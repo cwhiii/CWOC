@@ -1,0 +1,360 @@
+<!doctype html>
+<html>
+    <head>
+        <link rel="icon" type="image/png" href="location_logo.png" />
+        <meta charset="UTF-8" />
+        <title>CWOC Location</title>
+        <style>
+            body {
+                font-family: "Courier New", Courier, monospace;
+                padding: 20px;
+                margin: 0;
+                background: tan;
+            }
+
+            .forecast-container {
+                max-width: 540px; /* 500px map + 20px padding on each side */
+                margin: 0 auto;
+                padding: 20px;
+                background-color: ivory;
+                border-radius: 8px;
+                box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            }
+
+            h1 {
+                display: flex;
+                align-items: center;
+                justify-content: flex-start;
+                max-width: 500px;
+                margin: 0 auto 20px;
+                padding: 0;
+            }
+
+            h1 img {
+                margin-right: 10px;
+                vertical-align: middle;
+                max-width: 64px;
+            }
+
+            #locationInput {
+                padding: 10px;
+                font-size: 1em;
+                border-radius: 5px;
+                border: 1px solid #ccc;
+                width: 100%;
+                height: 40px;
+                box-sizing: border-box;
+            }
+
+            button {
+                padding: 10px 15px;
+                font-size: 1em;
+                border-radius: 5px;
+                background-color: #8b4513;
+                border: 1px solid #ccc;
+                cursor: pointer;
+                color: white;
+                height: 40px;
+                box-sizing: border-box;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                white-space: nowrap;
+            }
+
+            button:hover {
+                background-color: #a0522d;
+            }
+
+            .emoji-button {
+                padding: 2px 15px;
+                height: 40px;
+                box-sizing: border-box;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+
+            .emoji-button span {
+                margin-right: 4px;
+            }
+
+            .emoji-button span:last-child {
+                margin-right: 0;
+            }
+
+            .input-container {
+                display: flex;
+                flex-wrap: nowrap;
+                align-items: center;
+                width: 100%;
+                max-width: 500px;
+                margin: 0 auto 20px;
+                gap: 5px;
+            }
+
+            .input-wrapper {
+                flex-grow: 1;
+                min-width: 0;
+            }
+
+            .button-group {
+                display: flex;
+                align-items: center;
+                flex-wrap: nowrap;
+                gap: 5px;
+            }
+
+            .map-container {
+                width: 100%;
+                max-width: 500px;
+                height: auto;
+                aspect-ratio: 5 / 3;
+                border: 1px solid #ccc;
+                border-radius: 8px;
+                margin: 20px auto;
+                display: none; /* Hide map by default */
+            }
+
+            .error {
+                font-size: 1.2em;
+                font-weight: bold;
+                color: #8b4513;
+                text-align: center;
+            }
+
+            .loading {
+                font-size: 1.2em;
+                font-weight: bold;
+                color: #8b4513;
+                text-align: center;
+                display: none;
+                max-width: 500px;
+                margin: 0 auto;
+            }
+
+            label {
+                position: absolute;
+                clip: rect(0 0 0 0); /* Visually hidden but accessible */
+            }
+
+            .search-icon {
+                font-size: 1em;
+                margin-right: 5px;
+            }
+
+            .hideWhenNarow {
+                display: inline;
+            }
+            .showWhenNarow {
+                display: none;
+            }
+
+            @media (max-width: 550px) {
+                .input-container {
+                    flex-wrap: wrap;
+                }
+
+                .input-wrapper {
+                    width: 100%;
+                    margin-bottom: 5px;
+                }
+
+                .button-group {
+                    width: 100%;
+                    justify-content: space-between;
+                    flex-wrap: wrap;
+                }
+
+                .button-group button {
+                    flex: 0 1 auto;
+                    margin-bottom: 5px;
+                }
+
+                .map-container {
+                    max-width: 100%;
+                }
+            }
+
+            @media (max-width: 450px) {
+                .hideWhenNarow {
+                    display: none;
+                }
+                .showWhenNarow {
+                    display: inline;
+                }
+
+                button {
+                    padding: 10px;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="forecast-container">
+            <h1>
+                <img src="location_logo.png" alt="Logo" />
+                <span class="hideWhenNarow">Location</span>&nbsp;<span
+                    class="showWhenNarow"
+                    >Map</span
+                >
+            </h1>
+
+            <form onsubmit="searchMap(); return false;">
+                <div class="input-container">
+                    <div class="input-wrapper">
+                        <label for="locationInput">Street Address</label>
+                        <input
+                            type="text"
+                            id="locationInput"
+                            name="address"
+                            value="San Diego, CA"
+                            placeholder="Enter street address, city, state, or ZIP"
+                            autocomplete="street-address address-level2 address-level1 postal-code"
+                        />
+                    </div>
+                    <div class="button-group">
+                        <button type="button" onclick="searchMap()">
+                            <span class="search-icon">🔍</span>
+                            <span class="hideWhenNarow">Search</span>
+                        </button>
+                        <button
+                            type="button"
+                            class="emoji-button"
+                            onclick="toggleMap()"
+                        >
+                            <span style="font-size: x-large; padding: 0"
+                                >🗺️</span
+                            >
+                        </button>
+                        <button
+                            type="button"
+                            class="emoji-button"
+                            onclick="openInNewTab()"
+                        >
+                            <span style="font-size: x-large; padding: 0"
+                                >↗</span
+                            >
+                        </button>
+                        <button
+                            type="button"
+                            class="emoji-button"
+                            onclick="openDirections()"
+                        >
+                            <span style="font-size: xx-large; padding: 0"
+                                >⥅</span
+                            >
+                        </button>
+                    </div>
+                </div>
+            </form>
+            <div id="loading" class="loading">Loading...</div>
+            <div id="map" class="map-container"></div>
+            <div id="error" class="error"></div>
+        </div>
+        <p style="font-size: small; color: ivory">
+            By C.W.Holeman III<br />
+            <a
+                href="https://www.cwholemaniii.com/pages/code/index.shtml#weather"
+                >www.cwholemaniii.com</a
+            ><br />
+            Version: 2025-05-12 1033.
+        </p>
+
+        <script>
+            let currentCoords = { lat: 32, lon: -117 }; // Default: San Diego, CA
+            let mapVisible = false; // Changed to false to hide map by default
+
+            async function getCoordinates(location) {
+                const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(location)}`;
+                const res = await fetch(url);
+                const data = await res.json();
+                if (data.length === 0) throw new Error("Location not found.");
+                const lat = parseFloat(data[0].lat);
+                const lon = parseFloat(data[0].lon);
+                if (isNaN(lat) || isNaN(lon))
+                    throw new Error("Invalid coordinates.");
+                return { lat, lon };
+            }
+
+            function showMap(lat, lon) {
+                const mapDiv = document.getElementById("map");
+                mapDiv.innerHTML = "";
+                const mapUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${lon - 0.01}%2C${lat - 0.01}%2C${lon + 0.01}%2C${lat + 0.01}&layer=mapnik&marker=${lat}%2C${lon}`;
+                mapDiv.innerHTML = `<iframe width="100%" height="100%" frameborder="0" scrolling="no" marginheight="0" marginwidth="0" src="${mapUrl}"></iframe>`;
+                document.getElementById("error").innerHTML = "";
+                document.getElementById("loading").style.display = "none";
+            }
+
+            function openInNewTab() {
+                if (!mapVisible) toggleMap(); // Ensure map is visible before opening
+                const url = `https://www.openstreetmap.org/#map=15/${currentCoords.lat}/${currentCoords.lon}&layers=N`;
+                window.open(url, "_blank");
+            }
+
+            function openDirections() {
+                const errorDiv = document.getElementById("error");
+                if (!navigator.geolocation) {
+                    errorDiv.innerHTML =
+                        "Geolocation not supported by your browser.";
+                    return;
+                }
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        const userCoords = {
+                            lat: position.coords.latitude,
+                            lon: position.coords.longitude,
+                        };
+                        const url = `https://www.openstreetmap.org/directions?from=${userCoords.lat}%2C${userCoords.lon}&to=${currentCoords.lat}%2C${currentCoords.lon}`;
+                        window.open(url, "_blank");
+                    },
+                    () => {
+                        errorDiv.innerHTML =
+                            "Unable to access your location. Please allow location access.";
+                    },
+                );
+            }
+
+            function toggleMap() {
+                const mapDiv = document.getElementById("map");
+                mapVisible = !mapVisible;
+                mapDiv.style.display = mapVisible ? "block" : "none";
+            }
+
+            async function searchMap() {
+                const location = document.getElementById("locationInput").value;
+                const mapDiv = document.getElementById("map");
+                const errorDiv = document.getElementById("error");
+                const loadingDiv = document.getElementById("loading");
+
+                mapDiv.innerHTML = "";
+                errorDiv.innerHTML = "";
+                loadingDiv.style.display = "block";
+
+                try {
+                    const coords = await getCoordinates(location);
+                    currentCoords = coords;
+                    showMap(coords.lat, coords.lon);
+                    if (!mapVisible) toggleMap(); // Ensure map is visible after search
+                } catch (err) {
+                    mapDiv.innerHTML = "";
+                    errorDiv.innerHTML = err.message;
+                    loadingDiv.style.display = "none";
+                }
+            }
+
+            // Show default map on load but keep it hidden
+            showMap(currentCoords.lat, currentCoords.lon);
+
+            // Make Enter key work for the input box
+            document
+                .getElementById("locationInput")
+                .addEventListener("keypress", function (event) {
+                    if (event.key === "Enter") {
+                        event.preventDefault();
+                        searchMap();
+                    }
+                });
+        </script>
+    </body>
+</html>

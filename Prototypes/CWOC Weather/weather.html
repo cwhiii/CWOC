@@ -1,0 +1,481 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>CWOC Weather</title>
+        <link rel="icon" type="image/png" href="weather_logo.png" />
+
+        <style>
+            img {
+                vertical-align: middle;
+                max-width: 64px;
+            }
+            body {
+                font-family: "Courier New", Courier, monospace;
+                padding: 20px;
+                margin: 0;
+                background: tan;
+                color: #3e2b2b; /* Dark earth brown for light backgrounds */
+            }
+
+            .forecast-container {
+                max-width: 600px;
+                margin-left: 0;
+                padding: 20px;
+                background-color: ivory;
+                border-radius: 8px;
+                box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+                color: #3e2b2b; /* Dark earth brown for light backgrounds */
+            }
+
+            .search-row {
+                display: flex;
+                flex-wrap: wrap;
+                align-items: center;
+                gap: 10px;
+                margin-top: 10px;
+            }
+
+            .location-wrapper {
+                position: relative;
+            }
+
+            #locationInput {
+                padding: 8px 36px 8px 8px;
+                font-family: inherit;
+                font-size: 1em;
+                border: 1px solid #ccc;
+                border-radius: 5px;
+                width: 250px;
+            }
+
+            .location-button {
+                position: absolute;
+                right: 6px;
+                top: 6px;
+                background: none;
+                border: none;
+                font-size: 1.2em;
+                cursor: pointer;
+            }
+
+            button {
+                padding: 8px 16px;
+                font-size: 1em;
+                font-family: inherit;
+                background-color: #a0522d;
+                color: ivory;
+                border: none;
+                border-radius: 5px;
+                cursor: pointer;
+            }
+
+            .switch-wrapper {
+                display: flex;
+                align-items: center;
+                gap: 5px;
+            }
+
+            .toggle-label {
+                color: #3e2b2b; /* Dark brown color for the text */
+                font-size: 0.9em;
+            }
+
+            .switch {
+                position: relative;
+                display: inline-block;
+                width: 40px;
+                height: 20px;
+            }
+
+            .switch input {
+                opacity: 0;
+                width: 0;
+                height: 0;
+            }
+
+            .slider {
+                position: absolute;
+                cursor: pointer;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background-color: #a0522d; /* Brown toggle background */
+                transition: 0.4s;
+                border-radius: 20px;
+            }
+
+            .slider:before {
+                position: absolute;
+                content: "";
+                height: 14px;
+                width: 14px;
+                left: 3px;
+                bottom: 3px;
+                background-color: ivory;
+                transition: 0.4s;
+                border-radius: 50%;
+            }
+
+            .switch input:checked + .slider {
+                background-color: #2196f3;
+            }
+
+            .switch input:checked + .slider:before {
+                transform: translateX(20px);
+            }
+
+            .day {
+                margin: 10px 0;
+                font-size: 1em;
+                background-color: #f4f1e0; /* Default background */
+                border-radius: 5px;
+                padding: 1em 2em 2em 1em;
+            }
+
+            .day:nth-child(even) {
+                background-color: #eae4c1; /* Slightly lighter background for even rows */
+            }
+
+            .day-header {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                justify-content: flex-start;
+                flex-wrap: wrap;
+            }
+
+            .icon {
+                font-size: 2em;
+            }
+
+            .date {
+                width: 190px;
+            }
+
+            .temperatures {
+                display: flex;
+                flex-direction: column;
+                width: 100px;
+            }
+
+            .high,
+            .low {
+                font-weight: bold;
+                padding: 5px 15px; /* Keep padding minimal */
+                border-radius: 20px;
+                text-align: center;
+                white-space: nowrap; /* Prevent text from wrapping */
+                overflow: hidden; /* Hide any overflowed text */
+                text-overflow: ellipsis; /* Add ellipsis if text overflows */
+            }
+
+            .high {
+                color: #8b0000;
+                background-color: #f9c74f;
+            }
+
+            .low {
+                color: #00008b;
+                background-color: #90be6d;
+            }
+
+            .precip {
+                font-size: 0.9em;
+                min-width: 100px;
+                font-weight: bold;
+                background-color: #d0e1ff; /* soft blue for rain/snow */
+                color: #1a1a1a;
+                padding: 1em 0.5em 1em 0.5em;
+                border-radius: 5px;
+                margin: 0 auto;
+            }
+            .precip:empty {
+                display: none;
+            }
+
+            .temperature-track {
+                position: relative;
+                width: 100%;
+                height: 10px;
+                background: linear-gradient(
+                    to right,
+                    #1a4b8c 0%,
+                    #1a4b8c 25%,
+                    #fffff0 50%,
+                    #8b0000 75%,
+                    #8b0000 100%
+                );
+                border-radius: 5px;
+                margin-top: 1em;
+                margin-bottom: 1em;
+            }
+
+            .temperature-mask {
+                position: absolute;
+                top: 0;
+                height: 100%;
+                background-color: #5c4033;
+                z-index: 2;
+            }
+
+            .temperature-fill {
+                position: absolute;
+                top: 0;
+                height: 100%;
+                background-color: transparent; /* Make fill transparent */
+                z-index: 3;
+            }
+
+            .temperature-line {
+                position: absolute;
+                width: 1px;
+                height: 100%;
+                background-color: black; /* Black vertical lines for 10-degree marks */
+            }
+
+            .temperature-label {
+                position: absolute;
+                bottom: -18px;
+                text-align: center;
+                font-size: 0.8em;
+                color: black;
+            }
+
+            .dark-bg {
+                color: #3e2b2b; /* Dark earth brown background */
+            }
+
+            @media (max-width: 480px) {
+                .day-header {
+                    flex-direction: column;
+                    align-items: flex-start;
+                }
+
+                .search-row {
+                    flex-direction: column;
+                    align-items: flex-start;
+                }
+
+                .date {
+                    width: 100%;
+                }
+                #locationInput {
+                    max-width: 75%;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="forecast-container">
+            <h1 class="dark-bg">
+                <img src="weather_logo.png" /> Weather Forecast (16 Day)
+            </h1>
+
+            <div class="search-row">
+                <div class="location-wrapper">
+                    <input
+                        type="text"
+                        id="locationInput"
+                        value="Lockwood, MT"
+                    />
+                    <button
+                        class="location-button"
+                        onclick="useCurrentLocation()"
+                    >
+                        📍
+                    </button>
+                </div>
+
+                <button onclick="searchWeather()">Search</button>
+
+                <div class="switch-wrapper">
+                    <span class="toggle-label">Metric</span>
+                    <label class="switch">
+                        <input type="checkbox" id="unitToggle" />
+                        <span class="slider"></span>
+                    </label>
+                    <span class="toggle-label">Imperial</span>
+                </div>
+            </div>
+
+            <div id="forecast" style="margin-top: 20px"></div>
+        </div>
+
+        <script>
+            const icons = {
+                0: "☀️",
+                1: "🌤️",
+                2: "⛅",
+                3: "☁️",
+                45: "🌫️",
+                48: "🌫️",
+                51: "🌦️",
+                53: "🌦️",
+                55: "🌦️",
+                61: "🌧️",
+                63: "🌧️",
+                65: "🌧️",
+                71: "🌨️",
+                73: "🌨️",
+                75: "🌨️",
+                80: "🌧️",
+                81: "🌧️",
+                82: "🌧️",
+                95: "⛈️",
+                96: "⛈️",
+                99: "⛈️",
+            };
+
+            function getPrecipType(code) {
+                if ([61, 63, 65, 80, 81, 82].includes(code)) return "rain";
+                if ([71, 73, 75].includes(code)) return "snow";
+                if ([95, 96, 99].includes(code)) return "thunder";
+                return "";
+            }
+
+            async function getCoordinates(location) {
+                const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(location)}`;
+                const res = await fetch(url);
+                const data = await res.json();
+                if (data.length === 0) throw new Error("Location not found.");
+                return {
+                    lat: data[0].lat,
+                    lon: data[0].lon,
+                    display_name: data[0].display_name,
+                };
+            }
+
+            async function getWeather(lat, lon) {
+                const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_sum&timezone=auto&forecast_days=16`;
+                const res = await fetch(url);
+                return await res.json();
+            }
+
+            async function searchWeather() {
+                const location = document.getElementById("locationInput").value;
+                document.getElementById("forecast").innerHTML =
+                    "<p>Loading...</p>";
+                try {
+                    const coords = await getCoordinates(location);
+                    weatherData = await getWeather(coords.lat, coords.lon);
+                    document.getElementById("locationInput").value =
+                        coords.display_name;
+                    renderForecast();
+                } catch (err) {
+                    document.getElementById("forecast").innerHTML =
+                        `<p>${err.message}</p>`;
+                }
+            }
+
+            function renderForecast() {
+                const useImperial =
+                    document.getElementById("unitToggle").checked;
+                const barMin = useImperial ? -14 : -10;
+                const barMax = useImperial ? 104 : 40;
+                const range = barMax - barMin;
+
+                const forecastHTML = weatherData.daily.time
+                    .map((date, i) => {
+                        const icon =
+                            icons[weatherData.daily.weathercode[i]] || "❓";
+                        const minC = weatherData.daily.temperature_2m_min[i];
+                        const maxC = weatherData.daily.temperature_2m_max[i];
+                        const min = useImperial
+                            ? Math.round((minC * 9) / 5 + 32)
+                            : Math.round(minC);
+                        const max = useImperial
+                            ? Math.round((maxC * 9) / 5 + 32)
+                            : Math.round(maxC);
+                        const mm = Math.ceil(
+                            weatherData.daily.precipitation_sum[i],
+                        );
+                        const inches = Math.ceil(mm * 0.0393701 * 10) / 10;
+                        const precipAmt = useImperial
+                            ? `${inches} inch`
+                            : `${mm} mm`;
+                        const precipType = getPrecipType(
+                            weatherData.daily.weathercode[i],
+                        );
+                        const precip = precipType
+                            ? `${precipAmt} ${precipType}`
+                            : "";
+                        const d = new Date(date);
+                        const formattedDate = `${d.toLocaleDateString("en-US", { weekday: "short" })} ${d.getFullYear()}-${d.toLocaleDateString("en-US", { month: "short" })}-${String(d.getDate()).padStart(2, "0")}`;
+                        const startPct = ((min - barMin) / range) * 100;
+                        const endPct = ((max - barMin) / range) * 100;
+
+                        return `
+          <div class="day">
+            <div class="day-header">
+              <span class="icon">${icon}</span>
+              <span class="date">${formattedDate}</span>
+              <div class="temperatures">
+                <div class="high">${max}º</div>
+                <div class="low">${min}º</div>
+              </div>
+              <div class="precip">${precip}</div>
+            </div>
+            <div class="temperature-track">
+              <div class="temperature-mask" style="left:0%; width:${startPct}%;"></div>
+              <div class="temperature-fill" style="left:${startPct}%; width:${endPct - startPct}%;"></div>
+              <div class="temperature-mask" style="right:0%; width:${100 - endPct}%;"></div>
+
+              <!-- Temperature marks every 10 degrees -->
+              ${[...Array(Math.floor((barMax - barMin) / 10) + 1)]
+                  .map((_, index) => {
+                      const temp = barMin + index * 10;
+                      const position = ((temp - barMin) / range) * 100;
+                      return `<div class="temperature-line" style="left: ${position}%;"></div><div class="temperature-label" style="left: ${position}%">${temp}º</div>`;
+                  })
+                  .join("")}
+            </div>
+          </div>
+        `;
+                    })
+                    .join("");
+
+                document.getElementById("forecast").innerHTML = forecastHTML;
+            }
+
+            async function useCurrentLocation() {
+                if (!navigator.geolocation) {
+                    alert("Geolocation not supported");
+                    return;
+                }
+
+                navigator.geolocation.getCurrentPosition(
+                    async (position) => {
+                        const { latitude, longitude } = position.coords;
+                        const coords = await getCoordinates(
+                            `${latitude},${longitude}`,
+                        );
+                        weatherData = await getWeather(latitude, longitude);
+                        document.getElementById("locationInput").value =
+                            coords.display_name;
+                        renderForecast();
+                    },
+                    () => {
+                        alert("Unable to retrieve your location");
+                    },
+                );
+            }
+
+            document
+                .getElementById("unitToggle")
+                .addEventListener("change", renderForecast);
+            let weatherData = null;
+            searchWeather();
+        </script>
+        <p style="font-size: small; color: ivory">
+            By C.W.Holeman III<br />
+            <a
+                href="https://www.cwholemaniii.com/pages/code/index.shtml#weather"
+                >www.cwholemaniii.com</a
+            ><br />
+            Version: 2025-05-12 0831.
+        </p>
+    </body>
+</html>

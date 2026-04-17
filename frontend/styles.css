@@ -1,0 +1,818 @@
+/* Main content wrapper */
+.main-content {
+    transition: margin-left 0.3s ease;
+    margin-left: 0;
+    margin-top: 0;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Adjust main content when sidebar is active */
+.sidebar.active + .main-content {
+    margin-left: 240px;
+}
+
+/* Sidebar styling */
+.sidebar {
+    position: fixed;
+    top: 75px;
+    left: -240px;
+    width: 200px;
+    height: calc(100% - 75px);
+    background-color: #e0d4b5; /* Match header color */
+    border-right: 1px solid #6b4e31;
+    padding: 20px;
+    padding-top: 80px;
+    transition: left 0.3s ease;
+    z-index: 1000;
+}
+
+.sidebar.active {
+    left: 0;
+}
+
+/* Unified button styling */
+.action-button {
+    width: 100%;
+    margin-bottom: 15px;
+    padding: 10px;
+    height: 40px;
+    background-color: #8b5a2b; /* Darker brown */
+    border: 1px solid #5a3f2a; /* Slightly blue-tinted darker brown */
+    cursor: pointer;
+    font-family: "Courier New", Courier, monospace;
+    font-weight: bold;
+    font-size: larger;
+    border-radius: 3px;
+    box-sizing: border-box;
+    display: flex; /* Added to center contents */
+    justify-content: center; /* Added to center contents */
+    align-items: center; /* Added to center contents */
+}
+
+.action-button:hover {
+    background-color: #6b4e31; /* Slightly darker hover */
+    color: #d2b48c;
+}
+
+.action-button > img,
+.tab > img {
+    height: 2em;
+    margin-right: 1em;
+    vertical-align: middle;
+}
+
+/* Sidebar search bar */
+.sidebar-search {
+    margin-bottom: 20px;
+}
+
+.sidebar-search input {
+    width: 100%;
+    padding: 8px;
+    font-family: "Courier New", Courier, monospace;
+    border: 1px solid #6b4e31;
+    background-color: #ffff0;
+    border-radius: 3px;
+    box-sizing: border-box;
+}
+
+/* View selector in sidebar */
+.view-selector {
+    margin-top: 20px;
+}
+
+.view-selector label {
+    display: block;
+    margin: 5px 0;
+}
+
+.view-selector select {
+    width: 100%;
+    margin-bottom: 15px;
+    padding: 5px;
+    font-family: "Courier New", Courier, monospace;
+    border: 1px solid #6b4e31;
+    background-color: #ffff0;
+    border-radius: 3px;
+}
+
+/* Sidebar toggle button (positioning) */
+.action-button.toggle-sidebar {
+    position: fixed;
+    top: 110px;
+    left: 10px;
+    z-index: 1003;
+    width: auto;
+}
+
+/* Week navigation buttons (parent container) */
+#year-week-container {
+    width: 100%;
+    max-width: 160px; /* sidebar content width */
+    margin: 0 auto 10px auto;
+    text-align: center;
+}
+
+.week-nav {
+    display: flex;
+    justify-content: space-between; /* arrow buttons at edges */
+    align-items: center;
+    width: 100%; /* full width of container */
+    margin: 0 auto 15px auto;
+    gap: 10px;
+}
+
+.week-nav .action-button {
+    width: 40px; /* fixed width for arrow buttons */
+    margin: 0; /* no margin to keep flush with edges */
+    padding: 5px;
+    font-size: 1.2em;
+    box-sizing: border-box;
+}
+
+body {
+    background-image: url("/static/parchment.jpg");
+    background-size: cover;
+    font-family: "Courier New", Courier, monospace;
+    color: #333;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+}
+
+h1 {
+    font-size: 2.5em;
+    /*border-bottom: 2px solid #6b4e31*/
+    margin: 0;
+    padding: 10px 20px;
+    text-align: left;
+    display: inline-flex;
+    align-items: center;
+    background-color: #e0d4b5;
+    width: auto;
+    height: 75px;
+}
+
+.header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    z-index: 1002;
+    background-color: #e0d4b5;
+    display: flex;
+    align-items: center;
+    padding: 10px 20px;
+    box-sizing: border-box;
+    height: 100px;
+    flex-shrink: 0;
+}
+
+.logo {
+    width: 80px;
+    height: 80px;
+    margin-right: 10px;
+    vertical-align: middle;
+    border: 1px solid #5a3f2a;
+    border-radius: 50%;
+}
+
+.top-bar {
+    position: fixed;
+    top: 100px;
+    left: 0;
+    width: 100%;
+    z-index: 1001;
+    background-color: #e0d4b5;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 10px 20px;
+    box-sizing: border-box;
+    height: 60px;
+    flex-shrink: 0;
+}
+
+.week-range {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    font-size: 1rem; /* base size */
+}
+
+#week-range span {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+    display: inline-block;
+    font-size: clamp(0.7rem, 1vw, 1rem); /* shrink text responsively */
+}
+
+.search-bar {
+    display: none;
+}
+
+.status-filter {
+    margin-bottom: 15px;
+}
+
+.status-filter label {
+    display: block;
+    margin-bottom: 5px;
+}
+
+.status-filter select {
+    width: 100%;
+    padding: 5px;
+    font-family: "Courier New", Courier, monospace;
+    border: 1px solid #6b4e31;
+    background-color: #ffff0;
+    border-radius: 3px;
+}
+
+.tabs {
+    display: flex;
+    margin-bottom: 0;
+    white-space: nowrap;
+    padding: 3px;
+}
+
+.tab {
+    padding: 10px 20px;
+    background-color: #8b5a2b; /* Match action-button color */
+    border: 1px solid #5a3f2a; /* Match action-button border */
+    cursor: pointer;
+    margin-right: 5px;
+    font-family: "Courier New", Courier, monospace;
+    font-weight: bold;
+    border-radius: 3px;
+    font-size: larger;
+}
+
+.tab.active {
+    background-color: ivory; /* Match action-button hover */
+}
+
+.tab:hover {
+    background-color: #6b4e31; /* Slightly darker hover */
+    color: #d2b48c;
+}
+
+.chit-list {
+    background-color: #fffaf0;
+    border: 1px solid #6b4e31;
+    margin-top: 100px;
+    height: calc(100vh - 100px);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.week-view {
+    display: grid;
+    grid-template-columns: 60px repeat(7, 1fr);
+    gap: 5px;
+    height: 100%;
+    overflow-y: auto;
+    position: relative;
+    scroll-behavior: smooth;
+}
+
+.week-view:not(:target) {
+    scroll-padding-top: 0;
+}
+
+.week-view .day-header {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    text-align: center;
+    font-weight: bold;
+    padding: 10px 5px;
+    background-color: #e0d4b5;
+    border: 1px solid #6b4e31;
+    margin: 0;
+    grid-row: 1;
+}
+
+.day-column {
+    border: 1px solid #d3d3d3;
+    padding: 5px;
+    background-color: #ffff0;
+    min-height: 1440px;
+    position: relative;
+}
+
+.day-header {
+    text-align: center;
+    font-weight: bold;
+    padding: 10px 5px;
+    background-color: #e0d4b5;
+    border: 1px solid #6b4e31;
+    margin: 0;
+}
+
+.hour-column {
+    position: relative;
+    height: 1440px;
+    background-color: #f8f8f8;
+}
+
+.hour-block {
+    height: 60px;
+    border-bottom: 1px solid #d3d3d3;
+    text-align: right;
+    padding-right: 5px;
+    font-size: 0.8em;
+    position: absolute;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.all-day-section {
+    background-color: #fffacd;
+    padding: 5px;
+    margin-bottom: 0;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.all-day-event {
+    display: block;
+    padding: 2px;
+    border-bottom: 1px solid #d3d3d3;
+}
+
+.all-day-event.multi-day {
+    grid-column: span var(--span);
+    background-color: #ffe4b5;
+}
+.month-event {
+    border: 0.5px solid ivory;
+}
+
+.timed-event {
+    position: absolute;
+    padding: 2px;
+    border: 1px solid #6b4e31;
+    background-color: var(--event-bg-color);
+    box-sizing: border-box;
+    overflow: hidden;
+    top: 0;
+    height: auto;
+}
+
+.timed-event:hover {
+    cursor: pointer;
+}
+
+.month-view {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: auto;
+}
+
+.month-header {
+    text-align: center;
+    font-size: 1.5em;
+    padding: 10px;
+    background-color: #e0d4b5;
+    border-bottom: 1px solid #6b4e31;
+}
+
+.day-headers {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    background-color: #e0d4b5;
+}
+
+.month-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+    flex: 1;
+}
+
+.month-day {
+    border: 1px solid #d3d3d3;
+    padding: 5px;
+    background-color: #ffff0;
+    min-height: 100px;
+}
+
+.month-day.empty {
+    background-color: #f0f0f0;
+}
+
+.day-number {
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+.chit {
+    border-bottom: 1px solid #d3d3d3;
+    padding: 10px 0;
+    margin-left: 1em;
+}
+
+.chit:last-child {
+    border-bottom: none;
+}
+
+.chit h3 {
+    margin: 0;
+    font-size: 1.2em;
+}
+
+.chit p {
+    margin: 5px 0;
+}
+
+.chit .labels {
+    margin: 5px 0;
+}
+
+.chit .label {
+    display: inline-block;
+    margin-right: 10px;
+}
+
+.chit .label img {
+    width: 2.8em !important; /* Reduced from 3em */
+    height: 2.8em !important; /* Reduced from 3em */
+    vertical-align: middle;
+    margin-right: 5px;
+}
+
+.chit:hover {
+    cursor: pointer;
+}
+
+.timed-event .label img,
+.all-day-event .label img {
+    width: 2.8em !important; /* Reduced from 3em */
+    height: 2.8em !important; /* Reduced from 3em */
+    flex-shrink: 0;
+}
+
+.chit a {
+    color: #6b4e31;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+.header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.editor {
+    background-color: #fffaf0;
+    padding: 20px;
+    border: 1px solid #6b4e31;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+}
+
+.field {
+    margin-bottom: 15px;
+}
+
+.field.full-width {
+    grid-column: 1 / -1;
+}
+
+label {
+    display: block;
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+input[type="text"],
+textarea,
+select {
+    padding: 5px;
+    font-family: "Courier New", Courier, monospace;
+    border: 1px solid #6b4e31;
+    background-color: #ffff0;
+    box-sizing: border-box;
+}
+
+input[type="text"].date-time {
+    width: 120px;
+}
+
+input[type="text"].location {
+    width: 300px;
+}
+
+textarea {
+    width: 100%;
+    height: 100px;
+}
+
+.checkbox-group {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.date-time-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.color-samples {
+    display: flex;
+    gap: 5px;
+    margin-top: 5px;
+}
+
+.color-sample {
+    width: 20px;
+    height: 20px;
+    border: 1px solid #6b4e31;
+    cursor: pointer;
+}
+
+.hidden {
+    visibility: hidden;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.visible {
+    visibility: visible;
+    opacity: 1;
+}
+
+.buttons {
+    display: flex;
+    gap: 10px;
+}
+
+button {
+    padding: 10px 20px;
+    background-color: #e0d4b5;
+    border: 1px solid #6b4e31;
+    cursor: pointer;
+    font-family: "Courier New", Courier, monospace;
+    font-weight: bold;
+    border-radius: 3px;
+}
+
+button:hover {
+    background-color: #d2b48c;
+}
+
+button.delete {
+    background-color: #a0522d;
+    color: white;
+    font-family: "Courier New", Courier, monospace;
+    font-weight: bold;
+    border-radius: 3px;
+}
+
+button.delete:hover {
+    background-color: #8b4513;
+}
+
+.debug-info {
+    grid-column: 1 / -1;
+    margin-top: 20px;
+    padding: 10px;
+    background-color: #f0f0f0;
+    border: 1px solid #6b4e31;
+}
+
+#note-content,
+#checklist-content {
+    transition: opacity 0.3s ease;
+}
+
+#note-content.hidden,
+#checklist-content.hidden {
+    visibility: hidden;
+    opacity: 0;
+}
+
+#note-content.visible,
+#checklist-content.visible {
+    visibility: visible;
+    opacity: 1;
+}
+
+.checklist-container .checklist-item {
+    align-items: flex-start;
+}
+
+.checklist-container .checklist-item input[type="checkbox"] {
+    flex-shrink: 0;
+    margin-right: 10px;
+    width: 20px;
+}
+
+/* Notes view styles */
+.notes-view {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5em;
+    padding: 1em;
+    overflow-y: auto;
+    background-color: #fffaf0;
+    border: 1px solid #6b4e31;
+    border-radius: 5px;
+    box-sizing: border-box;
+    height: 100%;
+}
+
+.notes-view .note-chit {
+    min-width: 25em;
+    width: 25em;
+    max-height: 25em;
+    min-height: 4em;
+    height: fit-content;
+    background-color: #ffff0;
+    border: 1px solid #6b4e31;
+    border-radius: 5px;
+    padding: 0.5em;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    cursor: pointer;
+    font-family: "Courier New", Courier, monospace;
+    color: #333;
+    box-sizing: border-box;
+    flex-shrink: 0;
+}
+
+.note-chit h3 {
+    margin: 0;
+    padding: 0.3em;
+    font-size: 1.2em;
+    font-weight: bold;
+    flex: 0 0 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    border-bottom: 1px solid #6b4e31;
+}
+
+.note-chit p {
+    margin: 0.3em 0;
+    padding: 0.3em;
+    font-size: 1em;
+    flex: 1 1 auto;
+    overflow-y: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.note-chit p::-webkit-scrollbar {
+    display: none;
+}
+
+.note-chit .labels {
+    margin: 0;
+    padding: 0.3em;
+    flex: 0 0 auto;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3em;
+    border-top: 1px solid #6b4e31;
+}
+
+.note-chit .label {
+    display: inline-block;
+    padding: 0.2em 0.5em;
+    border-radius: 3px;
+    font-size: 0.9em;
+    color: #333;
+    background-color: #e0d4b5;
+    border: 1px solid #6b4e31;
+    flex-shrink: 0;
+}
+
+@media (max-width: 600px) {
+    .notes-view {
+        flex-direction: column;
+        gap: 0.5em;
+    }
+
+    .notes-view .note-chit {
+        width: 100%;
+        min-width: 25em;
+        margin: 0;
+    }
+}
+
+.completed-task {
+    opacity: 0.5;
+    color: #666 !important;
+    background-color: #ddd !important;
+}
+
+/* Delete Chit Modal Styles */
+#deleteChitModal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0, 0, 0, 0.5);
+    font-family: "Courier New", Courier, monospace;
+}
+
+#deleteChitModal > div {
+    background-color: #fffaf0;
+    margin: 15% auto;
+    padding: 20px 30px;
+    border: 1px solid #6b4e31;
+    border-radius: 5px;
+    width: 320px;
+    max-width: 90%;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    text-align: center;
+    color: #333;
+}
+
+#deleteChitModal h2 {
+    margin-top: 0;
+    font-size: 1.5em;
+    font-weight: 600;
+    color: #6b4e31;
+}
+
+#deleteChitModal p {
+    margin: 10px 0 20px;
+    font-size: 1em;
+    color: #333;
+}
+
+#deleteChitModal button {
+    font-size: 1em;
+    padding: 10px 20px;
+    margin: 0 10px;
+    border: 1px solid #6b4e31;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+    min-width: 140px;
+    font-family: "Courier New", Courier, monospace;
+    font-weight: bold;
+}
+
+#confirmDeleteChitBtn {
+    background-color: #a0522d;
+    color: #fff;
+}
+
+#confirmDeleteChitBtn:hover {
+    background-color: #8b4513;
+}
+
+#cancelDeleteChitBtn {
+    background-color: #e0d4b5;
+    color: #333;
+}
+
+#cancelDeleteChitBtn:hover {
+    background-color: #d2b48c;
+}
+
+#year-display {
+    font-weight: bold;
+    font-size: 1.2rem;
+    text-align: center;
+    margin-bottom: 4px;
+}
+
+#week-range {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    font-size: 1rem;
+}
+
+#week-range span {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+    display: inline-block;
+    font-size: clamp(0.7rem, 1vw, 1rem);
+}

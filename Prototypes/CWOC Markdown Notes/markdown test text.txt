@@ -1,0 +1,78 @@
+# Heading Level 1
+
+## Heading Level 2
+
+### Heading Level 3
+
+---
+
+**Bold Text**
+*Italic Text*
+***Bold & Italic***
+~~Strikethrough~~
+==Highlight==
+
+---
+
+Here is a [link](https://example.com) and an inline `code` snippet.
+
+> This is a blockquote.
+> It spans multiple lines.
+
+---
+
+### Lists
+
+#### Unordered List
+
+- Item One
+- Item Two
+  - Subitem A
+  - Subitem B
+- Trailing item
+
+#### Ordered List
+
+1. First
+2. Second
+   1. Sub-first
+   2. Sub-second
+
+---
+
+### Code Blocks
+
+#### Fenced Code Block
+
+```js
+function greet(name) {
+    console.log(`Hello, ${name}!`);
+}
+greet("World");
+```
+
+#### Indented Code Block
+
+    This is an indented code block.
+    It does not specify a language.
+
+---
+
+### Table
+
+| Syntax | Description |
+|--------|-------------|
+| Header | Title       |
+| Cell   | Data        |
+
+---
+
+### Image
+
+![Alt Text](https://via.placeholder.com/150)
+
+---
+
+### Horizontal Rule
+
+---

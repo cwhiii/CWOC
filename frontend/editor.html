@@ -1,0 +1,1263 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <link rel="icon" href="/static/editor.png" />
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Chit Editor - C.W.'s Omni Chits</title>
+        <link
+            rel="stylesheet"
+            href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css"
+        />
+        <link
+            rel="stylesheet"
+            href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"
+        />
+        <link rel="stylesheet" href="/frontend/editor.css" />
+    </head>
+    <body>
+        <div class="header-row">
+            <img src="/static/create_new.png" alt="Logo" class="headerImage" />
+            <h1>Chit Editor</h1>
+            <div class="buttons">
+                <div class="left-buttons">
+                    <button id="saveButton" onclick="saveChit()">
+                        <i class="fas fa-save"></i> Save
+                    </button>
+                    <button onclick="window.location.href='/'" class="cancel">
+                        <i class="fas fa-times"></i> Cancel
+                    </button>
+                </div>
+                <button id="deleteButton" class="delete" onclick="deleteChit()">
+                    <i class="fas fa-trash-alt"></i> Delete
+                </button>
+            </div>
+        </div>
+        <div class="editor" id="mainEditor">
+            <div class="main-zones-grid">
+                <div id="titleWeatherContainer" class="grid-span-2">
+                    <div class="field full-width" id="titleField">
+                        <label
+                            for="title"
+                            style="
+                                display: flex;
+                                align-items: center;
+                                gap: 15px;
+                            "
+                        >
+                            Title
+                            <div class="pinned-archived-group">
+                                <button
+                                    type="button"
+                                    id="pinnedButton"
+                                    class="status-icon-button"
+                                    onclick="togglePinned()"
+                                    title="Toggle Pinned State"
+                                >
+                                    <i class="far fa-bookmark"></i>
+                                </button>
+                                <button
+                                    type="button"
+                                    id="archivedButton"
+                                    class="status-icon-button"
+                                    onclick="toggleArchived()"
+                                    title="Toggle Archived State"
+                                >
+                                    <i class="far fa-box-open"></i>
+                                </button>
+                                <input
+                                    type="hidden"
+                                    id="pinned"
+                                    value="false"
+                                />
+                                <input
+                                    type="hidden"
+                                    id="archived"
+                                    value="false"
+                                />
+                            </div>
+                        </label>
+                        <input
+                            type="text"
+                            id="title"
+                            placeholder="Enter title"
+                            required
+                        />
+                    </div>
+                    <div id="compactWeatherSection">Weather Loading...</div>
+                </div>
+
+                <div class="column-one">
+                    <div id="datesSection" class="zone-container">
+                        <div
+                            class="zone-header"
+                            onclick="toggleZone(event, 'datesSection', 'datesContent')"
+                        >
+                            <h2 class="zone-title">📅 Dates & Times</h2>
+                            <div class="zone-actions">
+                                <button
+                                    type="button"
+                                    id="allDayToggleButton"
+                                    class="zone-button"
+                                    onclick="toggleAllDay(event)"
+                                >
+                                    <i class="far fa-sun"></i> All Day
+                                </button>
+                            </div>
+                            <span class="zone-toggle-icon">🔼</span>
+                        </div>
+                        <div id="datesContent" class="zone-body">
+                            <div class="date-time-fields-group">
+                                <div class="field">
+                                    <label class="date-time-field-label"
+                                        >Start Date & Time</label
+                                    >
+                                    <div class="date-time-row">
+                                        <input
+                                            type="text"
+                                            id="start_datetime"
+                                            class="date-time"
+                                            placeholder="YYYY-MMM-DD"
+                                        />
+                                        <input
+                                            type="text"
+                                            id="start_time"
+                                            class="date-time"
+                                            placeholder="HH:MM"
+                                        />
+                                        <button
+                                            type="button"
+                                            onclick="clearStartAndEndDates()"
+                                            style="padding: 1px 3px 1px 3px"
+                                        >
+                                            ❌
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="field">
+                                    <label class="date-time-field-label"
+                                        >End Date & Time</label
+                                    >
+                                    <div class="date-time-row">
+                                        <input
+                                            type="text"
+                                            id="end_datetime"
+                                            class="date-time"
+                                            placeholder="YYYY-MMM-DD"
+                                        />
+                                        <input
+                                            type="text"
+                                            id="end_time"
+                                            class="date-time"
+                                            placeholder="HH:MM"
+                                        />
+                                    </div>
+                                </div>
+                                <div class="field">
+                                    <label class="date-time-field-label"
+                                        >Due Date & Time</label
+                                    >
+                                    <div class="date-time-row">
+                                        <input
+                                            type="text"
+                                            id="due_datetime"
+                                            class="date-time"
+                                            placeholder="YYYY-MMM-DD"
+                                        />
+                                        <input
+                                            type="text"
+                                            id="due_time"
+                                            class="date-time"
+                                            placeholder="HH:MM"
+                                        />
+
+                                        <button
+                                            type="button"
+                                            onclick="clearDueDate()"
+                                            style="padding: 1px 3px 1px 3px"
+                                        >
+                                            ❌
+                                        </button>
+                                    </div>
+                                </div>
+                                <input
+                                    type="hidden"
+                                    id="allDay"
+                                    value="false"
+                                />
+
+                                <div class="field">
+                                    <label for="recurrence">🔁 Repeat</label>
+                                    <select id="recurrence">
+                                        <option value="">None</option>
+                                        <option value="Hourly">Hourly</option>
+                                        <option value="Daily">Daily</option>
+                                        <option value="Weekly">Weekly</option>
+                                        <option value="Monthly">Monthly</option>
+                                        <option value="Yearly">Yearly</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="weightSection" class="zone-container">
+                        <div
+                            class="zone-header"
+                            onclick="toggleZone(event, 'weightSection', 'weightContent')"
+                        >
+                            <h2 class="zone-title">⚖️ Weight</h2>
+                            <span class="zone-toggle-icon">🔽</span>
+                        </div>
+                        <div id="weightContent" class="zone-body">
+                            <div class="priority-status-group">
+                                <div class="field">
+                                    <label for="priority">Priority</label>
+                                    <select id="priority">
+                                        <option value="" selected>-</option>
+                                        <option value="High">High</option>
+                                        <option value="Medium">Medium</option>
+                                        <option value="Low">Low</option>
+                                    </select>
+                                </div>
+                                <div class="field">
+                                    <label for="severity">Severity</label>
+                                    <select id="severity">
+                                        <option value="" selected>-</option>
+                                        <option value="Critical">
+                                            Critical
+                                        </option>
+                                        <option value="Major">Major</option>
+                                        <option value="Minor">Minor</option>
+                                    </select>
+                                </div>
+                                <div class="field">
+                                    <label for="status">Status</label>
+                                    <select id="status">
+                                        <option value="" selected>-</option>
+                                        <option value="ToDo">ToDo</option>
+                                        <option value="In Progress">
+                                            In Progress
+                                        </option>
+                                        <option value="Blocked">Blocked</option>
+                                        <option value="Complete">
+                                            Complete
+                                        </option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="locationSection" class="zone-container">
+                        <div
+                            class="zone-header"
+                            onclick="toggleZone(event, 'locationSection', 'locationContent')"
+                        >
+                            <h2 class="zone-title">📍 Location</h2>
+                            <div class="zone-actions">
+                                <button
+                                    type="button"
+                                    class="zone-button"
+                                    onclick="searchLocationMap(event)"
+                                >
+                                    <i class="fas fa-search"></i>
+                                    <span class="hideWhenNarrow">Search</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    class="zone-button"
+                                    onclick="openLocationInNewTab(event)"
+                                >
+                                    <i class="fas fa-external-link-alt"></i>
+                                    <span class="hideWhenNarrow">Map</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    class="zone-button"
+                                    onclick="openLocationDirections(event)"
+                                >
+                                    <i class="fas fa-directions"></i>
+                                    <span class="hideWhenNarrow"
+                                        >Directions</span
+                                    >
+                                </button>
+                            </div>
+                            <span class="zone-toggle-icon">🔽</span>
+                        </div>
+                        <div id="locationContent" class="zone-body">
+                            <div
+                                class="field full-width"
+                                style="margin-bottom: 0"
+                            >
+                                <input
+                                    type="text"
+                                    id="location"
+                                    class="location"
+                                    placeholder="4204, Pine Hills Rd, Billings, MT 59101"
+                                />
+                            </div>
+                            <div
+                                id="location-loading"
+                                class="location-loading zone-status zone-loading"
+                            >
+                                Loading...
+                            </div>
+                            <div
+                                id="location-map"
+                                class="location-map-container zone-map"
+                            ></div>
+                            <div
+                                id="location-error"
+                                class="location-error zone-status"
+                            ></div>
+                        </div>
+                    </div>
+
+                    <div id="tagsSection" class="zone-container">
+                        <div
+                            class="zone-header"
+                            onclick="toggleZone(event, 'tagsSection', 'tagsContent')"
+                        >
+                            <h2 class="zone-title">
+                                🏷️ Tags (<span id="activeTagsCount">0</span>
+                                active)
+                            </h2>
+                            <div class="zone-actions">
+                                <button
+                                    type="button"
+                                    onclick="toggleAllTags(event, true)"
+                                    id="expand-all-tags-button"
+                                    class="zone-button"
+                                >
+                                    <i class="fas fa-expand-alt"></i> Expand All
+                                </button>
+                                <button
+                                    type="button"
+                                    onclick="toggleAllTags(event, false)"
+                                    id="collapse-all-tags-button"
+                                    class="zone-button"
+                                >
+                                    <i class="fas fa-compress-alt"></i> Collapse
+                                    All
+                                </button>
+                                <button
+                                    type="button"
+                                    onclick="createTag(event)"
+                                    id="create-new-tag-button"
+                                    class="zone-button"
+                                >
+                                    <i class="fas fa-plus"></i> Create New
+                                </button>
+                            </div>
+                            <span class="zone-toggle-icon">🔽</span>
+                        </div>
+                        <div id="tagsContent" class="zone-body">
+                            <div class="tags-search-row">
+                                <button
+                                    type="button"
+                                    class="clear-search-button"
+                                    onclick="clearTagSearch(event)"
+                                >
+                                    <i class="fas fa-times"></i>
+                                </button>
+                                <input
+                                    type="text"
+                                    id="labels"
+                                    placeholder="Work, Family"
+                                />
+                                <button onclick="addSearchedTag(event)">
+                                    <i class="fas fa-plus"></i> Add
+                                </button>
+                            </div>
+
+                            <div class="verticalBox">
+                                <div class="tag-container">
+                                    <div class="tag-grid-row">
+                                        <span class="tag-grid-row-label"
+                                            >Top:</span
+                                        >
+                                        <div
+                                            class="tag-grid-items"
+                                            id="mostUsedTags"
+                                        ></div>
+                                    </div>
+                                    <div class="tag-grid-row">
+                                        <span class="tag-grid-row-label"
+                                            >Recent:</span
+                                        >
+                                        <div
+                                            class="tag-grid-items"
+                                            id="mostRecentTags"
+                                        ></div>
+                                    </div>
+                                    <div class="tag-grid-row">
+                                        <span class="tag-grid-row-label"
+                                            >3 Favs:</span
+                                        >
+                                        <div
+                                            class="tag-grid-items"
+                                            id="favTags"
+                                        ></div>
+                                    </div>
+                                </div>
+
+                                <div
+                                    class="tag-container"
+                                    id="tagTreeContainer"
+                                ></div>
+                            </div>
+
+                            <div
+                                class="tag-container-Active"
+                                id="ActiveTagsBox"
+                            >
+                                <h3>Active Tags</h3>
+                                <div
+                                    class="active-tags-list-container"
+                                    id="activeTagsListContainer"
+                                ></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="peopleSection" class="zone-container">
+                        <div
+                            class="zone-header"
+                            onclick="toggleZone(event, 'peopleSection', 'peopleContent')"
+                        >
+                            <h2 class="zone-title">👥 People</h2>
+                            <div class="zone-actions">
+                                <button
+                                    type="button"
+                                    id="roleFilterButton"
+                                    class="zone-button"
+                                    onclick="toggleRoleFilterDropdown(event)"
+                                >
+                                    <i class="fas fa-filter"></i> Filter
+                                </button>
+                                <button
+                                    type="button"
+                                    id="addNewPersonButton"
+                                    class="zone-button"
+                                    onclick="addPersonItem(event)"
+                                >
+                                    <i class="fas fa-plus"></i> Add Person
+                                </button>
+                            </div>
+                            <span class="zone-toggle-icon">🔽</span>
+                        </div>
+                        <div id="peopleContent" class="zone-body">
+                            <div class="field">
+                                <input
+                                    type="text"
+                                    id="people"
+                                    placeholder="Alice, Bob"
+                                />
+                            </div>
+                        </div>
+                        <input
+                            type="hidden"
+                            id="isPeopleMaster"
+                            value="false"
+                        />
+                    </div>
+                </div>
+
+                <div class="column-two">
+                    <div id="notesSection" class="zone-container">
+                        <div
+                            class="zone-header"
+                            onclick="toggleZone(event, 'notesSection', 'notesContent')"
+                        >
+                            <h2 class="zone-title">📝 Notes</h2>
+                            <div class="zone-actions">
+                                <button
+                                    type="button"
+                                    onclick="openNotesModal(event)"
+                                    id="open-notes-modal-button"
+                                    class="zone-button"
+                                >
+                                    <i class="fas fa-expand"></i> Expand Note
+                                </button>
+                                <button
+                                    type="button"
+                                    onclick="toggleNotesViewMode(event)"
+                                    class="zone-button"
+                                >
+                                    <i class="fas fa-eye"></i> Render
+                                </button>
+                                <button
+                                    type="button"
+                                    onclick="copyNotesToClipboard(event, 'main')"
+                                    title="Copy to Clipboard"
+                                    class="zone-button"
+                                >
+                                    <i class="fas fa-clipboard"></i>
+                                </button>
+                                <button
+                                    type="button"
+                                    onclick="downloadNotes(event, 'main')"
+                                    title="Download"
+                                    class="zone-button"
+                                >
+                                    <i class="fas fa-download"></i> Download
+                                </button>
+                            </div>
+                            <span class="zone-toggle-icon">🔼</span>
+                        </div>
+                        <div id="notesContent" class="zone-body">
+                            <div class="field full-width">
+                                <textarea id="note"></textarea>
+                                <div
+                                    id="notes-rendered-output"
+                                    class="markdown-output"
+                                    style="display: none"
+                                ></div>
+                                <input
+                                    type="hidden"
+                                    id="description"
+                                    name="description"
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="checklistSection" class="zone-container">
+                        <div
+                            class="zone-header"
+                            onclick="toggleZone(event, 'checklistSection', 'checklistContent')"
+                        >
+                            <h2 class="zone-title">✅ Checklist</h2>
+                            <!-- Removed old Add Item button because new checklist has its own input -->
+                            <span class="zone-toggle-icon">🔽</span>
+                        </div>
+                        <div id="checklistContent" class="zone-body">
+                            <div
+                                class="checklist-container"
+                                id="checklist-container"
+                            ></div>
+                            <hr
+                                id="completed-section-hr"
+                                class="completed-section-hidden"
+                            />
+                            <div
+                                id="completed-checklist-container"
+                                class="completed-section-hidden"
+                            >
+                                <h2>Completed</h2>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="alertsSection" class="zone-container">
+                        <div
+                            class="zone-header"
+                            onclick="toggleZone(event, 'alertsSection', 'alertsContent')"
+                        >
+                            <h2 class="zone-title">🔔 Alerts</h2>
+                            <div class="zone-actions">
+                                <button
+                                    type="button"
+                                    id="alertFilterButton"
+                                    class="zone-button"
+                                    onclick="toggleAlertFilterDropdown(event)"
+                                >
+                                    <i class="fas fa-filter"></i> Filter
+                                </button>
+                                <button
+                                    type="button"
+                                    id="addNewAlarmButton"
+                                    class="zone-button"
+                                    onclick="openAlarmModal(event)"
+                                >
+                                    <i class="fas fa-plus"></i> Add Alarm
+                                </button>
+                                <button
+                                    type="button"
+                                    id="addNewTimerButton"
+                                    class="zone-button"
+                                    onclick="openTimerModal(event)"
+                                >
+                                    <i class="fas fa-plus"></i> Add Timer
+                                </button>
+                                <button
+                                    type="button"
+                                    id="addNewStopwatchButton"
+                                    class="zone-button"
+                                    onclick="addStopwatch()"
+                                >
+                                    <i class="fas fa-plus"></i> Add Stopwatch
+                                </button>
+                                <button
+                                    type="button"
+                                    id="addNewNotificationButton"
+                                    class="zone-button"
+                                    onclick="openNotificationModal(event)"
+                                >
+                                    <i class="fas fa-plus"></i> Add Notification
+                                </button>
+                            </div>
+                            <span class="zone-toggle-icon">🔽</span>
+                        </div>
+                        <div id="alertsContent" class="zone-body">
+                            <div class="field">
+                                <div class="checkbox-group">
+                                    <input type="checkbox" id="alarm" />
+                                    Alarm
+                                </div>
+                            </div>
+                            <div class="field">
+                                <div class="checkbox-group">
+                                    <input type="checkbox" id="notification" />
+                                    Notification
+                                </div>
+                            </div>
+                            <div
+                                class="alert-type-container"
+                                id="alarms-container"
+                            ></div>
+                            <div
+                                class="alert-type-container"
+                                id="timers-container"
+                            ></div>
+                            <div
+                                class="alert-type-container"
+                                id="stopwatches-container"
+                            ></div>
+                            <div
+                                class="alert-type-container"
+                                id="notifications-container"
+                            ></div>
+
+                            <div
+                                class="alert-type-container"
+                                id="events-container"
+                            ></div>
+                        </div>
+                    </div>
+
+                    <div
+                        id="healthIndicatorsSection"
+                        class="zone-container healthZone"
+                    >
+                        <div
+                            class="zone-header"
+                            onclick="toggleZone(event, 'healthIndicatorsSection', 'healthIndicatorsContent')"
+                        >
+                            <h2 class="zone-title">❤️ Health Indicators</h2>
+                            <div class="zone-actions">
+                                <label class="switch">
+                                    <input
+                                        type="checkbox"
+                                        id="unitToggle"
+                                        checked
+                                    />
+                                    <span class="slider round"></span>
+                                </label>
+                                <span class="unit-label"
+                                    >Imperial / Metric</span
+                                >
+                                <label class="switch">
+                                    <input
+                                        type="checkbox"
+                                        id="sexToggle"
+                                        checked
+                                    />
+                                    <span class="slider round"></span>
+                                </label>
+                                <span class="unit-label">Female / Male</span>
+                            </div>
+                            <span class="zone-toggle-icon">🔽</span>
+                        </div>
+                        <div
+                            id="healthIndicatorsContent"
+                            class="zone-body healthBox"
+                        >
+                            <div class="healthInput" id="weightEntry"></div>
+                            <div class="healthInput" id="distanceEntry"></div>
+                            <div class="healthInput" id="heartRateEntry"></div>
+                            <div class="healthInput" id="bpEntry"></div>
+                            <div class="healthInput" id="spo2Entry"></div>
+                            <div class="healthInput" id="glucoseEntry"></div>
+                            <div id="temperatureEntry"></div>
+                            <!-- Add this -->
+                            <div
+                                class="healthInput"
+                                iid="temperatureEntry"
+                            ></div>
+
+                            <div id="reproductionSection">
+                                <div
+                                    class="healthInput"
+                                    id="intercourseEntry"
+                                ></div>
+                                <div class="healthInput" id="cycleEntry"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Replace the existing colorSection with this -->
+                    <div id="colorSection" class="zone-container">
+                        <div
+                            class="zone-header"
+                            onclick="toggleZone(event, 'colorSection', 'colorContent')"
+                        >
+                            <h2 class="zone-title">🌈 Color</h2>
+                            <span class="zone-toggle-icon">🔽</span>
+                        </div>
+                        <div id="colorContent" class="zone-body">
+                            <button
+                                onclick="window.open('/frontend/settings.html', '_blank')"
+                            >
+                                Manage Colors
+                            </button>
+
+                            <div class="field">
+                                <label for="color">
+                                    <span id="selected-color-name"
+                                        >Dusty Rose</span
+                                    >
+                                    <div class="color-input">
+                                        <span
+                                            id="selected-color"
+                                            class="color-preview"
+                                            style="background-color: #c66b6b"
+                                        ></span>
+                                        <input
+                                            type="text"
+                                            id="color"
+                                            value="#C66B6B"
+                                            readonly
+                                        />
+                                    </div>
+                                </label>
+                            </div>
+                            <div class="color-picker">
+                                <div class="color-row" id="default-colors">
+                                    <div
+                                        class="color-swatch"
+                                        data-color="transparent"
+                                        style="
+                                            background-color: transparent;
+                                            font-size: 2em;
+                                        "
+                                    >
+                                        ☒
+                                    </div>
+                                    <div
+                                        class="color-swatch selected"
+                                        data-color="#C66B6B"
+                                        style="background-color: #c66b6b"
+                                    ></div>
+                                    <div
+                                        class="color-swatch"
+                                        data-color="#D68A59"
+                                        style="background-color: #d68a59"
+                                    ></div>
+                                    <div
+                                        class="color-swatch"
+                                        data-color="#E3B23C"
+                                        style="background-color: #e3b23c"
+                                    ></div>
+                                    <div
+                                        class="color-swatch"
+                                        data-color="#8A9A5B"
+                                        style="background-color: #8a9a5b"
+                                    ></div>
+                                    <div
+                                        class="color-swatch"
+                                        data-color="#6B8299"
+                                        style="background-color: #6b8299"
+                                    ></div>
+                                    <div
+                                        class="color-swatch"
+                                        data-color="#8B6B99"
+                                        style="background-color: #8b6b99"
+                                    ></div>
+                                </div>
+                                <div class="color-row" id="custom-colors"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="projectsSection" class="zone-container">
+                        <div
+                            class="zone-header"
+                            onclick="toggleZone(event, 'projectsSection', 'projectsContent')"
+                        >
+                            <h2 class="zone-title">📊 Projects</h2>
+                            <div class="zone-actions">
+                                <button
+                                    type="button"
+                                    id="statusFilterButton"
+                                    class="zone-button"
+                                    onclick="toggleStatusFilterDropdown(event)"
+                                >
+                                    <i class="fas fa-filter"></i> Filter
+                                </button>
+                                <button
+                                    type="button"
+                                    id="addNewChitButton"
+                                    class="zone-button"
+                                    onclick="addProjectItem(event)"
+                                >
+                                    <i class="fas fa-plus"></i> Add Chit
+                                </button>
+                                <button
+                                    type="button"
+                                    id="projectMasterToggleButton"
+                                    class="zone-button"
+                                    onclick="toggleProjectMaster(event)"
+                                    title="Make a project master"
+                                >
+                                    <i class="fas fa-hammer"></i> Make A Project
+                                    Master
+                                </button>
+                                <select
+                                    id="moveToProjectDropdown"
+                                    class="zone-button"
+                                    style="display: none"
+                                >
+                                    <option value="">Move to Project →</option>
+                                    <option value="project-alpha">
+                                        Project Alpha
+                                    </option>
+                                    <option value="project-beta">
+                                        Project Beta
+                                    </option>
+                                </select>
+                            </div>
+                            <span class="zone-toggle-icon">🔽</span>
+                        </div>
+                        <div id="projectsContent" class="zone-body"></div>
+                        <input
+                            type="hidden"
+                            id="isProjectMaster"
+                            value="false"
+                        />
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="notesModal" class="modal-overlay" style="display: none">
+            <div class="modal-contentFull">
+                <div class="modal-header">
+                    <h2>Notes</h2>
+                    <!--Expanded -->
+                </div>
+                <div class="modal-body">
+                    <div class="field full-width">
+                        <div
+                            id="notes-markdown-input-modal"
+                            class="notes-markdown-inputLarge zone-input"
+                            contenteditable="true"
+                            placeholder="Enter your notes here..."
+                        ></div>
+                        <div
+                            id="notes-rendered-output-modal"
+                            class="markdown-output"
+                            style="display: none"
+                        ></div>
+                    </div>
+                </div>
+                <div class="modal-buttons">
+                    <button type="button" onclick="toggleModalNotesRender()">
+                        <i class="fas fa-eye"></i> Render
+                    </button>
+                    <button
+                        type="button"
+                        onclick="copyNotesToClipboard(event, 'modal')"
+                        title="Copy to Clipboard"
+                    >
+                        <i class="fas fa-clipboard"></i> Copy
+                    </button>
+                    <button
+                        type="button"
+                        onclick="downloadNotes(event, 'modal')"
+                        title="Download"
+                    >
+                        <i class="fas fa-download"></i> Download
+                    </button>
+                    <button
+                        type="button"
+                        class="modal-discard-button"
+                        onclick="closeNotesModal(false)"
+                    >
+                        Discard
+                    </button>
+                    <button type="button" onclick="closeNotesModal(true)">
+                        Save & Close
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="alarmModal" class="modal-overlay" style="display: none">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Alarm Details</h2>
+                </div>
+                <div class="modal-body">
+                    <div class="field">
+                        <label for="alarmName">Alarm Name</label>
+                        <input
+                            type="text"
+                            id="alarmName"
+                            placeholder="e.g., Morning Wake-up"
+                        />
+                    </div>
+                    <div class="field">
+                        <label for="alarmTime">Time</label>
+                        <input
+                            type="text"
+                            id="alarmTime"
+                            placeholder="HH:MM"
+                            required
+                        />
+                    </div>
+                    <div class="field">
+                        <label for="alarmRecurrence">Repeat</label>
+                        <select id="alarmRecurrence">
+                            <option value="none">None</option>
+                            <option value="daily">Daily</option>
+                            <option value="weekly">Weekly</option>
+                            <option value="weekdays">Weekdays</option>
+                            <option value="weekends">Weekends</option>
+                        </select>
+                    </div>
+                    <div
+                        class="field"
+                        id="alarmDaysGroup"
+                        style="display: none"
+                    >
+                        <label>Days</label>
+                        <div class="alarm-days-checkboxes">
+                            <label
+                                ><input
+                                    type="checkbox"
+                                    class="alarm-day"
+                                    value="Mon"
+                                />
+                                Mon</label
+                            >
+                            <label
+                                ><input
+                                    type="checkbox"
+                                    class="alarm-day"
+                                    value="Tue"
+                                />
+                                Tue</label
+                            >
+                            <label
+                                ><input
+                                    type="checkbox"
+                                    class="alarm-day"
+                                    value="Wed"
+                                />
+                                Wed</label
+                            >
+                            <label
+                                ><input
+                                    type="checkbox"
+                                    class="alarm-day"
+                                    value="Thu"
+                                />
+                                Thu</label
+                            >
+                            <label
+                                ><input
+                                    type="checkbox"
+                                    class="alarm-day"
+                                    value="Fri"
+                                />
+                                Fri</label
+                            >
+                            <label
+                                ><input
+                                    type="checkbox"
+                                    class="alarm-day"
+                                    value="Sat"
+                                />
+                                Sat</label
+                            >
+                            <label
+                                ><input
+                                    type="checkbox"
+                                    class="alarm-day"
+                                    value="Sun"
+                                />
+                                Sun</label
+                            >
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label for="alarmSoundSelect">Sound</label>
+                        <select id="alarmSoundSelect">
+                            <option value="chime">Chime</option>
+                            <option value="bell">Bell</option>
+                            <option value="alarm">Alarm</option>
+                        </select>
+                        <audio id="alarmSound" src="" preload="auto"></audio>
+                    </div>
+                </div>
+                <div class="modal-buttons">
+                    <button
+                        type="button"
+                        class="modal-discard-button"
+                        onclick="closeAlarmModal(false)"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        type="button"
+                        id="modalAlarmSubmit"
+                        onclick="addAlarm()"
+                    >
+                        Add Alarm
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="timerModal" class="modal-overlay" style="display: none">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Timer Details</h2>
+                </div>
+                <div class="modal-body">
+                    <div class="field">
+                        <label for="timerNameModal">Timer Name</label>
+                        <input
+                            type="text"
+                            id="timerNameModal"
+                            placeholder="e.g., Cooking Timer"
+                        />
+                    </div>
+                    <div class="field">
+                        <label for="timerHoursModal">Duration</label>
+                        <div class="time-input">
+                            <input
+                                type="number"
+                                id="timerHoursModal"
+                                placeholder="HH"
+                                min="0"
+                                step="1"
+                            />
+                            <span>:</span>
+                            <input
+                                type="number"
+                                id="timerMinutesModal"
+                                placeholder="MM"
+                                min="0"
+                                max="59"
+                                step="1"
+                            />
+                            <span>:</span>
+                            <input
+                                type="number"
+                                id="timerSecondsModal"
+                                placeholder="SS"
+                                min="0"
+                                max="59"
+                                step="1"
+                            />
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label for="timerLoopModal">Loop Timer</label>
+                        <input type="checkbox" id="timerLoopModal" />
+                    </div>
+                    <div class="field">
+                        <label for="timerSoundSelect">Sound</label>
+                        <select id="timerSoundSelect">
+                            <option value="chime">Chime</option>
+                            <option value="bell">Bell</option>
+                            <option value="alarm">Alarm</option>
+                            <option value="timer">Timer (default)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-buttons">
+                    <button
+                        type="button"
+                        class="modal-discard-button"
+                        onclick="closeTimerModal(false)"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        type="button"
+                        id="modalTimerSubmit"
+                        onclick="addTimer()"
+                    >
+                        Add Timer
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="stopwatchModal" class="modal-overlay" style="display: none">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 id="stopwatchModalTitle">Stopwatch Details</h2>
+                </div>
+                <div class="modal-body">
+                    <div class="field">
+                        <label for="stopwatchNameModal">Stopwatch Name</label>
+                        <input
+                            type="text"
+                            id="stopwatchNameModal"
+                            placeholder="e.g., Workout Timer"
+                        />
+                    </div>
+                    <div class="field">
+                        <label>Current Time</label>
+                        <span
+                            id="stopwatchCurrentTimeDisplay"
+                            class="text-xl font-bold"
+                            >00:00:00.00</span
+                        >
+                    </div>
+                    <div class="field">
+                        <label>Laps</label>
+                        <div
+                            id="stopwatchLapsList"
+                            class="stopwatch-lap-list"
+                        ></div>
+                    </div>
+                </div>
+                <div class="modal-buttons">
+                    <button
+                        type="button"
+                        class="modal-discard-button"
+                        onclick="closeStopwatchModal()"
+                    >
+                        Close
+                    </button>
+                    <button
+                        type="button"
+                        id="modalStopwatchSave"
+                        onclick="saveStopwatchDetails()"
+                    >
+                        Save Name
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="notificationModal" class="modal-overlay" style="display: none">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Notification Details</h2>
+                </div>
+                <div class="modal-body">
+                    <div class="field">
+                        <label>Trigger Before</label>
+                        <div
+                            style="
+                                display: flex;
+                                gap: 10px;
+                                align-items: center;
+                            "
+                        >
+                            <input
+                                type="number"
+                                id="notificationValue"
+                                placeholder="Number"
+                                min="0"
+                                step="1"
+                                oninput="validateNotificationInputs()"
+                            />
+                            <select
+                                id="notificationUnit"
+                                onchange="validateNotificationInputs()"
+                            >
+                                <option value="minutes">Minutes</option>
+                                <option value="hours">Hours</option>
+                                <option value="days">Days</option>
+                                <option value="weeks">Weeks</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="field notification-relative-toggle">
+                        <label for="notificationRelativeToToggle"
+                            >Relative to Due Date / Start Date</label
+                        >
+                        <label class="switch">
+                            <input
+                                type="checkbox"
+                                id="notificationRelativeToToggle"
+                                onchange="validateNotificationInputs()"
+                            />
+                            <span class="slider round"></span>
+                        </label>
+                    </div>
+                    <div class="field">
+                        <p>Current Chit Dates:</p>
+                        <p>Start: <span id="currentChitStartDate">N/A</span></p>
+                        <p>Due: <span id="currentChitDueDate">N/A</span></p>
+                    </div>
+                </div>
+                <div class="modal-buttons">
+                    <button
+                        type="button"
+                        class="modal-discard-button"
+                        onclick="closeNotificationModal(false)"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        type="button"
+                        id="modalNotificationSubmit"
+                        onclick="addNotification()"
+                        disabled
+                        title="Enter a valid number and ensure either a Start or Due Date is set for the Chit."
+                    >
+                        Add Notification
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="alertModal" class="alert-modal" style="display: none">
+            <div class="modal-content">
+                <h2 id="modalTitle"></h2>
+                <p>Time: <span id="modalTime"></span></p>
+                <div class="modal-buttons">
+                    <button onclick="dismissAlert()">Dismiss</button>
+                    <button
+                        id="snoozeButton"
+                        onclick="snoozeAlarm()"
+                        style="display: none"
+                    >
+                        Snooze
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div id="deleteChitModal" class="modal">
+            <div class="modal-content">
+                <h2 class="modal-title">Delete Chit?</h2>
+                <p class="modal-message">This action cannot be undone.</p>
+                <button
+                    id="confirmDeleteChitBtn"
+                    class="modal-button modal-button-danger"
+                >
+                    Nuke Chit!
+                </button>
+                <button
+                    id="cancelDeleteChitBtn"
+                    class="modal-button modal-button-cancel"
+                >
+                    Nevermind; keep Chit.
+                </button>
+            </div>
+        </div>
+        <script src="/frontend/editor_checklists.js"></script>
+        <script src="/frontend/editor_projects.js"></script>
+        <script src="/frontend/editor.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+        <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    </body>
+</html>

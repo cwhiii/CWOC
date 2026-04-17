@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <link
+            rel="icon"
+            type="image/x-icon"
+            href="/static/cwod_logo-favicon.png"
+        />
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>C.W.'s Omni Chits</title>
+        <link
+            rel="stylesheet"
+            href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css"
+        />
+        <link rel="stylesheet" href="/frontend/styles.css" />
+        <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    </head>
+    <body>
+        <div class="sidebar" id="sidebar">
+            <div id="year-week-container">
+                <div id="year-display"></div>
+                <div class="week-nav" id="week-nav">
+                    <button class="action-button" onclick="previousPeriod()">
+                        ◄
+                    </button>
+                    <span class="week-range" id="week-range"></span>
+                    <button class="action-button" onclick="nextPeriod()">
+                        ►
+                    </button>
+                </div>
+            </div>
+            <button
+                class="create-chit action-button"
+                onclick="window.location.href='/frontend/editor.html'"
+            >
+                <img src="/static/create_new.png" alt="" />
+                Create Chit
+            </button>
+
+            <!-- Search bar moved to sidebar -->
+            <div class="sidebar-search">
+                <input
+                    type="text"
+                    id="search"
+                    placeholder="Filter Chits..."
+                    onkeyup="searchChits()"
+                />
+            </div>
+
+            <div class="status-filter" style="margin-bottom: 10px">
+                <label for="status-filter">Status:</label>
+                <select id="status-filter" onchange="filterByStatus()">
+                    <option value="">Any Status</option>
+                    <option value="ToDo">ToDo</option>
+                    <option value="In Progress">In Progress</option>
+                    <option value="Blocked">Blocked</option>
+                    <option value="Complete">Complete</option>
+                </select>
+            </div>
+
+            <div class="view-selector">
+                <label for="view-select">View:</label>
+                <select id="view-select" onchange="changeView()">
+                    <option value="Itinerary">Itinerary</option>
+                    <option value="Day">Day</option>
+                    <option value="Week" selected>Week</option>
+                    <option value="Month">Month</option>
+                    <option value="Year">Year</option>
+                </select>
+
+                <!-- Settings button with improved styling and spacing -->
+                <button
+                    class="action-button"
+                    onclick="window.location.href='/frontend/settings.html'"
+                >
+                    <img src="/static/settings.png" alt="Settings" />
+                    Settings
+                </button>
+            </div>
+        </div>
+        <div class="main-content">
+            <div class="header">
+                <img
+                    src="/static/cwod_logo.png"
+                    alt="C.W.'s Omni Chits Logo -- CLICK TO TOGGLE SIDEBAR."
+                    title="C.W.'s Omni Chits -- CLICK TO TOGGLE SIDEBAR."
+                    class="logo"
+                    onclick="toggleSidebar()"
+                />
+                <h1 title="C.W.'s Omni Chits">Omni Chits</h1>
+
+                <div class="tabs">
+                    <div class="tab" onclick="filterChits('Calendar')">
+                        <img src="/static/calendar.png" /> Calendar
+                    </div>
+                    <div class="tab" onclick="filterChits('Checklists')">
+                        <img src="/static/checklists.png" /> Checklists
+                    </div>
+                    <div class="tab" onclick="filterChits('Alarms')">
+                        <img src="/static/alerts.png" /> Alerts
+                    </div>
+                    <div class="tab" onclick="filterChits('Projects')">
+                        <img src="/static/projects.png" /> Projects
+                    </div>
+                    <div class="tab" onclick="filterChits('Tasks')">
+                        <img src="/static/tasks.png" /> Tasks
+                    </div>
+                    <div class="tab" onclick="filterChits('Notes')">
+                        <img src="/static/notes.png" /> Notes
+                    </div>
+                </div>
+                <div class="top-bar-spacer"></div>
+            </div>
+            <div class="chit-list" id="chit-list">
+                <!-- Chits will be populated here -->
+            </div>
+        </div>
+        <script src="/frontend/main.js"></script>
+    </body>
+</html>
