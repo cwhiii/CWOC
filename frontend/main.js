@@ -1160,12 +1160,17 @@ function displayNotesView(chitsToDisplay) {
       titleEl.textContent = `${titlePrefix}${chit.title}`;
       chitElement.appendChild(titleEl);
 
-      // Use a <pre> so newlines and whitespace are preserved exactly as stored
-      const noteEl = document.createElement("pre");
-      noteEl.style.whiteSpace = "pre-wrap";
-      noteEl.style.fontFamily = "inherit";
-      noteEl.style.margin = "0.25em 0";
-      noteEl.textContent = chit.note;
+      // Render markdown if marked.js is available, otherwise pre-wrap plaintext
+      const noteEl = document.createElement("div");
+      noteEl.className = "note-content";
+      noteEl.style.cssText = "margin:0.25em 0;overflow:hidden;max-height:calc(100vh - 120px);";
+      if (typeof marked !== "undefined" && chit.note) {
+        noteEl.innerHTML = marked.parse(chit.note);
+      } else {
+        noteEl.style.whiteSpace = "pre-wrap";
+        noteEl.style.fontFamily = "inherit";
+        noteEl.textContent = chit.note;
+      }
       chitElement.appendChild(noteEl);
 
       const labelsContainer = document.createElement("div");

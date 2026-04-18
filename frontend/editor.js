@@ -774,6 +774,7 @@ function resetEditorForNewChit() {
   // Checklist reset removed
 
   window._currentTagSelection = [];
+  window._loadedChildChits = [];
   loadTags().then((tags) => renderTags(tags, []));
 
   // Reset alerts
@@ -954,9 +955,12 @@ async function buildChitObject() {
     : false;
 
   if (chit.is_project_master && typeof projectState === "object" && projectState.projectChit) {
+    // Project master: use the live projectState child_chits
     chit.child_chits = projectState.projectChit.child_chits || [];
   } else {
-    chit.child_chits = [];
+    // Non-project-master: preserve whatever child_chits were loaded from the DB
+    // Never overwrite with [] — that would delete project membership
+    chit.child_chits = window._loadedChildChits || [];
   }
 
   // Validate minimum required fields
@@ -2394,6 +2398,8 @@ async function loadChitData(chitId) {
     }
 
     window.currentChitId = chit.id || chitId;
+    // Preserve child_chits so buildChitObject doesn't wipe them on save
+    window._loadedChildChits = Array.isArray(chit.child_chits) ? chit.child_chits : [];
     console.log(
       `[loadChitData] Set currentChitId to: "${window.currentChitId}"`,
     );

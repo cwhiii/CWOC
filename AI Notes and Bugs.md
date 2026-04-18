@@ -377,6 +377,16 @@ These are explicitly desired but have no code yet:
 - `[ ]` Sidebar: save a search as a one-click button
 - when creating a chit from any view, hide all zones other than the one from the matching view, and start with focus in that zone's 1st input. 
 impliment drag & drop in calenedar view to change the start time of events (set the evne to thte same length of tiem it had before, with a new edn time), also the ability to drad the lower edge of an event to extend the end-time. do btoth of these rounded to the nearest 15 minutes, so start times jump in 15 minute incriemtnets, and end times snap to nearest 15 minute slot. (neither of these new things happen in in month or year view)
+projects keep vanishing. they are getting deleted from chits after editing the chit?
+
+
+
+Aslo, in the notes view, the size of the ote should exand to fit all the text, bur not longer than the viewpoert space their in (so never have to scroll. 
+
+
+
+Also, in notes view, the markdown is being rendered as plaintext. it should be rendered markdown. 
+
 
 **Medium-term:**
 - `[ ]` Recurrence: full implementation (daily/weekly/monthly/yearly + sub-chit numbering + success rate reporting)
@@ -668,7 +678,20 @@ The design doc calls this out in strong terms: *"The Health Indicators zone IS L
 
 ## 18. Refactor Log — 2026-04-17 (Session 2)
 
-### Alerts improvements — 2026-04-18 (Session 10)
+### Bug fixes — 2026-04-18 (Session 11)
+
+**editor.js — Projects vanishing on save:**
+Root cause: `buildChitObject` always set `chit.child_chits = []` for any chit where `is_project_master` was false. This wiped the `child_chits` array on every save of a regular chit, destroying project membership. Fix: `window._loadedChildChits` is now set when `loadChitData` loads a chit, preserving the original `child_chits` from the DB. `buildChitObject` uses this value instead of `[]` for non-project-master chits. `resetEditorForNewChit` clears it to `[]`.
+
+**main.js — Notes view renders plaintext:**
+`noteEl.textContent = chit.note` was using a `<pre>` element with `textContent`, which renders plain text. Fixed to use a `<div>` with `innerHTML = marked.parse(chit.note)` when marked.js is available.
+
+**main.js — Notes card height:**
+Note element now has `max-height: calc(100vh - 120px)` and `overflow: hidden` so it never exceeds the viewport.
+
+**index.html — marked.js not loaded:**
+Added `marked.min.js` CDN script tag so the Notes view can render markdown.
+
 
 **editor.js:**
 - `loadEditorTimeFormat()` — fetches time format from settings API on init; stored in `window._editorTimeFormat`.
