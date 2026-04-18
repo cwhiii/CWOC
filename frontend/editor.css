@@ -321,6 +321,12 @@ button:disabled:not(.status-icon-button) {
 
 .zone-container.collapsed {
     height: 48px;
+    opacity: 0.55;
+    transition: opacity 0.2s, height 0.3s ease;
+}
+
+.zone-container.collapsed:hover {
+    opacity: 0.85;
 }
 
 .zone-header {

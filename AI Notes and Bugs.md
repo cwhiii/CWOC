@@ -375,6 +375,8 @@ These are explicitly desired but have no code yet:
 - `[ ]` Sidebar: sort order options (title, start date, due date, manual)
 - `[ ]` Sidebar: button/filter to go to archived (and hide archived in views)
 - `[ ]` Sidebar: save a search as a one-click button
+- when creating a chit from any view, hide all zones other than the one from the matching view, and start with focus in that zone's 1st input. 
+impliment drag & drop in calenedar view to change the start time of events (set the evne to thte same length of tiem it had before, with a new edn time), also the ability to drad the lower edge of an event to extend the end-time. do btoth of these rounded to the nearest 15 minutes, so start times jump in 15 minute incriemtnets, and end times snap to nearest 15 minute slot. (neither of these new things happen in in month or year view)
 
 **Medium-term:**
 - `[ ]` Recurrence: full implementation (daily/weekly/monthly/yearly + sub-chit numbering + success rate reporting)
@@ -666,7 +668,83 @@ The design doc calls this out in strong terms: *"The Health Indicators zone IS L
 
 ## 18. Refactor Log — 2026-04-17 (Session 2)
 
-### Bug fixes — 2026-04-18 (Session 5)
+### Bug fixes — 2026-04-18 (Session 9)
+
+**editor.js — Notes zone:**
+- Removed duplicate `openNotesModal`, `closeNotesModal`, `toggleModalNotesRender` stubs that were overriding the correct implementations (JS uses last definition).
+- `toggleNotesViewMode` now captures the textarea/rendered div height before switching so the visual size stays consistent.
+- `shrinkNoteToFourLines` now also sets `minHeight` on the rendered output div.
+
+**editor.js — Alerts zone:**
+- `applyZoneStates` now checks `chit.alerts.length > 0` in addition to `chit.alarm/notification` flags so the zone expands when alerts exist.
+- `openAlarmModal`, `openTimerModal`, `openNotificationModal` now add items inline (no modal) — same pattern as stopwatches.
+- `renderAlarmsContainer` rewritten as inline widget: name input, time picker, day checkboxes, On/Off toggle, delete.
+- `renderTimersContainer` rewritten as inline widget: name input, HH:MM:SS inputs, loop checkbox, live countdown display, Start/Pause/Reset buttons.
+- `renderNotificationsContainer` rewritten as inline widget: value input, unit dropdown, relative-to checkbox, delete.
+- Removed duplicate old timer render block.
+
+**editor.css — Empty collapsed zones:**
+- Collapsed zones now show at 55% opacity (semi-transparent). Hover raises to 85%.
+
+**editor_projects.js:**
+- Removed `alert()` calls from `saveProjectChanges` — saves silently, logs to console only.
+
+
+**main.js:**
+- Added `chitColor(chit)` helper — returns `#fdf6e3` (pale cream) for null/transparent, otherwise the chit's color. Applied to all view renderers via `sed` replacement.
+- `displayProjectsView` rewritten as a tree: each project master is a colored box containing a nested `<ul>` of its child chits. Children show their own color, title, status, and due date. Double-click on either opens the editor.
+
+**editor.js:**
+- Removed duplicate old `renderTimersContainer` and `renderStopwatchesContainer` (static display only).
+- New `renderTimersContainer` — each timer renders as an inline widget with a live countdown display (HH:MM:SS), Start/Pause and Reset buttons. Countdown ticks every second. Fires alert on completion; loops if `loop=true`.
+- New `renderStopwatchesContainer` — each stopwatch renders as an inline widget with editable name, live centisecond display (HH:MM:SS.cc updating every 50ms), Start/Pause, Lap, and Reset buttons. Laps shown in scrollable list.
+- `window._swRuntime` and `window._timerRuntime` hold live state (not persisted — runtime only).
+- `addStopwatch` no longer uses `prompt()` — creates inline widget directly.
+- Alarm modal `alarmTime` input changed from `type="text"` to `type="time"` for native time picker.
+
+
+**backend/main.py:**
+- Added `alerts: Optional[List[Dict[str, Any]]]` to Pydantic `Chit` model
+- Added `alerts TEXT` column to DB schema
+- Added `migrate_add_alerts()` migration (runs at startup)
+- Added `alerts` to all INSERT/UPDATE SQL and GET deserialization
+- Restored missing `init_db()` / migration startup calls
+
+**editor.js — Alerts zone (full implementation):**
+- `window._alertsData` holds `{ alarms, timers, stopwatches, notifications }` arrays
+- Each alert type has its own data structure (alarm: `{_type, name, time, recurrence, days, enabled}`, timer: `{_type, name, totalSeconds, loop}`, stopwatch: `{_type, name}`, notification: `{_type, value, unit, relativeTo}`)
+- `_alertsFromChit(chit)` loads alerts from saved chit data on load
+- `_alertsToArray()` flattens all alert types for saving
+- Full CRUD for each type: `openAlarmModal/addAlarm/editAlarmItem/toggleAlarmEnabled/deleteAlarmItem`, `openTimerModal/addTimer/editTimerItem/deleteTimerItem`, `addStopwatch/deleteStopwatchItem`, `openNotificationModal/addNotification/deleteNotificationItem`
+- `renderAllAlerts()` re-renders all four containers
+- `buildChitObject` now saves `chit.alerts = _alertsToArray()` and sets `alarm`/`notification` flags based on array contents
+- `loadChitData` calls `_alertsFromChit(chit)` to restore alerts
+- `resetEditorForNewChit` resets `_alertsData` and re-renders
+
+**editor.js — Notes zone (full implementation):**
+- `toggleNotesViewMode` — toggles between textarea edit and marked.js rendered view
+- `copyNotesToClipboard` — copies note text to clipboard with visual feedback; fallback for non-HTTPS
+- `downloadNotes` — downloads note as `.md` file named after chit title
+- `openNotesModal` — syncs textarea content into modal contenteditable div, shows modal
+- `closeNotesModal` — saves modal content back to textarea if `save=true`
+- `toggleModalNotesRender` — toggles rendered view inside the modal
+
+
+**editor.js — Project data not saved/reloaded:**
+`loadChitData` was returning early for project masters without populating any standard fields (title, note, color, dates, etc.). Fixed: all standard fields are now populated for project masters too, then `initializeProjectZone` is called at the end. This means project master chits now correctly round-trip all their data.
+
+**editor_projects.js — Current chit shows in Add Chit modal:**
+`openAddChitModal` filtered out project masters and existing children but not the current chit itself. Added `chit.id !== projectState.projectChit?.id` to the filter.
+
+**main.js — Projects tab:**
+Added `displayProjectsView()` — lists all project master chits as cards showing title, note preview, child chit count badge, and due date. Double-click opens the editor.
+
+**main.js — Alarms tab:**
+Added `displayAlarmsView()` — lists all chits with `alarm === true` or `notification === true`. Shows 🔔 for alarm, 📢 for notification. Double-click opens the editor.
+
+**editor.js — Alerts zone buttons not working:**
+All alert functions were missing. Added: `openAlarmModal`, `openTimerModal`, `addStopwatch`, `openNotificationModal`, `toggleAlertFilterDropdown`, `closeAlarmModal`, `closeTimerModal`, `closeStopwatchModal`, `saveStopwatchDetails`, `closeNotificationModal`, `validateNotificationInputs`, `addAlarm`, `addTimer`, `addNotification`. These wire up the existing modal HTML in editor.html.
+
 
 **main.js — Scroll to 6am:**
 Changed from `requestAnimationFrame` to `setTimeout(50)` to ensure the DOM is fully painted and the scrollable element has its height before setting `scrollTop`. Removed `.itinerary-view` from scroll targets (itinerary is not a time-grid).

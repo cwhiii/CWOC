@@ -64,6 +64,7 @@ class Chit(BaseModel):
     is_project_master: Optional[bool] = False  # New field
     child_chits: Optional[List[str]] = None    # New field
     all_day: Optional[bool] = False            # All-day event flag
+    alerts: Optional[List[Dict[str, Any]]] = None  # Alarms, timers, stopwatches, notifications
 
 # Database initialization
 def init_db():
@@ -98,7 +99,8 @@ def init_db():
             modified_datetime TEXT,
             is_project_master BOOLEAN DEFAULT 0,
             child_chits TEXT,
-            all_day BOOLEAN DEFAULT 0
+            all_day BOOLEAN DEFAULT 0,
+            alerts TEXT
         )
         """)
         cursor.execute("""
@@ -173,10 +175,27 @@ def deserialize_json_field(data: Optional[str]) -> Any:
         logger.error(f"Deserialization error: {str(e)}")
         return None
 
-# Initialize database and run migrations
+# Migration: Add alerts column if missing
+def migrate_add_alerts():
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(chits)")
+        columns = [col[1] for col in cursor.fetchall()]
+        if "alerts" not in columns:
+            cursor.execute("ALTER TABLE chits ADD COLUMN alerts TEXT")
+            conn.commit()
+            logger.info("Added alerts column to chits table")
+        conn.close()
+    except Exception as e:
+        logger.error(f"Error adding alerts column: {str(e)}")
+        raise
+
+# Initialize database and run all migrations
 init_db()
 migrate_labels_to_tags()
 migrate_add_all_day()
+migrate_add_alerts()
 
 # Serve all files from /frontend/ (e.g., index.html, settings.html, editor.html)
 app.mount("/frontend", StaticFiles(directory="/app/frontend"), name="frontend")
@@ -216,6 +235,7 @@ def get_chit(chit_id: str):
         chit["child_chits"] = deserialize_json_field(chit.get("child_chits"))
         chit["is_project_master"] = bool(chit.get("is_project_master"))
         chit["all_day"] = bool(chit.get("all_day"))
+        chit["alerts"] = deserialize_json_field(chit.get("alerts"))
         return chit
     except sqlite3.Error as e:
         logger.error(f"Database error fetching chit {chit_id}: {str(e)}")
@@ -246,6 +266,7 @@ def get_all_chits():
             chit["child_chits"] = deserialize_json_field(chit.get("child_chits"))
             chit["is_project_master"] = bool(chit.get("is_project_master"))
             chit["all_day"] = bool(chit.get("all_day"))
+            chit["alerts"] = deserialize_json_field(chit.get("alerts"))
             chits.append(chit)
         return chits
     except Exception as e:
@@ -283,8 +304,8 @@ def create_chit(chit: Chit):
                 id, title, note, tags, start_datetime, end_datetime, due_datetime,
                 completed_datetime, status, priority, severity, checklist, alarm, notification,
                 recurrence, recurrence_id, location, color, people, pinned, archived,
-                deleted, created_datetime, modified_datetime, is_project_master, child_chits, all_day
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                deleted, created_datetime, modified_datetime, is_project_master, child_chits, all_day, alerts
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 chit_id,
@@ -314,6 +335,7 @@ def create_chit(chit: Chit):
                 chit.is_project_master,
                 serialize_json_field(chit.child_chits),
                 chit.all_day if chit.all_day is not None else False,
+                serialize_json_field(chit.alerts),
             )
         )
         conn.commit()
@@ -356,7 +378,7 @@ def update_chit(chit_id: str, chit: Chit):
                     title = ?, note = ?, tags = ?, start_datetime = ?, end_datetime = ?, due_datetime = ?,
                     completed_datetime = ?, status = ?, priority = ?, severity = ?, checklist = ?, alarm = ?, notification = ?,
                     recurrence = ?, recurrence_id = ?, location = ?, color = ?, people = ?, pinned = ?,
-                    archived = ?, deleted = ?, modified_datetime = ?, is_project_master = ?, child_chits = ?, all_day = ?
+                    archived = ?, deleted = ?, modified_datetime = ?, is_project_master = ?, child_chits = ?, all_day = ?, alerts = ?
                 WHERE id = ?
                 """,
                 (
@@ -385,6 +407,7 @@ def update_chit(chit_id: str, chit: Chit):
                     chit.is_project_master,
                     serialize_json_field(chit.child_chits),
                     chit.all_day if chit.all_day is not None else False,
+                    serialize_json_field(chit.alerts),
                     chit_id,
                 )
             )
@@ -396,8 +419,8 @@ def update_chit(chit_id: str, chit: Chit):
                     id, title, note, tags, start_datetime, end_datetime, due_datetime,
                     completed_datetime, status, priority, severity, checklist, alarm, notification,
                     recurrence, recurrence_id, location, color, people, pinned, archived,
-                    deleted, created_datetime, modified_datetime, is_project_master, child_chits, all_day
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    deleted, created_datetime, modified_datetime, is_project_master, child_chits, all_day, alerts
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     chit_id,
@@ -427,6 +450,7 @@ def update_chit(chit_id: str, chit: Chit):
                     chit.is_project_master,
                     serialize_json_field(chit.child_chits),
                     chit.all_day if chit.all_day is not None else False,
+                    serialize_json_field(chit.alerts),
                 )
             )
         conn.commit()

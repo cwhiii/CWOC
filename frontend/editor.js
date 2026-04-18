@@ -776,6 +776,10 @@ function resetEditorForNewChit() {
   window._currentTagSelection = [];
   loadTags().then((tags) => renderTags(tags, []));
 
+  // Reset alerts
+  window._alertsData = { alarms: [], timers: [], stopwatches: [], notifications: [] };
+  renderAllAlerts();
+
   console.log("Editor reset completed.");
 }
 
@@ -938,6 +942,12 @@ async function buildChitObject() {
 
   chit.checklist = window.checklist ? window.checklist.getChecklistData() : [];
 
+  // Collect alerts from the live alerts state
+  chit.alerts = _alertsToArray();
+  // Set alarm/notification flags based on whether any exist
+  chit.alarm = window._alertsData.alarms.length > 0;
+  chit.notification = window._alertsData.notifications.length > 0;
+
   const projectMasterInput = document.getElementById("isProjectMaster");
   chit.is_project_master = projectMasterInput
     ? projectMasterInput.value === "true"
@@ -1077,7 +1087,852 @@ function renderHealthIndicator(indicatorId) {
   }
 }
 
-// Updated loadChitData function in editor.js
+function renderHealthIndicator(indicatorId) {
+  const element = document.getElementById(indicatorId);
+  if (!element) {
+    if (!healthIndicatorWarningsShown.has(indicatorId)) {
+      console.warn(
+        `Element with ID '${indicatorId}' not found. Skipping rendering for this health indicator.`,
+      );
+      healthIndicatorWarningsShown.add(indicatorId);
+    }
+    return;
+  }
+}
+
+// ── Alerts zone — full implementation ───────────────────────────────────────
+// Alert data is stored in window._alertsData = { alarms: [], timers: [], stopwatches: [], notifications: [] }
+// Each type has its own array. Saved to chit.alerts as a flat array with _type field.
+
+window._alertsData = { alarms: [], timers: [], stopwatches: [], notifications: [] };
+let _stopwatchIntervals = {}; // id -> intervalId
+
+function _alertsFromChit(chit) {
+  if (!Array.isArray(chit.alerts)) return;
+  window._alertsData = { alarms: [], timers: [], stopwatches: [], notifications: [] };
+  chit.alerts.forEach((a) => {
+    if (a._type === "alarm") window._alertsData.alarms.push(a);
+    else if (a._type === "timer") window._alertsData.timers.push(a);
+    else if (a._type === "stopwatch") window._alertsData.stopwatches.push(a);
+    else if (a._type === "notification") window._alertsData.notifications.push(a);
+  });
+  renderAllAlerts();
+}
+
+function _alertsToArray() {
+  return [
+    ...window._alertsData.alarms,
+    ...window._alertsData.timers,
+    ...window._alertsData.stopwatches,
+    ...window._alertsData.notifications,
+  ];
+}
+
+// ── Render all alert containers ──────────────────────────────────────────────
+
+function renderAllAlerts() {
+  renderAlarmsContainer();
+  renderTimersContainer();
+  renderStopwatchesContainer();
+  renderNotificationsContainer();
+}
+
+function renderAlarmsContainer() {
+  const c = document.getElementById("alarms-container");
+  if (!c) return;
+  c.innerHTML = "";
+  if (window._alertsData.alarms.length === 0) return;
+
+  const header = document.createElement("h4");
+  header.style.cssText = "margin:0.5em 0 0.25em;font-size:0.9em;opacity:0.7;";
+  header.textContent = "🔔 Alarms";
+  c.appendChild(header);
+
+  window._alertsData.alarms.forEach((alarm, idx) => {
+    const wrap = document.createElement("div");
+    wrap.style.cssText = `border:1px solid #e0d4b5;border-radius:4px;padding:0.4em 0.6em;margin-bottom:0.4em;${!alarm.enabled ? "opacity:0.5;" : ""}`;
+
+    const row1 = document.createElement("div");
+    row1.style.cssText = "display:flex;align-items:center;gap:0.4em;margin-bottom:0.3em;";
+
+    const nameInput = document.createElement("input");
+    nameInput.type = "text";
+    nameInput.value = alarm.name || "";
+    nameInput.placeholder = "Alarm name";
+    nameInput.style.cssText = "flex:1;font-size:0.9em;padding:2px 4px;";
+    nameInput.addEventListener("input", () => { window._alertsData.alarms[idx].name = nameInput.value; setSaveButtonUnsaved(); });
+
+    const timeInput = document.createElement("input");
+    timeInput.type = "time";
+    timeInput.value = alarm.time || "";
+    timeInput.style.cssText = "font-size:0.9em;padding:2px 4px;";
+    timeInput.addEventListener("change", () => { window._alertsData.alarms[idx].time = timeInput.value; setSaveButtonUnsaved(); });
+
+    const toggleBtn = document.createElement("button");
+    toggleBtn.type = "button";
+    toggleBtn.textContent = alarm.enabled ? "On" : "Off";
+    toggleBtn.style.cssText = "padding:1px 6px;";
+    toggleBtn.onclick = () => toggleAlarmEnabled(idx);
+
+    const delBtn = document.createElement("button");
+    delBtn.type = "button"; delBtn.textContent = "❌"; delBtn.style.cssText = "padding:1px 5px;";
+    delBtn.onclick = () => deleteAlarmItem(idx);
+
+    row1.appendChild(nameInput);
+    row1.appendChild(timeInput);
+    row1.appendChild(toggleBtn);
+    row1.appendChild(delBtn);
+    wrap.appendChild(row1);
+
+    // Days row
+    const daysRow = document.createElement("div");
+    daysRow.style.cssText = "display:flex;gap:0.3em;flex-wrap:wrap;font-size:0.8em;";
+    ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].forEach((day) => {
+      const lbl = document.createElement("label");
+      lbl.style.cssText = "display:flex;align-items:center;gap:2px;cursor:pointer;";
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.checked = (alarm.days || []).includes(day);
+      cb.addEventListener("change", () => {
+        const days = window._alertsData.alarms[idx].days || [];
+        if (cb.checked) { if (!days.includes(day)) days.push(day); }
+        else { const i = days.indexOf(day); if (i !== -1) days.splice(i, 1); }
+        window._alertsData.alarms[idx].days = days;
+        setSaveButtonUnsaved();
+      });
+      lbl.appendChild(cb);
+      lbl.appendChild(document.createTextNode(day));
+      daysRow.appendChild(lbl);
+    });
+    wrap.appendChild(daysRow);
+    c.appendChild(wrap);
+  });
+}
+
+function renderNotificationsContainer() {
+  const c = document.getElementById("notifications-container");
+  if (!c) return;
+  c.innerHTML = "";
+  if (window._alertsData.notifications.length === 0) return;
+
+  const header = document.createElement("h4");
+  header.style.cssText = "margin:0.5em 0 0.25em;font-size:0.9em;opacity:0.7;";
+  header.textContent = "📢 Notifications";
+  c.appendChild(header);
+
+  window._alertsData.notifications.forEach((n, idx) => {
+    const row = document.createElement("div");
+    row.style.cssText = "display:flex;align-items:center;gap:0.4em;padding:4px 0;border-bottom:1px solid #e0d4b5;flex-wrap:wrap;";
+
+    const valInput = document.createElement("input");
+    valInput.type = "number"; valInput.min = "1"; valInput.value = n.value || 15;
+    valInput.style.cssText = "width:55px;font-size:0.9em;padding:2px 4px;";
+    valInput.addEventListener("change", () => { window._alertsData.notifications[idx].value = parseInt(valInput.value) || 1; setSaveButtonUnsaved(); });
+
+    const unitSel = document.createElement("select");
+    unitSel.style.cssText = "font-size:0.9em;padding:2px 4px;";
+    ["minutes","hours","days","weeks"].forEach((u) => {
+      const opt = document.createElement("option");
+      opt.value = u; opt.textContent = u;
+      if (n.unit === u) opt.selected = true;
+      unitSel.appendChild(opt);
+    });
+    unitSel.addEventListener("change", () => { window._alertsData.notifications[idx].unit = unitSel.value; setSaveButtonUnsaved(); });
+
+    const relLbl = document.createElement("label");
+    relLbl.style.cssText = "display:flex;align-items:center;gap:2px;font-size:0.85em;cursor:pointer;white-space:nowrap;";
+    const relCb = document.createElement("input");
+    relCb.type = "checkbox"; relCb.checked = !!n.relativeTo;
+    relCb.addEventListener("change", () => { window._alertsData.notifications[idx].relativeTo = relCb.checked; setSaveButtonUnsaved(); });
+    relLbl.appendChild(relCb);
+    relLbl.appendChild(document.createTextNode("before due/start"));
+
+    const delBtn = document.createElement("button");
+    delBtn.type = "button"; delBtn.textContent = "❌"; delBtn.style.cssText = "padding:1px 5px;";
+    delBtn.onclick = () => deleteNotificationItem(idx);
+
+    row.appendChild(document.createTextNode("Notify "));
+    row.appendChild(valInput);
+    row.appendChild(unitSel);
+    row.appendChild(relLbl);
+    row.appendChild(delBtn);
+    c.appendChild(row);
+  });
+}
+
+// ── Alarm CRUD ───────────────────────────────────────────────────────────────
+
+let _editingAlarmIdx = null;
+
+function openAlarmModal(event) {
+  if (event) event.stopPropagation();
+  // Add a new alarm inline — no modal needed
+  window._alertsData.alarms.push({ _type: "alarm", name: "", time: "", recurrence: "none", days: [], enabled: true });
+  const cb = document.getElementById("alarm");
+  if (cb) cb.checked = true;
+  renderAlarmsContainer();
+  setSaveButtonUnsaved();
+}
+
+function editAlarmItem(idx) {
+  _editingAlarmIdx = idx;
+  const alarm = window._alertsData.alarms[idx];
+  const modal = document.getElementById("alarmModal");
+  if (!modal) return;
+  document.getElementById("alarmName").value = alarm.name || "";
+  document.getElementById("alarmTime").value = alarm.time || "";
+  document.getElementById("alarmRecurrence").value = alarm.recurrence || "none";
+  document.querySelectorAll(".alarm-day").forEach((cb) => {
+    cb.checked = (alarm.days || []).includes(cb.value);
+  });
+  document.getElementById("modalAlarmSubmit").textContent = "Update Alarm";
+  modal.style.display = "flex";
+}
+
+function addAlarm() {
+  const name = document.getElementById("alarmName")?.value.trim() || "";
+  const time = document.getElementById("alarmTime")?.value.trim() || "";
+  const recurrence = document.getElementById("alarmRecurrence")?.value || "none";
+  const days = Array.from(document.querySelectorAll(".alarm-day:checked")).map((cb) => cb.value);
+  if (!time) { alert("Please enter a time for the alarm."); return; }
+  const alarm = { _type: "alarm", name, time, recurrence, days, enabled: true };
+  if (_editingAlarmIdx !== null) {
+    window._alertsData.alarms[_editingAlarmIdx] = alarm;
+    _editingAlarmIdx = null;
+  } else {
+    window._alertsData.alarms.push(alarm);
+  }
+  // Set alarm checkbox
+  const cb = document.getElementById("alarm");
+  if (cb) cb.checked = true;
+  closeAlarmModal(true);
+  renderAlarmsContainer();
+  setSaveButtonUnsaved();
+}
+
+function toggleAlarmEnabled(idx) {
+  window._alertsData.alarms[idx].enabled = !window._alertsData.alarms[idx].enabled;
+  renderAlarmsContainer();
+  setSaveButtonUnsaved();
+}
+
+function deleteAlarmItem(idx) {
+  window._alertsData.alarms.splice(idx, 1);
+  if (window._alertsData.alarms.length === 0) {
+    const cb = document.getElementById("alarm");
+    if (cb) cb.checked = false;
+  }
+  renderAlarmsContainer();
+  setSaveButtonUnsaved();
+}
+
+function closeAlarmModal(save) {
+  const modal = document.getElementById("alarmModal");
+  if (modal) modal.style.display = "none";
+}
+
+// ── Timer CRUD ───────────────────────────────────────────────────────────────
+
+let _editingTimerIdx = null;
+
+function openTimerModal(event) {
+  if (event) event.stopPropagation();
+  // Add a new timer inline — no modal needed
+  window._alertsData.timers.push({ _type: "timer", name: "", totalSeconds: 0, loop: false });
+  const idx = window._alertsData.timers.length - 1;
+  window._timerRuntime[idx] = { remaining: 0, intervalId: null, running: false };
+  renderTimersContainer();
+  setSaveButtonUnsaved();
+}
+
+function editTimerItem(idx) {
+  _editingTimerIdx = idx;
+  const timer = window._alertsData.timers[idx];
+  const modal = document.getElementById("timerModal");
+  if (!modal) return;
+  document.getElementById("timerNameModal").value = timer.name || "";
+  document.getElementById("timerHoursModal").value = Math.floor(timer.totalSeconds / 3600);
+  document.getElementById("timerMinutesModal").value = Math.floor((timer.totalSeconds % 3600) / 60);
+  document.getElementById("timerSecondsModal").value = timer.totalSeconds % 60;
+  document.getElementById("timerLoopModal").checked = !!timer.loop;
+  document.getElementById("modalTimerSubmit").textContent = "Update Timer";
+  modal.style.display = "flex";
+}
+
+function addTimer() {
+  const name = document.getElementById("timerNameModal")?.value.trim() || "";
+  const h = parseInt(document.getElementById("timerHoursModal")?.value) || 0;
+  const m = parseInt(document.getElementById("timerMinutesModal")?.value) || 0;
+  const s = parseInt(document.getElementById("timerSecondsModal")?.value) || 0;
+  const loop = document.getElementById("timerLoopModal")?.checked || false;
+  const totalSeconds = h * 3600 + m * 60 + s;
+  if (totalSeconds <= 0) { alert("Please enter a duration greater than 0."); return; }
+  const timer = { _type: "timer", name, totalSeconds, loop };
+  if (_editingTimerIdx !== null) {
+    window._alertsData.timers[_editingTimerIdx] = timer;
+    _editingTimerIdx = null;
+  } else {
+    window._alertsData.timers.push(timer);
+  }
+  closeTimerModal(true);
+  renderTimersContainer();
+  setSaveButtonUnsaved();
+}
+
+function closeTimerModal(save) {
+  const modal = document.getElementById("timerModal");
+  if (modal) modal.style.display = "none";
+}
+
+// ── Stopwatch CRUD — with live running clock ─────────────────────────────────
+
+// Runtime state for running stopwatches (not persisted)
+window._swRuntime = {}; // idx -> { running, elapsed, intervalId, laps }
+
+function addStopwatch(event) {
+  if (event) event.stopPropagation();
+  const idx = window._alertsData.stopwatches.length;
+  window._alertsData.stopwatches.push({ _type: "stopwatch", name: "" });
+  window._swRuntime[idx] = { running: false, elapsed: 0, intervalId: null, laps: [] };
+  renderStopwatchesContainer();
+  setSaveButtonUnsaved();
+}
+
+function deleteStopwatchItem(idx) {
+  // Stop interval if running
+  const rt = window._swRuntime[idx];
+  if (rt && rt.intervalId) clearInterval(rt.intervalId);
+  window._alertsData.stopwatches.splice(idx, 1);
+  // Rebuild runtime map
+  const newRuntime = {};
+  Object.keys(window._swRuntime).forEach((k) => {
+    const ki = parseInt(k);
+    if (ki < idx) newRuntime[ki] = window._swRuntime[ki];
+    else if (ki > idx) newRuntime[ki - 1] = window._swRuntime[ki];
+  });
+  window._swRuntime = newRuntime;
+  renderStopwatchesContainer();
+  setSaveButtonUnsaved();
+}
+
+function _swFmt(ms) {
+  const cs = Math.floor((ms % 1000) / 10);
+  const s = Math.floor(ms / 1000) % 60;
+  const m = Math.floor(ms / 60000) % 60;
+  const h = Math.floor(ms / 3600000);
+  return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}.${String(cs).padStart(2,"0")}`;
+}
+
+function renderStopwatchesContainer() {
+  const c = document.getElementById("stopwatches-container");
+  if (!c) return;
+  c.innerHTML = "";
+  if (window._alertsData.stopwatches.length === 0) return;
+
+  const header = document.createElement("h4");
+  header.style.cssText = "margin:0.5em 0 0.25em;font-size:0.9em;opacity:0.7;";
+  header.textContent = "⏲️ Stopwatches";
+  c.appendChild(header);
+
+  window._alertsData.stopwatches.forEach((sw, idx) => {
+    if (!window._swRuntime[idx]) {
+      window._swRuntime[idx] = { running: false, elapsed: 0, intervalId: null, laps: [] };
+    }
+    const rt = window._swRuntime[idx];
+
+    const wrap = document.createElement("div");
+    wrap.style.cssText = "border:1px solid #e0d4b5;border-radius:4px;padding:0.4em 0.6em;margin-bottom:0.4em;";
+    wrap.id = `sw-wrap-${idx}`;
+
+    // Name row
+    const nameRow = document.createElement("div");
+    nameRow.style.cssText = "display:flex;align-items:center;gap:0.4em;margin-bottom:0.3em;";
+    const nameInput = document.createElement("input");
+    nameInput.type = "text";
+    nameInput.value = sw.name || "";
+    nameInput.placeholder = "Stopwatch name";
+    nameInput.style.cssText = "flex:1;font-size:0.9em;padding:2px 4px;";
+    nameInput.addEventListener("input", () => {
+      window._alertsData.stopwatches[idx].name = nameInput.value;
+      setSaveButtonUnsaved();
+    });
+    const delBtn = document.createElement("button");
+    delBtn.type = "button";
+    delBtn.textContent = "❌";
+    delBtn.style.cssText = "padding:1px 5px;";
+    delBtn.onclick = () => deleteStopwatchItem(idx);
+    nameRow.appendChild(nameInput);
+    nameRow.appendChild(delBtn);
+    wrap.appendChild(nameRow);
+
+    // Display
+    const display = document.createElement("div");
+    display.id = `sw-display-${idx}`;
+    display.style.cssText = "font-family:monospace;font-size:1.4em;text-align:center;padding:0.2em 0;letter-spacing:0.05em;";
+    display.textContent = _swFmt(rt.elapsed);
+    wrap.appendChild(display);
+
+    // Controls
+    const controls = document.createElement("div");
+    controls.style.cssText = "display:flex;gap:0.4em;justify-content:center;margin-top:0.3em;";
+
+    const startStopBtn = document.createElement("button");
+    startStopBtn.type = "button";
+    startStopBtn.id = `sw-startstop-${idx}`;
+    startStopBtn.textContent = rt.running ? "⏸ Pause" : "▶ Start";
+    startStopBtn.style.cssText = "padding:2px 10px;";
+    startStopBtn.onclick = () => {
+      if (rt.running) {
+        clearInterval(rt.intervalId);
+        rt.intervalId = null;
+        rt.running = false;
+        startStopBtn.textContent = "▶ Start";
+      } else {
+        const startMs = Date.now() - rt.elapsed;
+        rt.intervalId = setInterval(() => {
+          rt.elapsed = Date.now() - startMs;
+          const d = document.getElementById(`sw-display-${idx}`);
+          if (d) d.textContent = _swFmt(rt.elapsed);
+        }, 50);
+        rt.running = true;
+        startStopBtn.textContent = "⏸ Pause";
+      }
+    };
+
+    const lapBtn = document.createElement("button");
+    lapBtn.type = "button";
+    lapBtn.textContent = "🏁 Lap";
+    lapBtn.style.cssText = "padding:2px 10px;";
+    lapBtn.onclick = () => {
+      if (rt.running) {
+        rt.laps.push(_swFmt(rt.elapsed));
+        renderLaps(idx, lapsDiv);
+      }
+    };
+
+    const resetBtn = document.createElement("button");
+    resetBtn.type = "button";
+    resetBtn.textContent = "🔄 Reset";
+    resetBtn.style.cssText = "padding:2px 10px;";
+    resetBtn.onclick = () => {
+      clearInterval(rt.intervalId);
+      rt.intervalId = null;
+      rt.running = false;
+      rt.elapsed = 0;
+      rt.laps = [];
+      display.textContent = _swFmt(0);
+      startStopBtn.textContent = "▶ Start";
+      renderLaps(idx, lapsDiv);
+    };
+
+    controls.appendChild(startStopBtn);
+    controls.appendChild(lapBtn);
+    controls.appendChild(resetBtn);
+    wrap.appendChild(controls);
+
+    // Laps
+    const lapsDiv = document.createElement("div");
+    lapsDiv.id = `sw-laps-${idx}`;
+    lapsDiv.style.cssText = "font-size:0.8em;margin-top:0.3em;max-height:80px;overflow-y:auto;";
+    renderLaps(idx, lapsDiv);
+    wrap.appendChild(lapsDiv);
+
+    c.appendChild(wrap);
+  });
+}
+
+function renderLaps(idx, container) {
+  const rt = window._swRuntime[idx];
+  if (!rt || !container) return;
+  container.innerHTML = "";
+  rt.laps.forEach((lap, i) => {
+    const d = document.createElement("div");
+    d.style.cssText = "border-bottom:1px solid #e0d4b5;padding:1px 0;";
+    d.textContent = `Lap ${i + 1}: ${lap}`;
+    container.appendChild(d);
+  });
+}
+
+function closeStopwatchModal() {}
+function saveStopwatchDetails() {}
+
+// ── Timer CRUD — with countdown display ──────────────────────────────────────
+
+// Runtime state for running timers
+window._timerRuntime = {}; // idx -> { remaining, intervalId, running }
+
+function renderTimersContainer() {
+  const c = document.getElementById("timers-container");
+  if (!c) return;
+  c.innerHTML = "";
+  if (window._alertsData.timers.length === 0) return;
+
+  const header = document.createElement("h4");
+  header.style.cssText = "margin:0.5em 0 0.25em;font-size:0.9em;opacity:0.7;";
+  header.textContent = "⏱️ Timers";
+  c.appendChild(header);
+
+  window._alertsData.timers.forEach((timer, idx) => {
+    if (!window._timerRuntime[idx]) {
+      window._timerRuntime[idx] = { remaining: timer.totalSeconds, intervalId: null, running: false };
+    }
+    const rt = window._timerRuntime[idx];
+
+    const wrap = document.createElement("div");
+    wrap.style.cssText = "border:1px solid #e0d4b5;border-radius:4px;padding:0.4em 0.6em;margin-bottom:0.4em;";
+
+    // Name + duration inputs row
+    const row1 = document.createElement("div");
+    row1.style.cssText = "display:flex;align-items:center;gap:0.4em;margin-bottom:0.3em;flex-wrap:wrap;";
+
+    const nameInput = document.createElement("input");
+    nameInput.type = "text"; nameInput.value = timer.name || ""; nameInput.placeholder = "Timer name";
+    nameInput.style.cssText = "flex:1;min-width:80px;font-size:0.9em;padding:2px 4px;";
+    nameInput.addEventListener("input", () => { window._alertsData.timers[idx].name = nameInput.value; setSaveButtonUnsaved(); });
+
+    // HH:MM:SS inputs
+    const hInput = document.createElement("input");
+    hInput.type = "number"; hInput.min = "0"; hInput.placeholder = "HH";
+    hInput.value = Math.floor(timer.totalSeconds / 3600) || "";
+    hInput.style.cssText = "width:42px;font-size:0.9em;padding:2px 4px;text-align:center;";
+
+    const mInput = document.createElement("input");
+    mInput.type = "number"; mInput.min = "0"; mInput.max = "59"; mInput.placeholder = "MM";
+    mInput.value = Math.floor((timer.totalSeconds % 3600) / 60) || "";
+    mInput.style.cssText = "width:42px;font-size:0.9em;padding:2px 4px;text-align:center;";
+
+    const sInput = document.createElement("input");
+    sInput.type = "number"; sInput.min = "0"; sInput.max = "59"; sInput.placeholder = "SS";
+    sInput.value = timer.totalSeconds % 60 || "";
+    sInput.style.cssText = "width:42px;font-size:0.9em;padding:2px 4px;text-align:center;";
+
+    const updateDuration = () => {
+      const h = parseInt(hInput.value) || 0;
+      const m = parseInt(mInput.value) || 0;
+      const s = parseInt(sInput.value) || 0;
+      const total = h * 3600 + m * 60 + s;
+      window._alertsData.timers[idx].totalSeconds = total;
+      if (!rt.running) {
+        rt.remaining = total;
+        const d = document.getElementById(`timer-display-${idx}`);
+        if (d) d.textContent = fmtTimer(rt.remaining);
+      }
+      setSaveButtonUnsaved();
+    };
+    [hInput, mInput, sInput].forEach((inp) => inp.addEventListener("change", updateDuration));
+
+    const loopLbl = document.createElement("label");
+    loopLbl.style.cssText = "display:flex;align-items:center;gap:2px;font-size:0.85em;cursor:pointer;";
+    const loopCb = document.createElement("input");
+    loopCb.type = "checkbox"; loopCb.checked = !!timer.loop;
+    loopCb.addEventListener("change", () => { window._alertsData.timers[idx].loop = loopCb.checked; setSaveButtonUnsaved(); });
+    loopLbl.appendChild(loopCb);
+    loopLbl.appendChild(document.createTextNode("🔁"));
+
+    const delBtn = document.createElement("button");
+    delBtn.type = "button"; delBtn.textContent = "❌"; delBtn.style.cssText = "padding:1px 5px;";
+    delBtn.onclick = () => deleteTimerItem(idx);
+
+    row1.appendChild(nameInput);
+    row1.appendChild(hInput);
+    row1.appendChild(document.createTextNode(":"));
+    row1.appendChild(mInput);
+    row1.appendChild(document.createTextNode(":"));
+    row1.appendChild(sInput);
+    row1.appendChild(loopLbl);
+    row1.appendChild(delBtn);
+    wrap.appendChild(row1);
+
+    // Countdown display
+    const fmtTimer = (s) => {
+      const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+      return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:${String(sec).padStart(2,"0")}`;
+    };
+    const display = document.createElement("div");
+    display.id = `timer-display-${idx}`;
+    display.style.cssText = "font-family:monospace;font-size:1.4em;text-align:center;padding:0.2em 0;";
+    display.textContent = fmtTimer(rt.remaining);
+    wrap.appendChild(display);
+
+    // Controls
+    const controls = document.createElement("div");
+    controls.style.cssText = "display:flex;gap:0.4em;justify-content:center;margin-top:0.3em;";
+
+    const startStopBtn = document.createElement("button");
+    startStopBtn.type = "button";
+    startStopBtn.id = `timer-startstop-${idx}`;
+    startStopBtn.textContent = rt.running ? "⏸ Pause" : "▶ Start";
+    startStopBtn.style.cssText = "padding:2px 10px;";
+    startStopBtn.onclick = () => {
+      if (rt.running) {
+        clearInterval(rt.intervalId); rt.intervalId = null; rt.running = false;
+        startStopBtn.textContent = "▶ Start";
+      } else {
+        if (rt.remaining <= 0) rt.remaining = window._alertsData.timers[idx].totalSeconds;
+        rt.intervalId = setInterval(() => {
+          rt.remaining = Math.max(0, rt.remaining - 1);
+          const d = document.getElementById(`timer-display-${idx}`);
+          if (d) d.textContent = fmtTimer(rt.remaining);
+          if (rt.remaining <= 0) {
+            clearInterval(rt.intervalId); rt.intervalId = null; rt.running = false;
+            const btn = document.getElementById(`timer-startstop-${idx}`);
+            if (btn) btn.textContent = "▶ Start";
+            if (window._alertsData.timers[idx].loop) {
+              rt.remaining = window._alertsData.timers[idx].totalSeconds;
+            } else {
+              alert(`⏱️ Timer "${window._alertsData.timers[idx].name || "Timer"}" finished!`);
+            }
+          }
+        }, 1000);
+        rt.running = true; startStopBtn.textContent = "⏸ Pause";
+      }
+    };
+
+    const resetBtn = document.createElement("button");
+    resetBtn.type = "button"; resetBtn.textContent = "🔄 Reset"; resetBtn.style.cssText = "padding:2px 10px;";
+    resetBtn.onclick = () => {
+      clearInterval(rt.intervalId); rt.intervalId = null; rt.running = false;
+      rt.remaining = window._alertsData.timers[idx].totalSeconds;
+      display.textContent = fmtTimer(rt.remaining);
+      startStopBtn.textContent = "▶ Start";
+    };
+
+    controls.appendChild(startStopBtn);
+    controls.appendChild(resetBtn);
+    wrap.appendChild(controls);
+    c.appendChild(wrap);
+  });
+}
+
+function deleteTimerItem(idx) {
+  const rt = window._timerRuntime[idx];
+  if (rt && rt.intervalId) clearInterval(rt.intervalId);
+  window._alertsData.timers.splice(idx, 1);
+  const newRt = {};
+  Object.keys(window._timerRuntime).forEach((k) => {
+    const ki = parseInt(k);
+    if (ki < idx) newRt[ki] = window._timerRuntime[ki];
+    else if (ki > idx) newRt[ki - 1] = window._timerRuntime[ki];
+  });
+  window._timerRuntime = newRt;
+  renderTimersContainer();
+  setSaveButtonUnsaved();
+}
+
+// ── Notification CRUD ────────────────────────────────────────────────────────
+
+function openNotificationModal(event) {
+  if (event) event.stopPropagation();
+  // Add a new notification inline
+  window._alertsData.notifications.push({ _type: "notification", value: 15, unit: "minutes", relativeTo: false });
+  const cb = document.getElementById("notification");
+  if (cb) cb.checked = true;
+  renderNotificationsContainer();
+  setSaveButtonUnsaved();
+}
+
+function addNotification() {
+  const value = parseInt(document.getElementById("notificationValue")?.value);
+  const unit = document.getElementById("notificationUnit")?.value || "minutes";
+  const relativeTo = document.getElementById("notificationRelativeToToggle")?.checked || false;
+  if (!value || value <= 0) { alert("Please enter a valid number."); return; }
+  window._alertsData.notifications.push({ _type: "notification", value, unit, relativeTo });
+  closeNotificationModal(true);
+  renderNotificationsContainer();
+  setSaveButtonUnsaved();
+}
+
+function deleteNotificationItem(idx) {
+  window._alertsData.notifications.splice(idx, 1);
+  if (window._alertsData.notifications.length === 0) {
+    const cb = document.getElementById("notification");
+    if (cb) cb.checked = false;
+  }
+  renderNotificationsContainer();
+  setSaveButtonUnsaved();
+}
+
+function closeNotificationModal(save) {
+  const modal = document.getElementById("notificationModal");
+  if (modal) modal.style.display = "none";
+}
+
+function validateNotificationInputs() {
+  const val = document.getElementById("notificationValue")?.value;
+  const btn = document.getElementById("modalNotificationSubmit");
+  if (btn) btn.disabled = !val || isNaN(val) || Number(val) <= 0;
+}
+
+function toggleAlertFilterDropdown(event) {
+  if (event) event.stopPropagation();
+  const containers = ["alarms-container", "timers-container", "stopwatches-container", "notifications-container"];
+  const anyVisible = containers.some((id) => {
+    const el = document.getElementById(id);
+    return el && el.style.display !== "none" && el.innerHTML !== "";
+  });
+  containers.forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = anyVisible ? "none" : "";
+  });
+}
+
+// ── End alerts zone ──────────────────────────────────────────────────────────
+
+// ── Notes zone functions ─────────────────────────────────────────────────────
+
+function autoGrowNote(el) {
+  el.style.height = "auto";
+  const maxH = Math.floor(window.innerHeight * 0.6);
+  el.style.height = Math.min(el.scrollHeight, maxH) + "px";
+}
+
+function shrinkNoteToFourLines(event) {
+  if (event) event.stopPropagation();
+  const textarea = document.getElementById("note");
+  const rendered = document.getElementById("notes-rendered-output");
+  const lineH = textarea ? (parseInt(getComputedStyle(textarea).lineHeight) || 22) : 22;
+  const targetH = lineH * 4 + 16;
+  if (textarea) textarea.style.height = targetH + "px";
+  if (rendered) rendered.style.minHeight = targetH + "px";
+}
+
+function _setNotesRenderToggleLabel(isRendered, source) {
+  const btnId = source === "modal" ? "modal-render-toggle-btn" : "notes-render-toggle-btn";
+  const btn = document.getElementById(btnId);
+  if (!btn) return;
+  if (isRendered) {
+    btn.innerHTML = '<i class="fas fa-edit"></i> Edit';
+  } else {
+    btn.innerHTML = '<i class="fas fa-eye"></i> Render';
+  }
+}
+
+function toggleNotesViewMode(event) {
+  if (event) event.stopPropagation();
+  const textarea = document.getElementById("note");
+  const rendered = document.getElementById("notes-rendered-output");
+  if (!textarea || !rendered) return;
+
+  const isCurrentlyRendered = rendered.style.display !== "none";
+  if (isCurrentlyRendered) {
+    // Switch to edit — restore textarea at same visual height as rendered div
+    const h = rendered.offsetHeight;
+    rendered.style.display = "none";
+    textarea.style.display = "";
+    if (h > 0) textarea.style.height = h + "px";
+    textarea.focus();
+    _setNotesRenderToggleLabel(false, "main");
+  } else {
+    // Switch to rendered — capture textarea height first
+    const h = textarea.offsetHeight || textarea.scrollHeight;
+    if (typeof marked !== "undefined") {
+      rendered.innerHTML = marked.parse(textarea.value || "");
+    } else {
+      rendered.innerHTML = `<pre style="white-space:pre-wrap;">${textarea.value}</pre>`;
+    }
+    rendered.style.minHeight = h + "px";
+    rendered.style.display = "block";
+    textarea.style.display = "none";
+    _setNotesRenderToggleLabel(true, "main");
+  }
+}
+
+function copyNotesToClipboard(event, source) {
+  if (event) event.stopPropagation();
+  let text = "";
+  if (source === "modal") {
+    const modalInput = document.getElementById("notes-markdown-input-modal");
+    text = modalInput ? modalInput.innerText : "";
+  } else {
+    const textarea = document.getElementById("note");
+    text = textarea ? textarea.value : "";
+  }
+  const btn = event?.target?.closest("button");
+  const origHTML = btn ? btn.innerHTML : null;
+  navigator.clipboard.writeText(text).then(() => {
+    if (btn && origHTML) { btn.innerHTML = "✅"; setTimeout(() => { btn.innerHTML = origHTML; }, 1200); }
+  }).catch(() => {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand("copy");
+    document.body.removeChild(ta);
+    if (btn && origHTML) { btn.innerHTML = "✅"; setTimeout(() => { btn.innerHTML = origHTML; }, 1200); }
+  });
+}
+
+function downloadNotes(event, source) {
+  if (event) event.stopPropagation();
+  let text = "";
+  if (source === "modal") {
+    const modalInput = document.getElementById("notes-markdown-input-modal");
+    text = modalInput ? modalInput.innerText : "";
+  } else {
+    const textarea = document.getElementById("note");
+    text = textarea ? textarea.value : "";
+  }
+  const title = document.getElementById("title")?.value.trim() || "note";
+  const filename = title.replace(/[^a-z0-9]/gi, "_").toLowerCase() + ".md";
+  const blob = new Blob([text], { type: "text/markdown" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function openNotesModal(event) {
+  if (event) event.stopPropagation();
+  const modal = document.getElementById("notesModal");
+  if (!modal) return;
+  const textarea = document.getElementById("note");
+  const modalInput = document.getElementById("notes-markdown-input-modal");
+  const modalOutput = document.getElementById("notes-rendered-output-modal");
+  if (textarea && modalInput) modalInput.innerText = textarea.value || "";
+  if (modalOutput) modalOutput.style.display = "none";
+  if (modalInput) modalInput.style.display = "";
+  _setNotesRenderToggleLabel(false, "modal");
+  modal.style.display = "flex";
+  if (modalInput) setTimeout(() => modalInput.focus(), 50);
+}
+
+function closeNotesModal(save) {
+  const modal = document.getElementById("notesModal");
+  if (modal) modal.style.display = "none";
+  if (save) {
+    const modalInput = document.getElementById("notes-markdown-input-modal");
+    const mainNote = document.getElementById("note");
+    if (modalInput && mainNote) {
+      mainNote.value = modalInput.innerText;
+      autoGrowNote(mainNote);
+      setSaveButtonUnsaved();
+    }
+  }
+}
+
+function toggleModalNotesRender() {
+  const modalInput = document.getElementById("notes-markdown-input-modal");
+  const modalOutput = document.getElementById("notes-rendered-output-modal");
+  if (!modalInput || !modalOutput) return;
+  const isRendered = modalOutput.style.display !== "none";
+  if (isRendered) {
+    modalOutput.style.display = "none";
+    modalInput.style.display = "";
+    modalInput.focus();
+    _setNotesRenderToggleLabel(false, "modal");
+  } else {
+    if (typeof marked !== "undefined") {
+      modalOutput.innerHTML = marked.parse(modalInput.innerText || "");
+    } else {
+      modalOutput.innerHTML = `<pre style="white-space:pre-wrap;">${modalInput.innerText}</pre>`;
+    }
+    modalOutput.style.display = "block";
+    modalInput.style.display = "none";
+    _setNotesRenderToggleLabel(true, "modal");
+  }
+}
+
+// ── End notes zone functions ──────────────────────────────────────────────────
 async function loadChitData(chitId) {
   console.log(`[loadChitData] Called with chitId: ${chitId}`);
 
@@ -1102,17 +1957,13 @@ async function loadChitData(chitId) {
     const chit = await response.json();
     console.log("[loadChitData] Loaded chit data:", chit);
 
-    // If project master, initialize Projects Zone inside existing container
+    // If project master, populate all standard fields AND initialize Projects Zone
     if (chit.is_project_master) {
-      // Initialize Projects Zone with this chit ID
-      if (typeof initializeProjectZone === "function") {
-        await initializeProjectZone(chit.id);
-      }
-      // Do NOT populate default chit editor fields for project master chit
-      return;
+      // Populate standard editor fields first (title, note, color, etc.)
+      // Fall through to the normal field population below, then init project zone
     }
 
-    // Populate editor fields for non-project chit as usual
+    // Populate editor fields for all chits (including project masters)
 
     const titleInput = document.getElementById("title");
     if (titleInput) {
@@ -1123,9 +1974,13 @@ async function loadChitData(chitId) {
     const noteTextarea = document.getElementById("note");
     if (noteTextarea) {
       noteTextarea.value = chit.note || "";
-      console.log(
-        `[loadChitData] Set note-textarea to: "${noteTextarea.value}"`,
-      );
+      // Auto-grow to fit content
+      setTimeout(() => autoGrowNote(noteTextarea), 0);
+      // Start in rendered mode if there's content
+      if (chit.note && chit.note.trim()) {
+        setTimeout(() => toggleNotesViewMode(null), 50);
+      }
+      console.log(`[loadChitData] Set note-textarea to: "${noteTextarea.value.slice(0,40)}..."`);
     }
 
     const recurrenceSelect = document.getElementById("recurrence");
@@ -1265,6 +2120,9 @@ async function loadChitData(chitId) {
       }
     }
 
+    // Restore alerts
+    _alertsFromChit(chit);
+
     // Restore location
     const locationInput = document.getElementById("location");
     if (locationInput) {
@@ -1337,6 +2195,13 @@ async function loadChitData(chitId) {
     // Collapse zones that have no data, expand zones that do
     applyZoneStates(chit);
 
+    // If project master, initialize the Projects Zone after all fields are populated
+    if (chit.is_project_master) {
+      if (typeof initializeProjectZone === "function") {
+        await initializeProjectZone(chit.id);
+      }
+    }
+
     markEditorSaved();
   } catch (error) {
     console.error("[loadChitData] Error loading chit:", error);
@@ -1380,7 +2245,7 @@ function applyZoneStates(chit) {
     ],
     [
       "alertsSection", "alertsContent",
-      () => !!(chit.alarm || chit.notification),
+      () => !!(chit.alarm || chit.notification || (Array.isArray(chit.alerts) && chit.alerts.length > 0)),
     ],
     [
       "healthIndicatorsSection", "healthIndicatorsContent",
@@ -1524,39 +2389,6 @@ function openLocationDirections(event) {
     },
     { enableHighAccuracy: false, timeout: 5000, maximumAge: 60000 },
   );
-}
-
-function openNotesModal(event) {
-  const modal = document.getElementById("notesModal");
-  if (modal) modal.style.display = "block";
-}
-
-function closeNotesModal(save) {
-  const modal = document.getElementById("notesModal");
-  if (modal) modal.style.display = "none";
-  if (save) {
-    const modalInput = document.getElementById("notes-markdown-input-modal");
-    const mainNote = document.getElementById("note");
-    if (modalInput && mainNote) mainNote.value = modalInput.innerText;
-  }
-}
-
-function toggleModalNotesRender() {
-  const modalInput = document.getElementById("notes-markdown-input-modal");
-  const modalOutput = document.getElementById("notes-rendered-output-modal");
-  if (!modalInput || !modalOutput) return;
-  if (modalOutput.style.display === "none") {
-    if (typeof marked !== "undefined") {
-      modalOutput.innerHTML = marked.parse(modalInput.innerText);
-    } else {
-      modalOutput.innerHTML = modalInput.innerText;
-    }
-    modalOutput.style.display = "block";
-    modalInput.style.display = "none";
-  } else {
-    modalOutput.style.display = "none";
-    modalInput.style.display = "block";
-  }
 }
 
 document.addEventListener("DOMContentLoaded", function () {

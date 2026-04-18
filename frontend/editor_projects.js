@@ -450,10 +450,8 @@ async function saveProjectChanges() {
     ]);
     if (results.some((res) => res && !res.ok)) {
       console.warn("Some save operations failed:", results);
-      alert("Some changes could not be saved. See console for details.");
     } else {
       console.log("All project and child chits saved successfully.");
-      alert("Project and child chits saved successfully.");
     }
   } catch (error) {
     console.error("Error saving project changes:", error);
@@ -514,6 +512,7 @@ async function openAddChitModal() {
       .filter(
         (chit) =>
           !chit.is_project_master &&
+          chit.id !== (projectState.projectChit?.id) &&
           !(projectState.projectChit.child_chits || []).includes(chit.id),
       )
       .sort((a, b) => (a.title || "").localeCompare(b.title || ""));

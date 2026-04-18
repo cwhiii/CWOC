@@ -100,6 +100,20 @@ function getPastelColor(label) {
   return `rgb(${r}, ${g}, ${b})`;
 }
 
+function getChitDisplayColor(chit) {
+  // Return pale cream for no color or transparent — never show transparent in views
+  if (!chit.color || chit.color === "transparent") return "#fdf6e3";
+  return chit.color;
+}
+
+/**
+ * Returns the display color for a chit. Transparent/null → pale cream.
+ */
+function chitColor(chit) {
+  if (!chit.color || chit.color === "transparent") return "#fdf6e3";
+  return chit.color;
+}
+
 function previousPeriod() {
   if (!currentWeekStart) currentWeekStart = getWeekStart(new Date());
   if (currentView === "Day") {
@@ -272,10 +286,10 @@ function displayChits() {
       displayNotesView(filteredChits);
       break;
     case "Alarms":
-      listContainer.innerHTML = `<p>Alarms view not implemented yet.</p>`;
+      displayAlarmsView(filteredChits);
       break;
     case "Projects":
-      listContainer.innerHTML = `<p>Projects view not implemented yet.</p>`;
+      displayProjectsView(filteredChits);
       break;
     default:
       listContainer.innerHTML = `<p>${currentTab} tab not implemented yet.</p>`;
@@ -384,7 +398,7 @@ function displayWeekView(chitsToDisplay) {
 
         timedEvent.style.top = `${top}px`;
         timedEvent.style.height = `${height}px`;
-        timedEvent.style.backgroundColor = chit.color || "#C66B6B";
+        timedEvent.style.backgroundColor = chitColor(chit);
         timedEvent.style.width = "calc(100% - 4px)";
         timedEvent.style.boxSizing = "border-box";
 
@@ -475,7 +489,7 @@ function displayMonthView(chitsToDisplay) {
       dayChits.forEach((chit) => {
         const chitElement = document.createElement("div");
         chitElement.className = "month-event";
-        chitElement.style.backgroundColor = chit.color || "#C66B6B";
+        chitElement.style.backgroundColor = chitColor(chit);
         chitElement.style.cursor = "pointer";
 
         // Fade completed tasks
@@ -537,7 +551,7 @@ function displayItineraryView(chitsToDisplay) {
       chitElement.style.display = "flex";
       chitElement.style.justifyContent = "flex-start";
       chitElement.style.padding = "10px";
-      chitElement.style.backgroundColor = chit.color || "#C66B6B";
+      chitElement.style.backgroundColor = chitColor(chit);
       chitElement.style.marginBottom = "5px";
       chitElement.style.borderRadius = "5px";
       chitElement.style.marginLeft = "100px";
@@ -686,7 +700,7 @@ function displayDayView(chitsToDisplay) {
     chitElement.style.left = `${position * widthPercentage}%`;
     chitElement.style.width = `${widthPercentage - 1}%`;
     chitElement.style.position = "absolute";
-    chitElement.style.backgroundColor = chit.color || "#C66B6B";
+    chitElement.style.backgroundColor = chitColor(chit);
     chitElement.style.boxSizing = "border-box";
 
     // Fade completed tasks
@@ -1138,7 +1152,7 @@ function displayNotesView(chitsToDisplay) {
       chitElement.className = "note-chit";
       chitElement.style.margin = "0";
       chitElement.style.padding = "0.5em";
-      chitElement.style.backgroundColor = chit.color || "#fffaf0";
+      chitElement.style.backgroundColor = chitColor(chit);
 
       const titlePrefix = chit.due_datetime ? "✅ " : "";
 
@@ -1394,7 +1408,7 @@ function displaySevenDayView(chitsToDisplay) {
         const height = (chitEnd.getHours() * 60 + chitEnd.getMinutes()) - top;
         timedEvent.style.top = `${top}px`;
         timedEvent.style.height = `${height}px`;
-        timedEvent.style.backgroundColor = chit.color || "#C66B6B";
+        timedEvent.style.backgroundColor = chitColor(chit);
         timedEvent.style.width = "calc(100% - 4px)";
         timedEvent.style.boxSizing = "border-box";
 
@@ -1413,6 +1427,195 @@ function displaySevenDayView(chitsToDisplay) {
 
   scrollToSixAM();
   renderTimeBar("SevenDay");
+}
+
+/**
+ * Projects tab: tree view — each project master with its child chits nested.
+ */
+function displayProjectsView(chitsToDisplay) {
+  const chitList = document.getElementById("chit-list");
+  chitList.innerHTML = "";
+
+  const projects = chitsToDisplay.filter((c) => c.is_project_master);
+
+  if (projects.length === 0) {
+    chitList.innerHTML = "<p>No projects found. Create a chit and enable Project Master in the Projects zone.</p>";
+    return;
+  }
+
+  // Build a lookup map of all chits by ID
+  const chitMap = {};
+  chits.forEach((c) => { chitMap[c.id] = c; });
+
+  const view = document.createElement("div");
+  view.className = "projects-view";
+  view.style.cssText = "padding:1em;display:flex;flex-direction:column;gap:1em;";
+
+  projects.forEach((project) => {
+    const childIds = Array.isArray(project.child_chits) ? project.child_chits : [];
+    const projectColor = chitColor(project);
+
+    // Outer box colored with project color
+    const box = document.createElement("div");
+    box.style.cssText = `border:2px solid #8b5a2b;border-radius:6px;overflow:hidden;background:${projectColor};`;
+
+    // Project header row
+    const header = document.createElement("div");
+    header.style.cssText = `display:flex;align-items:center;justify-content:space-between;padding:0.6em 0.8em;background:${projectColor};cursor:pointer;`;
+
+    const headerLeft = document.createElement("div");
+    const title = document.createElement("strong");
+    title.style.cssText = "font-size:1.05em;";
+    title.textContent = project.title || "(Untitled Project)";
+    headerLeft.appendChild(title);
+
+    if (project.note) {
+      const note = document.createElement("div");
+      note.style.cssText = "font-size:0.8em;opacity:0.65;margin-top:2px;";
+      note.textContent = project.note.slice(0, 100) + (project.note.length > 100 ? "…" : "");
+      headerLeft.appendChild(note);
+    }
+
+    const headerRight = document.createElement("div");
+    headerRight.style.cssText = "display:flex;gap:0.5em;align-items:center;flex-shrink:0;";
+
+    const badge = document.createElement("span");
+    badge.style.cssText = "background:#8b5a2b;color:#fff;border-radius:12px;padding:2px 10px;font-size:0.8em;white-space:nowrap;";
+    badge.textContent = `${childIds.length} chit${childIds.length !== 1 ? "s" : ""}`;
+    headerRight.appendChild(badge);
+
+    if (project.due_datetime) {
+      const due = document.createElement("span");
+      due.style.cssText = "font-size:0.8em;opacity:0.7;";
+      due.textContent = `Due: ${formatDate(new Date(project.due_datetime))}`;
+      headerRight.appendChild(due);
+    }
+
+    header.appendChild(headerLeft);
+    header.appendChild(headerRight);
+    header.addEventListener("dblclick", () => {
+      storePreviousState();
+      window.location.href = `/editor?id=${project.id}`;
+    });
+    box.appendChild(header);
+
+    // Child chits tree
+    if (childIds.length > 0) {
+      const tree = document.createElement("ul");
+      tree.style.cssText = "list-style:none;margin:0;padding:0 0 0.5em 0;border-top:1px solid rgba(139,90,43,0.2);";
+
+      childIds.forEach((childId) => {
+        const child = chitMap[childId];
+        const li = document.createElement("li");
+        li.style.cssText = `display:flex;align-items:center;gap:0.5em;padding:0.35em 0.8em 0.35em 1.5em;border-bottom:1px solid rgba(139,90,43,0.1);background:${child ? chitColor(child) : "#fdf6e3"};cursor:pointer;`;
+
+        const bullet = document.createElement("span");
+        bullet.style.cssText = "opacity:0.4;font-size:0.8em;flex-shrink:0;";
+        bullet.textContent = "▸";
+        li.appendChild(bullet);
+
+        const childTitle = document.createElement("span");
+        childTitle.style.cssText = "flex:1;font-size:0.95em;";
+        childTitle.textContent = child ? (child.title || "(Untitled)") : `[${childId.slice(0,8)}…]`;
+        li.appendChild(childTitle);
+
+        if (child) {
+          if (child.status) {
+            const status = document.createElement("span");
+            status.style.cssText = "font-size:0.75em;opacity:0.7;white-space:nowrap;";
+            status.textContent = child.status;
+            li.appendChild(status);
+          }
+          if (child.due_datetime) {
+            const due = document.createElement("span");
+            due.style.cssText = "font-size:0.75em;opacity:0.6;white-space:nowrap;";
+            due.textContent = formatDate(new Date(child.due_datetime));
+            li.appendChild(due);
+          }
+          li.addEventListener("dblclick", () => {
+            storePreviousState();
+            window.location.href = `/editor?id=${child.id}`;
+          });
+        }
+
+        tree.appendChild(li);
+      });
+
+      box.appendChild(tree);
+    }
+
+    view.appendChild(box);
+  });
+
+  chitList.appendChild(view);
+}
+
+/**
+ * Alarms tab: list all chits that have any alert (alarm, notification, timer, stopwatch).
+ */
+function displayAlarmsView(chitsToDisplay) {
+  const chitList = document.getElementById("chit-list");
+  chitList.innerHTML = "";
+
+  // A chit has alerts if alarm or notification flag is set
+  const alertChits = chitsToDisplay.filter((c) => c.alarm || c.notification);
+
+  if (alertChits.length === 0) {
+    chitList.innerHTML = "<p>No chits with alerts found.</p>";
+    return;
+  }
+
+  const view = document.createElement("div");
+  view.className = "alarms-view";
+  view.style.cssText = "padding:1em;display:flex;flex-direction:column;gap:0.75em;";
+
+  alertChits.forEach((chit) => {
+    const card = document.createElement("div");
+    card.className = "chit";
+    card.style.cssText = "display:flex;align-items:center;justify-content:space-between;padding:0.75em;cursor:pointer;";
+    card.style.backgroundColor = chitColor(chit);
+
+    const left = document.createElement("div");
+    const title = document.createElement("h3");
+    title.style.margin = "0 0 0.25em 0";
+    title.textContent = chit.title || "(Untitled)";
+    left.appendChild(title);
+
+    if (chit.due_datetime) {
+      const due = document.createElement("p");
+      due.style.cssText = "margin:0;font-size:0.85em;opacity:0.7;";
+      due.textContent = `Due: ${formatDate(new Date(chit.due_datetime))}`;
+      left.appendChild(due);
+    }
+
+    const right = document.createElement("div");
+    right.style.cssText = "display:flex;gap:0.5em;align-items:center;flex-shrink:0;margin-left:1em;font-size:1.3em;";
+
+    if (chit.alarm) {
+      const icon = document.createElement("span");
+      icon.title = "Alarm";
+      icon.textContent = "🔔";
+      right.appendChild(icon);
+    }
+    if (chit.notification) {
+      const icon = document.createElement("span");
+      icon.title = "Notification";
+      icon.textContent = "📢";
+      right.appendChild(icon);
+    }
+
+    card.appendChild(left);
+    card.appendChild(right);
+
+    card.addEventListener("dblclick", () => {
+      storePreviousState();
+      window.location.href = `/editor?id=${chit.id}`;
+    });
+
+    view.appendChild(card);
+  });
+
+  chitList.appendChild(view);
 }
 
 function filterChits(tab) {
@@ -1563,7 +1766,7 @@ if (chitId) {
         chit.notification || false;
       document.getElementById("recurrence").value = chit.recurrence || "";
       document.getElementById("location").value = chit.location || "";
-      document.getElementById("color").value = chit.color || "#C66B6B";
+      document.getElementById("color").value = chitColor(chit);
       document.getElementById("selected-color").textContent = chit.color
         ? chit.color === "#C66B6B"
           ? "Dusty Rose"
