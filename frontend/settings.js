@@ -612,6 +612,7 @@ function cancelSettings() {
   if (isUnsaved) {
     const modal = document.createElement("div");
     modal.className = "modal";
+    modal.id = "cancel-confirm-modal";
     modal.style.display = "flex";
     modal.innerHTML = `
     <div class="modal-content">
@@ -623,14 +624,14 @@ function cancelSettings() {
     document.body.appendChild(modal);
 
     document.getElementById("confirm-exit").onclick = () => {
-      window.location.href = "/frontend/index.html";
+      window.location.href = "/";
     };
 
     document.getElementById("stay-here").onclick = () => {
       modal.remove();
     };
   } else {
-    window.location.href = "/frontend/index.html";
+    window.location.href = "/";
   }
 }
 
@@ -646,6 +647,12 @@ document.addEventListener("keydown", (event) => {
       document.getElementById("duplicate-tag-modal").style.display === "flex"
     ) {
       closeDuplicateTagModal();
+    } else if (document.getElementById("cancel-confirm-modal")) {
+      // ESC on the unsaved-changes confirm modal = "Oops, stay here"
+      document.getElementById("cancel-confirm-modal").remove();
+    } else {
+      // No modal open — same as clicking Cancel
+      cancelSettings();
     }
   } else if (event.key === "Enter") {
     if (document.getElementById("tag-modal").style.display === "flex") {

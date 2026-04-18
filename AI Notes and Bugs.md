@@ -666,7 +666,55 @@ The design doc calls this out in strong terms: *"The Health Indicators zone IS L
 
 ## 18. Refactor Log — 2026-04-17 (Session 2)
 
-### Tags not persisting to DB — root cause found (2026-04-18)
+### Bug fixes — 2026-04-18 (Session 5)
+
+**main.js — Scroll to 6am:**
+Changed from `requestAnimationFrame` to `setTimeout(50)` to ensure the DOM is fully painted and the scrollable element has its height before setting `scrollTop`. Removed `.itinerary-view` from scroll targets (itinerary is not a time-grid).
+
+**main.js — Now-bar wrong position:**
+Changed initial `placeBar()` call from `requestAnimationFrame` to `setTimeout(60)` so `offsetHeight` measurements are valid. The Week/SevenDay bar correctly measures `headerEl.offsetHeight + allDayEl.offsetHeight` at runtime instead of hardcoded 48px.
+
+**editor.js — Pinned/Archived buttons not working:**
+Two bugs fixed:
+1. `togglePinned()` and `toggleArchived()` functions were never implemented — added both. They toggle the hidden input value between `"true"`/`"false"` and update the button icon class (`fas`/`far`).
+2. `buildChitObject` was reading `pinnedCheckbox.checked` on a `<input type="hidden">` — hidden inputs have no `.checked` property. Fixed to read `.value === "true"`.
+
+
+**editor.js — Zone header buttons triggering collapse:**
+`toggleZone` now checks if the click originated from a `.zone-button`, `button`, `input`, `select`, or `label` and returns early if so. Only clicks on the header background, title text, or toggle icon trigger collapse/expand.
+
+**main.js — Scroll to 6am not working:**
+`scrollToSixAM` was calling `chitList.scrollTop = 360` but `#chit-list` has `overflow: hidden` in CSS — it doesn't scroll. Fixed to query the actual scrollable child element (`.week-view`, `.day-view`, or `.itinerary-view`) which has `overflow-y: auto`.
+
+**main.js — Now-bar wrong position:**
+Week/SevenDay bar was using hardcoded `+48px` offset for the day-header height. Fixed to measure `headerEl.offsetHeight + allDayEl.offsetHeight` at runtime. Initial `placeBar()` call wrapped in `requestAnimationFrame` so layout is computed before measuring.
+
+**settings.js — ESC on confirm modal:**
+`cancelSettings` now gives the dynamically-created confirm modal a stable `id="cancel-confirm-modal"`. ESC handler now checks for that modal first and removes it (= "Oops, stay here") before falling through to the "no modal open" case. Also fixed navigation target from `/frontend/index.html` to `/`.
+
+
+**editor.js:**
+- Default chit color changed from `#C66B6B` (Dusty Rose) to `transparent`
+- Default location removed (was "Billings, MT", now empty string)
+- Weather fetch on new chit removed (was fetching for default address)
+
+**settings.js:**
+- ESC key outside any modal now calls `cancelSettings()` (same confirm-if-unsaved logic as Cancel button)
+
+**index.html:**
+- Added "7 Days" (`SevenDay`) option to view dropdown
+
+**main.js:**
+- Added `displaySevenDayView()` — 7-day grid always starting from today
+- Added `scrollToSixAM()` — scrolls `#chit-list` to 6am slot after rendering time-based views
+- Added `renderTimeBar(viewType)` — places a red 2px bar at current time in Day/Week/SevenDay columns (today only) and in Itinerary view; updates every minute at the start of each minute; clears previous interval on re-render
+- `displayWeekView`, `displayDayView`, `displayItineraryView` now call `scrollToSixAM()` and `renderTimeBar()` after rendering
+- `updateDateRange()` now handles `SevenDay` view
+- `displayChits()` now routes `SevenDay` to `displaySevenDayView()`
+- Added keyboard shortcuts (blocked when typing in any input/textarea/select/contenteditable):
+  - `1`–`6`: switch tabs (Calendar, Checklists, Alarms, Projects, Tasks, Notes)
+  - `I` Itinerary, `D` Day, `W` Week, `M` Month, `Y` Year, `S` Seven Days (Calendar tab only)
+
 **Root cause:** `save_settings` in `backend/main.py` called `serialize_json_field(settings.tags)` where `settings.tags` is a list of Pydantic `Tag` model instances. `json.dumps()` cannot serialize Pydantic objects natively — it throws a `TypeError` which `serialize_json_field` catches and returns `None`. So tags were stored as `NULL` in the DB on every save, silently. The save appeared to succeed (200 OK) because the error was swallowed inside the helper.  
 **Fix:** Changed to `json.dumps([t.dict() for t in settings.tags])` which converts Pydantic objects to plain dicts before serialization.  
 **Files changed:** `backend/main.py`

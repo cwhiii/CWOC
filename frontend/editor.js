@@ -13,7 +13,7 @@ let currentWeatherLat = null;
 let currentWeatherLon = null;
 let currentWeatherData = null;
 
-const defaultAddress = "Billings, MT";
+const defaultAddress = "";
 
 const weatherIcons = {
   0: "☀️",
@@ -48,7 +48,6 @@ const defaultColors = [
   { hex: "#6B8299", name: "Slate Teal" },
   { hex: "#8B6B99", name: "Muted Lilac" },
 ];
-
 function generateUniqueId() {
   return Date.now().toString(36) + Math.random().toString(36).substr(2);
 }
@@ -225,6 +224,19 @@ function initializeChitId() {
 }
 
 function toggleZone(event, sectionId, contentId) {
+  // Only toggle if the click was on the header background, title, or toggle icon —
+  // not on any button or interactive element inside the header.
+  const target = event.target;
+  if (
+    target.closest(".zone-button") ||
+    target.closest("button") ||
+    target.closest("input") ||
+    target.closest("select") ||
+    target.closest("label")
+  ) {
+    return;
+  }
+
   const section = document.getElementById(sectionId);
   const content = document.getElementById(contentId);
   if (!section || !content) return;
@@ -256,6 +268,40 @@ function toggleSection(contentId, button) {
     content.classList.add("hidden");
     if (button) button.textContent = "Show";
   }
+}
+
+function togglePinned() {
+  const input = document.getElementById("pinned");
+  const btn = document.getElementById("pinnedButton");
+  if (!input) return;
+  const isNowPinned = input.value !== "true";
+  input.value = isNowPinned ? "true" : "false";
+  if (btn) {
+    const icon = btn.querySelector("i");
+    if (icon) {
+      icon.classList.toggle("fas", isNowPinned);
+      icon.classList.toggle("far", !isNowPinned);
+    }
+    btn.title = isNowPinned ? "Pinned" : "Toggle Pinned State";
+  }
+  setSaveButtonUnsaved();
+}
+
+function toggleArchived() {
+  const input = document.getElementById("archived");
+  const btn = document.getElementById("archivedButton");
+  if (!input) return;
+  const isNowArchived = input.value !== "true";
+  input.value = isNowArchived ? "true" : "false";
+  if (btn) {
+    const icon = btn.querySelector("i");
+    if (icon) {
+      icon.classList.toggle("fas", isNowArchived);
+      icon.classList.toggle("far", !isNowArchived);
+    }
+    btn.title = isNowArchived ? "Archived" : "Toggle Archived State";
+  }
+  setSaveButtonUnsaved();
 }
 
 function addChecklistItem(isSubItem) {
@@ -660,12 +706,12 @@ function resetEditorForNewChit() {
   const elementsToReset = [
     { id: "title", defaultValue: "" },
     { id: "note", defaultValue: "" },
-    { id: "location", defaultValue: defaultAddress },
+    { id: "location", defaultValue: "" },
     { id: "people", defaultValue: "" },
     { id: "status", defaultValue: "" },
     { id: "priority", defaultValue: "" },
     { id: "recurrence", defaultValue: "" },
-    { id: "color", defaultValue: "#C66B6B" },
+    { id: "color", defaultValue: "transparent" },
   ];
 
   const checkboxesToReset = [
@@ -715,26 +761,20 @@ function resetEditorForNewChit() {
 
   const selectedColorElement = document.getElementById("selected-color");
   if (selectedColorElement) {
-    selectedColorElement.style.backgroundColor = "#C66B6B";
+    selectedColorElement.style.backgroundColor = "transparent";
   }
 
   const selectedColorName = document.getElementById("selected-color-name");
   if (selectedColorName) {
-    selectedColorName.textContent = "Dusty Rose";
+    selectedColorName.textContent = "Transparent";
   }
 
-  setColor("#C66B6B", "Dusty Rose");
+  setColor("transparent", "Transparent");
 
   // Checklist reset removed
 
   window._currentTagSelection = [];
   loadTags().then((tags) => renderTags(tags, []));
-
-  if (defaultAddress) {
-    fetchWeatherData(defaultAddress).catch((error) => {
-      console.log("Could not fetch weather for default location:", error);
-    });
-  }
 
   console.log("Editor reset completed.");
 }
@@ -858,10 +898,10 @@ async function buildChitObject() {
   chit.notification = notificationCheckbox ? notificationCheckbox.checked : false;
 
   const pinnedCheckbox = document.getElementById("pinned");
-  chit.pinned = pinnedCheckbox ? pinnedCheckbox.checked : false;
+  chit.pinned = pinnedCheckbox ? pinnedCheckbox.value === "true" : false;
 
   const archivedCheckbox = document.getElementById("archived");
-  chit.archived = archivedCheckbox ? archivedCheckbox.checked : false;
+  chit.archived = archivedCheckbox ? archivedCheckbox.value === "true" : false;
 
   const allDayInput = document.getElementById("allDay");
   const isAllDay = allDayInput ? allDayInput.value === "true" : false;

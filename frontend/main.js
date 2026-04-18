@@ -184,6 +184,12 @@ function updateDateRange() {
     end.setDate(start.getDate() + 6);
     yearElement.textContent = start.getFullYear();
     rangeElement.innerHTML = formatWeekRange(start, end);
+  } else if (currentView === "SevenDay") {
+    const start = new Date(currentWeekStart);
+    const end = new Date(start);
+    end.setDate(start.getDate() + 6);
+    yearElement.textContent = start.getFullYear();
+    rangeElement.innerHTML = formatWeekRange(start, end);
   } else if (currentView === "Month") {
     const monthStart = getMonthStart(currentWeekStart);
     yearElement.textContent = monthStart.getFullYear();
@@ -252,6 +258,7 @@ function displayChits() {
       else if (currentView === "Itinerary") displayItineraryView(filteredChits);
       else if (currentView === "Day") displayDayView(filteredChits);
       else if (currentView === "Year") displayYearView(filteredChits);
+      else if (currentView === "SevenDay") displaySevenDayView(filteredChits);
       else
         listContainer.innerHTML = `<p>${currentView} view not implemented yet.</p>`;
       break;
@@ -396,6 +403,9 @@ function displayWeekView(chitsToDisplay) {
 
   weekView.appendChild(dayColumnsContainer);
   chitList.appendChild(weekView);
+
+  scrollToSixAM();
+  renderTimeBar("Week");
 }
 
 function displayMonthView(chitsToDisplay) {
@@ -565,6 +575,8 @@ function displayItineraryView(chitsToDisplay) {
   }
 
   chitList.appendChild(itineraryView);
+
+  renderTimeBar("Itinerary");
 }
 
 function displayDayView(chitsToDisplay) {
@@ -694,6 +706,9 @@ function displayDayView(chitsToDisplay) {
 
   dayView.appendChild(eventsContainer);
   chitList.appendChild(dayView);
+
+  scrollToSixAM();
+  renderTimeBar("Day");
 }
 
 function displayYearView(chitsToDisplay) {
@@ -1164,6 +1179,242 @@ function displayNotesView(chitsToDisplay) {
   chitList.appendChild(notesView);
 }
 
+/**
+ * Scroll the time-based view so 6:00am is the first visible slot.
+ * Uses setTimeout(0) to ensure the DOM is fully painted before scrolling.
+ */
+function scrollToSixAM() {
+  setTimeout(() => {
+    const scrollable =
+      document.querySelector(".week-view") ||
+      document.querySelector(".day-view");
+    if (scrollable) {
+      scrollable.scrollTop = 360;
+    }
+  }, 50);
+}
+
+/**
+ * Render and maintain a "current time" bar in time-based views.
+ * Only shows in today's column. Updates every minute.
+ */
+let _timeBarInterval = null;
+
+function renderTimeBar(viewType) {
+  // Clear any existing interval
+  if (_timeBarInterval) {
+    clearInterval(_timeBarInterval);
+    _timeBarInterval = null;
+  }
+
+  function placeBar() {
+    // Remove any existing bars
+    document.querySelectorAll(".current-time-bar").forEach((el) => el.remove());
+
+    const now = new Date();
+    const todayStr = now.toDateString();
+    const minuteOfDay = now.getHours() * 60 + now.getMinutes();
+
+    if (viewType === "Day") {
+      // Day view: events container is position:relative, events use top = minuteOfDay
+      const eventsContainer = document.querySelector(".day-view > div:last-child");
+      if (!eventsContainer) return;
+      const bar = document.createElement("div");
+      bar.className = "current-time-bar";
+      bar.style.cssText = `position:absolute;left:0;right:0;top:${minuteOfDay}px;height:2px;background:#e63946;z-index:10;pointer-events:none;`;
+      const dot = document.createElement("div");
+      dot.style.cssText = `position:absolute;left:-4px;top:-4px;width:10px;height:10px;border-radius:50%;background:#e63946;`;
+      bar.appendChild(dot);
+      eventsContainer.appendChild(bar);
+    } else if (viewType === "Week" || viewType === "SevenDay") {
+      // Find today's column and measure actual header + all-day section height
+      const dayColumns = document.querySelectorAll(".day-column");
+      dayColumns.forEach((col) => {
+        const headerEl = col.querySelector(".day-header");
+        const headerText = headerEl?.textContent || "";
+        const parts = headerText.trim().split(/\s+/);
+        if (parts.length >= 3) {
+          const monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+          const monthIdx = monthNames.indexOf(parts[0]);
+          const day = parseInt(parts[1]);
+          const year = new Date().getFullYear();
+          if (monthIdx !== -1 && !isNaN(day)) {
+            const colDate = new Date(year, monthIdx, day);
+            if (colDate.toDateString() === todayStr) {
+              // Measure actual offset at runtime
+              const headerH = headerEl ? headerEl.offsetHeight : 0;
+              const allDayEl = col.querySelector(".all-day-section");
+              const allDayH = allDayEl ? allDayEl.offsetHeight : 0;
+              const offset = headerH + allDayH;
+
+              col.style.position = "relative";
+              const bar = document.createElement("div");
+              bar.className = "current-time-bar";
+              bar.style.cssText = `position:absolute;left:0;right:0;top:${minuteOfDay + offset}px;height:2px;background:#e63946;z-index:10;pointer-events:none;`;
+              const dot = document.createElement("div");
+              dot.style.cssText = `position:absolute;left:-4px;top:-4px;width:10px;height:10px;border-radius:50%;background:#e63946;`;
+              bar.appendChild(dot);
+              col.appendChild(bar);
+            }
+          }
+        }
+      });
+    } else if (viewType === "Itinerary") {
+      // In itinerary, show a horizontal rule at "now" between past and future events
+      const itineraryView = document.querySelector(".itinerary-view");
+      if (!itineraryView) return;
+      const bar = document.createElement("div");
+      bar.className = "current-time-bar";
+      bar.style.cssText = `width:100%;height:2px;background:#e63946;margin:4px 0;position:relative;`;
+      const label = document.createElement("span");
+      label.style.cssText = `position:absolute;left:0;top:-10px;font-size:0.75em;color:#e63946;font-weight:bold;`;
+      label.textContent = `▶ Now (${now.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit",hour12:false})})`;
+      bar.appendChild(label);
+      // Insert before the first future event separator
+      const separators = itineraryView.querySelectorAll(".day-separator");
+      let inserted = false;
+      separators.forEach((sep) => {
+        if (!inserted) {
+          const h3 = sep.querySelector("h3");
+          if (h3) {
+            // Try to parse the date from the separator
+            const parts = h3.textContent.trim().split(/\s+/);
+            const monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+            const monthIdx = monthNames.indexOf(parts[0]);
+            const day = parseInt(parts[1]);
+            const year = new Date().getFullYear();
+            if (monthIdx !== -1 && !isNaN(day)) {
+              const sepDate = new Date(year, monthIdx, day);
+              if (sepDate >= now) {
+                itineraryView.insertBefore(bar, sep);
+                inserted = true;
+              }
+            }
+          }
+        }
+      });
+      if (!inserted) itineraryView.appendChild(bar);
+    }
+  }
+
+  // Use setTimeout so layout is fully computed before measuring offsetHeight
+  setTimeout(() => {
+    placeBar();
+  }, 60);
+  // Update at the start of each minute
+  const msUntilNextMinute = (60 - new Date().getSeconds()) * 1000;
+  setTimeout(() => {
+    placeBar();
+    _timeBarInterval = setInterval(placeBar, 60000);
+  }, msUntilNextMinute);
+}
+
+/**
+ * Seven-day view: same as week view but always starts from today.
+ */
+function displaySevenDayView(chitsToDisplay) {
+  const chitList = document.getElementById("chit-list");
+  chitList.innerHTML = "";
+  const weekView = document.createElement("div");
+  weekView.className = "week-view";
+  weekView.style.display = "flex";
+  weekView.style.width = "100%";
+
+  const hourColumn = document.createElement("div");
+  hourColumn.className = "hour-column";
+  hourColumn.style.order = "1";
+  hourColumn.style.width = "60px";
+  hourColumn.style.flexShrink = "0";
+  for (let hour = 0; hour < 24; hour++) {
+    const hourBlock = document.createElement("div");
+    hourBlock.className = "hour-block";
+    hourBlock.style.top = `${hour * 60}px`;
+    hourBlock.textContent = `${hour}:00`;
+    hourColumn.appendChild(hourBlock);
+  }
+  weekView.appendChild(hourColumn);
+
+  const dayColumnsContainer = document.createElement("div");
+  dayColumnsContainer.style.display = "flex";
+  dayColumnsContainer.style.order = "2";
+  dayColumnsContainer.style.flex = "1";
+  dayColumnsContainer.style.width = "calc(100% - 60px)";
+
+  // Always start from today
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  for (let i = 0; i < 7; i++) {
+    const day = new Date(today);
+    day.setDate(today.getDate() + i);
+    const dayColumn = document.createElement("div");
+    dayColumn.className = "day-column";
+    dayColumn.style.flex = "1";
+    dayColumn.style.minWidth = "0";
+    dayColumn.style.position = "relative";
+
+    const dayHeader = document.createElement("div");
+    dayHeader.className = "day-header";
+    dayHeader.textContent = formatDate(day);
+    dayColumn.appendChild(dayHeader);
+
+    const allDaySection = document.createElement("div");
+    allDaySection.className = "all-day-section";
+    dayColumn.appendChild(allDaySection);
+
+    const dayChits = chitsToDisplay.filter((chit) => {
+      const startDateMatch = chit.start_datetime_obj && chit.start_datetime_obj.toDateString() === day.toDateString();
+      const dueDateObj = chit.due_datetime ? new Date(chit.due_datetime) : null;
+      const dueDateMatch = dueDateObj && dueDateObj.toDateString() === day.toDateString();
+      return startDateMatch || dueDateMatch;
+    });
+
+    dayChits.forEach((chit) => {
+      if (chit.all_day) {
+        const allDayEvent = document.createElement("div");
+        allDayEvent.className = "all-day-event";
+        if (chit.status === "Complete") allDayEvent.classList.add("completed-task");
+        const titlePrefix = chit.due_datetime ? "✅ " : "";
+        allDayEvent.innerHTML = `<span style="font-weight:bold;font-size:1.1em;">${titlePrefix}${chit.title}</span>`;
+        allDayEvent.addEventListener("dblclick", () => { storePreviousState(); window.location.href = `/editor?id=${chit.id}`; });
+        allDaySection.appendChild(allDayEvent);
+      } else {
+        const timedEvent = document.createElement("div");
+        timedEvent.className = "timed-event";
+        if (chit.status === "Complete") timedEvent.classList.add("completed-task");
+
+        let chitStart = chit.start_datetime_obj;
+        let chitEnd = chit.end_datetime_obj;
+        if (!chitStart && chit.due_datetime) {
+          chitStart = new Date(chit.due_datetime);
+          chitEnd = new Date(chitStart.getTime() + 30 * 60 * 1000);
+        }
+
+        const top = chitStart.getHours() * 60 + chitStart.getMinutes();
+        const height = (chitEnd.getHours() * 60 + chitEnd.getMinutes()) - top;
+        timedEvent.style.top = `${top}px`;
+        timedEvent.style.height = `${height}px`;
+        timedEvent.style.backgroundColor = chit.color || "#C66B6B";
+        timedEvent.style.width = "calc(100% - 4px)";
+        timedEvent.style.boxSizing = "border-box";
+
+        const titlePrefix = chit.due_datetime ? "✅ " : "";
+        timedEvent.innerHTML = `<span style="font-weight:bold;font-size:1.1em;">${titlePrefix}${chit.title}</span><br>${formatTime(chitStart)} - ${formatTime(chitEnd)}`;
+        timedEvent.addEventListener("dblclick", () => { storePreviousState(); window.location.href = `/editor?id=${chit.id}`; });
+        dayColumn.appendChild(timedEvent);
+      }
+    });
+
+    dayColumnsContainer.appendChild(dayColumn);
+  }
+
+  weekView.appendChild(dayColumnsContainer);
+  chitList.appendChild(weekView);
+
+  scrollToSixAM();
+  renderTimeBar("SevenDay");
+}
+
 function filterChits(tab) {
   storePreviousState();
 
@@ -1440,6 +1691,47 @@ document.addEventListener("DOMContentLoaded", function () {
 
   window.addEventListener("resize", () => {
     if (currentTab === "Notes") {
+      displayChits();
+    }
+  });
+
+  // ── Keyboard shortcuts ──────────────────────────────────────────────────
+  // Don't fire when user is typing in any input/textarea/select/contenteditable
+  document.addEventListener("keydown", (e) => {
+    const tag = document.activeElement?.tagName?.toLowerCase();
+    const isTyping = tag === "input" || tag === "textarea" || tag === "select"
+      || document.activeElement?.isContentEditable;
+    if (isTyping) return;
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+    const tabOrder = ["Calendar", "Checklists", "Alarms", "Projects", "Tasks", "Notes"];
+    const viewMap = {
+      i: "Itinerary",
+      d: "Day",
+      w: "Week",
+      m: "Month",
+      y: "Year",
+      s: "SevenDay",
+    };
+
+    const key = e.key.toLowerCase();
+
+    // 1-6: switch tabs
+    if (key >= "1" && key <= "6") {
+      const idx = parseInt(key) - 1;
+      if (idx < tabOrder.length) filterChits(tabOrder[idx]);
+      return;
+    }
+
+    // I/D/W/M/Y/S: switch calendar views (only meaningful in Calendar tab)
+    if (viewMap[key] && currentTab === "Calendar") {
+      const newView = viewMap[key];
+      currentView = newView;
+      const viewSelect = document.getElementById("view-select");
+      if (viewSelect) viewSelect.value = newView;
+      // SevenDay always starts from today
+      if (newView === "SevenDay") currentWeekStart = new Date();
+      updateDateRange();
       displayChits();
     }
   });
