@@ -1,7 +1,7 @@
 const checklistContainer = document.getElementById("checklist-container");
 
 function onChecklistChange() {
-  markEditorUnsaved();
+  setSaveButtonUnsaved();
 }
 
 let dragIndicator = null;
@@ -428,12 +428,11 @@ function setColor(hex, name = "Custom") {
   const colorPreview = document.getElementById("selected-color");
   const colorNameLabel = document.getElementById("selected-color-name");
   const mainEditor = document.getElementById("mainEditor");
-  const headerRow = document.querySelector(".header-row"); // Select header-row element
+  // NOTE: header-row intentionally NOT colored — design spec says header stays fixed color
 
   if (colorInput) colorInput.value = hex;
   if (colorPreview) colorPreview.style.backgroundColor = hex;
   if (mainEditor) mainEditor.style.backgroundColor = hex;
-  if (headerRow) headerRow.style.backgroundColor = hex; // Change header-row background color
   if (colorNameLabel) colorNameLabel.textContent = name;
 
   document.querySelectorAll(".color-swatch").forEach((swatch) => {
@@ -726,18 +725,6 @@ function convertMonthFormat(dateStr) {
   );
 }
 
-function isValidMediaSource(src) {
-  if (!src || src.trim() === "" || src === "editor") {
-    return false;
-  }
-  try {
-    new URL(src, window.location.origin);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 function setMediaSource(elementId, src) {
   console.log(
     `setMediaSource called with elementId: ${elementId}, src: ${src}`,
@@ -931,15 +918,6 @@ async function saveChitData() {
   } catch (error) {
     console.error("[saveChitData] Error saving chit:", error);
     alert("Failed to save chit. Check console for details.");
-  }
-}
-
-async function chitExists(chitId) {
-  try {
-    const response = await fetch(`/api/chit/${chitId}`);
-    return response.ok;
-  } catch {
-    return false;
   }
 }
 
@@ -1180,6 +1158,70 @@ async function loadChitData(chitId) {
       }
     }
 
+    // Restore location
+    const locationInput = document.getElementById("location");
+    if (locationInput) {
+      locationInput.value = chit.location || "";
+      console.log(`[loadChitData] Set location to: "${locationInput.value}"`);
+    }
+
+    // Restore people (stored as array, display as comma-separated)
+    const peopleInput = document.getElementById("people");
+    if (peopleInput) {
+      peopleInput.value = Array.isArray(chit.people)
+        ? chit.people.join(", ")
+        : chit.people || "";
+      console.log(`[loadChitData] Set people to: "${peopleInput.value}"`);
+    }
+
+    // Restore color
+    if (chit.color) {
+      const allColors = [...defaultColors, ...(window.customColors || [])];
+      const colorObj = allColors.find(
+        (c) => c.hex.toLowerCase() === chit.color.toLowerCase(),
+      );
+      setColor(chit.color, colorObj ? colorObj.name : "Custom");
+      console.log(`[loadChitData] Set color to: "${chit.color}"`);
+    }
+
+    // Restore pinned state
+    const pinnedInput = document.getElementById("pinned");
+    const pinnedButton = document.getElementById("pinnedButton");
+    if (pinnedInput) {
+      pinnedInput.value = chit.pinned ? "true" : "false";
+      if (pinnedButton) {
+        pinnedButton.querySelector("i")?.classList.toggle("fas", !!chit.pinned);
+        pinnedButton.querySelector("i")?.classList.toggle("far", !chit.pinned);
+      }
+      console.log(`[loadChitData] Set pinned to: ${chit.pinned}`);
+    }
+
+    // Restore archived state
+    const archivedInput = document.getElementById("archived");
+    const archivedButton = document.getElementById("archivedButton");
+    if (archivedInput) {
+      archivedInput.value = chit.archived ? "true" : "false";
+      if (archivedButton) {
+        archivedButton.querySelector("i")?.classList.toggle("fas", !!chit.archived);
+        archivedButton.querySelector("i")?.classList.toggle("far", !chit.archived);
+      }
+      console.log(`[loadChitData] Set archived to: ${chit.archived}`);
+    }
+
+    // Restore tags — load all tags then pre-check the ones on this chit
+    loadTags().then((tags) => {
+      renderTags(tags, chit.tags || []);
+      console.log(`[loadChitData] Restored tags:`, chit.tags);
+    });
+
+    // Fetch weather for the chit's location (or default)
+    const locationForWeather = chit.location || defaultAddress;
+    if (locationForWeather) {
+      fetchWeatherData(locationForWeather).catch((err) => {
+        console.log("Could not fetch weather on load:", err);
+      });
+    }
+
     window.currentChitId = chit.id || chitId;
     console.log(
       `[loadChitData] Set currentChitId to: "${window.currentChitId}"`,
@@ -1205,22 +1247,11 @@ function setSelectValue(selectElement, value) {
 }
 
 function markEditorUnsaved() {
-  const saveButton = document.getElementById("saveButton"); // Note capital B
-  if (saveButton) {
-    saveButton.disabled = false;
-  }
-  // Additional UI updates for unsaved state can be added here
+  setSaveButtonUnsaved();
 }
 
 function markEditorSaved() {
-  const saveButton = document.getElementById("saveButton");
-  const cancelButton = document.querySelector(".cancel");
-  if (saveButton) saveButton.disabled = true;
-  if (cancelButton) {
-    cancelButton.textContent = "Done";
-    cancelButton.onclick = () => (window.location.href = "/");
-  }
-  console.log("Editor marked as saved");
+  setSaveButtonSaved();
 }
 
 function searchLocationMap(event) {
@@ -1458,6 +1489,13 @@ document.addEventListener("DOMContentLoaded", function () {
 
   healthIndicators.forEach(renderHealthIndicator);
 
+  setSaveButtonSaved();
+
+  // Attach input change listeners to mark editor unsaved on any change
+  document.querySelectorAll("input, textarea, select").forEach((input) => {
+    input.addEventListener("input", () => setSaveButtonUnsaved());
+  });
+
   console.log("Editor initialization completed.");
 });
 
@@ -1498,16 +1536,5 @@ function setSaveButtonUnsaved() {
 
   cancelBtn.textContent = "❌ Cancel";
 }
-
-document.addEventListener("DOMContentLoaded", () => {
-  const inputs = document.querySelectorAll("input, textarea, select");
-  inputs.forEach((input) => {
-    input.addEventListener("input", () => {
-      setSaveButtonUnsaved();
-    });
-  });
-
-  setSaveButtonSaved();
-});
 
 console.log("Editor script loaded successfully.");

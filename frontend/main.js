@@ -850,6 +850,10 @@ function displayTasksView(chitsToDisplay) {
   // Replace week-nav with sorting dropdown only if in Tasks tab
   const weekNav = document.getElementById("week-nav");
   if (weekNav) {
+    // Save original week-nav HTML if not already saved
+    if (!weekNav.dataset.originalHtml) {
+      weekNav.dataset.originalHtml = weekNav.innerHTML;
+    }
     weekNav.innerHTML = ""; // Clear existing content
 
     const sortLabel = document.createElement("label");
@@ -1148,6 +1152,16 @@ function displayNotesView(chitsToDisplay) {
 
 function filterChits(tab) {
   storePreviousState();
+
+  // Restore week-nav if switching away from Tasks
+  if (currentTab === "Tasks" && tab !== "Tasks") {
+    const weekNav = document.getElementById("week-nav");
+    if (weekNav && weekNav.dataset.originalHtml) {
+      weekNav.innerHTML = weekNav.dataset.originalHtml;
+      delete weekNav.dataset.originalHtml;
+    }
+  }
+
   currentTab = tab;
   document
     .querySelectorAll(".tab")

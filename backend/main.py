@@ -213,6 +213,7 @@ def get_chit(chit_id: str):
 # API Endpoints (remaining unchanged)
 @app.get("/api/chits")
 def get_all_chits():
+    conn = None
     try:
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
@@ -231,10 +232,12 @@ def get_all_chits():
         logger.error(f"Error fetching chits: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch chits: {str(e)}")
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 @app.post("/api/chits")
 def create_chit(chit: Chit):
+    conn = None
     try:
         chit_id = str(uuid4())
         conn = sqlite3.connect(DB_PATH)
@@ -298,14 +301,17 @@ def create_chit(chit: Chit):
         logger.error(f"Error creating chit: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to create chit: {str(e)}")
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 @app.put("/api/chits/{chit_id}")
 def update_chit(chit_id: str, chit: Chit):
+    conn = None
     try:
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM chits WHERE id = ?", (chit_id,))
+        existing = cursor.fetchone()
         current_time = datetime.utcnow().isoformat()
         system_tags = []
         if chit.due_datetime or chit.start_datetime:
@@ -321,7 +327,7 @@ def update_chit(chit_id: str, chit: Chit):
         if not (chit.due_datetime or chit.start_datetime or chit.end_datetime):
             system_tags.append("Notes")
         chit_tags = list(set((chit.tags or []) + system_tags))
-        if cursor.fetchone():
+        if existing:
             # Update existing chit
             cursor.execute(
                 """
@@ -406,10 +412,12 @@ def update_chit(chit_id: str, chit: Chit):
         logger.error(f"Error updating/creating chit: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to update/create chit: {str(e)}")
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 @app.delete("/api/chits/{chit_id}")
 def delete_chit(chit_id: str):
+    conn = None
     try:
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
@@ -423,10 +431,12 @@ def delete_chit(chit_id: str):
         logger.error(f"Error deleting chit: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to delete chit: {str(e)}")
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 @app.get("/api/settings/{user_id}")
 def get_settings(user_id: str):
+    conn = None
     try:
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
@@ -445,10 +455,12 @@ def get_settings(user_id: str):
         logger.error(f"Error fetching settings: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch settings: {str(e)}")
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 @app.post("/api/settings")
 def save_settings(settings: Settings):
+    conn = None
     try:
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
@@ -478,7 +490,8 @@ def save_settings(settings: Settings):
         logger.error(f"Error saving settings: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to save settings: {str(e)}")
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 # Health check
 @app.get("/health")

@@ -469,7 +469,8 @@ The design doc specifies a much richer property set than currently implemented:
 ### BUG-001 — `chitExists()` Defined Twice
 **File:** `frontend/editor.js`  
 **Severity:** Medium  
-The function `chitExists(chitId)` is defined twice in the same file (identical implementations). JavaScript will silently use the second definition. No functional impact currently, but it's dead code and a maintenance hazard.
+~~The function `chitExists(chitId)` is defined twice in the same file (identical implementations). JavaScript will silently use the second definition. No functional impact currently, but it's dead code and a maintenance hazard.~~  
+**FIXED 2026-04-17** — First duplicate removed.
 
 ### BUG-002 — `loadChitData` Skips All Fields for Project Master Chits
 **File:** `frontend/editor.js` — `loadChitData()`  
@@ -489,22 +490,26 @@ The `case "Alarms":` branch renders `"Alarms view not implemented yet."` despite
 ### BUG-005 — `isValidMediaSource()` Defined Twice
 **File:** `frontend/editor.js`  
 **Severity:** Low  
-Same as BUG-001 pattern — `isValidMediaSource()` is defined twice. The second definition is slightly different (adds a `console.error` call). The second one wins, which is the more complete version, but the duplicate is confusing.
+~~Same as BUG-001 pattern — `isValidMediaSource()` is defined twice. The second definition is slightly different (adds a `console.error` call). The second one wins, which is the more complete version, but the duplicate is confusing.~~  
+**FIXED 2026-04-17** — First (less complete) duplicate removed. Second definition (with `console.error`) retained.
 
 ### BUG-006 — `markEditorSaved()` Disables Save Button on Load
 **File:** `frontend/editor.js`  
 **Severity:** Low / UX  
-`markEditorSaved()` is called at the end of `loadChitData()`, which disables the Save button. This is correct behavior. However, there are two separate `DOMContentLoaded` listeners — one in the main init block and one at the bottom of the file that calls `setSaveButtonSaved()`. Having two `DOMContentLoaded` listeners is fragile and could cause ordering issues.
+~~`markEditorSaved()` is called at the end of `loadChitData()`, which disables the Save button. This is correct behavior. However, there are two separate `DOMContentLoaded` listeners — one in the main init block and one at the bottom of the file that calls `setSaveButtonSaved()`. Having two `DOMContentLoaded` listeners is fragile and could cause ordering issues.~~  
+**FIXED 2026-04-17** — Second `DOMContentLoaded` listener removed. Input change listeners and `setSaveButtonSaved()` call merged into the single main init listener. `markEditorSaved`/`markEditorUnsaved` now delegate to `setSaveButtonSaved`/`setSaveButtonUnsaved` — single source of truth.
 
 ### BUG-007 — `get_all_chits` Closes DB Connection in `finally` Even on Error Before Assignment
 **File:** `backend/main.py` — `get_all_chits()`  
 **Severity:** Low  
-In `get_all_chits`, `conn` is assigned inside the `try` block without a `conn = None` guard before it. If `sqlite3.connect()` itself throws, the `finally: conn.close()` will raise a `NameError` on `conn`. All other endpoints have the same pattern. Compare to `get_chit()` which correctly initializes `conn = None` before the try block.
+~~In `get_all_chits`, `conn` is assigned inside the `try` block without a `conn = None` guard before it. If `sqlite3.connect()` itself throws, the `finally: conn.close()` will raise a `NameError` on `conn`. All other endpoints have the same pattern. Compare to `get_chit()` which correctly initializes `conn = None` before the try block.~~  
+**FIXED 2026-04-17** — All endpoints (`get_all_chits`, `create_chit`, `update_chit`, `delete_chit`, `get_settings`, `save_settings`) now initialize `conn = None` before the try block and use `if conn: conn.close()` in finally.
 
 ### BUG-008 — `update_chit` Fetches Row But Checks After Building Tags
 **File:** `backend/main.py` — `update_chit()`  
 **Severity:** Low / Logic  
-The `cursor.execute("SELECT * FROM chits WHERE id = ?", ...)` is called, then system tags are computed, then `cursor.fetchone()` is called. This is fine in SQLite (single connection, single cursor), but it's fragile — any cursor operation between the SELECT and fetchone would lose the result. The SELECT result should be fetched immediately.
+~~The `cursor.execute("SELECT * FROM chits WHERE id = ?", ...)` is called, then system tags are computed, then `cursor.fetchone()` is called. This is fine in SQLite (single connection, single cursor), but it's fragile — any cursor operation between the SELECT and fetchone would lose the result. The SELECT result should be fetched immediately.~~  
+**FIXED 2026-04-17** — `cursor.fetchone()` now called immediately after the SELECT, stored in `existing`. The `if existing:` check uses this variable.
 
 ### BUG-009 — `loadChitData` Condition Is Always True for New Chits
 **File:** `frontend/editor.js` — `loadChitData()`  
@@ -523,22 +528,26 @@ On save, `chit.allDay` is not included in the saved object — the all-day state
 ### BUG-011 — Tags Not Loaded/Restored When Editing Existing Chit
 **File:** `frontend/editor.js` — `loadChitData()`  
 **Severity:** Medium  
-`loadChitData()` calls `loadTags()` and `renderTags()` to populate the tag checkboxes, but it never checks `chit.tags` to pre-check the boxes for an existing chit. The `renderTags(tags, selectedTags)` function accepts a `selectedTags` parameter, but `loadChitData` never passes the chit's existing tags to it. Result: editing an existing chit always shows all tags unchecked.
+~~`loadChitData()` calls `loadTags()` and `renderTags()` to populate the tag checkboxes, but it never checks `chit.tags` to pre-check the boxes for an existing chit. The `renderTags(tags, selectedTags)` function accepts a `selectedTags` parameter, but `loadChitData` never passes the chit's existing tags to it. Result: editing an existing chit always shows all tags unchecked.~~  
+**FIXED 2026-04-17** — `loadChitData` now calls `renderTags(tags, chit.tags || [])` so existing tags are pre-checked.
 
 ### BUG-012 — Location and People Not Loaded in `loadChitData`
 **File:** `frontend/editor.js` — `loadChitData()`  
 **Severity:** Medium  
-The `loadChitData()` function does not populate the `location` input or the `people` input from the loaded chit data. These fields are saved correctly but never restored when re-opening a chit for editing.
+~~The `loadChitData()` function does not populate the `location` input or the `people` input from the loaded chit data. These fields are saved correctly but never restored when re-opening a chit for editing.~~  
+**FIXED 2026-04-17** — Both fields now restored in `loadChitData`. People array joined as comma-separated string.
 
 ### BUG-013 — Color Not Restored When Editing Existing Chit
 **File:** `frontend/editor.js` — `loadChitData()`  
 **Severity:** Medium  
-Similar to BUG-012 — `chit.color` is never applied via `setColor()` in `loadChitData()`. The editor always shows the default color when opening an existing chit.
+~~Similar to BUG-012 — `chit.color` is never applied via `setColor()` in `loadChitData()`. The editor always shows the default color when opening an existing chit.~~  
+**FIXED 2026-04-17** — `loadChitData` now calls `setColor(chit.color, name)` with the correct color name looked up from the color palette.
 
 ### BUG-014 — Pinned/Archived State Not Restored
 **File:** `frontend/editor.js` — `loadChitData()`  
 **Severity:** Low  
-The `pinned` and `archived` hidden inputs (and their icon buttons) are not updated from `chit.pinned` / `chit.archived` in `loadChitData()`. The toggle buttons will always show as inactive when editing an existing chit.
+~~The `pinned` and `archived` hidden inputs (and their icon buttons) are not updated from `chit.pinned` / `chit.archived` in `loadChitData()`. The toggle buttons will always show as inactive when editing an existing chit.~~  
+**FIXED 2026-04-17** — Both hidden inputs and their icon button classes now restored in `loadChitData`.
 
 ### BUG-015 — `displayChecklistView` Checks `item.done` But Schema Uses `item.checked`
 **File:** `frontend/main.js` — `displayChecklistView()`  
@@ -558,7 +567,8 @@ Two separate functions manage the save button state: `markEditorSaved()` / `mark
 ### BUG-018 — Header Row Changes Color When Chit Color Is Picked (Design Doc Violation)
 **File:** `frontend/editor.js` — `setColor()`  
 **Severity:** Low / UX  
-The design doc explicitly states: *"the very top header (Chit Editor, save buttons, etc) should not change color when a color is picked."* Currently `setColor()` applies the color to both `#mainEditor` AND `.header-row`. The header-row line should be removed.
+~~The design doc explicitly states: *"the very top header (Chit Editor, save buttons, etc) should not change color when a color is picked."* Currently `setColor()` applies the color to both `#mainEditor` AND `.header-row`. The header-row line should be removed.~~  
+**FIXED 2026-04-17** — `headerRow.style.backgroundColor` line removed from `setColor()`. Only `#mainEditor` background changes with color selection.
 
 ### BUG-019 — Notes Saving to a Single Line
 **File:** `frontend/editor.js` / `backend/main.py`  
@@ -573,7 +583,8 @@ The design doc calls this out in strong terms: *"The Health Indicators zone IS L
 ### BUG-021 — Tasks Tab: Sort Dropdown Doesn't Revert When Switching Away
 **File:** `frontend/main.js` — `displayTasksView()`  
 **Severity:** Low / UX  
-When switching to the Tasks tab, the week-nav element is replaced with a sort dropdown. When switching back to any other tab, the sort dropdown is not removed and the week-nav is not restored. The design doc explicitly flags this.
+~~When switching to the Tasks tab, the week-nav element is replaced with a sort dropdown. When switching back to any other tab, the sort dropdown is not removed and the week-nav is not restored. The design doc explicitly flags this.~~  
+**FIXED 2026-04-17** — `displayTasksView` now saves the original week-nav HTML to `dataset.originalHtml` before replacing it. `filterChits()` restores it when switching away from Tasks.
 
 
 | Feature | Status | Notes |
@@ -646,11 +657,17 @@ When switching to the Tasks tab, the week-nav element is replaced with a sort dr
 
 Priority order based on user-visible impact:
 
-1. **BUG-011, 012, 013, 014** — Existing chit data (tags, location, people, color, pinned/archived) not restored when editing. This is the most impactful UX bug — editing any chit loses its metadata.
-2. **BUG-010** — All-day state lost on reload.
-3. **BUG-003** — Projects tab on dashboard is a placeholder.
-4. **BUG-004** — Alarms tab on dashboard is a placeholder.
-5. **BUG-002** — Project master chits can't have their own title/notes edited.
-6. **BUG-015** — Checklist completed state not shown on dashboard.
-7. **BUG-007** — `conn` not initialized before try block in most backend endpoints (potential NameError crash).
-8. **BUG-001, 005** — Duplicate function definitions (cleanup).
+1. ~~**BUG-011, 012, 013, 014**~~ ✅ **FIXED 2026-04-17** — Existing chit data (tags, location, people, color, pinned/archived) not restored when editing.
+2. ~~**BUG-010**~~ — All-day state lost on reload. *(still open)*
+3. ~~**BUG-018**~~ ✅ **FIXED 2026-04-17** — Header row incorrectly colored when picking chit color.
+4. ~~**BUG-021**~~ ✅ **FIXED 2026-04-17** — Tasks tab sort dropdown doesn't revert on tab switch.
+5. ~~**BUG-007, 008**~~ ✅ **FIXED 2026-04-17** — Backend `conn = None` guard and `update_chit` fetchone ordering.
+6. ~~**BUG-001, 005, 006**~~ ✅ **FIXED 2026-04-17** — Duplicate functions and dual DOMContentLoaded listeners.
+7. **BUG-003** — Projects tab on dashboard is a placeholder. *(still open)*
+8. **BUG-004** — Alarms tab on dashboard is a placeholder. *(still open)*
+9. **BUG-002** — Project master chits can't have their own title/notes edited. *(still open)*
+10. **BUG-015** — Checklist completed state (`checked` vs `done` field mismatch) not shown on dashboard. *(still open)*
+11. **BUG-009** — `loadChitData` guard condition is always false for new chits. *(still open, low impact)*
+12. **BUG-010** — All-day state not persisted/restored. *(still open)*
+13. **BUG-019** — Notes saving to a single line. *(still open)*
+14. **BUG-020** — Health Indicators zone buttons collapse the whole zone. *(still open)*
