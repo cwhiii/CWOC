@@ -1107,6 +1107,191 @@ function renderHealthIndicator(indicatorId) {
 window._alertsData = { alarms: [], timers: [], stopwatches: [], notifications: [] };
 let _stopwatchIntervals = {}; // id -> intervalId
 
+// ── Time format helper ───────────────────────────────────────────────────────
+// Loaded from settings on init; used for alarm time display
+window._editorTimeFormat = "24hour"; // default until settings load
+
+async function loadEditorTimeFormat() {
+  try {
+    const res = await fetch("/api/settings/default_user");
+    if (!res.ok) return;
+    const s = await res.json();
+    window._editorTimeFormat = s.time_format || "24hour";
+  } catch (e) { /* keep default */ }
+}
+
+function _fmtAlarmTime(time24) {
+  // time24 is "HH:MM"
+  if (!time24) return "";
+  if (window._editorTimeFormat === "12hour" || window._editorTimeFormat === "12houranalog") {
+    const [h, m] = time24.split(":").map(Number);
+    const ampm = h >= 12 ? "PM" : "AM";
+    const h12 = h % 12 || 12;
+    return `${h12}:${String(m).padStart(2,"0")} ${ampm}`;
+  }
+  return time24;
+}
+
+// ── Sound helpers ────────────────────────────────────────────────────────────
+let _alarmAudio = null;
+let _timerAudio = null;
+
+function _playAlarmSound() {
+  if (!_alarmAudio) {
+    _alarmAudio = new Audio("/static/alarm.mp3");
+    _alarmAudio.loop = true;
+  }
+  _alarmAudio.currentTime = 0;
+  _alarmAudio.play().catch(() => {});
+}
+
+function _stopAlarmSound() {
+  if (_alarmAudio) { _alarmAudio.pause(); _alarmAudio.currentTime = 0; }
+}
+
+function _playTimerSound() {
+  if (!_timerAudio) {
+    _timerAudio = new Audio("/static/timer.mp3");
+  }
+  _timerAudio.currentTime = 0;
+  _timerAudio.play().catch(() => {});
+}
+
+// ── Alarm checker — runs every second ───────────────────────────────────────
+let _alarmCheckerInterval = null;
+const _triggeredAlarms = new Set(); // "idx-HH:MM-dayAbbr"
+
+function _startAlarmChecker() {
+  if (_alarmCheckerInterval) return;
+  _alarmCheckerInterval = setInterval(_checkAlarms, 1000);
+}
+
+function _stopAlarmChecker() {
+  if (_alarmCheckerInterval) { clearInterval(_alarmCheckerInterval); _alarmCheckerInterval = null; }
+}
+
+function _dayAbbr(date) {
+  return ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][date.getDay()];
+}
+
+function _checkAlarms() {
+  const now = new Date();
+  const currentHH = String(now.getHours()).padStart(2,"0");
+  const currentMM = String(now.getMinutes()).padStart(2,"0");
+  const currentTime = `${currentHH}:${currentMM}`;
+  const currentDay = _dayAbbr(now);
+
+  window._alertsData.alarms.forEach((alarm, idx) => {
+    if (!alarm.enabled || !alarm.time) return;
+    const days = alarm.days && alarm.days.length > 0 ? alarm.days : [currentDay];
+    if (!days.includes(currentDay)) return;
+    if (alarm.time !== currentTime) return;
+
+    const key = `${idx}-${alarm.time}-${currentDay}-${now.toDateString()}`;
+    if (_triggeredAlarms.has(key)) return;
+    _triggeredAlarms.add(key);
+
+    // Fire alarm
+    _playAlarmSound();
+    _showAlarmAlert(alarm, () => _stopAlarmSound());
+
+    // Request browser notification
+    if (Notification.permission === "granted") {
+      new Notification(`🔔 Alarm: ${alarm.name || "Alarm"}`, { body: `Time: ${_fmtAlarmTime(alarm.time)}` });
+    }
+  });
+
+  // Clean up old keys (keep only today's)
+  _triggeredAlarms.forEach((key) => {
+    if (!key.endsWith(now.toDateString())) _triggeredAlarms.delete(key);
+  });
+}
+
+function _showAlarmAlert(alarm, onDismiss) {
+  // Create a non-blocking overlay alert
+  const overlay = document.createElement("div");
+  overlay.style.cssText = "position:fixed;top:20px;right:20px;z-index:9999;background:#fff5e6;border:2px solid #8b5a2b;border-radius:8px;padding:1em 1.5em;box-shadow:0 4px 16px rgba(0,0,0,0.3);min-width:220px;";
+  overlay.innerHTML = `
+    <div style="font-weight:bold;font-size:1.1em;margin-bottom:0.4em;">🔔 ${alarm.name || "Alarm"}</div>
+    <div style="font-size:0.9em;margin-bottom:0.6em;">${_fmtAlarmTime(alarm.time)}</div>
+    <button id="_alarm-dismiss-btn" style="padding:4px 14px;margin-right:6px;">Dismiss</button>
+    <button id="_alarm-snooze-btn" style="padding:4px 14px;">Snooze 5m</button>
+  `;
+  document.body.appendChild(overlay);
+
+  overlay.querySelector("#_alarm-dismiss-btn").onclick = () => {
+    overlay.remove();
+    if (onDismiss) onDismiss();
+  };
+  overlay.querySelector("#_alarm-snooze-btn").onclick = () => {
+    overlay.remove();
+    if (onDismiss) onDismiss();
+    // Snooze: add 5 minutes
+    const [h, m] = alarm.time.split(":").map(Number);
+    const snoozeDate = new Date();
+    snoozeDate.setHours(h, m + 5, 0, 0);
+    alarm.time = `${String(snoozeDate.getHours()).padStart(2,"0")}:${String(snoozeDate.getMinutes()).padStart(2,"0")}`;
+  };
+}
+
+// ── Notification checker ─────────────────────────────────────────────────────
+let _notifCheckerInterval = null;
+const _firedNotifications = new Set();
+
+function _startNotificationChecker() {
+  if (_notifCheckerInterval) return;
+  _notifCheckerInterval = setInterval(_checkNotificationAlerts, 30000); // check every 30s
+  _checkNotificationAlerts(); // check immediately
+}
+
+function _stopNotificationChecker() {
+  if (_notifCheckerInterval) { clearInterval(_notifCheckerInterval); _notifCheckerInterval = null; }
+}
+
+function _checkNotificationAlerts() {
+  const startVal = document.getElementById("start_datetime")?.value;
+  const dueVal = document.getElementById("due_datetime")?.value;
+  const title = document.getElementById("title")?.value || "Chit";
+
+  window._alertsData.notifications.forEach((n, idx) => {
+    if (!n.value || !n.unit) return;
+
+    // Convert to milliseconds
+    const unitMs = { minutes: 60000, hours: 3600000, days: 86400000, weeks: 604800000 };
+    const offsetMs = n.value * (unitMs[n.unit] || 60000);
+
+    // Determine target datetime
+    const targetStr = n.relativeTo ? (dueVal || startVal) : startVal;
+    if (!targetStr) return;
+
+    const targetDate = new Date(targetStr);
+    if (isNaN(targetDate.getTime())) return;
+
+    const fireAt = new Date(targetDate.getTime() - offsetMs);
+    const now = new Date();
+
+    // Fire if we're within 30 seconds past the fire time
+    const diff = now - fireAt;
+    if (diff >= 0 && diff < 30000) {
+      const key = `notif-${idx}-${fireAt.toISOString()}`;
+      if (_firedNotifications.has(key)) return;
+      _firedNotifications.add(key);
+
+      const msg = `${n.value} ${n.unit} before ${n.relativeTo ? "due/start" : "start"}: "${title}"`;
+      if (Notification.permission === "granted") {
+        new Notification("📢 Reminder", { body: msg });
+      } else {
+        // Fallback: show inline toast
+        const toast = document.createElement("div");
+        toast.style.cssText = "position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:9999;background:#fff5e6;border:2px solid #8b5a2b;border-radius:8px;padding:0.75em 1.5em;box-shadow:0 4px 16px rgba(0,0,0,0.3);";
+        toast.textContent = `📢 ${msg}`;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 8000);
+      }
+    }
+  });
+}
+
 function _alertsFromChit(chit) {
   if (!Array.isArray(chit.alerts)) return;
   window._alertsData = { alarms: [], timers: [], stopwatches: [], notifications: [] };
@@ -1117,6 +1302,9 @@ function _alertsFromChit(chit) {
     else if (a._type === "notification") window._alertsData.notifications.push(a);
   });
   renderAllAlerts();
+  // Start checkers if there are alarms or notifications
+  if (window._alertsData.alarms.length > 0) _startAlarmChecker();
+  if (window._alertsData.notifications.length > 0) _startNotificationChecker();
 }
 
 function _alertsToArray() {
@@ -1165,8 +1353,16 @@ function renderAlarmsContainer() {
     const timeInput = document.createElement("input");
     timeInput.type = "time";
     timeInput.value = alarm.time || "";
-    timeInput.style.cssText = "font-size:0.9em;padding:2px 4px;";
-    timeInput.addEventListener("change", () => { window._alertsData.alarms[idx].time = timeInput.value; setSaveButtonUnsaved(); });
+    timeInput.style.cssText = "font-size:1.1em;padding:3px 6px;font-weight:bold;";
+    timeInput.addEventListener("change", () => {
+      window._alertsData.alarms[idx].time = timeInput.value;
+      // If no days set, default to today
+      if (!window._alertsData.alarms[idx].days || window._alertsData.alarms[idx].days.length === 0) {
+        window._alertsData.alarms[idx].days = [_dayAbbr(new Date())];
+        renderAlarmsContainer(); // re-render to show checked day
+      }
+      setSaveButtonUnsaved();
+    });
 
     const toggleBtn = document.createElement("button");
     toggleBtn.type = "button";
@@ -1266,10 +1462,14 @@ let _editingAlarmIdx = null;
 
 function openAlarmModal(event) {
   if (event) event.stopPropagation();
-  // Add a new alarm inline — no modal needed
-  window._alertsData.alarms.push({ _type: "alarm", name: "", time: "", recurrence: "none", days: [], enabled: true });
+  // Add a new alarm inline — no modal needed, default time to now+1min, days to today
+  const now = new Date();
+  now.setMinutes(now.getMinutes() + 1);
+  const defaultTime = `${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`;
+  window._alertsData.alarms.push({ _type: "alarm", name: "", time: defaultTime, recurrence: "none", days: [_dayAbbr(new Date())], enabled: true });
   const cb = document.getElementById("alarm");
   if (cb) cb.checked = true;
+  _startAlarmChecker();
   renderAlarmsContainer();
   setSaveButtonUnsaved();
 }
@@ -1677,10 +1877,15 @@ function renderTimersContainer() {
             clearInterval(rt.intervalId); rt.intervalId = null; rt.running = false;
             const btn = document.getElementById(`timer-startstop-${idx}`);
             if (btn) btn.textContent = "▶ Start";
+            _playTimerSound();
             if (window._alertsData.timers[idx].loop) {
               rt.remaining = window._alertsData.timers[idx].totalSeconds;
             } else {
-              alert(`⏱️ Timer "${window._alertsData.timers[idx].name || "Timer"}" finished!`);
+              // Show toast instead of blocking alert
+              const toast = document.createElement("div");
+              toast.style.cssText = "position:fixed;top:20px;right:20px;z-index:9999;background:#fff5e6;border:2px solid #8b5a2b;border-radius:8px;padding:0.75em 1.5em;box-shadow:0 4px 16px rgba(0,0,0,0.3);";
+              toast.innerHTML = `⏱️ Timer "${window._alertsData.timers[idx].name || "Timer"}" finished! <button onclick="this.parentElement.remove();_stopAlarmSound();" style="margin-left:8px;padding:2px 8px;">OK</button>`;
+              document.body.appendChild(toast);
             }
           }
         }, 1000);
@@ -1727,6 +1932,7 @@ function openNotificationModal(event) {
   window._alertsData.notifications.push({ _type: "notification", value: 15, unit: "minutes", relativeTo: false });
   const cb = document.getElementById("notification");
   if (cb) cb.checked = true;
+  _startNotificationChecker();
   renderNotificationsContainer();
   setSaveButtonUnsaved();
 }
@@ -2395,6 +2601,14 @@ document.addEventListener("DOMContentLoaded", function () {
   console.log("DOM Content Loaded - Initializing editor...");
 
   initializeChitId();
+
+  // Load time format setting for alarm display
+  loadEditorTimeFormat();
+
+  // Request notification permission
+  if (typeof Notification !== "undefined" && Notification.permission === "default") {
+    Notification.requestPermission();
+  }
 
   // Load custom colors from settings and render into the color picker
   fetchCustomColors().then((colors) => {

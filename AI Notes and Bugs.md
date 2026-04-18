@@ -668,7 +668,22 @@ The design doc calls this out in strong terms: *"The Health Indicators zone IS L
 
 ## 18. Refactor Log — 2026-04-17 (Session 2)
 
-### Bug fixes — 2026-04-18 (Session 9)
+### Alerts improvements — 2026-04-18 (Session 10)
+
+**editor.js:**
+- `loadEditorTimeFormat()` — fetches time format from settings API on init; stored in `window._editorTimeFormat`.
+- `_fmtAlarmTime(time24)` — converts HH:MM to 12-hour format if setting is `12hour`/`12houranalog`.
+- `_playAlarmSound()` / `_stopAlarmSound()` — plays/stops `/static/alarm.mp3` (looping).
+- `_playTimerSound()` — plays `/static/timer.mp3` on timer completion.
+- `_startAlarmChecker()` / `_checkAlarms()` — runs every second; fires alarm overlay (non-blocking) with Dismiss and Snooze 5m buttons; also sends browser Notification if permission granted; uses `_triggeredAlarms` Set to prevent duplicate fires.
+- `_startNotificationChecker()` / `_checkNotificationAlerts()` — runs every 30s; fires browser Notification or inline toast when within 30s of the scheduled fire time.
+- `openAlarmModal` now defaults new alarms to current time +1 minute and today's day.
+- Alarm time input enlarged to `font-size:1.1em`.
+- When alarm time is changed and no days are set, defaults to today.
+- Timer completion now shows a non-blocking toast instead of `alert()`, plays timer sound.
+- Notification permission requested on DOMContentLoaded.
+- Alarm checker started automatically when alarms/notifications are loaded from a chit or added.
+
 
 **editor.js — Notes zone:**
 - Removed duplicate `openNotesModal`, `closeNotesModal`, `toggleModalNotesRender` stubs that were overriding the correct implementations (JS uses last definition).
