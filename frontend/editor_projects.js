@@ -8,6 +8,16 @@ const projectState = {
   projectMasters: [], // List of all project master chits for move dropdown
 };
 
+/**
+ * Mark the editor as having unsaved changes.
+ * Delegates to setSaveButtonUnsaved() defined in editor.js.
+ */
+function saveCurrentChit() {
+  if (typeof setSaveButtonUnsaved === "function") {
+    setSaveButtonUnsaved();
+  }
+}
+
 // Initialize the Projects Zone for the given project chit ID
 async function initializeProjectZone(projectChitId) {
   if (!projectChitId) {
@@ -130,6 +140,7 @@ function updateChitStatus(chitId, newStatus) {
   if (projectState.childChits[chitId]) {
     projectState.childChits[chitId].status = newStatus;
     renderChildChitsByStatus();
+    saveCurrentChit();
   }
 }
 
@@ -371,6 +382,7 @@ function moveChildChitToProject(childChitId, targetProjectId) {
 
   // Re-render UI to reflect changes
   renderChildChitsByStatus();
+  saveCurrentChit();
 }
 
 // Fetch all project master chits for move dropdown
@@ -609,6 +621,7 @@ function addChildChit(chit) {
 
   // Re-render the Projects Zone UI
   renderChildChitsByStatus();
+  saveCurrentChit();
 }
 
 // Modified addProjectItem to open the modal
@@ -650,11 +663,10 @@ async function toggleProjectMaster() {
 
     if (projectMasterInput.value === "true") {
       await initializeProjectZone(chitId);
-      // alert commented out as requested
     } else {
       clearProjectsContent();
-      // alert commented out as requested
     }
+    saveCurrentChit();
   } catch (error) {
     console.error("Error in toggleProjectMaster:", error);
     alert("Failed to toggle project master status. Please try again.");

@@ -5,6 +5,268 @@ let currentWeekStart = null;
 let currentView = "Week";
 let previousState = { tab: "Calendar", view: "Week" };
 
+// ── Global Alert System ──────────────────────────────────────────────────────
+// Runs continuously regardless of which view or chit is open.
+
+const _globalTriggeredAlarms = new Set(); // "chitId-alarmIdx-HH:MM-dateStr"
+const _globalFiredNotifications = new Set(); // "chitId-notifIdx-fireISOStr"
+let _globalAlarmInterval = null;
+let _globalNotifInterval = null;
+let _globalAlarmAudio = null;
+let _globalTimerAudio = null;
+let _globalTimeFormat = "24hour";
+
+function _globalFmtTime(time24) {
+  if (!time24) return "";
+  if (_globalTimeFormat === "12hour" || _globalTimeFormat === "12houranalog") {
+    const [h, m] = time24.split(":").map(Number);
+    const ampm = h >= 12 ? "PM" : "AM";
+    return `${h % 12 || 12}:${String(m).padStart(2,"0")} ${ampm}`;
+  }
+  return time24;
+}
+
+function _globalPlayAlarm() {
+  if (!_globalAlarmAudio) {
+    _globalAlarmAudio = new Audio("/static/alarm.mp3");
+    _globalAlarmAudio.loop = true;
+  }
+  // Resume AudioContext if suspended (browser autoplay policy)
+  _globalAlarmAudio.currentTime = 0;
+  const playPromise = _globalAlarmAudio.play();
+  if (playPromise !== undefined) {
+    playPromise.catch(() => {
+      // Autoplay blocked — queue it to play on next user interaction
+      const unlock = () => {
+        _globalAlarmAudio.play().catch(() => {});
+        document.removeEventListener("click", unlock);
+        document.removeEventListener("keydown", unlock);
+      };
+      document.addEventListener("click", unlock, { once: true });
+      document.addEventListener("keydown", unlock, { once: true });
+    });
+  }
+}
+
+function _globalStopAlarm() {
+  if (_globalAlarmAudio) { _globalAlarmAudio.pause(); _globalAlarmAudio.currentTime = 0; }
+}
+
+function _globalPlayTimer() {
+  if (!_globalTimerAudio) _globalTimerAudio = new Audio("/static/timer.mp3");
+  _globalTimerAudio.currentTime = 0;
+  _globalTimerAudio.play().catch(() => {});
+}
+
+function _globalDayAbbr(date) {
+  return ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][date.getDay()];
+}
+
+/**
+ * Show a persistent toast notification with chit title and Open button.
+ * Clicking Open navigates to the chit editor.
+ */
+function _showGlobalToast(emoji, label, chitTitle, chitId, onDismiss) {
+  const toast = document.createElement("div");
+  toast.style.cssText = [
+    "position:fixed",
+    "top:16px",
+    "right:16px",
+    "z-index:99999",
+    "background:#fff5e6",
+    "border:2px solid #8b5a2b",
+    "border-radius:8px",
+    "padding:0.75em 1em",
+    "box-shadow:0 4px 20px rgba(0,0,0,0.35)",
+    "min-width:240px",
+    "max-width:320px",
+    "font-family:'Courier New',monospace",
+    "display:flex",
+    "flex-direction:column",
+    "gap:0.4em",
+  ].join(";");
+
+  const titleRow = document.createElement("div");
+  titleRow.style.cssText = "font-weight:bold;font-size:1em;";
+  titleRow.textContent = `${emoji} ${chitTitle || "Alert"}`;
+
+  const labelRow = document.createElement("div");
+  labelRow.style.cssText = "font-size:0.85em;opacity:0.8;";
+  labelRow.textContent = label;
+
+  const btnRow = document.createElement("div");
+  btnRow.style.cssText = "display:flex;gap:0.5em;margin-top:0.2em;";
+
+  const openBtn = document.createElement("button");
+  openBtn.textContent = chitTitle || "Open Chit";
+  openBtn.style.cssText = "flex:1;padding:3px 8px;cursor:pointer;font-weight:bold;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:160px;";
+  openBtn.onclick = () => {
+    toast.remove();
+    if (onDismiss) onDismiss();
+    window.location.href = `/editor?id=${chitId}`;
+  };
+
+  const dismissBtn = document.createElement("button");
+  dismissBtn.textContent = "Dismiss";
+  dismissBtn.style.cssText = "padding:3px 8px;cursor:pointer;";
+  dismissBtn.onclick = () => {
+    toast.remove();
+    if (onDismiss) onDismiss();
+  };
+
+  const snoozeBtn = document.createElement("button");
+  snoozeBtn.textContent = "Snooze 5m";
+  snoozeBtn.style.cssText = "padding:3px 8px;cursor:pointer;";
+  snoozeBtn.onclick = () => {
+    toast.remove();
+    if (onDismiss) onDismiss();
+    // Snooze handled by caller if needed
+  };
+
+  btnRow.appendChild(openBtn);
+  btnRow.appendChild(dismissBtn);
+  if (emoji === "🔔") btnRow.appendChild(snoozeBtn);
+
+  toast.appendChild(titleRow);
+  toast.appendChild(labelRow);
+  toast.appendChild(btnRow);
+  document.body.appendChild(toast);
+
+  // Auto-dismiss after 60 seconds
+  setTimeout(() => { if (toast.parentNode) toast.remove(); }, 60000);
+
+  return toast;
+}
+
+function _sendBrowserNotification(title, body, chitId) {
+  if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+  const n = new Notification(title, { body, icon: "/static/cwod_logo-favicon.png" });
+  n.onclick = () => {
+    window.focus();
+    window.location.href = `/editor?id=${chitId}`;
+  };
+}
+
+function _globalCheckAlarms() {
+  const now = new Date();
+  const hh = String(now.getHours()).padStart(2,"0");
+  const mm = String(now.getMinutes()).padStart(2,"0");
+  const currentTime = `${hh}:${mm}`;
+  const currentDay = _globalDayAbbr(now);
+  const dateStr = now.toDateString();
+
+  chits.forEach((chit) => {
+    if (!Array.isArray(chit.alerts)) return;
+    chit.alerts.forEach((alert, alertIdx) => {
+      if (alert._type !== "alarm" || !alert.enabled || !alert.time) return;
+      const days = alert.days && alert.days.length > 0 ? alert.days : [currentDay];
+      if (!days.includes(currentDay)) return;
+      if (alert.time !== currentTime) return;
+
+      const key = `${chit.id}-${alertIdx}-${alert.time}-${dateStr}`;
+      if (_globalTriggeredAlarms.has(key)) return;
+      _globalTriggeredAlarms.add(key);
+
+      const label = `${_globalFmtTime(alert.time)}${alert.name ? " — " + alert.name : ""}`;
+      _globalPlayAlarm();
+      const toast = _showGlobalToast("🔔", label, chit.title, chit.id, _globalStopAlarm);
+
+      // Snooze: update the alert time +5 min in the chit (requires re-save — just update display for now)
+      const snoozeBtn = toast.querySelector("button:last-child");
+      if (snoozeBtn) {
+        snoozeBtn.onclick = () => {
+          toast.remove();
+          _globalStopAlarm();
+          // Re-trigger in 5 minutes by removing the key after 5 min
+          setTimeout(() => _globalTriggeredAlarms.delete(key), 5 * 60 * 1000);
+        };
+      }
+
+      _sendBrowserNotification(`🔔 Alarm: ${chit.title}`, label, chit.id);
+    });
+  });
+
+  // Clean up old keys
+  _globalTriggeredAlarms.forEach((key) => {
+    if (!key.endsWith(now.toDateString())) _globalTriggeredAlarms.delete(key);
+  });
+}
+
+function _globalCheckNotifications() {
+  const now = new Date();
+
+  chits.forEach((chit) => {
+    if (!Array.isArray(chit.alerts)) return;
+    chit.alerts.forEach((alert, alertIdx) => {
+      if (alert._type !== "notification" || !alert.value || !alert.unit) return;
+
+      const unitMs = { minutes: 60000, hours: 3600000, days: 86400000, weeks: 604800000 };
+      const offsetMs = alert.value * (unitMs[alert.unit] || 60000);
+
+      const targetStr = alert.relativeTo
+        ? (chit.due_datetime || chit.start_datetime)
+        : chit.start_datetime;
+      if (!targetStr) return;
+
+      const targetDate = new Date(targetStr);
+      if (isNaN(targetDate.getTime())) return;
+
+      const fireAt = new Date(targetDate.getTime() - offsetMs);
+      const diff = now - fireAt;
+
+      // Fire if within 60 seconds past the fire time (check runs every 30s)
+      if (diff < 0 || diff > 60000) return;
+
+      const key = `${chit.id}-notif-${alertIdx}-${fireAt.toISOString()}`;
+      if (_globalFiredNotifications.has(key)) return;
+      _globalFiredNotifications.add(key);
+
+      const label = `${alert.value} ${alert.unit} before ${alert.relativeTo ? "due/start" : "start"}`;
+      _showGlobalToast("📢", label, chit.title, chit.id, null);
+      _sendBrowserNotification(`📢 Reminder: ${chit.title}`, label, chit.id);
+    });
+  });
+}
+
+function _startGlobalAlertSystem() {
+  // Request notification permission
+  if (typeof Notification !== "undefined" && Notification.permission === "default") {
+    Notification.requestPermission();
+  }
+
+  // Pre-unlock audio on first user interaction so alarms can play immediately
+  const unlockAudio = () => {
+    if (!_globalAlarmAudio) _globalAlarmAudio = new Audio("/static/alarm.mp3");
+    if (!_globalTimerAudio) _globalTimerAudio = new Audio("/static/timer.mp3");
+    // Play and immediately pause to unlock the audio context
+    _globalAlarmAudio.play().then(() => _globalAlarmAudio.pause()).catch(() => {});
+    _globalTimerAudio.play().then(() => _globalTimerAudio.pause()).catch(() => {});
+    document.removeEventListener("click", unlockAudio);
+    document.removeEventListener("keydown", unlockAudio);
+  };
+  document.addEventListener("click", unlockAudio, { once: true });
+  document.addEventListener("keydown", unlockAudio, { once: true });
+
+  // Load time format
+  fetch("/api/settings/default_user")
+    .then((r) => r.json())
+    .then((s) => { _globalTimeFormat = s.time_format || "24hour"; })
+    .catch(() => {});
+
+  // Start alarm checker (every second)
+  if (!_globalAlarmInterval) {
+    _globalAlarmInterval = setInterval(_globalCheckAlarms, 1000);
+  }
+
+  // Start notification checker (every 30 seconds)
+  if (!_globalNotifInterval) {
+    _globalNotifInterval = setInterval(_globalCheckNotifications, 30000);
+    _globalCheckNotifications(); // check immediately on start
+  }
+}
+
+// ── End Global Alert System ──────────────────────────────────────────────────
+
 function storePreviousState() {
   previousState = { tab: currentTab, view: currentView };
 }
@@ -165,6 +427,8 @@ function fetchChits() {
       updateDateRange();
       displayChits();
       restoreSidebarState();
+      // Re-check notifications immediately after chits refresh
+      if (typeof _globalCheckNotifications === "function") _globalCheckNotifications();
     })
     .catch((err) => {
       console.error("Error fetching chits:", err);
@@ -1562,8 +1826,11 @@ function displayAlarmsView(chitsToDisplay) {
   const chitList = document.getElementById("chit-list");
   chitList.innerHTML = "";
 
-  // A chit has alerts if alarm or notification flag is set
-  const alertChits = chitsToDisplay.filter((c) => c.alarm || c.notification);
+  // Include chits with any alert type: alarm flag, notification flag, or alerts array entries
+  const alertChits = chitsToDisplay.filter((c) =>
+    c.alarm || c.notification ||
+    (Array.isArray(c.alerts) && c.alerts.length > 0)
+  );
 
   if (alertChits.length === 0) {
     chitList.innerHTML = "<p>No chits with alerts found.</p>";
@@ -1593,21 +1860,32 @@ function displayAlarmsView(chitsToDisplay) {
       left.appendChild(due);
     }
 
-    const right = document.createElement("div");
-    right.style.cssText = "display:flex;gap:0.5em;align-items:center;flex-shrink:0;margin-left:1em;font-size:1.3em;";
+    // Show alert type summary
+    const alerts = Array.isArray(chit.alerts) ? chit.alerts : [];
+    const alarmCount = alerts.filter((a) => a._type === "alarm").length;
+    const timerCount = alerts.filter((a) => a._type === "timer").length;
+    const swCount = alerts.filter((a) => a._type === "stopwatch").length;
+    const notifCount = alerts.filter((a) => a._type === "notification").length;
 
-    if (chit.alarm) {
-      const icon = document.createElement("span");
-      icon.title = "Alarm";
-      icon.textContent = "🔔";
-      right.appendChild(icon);
+    if (alarmCount + timerCount + swCount + notifCount > 0) {
+      const summary = document.createElement("p");
+      summary.style.cssText = "margin:0.2em 0 0;font-size:0.8em;opacity:0.65;";
+      const parts = [];
+      if (alarmCount) parts.push(`${alarmCount} alarm${alarmCount > 1 ? "s" : ""}`);
+      if (timerCount) parts.push(`${timerCount} timer${timerCount > 1 ? "s" : ""}`);
+      if (swCount) parts.push(`${swCount} stopwatch${swCount > 1 ? "es" : ""}`);
+      if (notifCount) parts.push(`${notifCount} notification${notifCount > 1 ? "s" : ""}`);
+      summary.textContent = parts.join(" · ");
+      left.appendChild(summary);
     }
-    if (chit.notification) {
-      const icon = document.createElement("span");
-      icon.title = "Notification";
-      icon.textContent = "📢";
-      right.appendChild(icon);
-    }
+
+    const right = document.createElement("div");
+    right.style.cssText = "display:flex;gap:0.4em;align-items:center;flex-shrink:0;margin-left:1em;font-size:1.3em;";
+
+    if (alarmCount > 0 || chit.alarm) right.appendChild(Object.assign(document.createElement("span"), { title: "Alarm", textContent: "🔔" }));
+    if (timerCount > 0) right.appendChild(Object.assign(document.createElement("span"), { title: "Timer", textContent: "⏱️" }));
+    if (swCount > 0) right.appendChild(Object.assign(document.createElement("span"), { title: "Stopwatch", textContent: "⏲️" }));
+    if (notifCount > 0 || chit.notification) right.appendChild(Object.assign(document.createElement("span"), { title: "Notification", textContent: "📢" }));
 
     card.appendChild(left);
     card.appendChild(right);
@@ -1848,6 +2126,7 @@ document.addEventListener("DOMContentLoaded", function () {
   fetchChits();
   updateDateRange();
   restoreSidebarState();
+  _startGlobalAlertSystem();
 
   const now = new Date();
   const oneHourLater = new Date(now.getTime() + 60 * 60 * 1000);

@@ -378,6 +378,22 @@ These are explicitly desired but have no code yet:
 - when creating a chit from any view, hide all zones other than the one from the matching view, and start with focus in that zone's 1st input. 
 impliment drag & drop in calenedar view to change the start time of events (set the evne to thte same length of tiem it had before, with a new edn time), also the ability to drad the lower edge of an event to extend the end-time. do btoth of these rounded to the nearest 15 minutes, so start times jump in 15 minute incriemtnets, and end times snap to nearest 15 minute slot. (neither of these new things happen in in month or year view)
 projects keep vanishing. they are getting deleted from chits after editing the chit?
+- 
+Alerts: 
+
+1. the timers still dont' show up n the views page. 
+
+2. no sound plays when alarms tirgger (even though I do see the notificaiton)
+
+3. no sound plays in the views for alarms
+
+4. the button to open th erelated chit should have th echit's title, not "open chit"
+
+
+
+Projects:
+
+1. Making a chit a ptroject master or adding a chit to a project, or making ANY other tchange in the project zone should let the chit editor knwo changes ahve been made, and enable the save buttons
 
 
 
@@ -893,3 +909,34 @@ Week/SevenDay bar was using hardcoded `+48px` offset for the day-header height. 
 15. ~~BUG-006~~ ✅ Dual `DOMContentLoaded` listeners — merged into one
 16. ~~BUG-005~~ ✅ `isValidMediaSource` defined twice
 17. ~~BUG-001~~ ✅ `chitExists` defined twice
+
+### Global alert system — 2026-04-18 (Session 12)
+
+**main.js — Global alert checker:**
+Alerts now fire from the dashboard regardless of which view or chit is open.
+
+- `_startGlobalAlertSystem()` — called on `DOMContentLoaded`. Requests browser notification permission, loads time format from settings, starts alarm checker (every 1s) and notification checker (every 30s).
+- `_globalCheckAlarms()` — scans all loaded chits' `alerts` arrays every second. Fires once per day per alarm using `_globalTriggeredAlarms` Set for deduplication.
+- `_globalCheckNotifications()` — scans notification alerts every 30s. Fires if within 60s window of calculated fire time. Re-runs after `fetchChits` completes.
+- `_showGlobalToast()` — persistent toast with chit title, "Open Chit" button (navigates to editor), "Dismiss", and "Snooze 5m" (alarms). Auto-dismisses after 60s.
+- `_sendBrowserNotification()` — OS notification; click navigates to chit editor.
+- Sounds: `alarm.mp3` loops on alarm, `timer.mp3` plays on timer completion.
+
+### Projects zone save button fix — 2026-04-18 (Session 13)
+
+**editor_projects.js:**
+`saveCurrentChit()` was called in 4 places (status dropdown change, title edit, due date change, move-to-project) but was never defined — silent no-op. Added definition as a thin wrapper that calls `setSaveButtonUnsaved()` from editor.js. Also added `saveCurrentChit()` call to `updateChitStatus()` so drag-drop status changes also mark the editor as unsaved.
+
+### Alerts + Projects fixes — 2026-04-18 (Session 14)
+
+**main.js — Alerts view shows all types:**
+`displayAlarmsView` now filters on `c.alarm || c.notification || (c.alerts.length > 0)` so chits with timers, stopwatches, or notifications also appear. Shows emoji icons and a summary line (e.g. "2 alarms · 1 timer").
+
+**main.js — Sound autoplay fix:**
+Browsers block audio until a user gesture. `_startGlobalAlertSystem` now registers a one-time click/keydown listener that pre-unlocks both audio elements (play+pause) on first interaction. `_globalPlayAlarm` also queues a retry on next user interaction if autoplay is blocked.
+
+**main.js — Toast button shows chit title:**
+`openBtn.textContent` changed from `"Open Chit"` to `chitTitle || "Open Chit"`.
+
+**editor_projects.js — All project zone changes mark editor unsaved:**
+Added `saveCurrentChit()` calls to: `addChildChit`, `toggleProjectMaster`, `moveChildChitToProject`. These were missing, so the save buttons stayed disabled after project zone changes.
