@@ -479,37 +479,23 @@ function openTagModal(tag) {
   const colorInput = document.getElementById("tag-color");
   const colorOptions = document.getElementById("tag-color-options");
 
-  // Set tagNameInput to disabled and show hex as name
-  tagNameInput.value = tag.dataset.color || "";
-  tagNameInput.disabled = true;
+  // Show the tag's actual name (text content minus the ✕ button)
+  const rawText = tag.childNodes[0]?.textContent?.trim() || tag.dataset.color || "";
+  tagNameInput.value = rawText;
+  tagNameInput.disabled = false;
 
-  // Set color input value to current color or default
-  colorInput.value = tag.dataset.color || "#000000";
+  // Set color picker to current tag color
+  colorInput.value = tag.dataset.color || "#8b5a2b";
 
-  // Clear custom color options (no longer needed)
-  colorOptions.innerHTML = "";
+  if (colorOptions) colorOptions.innerHTML = "";
 
-  // When color changes, update tag color and name (hex)
+  // Live preview: when color changes, update the tag swatch immediately
   colorInput.onchange = function () {
     currentTag.dataset.color = this.value;
     currentTag.style.backgroundColor = this.value;
-    currentTag.textContent = this.value + " ";
-    // Add delete button back after changing textContent
-    const deleteBtn = document.createElement("button");
-    deleteBtn.textContent = "✕";
-    deleteBtn.onclick = (e) => {
-      e.stopPropagation();
-      openDeleteModal(e, currentTag);
-    };
-    currentTag.appendChild(deleteBtn);
-
-    // Update tagNameInput value to new hex
-    tagNameInput.value = this.value;
-
     setSaveButtonUnsaved();
   };
 
-  // Show system color picker on click
   colorInput.onclick = function () {
     this.showPicker();
   };
@@ -518,6 +504,9 @@ function openTagModal(tag) {
 }
 
 function saveTag() {
+  const tagEditor = document.getElementById("tag-editor");
+  if (!tagEditor) return;
+
   if (!currentTag) {
     currentTag = document.createElement("div");
     currentTag.className = "tag";
@@ -526,35 +515,61 @@ function saveTag() {
       openTagModal(this);
     };
   }
+
   const tagNameInput = document.getElementById("tag-name");
   const colorInput = document.getElementById("tag-color");
+  const newName = tagNameInput.value.trim();
   const newColor = colorInput.value;
 
-  // Use hex value as name
-  const newName = newColor;
-
-  // Check for duplicates by hex value (name is hex)
-  const existingTags = Array.from(document.querySelectorAll(".tag"))
-    .filter((tag) => tag !== currentTag)
-    .map((tag) => tag.dataset.color.toLowerCase());
-
-  if (existingTags.includes(newColor.toLowerCase())) {
-    const modal = document.getElementById("duplicate-tag-modal");
-    modal.style.display = "flex";
-    setTimeout(() => {
-      modal.style.display = "none";
-      colorInput.value = newColor;
-    }, 2000);
+  if (!newName) {
+    alert("Tag name cannot be empty.");
     return;
   }
 
-  currentTag.innerHTML = `${newName} <button onclick="openDeleteModal(event, this.parentElement)">✕</button>`;
+  // Check for duplicate names (excluding the tag being edited)
+  const existingNames = Array.from(
+    document.querySelectorAll(".tag:not(.tag-input-container .tag)")
+  )
+    .filter((t) => t !== currentTag)
+    .map((t) => {
+      const txt = t.childNodes[0]?.textContent?.trim() || "";
+      return txt.toLowerCase();
+    });
+
+  if (existingNames.includes(newName.toLowerCase())) {
+    const dupModal = document.getElementById("duplicate-tag-modal");
+    if (dupModal) {
+      dupModal.style.display = "flex";
+      setTimeout(() => { dupModal.style.display = "none"; }, 2000);
+    }
+    return;
+  }
+
+  // Update the tag element
   currentTag.dataset.color = newColor;
   currentTag.style.backgroundColor = newColor;
+  // Rebuild inner HTML safely
+  currentTag.innerHTML = "";
+  const nameNode = document.createTextNode(newName + " ");
+  const deleteBtn = document.createElement("button");
+  deleteBtn.textContent = "✕";
+  deleteBtn.onclick = (e) => {
+    e.stopPropagation();
+    openDeleteModal(e, currentTag);
+  };
+  currentTag.appendChild(nameNode);
+  currentTag.appendChild(deleteBtn);
+
+  // Ensure click handler is set
+  currentTag.onclick = function (e) {
+    if (e.target !== this && e.target.tagName === "BUTTON") return;
+    openTagModal(this);
+  };
 
   if (!tagEditor.contains(currentTag)) {
     tagEditor.appendChild(currentTag);
   }
+
   closeTagModal();
   setSaveButtonUnsaved();
 }
@@ -578,26 +593,16 @@ function openDeleteModal(event, item) {
   document.getElementById("delete-modal").style.display = "flex";
 }
 
-function confirmDelete() {
-  if (itemToDelete) {
-    itemToDelete.remove();
-    closeDeleteModal();
-    setSaveButtonUnsaved();
-  }
-}
-
 function closeDuplicateTagModal() {
   const modal = document.getElementById("duplicate-tag-modal");
   modal.style.display = "none";
-  const input = document.getElementById("new-tag").id;
-  input.value = document.querySelector("#tag-name").value;
 }
 
 function saveSettings() {
-  document.getElementById("loader").style.display = "block";
-  setTimeout(() => {
-    document.getElementById("loader").style.display = "none";
-  }, 1000);
+  // Delegate to the SettingsManager instance
+  if (window.settingsManager) {
+    window.settingsManager.save();
+  }
 }
 
 function cancelSettings() {
@@ -831,13 +836,11 @@ class SettingsManager {
         ? "Vertical"
         : "Horizontal",
       tags: Array.from(
-        document.querySelectorAll(".tag:not(.tag-input-container .tag)"),
+        document.querySelectorAll("#tag-editor .tag:not(.tag-input-container .tag)"),
       ).map((tag) => ({
-        name: tag.textContent
-          .substring(0, tag.textContent.lastIndexOf("✕"))
-          .trim(),
-        color: tag.dataset.color,
-      })),
+        name: (tag.childNodes[0]?.textContent || "").trim(),
+        color: tag.dataset.color || "#8b5a2b",
+      })).filter((t) => t.name),
       custom_colors: Array.from(document.querySelectorAll(".color-item")).map(
         (item) => ({
           hex: item.dataset.color,
@@ -869,8 +872,16 @@ class SettingsManager {
     document.getElementById("loader").style.display = "block";
     try {
       const settingsToSave = this.gatherSettings();
-      this.settings = await SettingsService.saveAll(settingsToSave);
-      console.log("✅ Settings saved successfully.");
+      console.log("Saving settings with tags:", JSON.stringify(settingsToSave.tags));
+      await SettingsService.saveAll(settingsToSave);
+      // Reload from API to get canonical saved state (avoids Pydantic serialization quirks)
+      this.settings = await SettingsService.loadAll();
+      if (Array.isArray(this.settings.custom_colors)) {
+        this.settings.custom_colors = this.settings.custom_colors.map((c) =>
+          typeof c === "string" ? { hex: c, name: colorMap[c] || "Custom" } : c,
+        );
+      }
+      console.log("✅ Settings saved. Reloaded tags:", JSON.stringify(this.settings.tags));
       setSaveButtonSaved();
       document.getElementById("loader").style.display = "none";
       return true;
@@ -943,5 +954,5 @@ function monitorChanges() {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
-  const settingsManager = new SettingsManager();
+  window.settingsManager = new SettingsManager();
 });

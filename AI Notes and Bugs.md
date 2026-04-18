@@ -664,21 +664,68 @@ The design doc calls this out in strong terms: *"The Health Indicators zone IS L
 
 ---
 
-## 17. Summary of Most Important Issues to Fix
+## 18. Refactor Log — 2026-04-17 (Session 2)
 
-Priority order based on user-visible impact:
+### Tags not persisting to DB — root cause found (2026-04-18)
+**Root cause:** `save_settings` in `backend/main.py` called `serialize_json_field(settings.tags)` where `settings.tags` is a list of Pydantic `Tag` model instances. `json.dumps()` cannot serialize Pydantic objects natively — it throws a `TypeError` which `serialize_json_field` catches and returns `None`. So tags were stored as `NULL` in the DB on every save, silently. The save appeared to succeed (200 OK) because the error was swallowed inside the helper.  
+**Fix:** Changed to `json.dumps([t.dict() for t in settings.tags])` which converts Pydantic objects to plain dicts before serialization.  
+**Files changed:** `backend/main.py`
+- **Custom colors not displaying in editor:** `renderCustomColors` was appending swatches without clearing the container first, causing duplicates or stale state. Fixed to clear `innerHTML` before rendering. Also `fetchCustomColors` was hardcoding `name: "Custom Color"` for all colors, losing the actual name. Fixed to preserve the name from settings.
+- **Tags not saving/loading:** `SettingsManager.save()` was using the Pydantic API response to update `this.settings`, which could lose tag data due to serialization differences. Fixed to reload from the API after save to get canonical state. Added console logging to trace tag save/load. `loadTags()` in editor now normalizes legacy string tags to `{name, color}` objects.
 
-1. ~~**BUG-011, 012, 013, 014**~~ ✅ **FIXED 2026-04-17** — Existing chit data (tags, location, people, color, pinned/archived) not restored when editing.
-2. ~~**BUG-010**~~ ✅ **FIXED 2026-04-17** — All-day state lost on reload. Full backend+frontend fix: `all_day` column added to DB with migration, saved and restored correctly.
-3. ~~**BUG-018**~~ ✅ **FIXED 2026-04-17** — Header row incorrectly colored when picking chit color.
-4. ~~**BUG-021**~~ ✅ **FIXED 2026-04-17** — Tasks tab sort dropdown doesn't revert on tab switch.
-5. ~~**BUG-007, 008**~~ ✅ **FIXED 2026-04-17** — Backend `conn = None` guard and `update_chit` fetchone ordering.
-6. ~~**BUG-001, 005, 006**~~ ✅ **FIXED 2026-04-17** — Duplicate functions and dual DOMContentLoaded listeners.
-7. **BUG-003** — Projects tab on dashboard is a placeholder. *(still open)*
-8. **BUG-004** — Alarms tab on dashboard is a placeholder. *(still open)*
-9. **BUG-002** — Project master chits can't have their own title/notes edited. *(still open)*
-10. **BUG-015** — Checklist completed state (`checked` vs `done` field mismatch) not shown on dashboard. *(still open)*
-11. **BUG-009** — `loadChitData` guard condition is always false for new chits. *(still open, low impact)*
-12. **BUG-010** — All-day state not persisted/restored. *(still open)*
-13. **BUG-019** — Notes saving to a single line. *(still open)*
-14. **BUG-020** — Health Indicators zone buttons collapse the whole zone. *(still open)*
+**Root causes found and fixed:**
+1. **Tags not saving** — `settings.html` had two hardcoded `.tag` divs (`Urgent`, `Work`) with no `dataset.color`. These were always collected by `gatherSettings` and sent to the API on every save, overwriting whatever was loaded from the DB. Fixed by removing hardcoded tags from HTML — tags are now loaded exclusively from the API.
+2. **`gatherSettings` wrong selector** — Used `.tag:not(.tag-input-container .tag)` but the input wrapper had no `.tag-input-container` class, so the selector didn't exclude anything correctly. Fixed selector to `#tag-editor .tag:not(.tag-input-container .tag)` and switched to `childNodes[0].textContent` for name extraction (more reliable than `lastIndexOf("✕")`).
+3. **Tag modal shows hex instead of name** — `openTagModal` set `tagNameInput.value = tag.dataset.color` (the hex string) and `tagNameInput.disabled = true`. Fixed to read the tag's actual text node and enable the input.
+4. **Save in modal doesn't close** — `saveTag` referenced `tagEditor` as a bare variable (not defined in scope), causing a silent ReferenceError before `closeTagModal()` was reached. Fixed by using `document.getElementById("tag-editor")` inside the function.
+5. **`confirmDelete` defined twice** — Second definition (simple `itemToDelete.remove()`) overwrote the first (which handled color-item deletion separately). Removed the second definition, keeping the complete one.
+6. **`closeDuplicateTagModal` crash** — Used `document.getElementById("new-tag").id` (returns the string `"new-tag"`, not the element) then called `.value` on it. Simplified to just close the modal.
+
+**Root cause:** `renderTags()` was writing to `#tags-container` which doesn't exist in the editor HTML. The editor has a completely different tag zone structure (`#tagTreeContainer`, `#activeTagsListContainer`, `#activeTagsCount`).  
+**Fix:** Rewrote `renderTags()` to target the actual HTML elements. Tags from settings now render as clickable badges in the tree. Clicking toggles selection. Active tags shown in the Active Tags panel with remove buttons. `window._currentTagSelection` array tracks the live selection state. `saveChitData` now reads from that array instead of the old checkbox query.
+
+### Custom colors not loading in editor
+**Root cause:** `fetchCustomColors()` and `renderCustomColors()` existed but were never called on page load.  
+**Fix:** Added `fetchCustomColors()` call in `DOMContentLoaded`, stores result in `window.customColors`, then calls `renderCustomColors()` to populate the `#custom-colors` row below the default swatches.
+
+### Save button restructure
+**Changes:**
+- HTML: Single `#saveButton` replaced with three buttons: `#saveStayButton` (Save & Stay), `#saveExitButton` (Save & Exit), and `#saveButton` (disabled saved state)
+- Cancel button now calls `cancelOrExit()` instead of navigating directly
+- **Saved state** (no changes): `#saveButton` visible + disabled showing "✅ Saved", Exit button shows "Exit"
+- **Unsaved state** (changes made): `#saveButton` hidden, `#saveStayButton` + `#saveExitButton` shown, Exit button shows "❌ Cancel"
+- `saveChitAndStay()` saves and updates URL without navigating away
+- `buildChitObject()` extracted as shared function used by both save paths
+
+### ESC hotkey
+**Fix:** Added `keydown` listener in `DOMContentLoaded`. ESC calls `cancelOrExit()` — same confirm-if-unsaved logic as the Cancel/Exit button. Skips if a modal is open.
+
+### Zone collapse on load
+**Fix:** `applyZoneStates(chit)` called at end of `loadChitData()`. Each zone has a data-presence check. If any field in the zone has a value, the zone expands. If all fields are empty, it collapses. Health Indicators always collapses (no chit-specific data). Dates zone expands if any of start/end/due/recurrence has a value.
+
+
+## 17. Summary — Open Issues
+
+1. **BUG-003** — Projects tab on dashboard is a placeholder.
+2. **BUG-004** — Alarms tab on dashboard is a placeholder.
+3. **BUG-002** — Project master chits can't have their own title/notes edited.
+
+## 17b. Summary — Fixed Issues
+
+1. ~~BUG-022~~ ✅ DB_PATH pointed at wrong file (`database.db` vs `app.db`)
+2. ~~BUG-021~~ ✅ Tasks tab sort dropdown didn't revert on tab switch
+3. ~~BUG-020~~ ✅ Health Indicators zone buttons collapsed the whole zone
+4. ~~BUG-019~~ ✅ Notes saving to a single line (HTML collapsed newlines — fixed with `<pre>` + `textContent`)
+5. ~~BUG-018~~ ✅ Header row changed color when picking chit color
+6. ~~BUG-015~~ ✅ Checklist `checked` vs `done` field mismatch on dashboard
+7. ~~BUG-014~~ ✅ Pinned/archived state not restored on load
+8. ~~BUG-013~~ ✅ Color not restored when editing existing chit
+9. ~~BUG-012~~ ✅ Location and people not loaded in `loadChitData`
+10. ~~BUG-011~~ ✅ Tags not pre-checked when editing existing chit
+11. ~~BUG-010~~ ✅ All-day state not persisted/restored — full backend+frontend fix
+12. ~~BUG-009~~ ✅ `loadChitData` guard condition always false — replaced with `window.isNewChit` flag
+13. ~~BUG-008~~ ✅ `update_chit` fetchone called after cursor reuse
+14. ~~BUG-007~~ ✅ `conn = None` guard missing in all backend endpoints
+15. ~~BUG-006~~ ✅ Dual `DOMContentLoaded` listeners — merged into one
+16. ~~BUG-005~~ ✅ `isValidMediaSource` defined twice
+17. ~~BUG-001~~ ✅ `chitExists` defined twice

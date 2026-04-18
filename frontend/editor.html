@@ -21,11 +21,19 @@
             <h1>Chit Editor</h1>
             <div class="buttons">
                 <div class="left-buttons">
-                    <button id="saveButton" onclick="saveChit()">
+                    <!-- Shown when unsaved changes exist -->
+                    <button id="saveStayButton" onclick="saveChitAndStay()" style="display:none;">
+                        <i class="fas fa-save"></i> Save &amp; Stay
+                    </button>
+                    <button id="saveExitButton" onclick="saveChit()" style="display:none;">
+                        <i class="fas fa-save"></i> Save &amp; Exit
+                    </button>
+                    <!-- Shown when no unsaved changes -->
+                    <button id="saveButton" onclick="saveChit()" disabled>
                         <i class="fas fa-save"></i> Save
                     </button>
-                    <button onclick="window.location.href='/'" class="cancel">
-                        <i class="fas fa-times"></i> Cancel
+                    <button onclick="cancelOrExit()" class="cancel">
+                        <i class="fas fa-times"></i> Exit
                     </button>
                 </div>
                 <button id="deleteButton" class="delete" onclick="deleteChit()">

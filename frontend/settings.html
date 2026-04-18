@@ -805,9 +805,8 @@
                     <div class="setting-group">
                         <h3>Tag Editor</h3>
                         <div class="tag-editor" id="tag-editor">
-                            <div style="flex-direction: column">
-
-                                <div style="flex-direction:row"><button
+                            <div class="tag-input-container">
+                                <button
                                     onclick="addTag()"
                                     class="standard-button"
                                     title="Press Shift+Enter or Shift+Click to open tag modal with entered value"
@@ -819,7 +818,7 @@
                                     onclick="handleInfoClick(event)"
                                     title="Press Shift+Enter or Shift+Click to open tag modal with entered value"
                                     >ℹ</span
-                                ></div>
+                                >
                                 <input
                                     type="text"
                                     id="new-tag"
@@ -827,22 +826,7 @@
                                     onkeypress="handleTagInput(event)"
                                 />
                             </div>
-                            <div class="tag" onclick="openTagModal(this)">
-                                Urgent
-                                <button
-                                    onclick="openDeleteModal(event, this.parentElement)"
-                                >
-                                    ✕
-                                </button>
-                            </div>
-                            <div class="tag" onclick="openTagModal(this)">
-                                Work
-                                <button
-                                    onclick="openDeleteModal(event, this.parentElement)"
-                                >
-                                    ✕
-                                </button>
-                            </div>
+                            <!-- Tags loaded from settings will be injected here by JS -->
                         </div>
                     </div>
 

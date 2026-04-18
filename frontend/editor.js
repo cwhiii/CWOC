@@ -411,11 +411,11 @@ async function fetchCustomColors() {
       return [];
     }
 
-    // Normalize colors: convert strings to objects { hex, name: "Custom Color" }
+    // Normalize colors: preserve name if present, fall back to hex
     const normalizedColors = settings.custom_colors.map((c) =>
       typeof c === "string"
-        ? { hex: c, name: "Custom Color" }
-        : { hex: c.hex, name: "Custom Color" },
+        ? { hex: c, name: c }
+        : { hex: c.hex, name: c.name || c.hex },
     );
 
     return normalizedColors;
@@ -479,18 +479,20 @@ function renderCustomColors(customColors) {
     return;
   }
 
-  console.log("Rendering custom colors:", customColors);
+  // Clear existing custom swatches before re-rendering
+  customColorsContainer.innerHTML = "";
+
+  if (!customColors || customColors.length === 0) return;
 
   customColors.forEach(({ hex, name }) => {
-    console.log(`Adding color swatch: ${name} (${hex})`);
     const swatch = document.createElement("div");
     swatch.className = "color-swatch";
     swatch.dataset.color = hex;
     swatch.style.backgroundColor = hex;
-    swatch.title = name || "Custom";
+    swatch.title = name || hex;
 
     swatch.addEventListener("click", () => {
-      setColor(hex, name);
+      setColor(hex, name || "Custom");
     });
 
     customColorsContainer.appendChild(swatch);
@@ -557,45 +559,99 @@ async function loadTags() {
   try {
     const response = await fetch("/api/settings/default_user");
     const settings = await response.json();
-    return settings.tags || [];
+    const tags = settings.tags || [];
+    // Normalize: tags may be strings (legacy) or {name, color} objects
+    return tags.map((t) =>
+      typeof t === "string" ? { name: t, color: null } : t
+    ).filter((t) => t.name);
   } catch (error) {
     console.error("Error fetching tags:", error);
     return [];
   }
 }
 
+/**
+ * Render tags from settings into the editor tag zone.
+ * Populates the tag tree container and marks active tags.
+ * @param {Array} tags - Array of {name, color} from settings
+ * @param {Array} selectedTags - Array of tag name strings currently on the chit
+ */
 function renderTags(tags, selectedTags = []) {
-  const tagsContainer = document.getElementById("tags-container");
-  if (!tagsContainer) {
-    console.warn("tags-container not found");
+  const treeContainer = document.getElementById("tagTreeContainer");
+  const activeContainer = document.getElementById("activeTagsListContainer");
+  const activeCount = document.getElementById("activeTagsCount");
+
+  if (!treeContainer || !activeContainer) {
+    console.warn("Tag zone containers not found");
     return;
   }
-  tagsContainer.innerHTML = "<label>Tags:</label>";
-  tags.forEach((tag) => {
-    const label = document.createElement("label");
-    label.style.display = "inline-flex";
-    label.style.alignItems = "center";
-    label.style.margin = "5px";
 
-    const checkbox = document.createElement("input");
-    checkbox.type = "checkbox";
-    checkbox.value = tag.name;
-    checkbox.checked = selectedTags.includes(tag.name);
-    checkbox.style.marginRight = "5px";
+  treeContainer.innerHTML = "";
+  activeContainer.innerHTML = "";
+
+  if (!tags || tags.length === 0) {
+    treeContainer.innerHTML = '<p style="font-size:0.85em;opacity:0.6;">No tags defined. Create tags in Settings.</p>';
+    if (activeCount) activeCount.textContent = "0";
+    return;
+  }
+
+  // Build the tree list
+  tags.forEach((tag) => {
+    const isActive = selectedTags.includes(tag.name);
+    const item = document.createElement("div");
+    item.className = "tag-tree-node" + (isActive ? " tag-active" : "");
+    item.style.cssText = "display:flex;align-items:center;gap:6px;padding:3px 0;cursor:pointer;";
+
+    const swatch = document.createElement("span");
+    swatch.style.cssText = `display:inline-block;width:12px;height:12px;border-radius:50%;background:${tag.color || getPastelColor(tag.name)};flex-shrink:0;`;
 
     const badge = document.createElement("span");
     badge.textContent = tag.name;
-    badge.style.backgroundColor = tag.color || getPastelColor(tag.name);
-    badge.style.color = "#000";
-    badge.style.padding = "2px 8px";
-    badge.style.borderRadius = "12px";
-    badge.style.fontSize = "0.9em";
-    badge.style.cursor = "pointer";
+    badge.style.cssText = `background:${tag.color || getPastelColor(tag.name)};color:#000;padding:2px 8px;border-radius:12px;font-size:0.9em;`;
 
-    label.appendChild(checkbox);
-    label.appendChild(badge);
-    tagsContainer.appendChild(label);
+    item.appendChild(swatch);
+    item.appendChild(badge);
+
+    item.addEventListener("click", () => {
+      const idx = selectedTags.indexOf(tag.name);
+      if (idx === -1) {
+        selectedTags.push(tag.name);
+      } else {
+        selectedTags.splice(idx, 1);
+      }
+      renderTags(tags, selectedTags);
+      setSaveButtonUnsaved();
+    });
+
+    treeContainer.appendChild(item);
   });
+
+  // Render active tags panel
+  const activeTags = tags.filter((t) => selectedTags.includes(t.name));
+  activeTags.forEach((tag) => {
+    const chip = document.createElement("span");
+    chip.style.cssText = `display:inline-flex;align-items:center;gap:4px;background:${tag.color || getPastelColor(tag.name)};color:#000;padding:2px 8px;border-radius:12px;font-size:0.9em;margin:2px;`;
+    chip.textContent = tag.name;
+
+    const removeBtn = document.createElement("button");
+    removeBtn.textContent = "✕";
+    removeBtn.style.cssText = "background:none;border:none;cursor:pointer;font-size:0.8em;padding:0 0 0 4px;line-height:1;";
+    removeBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const idx = selectedTags.indexOf(tag.name);
+      if (idx !== -1) selectedTags.splice(idx, 1);
+      renderTags(tags, selectedTags);
+      setSaveButtonUnsaved();
+    });
+
+    chip.appendChild(removeBtn);
+    activeContainer.appendChild(chip);
+  });
+
+  if (activeCount) activeCount.textContent = activeTags.length;
+
+  // Keep a reference so saveChitData can read the current selection
+  window._currentTagSelection = selectedTags;
 }
 
 function resetEditorForNewChit() {
@@ -671,7 +727,8 @@ function resetEditorForNewChit() {
 
   // Checklist reset removed
 
-  loadTags().then((tags) => renderTags(tags));
+  window._currentTagSelection = [];
+  loadTags().then((tags) => renderTags(tags, []));
 
   if (defaultAddress) {
     fetchWeatherData(defaultAddress).catch((error) => {
@@ -757,135 +814,122 @@ function isValidMediaSource(src) {
 }
 
 // Updated saveChitData function in editor.js
+/**
+ * Collect all form values into a chit object.
+ * Returns null if validation fails (and shows alert).
+ */
+async function buildChitObject() {
+  const chit = {};
+  chit.id = window.currentChitId || generateUniqueId();
+
+  const titleInput = document.getElementById("title");
+  chit.title = titleInput ? titleInput.value.trim() : "";
+
+  const noteTextarea = document.getElementById("note");
+  chit.note = noteTextarea ? noteTextarea.value.trim() : "";
+
+  const locationInput = document.getElementById("location");
+  chit.location = locationInput ? locationInput.value.trim() : "";
+
+  const peopleInput = document.getElementById("people");
+  chit.people = peopleInput
+    ? peopleInput.value.split(",").map((p) => p.trim()).filter((p) => p)
+    : [];
+
+  const statusSelect = document.getElementById("status");
+  chit.status = statusSelect ? statusSelect.value || null : null;
+
+  const prioritySelect = document.getElementById("priority");
+  chit.priority = prioritySelect ? prioritySelect.value || null : null;
+
+  const severitySelect = document.getElementById("severity");
+  chit.severity = severitySelect ? severitySelect.value || null : null;
+
+  const recurrenceSelect = document.getElementById("recurrence");
+  chit.recurrence = recurrenceSelect ? recurrenceSelect.value || null : null;
+
+  const colorInput = document.getElementById("color");
+  chit.color = colorInput ? colorInput.value || null : null;
+
+  const alarmCheckbox = document.getElementById("alarm");
+  chit.alarm = alarmCheckbox ? alarmCheckbox.checked : false;
+
+  const notificationCheckbox = document.getElementById("notification");
+  chit.notification = notificationCheckbox ? notificationCheckbox.checked : false;
+
+  const pinnedCheckbox = document.getElementById("pinned");
+  chit.pinned = pinnedCheckbox ? pinnedCheckbox.checked : false;
+
+  const archivedCheckbox = document.getElementById("archived");
+  chit.archived = archivedCheckbox ? archivedCheckbox.checked : false;
+
+  const allDayInput = document.getElementById("allDay");
+  const isAllDay = allDayInput ? allDayInput.value === "true" : false;
+  chit.all_day = isAllDay;
+
+  const startDateInput = document.getElementById("start_datetime");
+  const startTimeInput = document.getElementById("start_time");
+  chit.start_datetime = createISODateTimeString(
+    startDateInput ? startDateInput.value : "",
+    startTimeInput ? startTimeInput.value : "",
+    isAllDay, false,
+  );
+
+  const endDateInput = document.getElementById("end_datetime");
+  const endTimeInput = document.getElementById("end_time");
+  chit.end_datetime = createISODateTimeString(
+    endDateInput ? endDateInput.value : "",
+    endTimeInput ? endTimeInput.value : "",
+    isAllDay, true,
+  );
+
+  const dueDateInput = document.getElementById("due_datetime");
+  const dueTimeInput = document.getElementById("due_time");
+  chit.due_datetime = createISODateTimeString(
+    dueDateInput ? dueDateInput.value : "",
+    dueTimeInput ? dueTimeInput.value : "",
+    isAllDay, false,
+  );
+
+  // Read tags from the live selection state maintained by renderTags
+  chit.tags = Array.isArray(window._currentTagSelection)
+    ? [...window._currentTagSelection]
+    : [];
+
+  chit.checklist = window.checklist ? window.checklist.getChecklistData() : [];
+
+  const projectMasterInput = document.getElementById("isProjectMaster");
+  chit.is_project_master = projectMasterInput
+    ? projectMasterInput.value === "true"
+    : false;
+
+  if (chit.is_project_master && typeof projectState === "object" && projectState.projectChit) {
+    chit.child_chits = projectState.projectChit.child_chits || [];
+  } else {
+    chit.child_chits = [];
+  }
+
+  // Validate minimum required fields
+  if (
+    !chit.title &&
+    !chit.note &&
+    !chit.start_datetime &&
+    !chit.due_datetime &&
+    chit.tags.length === 0 &&
+    chit.checklist.length === 0 &&
+    chit.child_chits.length === 0
+  ) {
+    alert("Please provide at least a title, note, date, tag, checklist item, or child chit before saving.");
+    return null;
+  }
+
+  return chit;
+}
+
 async function saveChitData() {
   try {
-    const chit = {};
-    chit.id = window.currentChitId || generateUniqueId();
-
-    const titleInput = document.getElementById("title");
-    chit.title = titleInput ? titleInput.value.trim() : "";
-
-    const noteTextarea = document.getElementById("note");
-    chit.note = noteTextarea ? noteTextarea.value.trim() : "";
-
-    const locationInput = document.getElementById("location");
-    chit.location = locationInput ? locationInput.value.trim() : "";
-
-    const peopleInput = document.getElementById("people");
-    chit.people = peopleInput
-      ? peopleInput.value
-          .split(",")
-          .map((p) => p.trim())
-          .filter((p) => p)
-      : [];
-
-    const statusSelect = document.getElementById("status");
-    chit.status = statusSelect ? statusSelect.value || null : null;
-
-    const prioritySelect = document.getElementById("priority");
-    chit.priority = prioritySelect ? prioritySelect.value || null : null;
-
-    const severitySelect = document.getElementById("severity");
-    chit.severity = severitySelect ? severitySelect.value || null : null;
-
-    const recurrenceSelect = document.getElementById("recurrence");
-    chit.recurrence = recurrenceSelect ? recurrenceSelect.value || null : null;
-
-    const colorInput = document.getElementById("color");
-    chit.color = colorInput ? colorInput.value || null : null;
-
-    const alarmCheckbox = document.getElementById("alarm");
-    chit.alarm = alarmCheckbox ? alarmCheckbox.checked : false;
-
-    const notificationCheckbox = document.getElementById("notification");
-    chit.notification = notificationCheckbox
-      ? notificationCheckbox.checked
-      : false;
-
-    const pinnedCheckbox = document.getElementById("pinned");
-    chit.pinned = pinnedCheckbox ? pinnedCheckbox.checked : false;
-
-    const archivedCheckbox = document.getElementById("archived");
-    chit.archived = archivedCheckbox ? archivedCheckbox.checked : false;
-
-    const allDayInput = document.getElementById("allDay");
-    const isAllDay = allDayInput ? allDayInput.value === "true" : false;
-    chit.all_day = isAllDay;
-
-    const startDateInput = document.getElementById("start_datetime");
-    const startTimeInput = document.getElementById("start_time");
-    chit.start_datetime = createISODateTimeString(
-      startDateInput ? startDateInput.value : "",
-      startTimeInput ? startTimeInput.value : "",
-      isAllDay,
-      false,
-    );
-
-    const endDateInput = document.getElementById("end_datetime");
-    const endTimeInput = document.getElementById("end_time");
-    chit.end_datetime = createISODateTimeString(
-      endDateInput ? endDateInput.value : "",
-      endTimeInput ? endTimeInput.value : "",
-      isAllDay,
-      true,
-    );
-
-    const dueDateInput = document.getElementById("due_datetime");
-    const dueTimeInput = document.getElementById("due_time");
-    chit.due_datetime = createISODateTimeString(
-      dueDateInput ? dueDateInput.value : "",
-      dueTimeInput ? dueTimeInput.value : "",
-      isAllDay,
-      false,
-    );
-
-    const tagsContainer = document.getElementById("tags-container");
-    if (tagsContainer) {
-      const tagCheckboxes = tagsContainer.querySelectorAll(
-        "input[type='checkbox']:checked",
-      );
-      chit.tags = Array.from(tagCheckboxes).map((cb) => cb.value);
-    } else {
-      chit.tags = [];
-    }
-
-    chit.checklist = window.checklist
-      ? window.checklist.getChecklistData()
-      : [];
-
-    // Read isProjectMaster hidden input value (string "true" or "false")
-    const projectMasterInput = document.getElementById("isProjectMaster");
-    chit.is_project_master = projectMasterInput
-      ? projectMasterInput.value === "true"
-      : false;
-
-    // Include child_chits from projectState if project master
-    if (
-      chit.is_project_master &&
-      typeof projectState === "object" &&
-      projectState.projectChit
-    ) {
-      chit.child_chits = projectState.projectChit.child_chits || [];
-      console.log(`Saving chit ${chit.id} with child_chits:`, chit.child_chits);
-    } else {
-      chit.child_chits = [];
-    }
-
-    // Validate minimum required fields
-    if (
-      !chit.title &&
-      !chit.note &&
-      !chit.start_datetime &&
-      !chit.due_datetime &&
-      chit.tags.length === 0 &&
-      chit.checklist.length === 0 &&
-      chit.child_chits.length === 0
-    ) {
-      alert(
-        "Please provide at least a title, note, date, tag, checklist item, or child chit before saving.",
-      );
-      return;
-    }
+    const chit = await buildChitObject();
+    if (!chit) return;
 
     const isNewChit = !(await chitExists(chit.id));
     const method = isNewChit ? "POST" : "PUT";
@@ -1250,10 +1294,91 @@ async function loadChitData(chitId) {
       `[loadChitData] Set currentChitId to: "${window.currentChitId}"`,
     );
 
+    // Collapse zones that have no data, expand zones that do
+    applyZoneStates(chit);
+
     markEditorSaved();
   } catch (error) {
     console.error("[loadChitData] Error loading chit:", error);
   }
+}
+
+/**
+ * After loading a chit, collapse zones whose fields are all empty,
+ * expand zones that have at least one value.
+ */
+function applyZoneStates(chit) {
+  // Map of [sectionId, contentId, hasDataFn]
+  const zones = [
+    [
+      "datesSection", "datesContent",
+      () => !!(chit.start_datetime || chit.end_datetime || chit.due_datetime || chit.recurrence),
+    ],
+    [
+      "weightSection", "weightContent",
+      () => !!(chit.priority || chit.severity || chit.status),
+    ],
+    [
+      "locationSection", "locationContent",
+      () => !!(chit.location && chit.location.trim()),
+    ],
+    [
+      "tagsSection", "tagsContent",
+      () => Array.isArray(chit.tags) && chit.tags.length > 0,
+    ],
+    [
+      "peopleSection", "peopleContent",
+      () => Array.isArray(chit.people) ? chit.people.length > 0 : !!(chit.people && chit.people.trim()),
+    ],
+    [
+      "notesSection", "notesContent",
+      () => !!(chit.note && chit.note.trim()),
+    ],
+    [
+      "checklistSection", "checklistContent",
+      () => Array.isArray(chit.checklist) && chit.checklist.length > 0,
+    ],
+    [
+      "alertsSection", "alertsContent",
+      () => !!(chit.alarm || chit.notification),
+    ],
+    [
+      "healthIndicatorsSection", "healthIndicatorsContent",
+      () => false, // always collapsed — no chit-specific health data
+    ],
+    [
+      "colorSection", "colorContent",
+      () => !!(chit.color && chit.color !== "#C66B6B"),
+    ],
+    [
+      "projectsSection", "projectsContent",
+      () => !!(chit.is_project_master || (Array.isArray(chit.child_chits) && chit.child_chits.length > 0)),
+    ],
+  ];
+
+  zones.forEach(([sectionId, contentId, hasData]) => {
+    const section = document.getElementById(sectionId);
+    const content = document.getElementById(contentId);
+    if (!section || !content) return;
+
+    const shouldExpand = hasData();
+
+    if (shouldExpand) {
+      // Expand: remove collapsed classes, show buttons
+      content.classList.remove("collapsed");
+      section.classList.remove("collapsed");
+      section.querySelectorAll(".zone-button").forEach((btn) => {
+        btn.style.display = "";
+      });
+    } else {
+      // Collapse: add collapsed classes, hide buttons
+      content.classList.add("collapsed");
+      section.classList.add("collapsed");
+      section.querySelectorAll(".zone-button").forEach((btn) => {
+        btn.style.display = "none";
+      });
+    }
+  });
 }
 
 function setSelectValue(selectElement, value) {
@@ -1399,6 +1524,12 @@ document.addEventListener("DOMContentLoaded", function () {
 
   initializeChitId();
 
+  // Load custom colors from settings and render into the color picker
+  fetchCustomColors().then((colors) => {
+    window.customColors = colors;
+    renderCustomColors(colors);
+  });
+
   const initializeFlatpickr = (selector, options) => {
     const element = document.querySelector(selector);
     if (element && typeof flatpickr !== "undefined") {
@@ -1519,6 +1650,18 @@ document.addEventListener("DOMContentLoaded", function () {
     input.addEventListener("input", () => setSaveButtonUnsaved());
   });
 
+  // ESC key — same logic as clicking Exit/Cancel
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      // Don't intercept if a modal is open
+      const openModal = document.querySelector(
+        '.modal-overlay[style*="block"], .modal[style*="block"]'
+      );
+      if (openModal) return;
+      cancelOrExit();
+    }
+  });
+
   console.log("Editor initialization completed.");
 });
 
@@ -1535,29 +1678,99 @@ function clearDueDate() {
 }
 
 function setSaveButtonSaved() {
+  // Saved state: show single disabled Save button + "Exit" label on cancel
   const saveBtn = document.getElementById("saveButton");
+  const saveStayBtn = document.getElementById("saveStayButton");
+  const saveExitBtn = document.getElementById("saveExitButton");
   const cancelBtn = document.querySelector(".cancel");
-  if (!saveBtn || !cancelBtn) return;
 
-  saveBtn.innerHTML = "✅ Saved";
-  saveBtn.disabled = true;
-  saveBtn.style.opacity = 0.6;
-  saveBtn.style.pointerEvents = "none";
+  if (saveBtn) {
+    saveBtn.style.display = "";
+    saveBtn.innerHTML = "✅ Saved";
+    saveBtn.disabled = true;
+    saveBtn.style.opacity = "0.6";
+    saveBtn.style.pointerEvents = "none";
+  }
+  if (saveStayBtn) saveStayBtn.style.display = "none";
+  if (saveExitBtn) saveExitBtn.style.display = "none";
+  if (cancelBtn) cancelBtn.textContent = "Exit";
 
-  cancelBtn.textContent = "Done";
+  window._editorHasUnsavedChanges = false;
 }
 
 function setSaveButtonUnsaved() {
+  // Unsaved state: hide single Save, show Save & Stay + Save & Exit, "Cancel" on exit button
   const saveBtn = document.getElementById("saveButton");
+  const saveStayBtn = document.getElementById("saveStayButton");
+  const saveExitBtn = document.getElementById("saveExitButton");
   const cancelBtn = document.querySelector(".cancel");
-  if (!saveBtn || !cancelBtn) return;
 
-  saveBtn.innerHTML = "💾 Save";
-  saveBtn.disabled = false;
-  saveBtn.style.opacity = 1;
-  saveBtn.style.pointerEvents = "auto";
+  if (saveBtn) saveBtn.style.display = "none";
+  if (saveStayBtn) saveStayBtn.style.display = "";
+  if (saveExitBtn) saveExitBtn.style.display = "";
+  if (cancelBtn) cancelBtn.textContent = "❌ Cancel";
 
-  cancelBtn.textContent = "❌ Cancel";
+  window._editorHasUnsavedChanges = true;
+}
+
+/**
+ * Cancel / Exit button handler.
+ * If there are unsaved changes, prompt before leaving.
+ * If clean, just navigate home.
+ */
+function cancelOrExit() {
+  if (window._editorHasUnsavedChanges) {
+    if (confirm("You have unsaved changes. Leave without saving?")) {
+      window.location.href = "/";
+    }
+  } else {
+    window.location.href = "/";
+  }
+}
+
+/**
+ * Save the chit and stay on the editor page (don't navigate away).
+ */
+async function saveChitAndStay() {
+  try {
+    const chit = await buildChitObject();
+    if (!chit) return; // validation failed inside buildChitObject
+
+    const isNewChit = !(await chitExists(chit.id));
+    const method = isNewChit ? "POST" : "PUT";
+    const url = isNewChit ? "/api/chits" : `/api/chits/${chit.id}`;
+
+    const response = await fetch(url, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(chit),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to save chit: ${response.status} - ${errorText}`);
+    }
+
+    const updatedChit = await response.json();
+    window.currentChitId = updatedChit.id;
+
+    // Update URL so subsequent saves use PUT
+    const newUrl = new URL(window.location.href);
+    newUrl.searchParams.set("id", updatedChit.id);
+    window.history.replaceState({}, "", newUrl.toString());
+    chitId = updatedChit.id;
+    window.isNewChit = false;
+
+    if (updatedChit.is_project_master && typeof saveProjectChanges === "function") {
+      await saveProjectChanges();
+    }
+
+    setSaveButtonSaved();
+    console.log("Saved & staying on editor.");
+  } catch (error) {
+    console.error("[saveChitAndStay] Error:", error);
+    alert("Failed to save chit. Check console for details.");
+  }
 }
 
 console.log("Editor script loaded successfully.");

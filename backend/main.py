@@ -501,7 +501,8 @@ def save_settings(settings: Settings):
                 settings.snooze_length,
                 serialize_json_field(settings.default_filters),
                 settings.alarm_orientation,
-                serialize_json_field(settings.tags),
+                # Serialize tags as list of dicts (Pydantic Tag objects need .dict())
+                json.dumps([t.dict() for t in settings.tags]) if settings.tags else None,
                 serialize_json_field(settings.custom_colors),
                 serialize_json_field(settings.visual_indicators),
                 serialize_json_field(settings.chit_options)

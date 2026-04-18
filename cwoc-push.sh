@@ -1,35 +1,50 @@
 #!/bin/bash
 # =============================================================================
-# CWOC Push Script - Multiple Directories (Local → Server)
-# Password entered only ONCE
+# CWOC Push + Systemd Restart Script (fixed paths, no deletes)
 # =============================================================================
 
 SERVER="root@192.168.1.111"
 REMOTE_BASE="/app"
 
-# === DIRECTORIES TO PUSH (edit this list) ===
 DIRECTORIES=(
-    "data"
+    "frontend"
+    "backend"
     "config"
     "src"
     "static"
-    # Add more here:
-    # "models"
-    # "logs"
 )
 
 LOCAL_ROOT="/home/cwhiii/Sync/Secondary Data/Development/CWOC"
 
+RESTART=true
+VERBOSE=false
+FOLLOW=false
+
+show_help() {
+    cat << HELP
+Usage: cwoc-push [OPTIONS]
+
+Options:
+  -h, --help        Show this help message
+  -v, --verbose     Show copied files + recent logs
+  --follow          Push + restart + watch live logs (Ctrl+C to stop)
+  --no-restart      Push files only
+HELP
+}
+
+for arg in "$@"; do
+    case $arg in
+        -h|--help)     show_help; exit 0 ;;
+        -v|--verbose)  VERBOSE=true ;;
+        --follow)      FOLLOW=true ;;
+        --no-restart)  RESTART=false ;;
+        *) echo "Unknown option: $arg"; echo "Use cwoc-push -h"; exit 1 ;;
+    esac
+done
+
 echo "🚀 CWOC Push started - $(date)"
 echo "Target: $SERVER:$REMOTE_BASE"
-echo "Pushing: ${DIRECTORIES[*]}"
 echo "--------------------------------------------------"
-
-# Enable SSH connection reuse (password only once)
-ssh -o ControlMaster=auto -o ControlPersist=10m -o ControlPath=~/.ssh/cm-%r@%h:%p "$SERVER" "echo 'SSH connection established'" || {
-    echo "❌ Failed to connect to server"
-    exit 1
-}
 
 for dir in "${DIRECTORIES[@]}"; do
     local_path="$LOCAL_ROOT/$dir"
@@ -37,19 +52,51 @@ for dir in "${DIRECTORIES[@]}"; do
     if [[ -d "$local_path" ]]; then
         echo "📤 Pushing: $dir ..."
 
-        rsync -avz --delete \
-            -e "ssh -o ControlPath=~/.ssh/cm-%r@%h:%p" \
-            "$local_path/" "$SERVER:$REMOTE_BASE/$dir/"
+        # ensure remote directory exists
+        ssh "$SERVER" "mkdir -p \"$REMOTE_BASE/$dir\""
 
-        if [[ $? -eq 0 ]]; then
-            echo "✅ Successfully pushed: $dir"
+        if [[ "$VERBOSE" == true ]]; then
+            rsync -avzi \
+                --rsync-path="mkdir -p \"$REMOTE_BASE/$dir\" && rsync" \
+                "$local_path/" "$SERVER:$REMOTE_BASE/$dir/"
         else
-            echo "❌ Failed to push: $dir"
+            rsync -az \
+                --rsync-path="mkdir -p \"$REMOTE_BASE/$dir\" && rsync" \
+                "$local_path/" "$SERVER:$REMOTE_BASE/$dir/"
         fi
+
+        echo "✅ Pushed: $dir"
     else
-        echo "⚠️  Warning: Directory not found locally: $dir"
+        echo "⚠️  Directory not found: $dir"
     fi
 done
 
 echo "--------------------------------------------------"
-echo "✅ All pushes completed - $(date)"
+
+if [[ "$RESTART" == true ]]; then
+    echo "🔄 Restarting cwoc.service..."
+    ssh "$SERVER" '
+        systemctl restart cwoc.service
+        if [[ $? -eq 0 ]]; then
+            echo "✅ Service restarted"
+            systemctl status cwoc.service --no-pager -l
+        else
+            echo "❌ Restart failed"
+        fi
+    '
+
+    if [[ "$VERBOSE" == true || "$FOLLOW" == true ]]; then
+        echo "--------------------------------------------------"
+        if [[ "$FOLLOW" == true ]]; then
+            echo "📄 Live logs (Ctrl+C to stop)..."
+            ssh -t "$SERVER" "journalctl -u cwoc.service -f --no-hostname"
+        else
+            echo "📄 Recent logs:"
+            ssh "$SERVER" "journalctl -u cwoc.service -n 30 --no-hostname"
+        fi
+    else
+        echo "💡 Tip: Use 'cwoc-push -v' to see recent logs"
+    fi
+fi
+
+echo "🎉 All done! - $(date)"
