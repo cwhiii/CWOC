@@ -829,7 +829,8 @@ function displayChecklistView(chitsToDisplay) {
           if (item && typeof item === "object" && item.text) {
             const listItem = document.createElement("li");
             listItem.textContent = item.text;
-            if (item.done === true)
+            // Schema uses 'checked'; guard against legacy 'done' field
+            if (item.checked === true || item.done === true)
               listItem.style.textDecoration = "line-through";
             checklist.appendChild(listItem);
           }
@@ -1120,26 +1121,39 @@ function displayNotesView(chitsToDisplay) {
     sortedChits.forEach((chit) => {
       const chitElement = document.createElement("div");
       chitElement.className = "note-chit";
-      chitElement.style.margin = "0"; /* Remove extra margins */
-      chitElement.style.padding = "0.5em"; /* Consistent with CSS */
-      chitElement.style.backgroundColor = chit.color || "#ffff0";
+      chitElement.style.margin = "0";
+      chitElement.style.padding = "0.5em";
+      chitElement.style.backgroundColor = chit.color || "#fffaf0";
 
       const titlePrefix = chit.due_datetime ? "✅ " : "";
-      chitElement.innerHTML = `
-      <h3>${titlePrefix}${chit.title}</h3>
-      <p>${chit.note}</p>
-      <div class="labels"></div>
-      `;
-      const labelsContainer = chitElement.querySelector(".labels");
-      if (chit.labels && Array.isArray(chit.labels) && chit.labels.length > 0) {
-        chit.labels.forEach((label) => {
+
+      const titleEl = document.createElement("h3");
+      titleEl.textContent = `${titlePrefix}${chit.title}`;
+      chitElement.appendChild(titleEl);
+
+      // Use a <pre> so newlines and whitespace are preserved exactly as stored
+      const noteEl = document.createElement("pre");
+      noteEl.style.whiteSpace = "pre-wrap";
+      noteEl.style.fontFamily = "inherit";
+      noteEl.style.margin = "0.25em 0";
+      noteEl.textContent = chit.note;
+      chitElement.appendChild(noteEl);
+
+      const labelsContainer = document.createElement("div");
+      labelsContainer.className = "labels";
+      // Use chit.tags (canonical field name; guard against legacy chit.labels)
+      const tagList = chit.tags || chit.labels || [];
+      if (Array.isArray(tagList) && tagList.length > 0) {
+        tagList.forEach((tag) => {
           const labelElement = document.createElement("span");
           labelElement.className = "label";
-          labelElement.style.backgroundColor = getPastelColor(label);
-          labelElement.textContent = label;
+          labelElement.style.backgroundColor = getPastelColor(tag);
+          labelElement.textContent = tag;
           labelsContainer.appendChild(labelElement);
         });
       }
+      chitElement.appendChild(labelsContainer);
+
       chitElement.addEventListener("dblclick", () => {
         storePreviousState();
         window.location.href = `/editor?id=${chit.id}`;

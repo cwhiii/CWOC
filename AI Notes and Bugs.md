@@ -37,7 +37,7 @@ Deployed on a **Proxmox LXC container** (ID 111, host: Zamonia) at `http://192.1
 ┌────────────────────▼────────────────────────────────┐
 │  FastAPI (Python 3) — backend/main.py               │
 │  Uvicorn on port 3333                               │
-│  SQLite — /app/data/database.db                     │
+│  SQLite — /app/data/app.db                      │
 └─────────────────────────────────────────────────────┘
 ```
 
@@ -521,9 +521,16 @@ if (!chitId || chitId === generateUniqueId()) { return; }
 `generateUniqueId()` generates a *new* random ID each time it's called, so `chitId === generateUniqueId()` will never be true. The intent was probably to check if `chitId` was freshly generated (i.e., a new chit), but this comparison is meaningless. The actual guard in `DOMContentLoaded` (`if (chitId && chitId !== generateUniqueId())`) has the same problem but works by accident because `chitId` is set from the URL param, which is absent for new chits.
 
 ### BUG-010 — `allDay` Field Mismatch Between Save and Load
-**File:** `frontend/editor.js`  
+**File:** `frontend/editor.js`, `backend/main.py`  
 **Severity:** Medium  
-On save, `chit.allDay` is not included in the saved object — the all-day state is only used to construct ISO datetime strings (midnight/23:59). On load, `allDayInput.value = chit.allDay ? "true" : "false"` — but `chit.allDay` will always be `undefined` since it's never stored. The all-day toggle state is therefore lost on reload.
+~~On save, `chit.allDay` is not included in the saved object — the all-day state is only used to construct ISO datetime strings (midnight/23:59). On load, `allDayInput.value = chit.allDay ? "true" : "false"` — but `chit.allDay` will always be `undefined` since it's never stored. The all-day toggle state is therefore lost on reload.~~  
+**FIXED 2026-04-17** — Full fix across backend and frontend:
+- Added `all_day BOOLEAN DEFAULT 0` column to DB schema
+- Added `migrate_add_all_day()` migration that runs at startup for existing DBs
+- Added `all_day: Optional[bool]` to Pydantic `Chit` model
+- `all_day` now included in all INSERT/UPDATE SQL and deserialized in GET endpoints
+- `saveChitData()` now sets `chit.all_day = isAllDay` before sending to API
+- `loadChitData()` now reads `chit.all_day` (with `chit.allDay` fallback for legacy data), sets the hidden input, and applies full UI state (hides/shows time inputs, toggles button class)
 
 ### BUG-011 — Tags Not Loaded/Restored When Editing Existing Chit
 **File:** `frontend/editor.js` — `loadChitData()`  
@@ -580,7 +587,11 @@ The design doc notes: *"Notes are all saving to a single line."* Newlines in the
 **Severity:** High  
 The design doc calls this out in strong terms: *"The Health Indicators zone IS LITERALLY UNUSABLE GARBAGE BECAUSE the buttons in the main section of the Health Zone when clicked on, COLLAPSE THE WHOLE ZONE."* The `toggleZone()` click handler is likely attached to the entire zone container rather than just the header, so any click inside the zone triggers collapse.
 
-### BUG-021 — Tasks Tab: Sort Dropdown Doesn't Revert When Switching Away
+### BUG-022 — DB_PATH Pointed at Wrong File (Pre-existing)
+**File:** `backend/main.py`  
+**Severity:** Critical (data loss / all API calls fail)  
+`DB_PATH` was hardcoded as `/app/data/database.db` but the actual database on the server is `/app/data/app.db` (per `context.txt` and `.env`). On restart, `init_db()` created a fresh empty `database.db`, causing all API calls to return 500 with "no such table: chits".  
+**FIXED 2026-04-17** — `DB_PATH` corrected to `/app/data/app.db`.
 **File:** `frontend/main.js` — `displayTasksView()`  
 **Severity:** Low / UX  
 ~~When switching to the Tasks tab, the week-nav element is replaced with a sort dropdown. When switching back to any other tab, the sort dropdown is not removed and the week-nav is not restored. The design doc explicitly flags this.~~  
@@ -658,7 +669,7 @@ The design doc calls this out in strong terms: *"The Health Indicators zone IS L
 Priority order based on user-visible impact:
 
 1. ~~**BUG-011, 012, 013, 014**~~ ✅ **FIXED 2026-04-17** — Existing chit data (tags, location, people, color, pinned/archived) not restored when editing.
-2. ~~**BUG-010**~~ — All-day state lost on reload. *(still open)*
+2. ~~**BUG-010**~~ ✅ **FIXED 2026-04-17** — All-day state lost on reload. Full backend+frontend fix: `all_day` column added to DB with migration, saved and restored correctly.
 3. ~~**BUG-018**~~ ✅ **FIXED 2026-04-17** — Header row incorrectly colored when picking chit color.
 4. ~~**BUG-021**~~ ✅ **FIXED 2026-04-17** — Tasks tab sort dropdown doesn't revert on tab switch.
 5. ~~**BUG-007, 008**~~ ✅ **FIXED 2026-04-17** — Backend `conn = None` guard and `update_chit` fetchone ordering.

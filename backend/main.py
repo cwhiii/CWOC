@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 app = FastAPI()
 
 # Database path
-DB_PATH = "/app/data/database.db"
+DB_PATH = "/app/data/app.db"
 
 # Pydantic Models
 class Tag(BaseModel):
@@ -63,6 +63,7 @@ class Chit(BaseModel):
     modified_datetime: Optional[str] = None
     is_project_master: Optional[bool] = False  # New field
     child_chits: Optional[List[str]] = None    # New field
+    all_day: Optional[bool] = False            # All-day event flag
 
 # Database initialization
 def init_db():
@@ -96,7 +97,8 @@ def init_db():
             created_datetime TEXT,
             modified_datetime TEXT,
             is_project_master BOOLEAN DEFAULT 0,
-            child_chits TEXT
+            child_chits TEXT,
+            all_day BOOLEAN DEFAULT 0
         )
         """)
         cursor.execute("""
@@ -125,7 +127,6 @@ def migrate_labels_to_tags():
     try:
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
-        # Check if labels column exists
         cursor.execute("PRAGMA table_info(chits)")
         columns = [col[1] for col in cursor.fetchall()]
         if "labels" in columns and "tags" not in columns:
@@ -135,6 +136,22 @@ def migrate_labels_to_tags():
         conn.close()
     except Exception as e:
         logger.error(f"Error migrating labels to tags: {str(e)}")
+        raise
+
+# Migration: Add all_day column if missing
+def migrate_add_all_day():
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(chits)")
+        columns = [col[1] for col in cursor.fetchall()]
+        if "all_day" not in columns:
+            cursor.execute("ALTER TABLE chits ADD COLUMN all_day BOOLEAN DEFAULT 0")
+            conn.commit()
+            logger.info("Added all_day column to chits table")
+        conn.close()
+    except Exception as e:
+        logger.error(f"Error adding all_day column: {str(e)}")
         raise
 
 # JSON serialization/deserialization helpers
@@ -156,9 +173,10 @@ def deserialize_json_field(data: Optional[str]) -> Any:
         logger.error(f"Deserialization error: {str(e)}")
         return None
 
-# Initialize database and run migration
+# Initialize database and run migrations
 init_db()
 migrate_labels_to_tags()
+migrate_add_all_day()
 
 # Serve all files from /frontend/ (e.g., index.html, settings.html, editor.html)
 app.mount("/frontend", StaticFiles(directory="/app/frontend"), name="frontend")
@@ -197,6 +215,7 @@ def get_chit(chit_id: str):
         chit["people"] = deserialize_json_field(chit["people"])
         chit["child_chits"] = deserialize_json_field(chit.get("child_chits"))
         chit["is_project_master"] = bool(chit.get("is_project_master"))
+        chit["all_day"] = bool(chit.get("all_day"))
         return chit
     except sqlite3.Error as e:
         logger.error(f"Database error fetching chit {chit_id}: {str(e)}")
@@ -226,6 +245,7 @@ def get_all_chits():
             chit["people"] = deserialize_json_field(chit["people"])
             chit["child_chits"] = deserialize_json_field(chit.get("child_chits"))
             chit["is_project_master"] = bool(chit.get("is_project_master"))
+            chit["all_day"] = bool(chit.get("all_day"))
             chits.append(chit)
         return chits
     except Exception as e:
@@ -263,8 +283,8 @@ def create_chit(chit: Chit):
                 id, title, note, tags, start_datetime, end_datetime, due_datetime,
                 completed_datetime, status, priority, severity, checklist, alarm, notification,
                 recurrence, recurrence_id, location, color, people, pinned, archived,
-                deleted, created_datetime, modified_datetime, is_project_master, child_chits
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                deleted, created_datetime, modified_datetime, is_project_master, child_chits, all_day
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 chit_id,
@@ -293,6 +313,7 @@ def create_chit(chit: Chit):
                 current_time,
                 chit.is_project_master,
                 serialize_json_field(chit.child_chits),
+                chit.all_day if chit.all_day is not None else False,
             )
         )
         conn.commit()
@@ -335,7 +356,7 @@ def update_chit(chit_id: str, chit: Chit):
                     title = ?, note = ?, tags = ?, start_datetime = ?, end_datetime = ?, due_datetime = ?,
                     completed_datetime = ?, status = ?, priority = ?, severity = ?, checklist = ?, alarm = ?, notification = ?,
                     recurrence = ?, recurrence_id = ?, location = ?, color = ?, people = ?, pinned = ?,
-                    archived = ?, deleted = ?, modified_datetime = ?, is_project_master = ?, child_chits = ?
+                    archived = ?, deleted = ?, modified_datetime = ?, is_project_master = ?, child_chits = ?, all_day = ?
                 WHERE id = ?
                 """,
                 (
@@ -363,6 +384,7 @@ def update_chit(chit_id: str, chit: Chit):
                     current_time,
                     chit.is_project_master,
                     serialize_json_field(chit.child_chits),
+                    chit.all_day if chit.all_day is not None else False,
                     chit_id,
                 )
             )
@@ -374,8 +396,8 @@ def update_chit(chit_id: str, chit: Chit):
                     id, title, note, tags, start_datetime, end_datetime, due_datetime,
                     completed_datetime, status, priority, severity, checklist, alarm, notification,
                     recurrence, recurrence_id, location, color, people, pinned, archived,
-                    deleted, created_datetime, modified_datetime, is_project_master, child_chits
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    deleted, created_datetime, modified_datetime, is_project_master, child_chits, all_day
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     chit_id,
@@ -404,6 +426,7 @@ def update_chit(chit_id: str, chit: Chit):
                     current_time,
                     chit.is_project_master,
                     serialize_json_field(chit.child_chits),
+                    chit.all_day if chit.all_day is not None else False,
                 )
             )
         conn.commit()

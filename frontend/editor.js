@@ -216,9 +216,11 @@ function initializeChitId() {
   if (!chitId) {
     chitId = generateUniqueId(); // Fallback to a new ID
     window.currentChitId = chitId;
+    window.isNewChit = true;
     console.log("Generated new chitId:", chitId);
   } else {
     window.currentChitId = chitId;
+    window.isNewChit = false;
   }
 }
 
@@ -808,6 +810,7 @@ async function saveChitData() {
 
     const allDayInput = document.getElementById("allDay");
     const isAllDay = allDayInput ? allDayInput.value === "true" : false;
+    chit.all_day = isAllDay;
 
     const startDateInput = document.getElementById("start_datetime");
     const startTimeInput = document.getElementById("start_time");
@@ -994,8 +997,8 @@ function renderHealthIndicator(indicatorId) {
 async function loadChitData(chitId) {
   console.log(`[loadChitData] Called with chitId: ${chitId}`);
 
-  if (!chitId || chitId === generateUniqueId()) {
-    console.log("[loadChitData] Skipping load: Invalid or new chitId");
+  if (!chitId || window.isNewChit) {
+    console.log("[loadChitData] Skipping load: new chit");
     return;
   }
 
@@ -1051,8 +1054,28 @@ async function loadChitData(chitId) {
 
     const allDayInput = document.getElementById("allDay");
     if (allDayInput) {
-      allDayInput.value = chit.allDay ? "true" : "false";
+      // Field is stored as all_day in DB; guard against legacy allDay key
+      const isAllDay = !!(chit.all_day || chit.allDay);
+      allDayInput.value = isAllDay ? "true" : "false";
       console.log(`[loadChitData] Set allDay to: "${allDayInput.value}"`);
+
+      // Apply UI state: hide/show time inputs to match the stored all-day flag
+      const startTime = document.getElementById("start_time");
+      const endTime = document.getElementById("end_time");
+      const dueTime = document.getElementById("due_time");
+      const allDayBtn = document.getElementById("allDayToggleButton");
+
+      if (isAllDay) {
+        if (startTime) startTime.style.display = "none";
+        if (endTime) endTime.style.display = "none";
+        if (dueTime) dueTime.style.display = "none";
+        if (allDayBtn) allDayBtn.classList.add("active");
+      } else {
+        if (startTime) startTime.style.display = "";
+        if (endTime) endTime.style.display = "";
+        if (dueTime) dueTime.style.display = "";
+        if (allDayBtn) allDayBtn.classList.remove("active");
+      }
     }
 
     const prioritySelect = document.getElementById("priority");
@@ -1114,7 +1137,7 @@ async function loadChitData(chitId) {
       );
     }
     if (startTimeInput) {
-      startTimeInput.value = chit.allDay ? "" : startParts.time;
+      startTimeInput.value = (chit.all_day || chit.allDay) ? "" : startParts.time;
       console.log(
         `[loadChitData] Set start_time to: "${startTimeInput.value}"`,
       );
@@ -1130,7 +1153,7 @@ async function loadChitData(chitId) {
       );
     }
     if (endTimeInput) {
-      endTimeInput.value = chit.allDay ? "" : endParts.time;
+      endTimeInput.value = (chit.all_day || chit.allDay) ? "" : endParts.time;
       console.log(`[loadChitData] Set end_time to: "${endTimeInput.value}"`);
     }
 
@@ -1144,7 +1167,7 @@ async function loadChitData(chitId) {
       );
     }
     if (dueTimeInput) {
-      dueTimeInput.value = chit.allDay ? "" : dueParts.time;
+      dueTimeInput.value = (chit.all_day || chit.allDay) ? "" : dueParts.time;
       console.log(`[loadChitData] Set due_time to: "${dueTimeInput.value}"`);
     }
 
@@ -1442,7 +1465,7 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   // Conditionally load chit data or reset for new chit
-  if (chitId && chitId !== generateUniqueId()) {
+  if (chitId && !window.isNewChit) {
     loadChitData(chitId);
   } else {
     console.log("No valid chitId for loading, initializing new chit");
