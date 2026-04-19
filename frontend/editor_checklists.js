@@ -71,6 +71,9 @@ class Checklist {
       if (e.key === "Enter" && this.input.value.trim() !== "") {
         this.addNewItem(this.input.value.trim());
         this.input.value = "";
+      } else if (e.key === "Escape") {
+        // ESC on the add-item input: same as clicking Cancel/Exit
+        if (typeof cancelOrExit === "function") cancelOrExit();
       }
     });
     this.container.insertBefore(this.input, this.container.firstChild);
@@ -400,6 +403,50 @@ class Checklist {
         addNewItemBelow();
       } else if (e.key === "Escape") {
         finishEditing(false);
+      } else if (e.key === "Tab") {
+        e.preventDefault();
+        if (e.shiftKey) {
+          // Unindent
+          if (item.level > 0) {
+            item.level = Math.max(0, item.level - 1);
+            item.parent = null;
+            const idx = this.items.indexOf(item);
+            for (let i = idx - 1; i >= 0; i--) {
+              if (this.items[i].level === item.level - 1) {
+                item.parent = this.items[i].id;
+                break;
+              }
+            }
+            finishEditing(true);
+            this.render();
+            this._notifyChange();
+            // Re-focus by clicking the item's text span after render
+            setTimeout(() => {
+              const el = this.container.querySelector(`[data-id="${item.id}"] .checklist-text`);
+              if (el) el.click();
+            }, 0);
+          }
+        } else {
+          // Indent
+          const idx = this.items.indexOf(item);
+          if (idx > 0 && item.level < MAX_INDENT_LEVEL) {
+            item.level = Math.min(item.level + 1, MAX_INDENT_LEVEL);
+            item.parent = null;
+            for (let i = idx - 1; i >= 0; i--) {
+              if (this.items[i].level === item.level - 1) {
+                item.parent = this.items[i].id;
+                break;
+              }
+            }
+            finishEditing(true);
+            this.render();
+            this._notifyChange();
+            setTimeout(() => {
+              const el = this.container.querySelector(`[data-id="${item.id}"] .checklist-text`);
+              if (el) el.click();
+            }, 0);
+          }
+        }
       } else if (e.key === "ArrowUp") {
         const cursorPos = input.selectionStart;
         if (cursorPos === 0) {

@@ -781,6 +781,10 @@ function resetEditorForNewChit() {
   window._alertsData = { alarms: [], timers: [], stopwatches: [], notifications: [] };
   renderAllAlerts();
 
+  // Show weather placeholder for new chits (no location/date yet)
+  const cws = document.getElementById("compactWeatherSection");
+  if (cws) cws.innerHTML = `<div style="padding:8px;font-family:'Courier New',monospace;color:#8b5a2b;font-size:0.85em;opacity:0.7;">📍 Date &amp; location needed for weather</div>`;
+
   console.log("Editor reset completed.");
 }
 
@@ -2391,10 +2395,14 @@ async function loadChitData(chitId) {
 
     // Fetch weather for the chit's location (or default)
     const locationForWeather = chit.location || defaultAddress;
-    if (locationForWeather) {
+    const hasDate = !!(chit.start_datetime || chit.due_datetime);
+    const compactWeatherSection = document.getElementById("compactWeatherSection");
+    if (locationForWeather && hasDate) {
       fetchWeatherData(locationForWeather).catch((err) => {
         console.log("Could not fetch weather on load:", err);
       });
+    } else if (compactWeatherSection) {
+      compactWeatherSection.innerHTML = `<div style="padding:8px;font-family:'Courier New',monospace;color:#8b5a2b;font-size:0.85em;opacity:0.7;">📍 Date &amp; location needed for weather</div>`;
     }
 
     window.currentChitId = chit.id || chitId;
@@ -2527,11 +2535,20 @@ function searchLocationMap(event) {
   }
 
   const address = locationInput.value.trim();
-  console.log("Searching location:", address);
+  const hasDate = !!(document.getElementById("start_datetime")?.value || document.getElementById("due_datetime")?.value);
+
+  if (!hasDate) {
+    const cws = document.getElementById("compactWeatherSection");
+    if (cws) cws.innerHTML = `<div style="padding:8px;font-family:'Courier New',monospace;color:#8b5a2b;font-size:0.85em;opacity:0.7;">📍 Date &amp; location needed for weather</div>`;
+    // Still show the map
+    getCoordinates(address).then((coords) => {
+      displayMapInUI(coords.lat, coords.lon, address);
+    }).catch(() => {});
+    return;
+  }
 
   fetchWeatherData(address)
     .then((weatherData) => {
-      console.log("Weather data fetched successfully:", weatherData);
       if (currentWeatherLat && currentWeatherLon) {
         displayMapInUI(currentWeatherLat, currentWeatherLon, address);
       }

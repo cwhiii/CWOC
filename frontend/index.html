@@ -60,6 +60,36 @@
                 </select>
             </div>
 
+            <!-- Sort controls -->
+            <div id="sort-controls" style="margin-bottom:10px;">
+                <label for="sort-select" style="display:block;margin-bottom:4px;font-size:0.85em;opacity:0.8;">Sort:</label>
+                <div style="display:flex;gap:4px;align-items:center;">
+                    <select id="sort-select" onchange="onSortSelectChange()" style="flex:1;">
+                        <option value="">— None —</option>
+                        <option value="title">Title</option>
+                        <option value="start">Start Date</option>
+                        <option value="due">Due Date</option>
+                    </select>
+                    <button id="sort-dir-btn" onclick="toggleSortDir()" title="Toggle sort direction" style="padding:2px 8px;font-size:1em;display:none;">▲</button>
+                </div>
+            </div>
+
+            <!-- Pinned / Archived multi-select filter -->
+            <div style="margin-bottom:10px;">
+                <label style="display:block;margin-bottom:4px;font-size:0.85em;opacity:0.8;">Show:</label>
+                <div style="display:flex;flex-direction:column;gap:3px;font-size:0.9em;">
+                    <label style="display:flex;align-items:center;gap:5px;cursor:pointer;">
+                        <input type="checkbox" id="show-pinned" onchange="onShowFilterChange()" checked /> 📌 Pinned
+                    </label>
+                    <label style="display:flex;align-items:center;gap:5px;cursor:pointer;">
+                        <input type="checkbox" id="show-archived" onchange="onShowFilterChange()" checked /> 🗃️ Archived
+                    </label>
+                    <label style="display:flex;align-items:center;gap:5px;cursor:pointer;">
+                        <input type="checkbox" id="show-unmarked" onchange="onShowFilterChange()" checked /> 📄 Unmarked
+                    </label>
+                </div>
+            </div>
+
             <div class="view-selector">
                 <label for="view-select">View:</label>
                 <select id="view-select" onchange="changeView()">

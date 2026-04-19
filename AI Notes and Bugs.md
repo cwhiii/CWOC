@@ -940,3 +940,37 @@ Browsers block audio until a user gesture. `_startGlobalAlertSystem` now registe
 
 **editor_projects.js — All project zone changes mark editor unsaved:**
 Added `saveCurrentChit()` calls to: `addChildChit`, `toggleProjectMaster`, `moveChildChitToProject`. These were missing, so the save buttons stayed disabled after project zone changes.
+
+### Checklist + Weather fixes — 2026-04-18 (Session 15)
+
+**main.js — Checklist view chit color:**
+`chitElement` now has `backgroundColor = chitColor(chit)`. Checklist items also render with indentation based on `item.level`, level-appropriate bullets (•, ◦, ▸, –, ·), and strikethrough + reduced opacity for completed items.
+
+**editor_checklists.js — ESC on top-level input:**
+The add-item input now handles ESC by calling `cancelOrExit()` (same as clicking Cancel/Exit in the editor header).
+
+**editor_checklists.js — Tab/Shift+Tab indent/unindent:**
+While editing a checklist item, Tab indents it (increases level, finds new parent), Shift+Tab unindents it. After re-render, the item is re-focused by clicking its text span. Respects `MAX_INDENT_LEVEL = 4`.
+
+**editor.js + editor.html — Weather placeholder:**
+- `compactWeatherSection` initial HTML changed from "Weather Loading..." to the placeholder message.
+- `resetEditorForNewChit` sets the placeholder.
+- `loadChitData` only fetches weather if the chit has both a location AND a date (start or due). Otherwise shows placeholder.
+- `searchLocationMap` checks for a date before fetching weather; if no date, shows placeholder but still shows the map.
+
+### Sidebar sort + archive filter — 2026-04-18 (Session 16)
+
+**index.html:**
+- Added sort buttons (Title, Start, Due) to sidebar. Each shows ▲/▼ when active.
+- Added archive/pinned cycle button (All → Pinned → Archived → Normal → All).
+
+**main.js:**
+- `currentSortField` / `currentSortDir` — sort state. `null` = no sort (natural order).
+- `currentArchiveFilter` — `'all'` | `'pinned'` | `'archived'` | `'neither'`.
+- `setSortField(field)` — clicking same field toggles ▲/▼; clicking different field resets to ▲.
+- `_updateSortUI()` — updates button bold/opacity and arrow character.
+- `cycleArchiveFilter()` — cycles through 4 states, updates button label.
+- `_applySort(chitList)` — sorts by title (alpha), start date, or due date; respects direction; nulls sort last.
+- `_applyArchiveFilter(chitList)` — filters by pinned/archived/neither/all.
+- Both applied in `displayChits` after search/status filter, before passing to view renderers.
+- `_updateSortUI()` called on `DOMContentLoaded` to initialize button states.

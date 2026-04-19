@@ -5,8 +5,78 @@ let currentWeekStart = null;
 let currentView = "Week";
 let previousState = { tab: "Calendar", view: "Week" };
 
+// ── Sort & filter state ──────────────────────────────────────────────────────
+let currentSortField = null;   // null | 'title' | 'start' | 'due'
+let currentSortDir = 'asc';    // 'asc' | 'desc'
+
+function onSortSelectChange() {
+  const sel = document.getElementById('sort-select');
+  currentSortField = sel ? sel.value || null : null;
+  currentSortDir = 'asc';
+  _updateSortUI();
+  displayChits();
+}
+
+function toggleSortDir() {
+  currentSortDir = currentSortDir === 'asc' ? 'desc' : 'asc';
+  _updateSortUI();
+  displayChits();
+}
+
+function _updateSortUI() {
+  const dirBtn = document.getElementById('sort-dir-btn');
+  if (!dirBtn) return;
+  if (currentSortField) {
+    dirBtn.style.display = '';
+    dirBtn.textContent = currentSortDir === 'asc' ? '▲' : '▼';
+    dirBtn.title = currentSortDir === 'asc' ? 'Ascending — click to reverse' : 'Descending — click to reverse';
+  } else {
+    dirBtn.style.display = 'none';
+  }
+}
+
+function onShowFilterChange() {
+  displayChits();
+}
+
+function _applyArchiveFilter(chitList) {
+  const showPinned   = document.getElementById('show-pinned')?.checked ?? true;
+  const showArchived = document.getElementById('show-archived')?.checked ?? true;
+  const showUnmarked = document.getElementById('show-unmarked')?.checked ?? true;
+
+  // If all checked or all unchecked, show everything
+  if (showPinned && showArchived && showUnmarked) return chitList;
+  if (!showPinned && !showArchived && !showUnmarked) return chitList;
+
+  return chitList.filter((c) => {
+    const isPinned   = !!c.pinned;
+    const isArchived = !!c.archived;
+    const isUnmarked = !isPinned && !isArchived;
+    return (isPinned && showPinned) || (isArchived && showArchived) || (isUnmarked && showUnmarked);
+  });
+}
+
+function _applySort(chitList) {
+  if (!currentSortField) return chitList;
+  return [...chitList].sort((a, b) => {
+    let valA, valB;
+    if (currentSortField === 'title') {
+      valA = (a.title || '').toLowerCase();
+      valB = (b.title || '').toLowerCase();
+    } else if (currentSortField === 'start') {
+      valA = a.start_datetime ? new Date(a.start_datetime).getTime() : Infinity;
+      valB = b.start_datetime ? new Date(b.start_datetime).getTime() : Infinity;
+    } else if (currentSortField === 'due') {
+      valA = a.due_datetime ? new Date(a.due_datetime).getTime() : Infinity;
+      valB = b.due_datetime ? new Date(b.due_datetime).getTime() : Infinity;
+    }
+    if (valA < valB) return currentSortDir === 'asc' ? -1 : 1;
+    if (valA > valB) return currentSortDir === 'asc' ? 1 : -1;
+    return 0;
+  });
+}
+
 // ── Global Alert System ──────────────────────────────────────────────────────
-// Runs continuously regardless of which view or chit is open.
 
 const _globalTriggeredAlarms = new Set(); // "chitId-alarmIdx-HH:MM-dateStr"
 const _globalFiredNotifications = new Set(); // "chitId-notifIdx-fireISOStr"
@@ -528,6 +598,12 @@ function displayChits() {
       !statusFilter || statusFilter === "" || chit.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
+
+  // Apply archive/pinned filter
+  filteredChits = _applyArchiveFilter(filteredChits);
+
+  // Apply sort
+  filteredChits = _applySort(filteredChits);
 
   switch (currentTab) {
     case "Calendar":
@@ -1108,6 +1184,7 @@ function displayChecklistView(chitsToDisplay) {
     sortedChits.forEach((chit) => {
       const chitElement = document.createElement("div");
       chitElement.className = "chit";
+      chitElement.style.backgroundColor = chitColor(chit);
 
       const titlePrefix = chit.due_datetime ? "✅ " : "";
       chitElement.innerHTML = `<h3><a href="/editor?id=${chit.id}">${titlePrefix}${chit.title}</a></h3>`;
@@ -1118,13 +1195,18 @@ function displayChecklistView(chitsToDisplay) {
         chit.checklist.length > 0
       ) {
         const checklist = document.createElement("ul");
+        checklist.style.cssText = "margin:0.25em 0 0 0;padding:0;list-style:none;";
         chit.checklist.forEach((item) => {
           if (item && typeof item === "object" && item.text) {
             const listItem = document.createElement("li");
-            listItem.textContent = item.text;
-            // Schema uses 'checked'; guard against legacy 'done' field
-            if (item.checked === true || item.done === true)
-              listItem.style.textDecoration = "line-through";
+            listItem.style.cssText = `padding-left:${(item.level || 0) * 18 + 4}px;padding-top:2px;padding-bottom:2px;`;
+            const isDone = item.checked === true || item.done === true;
+            listItem.style.textDecoration = isDone ? "line-through" : "";
+            listItem.style.opacity = isDone ? "0.55" : "1";
+            // Bullet varies by level
+            const bullets = ["•", "◦", "▸", "–", "·"];
+            const bullet = bullets[Math.min(item.level || 0, bullets.length - 1)];
+            listItem.textContent = `${bullet} ${item.text}`;
             checklist.appendChild(listItem);
           }
         });
@@ -2123,6 +2205,7 @@ document.addEventListener("DOMContentLoaded", function () {
   console.log("DOM fully loaded, initializing...");
   currentTab = "Calendar"; // default tab
   updateStatusFilterOptions();
+  _updateSortUI();
   fetchChits();
   updateDateRange();
   restoreSidebarState();
