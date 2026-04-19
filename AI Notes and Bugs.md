@@ -388,7 +388,10 @@ Alerts:
 3. no sound plays in the views for alarms
 
 4. the button to open th erelated chit should have th echit's title, not "open chit"
+Afeter editing checklists from the view, also drag & drop checklist items ( and their subl=items) from one chit to another
 
+Filter by tag
+cange filter by ttag, filter by statuses, and filter by pinned, archived or normal  ito MULTI SELCTS
 
 
 Projects:
