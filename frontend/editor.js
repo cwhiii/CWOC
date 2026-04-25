@@ -375,18 +375,16 @@ function toggleAllDay() {
   const allDayCheckbox = document.getElementById("allDay");
   if (!allDayCheckbox) return;
   const allDay = allDayCheckbox.checked;
-  const mode = document.querySelector('input[name="dateMode"]:checked')?.value || 'none';
 
-  // Hide/show time inputs for whichever date mode is active
-  if (mode === 'startend') {
-    const timeInputs = document.querySelectorAll('#startEndFields .time-input');
-    timeInputs.forEach(input => { input.style.display = allDay ? 'none' : ''; });
-    const sep = document.querySelector('#startEndFields .date-mode-separator');
-    if (sep) sep.style.display = allDay ? 'none' : '';
-  } else if (mode === 'due') {
-    const dueTime = document.getElementById('due_time');
-    if (dueTime) dueTime.style.display = allDay ? 'none' : '';
-  }
+  // Hide/show time inputs for ALL date modes (All Day is global)
+  const startEndTimes = document.querySelectorAll('#startEndFields .time-input');
+  startEndTimes.forEach(input => { input.style.display = allDay ? 'none' : ''; });
+  // Keep the "to" separator visible between date fields
+  const sep = document.querySelector('#startEndFields .date-mode-separator');
+  if (sep) sep.style.display = '';
+
+  const dueTime = document.getElementById('due_time');
+  if (dueTime) dueTime.style.display = allDay ? 'none' : '';
 
   if (!_dateModeSuppressUnsaved) setSaveButtonUnsaved();
 }
@@ -412,6 +410,12 @@ function onDateModeChange() {
   }
   if (alldayRow) {
     alldayRow.style.display = (mode === 'none') ? 'none' : '';
+  }
+
+  // Show Complete checkbox only when Due mode is active
+  const dueCompleteLabel = document.getElementById('dueCompleteLabel');
+  if (dueCompleteLabel) {
+    dueCompleteLabel.style.display = (mode === 'due') ? 'inline-flex' : 'none';
   }
 
   // Re-apply all-day visibility for the active mode
@@ -475,73 +479,122 @@ let _snapMinutes = 15; // default, loaded from settings
 // ── Recurrence picker ─────────────────────────────────────────────────────────
 function onRecurrenceChange() {
   const sel = document.getElementById('recurrence');
-  const customDiv = document.getElementById('recurrenceCustom');
+  const details = document.getElementById('recurrenceDetails');
+  const customRow = document.getElementById('recurrenceCustomRow');
   const icon = document.getElementById('recurrenceIcon');
-  if (sel.value === 'CUSTOM') {
-    customDiv.style.display = '';
-    _updateByDayVisibility();
-  } else {
-    customDiv.style.display = 'none';
-  }
-  if (icon) icon.style.display = sel.value ? '' : 'none';
+  const hasValue = sel && sel.value && sel.value !== '';
+
+  // Hide everything when "Does not repeat"
+  if (details) details.style.display = hasValue ? '' : 'none';
+
+  // Custom row only for Custom — force hide interval/freq when not Custom
+  const isCustom = sel.value === 'CUSTOM';
+  if (customRow) customRow.style.display = isCustom ? '' : 'none';
+  const intervalEl = document.getElementById('recurrenceInterval');
+  const freqEl = document.getElementById('recurrenceFreq');
+  if (intervalEl) intervalEl.style.display = isCustom ? '' : 'none';
+  if (freqEl) freqEl.style.display = isCustom ? '' : 'none';
+
+  // Icon
+  if (icon) icon.style.display = hasValue ? '' : 'none';
+
+  // Day checkboxes only in Custom + weeks
+  onRecurrenceFreqChange();
+  if (!hasValue) setSaveButtonUnsaved();
+  else setSaveButtonUnsaved();
+}
+
+function onRecurrenceFreqChange() {
+  const byDayDiv = document.getElementById('recurrenceByDay');
+  const sel = document.getElementById('recurrence');
+  const freq = document.getElementById('recurrenceFreq')?.value;
+  const isCustomWeekly = sel?.value === 'CUSTOM' && freq === 'WEEKLY';
+  if (byDayDiv) byDayDiv.style.display = isCustomWeekly ? 'flex' : 'none';
   setSaveButtonUnsaved();
 }
 
-function _updateByDayVisibility() {
-  const freq = document.getElementById('recurrenceFreq');
-  const byDayDiv = document.getElementById('recurrenceByDay');
-  if (freq && byDayDiv) {
-    byDayDiv.style.display = freq.value === 'WEEKLY' ? 'flex' : 'none';
+function onRecurrenceEndsToggle() {
+  const neverCb = document.getElementById('recurrenceEndsNever');
+  const dateWrap = document.getElementById('recurrenceEndsDateWrap');
+  if (dateWrap) dateWrap.style.display = neverCb && neverCb.checked ? 'none' : '';
+  if (neverCb && neverCb.checked) {
+    const untilEl = document.getElementById('recurrenceUntil');
+    if (untilEl) untilEl.value = '';
   }
+  setSaveButtonUnsaved();
 }
+
+function _onRecurrenceFreqChange() { onRecurrenceFreqChange(); }
+function _updateByDayVisibility() { onRecurrenceFreqChange(); }
+function onRecurrenceToggle() { onRecurrenceChange(); }
 
 function _buildRecurrenceRule() {
   const sel = document.getElementById('recurrence');
   if (!sel || !sel.value || sel.value === '') return null;
 
+  const until = document.getElementById('recurrenceUntil')?.value || null;
+
   if (sel.value === 'CUSTOM') {
-    const freq = document.getElementById('recurrenceFreq')?.value || 'DAILY';
+    const freq = document.getElementById('recurrenceFreq')?.value || 'WEEKLY';
     const interval = parseInt(document.getElementById('recurrenceInterval')?.value) || 1;
     const byDay = [];
-    document.querySelectorAll('#recurrenceByDay input:checked').forEach(cb => byDay.push(cb.value));
-    const until = document.getElementById('recurrenceUntil')?.value || null;
+    if (freq === 'WEEKLY') {
+      document.querySelectorAll('#recurrenceByDay input:checked').forEach(cb => byDay.push(cb.value));
+    }
     const rule = { freq, interval };
-    if (byDay.length > 0 && freq === 'WEEKLY') rule.byDay = byDay;
+    if (byDay.length > 0) rule.byDay = byDay;
     if (until) rule.until = until;
     return rule;
   }
 
-  return { freq: sel.value, interval: 1 };
+  // Preset
+  const rule = { freq: sel.value, interval: 1 };
+  if (until) rule.until = until;
+  return rule;
 }
 
 function _loadRecurrenceRule(rule) {
   const sel = document.getElementById('recurrence');
   if (!sel) return;
+
   if (!rule || !rule.freq) {
     sel.value = '';
-    document.getElementById('recurrenceCustom').style.display = 'none';
+    onRecurrenceChange();
     return;
   }
 
-  // Check if it's a simple preset
-  const isSimple = rule.interval === 1 && (!rule.byDay || rule.byDay.length === 0) && !rule.until;
+  // Load until
+  const neverCb = document.getElementById('recurrenceEndsNever');
+  const dateWrap = document.getElementById('recurrenceEndsDateWrap');
+  if (rule.until) {
+    const untilEl = document.getElementById('recurrenceUntil');
+    if (untilEl) untilEl.value = rule.until;
+    if (neverCb) neverCb.checked = false;
+    if (dateWrap) dateWrap.style.display = '';
+  } else {
+    if (neverCb) neverCb.checked = true;
+    if (dateWrap) dateWrap.style.display = 'none';
+  }
+
+  // Simple preset?
+  const isSimple = (rule.interval || 1) === 1 && (!rule.byDay || rule.byDay.length === 0);
   if (isSimple && ['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'].includes(rule.freq)) {
     sel.value = rule.freq;
-    document.getElementById('recurrenceCustom').style.display = 'none';
   } else {
     sel.value = 'CUSTOM';
-    document.getElementById('recurrenceCustom').style.display = '';
-    document.getElementById('recurrenceFreq').value = rule.freq;
-    document.getElementById('recurrenceInterval').value = rule.interval || 1;
+    const freqEl = document.getElementById('recurrenceFreq');
+    const intervalEl = document.getElementById('recurrenceInterval');
+    if (freqEl) freqEl.value = rule.freq;
+    if (intervalEl) intervalEl.value = rule.interval || 1;
     if (rule.byDay) {
       rule.byDay.forEach(d => {
         const cb = document.querySelector(`#recurrenceByDay input[value="${d}"]`);
         if (cb) cb.checked = true;
       });
     }
-    if (rule.until) document.getElementById('recurrenceUntil').value = rule.until;
-    _updateByDayVisibility();
   }
+
+  onRecurrenceChange();
 }
 
 async function _loadSnapSetting() {
@@ -2499,13 +2552,8 @@ async function loadChitData(chitId) {
       console.log(`[loadChitData] Set note-textarea to: "${noteTextarea.value.slice(0,40)}..."`);
     }
 
-    const recurrenceSelect = document.getElementById("recurrence");
-    if (recurrenceSelect) {
-      recurrenceSelect.value = chit.recurrence || "";
-      console.log(
-        `[loadChitData] Set recurrence to: "${recurrenceSelect.value}"`,
-      );
-    }
+    // Recurrence is now loaded via _loadRecurrenceRule below
+    console.log(`[loadChitData] Recurrence rule:`, chit.recurrence_rule);
 
     // Load recurrence rule (new format)
     if (chit.recurrence_rule) {
@@ -2514,6 +2562,26 @@ async function loadChitData(chitId) {
       if (icon) icon.style.display = '';
     }
     window._loadedRecurrenceExceptions = chit.recurrence_exceptions || null;
+
+    // Populate Audit Log zone for recurring chits
+    const auditSection = document.getElementById('auditLogSection');
+    const auditContainer = document.getElementById('auditLogContainer');
+    if (auditSection && auditContainer) {
+      if (chit.recurrence_rule && chit.recurrence_rule.freq) {
+        auditSection.style.display = '';
+        // Always start collapsed
+        const auditContent = document.getElementById('auditLogContent');
+        if (auditContent) auditContent.style.display = 'none';
+        const auditToggle = auditSection.querySelector('.zone-toggle-icon');
+        if (auditToggle) auditToggle.textContent = '🔽';
+        // Render series summary
+        if (typeof _renderSeriesSummary === 'function') {
+          _renderSeriesSummary(auditContainer, chit, chit.id);
+        }
+      } else {
+        auditSection.style.display = 'none';
+      }
+    }
 
     const allDayInput = document.getElementById("allDay");
     if (allDayInput) {
@@ -2630,6 +2698,10 @@ async function loadChitData(chitId) {
       if (allDayCheckbox.checked) toggleAllDay();
     }
     _dateModeSuppressUnsaved = false;
+
+    // Re-apply All Day after all fields are fully set
+    const _allDayCb = document.getElementById("allDay");
+    if (_allDayCb && _allDayCb.checked) toggleAllDay();
 
     if (window.checklist) {
       if (Array.isArray(chit.checklist)) {
@@ -2955,6 +3027,12 @@ document.addEventListener("DOMContentLoaded", function () {
   _dateModeSuppressUnsaved = true;
   _setDateMode('none');
   _dateModeSuppressUnsaved = false;
+
+  // Ensure recurrence UI is hidden on init
+  const _recDetails = document.getElementById('recurrenceDetails');
+  if (_recDetails) _recDetails.style.display = 'none';
+  const _recIcon = document.getElementById('recurrenceIcon');
+  if (_recIcon) _recIcon.style.display = 'none';
 
   // Load time format setting for alarm display
   loadEditorTimeFormat();

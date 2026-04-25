@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <link rel="icon" href="/static/cwod_logo-favicon.png" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CWOC Help — C.W.'s Omni Chits</title>
+    <style>
+        body {
+            background: url("https://www.transparenttextures.com/patterns/old-paper.png") repeat;
+            background-color: #f5e6cc;
+            color: #2b1e0f;
+            font-family: "Courier New", Courier, monospace;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 2em;
+            line-height: 1.6;
+        }
+        h1 { color: #4a2c2a; border-bottom: 2px solid #6b4e31; padding-bottom: 0.3em; }
+        h2 { color: #4a2c2a; border-bottom: 1px solid #d4c5a9; padding-bottom: 0.2em; margin-top: 2em; }
+        h3 { color: #6b4e31; margin-top: 1.5em; }
+        a { color: #6b4e31; }
+        a:hover { color: #4a2c2a; }
+        .index { background: #fffaf0; border: 1px solid #6b4e31; border-radius: 6px; padding: 1em 1.5em; margin-bottom: 2em; }
+        .index ul { columns: 2; column-gap: 2em; list-style: none; padding: 0; margin: 0; }
+        .index li { padding: 2px 0; }
+        .index li a { text-decoration: none; }
+        .index li a:hover { text-decoration: underline; }
+        kbd { background: #e0d4b5; border: 1px solid #6b4e31; border-radius: 3px; padding: 1px 5px; font-size: 0.9em; }
+        code { background: #e0d4b5; padding: 1px 4px; border-radius: 3px; }
+        .back-link { position: fixed; top: 1em; right: 1em; background: #8b5a2b; color: #fff8e1; padding: 6px 14px; border-radius: 4px; text-decoration: none; font-size: 0.85em; }
+        .back-link:hover { background: #6b4e31; }
+    </style>
+</head>
+<body>
+    <a href="/" class="back-link">← Back to Chits</a>
+    <h1>📘 C.W.'s Omni Chits — Help Guide</h1>
+
+    <div class="index">
+        <strong>Contents</strong>
+        <ul>
+            <li><a href="#what-is-cwoc">What is CWOC?</a></li>
+            <li><a href="#chits">Chits</a></li>
+            <li><a href="#views">Views & Tabs</a></li>
+            <li><a href="#calendar">Calendar View</a></li>
+            <li><a href="#mouse">Mouse Interactions</a></li>
+            <li><a href="#hotkeys">Keyboard Shortcuts</a></li>
+            <li><a href="#recurrence">Recurrence / Repeating</a></li>
+            <li><a href="#tags">Tags</a></li>
+            <li><a href="#filters">Filtering & Sorting</a></li>
+            <li><a href="#notes-view">Notes View</a></li>
+            <li><a href="#editor">Chit Editor</a></li>
+            <li><a href="#quick-edit">Quick Edit Modal</a></li>
+            <li><a href="#settings">Settings</a></li>
+        </ul>
+    </div>
+
+    <h2 id="what-is-cwoc">What is CWOC?</h2>
+    <p>C.W.'s Omni Chits is a personal task, note, and calendar management app. The core concept is a <strong>chit</strong> — a flexible record that can be a task, note, calendar event, alarm, checklist, or project, all in one data model.</p>
+
+    <h2 id="chits">Chits</h2>
+    <p>A chit is the universal unit. Every item you create is a chit. What makes it appear in different views is which fields you fill in:</p>
+    <ul>
+        <li><strong>Calendar</strong> — has a start/end date or due date</li>
+        <li><strong>Tasks</strong> — has a status (ToDo, In Progress, Blocked, Complete)</li>
+        <li><strong>Notes</strong> — has note content and no dates</li>
+        <li><strong>Checklists</strong> — has checklist items</li>
+        <li><strong>Alerts</strong> — has alarms, timers, or notifications</li>
+        <li><strong>Projects</strong> — marked as a "Project Master" with child chits</li>
+    </ul>
+    <p>A single chit can appear in multiple views if it has the relevant fields.</p>
+
+    <h2 id="views">Views & Tabs</h2>
+    <p>The top tab bar switches between the six views: Calendar, Checklists, Alerts, Projects, Tasks, Notes. Each filters chits by the relevant criteria.</p>
+    <p>The <strong>sidebar</strong> (toggle by clicking the logo) provides sorting, period selection (for calendar), and filters.</p>
+
+    <h2 id="calendar">Calendar View</h2>
+    <p>Calendar has multiple periods: Itinerary, Day, Week, 7-Day, Month, Year. Switch with the Period dropdown or the <kbd>.</kbd> hotkey.</p>
+    <ul>
+        <li>Chits with <strong>start & end times</strong> appear as timed blocks</li>
+        <li>Chits with only a <strong>due date</strong> appear with a ⌚ icon</li>
+        <li><strong>All-day events</strong> appear in the all-day bar at the top</li>
+        <li>The <strong>current time</strong> is shown as a dark brown line</li>
+        <li><strong>Today</strong> is highlighted in all calendar views</li>
+    </ul>
+
+    <h2 id="mouse">Mouse Interactions</h2>
+    <h3>On Calendar Events</h3>
+    <ul>
+        <li><strong>Double-click</strong> — Open the chit in the full editor</li>
+        <li><strong>Shift+click</strong> — Open the Quick Edit modal (change status, priority, pin, archive, delete, and recurrence options)</li>
+        <li><strong>Drag up/down</strong> — Move the event to a different time</li>
+        <li><strong>Drag left/right</strong> — Move to a different day (Week/7-Day views)</li>
+        <li><strong>Drag bottom edge</strong> — Resize (change end time). Only for start/end events, not due-only.</li>
+    </ul>
+    <h3>On Empty Calendar Space</h3>
+    <ul>
+        <li><strong>Double-click</strong> — Create a new chit at that time slot. The start time is pre-populated from where you clicked, with a 1-hour default duration.</li>
+    </ul>
+
+    <h2 id="hotkeys">Keyboard Shortcuts</h2>
+    <p>Press <kbd>R</kbd> to see the full reference overlay. Key shortcuts:</p>
+    <ul>
+        <li><kbd>C</kbd> <kbd>H</kbd> <kbd>A</kbd> <kbd>P</kbd> <kbd>T</kbd> <kbd>N</kbd> — Switch tabs</li>
+        <li><kbd>K</kbd> — Create new chit</li>
+        <li><kbd>.</kbd> — Period submenu (calendar views)</li>
+        <li><kbd>F</kbd> — Filter submenu → <kbd>S</kbd>tatus, <kbd>T</kbd>ags, <kbd>P</kbd>riority, <kbd>W</kbd>ords</li>
+        <li><kbd>O</kbd> — Order/sort submenu</li>
+        <li><kbd>R</kbd> — Reference overlay</li>
+        <li><kbd>Shift+R</kbd> — This help page</li>
+        <li><kbd>S</kbd> — Settings</li>
+        <li><kbd>Backspace</kbd> — Clear the active filter (or all filters from the F menu)</li>
+        <li><kbd>ESC</kbd> — Close/exit current submenu</li>
+    </ul>
+
+    <h2 id="recurrence">Recurrence / Repeating</h2>
+    <p>Any chit with dates can repeat. In the editor's Dates & Times zone, select a recurrence pattern:</p>
+    <ul>
+        <li><strong>Daily, Weekly, Monthly, Yearly</strong> — simple presets</li>
+        <li><strong>Custom</strong> — "Every N [minutes/hours/days/weeks/months/years]" with optional day-of-week checkboxes for weekly</li>
+        <li><strong>Ends</strong> — optional end date for the series</li>
+    </ul>
+    <h3>Working with Recurring Instances</h3>
+    <p>On the calendar, each occurrence appears as a virtual instance with a 🔁 icon. Shift+click opens the Quick Edit modal with recurrence-specific options:</p>
+    <ul>
+        <li><strong>Edit series</strong> — opens the parent chit in the editor (changes affect all instances)</li>
+        <li><strong>Edit this instance</strong> — opens the editor for just this date (saved as an exception)</li>
+        <li><strong>Break off & edit</strong> — creates a standalone copy of this instance and removes it from the series</li>
+        <li><strong>Skip this instance</strong> — hides this occurrence without deleting the series</li>
+        <li><strong>Complete this instance</strong> — marks just this date as done</li>
+        <li><strong>Complete entire series</strong> — marks the parent chit as Complete</li>
+    </ul>
+    <h3>Dragging Recurring Events</h3>
+    <p>When you drag a recurring instance to a new time, a prompt asks:</p>
+    <ul>
+        <li><strong>This instance only</strong> — moves just this occurrence (saved as an exception)</li>
+        <li><strong>All in series</strong> — changes the time for all instances</li>
+        <li><strong>All following</strong> — changes the time for this and future instances</li>
+    </ul>
+    <h3>Series Info</h3>
+    <p>The Quick Edit modal shows the instance number (#3 of series), completion stats (e.g., "5/12 completed, 42% success rate"), and a collapsible Series Summary listing all instances with their status.</p>
+    <p>When a series has an end date and all instances are completed or skipped, the parent chit is automatically archived.</p>
+
+    <h2 id="tags">Tags</h2>
+    <p>Tags are hierarchical labels with colors. Create and manage them in Settings. Tags support nesting with <code>/</code> separators (e.g., <code>Work/Projects/CWOC</code>).</p>
+    <ul>
+        <li>Tags appear with their color as background everywhere (editor, sidebar, views)</li>
+        <li><strong>Favorite tags</strong> (★ gold star) appear at the top of filter lists and in the editor's favorites row</li>
+        <li>Filtering by a parent tag also matches all child tags</li>
+    </ul>
+
+    <h2 id="filters">Filtering & Sorting</h2>
+    <p>The sidebar has collapsible filter sections:</p>
+    <ul>
+        <li><strong>Search</strong> — text search across titles and notes</li>
+        <li><strong>Status</strong> — multi-select (ToDo, In Progress, Blocked, Complete). "Any" means no filter.</li>
+        <li><strong>Priority</strong> — multi-select (Low, Medium, High)</li>
+        <li><strong>Tags</strong> — tree view with checkboxes, search box</li>
+        <li><strong>Show</strong> — toggle Pinned, Archived, Unmarked visibility</li>
+    </ul>
+    <p>Each filter section has a <strong>Clear</strong> button. Press <kbd>Backspace</kbd> in a filter hotkey submenu to clear that filter.</p>
+
+    <h2 id="notes-view">Notes View</h2>
+    <p>Notes display in a multi-column masonry layout (like Google Keep). Cards are assigned to columns and maintain their position when reordered.</p>
+    <ul>
+        <li><strong>Drag & drop</strong> to reorder within or between columns</li>
+        <li><strong>ESC</strong> during drag cancels and restores original position</li>
+        <li>Markdown is rendered in note cards</li>
+        <li>Double-click a card to open in the editor</li>
+    </ul>
+
+    <h2 id="editor">Chit Editor</h2>
+    <p>The editor has collapsible zones:</p>
+    <ul>
+        <li><strong>Title</strong> — with pin toggle and recurrence icon</li>
+        <li><strong>Dates & Times</strong> — radio buttons for None/Due/Start&End, All Day checkbox in the header, recurrence picker</li>
+        <li><strong>Task</strong> — Status, Priority, Severity dropdowns. The Due line has a Complete checkbox that syncs with Status.</li>
+        <li><strong>Location</strong> — address input with map search and directions</li>
+        <li><strong>Tags</strong> — tree view, favorites, recent, active tags panel</li>
+        <li><strong>People</strong> — comma-separated names</li>
+        <li><strong>Notes</strong> — markdown editor with render toggle, expand modal, copy, download</li>
+        <li><strong>Checklist</strong> — nested items with drag-drop, indent/unindent</li>
+        <li><strong>Alerts</strong> — alarms, timers, stopwatches, notifications</li>
+        <li><strong>Health Indicators</strong> — (stub, not yet functional)</li>
+        <li><strong>Color</strong> — swatch picker with custom colors from settings</li>
+        <li><strong>Projects</strong> — Kanban board for project master chits</li>
+    </ul>
+    <p>Save buttons: <strong>Save & Stay</strong> (keep editing), <strong>Save & Exit</strong> (return to views), <strong>Exit</strong> (discard if unsaved).</p>
+    <p>Validation: if a date mode is active, a date and time (or All Day) are required before saving.</p>
+
+    <h2 id="quick-edit">Quick Edit Modal</h2>
+    <p>Shift+click any chit on the calendar to open the Quick Edit modal. It provides:</p>
+    <ul>
+        <li><strong>Task fields</strong> — editable dropdowns for Priority, Severity, Status (only shown if the chit already has values). For recurring chits, changes apply to <strong>this instance only</strong> by default. Check "Apply to all instances" to change the entire series.</li>
+        <li><strong>Pin / Archive / Delete</strong> — toggle buttons in a row. Delete shows sub-options for recurring chits (this instance, this and following, all).</li>
+        <li><strong>Recurrence options</strong> — (only for recurring chits) edit series, edit instance, break off &amp; edit</li>
+        <li><strong>Series summary</strong> — collapsible list of all instances with completion status</li>
+        <li><strong>Open in editor</strong> — full editor access</li>
+    </ul>
+
+    <h2 id="settings">Settings</h2>
+    <p>Accessible via the sidebar or <kbd>S</kbd> hotkey:</p>
+    <ul>
+        <li><strong>Time Format</strong> — 24-hour, 12-hour, or metric</li>
+        <li><strong>Calendar Snapping</strong> — snap interval for drag operations (5-60 min)</li>
+        <li><strong>Tag Editor</strong> — create, edit, delete, favorite tags with colors. Displayed as a tree view.</li>
+        <li><strong>Custom Colors</strong> — add colors for the chit color picker</li>
+        <li><strong>Snooze Length</strong> — default snooze duration for alarms</li>
+    </ul>
+    <p>Save buttons: <strong>Save & Stay</strong>, <strong>Save & Exit</strong>, <strong>Cancel</strong>.</p>
+
+    <hr style="border:none;border-top:1px solid #6b4e31;margin:2em 0;">
+    <p style="text-align:center;opacity:0.6;font-size:0.85em;">C.W.'s Omni Chits — Built with ☕ and 🎵</p>
+</body>
+</html>

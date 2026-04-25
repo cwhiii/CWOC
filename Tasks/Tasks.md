@@ -92,13 +92,13 @@
 - `[x]` Delete: "Skip this instance" vs "Delete entire series"
 
 ### Phase R3: Series Management + Reporting
-**Files:** `frontend/main.js`, `frontend/editor.js`
+**Files:** `frontend/main.js`, `frontend/editor.js`, `frontend/shared.js`
 
-- `[ ]` "Part X of series" indicator (count occurrences up to this date)
-- `[ ]` End date for recurrence (in the recurrence picker)
-- `[ ]` Success rate: % of past instances marked completed vs total
-- `[ ]` Auto-archive: when all instances in range are complete, archive parent
-- `[ ]` Series summary view: list all instances with their completion status
+- `[x]` "Part X of series" indicator (count occurrences up to this date) — shown in tooltips and quick edit modal
+- `[x]` End date for recurrence (in the recurrence picker) — available on all types, not just Custom
+- `[x]` Success rate: % of past instances marked completed vs total — shown in quick edit modal
+- `[x]` Auto-archive: when all instances in range are complete, archive parent
+- `[x]` Series summary view: list all instances with their completion status
 
 ---
 
@@ -248,15 +248,37 @@
 
 ---
 
-## Features — Stubs (partially built, not functional)
+## Non-Functional UI Elements (buttons/settings present but not wired up)
 
-| Feature | Status | Notes |
-|---|---|---|
-| Recurrence | Field only | See spec above |
-| Health indicators | Stub | `renderHealthIndicator()` empty |
-| Visual indicators | Settings UI only | Not rendered in views |
-| Chit options (fade past, highlight overdue) | Settings only | Not applied |
-| People zone | Basic | Comma-separated, no roles |
+### Editor — Broken/Missing Functions
+- `[ ]` **Tags: "Expand All" button** — calls `toggleAllTags()` which doesn't exist
+- `[ ]` **Tags: "Collapse All" button** — calls `toggleAllTags()` which doesn't exist
+- `[ ]` **Tags: "Create New" button** — calls `createTag()` which doesn't exist
+- `[ ]` **Tags: search input + clear button** — calls `clearTagSearch()` and `addSearchedTag()` which don't exist
+- `[ ]` **People: "Filter" button** — calls `toggleRoleFilterDropdown()` which doesn't exist (code is in Prototypes only)
+- `[ ]` **People: "Add Person" button** — calls `addPersonItem()` which doesn't exist (code is in Prototypes only)
+- `[ ]` **People zone** — only a plain text input, no roles/modal/autocomplete
+- `[ ]` **Health Indicators zone** — `renderHealthIndicator()` is defined twice and both are empty stubs; all health input divs are empty
+- `[ ]` **Health: Unit toggle** (Imperial/Metric) — checkbox present, not wired to anything
+- `[ ]` **Health: Sex toggle** (Female/Male) — checkbox present, not wired to anything
+- `[ ]` **Alerts: "Filter" button** — `toggleAlertFilterDropdown()` exists but only toggles container visibility, no actual filter logic
+- `[ ]` **Alerts: Alarm sound select** — dropdown present in modal but sounds aren't loaded/played
+- `[ ]` **Projects: "Filter" button** — calls `toggleStatusFilterDropdown()` which doesn't exist in editor.js
+- `[ ]` **Projects: "Move to Project" dropdown** — hardcoded options ("Project Alpha", "Project Beta"), not populated from data
+- `[ ]` **Color: "Manage Colors" button** — navigates to settings but doesn't return to the right place
+- `[ ]` **Weather bar** — shows placeholder text, actual weather fetch only works sometimes
+
+### Settings — Not Applied Anywhere
+- `[ ]` **Visual Indicators** (Alarm/Notification/Weather/People/Indicators: Always/Never/When Space) — saved to DB but never read or applied in any view
+- `[ ]` **Chit Options: "Fade Past Chits"** — saved but never applied in calendar/views
+- `[ ]` **Chit Options: "Highlight Overdue Chits"** — saved but never applied
+- `[ ]` **Chit Options: "Delete Past Alarm Chits"** — saved but never applied
+- `[ ]` **Default Filters (Word Search per tab)** — UI exists for Calendar/Checklists/Alarms/Projects/Tasks/Indicators/Notes but values are never used as default search filters when switching tabs
+- `[ ]` **Alarms: Active/Inactive clock drag-drop ordering** — UI works for reordering but the order isn't used anywhere in the dashboard alarm display
+
+### Editor — Partially Working
+- `[ ]` **Recurrence** — Phase R1 done (display + basic editing), Phase R2 done (instance editing), Phase R3 not started (series management, success rate)
+- `[ ]` **Projects zone** — Kanban works for project masters, but "Add Chit" creates blank children, "Move to Project" is hardcoded
 
 ---
 

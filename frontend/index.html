@@ -153,10 +153,13 @@
                 </button>
             </div>
 
-            <!-- Help -->
-            <div class="sidebar-section" id="section-help">
-                <button class="action-button" onclick="_toggleReference()" title="Keyboard shortcuts & help">
-                    ❓ Help <span class="hotkey-hint">R</span>
+            <!-- Reference & Help -->
+            <div class="sidebar-section" id="section-help" style="display:flex;gap:6px;">
+                <button class="action-button" onclick="_toggleReference()" title="Keyboard shortcuts reference" style="flex:1;margin-bottom:0;font-size:0.8em;padding:6px;">
+                    📖 Reference
+                </button>
+                <button class="action-button" onclick="openHelpPage()" title="Feature guide & documentation" style="flex:1;margin-bottom:0;font-size:0.8em;padding:6px;">
+                    📘 Help
                 </button>
             </div>
         </div>

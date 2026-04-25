@@ -410,7 +410,12 @@ function getCalendarDateInfo(chit) {
 function chitMatchesDay(chit, day) {
   const info = getCalendarDateInfo(chit);
   if (!info.hasDate) return false;
-  return info.start.toDateString() === day.toDateString();
+  const dayStart = new Date(day.getFullYear(), day.getMonth(), day.getDate());
+  const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000 - 1);
+  const evStart = new Date(info.start);
+  const evEnd = new Date(info.end);
+  // Event overlaps this day if it starts before day ends AND ends after day starts
+  return evStart <= dayEnd && evEnd >= dayStart;
 }
 
 /**
@@ -437,6 +442,7 @@ function calendarEventTooltip(chit, info) {
   let tooltip = chit.title || '(Untitled)';
   if (chit.recurrence_rule && chit.recurrence_rule.freq) {
     tooltip += ' — ' + formatRecurrenceRule(chit.recurrence_rule);
+    if (chit._instanceNum) tooltip += ` (#${chit._instanceNum})`;
   }
   if (info && info.hasDate) {
     if (info.isAllDay) {
@@ -750,14 +756,25 @@ function _showRecurringDragModal(parentId, dateStr, newTimes, virtualChit) {
 
   function close() { overlay.remove(); }
 
-  addBtn('This instance only', '📌', async () => {
-    const exception = { date: dateStr, ...newTimes };
-    await fetch(`/api/chits/${parentId}/recurrence-exceptions`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ exception })
-    });
-    if (typeof displayChits === 'function') displayChits();
+  addBtn('This instance only', '✂️', async () => {
+    // Break off: create a standalone copy at the new time, skip original
+    try {
+      const parentResp = await fetch(`/api/chit/${parentId}`);
+      if (!parentResp.ok) return;
+      const parentChit = await parentResp.json();
+      const newChit = { ...parentChit };
+      newChit.id = crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2);
+      newChit.recurrence_rule = null;
+      newChit.recurrence_exceptions = null;
+      newChit.recurrence = null;
+      newChit.recurrence_id = null;
+      newChit.created_datetime = new Date().toISOString();
+      newChit.modified_datetime = new Date().toISOString();
+      Object.assign(newChit, newTimes);
+      await fetch('/api/chits', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newChit) });
+      await _recurrenceAddException(parentId, { date: dateStr, broken_off: true });
+    } catch (e) { console.error('Drag break-off failed:', e); }
+    if (typeof fetchChits === 'function') fetchChits();
   });
 
   addBtn('All in series', '🔁', async () => {
@@ -770,7 +787,8 @@ function _showRecurringDragModal(parentId, dateStr, newTimes, virtualChit) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(chit)
     });
-    if (typeof displayChits === 'function') displayChits();
+    if (typeof fetchChits === 'function') fetchChits();
+    else if (typeof displayChits === 'function') displayChits();
   });
 
   addBtn('All following', '➡️🔁', async () => {
@@ -783,7 +801,8 @@ function _showRecurringDragModal(parentId, dateStr, newTimes, virtualChit) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(chit)
     });
-    if (typeof displayChits === 'function') displayChits();
+    if (typeof fetchChits === 'function') fetchChits();
+    else if (typeof displayChits === 'function') displayChits();
   });
 
   // Cancel
@@ -792,14 +811,14 @@ function _showRecurringDragModal(parentId, dateStr, newTimes, virtualChit) {
   cancelBtn.textContent = 'Cancel';
   cancelBtn.onmouseover = function() { this.style.background = '#d4c5a9'; };
   cancelBtn.onmouseout = function() { this.style.background = '#e8dcc8'; };
-  cancelBtn.addEventListener('click', () => { close(); if (typeof displayChits === 'function') displayChits(); });
+  cancelBtn.addEventListener('click', () => { close(); if (typeof fetchChits === 'function') fetchChits(); else if (typeof displayChits === 'function') displayChits(); });
   modal.appendChild(cancelBtn);
 
   overlay.appendChild(modal);
-  overlay.addEventListener('click', (e) => { if (e.target === overlay) { close(); if (typeof displayChits === 'function') displayChits(); } });
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) { close(); if (typeof fetchChits === 'function') fetchChits(); } });
   document.body.appendChild(overlay);
 
-  function onKey(e) { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', onKey); if (typeof displayChits === 'function') displayChits(); } }
+  function onKey(e) { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', onKey); if (typeof fetchChits === 'function') fetchChits(); } }
   document.addEventListener('keydown', onKey);
 }
 
@@ -1152,12 +1171,63 @@ function isSystemTag(tagName) {
 
 // ── Recurrence Expansion ─────────────────────────────────────────────────────
 
+/** Advance a date by the recurrence frequency and interval */
+
+/**
+ * Render all-day events into day cells with multi-day spanning visuals.
+ * Continuation days show no title, with flattened left/right edges.
+ */
+function renderAllDayEventsInCells(dayData, allDayEventsRow) {
+  dayData.forEach(dd => {
+    const cell = document.createElement("div");
+    cell.style.cssText = "flex:1;min-width:0;padding:2px;border-left:1px solid #d3d3d3;overflow:hidden;";
+    dd.allDay.forEach(({ chit, info }) => {
+      const ev = document.createElement("div");
+      ev.className = "all-day-event";
+      ev.dataset.chitId = chit.id;
+      ev.style.backgroundColor = chitColor(chit);
+      if (chit.status === "Complete") ev.classList.add("completed-task");
+      ev.title = calendarEventTooltip(chit, info);
+      const _evS = new Date(info.start.getFullYear(), info.start.getMonth(), info.start.getDate()).getTime();
+      const _evE = new Date(info.end.getFullYear(), info.end.getMonth(), info.end.getDate()).getTime();
+      const _thisD = new Date(dd.day.getFullYear(), dd.day.getMonth(), dd.day.getDate()).getTime();
+      if (_evS !== _evE && _thisD > _evS) {
+        ev.style.borderTopLeftRadius = '0'; ev.style.borderBottomLeftRadius = '0'; ev.style.marginLeft = '-3px';
+        ev.innerHTML = '&nbsp;';
+      } else {
+        ev.innerHTML = calendarEventTitle(chit, info.isDueOnly, info);
+      }
+      if (_evS !== _evE && _thisD < _evE) {
+        ev.style.borderTopRightRadius = '0'; ev.style.borderBottomRightRadius = '0'; ev.style.marginRight = '-3px';
+      }
+      if (typeof attachCalendarChitEvents === 'function') attachCalendarChitEvents(ev, chit);
+      cell.appendChild(ev);
+    });
+    allDayEventsRow.appendChild(cell);
+  });
+}
+
+function _advanceRecurrence(current, freq, interval, byDayNums) {
+  if (freq === 'MINUTELY') current.setMinutes(current.getMinutes() + interval);
+  else if (freq === 'HOURLY') current.setHours(current.getHours() + interval);
+  else if (freq === 'DAILY') current.setDate(current.getDate() + interval);
+  else if (freq === 'WEEKLY') {
+    if (byDayNums && byDayNums.length > 0) {
+      current.setDate(current.getDate() + 1);
+      if (current.getDay() === byDayNums[0] && interval > 1) {
+        current.setDate(current.getDate() + (interval - 1) * 7);
+      }
+    } else {
+      current.setDate(current.getDate() + interval * 7);
+    }
+  } else if (freq === 'MONTHLY') current.setMonth(current.getMonth() + interval);
+  else if (freq === 'YEARLY') current.setFullYear(current.getFullYear() + interval);
+  else return false; // unknown freq
+  return true;
+}
+
 /**
  * Expand a recurring chit into virtual instances for a date range.
- * @param {object} chit - the parent chit with recurrence_rule
- * @param {Date} rangeStart - start of visible range
- * @param {Date} rangeEnd - end of visible range
- * @returns {object[]} array of virtual chit instances
  */
 function expandRecurrence(chit, rangeStart, rangeEnd) {
   const rule = chit.recurrence_rule;
@@ -1188,12 +1258,16 @@ function expandRecurrence(chit, rangeStart, rangeEnd) {
   const maxInstances = 365; // safety limit
   let current = new Date(baseDate);
   let count = 0;
+  let occurrenceNum = 0; // counts all non-broken-off occurrences from series start
 
   while (count < maxInstances) {
     if (until && current > until) break;
     if (current > rangeEnd) break;
 
     const dateStr = current.toISOString().slice(0, 10);
+    // For sub-daily frequencies, use datetime as the instance key
+    const isSubDaily = freq === 'MINUTELY' || freq === 'HOURLY';
+    const instanceKey = isSubDaily ? current.toISOString().slice(0, 16) : dateStr; // YYYY-MM-DDTHH:MM or YYYY-MM-DD
     const inRange = current >= rangeStart;
 
     // For weekly with byDay, check if current day matches
@@ -1202,9 +1276,13 @@ function expandRecurrence(chit, rangeStart, rangeEnd) {
       dayMatches = byDayNums.includes(current.getDay());
     }
 
-    if (dayMatches && inRange && !brokenOffDates.has(dateStr)) {
+    if (dayMatches && !brokenOffDates.has(instanceKey)) {
+      occurrenceNum++;
+    }
+
+    if (dayMatches && inRange && !brokenOffDates.has(instanceKey)) {
       // Check for exception modifications
-      const exception = exceptions.find(e => e.date === dateStr && !e.broken_off);
+      const exception = exceptions.find(e => e.date === instanceKey && !e.broken_off);
 
       const virtualStart = new Date(current.getTime() + baseTimeMs);
       const virtualEnd = info.isAllDay ? virtualStart : new Date(virtualStart.getTime() + durationMs);
@@ -1213,8 +1291,9 @@ function expandRecurrence(chit, rangeStart, rangeEnd) {
         ...chit,
         _isVirtual: true,
         _parentId: chit.id,
-        _virtualDate: dateStr,
-        _isCompleted: completedDates.has(dateStr),
+        _virtualDate: instanceKey,
+        _isCompleted: completedDates.has(instanceKey),
+        _instanceNum: occurrenceNum,
       };
 
       // Mark completed instances visually
@@ -1253,26 +1332,7 @@ function expandRecurrence(chit, rangeStart, rangeEnd) {
 
     // Advance to next occurrence
     count++;
-    if (freq === 'DAILY') {
-      current.setDate(current.getDate() + interval);
-    } else if (freq === 'WEEKLY') {
-      if (byDayNums.length > 0) {
-        // Advance one day at a time, but count weeks by interval
-        current.setDate(current.getDate() + 1);
-        // If we've wrapped past the week, skip (interval-1) weeks
-        if (current.getDay() === byDayNums[0] && interval > 1) {
-          current.setDate(current.getDate() + (interval - 1) * 7);
-        }
-      } else {
-        current.setDate(current.getDate() + interval * 7);
-      }
-    } else if (freq === 'MONTHLY') {
-      current.setMonth(current.getMonth() + interval);
-    } else if (freq === 'YEARLY') {
-      current.setFullYear(current.getFullYear() + interval);
-    } else {
-      break; // unknown freq
-    }
+    if (!_advanceRecurrence(current, freq, interval, byDayNums)) break;
   }
 
   return instances.length > 0 ? instances : [chit];
@@ -1290,7 +1350,9 @@ function formatRecurrenceRule(rule) {
   const dayNames = { MO: 'Mon', TU: 'Tue', WE: 'Wed', TH: 'Thu', FR: 'Fri', SA: 'Sat', SU: 'Sun' };
 
   let text = '';
-  if (freq === 'DAILY') text = interval === 1 ? 'Daily' : `Every ${interval} days`;
+  if (freq === 'MINUTELY') text = interval === 1 ? 'Every minute' : `Every ${interval} minutes`;
+  else if (freq === 'HOURLY') text = interval === 1 ? 'Hourly' : `Every ${interval} hours`;
+  else if (freq === 'DAILY') text = interval === 1 ? 'Daily' : `Every ${interval} days`;
   else if (freq === 'WEEKLY') {
     const days = (rule.byDay || []).map(d => dayNames[d] || d).join(', ');
     text = interval === 1 ? `Weekly` : `Every ${interval} weeks`;
@@ -1302,6 +1364,72 @@ function formatRecurrenceRule(rule) {
 
   if (rule.until) text += ` until ${new Date(rule.until).toLocaleDateString()}`;
   return text;
+}
+
+
+// ── Recurrence Series Info (Phase R3) ────────────────────────────────────────
+
+/**
+ * Count which occurrence number a virtual date is in a series,
+ * and how many total past instances exist, how many are completed.
+ * @param {object} chit - the parent chit with recurrence_rule
+ * @param {string} virtualDate - YYYY-MM-DD of the instance
+ * @returns {{ instanceNum: number, totalPast: number, completedPast: number, successRate: number }}
+ */
+function getRecurrenceSeriesInfo(chit, virtualDate) {
+  const rule = chit.recurrence_rule;
+  if (!rule || !rule.freq) return null;
+
+  const exceptions = chit.recurrence_exceptions || [];
+  const brokenOffDates = new Set(exceptions.filter(e => e.broken_off).map(e => e.date));
+  const completedDates = new Set(exceptions.filter(e => e.completed).map(e => e.date));
+
+  const info = getCalendarDateInfo(chit);
+  if (!info.hasDate) return null;
+
+  const baseDate = new Date(info.start);
+  baseDate.setHours(0, 0, 0, 0);
+  const freq = rule.freq;
+  const interval = rule.interval || 1;
+  const byDay = rule.byDay || [];
+  const until = rule.until ? new Date(rule.until) : null;
+  const dayMap = { SU: 0, MO: 1, TU: 2, WE: 3, TH: 4, FR: 5, SA: 6 };
+  const byDayNums = byDay.map(d => dayMap[d]).filter(n => n !== undefined);
+
+  const today = new Date();
+  today.setHours(23, 59, 59, 999);
+  const targetDate = virtualDate ? new Date(virtualDate + 'T23:59:59') : today;
+
+  let current = new Date(baseDate);
+  let instanceNum = 0;
+  let totalPast = 0;
+  let completedPast = 0;
+  const maxIter = 730;
+
+  for (let i = 0; i < maxIter; i++) {
+    if (until && current > until) break;
+    if (current > today && current > targetDate) break;
+
+    const dateStr = current.toISOString().slice(0, 10);
+    let dayMatches = true;
+    if (freq === 'WEEKLY' && byDayNums.length > 0) {
+      dayMatches = byDayNums.includes(current.getDay());
+    }
+
+    if (dayMatches && !brokenOffDates.has(dateStr)) {
+      if (current <= today) {
+        totalPast++;
+        if (completedDates.has(dateStr)) completedPast++;
+      }
+      if (current <= targetDate) instanceNum++;
+    }
+
+    // Advance
+    if (!_advanceRecurrence(current, freq, interval, byDayNums)) break;
+  }
+
+  const successRate = totalPast > 0 ? Math.round((completedPast / totalPast) * 100) : 0;
+  return { instanceNum, totalPast, completedPast, successRate };
 }
 
 
@@ -1333,9 +1461,19 @@ function showQuickEditModal(chit, onRefresh) {
 
   if (isRecurring) {
     const dateLine = document.createElement('div');
-    dateLine.style.cssText = 'margin-bottom:12px;color:#6b4e31;font-size:0.9em;';
+    dateLine.style.cssText = 'margin-bottom:4px;color:#6b4e31;font-size:0.9em;';
     dateLine.textContent = `🔁 ${formatRecurrenceRule(chit.recurrence_rule)} — ${dateStr}`;
+    if (chit._instanceNum) dateLine.textContent += ` (#${chit._instanceNum})`;
     modal.appendChild(dateLine);
+
+    // Series stats
+    const seriesInfo = getRecurrenceSeriesInfo(chit, dateStr);
+    if (seriesInfo && seriesInfo.totalPast > 0) {
+      const statsLine = document.createElement('div');
+      statsLine.style.cssText = 'margin-bottom:12px;color:#6b4e31;font-size:0.8em;opacity:0.8;';
+      statsLine.textContent = `✅ ${seriesInfo.completedPast}/${seriesInfo.totalPast} completed (${seriesInfo.successRate}% success rate)`;
+      modal.appendChild(statsLine);
+    }
   }
 
   const btnStyle = 'display:block;width:100%;padding:10px 12px;margin-bottom:8px;border:1px solid #6b4e31;border-radius:4px;background:#fdf5e6;color:#4a2c2a;font-family:inherit;font-size:0.95em;cursor:pointer;text-align:left;';
@@ -1364,7 +1502,10 @@ function showQuickEditModal(chit, onRefresh) {
   let pendingChanges = {};
   let hasTaskFields = false;
 
-  function addDropdown(icon, label, currentVal, options, onChange) {
+  // Track per-field "all instances" state
+  const allInstancesFlags = {};
+
+  function addDropdown(icon, label, fieldKey, currentVal, options, onChange) {
     hasTaskFields = true;
     const row = document.createElement('div');
     row.style.cssText = rowStyle;
@@ -1383,12 +1524,29 @@ function showQuickEditModal(chit, onRefresh) {
     sel.addEventListener('change', () => onChange(sel.value));
     row.appendChild(lbl);
     row.appendChild(sel);
+
+    // Inline "All" checkbox for recurring chits
+    if (isRecurring) {
+      const allCb = document.createElement('input');
+      allCb.type = 'checkbox';
+      allCb.title = 'Apply to all instances';
+      allCb.style.cssText = 'margin:0;cursor:pointer;flex-shrink:0;';
+      allCb.addEventListener('change', () => { allInstancesFlags[fieldKey] = allCb.checked; });
+      const allLbl = document.createElement('span');
+      allLbl.textContent = 'All';
+      allLbl.style.cssText = 'font-size:0.8em;color:#6b4e31;white-space:nowrap;cursor:pointer;';
+      allLbl.title = 'Apply to all instances';
+      allLbl.addEventListener('click', () => { allCb.checked = !allCb.checked; allInstancesFlags[fieldKey] = allCb.checked; });
+      row.appendChild(allCb);
+      row.appendChild(allLbl);
+    }
+
     modal.appendChild(row);
   }
 
-  if (chit.priority) addDropdown('🔺', 'Priority', chit.priority, ['', 'High', 'Medium', 'Low'], (v) => { pendingChanges.priority = v || null; });
-  if (chit.severity) addDropdown('⚠️', 'Severity', chit.severity, ['', 'Critical', 'Major', 'Minor'], (v) => { pendingChanges.severity = v || null; });
-  if (chit.status) addDropdown('📋', 'Status', chit.status, ['', 'ToDo', 'In Progress', 'Blocked', 'Complete'], (v) => { pendingChanges.status = v || null; });
+  if (chit.priority) addDropdown('🔺', 'Priority', 'priority', chit.priority, ['', 'High', 'Medium', 'Low'], (v) => { pendingChanges.priority = v || null; });
+  if (chit.severity) addDropdown('⚠️', 'Severity', 'severity', chit.severity, ['', 'Critical', 'Major', 'Minor'], (v) => { pendingChanges.severity = v || null; });
+  if (chit.status) addDropdown('📋', 'Status', 'status', chit.status, ['', 'ToDo', 'In Progress', 'Blocked', 'Complete'], (v) => { pendingChanges.status = v || null; });
 
   if (hasTaskFields) {
     const saveRow = document.createElement('div');
@@ -1401,20 +1559,59 @@ function showQuickEditModal(chit, onRefresh) {
     saveBtn.addEventListener('click', async () => {
       if (Object.keys(pendingChanges).length === 0) { close(); return; }
       try {
-        const resp = await fetch(`/api/chit/${chitId}`);
-        if (!resp.ok) throw new Error('Chit not found');
-        const fullChit = await resp.json();
-        Object.assign(fullChit, pendingChanges);
-        if (pendingChanges.status === 'Complete' && !fullChit.completed_datetime) {
-          fullChit.completed_datetime = new Date().toISOString();
+        if (isRecurring) {
+          // Split changes: fields with "All" checked go to parent, others go to exception
+          const parentChanges = {};
+          const instanceChanges = {};
+          for (const [key, val] of Object.entries(pendingChanges)) {
+            if (allInstancesFlags[key]) {
+              parentChanges[key] = val;
+            } else {
+              instanceChanges[key] = val;
+            }
+          }
+          // Save instance-only changes as exception
+          if (Object.keys(instanceChanges).length > 0) {
+            const exception = { date: dateStr, ...instanceChanges };
+            if (instanceChanges.status === 'Complete') exception.completed = true;
+            await fetch(`/api/chits/${chitId}/recurrence-exceptions`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ exception })
+            });
+          }
+          // Save all-instances changes to parent
+          if (Object.keys(parentChanges).length > 0) {
+            const resp = await fetch(`/api/chit/${chitId}`);
+            if (!resp.ok) throw new Error('Chit not found');
+            const fullChit = await resp.json();
+            Object.assign(fullChit, parentChanges);
+            if (parentChanges.status === 'Complete' && !fullChit.completed_datetime) {
+              fullChit.completed_datetime = new Date().toISOString();
+            }
+            await fetch(`/api/chits/${chitId}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(fullChit)
+            });
+          }
+        } else {
+          // Non-recurring: save directly to chit
+          const resp = await fetch(`/api/chit/${chitId}`);
+          if (!resp.ok) throw new Error('Chit not found');
+          const fullChit = await resp.json();
+          Object.assign(fullChit, pendingChanges);
+          if (pendingChanges.status === 'Complete' && !fullChit.completed_datetime) {
+            fullChit.completed_datetime = new Date().toISOString();
+          }
+          await fetch(`/api/chits/${chitId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(fullChit)
+          });
         }
-        await fetch(`/api/chits/${chitId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(fullChit)
-        });
         close();
-        if (onRefresh) onRefresh();
+        if (typeof fetchChits === 'function') fetchChits(); else if (onRefresh) onRefresh();
       } catch (e) {
         console.error('Quick edit save failed:', e);
         alert('Failed to save changes.');
@@ -1427,51 +1624,50 @@ function showQuickEditModal(chit, onRefresh) {
   // --- Recurrence actions (only for recurring chits) ---
   if (isRecurring) {
     addSep();
-    const recHeader = document.createElement('div');
-    recHeader.style.cssText = 'font-size:0.8em;color:#6b4e31;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.05em;';
-    recHeader.textContent = 'Recurrence';
-    modal.appendChild(recHeader);
+    const recRow = document.createElement('div');
+    recRow.style.cssText = 'display:flex;gap:6px;margin-bottom:8px;';
+    const recBtnStyle = 'flex:1;padding:8px;border:1px solid #6b4e31;border-radius:4px;background:#fdf5e6;font-size:1.2em;cursor:pointer;text-align:center;';
 
-    addBtn('Edit series', '✏️🔁', () => {
+    const editSeriesBtn = document.createElement('button');
+    editSeriesBtn.style.cssText = recBtnStyle;
+    editSeriesBtn.textContent = '✏️🔁';
+    editSeriesBtn.title = 'Edit entire series';
+    editSeriesBtn.onmouseover = function() { this.style.background = '#f0e6d3'; };
+    editSeriesBtn.onmouseout = function() { this.style.background = '#fdf5e6'; };
+    editSeriesBtn.addEventListener('click', () => {
+      close();
       if (typeof storePreviousState === 'function') storePreviousState();
       window.location.href = `/editor?id=${parentId}`;
     });
-    addBtn('Edit this instance', '✏️', () => {
+    recRow.appendChild(editSeriesBtn);
+
+    const editInstanceBtn = document.createElement('button');
+    editInstanceBtn.style.cssText = recBtnStyle;
+    editInstanceBtn.textContent = '✏️📌';
+    editInstanceBtn.title = 'Edit only this instance (keeps series)';
+    editInstanceBtn.onmouseover = function() { this.style.background = '#f0e6d3'; };
+    editInstanceBtn.onmouseout = function() { this.style.background = '#fdf5e6'; };
+    editInstanceBtn.addEventListener('click', () => {
+      close();
       if (typeof storePreviousState === 'function') storePreviousState();
       window.location.href = `/editor?id=${parentId}&instance=${dateStr}`;
     });
-    addBtn('Break off from series', '✂️', async () => {
+    recRow.appendChild(editInstanceBtn);
+
+    const breakOffBtn = document.createElement('button');
+    breakOffBtn.style.cssText = recBtnStyle;
+    breakOffBtn.textContent = '✏️✂️';
+    breakOffBtn.title = 'Break off from series & edit as standalone';
+    breakOffBtn.onmouseover = function() { this.style.background = '#f0e6d3'; };
+    breakOffBtn.onmouseout = function() { this.style.background = '#fdf5e6'; };
+    breakOffBtn.addEventListener('click', async () => {
+      close();
       await _recurrenceBreakOff(parentId, chit, dateStr);
       if (onRefresh) onRefresh();
     });
-    addBtn('Skip this instance', '🚫', async () => {
-      await _recurrenceAddException(parentId, { date: dateStr, broken_off: true });
-      if (onRefresh) onRefresh();
-    });
+    recRow.appendChild(breakOffBtn);
 
-    addSep();
-    const isCompleted = chit._isCompleted;
-    if (!isCompleted) {
-      addBtn('Complete this instance', '✅', async () => {
-        await _recurrenceAddException(parentId, { date: dateStr, completed: true });
-        if (onRefresh) onRefresh();
-      });
-    } else {
-      addBtn('Un-complete this instance', '↩️', async () => {
-        await _recurrenceRemoveException(parentId, dateStr);
-        if (onRefresh) onRefresh();
-      });
-    }
-    addBtn('Complete entire series', '✅🔁', async () => {
-      if (!confirm('Mark the entire recurring series as Complete?')) return;
-      await _recurrenceCompleteSeries(parentId);
-      if (onRefresh) onRefresh();
-    });
-    addBtn('Delete entire series', '🗑️🔁', async () => {
-      if (!confirm('Delete the entire recurring series?')) return;
-      await fetch(`/api/chits/${parentId}`, { method: 'DELETE' });
-      if (onRefresh) onRefresh();
-    });
+    modal.appendChild(recRow);
   }
 
   // --- Pin / Archive / Delete row ---
@@ -1494,7 +1690,7 @@ function showQuickEditModal(chit, onRefresh) {
       fullChit.pinned = !fullChit.pinned;
       await fetch(`/api/chits/${chitId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(fullChit) });
       close();
-      if (onRefresh) onRefresh();
+      if (typeof fetchChits === 'function') fetchChits(); else if (onRefresh) onRefresh();
     } catch (e) { console.error('Pin toggle failed:', e); }
   });
   actionRow.appendChild(pinBtn);
@@ -1512,33 +1708,40 @@ function showQuickEditModal(chit, onRefresh) {
       fullChit.archived = !fullChit.archived;
       await fetch(`/api/chits/${chitId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(fullChit) });
       close();
-      if (onRefresh) onRefresh();
+      if (typeof fetchChits === 'function') fetchChits(); else if (onRefresh) onRefresh();
     } catch (e) { console.error('Archive toggle failed:', e); }
   });
   actionRow.appendChild(archBtn);
 
-  // Delete
-  if (!isRecurring) {
-    const delBtn = document.createElement('button');
-    delBtn.style.cssText = iconBtnStyle + 'background:#fdf5e6;color:#a33;';
-    delBtn.innerHTML = '🗑️ Delete';
-    delBtn.title = 'Delete this chit';
-    delBtn.addEventListener('click', async () => {
+  // Delete — always present, shows sub-options for recurring
+  const delBtn = document.createElement('button');
+  delBtn.style.cssText = iconBtnStyle + 'background:#fdf5e6;color:#a33;';
+  delBtn.innerHTML = '🗑️ Delete';
+  delBtn.title = 'Delete this chit';
+  delBtn.addEventListener('click', () => {
+    if (isRecurring) {
+      // Show delete sub-menu inline
+      _showDeleteSubMenu(actionRow, delBtn, parentId, chitId, dateStr, chit, close, onRefresh);
+    } else {
       if (!confirm('Delete this chit?')) return;
-      await fetch(`/api/chits/${chitId}`, { method: 'DELETE' });
-      close();
-      if (onRefresh) onRefresh();
-    });
-    actionRow.appendChild(delBtn);
-  }
+      fetch(`/api/chits/${chitId}`, { method: 'DELETE' }).then(() => {
+        close();
+        if (typeof fetchChits === 'function') fetchChits();
+        else if (onRefresh) onRefresh();
+      });
+    }
+  });
+  actionRow.appendChild(delBtn);
 
   modal.appendChild(actionRow);
 
-  // Open in editor
-  addBtn('Open in editor', '📝', () => {
-    if (typeof storePreviousState === 'function') storePreviousState();
-    window.location.href = `/editor?id=${chitId}`;
-  });
+  // Open in editor (only for non-recurring — recurring has edit buttons in the recurrence row)
+  if (!isRecurring) {
+    addBtn('Open in editor', '📝', () => {
+      if (typeof storePreviousState === 'function') storePreviousState();
+      window.location.href = `/editor?id=${chitId}`;
+    });
+  }
 
   // Cancel
   const cancelBtn = document.createElement('button');
@@ -1556,6 +1759,86 @@ function showQuickEditModal(chit, onRefresh) {
   document.addEventListener('keydown', onKey);
 }
 
+/**
+ * Show a delete sub-menu replacing the delete button with options:
+ * This instance / This and following / All / Cancel
+ */
+function _showDeleteSubMenu(actionRow, delBtn, parentId, chitId, dateStr, chit, closeModal, onRefresh) {
+  // Hide all modal content except the delete options
+  const modal = actionRow.closest('.recurrence-modal-overlay > div') || actionRow.parentElement;
+  const allChildren = Array.from(modal.children);
+  const hiddenEls = [];
+  allChildren.forEach(el => {
+    if (el !== actionRow && el.style.display !== 'none') {
+      hiddenEls.push({ el, prev: el.style.display });
+      el.style.display = 'none';
+    }
+  });
+  actionRow.style.display = 'none';
+
+  const subMenu = document.createElement('div');
+  subMenu.style.cssText = 'display:flex;flex-direction:column;gap:4px;width:100%;';
+
+  const headerEl = document.createElement('h3');
+  headerEl.style.cssText = 'margin:0 0 12px 0;color:#a33;font-size:1.05em;';
+  headerEl.textContent = '🗑️ Delete — ' + (chit.title || '(Untitled)');
+  subMenu.appendChild(headerEl);
+
+  const subBtnStyle = 'padding:8px 10px;border:1px solid #a33;border-radius:4px;background:#fdf5e6;color:#a33;font-family:inherit;font-size:0.9em;cursor:pointer;text-align:left;';
+
+  function addSubBtn(label, onClick) {
+    const btn = document.createElement('button');
+    btn.style.cssText = subBtnStyle;
+    btn.textContent = label;
+    btn.onmouseover = function() { this.style.background = '#fce4e4'; };
+    btn.onmouseout = function() { this.style.background = '#fdf5e6'; };
+    btn.addEventListener('click', async () => {
+      await onClick();
+      closeModal();
+      if (typeof fetchChits === 'function') fetchChits();
+      else if (onRefresh) onRefresh();
+    });
+    subMenu.appendChild(btn);
+  }
+
+  addSubBtn('🗑️ Delete this instance', async () => {
+    await _recurrenceAddException(parentId, { date: dateStr, broken_off: true });
+  });
+
+  addSubBtn('🗑️ Delete this and following', async () => {
+    const resp = await fetch(`/api/chit/${parentId}`);
+    if (!resp.ok) return;
+    const fullChit = await resp.json();
+    const rule = fullChit.recurrence_rule || {};
+    const endDate = new Date(dateStr);
+    endDate.setDate(endDate.getDate() - 1);
+    rule.until = endDate.toISOString().slice(0, 10);
+    fullChit.recurrence_rule = rule;
+    await fetch(`/api/chits/${parentId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(fullChit)
+    });
+  });
+
+  addSubBtn('🗑️ Delete all (entire series)', async () => {
+    if (!confirm('Delete the entire recurring series?')) return;
+    await fetch(`/api/chits/${parentId}`, { method: 'DELETE' });
+  });
+
+  const cancelBtn = document.createElement('button');
+  cancelBtn.style.cssText = 'padding:8px 10px;border:1px solid #6b4e31;border-radius:4px;background:#e8dcc8;color:#4a2c2a;font-family:inherit;font-size:0.9em;cursor:pointer;text-align:center;margin-top:8px;';
+  cancelBtn.textContent = 'Cancel';
+  cancelBtn.addEventListener('click', () => {
+    subMenu.remove();
+    actionRow.style.display = 'flex';
+    hiddenEls.forEach(({ el, prev }) => { el.style.display = prev; });
+  });
+  subMenu.appendChild(cancelBtn);
+
+  modal.appendChild(subMenu);
+}
+
 // Backward compat alias
 function showRecurrenceActionModal(chit, onRefresh) { showQuickEditModal(chit, onRefresh); }
 
@@ -1568,10 +1851,166 @@ async function _recurrenceAddException(parentId, exception) {
       body: JSON.stringify({ exception })
     });
     if (!resp.ok) throw new Error(await resp.text());
+    // Check if series should be auto-archived
+    await _checkRecurrenceAutoArchive(parentId);
   } catch (e) {
     console.error('Failed to add recurrence exception:', e);
     alert('Failed to update recurrence instance.');
   }
+}
+
+/**
+ * Auto-archive a recurring chit if it has an end date and all instances
+ * up to that date are either completed or broken off.
+ */
+async function _checkRecurrenceAutoArchive(parentId) {
+  try {
+    const resp = await fetch(`/api/chit/${parentId}`);
+    if (!resp.ok) return;
+    const chit = await resp.json();
+    const rule = chit.recurrence_rule;
+    if (!rule || !rule.freq || !rule.until) return; // no end date = infinite series, skip
+    if (chit.archived) return; // already archived
+
+    const until = new Date(rule.until);
+    const today = new Date();
+    if (until > today) return; // series hasn't ended yet
+
+    // Count all instances from start to until
+    const info = getCalendarDateInfo(chit);
+    if (!info.hasDate) return;
+
+    const exceptions = chit.recurrence_exceptions || [];
+    const completedDates = new Set(exceptions.filter(e => e.completed).map(e => e.date));
+    const brokenOffDates = new Set(exceptions.filter(e => e.broken_off).map(e => e.date));
+
+    const baseDate = new Date(info.start);
+    baseDate.setHours(0, 0, 0, 0);
+    const freq = rule.freq;
+    const interval = rule.interval || 1;
+    const byDay = rule.byDay || [];
+    const dayMap = { SU: 0, MO: 1, TU: 2, WE: 3, TH: 4, FR: 5, SA: 6 };
+    const byDayNums = byDay.map(d => dayMap[d]).filter(n => n !== undefined);
+
+    let current = new Date(baseDate);
+    let allHandled = true;
+
+    for (let i = 0; i < 730; i++) {
+      if (current > until) break;
+      const dateStr = current.toISOString().slice(0, 10);
+      let dayMatches = true;
+      if (freq === 'WEEKLY' && byDayNums.length > 0) {
+        dayMatches = byDayNums.includes(current.getDay());
+      }
+      if (dayMatches && !brokenOffDates.has(dateStr) && !completedDates.has(dateStr)) {
+        allHandled = false;
+        break;
+      }
+      // Advance
+      if (!_advanceRecurrence(current, freq, interval, byDayNums)) break;
+    }
+
+    if (allHandled) {
+      chit.archived = true;
+      chit.status = 'Complete';
+      chit.completed_datetime = new Date().toISOString();
+      await fetch(`/api/chits/${parentId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(chit)
+      });
+      console.log(`Auto-archived recurring chit ${parentId} — all instances complete`);
+    }
+  } catch (e) {
+    console.error('Auto-archive check failed:', e);
+  }
+}
+
+/**
+ * Render a series summary showing all instances with their completion status.
+ * Shows past instances (up to today + 30 days future), max 50.
+ */
+function _renderSeriesSummary(container, virtualChit, parentId) {
+  container.innerHTML = '<div style="opacity:0.5;font-size:0.8em;padding:4px;">Loading...</div>';
+
+  const rule = virtualChit.recurrence_rule;
+  if (!rule || !rule.freq) {
+    container.innerHTML = '<div style="opacity:0.5;font-size:0.8em;padding:4px;">No recurrence rule</div>';
+    return;
+  }
+
+  const exceptions = virtualChit.recurrence_exceptions || [];
+  const completedDates = new Set(exceptions.filter(e => e.completed).map(e => e.date));
+  const brokenOffDates = new Set(exceptions.filter(e => e.broken_off).map(e => e.date));
+
+  const info = getCalendarDateInfo(virtualChit);
+  if (!info.hasDate) { container.innerHTML = ''; return; }
+
+  const baseDate = new Date(info.start);
+  baseDate.setHours(0, 0, 0, 0);
+  const freq = rule.freq;
+  const interval = rule.interval || 1;
+  const byDay = rule.byDay || [];
+  const until = rule.until ? new Date(rule.until) : null;
+  const dayMap = { SU: 0, MO: 1, TU: 2, WE: 3, TH: 4, FR: 5, SA: 6 };
+  const byDayNums = byDay.map(d => dayMap[d]).filter(n => n !== undefined);
+
+  const futureLimit = new Date();
+  futureLimit.setDate(futureLimit.getDate() + 30);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  let current = new Date(baseDate);
+  const rows = [];
+  const maxRows = 50;
+
+  for (let i = 0; i < 730 && rows.length < maxRows; i++) {
+    if (until && current > until) break;
+    if (current > futureLimit) break;
+
+    const dateStr = current.toISOString().slice(0, 10);
+    let dayMatches = true;
+    if (freq === 'WEEKLY' && byDayNums.length > 0) {
+      dayMatches = byDayNums.includes(current.getDay());
+    }
+
+    if (dayMatches) {
+      let status = '⬜';
+      let label = 'Upcoming';
+      let opacity = '0.5';
+      if (brokenOffDates.has(dateStr)) {
+        status = '✂️'; label = 'Broken off'; opacity = '0.4';
+      } else if (completedDates.has(dateStr)) {
+        status = '✅'; label = 'Completed'; opacity = '1';
+      } else if (current < today) {
+        status = '❌'; label = 'Missed'; opacity = '0.7';
+      } else {
+        status = '⬜'; label = 'Upcoming'; opacity = '0.5';
+      }
+      rows.push({ dateStr, status, label, opacity, isFuture: current >= today });
+    }
+
+    if (!_advanceRecurrence(current, freq, interval, byDayNums)) break;
+  }
+
+  container.innerHTML = '';
+  const list = document.createElement('div');
+  list.style.cssText = 'max-height:200px;overflow-y:auto;font-size:0.8em;';
+
+  rows.forEach(row => {
+    const r = document.createElement('div');
+    r.style.cssText = `display:flex;align-items:center;gap:6px;padding:2px 4px;opacity:${row.opacity};${row.isFuture ? '' : ''}`;
+    const d = new Date(row.dateStr + 'T12:00:00');
+    const dayName = d.toLocaleDateString(undefined, { weekday: 'short' });
+    r.innerHTML = `<span>${row.status}</span><span style="min-width:80px;">${row.dateStr}</span><span style="min-width:30px;opacity:0.6;">${dayName}</span><span style="color:#6b4e31;">${row.label}</span>`;
+    list.appendChild(r);
+  });
+
+  if (rows.length === 0) {
+    list.innerHTML = '<div style="opacity:0.5;padding:4px;">No instances found</div>';
+  }
+
+  container.appendChild(list);
 }
 
 /** Remove an exception for a specific date (e.g. un-complete) */
@@ -1615,30 +2054,37 @@ async function _recurrenceCompleteSeries(parentId) {
 /** Break off a single instance into a standalone chit */
 async function _recurrenceBreakOff(parentId, virtualChit, dateStr) {
   try {
-    // 1. Fetch the full parent chit from the API to get all fields
+    // 1. Fetch the full parent chit from the API
     const parentResp = await fetch(`/api/chit/${parentId}`);
     if (!parentResp.ok) throw new Error('Failed to fetch parent chit');
     const parentChit = await parentResp.json();
 
-    // 2. Create a new standalone chit as a copy of the parent
+    // 2. Create a new standalone chit as a full copy
     const newChit = { ...parentChit };
     newChit.id = crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2);
     newChit.recurrence_rule = null;
     newChit.recurrence_exceptions = null;
     newChit.recurrence = null;
     newChit.recurrence_id = null;
+    newChit.created_datetime = new Date().toISOString();
+    newChit.modified_datetime = new Date().toISOString();
 
-    // Use the virtual instance's dates (the specific occurrence)
+    // Use the virtual instance's specific dates
     if (virtualChit.start_datetime) newChit.start_datetime = virtualChit.start_datetime;
     if (virtualChit.end_datetime) newChit.end_datetime = virtualChit.end_datetime;
     if (virtualChit.due_datetime) newChit.due_datetime = virtualChit.due_datetime;
+
+    console.log('Breaking off chit:', newChit.id, 'from parent:', parentId, 'date:', dateStr);
 
     const createResp = await fetch('/api/chits', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(newChit)
     });
-    if (!createResp.ok) throw new Error('Failed to create broken-off chit');
+    if (!createResp.ok) {
+      const errText = await createResp.text();
+      throw new Error('Failed to create broken-off chit: ' + errText);
+    }
 
     // 3. Add exception to parent so this date is skipped
     await _recurrenceAddException(parentId, { date: dateStr, broken_off: true });
@@ -1648,7 +2094,7 @@ async function _recurrenceBreakOff(parentId, virtualChit, dateStr) {
     window.location.href = `/editor?id=${newChit.id}`;
   } catch (e) {
     console.error('Failed to break off instance:', e);
-    alert('Failed to break off instance.');
+    alert('Failed to break off instance: ' + e.message);
   }
 }
 

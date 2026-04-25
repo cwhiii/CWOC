@@ -545,6 +545,10 @@ function _pickSort(field) {
 }
 
 // ── Reference overlay ────────────────────────────────────────────────────────
+function openHelpPage() {
+  window.open('/frontend/help.html', '_blank');
+}
+
 function _toggleReference() {
   const overlay = document.getElementById('reference-overlay');
   if (!overlay) return;
@@ -980,8 +984,8 @@ function attachEmptySlotCreate(col, day, defaultDurationMin) {
     if (e.target !== col) return;
 
     const rect = col.getBoundingClientRect();
-    const scrollTop = col.closest('.week-view')?.scrollTop || 0;
-    const yInCol = e.clientY - rect.top + scrollTop;
+    // clientY - rect.top gives position within the column (1px = 1min)
+    const yInCol = e.clientY - rect.top;
     const totalMin = Math.max(0, Math.min(1439, Math.round(yInCol)));
 
     // Snap to nearest interval
@@ -1488,22 +1492,23 @@ function displayWeekView(chitsToDisplay) {
     rowSpacer.style.cssText = "width:60px;flex-shrink:0;";
     allDayEventsRow.appendChild(rowSpacer);
 
-    dayData.forEach(dd => {
-      const cell = document.createElement("div");
-      cell.style.cssText = "flex:1;min-width:0;padding:2px;border-left:1px solid #d3d3d3;";
-      dd.allDay.forEach(({ chit, info }) => {
-        const ev = document.createElement("div");
-        ev.className = "all-day-event";
-        ev.dataset.chitId = chit.id;
-        ev.style.backgroundColor = chitColor(chit);
-        if (chit.status === "Complete") ev.classList.add("completed-task");
-        ev.title = calendarEventTooltip(chit, info);
-        ev.innerHTML = calendarEventTitle(chit, info.isDueOnly, info);
-        attachCalendarChitEvents(ev, chit);
-        cell.appendChild(ev);
-      });
-      allDayEventsRow.appendChild(cell);
-    });
+    renderAllDayEventsInCells(dayData, allDayEventsRow);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     allDayContainer.appendChild(allDayEventsRow);
     wrapper.appendChild(allDayContainer);
@@ -1541,8 +1546,13 @@ function displayWeekView(chitsToDisplay) {
       const ev = document.createElement("div");
       ev.className = "timed-event";
       if (chit.status === "Complete") ev.classList.add("completed-task");
-      const top = info.start.getHours() * 60 + info.start.getMinutes();
-      let height = (info.end.getHours() * 60 + info.end.getMinutes()) - top;
+      // Clamp to this day for multi-day events
+      const _dayStart = new Date(dd.day.getFullYear(), dd.day.getMonth(), dd.day.getDate());
+      const _dayEnd = new Date(_dayStart.getTime() + 86400000);
+      const _cs = info.start < _dayStart ? _dayStart : info.start;
+      const _ce = info.end > _dayEnd ? _dayEnd : info.end;
+      const top = _cs.getHours() * 60 + _cs.getMinutes();
+      let height = (_ce.getTime() === _dayEnd.getTime()) ? 1440 - top : (_ce.getHours() * 60 + _ce.getMinutes()) - top;
       if (height < 30) height = 30;
       ev.style.top = `${top}px`;
       ev.style.height = `${height}px`;
@@ -1801,8 +1811,13 @@ function displayDayView(chitsToDisplay) {
 
   const timeSlots = {};
   timedChits.forEach(({ chit, info }) => {
-    const startTime = info.start.getHours() * 60 + info.start.getMinutes();
-    let endTime = info.end.getHours() * 60 + info.end.getMinutes();
+    // Clamp to this day for multi-day events
+    const _dayStart = new Date(day.getFullYear(), day.getMonth(), day.getDate());
+    const _dayEnd = new Date(_dayStart.getTime() + 86400000);
+    const _cs = info.start < _dayStart ? _dayStart : info.start;
+    const _ce = info.end > _dayEnd ? _dayEnd : info.end;
+    const startTime = _cs.getHours() * 60 + _cs.getMinutes();
+    let endTime = (_ce.getTime() === _dayEnd.getTime()) ? 1440 : _ce.getHours() * 60 + _ce.getMinutes();
     if (endTime <= startTime) endTime = startTime + 30;
 
     for (let t = startTime; t < endTime; t++) { if (!timeSlots[t]) timeSlots[t] = []; }
@@ -2330,22 +2345,23 @@ function displaySevenDayView(chitsToDisplay) {
     rowSpacer.style.cssText = "width:60px;flex-shrink:0;";
     allDayEventsRow.appendChild(rowSpacer);
 
-    dayData.forEach(dd => {
-      const cell = document.createElement("div");
-      cell.style.cssText = "flex:1;min-width:0;padding:2px;border-left:1px solid #d3d3d3;";
-      dd.allDay.forEach(({ chit, info }) => {
-        const ev = document.createElement("div");
-        ev.className = "all-day-event";
-        ev.dataset.chitId = chit.id;
-        ev.style.backgroundColor = chitColor(chit);
-        if (chit.status === "Complete") ev.classList.add("completed-task");
-        ev.title = calendarEventTooltip(chit, info);
-        ev.innerHTML = calendarEventTitle(chit, info.isDueOnly, info);
-        attachCalendarChitEvents(ev, chit);
-        cell.appendChild(ev);
-      });
-      allDayEventsRow.appendChild(cell);
-    });
+    renderAllDayEventsInCells(dayData, allDayEventsRow);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     allDayContainer.appendChild(allDayEventsRow);
     wrapper.appendChild(allDayContainer);
@@ -2381,8 +2397,13 @@ function displaySevenDayView(chitsToDisplay) {
       const ev = document.createElement("div");
       ev.className = "timed-event";
       if (chit.status === "Complete") ev.classList.add("completed-task");
-      const top = info.start.getHours() * 60 + info.start.getMinutes();
-      let height = (info.end.getHours() * 60 + info.end.getMinutes()) - top;
+      // Clamp to this day for multi-day events
+      const _dayStart = new Date(dd.day.getFullYear(), dd.day.getMonth(), dd.day.getDate());
+      const _dayEnd = new Date(_dayStart.getTime() + 86400000);
+      const _cs = info.start < _dayStart ? _dayStart : info.start;
+      const _ce = info.end > _dayEnd ? _dayEnd : info.end;
+      const top = _cs.getHours() * 60 + _cs.getMinutes();
+      let height = (_ce.getTime() === _dayEnd.getTime()) ? 1440 - top : (_ce.getHours() * 60 + _ce.getMinutes()) - top;
       if (height < 30) height = 30;
       ev.style.top = `${top}px`;
       ev.style.height = `${height}px`;
@@ -2926,10 +2947,14 @@ document.addEventListener("DOMContentLoaded", function () {
       return;
     }
 
-    // ── Reference overlay toggle ──
+    // ── Reference overlay toggle (R) / Help page (Shift+R) ──
     if (keyLower === 'r' && !_hotkeyMode) {
       e.preventDefault();
-      _toggleReference();
+      if (e.shiftKey) {
+        openHelpPage();
+      } else {
+        _toggleReference();
+      }
       return;
     }
 
