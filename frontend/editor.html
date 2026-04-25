@@ -102,14 +102,6 @@
                         </div>
                         <div id="datesContent" class="zone-body">
                             <div class="date-mode-group">
-                                <!-- None -->
-                                <div class="date-mode-row">
-                                    <label class="date-mode-label">
-                                        <input type="radio" name="dateMode" value="none" id="dateModeNone" onchange="onDateModeChange()" checked />
-                                        None
-                                    </label>
-                                </div>
-
                                 <!-- Start/End -->
                                 <div class="date-mode-row" id="startEndRow">
                                     <label class="date-mode-label">
@@ -117,13 +109,11 @@
                                         Start/End
                                     </label>
                                     <div class="date-mode-fields" id="startEndFields">
-                                        <input type="text" id="start_datetime" class="date-time" placeholder="Start Date" />
-                                        <input type="text" id="start_time" class="date-time time-input" placeholder="Start" />
+                                        <input type="text" id="start_datetime" class="date-time date-input" placeholder="Start Date" />
+                                        <input type="text" id="start_time" pattern="[0-9]{2}:[0-9]{2}" placeholder="HH:MM" maxlength="5" class="date-time time-input" />
                                         <span class="date-mode-separator">to</span>
-                                        <input type="text" id="end_time" class="date-time time-input" placeholder="End" />
-                                        <input type="text" id="end_datetime" class="date-time" placeholder="End Date" />
-                                        <label class="allday-inline"><input type="checkbox" id="allDay" onchange="toggleAllDay()" /> All Day</label>
-                                        <button type="button" onclick="clearStartAndEndDates()" class="date-clear-btn">❌</button>
+                                        <input type="text" id="end_time" pattern="[0-9]{2}:[0-9]{2}" placeholder="HH:MM" maxlength="5" class="date-time time-input" />
+                                        <input type="text" id="end_datetime" class="date-time date-input" placeholder="End Date" />
                                     </div>
                                 </div>
 
@@ -134,23 +124,35 @@
                                         Due
                                     </label>
                                     <div class="date-mode-fields" id="dueFields">
-                                        <input type="text" id="due_datetime" class="date-time" placeholder="Due Date" />
-                                        <input type="text" id="due_time" class="date-time time-input" placeholder="Time" />
-                                        <button type="button" onclick="clearDueDate()" class="date-clear-btn">❌</button>
+                                        <input type="text" id="due_datetime" class="date-time date-input" placeholder="Due Date" />
+                                        <input type="text" id="due_time" pattern="[0-9]{2}:[0-9]{2}" placeholder="HH:MM" maxlength="5" class="date-time time-input" />
                                     </div>
                                 </div>
 
-                                <!-- Recurrence -->
-                                <div class="field" style="margin-top:8px;">
-                                    <label for="recurrence">🔁 Repeat</label>
-                                    <select id="recurrence">
-                                        <option value="">None</option>
-                                        <option value="Hourly">Hourly</option>
-                                        <option value="Daily">Daily</option>
-                                        <option value="Weekly">Weekly</option>
-                                        <option value="Monthly">Monthly</option>
-                                        <option value="Yearly">Yearly</option>
-                                    </select>
+                                <!-- None -->
+                                <div class="date-mode-row">
+                                    <label class="date-mode-label">
+                                        <input type="radio" name="dateMode" value="none" id="dateModeNone" onchange="onDateModeChange()" checked />
+                                        None
+                                    </label>
+                                </div>
+
+                                <!-- All Day + Repeat -->
+                                <div class="date-mode-row" id="alldayRepeatRow">
+                                    <label class="date-mode-label">&nbsp;</label>
+                                    <div class="date-mode-fields" id="recurrenceFields">
+                                        <label class="allday-inline"><input type="checkbox" id="allDay" onchange="toggleAllDay()" /> All Day</label>
+                                        <span class="date-mode-separator">|</span>
+                                        <label class="allday-inline">🔁</label>
+                                        <select id="recurrence" class="date-time" style="width:auto;">
+                                            <option value="">No Repeat</option>
+                                            <option value="Hourly">Hourly</option>
+                                            <option value="Daily">Daily</option>
+                                            <option value="Weekly">Weekly</option>
+                                            <option value="Monthly">Monthly</option>
+                                            <option value="Yearly">Yearly</option>
+                                        </select>
+                                    </div>
                                 </div>
                             </div>
                         </div>

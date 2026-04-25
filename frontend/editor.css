@@ -2812,32 +2812,35 @@ button.archive-btn.archived-active {
 
 /* ── Date mode radio layout ───────────────────────────────────────────────── */
 .date-mode-group {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
+    display: table;
+    width: 100%;
+    border-spacing: 0 6px;
 }
 .date-mode-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
+    display: table-row;
 }
 .date-mode-label {
-    display: flex;
-    align-items: center;
-    gap: 4px;
+    display: table-cell;
+    vertical-align: middle;
     font-weight: bold;
     font-size: 0.9em;
     white-space: nowrap;
-    min-width: 80px;
+    width: 90px;
+    padding-right: 8px;
     cursor: pointer;
 }
+.date-mode-label input[type="radio"] {
+    vertical-align: middle;
+    margin-right: 4px;
+}
 .date-mode-fields {
-    display: flex;
+    display: table-cell;
+    vertical-align: middle;
+}
+.date-mode-fields > * {
+    display: inline-flex;
     align-items: center;
-    gap: 4px;
-    flex-wrap: wrap;
-    flex: 1;
+    vertical-align: middle;
 }
 .date-mode-fields.greyed-out {
     opacity: 0.3;
@@ -2848,14 +2851,6 @@ button.archive-btn.archived-active {
     opacity: 0.6;
     padding: 0 2px;
 }
-.date-clear-btn {
-    padding: 1px 4px;
-    font-size: 0.85em;
-    cursor: pointer;
-    background: none;
-    border: 1px solid var(--border-color);
-    border-radius: 3px;
-}
 .allday-inline {
     display: flex;
     align-items: center;
@@ -2864,32 +2859,37 @@ button.archive-btn.archived-active {
     white-space: nowrap;
     cursor: pointer;
 }
-.date-mode-fields .date-time {
-    width: 90px;
+.date-mode-fields .date-input {
+    width: 100px;
     font-size: 0.85em;
+    padding: 4px 6px;
+    font-family: "Courier New", Courier, monospace;
+    border: 1px solid var(--border-color);
+    border-radius: 3px;
+    background: var(--parchment-light, #fff8e1);
+    margin-right: 4px;
 }
 .date-mode-fields .time-input {
-    width: 55px;
-    position: relative;
+    width: 80px;
+    font-size: 0.85em;
+    padding: 3px 4px;
+    font-family: "Courier New", Courier, monospace;
+    border: 1px solid var(--border-color);
+    border-radius: 3px;
+    background: var(--parchment-light, #fff8e1);
+    margin-right: 4px;
 }
 
-/* Time dropdown */
-.time-dropdown {
-    position: absolute;
-    background: var(--parchment-light, #fff8e1);
-    border: 1px solid var(--border-color, #6b4e31);
-    border-radius: 4px;
-    z-index: 100;
-    max-height: 150px;
-    overflow-y: auto;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-    font-family: "Courier New", Courier, monospace;
-    font-size: 0.85em;
+
+/* Force All Day + Repeat row to stay on one line */
+#alldayRepeatRow .date-mode-fields {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
 }
-.time-dropdown-option {
-    padding: 4px 10px;
-    cursor: pointer;
-}
-.time-dropdown-option:hover {
-    background: rgba(139, 90, 43, 0.15);
+#alldayRepeatRow .date-mode-fields > * {
+    display: inline-flex !important;
+    flex-shrink: 0;
 }

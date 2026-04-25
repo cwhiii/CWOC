@@ -371,56 +371,61 @@ console.log(`User timezone offset: ${userTimezoneOffset} minutes`);
 
 function toggleAllDay() {
   const allDayCheckbox = document.getElementById("allDay");
-  const startTime = document.getElementById("start_time");
-  const endTime = document.getElementById("end_time");
-
   if (!allDayCheckbox) return;
   const allDay = allDayCheckbox.checked;
+  const mode = document.querySelector('input[name="dateMode"]:checked')?.value || 'none';
 
-  if (startTime) {
-    if (allDay) {
-      startTime.dataset.previousValue = startTime.value;
-      startTime.style.display = "none";
-      startTime.value = "";
-    } else {
-      startTime.style.display = "";
-      if (startTime.dataset.previousValue) startTime.value = startTime.dataset.previousValue;
-    }
+  // Hide/show time inputs for whichever date mode is active
+  if (mode === 'startend') {
+    const timeInputs = document.querySelectorAll('#startEndFields .time-input');
+    timeInputs.forEach(input => { input.style.display = allDay ? 'none' : ''; });
+    const sep = document.querySelector('#startEndFields .date-mode-separator');
+    if (sep) sep.style.display = allDay ? 'none' : '';
+  } else if (mode === 'due') {
+    const dueTime = document.getElementById('due_time');
+    if (dueTime) dueTime.style.display = allDay ? 'none' : '';
   }
-  if (endTime) {
-    if (allDay) {
-      endTime.dataset.previousValue = endTime.value;
-      endTime.style.display = "none";
-      endTime.value = "";
-    } else {
-      endTime.style.display = "";
-      if (endTime.dataset.previousValue) endTime.value = endTime.dataset.previousValue;
-    }
-  }
-  setSaveButtonUnsaved();
+
+  if (!_dateModeSuppressUnsaved) setSaveButtonUnsaved();
 }
 
 // ── Date mode radio buttons ──────────────────────────────────────────────────
+let _dateModeSuppressUnsaved = false; // suppress during init
+
 function onDateModeChange() {
   const mode = document.querySelector('input[name="dateMode"]:checked')?.value || 'none';
   const startEndFields = document.getElementById('startEndFields');
   const dueFields = document.getElementById('dueFields');
+  const recurrenceFields = document.getElementById('recurrenceFields');
+  const alldayRow = document.getElementById('alldayRepeatRow');
 
   if (startEndFields) {
-    if (mode === 'startend') {
-      startEndFields.classList.remove('greyed-out');
-    } else {
-      startEndFields.classList.add('greyed-out');
-    }
+    startEndFields.classList.toggle('greyed-out', mode !== 'startend');
   }
   if (dueFields) {
-    if (mode === 'due') {
-      dueFields.classList.remove('greyed-out');
-    } else {
-      dueFields.classList.add('greyed-out');
-    }
+    dueFields.classList.toggle('greyed-out', mode !== 'due');
   }
-  setSaveButtonUnsaved();
+  if (recurrenceFields) {
+    recurrenceFields.classList.toggle('greyed-out', mode === 'none');
+  }
+  if (alldayRow) {
+    alldayRow.style.display = (mode === 'none') ? 'none' : '';
+  }
+
+  // Re-apply all-day visibility for the active mode
+  const allDayCheckbox = document.getElementById("allDay");
+  if (allDayCheckbox && allDayCheckbox.checked) {
+    toggleAllDay();
+  } else {
+    // Show all time inputs when not all-day
+    document.querySelectorAll('#startEndFields .time-input').forEach(i => { i.style.display = ''; });
+    const sep = document.querySelector('#startEndFields .date-mode-separator');
+    if (sep) sep.style.display = '';
+    const dueTime = document.getElementById('due_time');
+    if (dueTime) dueTime.style.display = '';
+  }
+
+  if (!_dateModeSuppressUnsaved) setSaveButtonUnsaved();
 }
 
 // Determine date mode from chit data
@@ -453,55 +458,6 @@ async function _loadSnapSetting() {
       _snapMinutes = parseInt(settings.calendar_snap);
     }
   } catch (e) { /* use default */ }
-}
-
-function _showTimeDropdown(inputEl) {
-  // Remove any existing dropdown
-  document.querySelectorAll('.time-dropdown').forEach(d => d.remove());
-
-  const currentVal = inputEl.value || '12:00';
-  const [h, m] = currentVal.split(':').map(Number);
-  const baseMinutes = (isNaN(h) ? 12 : h) * 60 + (isNaN(m) ? 0 : m);
-
-  const dropdown = document.createElement('div');
-  dropdown.className = 'time-dropdown';
-
-  for (let i = 0; i < 5; i++) {
-    const totalMin = baseMinutes + i * _snapMinutes;
-    const hr = Math.floor(totalMin / 60) % 24;
-    const mn = totalMin % 60;
-    const timeStr = `${String(hr).padStart(2, '0')}:${String(mn).padStart(2, '0')}`;
-
-    const opt = document.createElement('div');
-    opt.className = 'time-dropdown-option';
-    opt.textContent = timeStr;
-    opt.addEventListener('mousedown', (e) => {
-      e.preventDefault(); // prevent blur
-      inputEl.value = timeStr;
-      dropdown.remove();
-      setSaveButtonUnsaved();
-    });
-    dropdown.appendChild(opt);
-  }
-
-  // Position below the input
-  const rect = inputEl.getBoundingClientRect();
-  dropdown.style.position = 'fixed';
-  dropdown.style.top = (rect.bottom + 2) + 'px';
-  dropdown.style.left = rect.left + 'px';
-  dropdown.style.minWidth = rect.width + 'px';
-  document.body.appendChild(dropdown);
-
-  // Close on blur
-  inputEl.addEventListener('blur', () => {
-    setTimeout(() => dropdown.remove(), 150);
-  }, { once: true });
-}
-
-function _initTimeDropdowns() {
-  document.querySelectorAll('.time-input').forEach(input => {
-    input.addEventListener('focus', () => _showTimeDropdown(input));
-  });
 }
 
 async function fetchCustomColors() {
@@ -805,7 +761,9 @@ function resetEditorForNewChit() {
   }
 
   // Reset date mode to None
+  _dateModeSuppressUnsaved = true;
   _setDateMode('none');
+  _dateModeSuppressUnsaved = false;
 
   const now = new Date();
   const oneHourLater = new Date(now.getTime() + 60 * 60 * 1000);
@@ -2290,7 +2248,6 @@ async function loadChitData(chitId) {
       // This is now handled by the date mode section after date fields are set
       console.log(`[loadChitData] allDay: ${isAllDay}`);
     }
-    }
 
     const prioritySelect = document.getElementById("priority");
     setSelectValue(prioritySelect, chit.priority);
@@ -2386,6 +2343,7 @@ async function loadChitData(chitId) {
     }
 
     // Set date mode radio based on chit data
+    _dateModeSuppressUnsaved = true;
     const dateMode = _detectDateMode(chit);
     _setDateMode(dateMode);
 
@@ -2395,6 +2353,7 @@ async function loadChitData(chitId) {
       allDayCheckbox.checked = !!(chit.all_day || chit.allDay);
       if (allDayCheckbox.checked) toggleAllDay();
     }
+    _dateModeSuppressUnsaved = false;
 
     if (window.checklist) {
       if (Array.isArray(chit.checklist)) {
@@ -2697,11 +2656,23 @@ document.addEventListener("DOMContentLoaded", function () {
 
   initializeChitId();
 
-  // Load snap setting for time picker dropdowns
-  _loadSnapSetting().then(() => _initTimeDropdowns());
+  // Load snap setting (for future calendar drag use)
+  _loadSnapSetting();
 
-  // Set default date mode to None for new chits
+  // Auto-colon mask for time inputs (HH:MM format)
+  document.querySelectorAll('.time-input').forEach(input => {
+    input.addEventListener('input', () => {
+      let v = input.value.replace(/[^0-9]/g, '');
+      if (v.length >= 3) v = v.slice(0, 2) + ':' + v.slice(2, 4);
+      if (v.length > 5) v = v.slice(0, 5);
+      input.value = v;
+    });
+  });
+
+  // Set default date mode to None for new chits (suppress unsaved marking)
+  _dateModeSuppressUnsaved = true;
   _setDateMode('none');
+  _dateModeSuppressUnsaved = false;
 
   // Load time format setting for alarm display
   loadEditorTimeFormat();
@@ -2734,45 +2705,6 @@ document.addEventListener("DOMContentLoaded", function () {
   initializeFlatpickr("#end_datetime", { dateFormat: "Y-M-d" });
   initializeFlatpickr("#due_datetime", { dateFormat: "Y-M-d" });
 
-  initializeFlatpickr("#start_time", {
-    enableTime: true,
-    noCalendar: true,
-    dateFormat: "H:i",
-    time_24hr: true,
-    minuteIncrement: 1,
-    onChange: function (selectedDates, dateStr, instance) {
-      const startTime = new Date(`1970-01-01T${dateStr}:00`);
-      const endTime = new Date(startTime.getTime() + 60 * 60 * 1000);
-      const endTimeInput = document.getElementById("end_time");
-      const allDayInput = document.getElementById("allDay");
-      if (
-        endTimeInput &&
-        endTimeInput._flatpickr &&
-        !endTimeInput._flatpickr.selectedDates.length &&
-        allDayInput &&
-        !allDayInput.checked
-      ) {
-        endTimeInput._flatpickr.setDate(formatTime(endTime));
-      }
-    },
-  });
-
-  initializeFlatpickr("#end_time", {
-    enableTime: true,
-    noCalendar: true,
-    dateFormat: "H:i",
-    time_24hr: true,
-    minuteIncrement: 1,
-  });
-
-  initializeFlatpickr("#due_time", {
-    enableTime: true,
-    noCalendar: true,
-    dateFormat: "H:i",
-    time_24hr: true,
-    minuteIncrement: 1,
-  });
-
   // Attach listeners to default colors
   attachColorSwatchListeners();
 
@@ -2797,6 +2729,17 @@ document.addEventListener("DOMContentLoaded", function () {
 
   const notesExpandBtn = document.getElementById("open-notes-modal-button");
   if (notesExpandBtn) notesExpandBtn.onclick = openNotesModal;
+
+  // Auto-switch note to render mode on blur
+  const noteTextarea = document.getElementById("note");
+  if (noteTextarea) {
+    noteTextarea.addEventListener("blur", () => {
+      const rendered = document.getElementById("notes-rendered-output");
+      if (rendered && rendered.style.display === "none" && noteTextarea.value.trim()) {
+        toggleNotesViewMode();
+      }
+    });
+  }
 
   const locationSection = document.getElementById("locationSection");
   if (locationSection) {
