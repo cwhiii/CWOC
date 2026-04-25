@@ -349,3 +349,89 @@ function enableDragToReorder(container, tab, onReorder) {
     if (onReorder) onReorder();
   });
 }
+
+
+// ── Calendar display helpers ─────────────────────────────────────────────────
+
+/**
+ * Normalize a chit's date info for calendar display.
+ * Rules:
+ * - If chit has due_datetime, use that (ignore start/end even if present)
+ * - If chit has start_datetime (no due), use start/end
+ * - Returns { start, end, isAllDay, isDueOnly, hasDate }
+ * @param {object} chit
+ * @returns {object}
+ */
+function getCalendarDateInfo(chit) {
+  const DEFAULT_DUE_DURATION_MIN = 30; // due-date-only events — enough height for one line of text
+
+  const hasDue = !!chit.due_datetime;
+  const hasStart = !!chit.start_datetime;
+  const isAllDay = !!(chit.all_day || chit.allDay);
+
+  if (hasDue) {
+    const dueDate = new Date(chit.due_datetime);
+    if (isNaN(dueDate.getTime())) return { hasDate: false };
+    if (isAllDay) {
+      return { start: dueDate, end: dueDate, isAllDay: true, isDueOnly: true, hasDate: true };
+    }
+    const endDate = new Date(dueDate.getTime() + DEFAULT_DUE_DURATION_MIN * 60 * 1000);
+    return { start: dueDate, end: endDate, isAllDay: false, isDueOnly: true, hasDate: true };
+  }
+
+  if (hasStart) {
+    const startDate = chit.start_datetime_obj || new Date(chit.start_datetime);
+    if (isNaN(startDate.getTime())) return { hasDate: false };
+    if (isAllDay) {
+      const endDate = chit.end_datetime_obj || (chit.end_datetime ? new Date(chit.end_datetime) : startDate);
+      return { start: startDate, end: endDate, isAllDay: true, isDueOnly: false, hasDate: true };
+    }
+    const endDate = chit.end_datetime_obj || (chit.end_datetime ? new Date(chit.end_datetime) : new Date(startDate.getTime() + 60 * 60 * 1000));
+    return { start: startDate, end: endDate, isAllDay: false, isDueOnly: false, hasDate: true };
+  }
+
+  return { hasDate: false };
+}
+
+/**
+ * Check if a chit should appear on a given day in the calendar.
+ * @param {object} chit
+ * @param {Date} day
+ * @returns {boolean}
+ */
+function chitMatchesDay(chit, day) {
+  const info = getCalendarDateInfo(chit);
+  if (!info.hasDate) return false;
+  return info.start.toDateString() === day.toDateString();
+}
+
+/**
+ * Build the title HTML for a calendar event.
+ * Adds ⌚ icon for due-date-only chits.
+ * Includes a title attribute (tooltip) with the chit title and date/time.
+ * @param {object} chit
+ * @param {boolean} isDueOnly
+ * @param {object} [info] - from getCalendarDateInfo
+ * @returns {string}
+ */
+function calendarEventTitle(chit, isDueOnly, info) {
+  const icon = isDueOnly ? '⌚ ' : '';
+  return `<span style="font-weight:bold;font-size:1.1em;">${icon}${chit.title || '(Untitled)'}</span>`;
+}
+
+/**
+ * Build a tooltip string for a calendar event.
+ */
+function calendarEventTooltip(chit, info) {
+  let tooltip = chit.title || '(Untitled)';
+  if (info && info.hasDate) {
+    if (info.isAllDay) {
+      tooltip += ' — All Day';
+    } else if (info.isDueOnly) {
+      tooltip += ' — Due: ' + info.start.toLocaleString();
+    } else {
+      tooltip += ' — ' + info.start.toLocaleString() + ' to ' + info.end.toLocaleString();
+    }
+  }
+  return tooltip;
+}

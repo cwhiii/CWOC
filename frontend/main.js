@@ -1064,122 +1064,123 @@ function displayChits() {
 function displayWeekView(chitsToDisplay) {
   const chitList = document.getElementById("chit-list");
   chitList.innerHTML = "";
-  const weekView = document.createElement("div");
-  weekView.className = "week-view";
-  weekView.style.display = "flex";
-  weekView.style.width = "100%";
 
-  const hourColumn = document.createElement("div");
-  hourColumn.className = "hour-column";
-  hourColumn.style.order = "1";
-  hourColumn.style.width = "60px";
-  hourColumn.style.flexShrink = "0";
-  for (let hour = 0; hour < 24; hour++) {
-    const hourBlock = document.createElement("div");
-    hourBlock.className = "hour-block";
-    hourBlock.style.top = `${hour * 60}px`;
-    hourBlock.textContent = `${hour}:00`;
-    hourColumn.appendChild(hourBlock);
-  }
-  weekView.appendChild(hourColumn);
-
-  const dayColumnsContainer = document.createElement("div");
-  dayColumnsContainer.style.display = "flex";
-  dayColumnsContainer.style.order = "2";
-  dayColumnsContainer.style.flex = "1";
-  dayColumnsContainer.style.width = "calc(100% - 60px)";
+  // Wrapper: flex column — headers, all-day, then scrollable time grid
+  const wrapper = document.createElement("div");
+  wrapper.style.cssText = "display:flex;flex-direction:column;height:100%;width:100%;";
 
   const weekStart = new Date(currentWeekStart);
+  const days = [];
   for (let i = 0; i < 7; i++) {
-    const day = new Date(weekStart);
-    day.setDate(weekStart.getDate() + i);
-    const dayColumn = document.createElement("div");
-    dayColumn.className = "day-column";
-    dayColumn.style.flex = "1";
-    dayColumn.style.minWidth = "0";
-    dayColumn.style.position = "relative";
-
-    const dayHeader = document.createElement("div");
-    dayHeader.className = "day-header";
-    dayHeader.textContent = formatDate(day);
-    dayColumn.appendChild(dayHeader);
-
-    const allDaySection = document.createElement("div");
-    allDaySection.className = "all-day-section";
-    dayColumn.appendChild(allDaySection);
-
-    // Include chits with start_datetime or due_datetime on this day
-    const dayChits = chitsToDisplay.filter((chit) => {
-      const startDateMatch =
-        chit.start_datetime_obj &&
-        chit.start_datetime_obj.toDateString() === day.toDateString();
-      const dueDateObj = chit.due_datetime ? new Date(chit.due_datetime) : null;
-      const dueDateMatch =
-        dueDateObj && dueDateObj.toDateString() === day.toDateString();
-      return startDateMatch || dueDateMatch;
-    });
-
-    dayChits.forEach((chit) => {
-      if (chit.all_day) {
-        const allDayEvent = document.createElement("div");
-        allDayEvent.className = "all-day-event";
-
-        // Fade completed tasks
-        if ((chit.due_datetime || chit.status) && chit.status === "Complete") {
-          allDayEvent.classList.add("completed-task");
-        }
-
-                allDayEvent.innerHTML = `<span style="font-weight: bold; font-size: 1.1em;">${chit.title}</span>`;
-        allDayEvent.addEventListener("dblclick", () => {
-          storePreviousState();
-          window.location.href = `/editor?id=${chit.id}`;
-        });
-        allDaySection.appendChild(allDayEvent);
-      } else {
-        const timedEvent = document.createElement("div");
-        timedEvent.className = "timed-event";
-
-        // Fade completed tasks
-        if ((chit.due_datetime || chit.status) && chit.status === "Complete") {
-          timedEvent.classList.add("completed-task");
-        }
-
-        let chitStart = chit.start_datetime_obj;
-        let chitEnd = chit.end_datetime_obj;
-
-        // If no start_datetime but has due_datetime, treat due_datetime as start and end +30 mins
-        if (!chitStart && chit.due_datetime) {
-          chitStart = new Date(chit.due_datetime);
-          chitEnd = new Date(chitStart.getTime() + 30 * 60 * 1000);
-        }
-
-        const startHour = chitStart.getHours();
-        const startMinute = chitStart.getMinutes();
-        const endHour = chitEnd.getHours();
-        const endMinute = chitEnd.getMinutes();
-        const top = startHour * 60 + startMinute;
-        const height = endHour * 60 + endMinute - top;
-
-        timedEvent.style.top = `${top}px`;
-        timedEvent.style.height = `${height}px`;
-        timedEvent.style.backgroundColor = chitColor(chit);
-        timedEvent.style.width = "calc(100% - 4px)";
-        timedEvent.style.boxSizing = "border-box";
-
-                timedEvent.innerHTML = `<span style="font-weight: bold; font-size: 1.1em;">${chit.title}</span><br>${formatTime(chitStart)} - ${formatTime(chitEnd)}`;
-        timedEvent.addEventListener("dblclick", () => {
-          storePreviousState();
-          window.location.href = `/editor?id=${chit.id}`;
-        });
-        dayColumn.appendChild(timedEvent);
-      }
-    });
-
-    dayColumnsContainer.appendChild(dayColumn);
+    const d = new Date(weekStart);
+    d.setDate(weekStart.getDate() + i);
+    days.push(d);
   }
 
-  weekView.appendChild(dayColumnsContainer);
-  chitList.appendChild(weekView);
+  // Collect chits per day
+  const dayData = days.map(day => {
+    const dayChits = chitsToDisplay.filter(c => chitMatchesDay(c, day));
+    const allDay = [], timed = [];
+    dayChits.forEach(c => {
+      const info = getCalendarDateInfo(c);
+      if (!info.hasDate) return;
+      if (info.isAllDay) allDay.push({ chit: c, info });
+      else timed.push({ chit: c, info });
+    });
+    return { day, allDay, timed };
+  });
+
+  // Row 1: Day headers
+  const headerRow = document.createElement("div");
+  headerRow.style.cssText = "display:flex;flex-shrink:0;border-bottom:1px solid #6b4e31;";
+  // Spacer for hour column
+  const headerSpacer = document.createElement("div");
+  headerSpacer.style.cssText = "width:60px;flex-shrink:0;";
+  headerRow.appendChild(headerSpacer);
+  days.forEach(day => {
+    const hdr = document.createElement("div");
+    hdr.className = "day-header";
+    hdr.style.cssText = "flex:1;min-width:0;text-align:center;padding:6px 2px;";
+    hdr.textContent = formatDate(day);
+    headerRow.appendChild(hdr);
+  });
+  wrapper.appendChild(headerRow);
+
+  // Row 2: All-day events
+  const hasAnyAllDay = dayData.some(d => d.allDay.length > 0);
+  if (hasAnyAllDay) {
+    const allDayRow = document.createElement("div");
+    allDayRow.style.cssText = "display:flex;flex-shrink:0;background:#fffacd;border-bottom:1px solid #6b4e31;min-height:24px;";
+    const allDaySpacer = document.createElement("div");
+    allDaySpacer.style.cssText = "width:60px;flex-shrink:0;font-size:0.75em;padding:4px 2px;color:#8b5a2b;";
+    allDaySpacer.textContent = "all day";
+    allDayRow.appendChild(allDaySpacer);
+    dayData.forEach(dd => {
+      const cell = document.createElement("div");
+      cell.style.cssText = "flex:1;min-width:0;padding:2px;";
+      dd.allDay.forEach(({ chit, info }) => {
+        const ev = document.createElement("div");
+        ev.className = "all-day-event";
+        ev.style.backgroundColor = chitColor(chit);
+        if (chit.status === "Complete") ev.classList.add("completed-task");
+        ev.title = calendarEventTooltip(chit, info);
+        ev.innerHTML = calendarEventTitle(chit, info.isDueOnly, info);
+        ev.addEventListener("dblclick", () => { storePreviousState(); window.location.href = `/editor?id=${chit.id}`; });
+        cell.appendChild(ev);
+      });
+      allDayRow.appendChild(cell);
+    });
+    wrapper.appendChild(allDayRow);
+  }
+
+  // Row 3: Scrollable time grid
+  const scrollGrid = document.createElement("div");
+  scrollGrid.className = "week-view";
+  scrollGrid.style.cssText = "display:flex;flex:1;overflow-y:auto;width:100%;";
+
+  // Hour column
+  const hourColumn = document.createElement("div");
+  hourColumn.className = "hour-column";
+  hourColumn.style.cssText = "width:60px;flex-shrink:0;position:relative;height:1440px;";
+  for (let hour = 0; hour < 24; hour++) {
+    const hb = document.createElement("div");
+    hb.className = "hour-block";
+    hb.style.top = `${hour * 60}px`;
+    hb.textContent = `${hour}:00`;
+    hourColumn.appendChild(hb);
+  }
+  scrollGrid.appendChild(hourColumn);
+
+  // Day columns with timed events only
+  dayData.forEach(dd => {
+    const col = document.createElement("div");
+    col.className = "day-column";
+    col.style.cssText = "flex:1;min-width:0;position:relative;min-height:1440px;border-left:1px solid #d3d3d3;";
+
+    dd.timed.forEach(({ chit, info }) => {
+      const ev = document.createElement("div");
+      ev.className = "timed-event";
+      if (chit.status === "Complete") ev.classList.add("completed-task");
+      const top = info.start.getHours() * 60 + info.start.getMinutes();
+      let height = (info.end.getHours() * 60 + info.end.getMinutes()) - top;
+      if (height < 30) height = 30;
+      ev.style.top = `${top}px`;
+      ev.style.height = `${height}px`;
+      ev.style.backgroundColor = chitColor(chit);
+      ev.style.width = "calc(100% - 4px)";
+      ev.style.boxSizing = "border-box";
+      ev.title = calendarEventTooltip(chit, info);
+      const timeLabel = info.isDueOnly ? `Due: ${formatTime(info.start)}` : `${formatTime(info.start)} - ${formatTime(info.end)}`;
+      ev.innerHTML = `${calendarEventTitle(chit, info.isDueOnly, info)}<br>${timeLabel}`;
+      ev.addEventListener("dblclick", () => { storePreviousState(); window.location.href = `/editor?id=${chit.id}`; });
+      col.appendChild(ev);
+    });
+
+    scrollGrid.appendChild(col);
+  });
+
+  wrapper.appendChild(scrollGrid);
+  chitList.appendChild(wrapper);
 
   scrollToSixAM();
   renderTimeBar("Week");
@@ -1235,32 +1236,20 @@ function displayMonthView(chitsToDisplay) {
     monthDay.className = "month-day";
     monthDay.innerHTML = `<div class="day-number">${day}</div>`;
 
-    // Include chits with start_datetime or due_datetime on this day
-    const dayChits = chitsToDisplay.filter((chit) => {
-      const startDateMatch =
-        chit.start_datetime_obj &&
-        chit.start_datetime_obj.toDateString() === dayDate.toDateString();
-      const dueDateObj = chit.due_datetime ? new Date(chit.due_datetime) : null;
-      const dueDateMatch =
-        dueDateObj && dueDateObj.toDateString() === dayDate.toDateString();
-      return startDateMatch || dueDateMatch;
-    });
+    const dayChits = chitsToDisplay.filter((chit) => chitMatchesDay(chit, dayDate));
 
     if (dayChits.length > 0) {
       const eventsContainer = document.createElement("div");
       eventsContainer.className = "day-events";
       dayChits.forEach((chit) => {
+        const info = getCalendarDateInfo(chit);
         const chitElement = document.createElement("div");
         chitElement.className = "month-event";
         chitElement.style.backgroundColor = chitColor(chit);
         chitElement.style.cursor = "pointer";
-
-        // Fade completed tasks
-        if ((chit.due_datetime || chit.status) && chit.status === "Complete") {
-          chitElement.classList.add("completed-task");
-        }
-
-                chitElement.innerHTML = `<span style="font-weight: bold; font-size: 1.1em; text-decoration: none; color: inherit;">${chit.title}</span>`;
+        if (chit.status === "Complete") chitElement.classList.add("completed-task");
+        chitElement.title = calendarEventTooltip(chit, info);
+        chitElement.innerHTML = calendarEventTitle(chit, info.isDueOnly, info);
         chitElement.addEventListener("dblclick", () => {
           storePreviousState();
           window.location.href = `/editor?id=${chit.id}`;
@@ -1358,128 +1347,98 @@ function displayDayView(chitsToDisplay) {
   const chitList = document.getElementById("chit-list");
   chitList.innerHTML = "";
 
-  const dayHeader = document.createElement("div");
-  dayHeader.className = "day-header";
-  dayHeader.style.textAlign = "center";
-  dayHeader.style.marginBottom = "10px";
-  dayHeader.textContent = formatDate(currentWeekStart);
-  chitList.appendChild(dayHeader);
+  const wrapper = document.createElement("div");
+  wrapper.style.cssText = "display:flex;flex-direction:column;height:100%;width:100%;";
 
+  const day = new Date(currentWeekStart);
+  const dayChits = chitsToDisplay.filter(c => chitMatchesDay(c, day));
+  const allDayChits = [], timedChits = [];
+  dayChits.forEach(c => {
+    const info = getCalendarDateInfo(c);
+    if (!info.hasDate) return;
+    if (info.isAllDay) allDayChits.push({ chit: c, info });
+    else timedChits.push({ chit: c, info });
+  });
+
+  // Row 1: Day header
+  const headerRow = document.createElement("div");
+  headerRow.className = "day-header";
+  headerRow.style.cssText = "flex-shrink:0;text-align:center;padding:8px;border-bottom:1px solid #6b4e31;";
+  headerRow.textContent = formatDate(day);
+  wrapper.appendChild(headerRow);
+
+  // Row 2: All-day events
+  if (allDayChits.length > 0) {
+    const allDayRow = document.createElement("div");
+    allDayRow.style.cssText = "flex-shrink:0;background:#fffacd;border-bottom:1px solid #6b4e31;padding:4px 8px;";
+    allDayChits.forEach(({ chit, info }) => {
+      const ev = document.createElement("div");
+      ev.className = "all-day-event";
+      ev.style.backgroundColor = chitColor(chit);
+      if (chit.status === "Complete") ev.classList.add("completed-task");
+      ev.title = calendarEventTooltip(chit, info);
+      ev.innerHTML = calendarEventTitle(chit, info.isDueOnly, info);
+      ev.addEventListener("dblclick", () => { storePreviousState(); window.location.href = `/editor?id=${chit.id}`; });
+      allDayRow.appendChild(ev);
+    });
+    wrapper.appendChild(allDayRow);
+  }
+
+  // Row 3: Scrollable time grid
   const dayView = document.createElement("div");
   dayView.className = "day-view";
-  dayView.style.display = "flex";
-  dayView.style.position = "relative";
-  dayView.style.width = "100%";
+  dayView.style.cssText = "display:flex;flex:1;overflow-y:auto;position:relative;width:100%;";
 
   const hourColumn = document.createElement("div");
   hourColumn.className = "hour-column";
-  hourColumn.style.order = "1";
-  hourColumn.style.position = "sticky";
-  hourColumn.style.left = "0";
-  hourColumn.style.zIndex = "1";
-  hourColumn.style.backgroundColor = "#fff5e6";
-  hourColumn.style.width = "80px";
+  hourColumn.style.cssText = "width:80px;flex-shrink:0;position:relative;height:1440px;background:#fff5e6;";
   for (let hour = 0; hour < 24; hour++) {
-    const hourBlock = document.createElement("div");
-    hourBlock.className = "hour-block";
-    hourBlock.style.top = `${hour * 60}px`;
-    hourBlock.textContent = `${hour}:00`;
-    hourColumn.appendChild(hourBlock);
+    const hb = document.createElement("div");
+    hb.className = "hour-block";
+    hb.style.top = `${hour * 60}px`;
+    hb.textContent = `${hour}:00`;
+    hourColumn.appendChild(hb);
   }
   dayView.appendChild(hourColumn);
 
   const eventsContainer = document.createElement("div");
-  eventsContainer.style.order = "2";
-  eventsContainer.style.position = "relative";
-  eventsContainer.style.flex = "1";
-  eventsContainer.style.marginLeft = "15px";
-  eventsContainer.style.width = "calc(100% - 95px)";
-
-  // Include chits with start_datetime or due_datetime on this day
-  const dayChits = chitsToDisplay.filter((chit) => {
-    const startDateMatch =
-      chit.start_datetime_obj &&
-      chit.start_datetime_obj.toDateString() ===
-        currentWeekStart.toDateString();
-    const dueDateObj = chit.due_datetime ? new Date(chit.due_datetime) : null;
-    const dueDateMatch =
-      dueDateObj &&
-      dueDateObj.toDateString() === currentWeekStart.toDateString();
-    return startDateMatch || dueDateMatch;
-  });
+  eventsContainer.style.cssText = "position:relative;flex:1;margin-left:15px;min-height:1440px;";
 
   const timeSlots = {};
+  timedChits.forEach(({ chit, info }) => {
+    const startTime = info.start.getHours() * 60 + info.start.getMinutes();
+    let endTime = info.end.getHours() * 60 + info.end.getMinutes();
+    if (endTime <= startTime) endTime = startTime + 30;
 
-  dayChits.forEach((chit) => {
-    let chitStart = chit.start_datetime_obj;
-    let chitEnd = chit.end_datetime_obj;
-
-    // If no start_datetime but has due_datetime, treat due_datetime as start and end with +30 mins
-    if (!chitStart && chit.due_datetime) {
-      chitStart = new Date(chit.due_datetime);
-      chitEnd = new Date(chitStart.getTime() + 30 * 60 * 1000); // 30 minutes later
-    }
-
-    const startHour = chitStart.getHours();
-    const startMinute = chitStart.getMinutes();
-    const startTime = startHour * 60 + startMinute;
-    const endHour = chitEnd.getHours();
-    const endMinute = chitEnd.getMinutes();
-    const endTime = endHour * 60 + endMinute;
-
-    for (let t = startTime; t < endTime; t++) {
-      if (!timeSlots[t]) timeSlots[t] = [];
-    }
-
+    for (let t = startTime; t < endTime; t++) { if (!timeSlots[t]) timeSlots[t] = []; }
     let position = 0;
     while (true) {
       let collision = false;
-      for (let t = startTime; t < endTime; t++) {
-        if (timeSlots[t].includes(position)) {
-          collision = true;
-          break;
-        }
-      }
+      for (let t = startTime; t < endTime; t++) { if (timeSlots[t].includes(position)) { collision = true; break; } }
       if (!collision) break;
       position++;
     }
+    for (let t = startTime; t < endTime; t++) { timeSlots[t].push(position); }
 
-    for (let t = startTime; t < endTime; t++) {
-      timeSlots[t].push(position);
-    }
-
-    const chitElement = document.createElement("div");
-    chitElement.className = "day-event";
-    const height = endTime - startTime;
-    const maxOverlap = Math.max(
-      ...Object.values(timeSlots).map((slot) => slot.length),
-    );
-    const widthPercentage = 95 / maxOverlap;
-
-    chitElement.style.top = `${startTime}px`;
-    chitElement.style.height = `${height}px`;
-    chitElement.style.left = `${position * widthPercentage}%`;
-    chitElement.style.width = `${widthPercentage - 1}%`;
-    chitElement.style.position = "absolute";
-    chitElement.style.backgroundColor = chitColor(chit);
-    chitElement.style.boxSizing = "border-box";
-
-    // Fade completed tasks
-    if ((chit.due_datetime || chit.status) && chit.status === "Complete") {
-      chitElement.classList.add("completed-task");
-    }
-
-    
-    chitElement.innerHTML = `<span style="font-weight: bold; font-size: 1.1em;">${chit.title}</span><br>${formatTime(chitStart)} - ${formatTime(chitEnd)}`;
-    chitElement.addEventListener("dblclick", () => {
-      storePreviousState();
-      window.location.href = `/editor?id=${chit.id}`;
-    });
-    eventsContainer.appendChild(chitElement);
+    const el = document.createElement("div");
+    el.className = "day-event";
+    let height = endTime - startTime;
+    if (height < 30) height = 30;
+    const maxOverlap = Math.max(...Object.values(timeSlots).map(s => s.length));
+    const widthPct = 95 / maxOverlap;
+    el.style.cssText = `top:${startTime}px;height:${height}px;left:${position * widthPct}%;width:${widthPct - 1}%;position:absolute;box-sizing:border-box;`;
+    el.style.backgroundColor = chitColor(chit);
+    el.title = calendarEventTooltip(chit, info);
+    if (chit.status === "Complete") el.classList.add("completed-task");
+    const timeLabel = info.isDueOnly ? `Due: ${formatTime(info.start)}` : `${formatTime(info.start)} - ${formatTime(info.end)}`;
+    el.innerHTML = `${calendarEventTitle(chit, info.isDueOnly, info)}<br>${timeLabel}`;
+    el.addEventListener("dblclick", () => { storePreviousState(); window.location.href = `/editor?id=${chit.id}`; });
+    eventsContainer.appendChild(el);
   });
 
   dayView.appendChild(eventsContainer);
-  chitList.appendChild(dayView);
+  wrapper.appendChild(dayView);
+  chitList.appendChild(wrapper);
 
   scrollToSixAM();
   renderTimeBar("Day");
@@ -1893,99 +1852,119 @@ function renderTimeBar(viewType) {
 function displaySevenDayView(chitsToDisplay) {
   const chitList = document.getElementById("chit-list");
   chitList.innerHTML = "";
-  const weekView = document.createElement("div");
-  weekView.className = "week-view";
-  weekView.style.display = "flex";
-  weekView.style.width = "100%";
+
+  const wrapper = document.createElement("div");
+  wrapper.style.cssText = "display:flex;flex-direction:column;height:100%;width:100%;";
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const days = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(today);
+    d.setDate(today.getDate() + i);
+    days.push(d);
+  }
+
+  const dayData = days.map(day => {
+    const dayChits = chitsToDisplay.filter(c => chitMatchesDay(c, day));
+    const allDay = [], timed = [];
+    dayChits.forEach(c => {
+      const info = getCalendarDateInfo(c);
+      if (!info.hasDate) return;
+      if (info.isAllDay) allDay.push({ chit: c, info });
+      else timed.push({ chit: c, info });
+    });
+    return { day, allDay, timed };
+  });
+
+  // Row 1: Day headers
+  const headerRow = document.createElement("div");
+  headerRow.style.cssText = "display:flex;flex-shrink:0;border-bottom:1px solid #6b4e31;";
+  const headerSpacer = document.createElement("div");
+  headerSpacer.style.cssText = "width:60px;flex-shrink:0;";
+  headerRow.appendChild(headerSpacer);
+  days.forEach(day => {
+    const hdr = document.createElement("div");
+    hdr.className = "day-header";
+    hdr.style.cssText = "flex:1;min-width:0;text-align:center;padding:6px 2px;";
+    hdr.textContent = formatDate(day);
+    headerRow.appendChild(hdr);
+  });
+  wrapper.appendChild(headerRow);
+
+  // Row 2: All-day events
+  const hasAnyAllDay = dayData.some(d => d.allDay.length > 0);
+  if (hasAnyAllDay) {
+    const allDayRow = document.createElement("div");
+    allDayRow.style.cssText = "display:flex;flex-shrink:0;background:#fffacd;border-bottom:1px solid #6b4e31;min-height:24px;";
+    const allDaySpacer = document.createElement("div");
+    allDaySpacer.style.cssText = "width:60px;flex-shrink:0;font-size:0.75em;padding:4px 2px;color:#8b5a2b;";
+    allDaySpacer.textContent = "all day";
+    allDayRow.appendChild(allDaySpacer);
+    dayData.forEach(dd => {
+      const cell = document.createElement("div");
+      cell.style.cssText = "flex:1;min-width:0;padding:2px;";
+      dd.allDay.forEach(({ chit, info }) => {
+        const ev = document.createElement("div");
+        ev.className = "all-day-event";
+        ev.style.backgroundColor = chitColor(chit);
+        if (chit.status === "Complete") ev.classList.add("completed-task");
+        ev.title = calendarEventTooltip(chit, info);
+        ev.innerHTML = calendarEventTitle(chit, info.isDueOnly, info);
+        ev.addEventListener("dblclick", () => { storePreviousState(); window.location.href = `/editor?id=${chit.id}`; });
+        cell.appendChild(ev);
+      });
+      allDayRow.appendChild(cell);
+    });
+    wrapper.appendChild(allDayRow);
+  }
+
+  // Row 3: Scrollable time grid
+  const scrollGrid = document.createElement("div");
+  scrollGrid.className = "week-view";
+  scrollGrid.style.cssText = "display:flex;flex:1;overflow-y:auto;width:100%;";
 
   const hourColumn = document.createElement("div");
   hourColumn.className = "hour-column";
-  hourColumn.style.order = "1";
-  hourColumn.style.width = "60px";
-  hourColumn.style.flexShrink = "0";
+  hourColumn.style.cssText = "width:60px;flex-shrink:0;position:relative;height:1440px;";
   for (let hour = 0; hour < 24; hour++) {
-    const hourBlock = document.createElement("div");
-    hourBlock.className = "hour-block";
-    hourBlock.style.top = `${hour * 60}px`;
-    hourBlock.textContent = `${hour}:00`;
-    hourColumn.appendChild(hourBlock);
+    const hb = document.createElement("div");
+    hb.className = "hour-block";
+    hb.style.top = `${hour * 60}px`;
+    hb.textContent = `${hour}:00`;
+    hourColumn.appendChild(hb);
   }
-  weekView.appendChild(hourColumn);
+  scrollGrid.appendChild(hourColumn);
 
-  const dayColumnsContainer = document.createElement("div");
-  dayColumnsContainer.style.display = "flex";
-  dayColumnsContainer.style.order = "2";
-  dayColumnsContainer.style.flex = "1";
-  dayColumnsContainer.style.width = "calc(100% - 60px)";
+  dayData.forEach(dd => {
+    const col = document.createElement("div");
+    col.className = "day-column";
+    col.style.cssText = "flex:1;min-width:0;position:relative;min-height:1440px;border-left:1px solid #d3d3d3;";
 
-  // Always start from today
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  for (let i = 0; i < 7; i++) {
-    const day = new Date(today);
-    day.setDate(today.getDate() + i);
-    const dayColumn = document.createElement("div");
-    dayColumn.className = "day-column";
-    dayColumn.style.flex = "1";
-    dayColumn.style.minWidth = "0";
-    dayColumn.style.position = "relative";
-
-    const dayHeader = document.createElement("div");
-    dayHeader.className = "day-header";
-    dayHeader.textContent = formatDate(day);
-    dayColumn.appendChild(dayHeader);
-
-    const allDaySection = document.createElement("div");
-    allDaySection.className = "all-day-section";
-    dayColumn.appendChild(allDaySection);
-
-    const dayChits = chitsToDisplay.filter((chit) => {
-      const startDateMatch = chit.start_datetime_obj && chit.start_datetime_obj.toDateString() === day.toDateString();
-      const dueDateObj = chit.due_datetime ? new Date(chit.due_datetime) : null;
-      const dueDateMatch = dueDateObj && dueDateObj.toDateString() === day.toDateString();
-      return startDateMatch || dueDateMatch;
+    dd.timed.forEach(({ chit, info }) => {
+      const ev = document.createElement("div");
+      ev.className = "timed-event";
+      if (chit.status === "Complete") ev.classList.add("completed-task");
+      const top = info.start.getHours() * 60 + info.start.getMinutes();
+      let height = (info.end.getHours() * 60 + info.end.getMinutes()) - top;
+      if (height < 30) height = 30;
+      ev.style.top = `${top}px`;
+      ev.style.height = `${height}px`;
+      ev.style.backgroundColor = chitColor(chit);
+      ev.style.width = "calc(100% - 4px)";
+      ev.style.boxSizing = "border-box";
+      ev.title = calendarEventTooltip(chit, info);
+      const timeLabel = info.isDueOnly ? `Due: ${formatTime(info.start)}` : `${formatTime(info.start)} - ${formatTime(info.end)}`;
+      ev.innerHTML = `${calendarEventTitle(chit, info.isDueOnly, info)}<br>${timeLabel}`;
+      ev.addEventListener("dblclick", () => { storePreviousState(); window.location.href = `/editor?id=${chit.id}`; });
+      col.appendChild(ev);
     });
 
-    dayChits.forEach((chit) => {
-      if (chit.all_day) {
-        const allDayEvent = document.createElement("div");
-        allDayEvent.className = "all-day-event";
-        if (chit.status === "Complete") allDayEvent.classList.add("completed-task");
-                allDayEvent.innerHTML = `<span style="font-weight:bold;font-size:1.1em;">${chit.title}</span>`;
-        allDayEvent.addEventListener("dblclick", () => { storePreviousState(); window.location.href = `/editor?id=${chit.id}`; });
-        allDaySection.appendChild(allDayEvent);
-      } else {
-        const timedEvent = document.createElement("div");
-        timedEvent.className = "timed-event";
-        if (chit.status === "Complete") timedEvent.classList.add("completed-task");
+    scrollGrid.appendChild(col);
+  });
 
-        let chitStart = chit.start_datetime_obj;
-        let chitEnd = chit.end_datetime_obj;
-        if (!chitStart && chit.due_datetime) {
-          chitStart = new Date(chit.due_datetime);
-          chitEnd = new Date(chitStart.getTime() + 30 * 60 * 1000);
-        }
-
-        const top = chitStart.getHours() * 60 + chitStart.getMinutes();
-        const height = (chitEnd.getHours() * 60 + chitEnd.getMinutes()) - top;
-        timedEvent.style.top = `${top}px`;
-        timedEvent.style.height = `${height}px`;
-        timedEvent.style.backgroundColor = chitColor(chit);
-        timedEvent.style.width = "calc(100% - 4px)";
-        timedEvent.style.boxSizing = "border-box";
-
-                timedEvent.innerHTML = `<span style="font-weight:bold;font-size:1.1em;">${chit.title}</span><br>${formatTime(chitStart)} - ${formatTime(chitEnd)}`;
-        timedEvent.addEventListener("dblclick", () => { storePreviousState(); window.location.href = `/editor?id=${chit.id}`; });
-        dayColumn.appendChild(timedEvent);
-      }
-    });
-
-    dayColumnsContainer.appendChild(dayColumn);
-  }
-
-  weekView.appendChild(dayColumnsContainer);
-  chitList.appendChild(weekView);
+  wrapper.appendChild(scrollGrid);
+  chitList.appendChild(wrapper);
 
   scrollToSixAM();
   renderTimeBar("SevenDay");

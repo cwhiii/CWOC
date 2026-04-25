@@ -339,9 +339,7 @@ h1 {
     background-color: #fffacd;
     padding: 5px;
     margin-bottom: 0;
-    position: sticky;
-    top: 0;
-    z-index: 10;
+    min-height: 0;
 }
 
 .all-day-event {

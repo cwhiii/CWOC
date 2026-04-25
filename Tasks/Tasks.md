@@ -158,14 +158,14 @@ Major feature: draggable calendar events, editor date field restructure, snap-to
 ### Phase 3: Calendar Display — Due Date Chits & All-Day Fix
 **Files:** `frontend/main.js`, `frontend/styles.css`
 
-- `[ ]` Due-date-only chits appear on calendar:
+- `[x]` Due-date-only chits appear on calendar:
   - All-day due date → all-day event strip
   - Timed due date → 10px tall timed event at due time, with ⌚ icon before title
-- `[ ]` If chit has both due AND start/end, use due date (ignore start/end) per editor rules
-- `[ ]` Fix all-day section layout in Day/Week/7-Day views:
+- `[x]` If chit has both due AND start/end, use due date (ignore start/end) per editor rules
+- `[x]` Fix all-day section layout in Day/Week/7-Day views:
   - Structure: Date header → All-day events (block, not floating) → Scrollable hourly grid
   - All-day section is above the time grid, not overlapping it
-- `[ ]` ⌚ icon on due-date-only chits (no start/end) in calendar views
+- `[x]` ⌚ icon on due-date-only chits (no start/end) in calendar views
 
 ### Phase 4: Calendar Drag — Move, Resize, Snap Grid
 **Files:** `frontend/main.js`, `frontend/shared.js`, `frontend/styles.css`
