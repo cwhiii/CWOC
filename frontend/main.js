@@ -137,27 +137,33 @@ function _applyMultiSelectFilters(chitList) {
 
 function _applySort(chitList) {
   if (!currentSortField) return chitList;
+  const LAST_ASC = currentSortDir === 'asc' ? Infinity : -Infinity;
+  const LAST_DESC = currentSortDir === 'asc' ? -Infinity : Infinity;
   return [...chitList].sort((a, b) => {
     let valA, valB;
+    const nullLast = currentSortDir === 'asc' ? Infinity : -Infinity;
     if (currentSortField === 'title') {
-      valA = (a.title || '').toLowerCase();
-      valB = (b.title || '').toLowerCase();
+      valA = a.title ? a.title.toLowerCase() : null;
+      valB = b.title ? b.title.toLowerCase() : null;
+      if (valA === null && valB === null) return 0;
+      if (valA === null) return 1;
+      if (valB === null) return -1;
     } else if (currentSortField === 'start') {
-      valA = a.start_datetime ? new Date(a.start_datetime).getTime() : Infinity;
-      valB = b.start_datetime ? new Date(b.start_datetime).getTime() : Infinity;
+      valA = a.start_datetime ? new Date(a.start_datetime).getTime() : nullLast;
+      valB = b.start_datetime ? new Date(b.start_datetime).getTime() : nullLast;
     } else if (currentSortField === 'due') {
-      valA = a.due_datetime ? new Date(a.due_datetime).getTime() : Infinity;
-      valB = b.due_datetime ? new Date(b.due_datetime).getTime() : Infinity;
+      valA = a.due_datetime ? new Date(a.due_datetime).getTime() : nullLast;
+      valB = b.due_datetime ? new Date(b.due_datetime).getTime() : nullLast;
     } else if (currentSortField === 'updated') {
-      valA = a.modified_datetime ? new Date(a.modified_datetime).getTime() : 0;
-      valB = b.modified_datetime ? new Date(b.modified_datetime).getTime() : 0;
+      valA = a.modified_datetime ? new Date(a.modified_datetime).getTime() : nullLast;
+      valB = b.modified_datetime ? new Date(b.modified_datetime).getTime() : nullLast;
     } else if (currentSortField === 'created') {
-      valA = a.created_datetime ? new Date(a.created_datetime).getTime() : 0;
-      valB = b.created_datetime ? new Date(b.created_datetime).getTime() : 0;
+      valA = a.created_datetime ? new Date(a.created_datetime).getTime() : nullLast;
+      valB = b.created_datetime ? new Date(b.created_datetime).getTime() : nullLast;
     } else if (currentSortField === 'status') {
       const order = { 'ToDo': 1, 'In Progress': 2, 'Blocked': 3, 'Complete': 4 };
-      valA = order[a.status] || 5;
-      valB = order[b.status] || 5;
+      valA = order[a.status] || 99;
+      valB = order[b.status] || 99;
     }
     if (valA < valB) return currentSortDir === 'asc' ? -1 : 1;
     if (valA > valB) return currentSortDir === 'asc' ? 1 : -1;
@@ -205,28 +211,26 @@ function _buildChitHeader(chit, titleHtml) {
   const right = document.createElement('div');
   right.className = 'chit-header-meta';
 
-  if (chit.status) {
-    const s = document.createElement('span'); s.textContent = chit.status; right.appendChild(s);
+  const sortIndicator = currentSortDir === 'asc' ? ' ▲' : ' ▼';
+
+  function addMeta(text, fieldName) {
+    const s = document.createElement('span');
+    s.textContent = text;
+    if (currentSortField === fieldName) {
+      s.style.fontWeight = 'bold';
+      s.textContent = text + sortIndicator;
+    }
+    right.appendChild(s);
   }
-  if (chit.priority) {
-    const s = document.createElement('span'); s.textContent = chit.priority; right.appendChild(s);
-  }
-  if (chit.due_datetime) {
-    const s = document.createElement('span'); s.textContent = `Due: ${formatDate(new Date(chit.due_datetime))}`; right.appendChild(s);
-  }
-  if (chit.start_datetime) {
-    const s = document.createElement('span'); s.textContent = `Start: ${formatDate(new Date(chit.start_datetime))}`; right.appendChild(s);
-  }
-  if (chit.modified_datetime) {
-    const s = document.createElement('span'); s.textContent = `Upd: ${formatDate(new Date(chit.modified_datetime))}`; right.appendChild(s);
-  }
-  if (chit.created_datetime) {
-    const s = document.createElement('span'); s.textContent = `Cre: ${formatDate(new Date(chit.created_datetime))}`; right.appendChild(s);
-  }
+
+  if (chit.status) addMeta(chit.status, 'status');
+  if (chit.priority) addMeta(chit.priority, null);
+  if (chit.due_datetime) addMeta(`Due: ${formatDate(new Date(chit.due_datetime))}`, 'due');
+  if (chit.start_datetime) addMeta(`Start: ${formatDate(new Date(chit.start_datetime))}`, 'start');
+  if (chit.modified_datetime) addMeta(`Upd: ${formatDate(new Date(chit.modified_datetime))}`, 'updated');
+  if (chit.created_datetime) addMeta(`Cre: ${formatDate(new Date(chit.created_datetime))}`, 'created');
   const tags = chit.tags || [];
-  if (tags.length > 0) {
-    const s = document.createElement('span'); s.textContent = tags.join(', '); right.appendChild(s);
-  }
+  if (tags.length > 0) addMeta(tags.join(', '), null);
 
   row.appendChild(right);
   return row;
