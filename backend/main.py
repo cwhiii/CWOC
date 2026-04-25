@@ -547,6 +547,44 @@ def delete_chit(chit_id: str):
         if conn:
             conn.close()
 
+
+@app.patch("/api/chits/{chit_id}/recurrence-exceptions")
+def patch_recurrence_exceptions(chit_id: str, body: dict):
+    """Add or update a recurrence exception on a parent chit.
+    Body: { "exception": { "date": "YYYY-MM-DD", "completed": bool, "broken_off": bool, "title": str, ... } }
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT recurrence_exceptions FROM chits WHERE id = ?", (chit_id,))
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Chit not found")
+        exceptions = deserialize_json_field(row["recurrence_exceptions"]) or []
+        new_exc = body.get("exception", {})
+        exc_date = new_exc.get("date")
+        if not exc_date:
+            raise HTTPException(status_code=400, detail="Exception must have a date")
+        # Replace existing exception for this date, or append
+        exceptions = [e for e in exceptions if e.get("date") != exc_date]
+        exceptions.append(new_exc)
+        cursor.execute(
+            "UPDATE chits SET recurrence_exceptions = ?, modified_datetime = ? WHERE id = ?",
+            (json.dumps(exceptions), datetime.utcnow().isoformat(), chit_id)
+        )
+        conn.commit()
+        return {"message": "Exception updated", "exceptions": exceptions}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error patching recurrence exceptions: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
+
 @app.get("/api/settings/{user_id}")
 def get_settings(user_id: str):
     conn = None

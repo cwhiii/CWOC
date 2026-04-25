@@ -423,9 +423,10 @@ function chitMatchesDay(chit, day) {
  * @returns {string}
  */
 function calendarEventTitle(chit, isDueOnly, info) {
+  const pinnedIcon = chit.pinned ? '<i class="fas fa-bookmark" style="font-size:0.8em;margin-right:2px;"></i>' : '';
   const dueIcon = isDueOnly ? '⌚ ' : '';
   const recurIcon = (chit.recurrence_rule && chit.recurrence_rule.freq) || chit._isVirtual ? '🔁 ' : '';
-  return `<span style="font-weight:bold;font-size:1.1em;">${recurIcon}${dueIcon}${chit.title || '(Untitled)'}</span>`;
+  return `<span style="font-weight:bold;font-size:1.1em;">${pinnedIcon}${recurIcon}${dueIcon}${chit.title || '(Untitled)'}</span>`;
 }
 
 /**
@@ -538,6 +539,7 @@ function enableCalendarDrag(scrollContainer, dayColumns, days, chitsMap) {
       handle.addEventListener('mousedown', (e) => {
         e.preventDefault();
         e.stopPropagation();
+        if (e.shiftKey || e.metaKey || e.ctrlKey) return;
         const entry = chitsMap.find(c => c.el === el);
         if (!entry) return;
       _calDragState = {
@@ -546,6 +548,7 @@ function enableCalendarDrag(scrollContainer, dayColumns, days, chitsMap) {
         origTop: parseInt(el.style.top),
         origHeight: parseInt(el.style.height),
         dayCol: el.parentElement,
+        hasMoved: false,
       };
       _showSnapGrid(el.parentElement);
       document.addEventListener('mousemove', _onCalDragMove);
@@ -556,7 +559,8 @@ function enableCalendarDrag(scrollContainer, dayColumns, days, chitsMap) {
     // Move: mousedown on event (not on handle)
     el.addEventListener('mousedown', (e) => {
       if (e.target.closest('.cal-resize-handle')) return;
-      // Don't interfere with dblclick
+      // Don't start drag on modifier clicks (shift=quick edit, cmd/ctrl=browser)
+      if (e.shiftKey || e.metaKey || e.ctrlKey) return;
       const entry = chitsMap.find(c => c.el === el);
       if (!entry) return;
       e.preventDefault();
@@ -569,6 +573,7 @@ function enableCalendarDrag(scrollContainer, dayColumns, days, chitsMap) {
         origColIdx: colIdx,
         dayColumns, days,
         dayCol: el.parentElement,
+        hasMoved: false,
       };
       el.style.opacity = '0.6';
       el.style.zIndex = '50';
@@ -582,6 +587,7 @@ function enableCalendarDrag(scrollContainer, dayColumns, days, chitsMap) {
 function _onCalDragMove(e) {
   if (!_calDragState) return;
   const s = _calDragState;
+  s.hasMoved = true;
   const dy = e.clientY - s.startY;
 
   if (s.mode === 'resize') {
@@ -622,6 +628,9 @@ async function _onCalDragEnd(e) {
   s.el.style.zIndex = '';
   _calDragState = null;
 
+  // If mouse didn't actually move, don't save anything
+  if (!s.hasMoved) return;
+
   const newTop = parseInt(s.el.style.top);
   const newHeight = parseInt(s.el.style.height);
   const newStartMin = newTop;
@@ -641,12 +650,40 @@ async function _onCalDragEnd(e) {
   const newEndM = newEndMin % 60;
 
   try {
+    // For virtual recurring instances, ask how to apply the change
+    if (s.chit._isVirtual && s.chit._parentId) {
+      const parentId = s.chit._parentId;
+      const dateStr = s.chit._virtualDate;
+      const info = getCalendarDateInfo(s.chit);
+      if (!info.hasDate) return;
+
+      // Build the new time values
+      const d = newDay || info.start;
+      let newTimes = {};
+      if (info.isDueOnly) {
+        const newDue = new Date(d.getFullYear(), d.getMonth(), d.getDate(), newStartH, newStartM);
+        newTimes = { due_datetime: newDue.toISOString() };
+      } else if (s.mode === 'move') {
+        const duration = info.end.getTime() - info.start.getTime();
+        const newStart = new Date(d.getFullYear(), d.getMonth(), d.getDate(), newStartH, newStartM);
+        const newEnd = new Date(newStart.getTime() + duration);
+        newTimes = { start_datetime: newStart.toISOString(), end_datetime: newEnd.toISOString() };
+      } else {
+        const newEnd = new Date(d.getFullYear(), d.getMonth(), d.getDate(), newEndH, newEndM);
+        newTimes = { end_datetime: newEnd.toISOString() };
+      }
+
+      // Show confirmation modal
+      _showRecurringDragModal(parentId, dateStr, newTimes, s.chit);
+      return;
+    }
+
     const resp = await fetch(`/api/chit/${s.chit.id}`);
-    if (!resp.ok) return;
+    if (!resp.ok) { console.error('Calendar drag: failed to fetch chit', s.chit.id); return; }
     const chit = await resp.json();
 
     const info = getCalendarDateInfo(chit);
-    if (!info.hasDate) return;
+    if (!info.hasDate) { console.error('Calendar drag: chit has no date info'); return; }
 
     if (info.isDueOnly) {
       // Update due_datetime
@@ -669,16 +706,101 @@ async function _onCalDragEnd(e) {
       }
     }
 
-    await fetch(`/api/chits/${chit.id}`, {
+    const putResp = await fetch(`/api/chits/${chit.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(chit),
     });
-
-    // Don't re-render — DOM is already updated by the drag
+    console.log('Calendar drag saved:', chit.id, putResp.status, 'start:', chit.start_datetime, 'end:', chit.end_datetime, 'due:', chit.due_datetime);
   } catch (err) {
     console.error('Calendar drag save failed:', err);
   }
+}
+
+/**
+ * Show a modal after dragging a recurring instance, asking how to apply the change.
+ * Options: This instance / All in series / All following / Cancel
+ */
+function _showRecurringDragModal(parentId, dateStr, newTimes, virtualChit) {
+  document.querySelectorAll('.recurrence-modal-overlay').forEach(el => el.remove());
+
+  const overlay = document.createElement('div');
+  overlay.className = 'recurrence-modal-overlay';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;';
+
+  const modal = document.createElement('div');
+  modal.style.cssText = 'background:#fffaf0;border:2px solid #6b4e31;border-radius:8px;padding:24px;min-width:300px;max-width:380px;font-family:"Courier New",monospace;box-shadow:0 8px 32px rgba(0,0,0,0.3);';
+
+  const title = document.createElement('h3');
+  title.style.cssText = 'margin:0 0 16px 0;color:#4a2c2a;font-size:1.1em;';
+  title.textContent = 'Edit recurring event';
+  modal.appendChild(title);
+
+  const btnStyle = 'display:block;width:100%;padding:10px 12px;margin-bottom:8px;border:1px solid #6b4e31;border-radius:4px;background:#fdf5e6;color:#4a2c2a;font-family:inherit;font-size:0.95em;cursor:pointer;text-align:left;';
+
+  function addBtn(label, icon, onClick) {
+    const btn = document.createElement('button');
+    btn.style.cssText = btnStyle;
+    btn.innerHTML = `${icon} ${label}`;
+    btn.onmouseover = function() { this.style.background = '#f0e6d3'; };
+    btn.onmouseout = function() { this.style.background = '#fdf5e6'; };
+    btn.addEventListener('click', async () => { await onClick(); close(); });
+    modal.appendChild(btn);
+  }
+
+  function close() { overlay.remove(); }
+
+  addBtn('This instance only', '📌', async () => {
+    const exception = { date: dateStr, ...newTimes };
+    await fetch(`/api/chits/${parentId}/recurrence-exceptions`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ exception })
+    });
+    if (typeof displayChits === 'function') displayChits();
+  });
+
+  addBtn('All in series', '🔁', async () => {
+    const resp = await fetch(`/api/chit/${parentId}`);
+    if (!resp.ok) { console.error('Failed to fetch chit for drag save'); return; }
+    const chit = await resp.json();
+    Object.assign(chit, newTimes);
+    await fetch(`/api/chits/${parentId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(chit)
+    });
+    if (typeof displayChits === 'function') displayChits();
+  });
+
+  addBtn('All following', '➡️🔁', async () => {
+    const resp = await fetch(`/api/chit/${parentId}`);
+    if (!resp.ok) { console.error('Failed to fetch chit for drag save'); return; }
+    const chit = await resp.json();
+    Object.assign(chit, newTimes);
+    await fetch(`/api/chits/${parentId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(chit)
+    });
+    if (typeof displayChits === 'function') displayChits();
+  });
+
+  // Cancel
+  const cancelBtn = document.createElement('button');
+  cancelBtn.style.cssText = btnStyle + 'margin-top:8px;text-align:center;background:#e8dcc8;font-weight:bold;';
+  cancelBtn.textContent = 'Cancel';
+  cancelBtn.onmouseover = function() { this.style.background = '#d4c5a9'; };
+  cancelBtn.onmouseout = function() { this.style.background = '#e8dcc8'; };
+  cancelBtn.addEventListener('click', () => { close(); if (typeof displayChits === 'function') displayChits(); });
+  modal.appendChild(cancelBtn);
+
+  overlay.appendChild(modal);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) { close(); if (typeof displayChits === 'function') displayChits(); } });
+  document.body.appendChild(overlay);
+
+  function onKey(e) { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', onKey); if (typeof displayChits === 'function') displayChits(); } }
+  document.addEventListener('keydown', onKey);
 }
 
 /**
@@ -877,6 +999,13 @@ function buildTagTree(flatTags) {
     });
   });
 
+  // Sort alphabetically at every level
+  function sortLevel(nodes) {
+    nodes.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+    nodes.forEach(n => { if (n.children.length > 0) sortLevel(n.children); });
+  }
+  sortLevel(root);
+
   return root;
 }
 
@@ -929,12 +1058,17 @@ function renderTagTree(container, tree, selectedTags, onToggle, opts) {
       const row = document.createElement('div');
       row.style.cssText = `display:flex;align-items:center;gap:4px;padding:2px 0;padding-left:${depth * 16}px;cursor:pointer;`;
 
-      // Expand/collapse toggle for nodes with children
+      // Create child container first so toggle can reference it
+      let childContainer = null;
       if (node.children.length > 0) {
+        childContainer = document.createElement('div');
+      }
+
+      // Expand/collapse toggle for nodes with children
+      if (childContainer) {
         const toggle = document.createElement('span');
-        toggle.style.cssText = 'font-size:0.7em;width:14px;text-align:center;cursor:pointer;user-select:none;';
+        toggle.style.cssText = 'font-size:0.7em;width:14px;text-align:center;cursor:pointer;user-select:none;flex-shrink:0;';
         toggle.textContent = '▼';
-        const childContainer = document.createElement('div');
         toggle.addEventListener('click', (e) => {
           e.stopPropagation();
           const isHidden = childContainer.style.display === 'none';
@@ -944,23 +1078,8 @@ function renderTagTree(container, tree, selectedTags, onToggle, opts) {
         row.appendChild(toggle);
       } else {
         const spacer = document.createElement('span');
-        spacer.style.cssText = 'width:14px;';
+        spacer.style.cssText = 'width:14px;flex-shrink:0;';
         row.appendChild(spacer);
-      }
-
-      // Favorite star
-      if (node.favorite) {
-        const star = document.createElement('span');
-        star.textContent = '⭐';
-        star.style.fontSize = '0.8em';
-        row.appendChild(star);
-      }
-
-      // Color swatch
-      if (node.color) {
-        const swatch = document.createElement('span');
-        swatch.style.cssText = `display:inline-block;width:10px;height:10px;border-radius:50%;background:${node.color};flex-shrink:0;`;
-        row.appendChild(swatch);
       }
 
       // Checkbox
@@ -975,23 +1094,30 @@ function renderTagTree(container, tree, selectedTags, onToggle, opts) {
       });
       row.appendChild(cb);
 
-      // Tag name badge with color
-      const tagColor = node.color || (typeof getPastelColor === 'function' ? getPastelColor(node.fullPath) : 'rgba(139,90,43,0.1)');
+      // Favorite star (inline before name)
+      if (node.favorite) {
+        const star = document.createElement('span');
+        star.textContent = '⭐';
+        star.style.cssText = 'font-size:0.75em;flex-shrink:0;';
+        row.appendChild(star);
+      }
+
+      // Tag name with color background — always shows tag color
+      const tagColor = node.color || (typeof getPastelColor === 'function' ? getPastelColor(node.fullPath) : 'rgba(139,90,43,0.15)');
       const badge = document.createElement('span');
       badge.textContent = node.name;
-      badge.style.cssText = `font-size:0.85em;padding:1px 6px;border-radius:10px;background:${isSelected ? tagColor : 'rgba(139,90,43,0.08)'};color:${isSelected ? '#000' : '#3c2f2f'};${isSelected ? 'font-weight:bold;' : ''}`;
+      badge.style.cssText = `font-size:0.85em;padding:1px 6px;border-radius:4px;background:${tagColor};color:#3c2f2f;white-space:nowrap;${isSelected ? 'font-weight:bold;outline:2px solid #4a2c2a;' : ''}`;
       row.appendChild(badge);
 
-      // Click to toggle selection
+      // Click row to toggle selection
       row.addEventListener('click', () => {
         if (onToggle) onToggle(node.fullPath, !isSelected);
       });
 
       parentEl.appendChild(row);
 
-      // Children
-      if (node.children.length > 0) {
-        const childContainer = document.createElement('div');
+      // Render children
+      if (childContainer) {
         renderLevel(node.children, childContainer, depth + 1);
         parentEl.appendChild(childContainer);
       }
@@ -1090,15 +1216,24 @@ function expandRecurrence(chit, rangeStart, rangeEnd) {
         _isCompleted: completedDates.has(dateStr),
       };
 
+      // Mark completed instances visually
+      if (instance._isCompleted) {
+        instance.status = 'Complete';
+      }
+
       // Apply exception overrides
       if (exception) {
         if (exception.title) instance.title = exception.title;
+        if (exception.note !== undefined) instance.note = exception.note;
+        if (exception.location !== undefined) instance.location = exception.location;
         if (exception.start_datetime) {
           instance.start_datetime = exception.start_datetime;
         } else if (!info.isDueOnly) {
           instance.start_datetime = virtualStart.toISOString();
           instance.end_datetime = virtualEnd.toISOString();
         }
+        if (exception.end_datetime) instance.end_datetime = exception.end_datetime;
+        if (exception.due_datetime) instance.due_datetime = exception.due_datetime;
       } else {
         if (info.isDueOnly) {
           instance.due_datetime = virtualStart.toISOString();
@@ -1166,6 +1301,354 @@ function formatRecurrenceRule(rule) {
 
   if (rule.until) text += ` until ${new Date(rule.until).toLocaleDateString()}`;
   return text;
+}
+
+
+// ── Recurrence Instance Actions (Phase R2) ───────────────────────────────────
+
+/**
+ * Quick Edit Modal — shift+click on any calendar chit.
+ * Shows editable dropdowns for task fields, plus recurrence options if recurring.
+ */
+function showQuickEditModal(chit, onRefresh) {
+  document.querySelectorAll('.recurrence-modal-overlay').forEach(el => el.remove());
+
+  const isRecurring = !!(chit._isVirtual && chit._parentId);
+  const parentId = chit._parentId || chit.id;
+  const chitId = chit._isVirtual ? chit._parentId : chit.id;
+  const dateStr = chit._virtualDate;
+
+  const overlay = document.createElement('div');
+  overlay.className = 'recurrence-modal-overlay';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;';
+
+  const modal = document.createElement('div');
+  modal.style.cssText = 'background:#fffaf0;border:2px solid #6b4e31;border-radius:8px;padding:24px;min-width:320px;max-width:420px;font-family:"Courier New",monospace;box-shadow:0 8px 32px rgba(0,0,0,0.3);';
+
+  const title = document.createElement('h3');
+  title.style.cssText = 'margin:0 0 6px 0;color:#4a2c2a;font-size:1.1em;';
+  title.textContent = chit.title || '(Untitled)';
+  modal.appendChild(title);
+
+  if (isRecurring) {
+    const dateLine = document.createElement('div');
+    dateLine.style.cssText = 'margin-bottom:12px;color:#6b4e31;font-size:0.9em;';
+    dateLine.textContent = `🔁 ${formatRecurrenceRule(chit.recurrence_rule)} — ${dateStr}`;
+    modal.appendChild(dateLine);
+  }
+
+  const btnStyle = 'display:block;width:100%;padding:10px 12px;margin-bottom:8px;border:1px solid #6b4e31;border-radius:4px;background:#fdf5e6;color:#4a2c2a;font-family:inherit;font-size:0.95em;cursor:pointer;text-align:left;';
+  const selStyle = 'padding:4px 6px;border:1px solid #6b4e31;border-radius:4px;background:#fdf5e6;color:#4a2c2a;font-family:inherit;font-size:0.9em;flex:1;';
+  const rowStyle = 'display:flex;align-items:center;gap:8px;padding:6px 12px;margin-bottom:6px;border:1px solid #d4c5a9;border-radius:4px;background:#fdf5e6;font-size:0.9em;';
+
+  function addBtn(label, icon, onClick) {
+    const btn = document.createElement('button');
+    btn.style.cssText = btnStyle;
+    btn.innerHTML = `${icon} ${label}`;
+    btn.onmouseover = function() { this.style.background = '#f0e6d3'; };
+    btn.onmouseout = function() { this.style.background = '#fdf5e6'; };
+    btn.addEventListener('click', () => { close(); onClick(); });
+    modal.appendChild(btn);
+  }
+
+  function addSep() {
+    const hr = document.createElement('hr');
+    hr.style.cssText = 'border:none;border-top:1px solid #d4c5a9;margin:12px 0;';
+    modal.appendChild(hr);
+  }
+
+  function close() { overlay.remove(); }
+
+  // --- Editable Task Fields (only show fields that already have values) ---
+  let pendingChanges = {};
+  let hasTaskFields = false;
+
+  function addDropdown(icon, label, currentVal, options, onChange) {
+    hasTaskFields = true;
+    const row = document.createElement('div');
+    row.style.cssText = rowStyle;
+    const lbl = document.createElement('span');
+    lbl.style.cssText = 'color:#6b4e31;white-space:nowrap;';
+    lbl.textContent = `${icon} ${label}:`;
+    const sel = document.createElement('select');
+    sel.style.cssText = selStyle;
+    options.forEach(opt => {
+      const o = document.createElement('option');
+      o.value = opt;
+      o.textContent = opt || '—';
+      if (opt === currentVal) o.selected = true;
+      sel.appendChild(o);
+    });
+    sel.addEventListener('change', () => onChange(sel.value));
+    row.appendChild(lbl);
+    row.appendChild(sel);
+    modal.appendChild(row);
+  }
+
+  if (chit.priority) addDropdown('🔺', 'Priority', chit.priority, ['', 'High', 'Medium', 'Low'], (v) => { pendingChanges.priority = v || null; });
+  if (chit.severity) addDropdown('⚠️', 'Severity', chit.severity, ['', 'Critical', 'Major', 'Minor'], (v) => { pendingChanges.severity = v || null; });
+  if (chit.status) addDropdown('📋', 'Status', chit.status, ['', 'ToDo', 'In Progress', 'Blocked', 'Complete'], (v) => { pendingChanges.status = v || null; });
+
+  if (hasTaskFields) {
+    const saveRow = document.createElement('div');
+    saveRow.style.cssText = 'text-align:right;margin-bottom:4px;';
+    const saveBtn = document.createElement('button');
+    saveBtn.style.cssText = 'padding:6px 16px;border:1px solid #6b4e31;border-radius:4px;background:#d4c5a9;color:#4a2c2a;font-family:inherit;font-size:0.85em;cursor:pointer;';
+    saveBtn.textContent = 'Save Changes';
+    saveBtn.onmouseover = function() { this.style.background = '#c4b599'; };
+    saveBtn.onmouseout = function() { this.style.background = '#d4c5a9'; };
+    saveBtn.addEventListener('click', async () => {
+      if (Object.keys(pendingChanges).length === 0) { close(); return; }
+      try {
+        const resp = await fetch(`/api/chit/${chitId}`);
+        if (!resp.ok) throw new Error('Chit not found');
+        const fullChit = await resp.json();
+        Object.assign(fullChit, pendingChanges);
+        if (pendingChanges.status === 'Complete' && !fullChit.completed_datetime) {
+          fullChit.completed_datetime = new Date().toISOString();
+        }
+        await fetch(`/api/chits/${chitId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(fullChit)
+        });
+        close();
+        if (onRefresh) onRefresh();
+      } catch (e) {
+        console.error('Quick edit save failed:', e);
+        alert('Failed to save changes.');
+      }
+    });
+    saveRow.appendChild(saveBtn);
+    modal.appendChild(saveRow);
+  }
+
+  // --- Recurrence actions (only for recurring chits) ---
+  if (isRecurring) {
+    addSep();
+    const recHeader = document.createElement('div');
+    recHeader.style.cssText = 'font-size:0.8em;color:#6b4e31;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.05em;';
+    recHeader.textContent = 'Recurrence';
+    modal.appendChild(recHeader);
+
+    addBtn('Edit series', '✏️🔁', () => {
+      if (typeof storePreviousState === 'function') storePreviousState();
+      window.location.href = `/editor?id=${parentId}`;
+    });
+    addBtn('Edit this instance', '✏️', () => {
+      if (typeof storePreviousState === 'function') storePreviousState();
+      window.location.href = `/editor?id=${parentId}&instance=${dateStr}`;
+    });
+    addBtn('Break off from series', '✂️', async () => {
+      await _recurrenceBreakOff(parentId, chit, dateStr);
+      if (onRefresh) onRefresh();
+    });
+    addBtn('Skip this instance', '🚫', async () => {
+      await _recurrenceAddException(parentId, { date: dateStr, broken_off: true });
+      if (onRefresh) onRefresh();
+    });
+
+    addSep();
+    const isCompleted = chit._isCompleted;
+    if (!isCompleted) {
+      addBtn('Complete this instance', '✅', async () => {
+        await _recurrenceAddException(parentId, { date: dateStr, completed: true });
+        if (onRefresh) onRefresh();
+      });
+    } else {
+      addBtn('Un-complete this instance', '↩️', async () => {
+        await _recurrenceRemoveException(parentId, dateStr);
+        if (onRefresh) onRefresh();
+      });
+    }
+    addBtn('Complete entire series', '✅🔁', async () => {
+      if (!confirm('Mark the entire recurring series as Complete?')) return;
+      await _recurrenceCompleteSeries(parentId);
+      if (onRefresh) onRefresh();
+    });
+    addBtn('Delete entire series', '🗑️🔁', async () => {
+      if (!confirm('Delete the entire recurring series?')) return;
+      await fetch(`/api/chits/${parentId}`, { method: 'DELETE' });
+      if (onRefresh) onRefresh();
+    });
+  }
+
+  // --- Pin / Archive / Delete row ---
+  addSep();
+  const actionRow = document.createElement('div');
+  actionRow.style.cssText = 'display:flex;gap:6px;margin-bottom:8px;';
+
+  const iconBtnStyle = 'flex:1;padding:8px;border:1px solid #6b4e31;border-radius:4px;font-family:inherit;font-size:0.9em;cursor:pointer;text-align:center;';
+
+  // Pin toggle
+  const pinBtn = document.createElement('button');
+  pinBtn.style.cssText = iconBtnStyle + `background:${chit.pinned ? '#d4c5a9' : '#fdf5e6'};`;
+  pinBtn.innerHTML = `<i class="fas fa-bookmark"></i> ${chit.pinned ? 'Unpin' : 'Pin'}`;
+  pinBtn.title = chit.pinned ? 'Unpin this chit' : 'Pin this chit';
+  pinBtn.addEventListener('click', async () => {
+    try {
+      const resp = await fetch(`/api/chit/${chitId}`);
+      if (!resp.ok) return;
+      const fullChit = await resp.json();
+      fullChit.pinned = !fullChit.pinned;
+      await fetch(`/api/chits/${chitId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(fullChit) });
+      close();
+      if (onRefresh) onRefresh();
+    } catch (e) { console.error('Pin toggle failed:', e); }
+  });
+  actionRow.appendChild(pinBtn);
+
+  // Archive toggle
+  const archBtn = document.createElement('button');
+  archBtn.style.cssText = iconBtnStyle + `background:${chit.archived ? '#d4c5a9' : '#fdf5e6'};color:#666;`;
+  archBtn.innerHTML = `📦 ${chit.archived ? 'Unarchive' : 'Archive'}`;
+  archBtn.title = chit.archived ? 'Unarchive this chit' : 'Archive this chit';
+  archBtn.addEventListener('click', async () => {
+    try {
+      const resp = await fetch(`/api/chit/${chitId}`);
+      if (!resp.ok) return;
+      const fullChit = await resp.json();
+      fullChit.archived = !fullChit.archived;
+      await fetch(`/api/chits/${chitId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(fullChit) });
+      close();
+      if (onRefresh) onRefresh();
+    } catch (e) { console.error('Archive toggle failed:', e); }
+  });
+  actionRow.appendChild(archBtn);
+
+  // Delete
+  if (!isRecurring) {
+    const delBtn = document.createElement('button');
+    delBtn.style.cssText = iconBtnStyle + 'background:#fdf5e6;color:#a33;';
+    delBtn.innerHTML = '🗑️ Delete';
+    delBtn.title = 'Delete this chit';
+    delBtn.addEventListener('click', async () => {
+      if (!confirm('Delete this chit?')) return;
+      await fetch(`/api/chits/${chitId}`, { method: 'DELETE' });
+      close();
+      if (onRefresh) onRefresh();
+    });
+    actionRow.appendChild(delBtn);
+  }
+
+  modal.appendChild(actionRow);
+
+  // Open in editor
+  addBtn('Open in editor', '📝', () => {
+    if (typeof storePreviousState === 'function') storePreviousState();
+    window.location.href = `/editor?id=${chitId}`;
+  });
+
+  // Cancel
+  const cancelBtn = document.createElement('button');
+  cancelBtn.style.cssText = btnStyle + 'margin-top:8px;text-align:center;background:#e8dcc8;font-weight:bold;';
+  cancelBtn.textContent = 'Cancel';
+  cancelBtn.onmouseover = function() { this.style.background = '#d4c5a9'; };
+  cancelBtn.onmouseout = function() { this.style.background = '#e8dcc8'; };
+  cancelBtn.addEventListener('click', close);
+  modal.appendChild(cancelBtn);
+
+  overlay.appendChild(modal);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+  document.body.appendChild(overlay);
+  function onKey(e) { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', onKey); } }
+  document.addEventListener('keydown', onKey);
+}
+
+// Backward compat alias
+function showRecurrenceActionModal(chit, onRefresh) { showQuickEditModal(chit, onRefresh); }
+
+/** Add or replace an exception on a recurring chit via PATCH */
+async function _recurrenceAddException(parentId, exception) {
+  try {
+    const resp = await fetch(`/api/chits/${parentId}/recurrence-exceptions`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ exception })
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+  } catch (e) {
+    console.error('Failed to add recurrence exception:', e);
+    alert('Failed to update recurrence instance.');
+  }
+}
+
+/** Remove an exception for a specific date (e.g. un-complete) */
+async function _recurrenceRemoveException(parentId, dateStr) {
+  try {
+    // Fetch current chit, remove the exception, save back
+    const resp = await fetch(`/api/chit/${parentId}`);
+    if (!resp.ok) throw new Error('Chit not found');
+    const chit = await resp.json();
+    const exceptions = (chit.recurrence_exceptions || []).filter(e => e.date !== dateStr);
+    await fetch(`/api/chits/${parentId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...chit, recurrence_exceptions: exceptions })
+    });
+  } catch (e) {
+    console.error('Failed to remove recurrence exception:', e);
+    alert('Failed to update recurrence instance.');
+  }
+}
+
+/** Mark the entire series as Complete */
+async function _recurrenceCompleteSeries(parentId) {
+  try {
+    const resp = await fetch(`/api/chit/${parentId}`);
+    if (!resp.ok) throw new Error('Chit not found');
+    const chit = await resp.json();
+    chit.status = 'Complete';
+    chit.completed_datetime = new Date().toISOString();
+    await fetch(`/api/chits/${parentId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(chit)
+    });
+  } catch (e) {
+    console.error('Failed to complete series:', e);
+    alert('Failed to complete series.');
+  }
+}
+
+/** Break off a single instance into a standalone chit */
+async function _recurrenceBreakOff(parentId, virtualChit, dateStr) {
+  try {
+    // 1. Fetch the full parent chit from the API to get all fields
+    const parentResp = await fetch(`/api/chit/${parentId}`);
+    if (!parentResp.ok) throw new Error('Failed to fetch parent chit');
+    const parentChit = await parentResp.json();
+
+    // 2. Create a new standalone chit as a copy of the parent
+    const newChit = { ...parentChit };
+    newChit.id = crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2);
+    newChit.recurrence_rule = null;
+    newChit.recurrence_exceptions = null;
+    newChit.recurrence = null;
+    newChit.recurrence_id = null;
+
+    // Use the virtual instance's dates (the specific occurrence)
+    if (virtualChit.start_datetime) newChit.start_datetime = virtualChit.start_datetime;
+    if (virtualChit.end_datetime) newChit.end_datetime = virtualChit.end_datetime;
+    if (virtualChit.due_datetime) newChit.due_datetime = virtualChit.due_datetime;
+
+    const createResp = await fetch('/api/chits', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newChit)
+    });
+    if (!createResp.ok) throw new Error('Failed to create broken-off chit');
+
+    // 3. Add exception to parent so this date is skipped
+    await _recurrenceAddException(parentId, { date: dateStr, broken_off: true });
+
+    // 4. Open the new chit in the editor
+    if (typeof storePreviousState === 'function') storePreviousState();
+    window.location.href = `/editor?id=${newChit.id}`;
+  } catch (e) {
+    console.error('Failed to break off instance:', e);
+    alert('Failed to break off instance.');
+  }
 }
 
 

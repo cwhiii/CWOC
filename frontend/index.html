@@ -33,16 +33,13 @@
 
             <!-- 1. Create -->
             <div class="sidebar-section" id="section-create">
-                <button
-                    class="create-chit action-button"
-                    onclick="window.location.href='/frontend/editor.html'"
-                >
+                <button class="create-chit action-button" onclick="window.location.href='/frontend/editor.html'">
                     <img src="/static/create_new.png" alt="" />
                     Create Chit <span class="hotkey-hint">K</span>
                 </button>
             </div>
 
-            <!-- 2. Order -->
+            <!-- 2. Order (always visible) -->
             <div class="sidebar-section" id="section-order">
                 <label class="sidebar-section-label">Order <span class="hotkey-hint">O</span></label>
                 <div id="order-controls">
@@ -60,7 +57,7 @@
                 </div>
             </div>
 
-            <!-- 3. Period (calendar views) -->
+            <!-- 3. Period (always visible) -->
             <div class="sidebar-section" id="section-period">
                 <label class="sidebar-section-label">Period <span class="hotkey-hint">.</span></label>
                 <select id="period-select" onchange="changePeriod()">
@@ -73,78 +70,93 @@
                 </select>
             </div>
 
-            <!-- 4. Filters -->
+            <!-- 4. Filters — each sub-section individually collapsible -->
             <div class="sidebar-section" id="section-filters">
                 <label class="sidebar-section-label">Filters <span class="hotkey-hint">F</span></label>
 
-                <!-- Search -->
+                <!-- Words (always visible) -->
                 <div class="filter-group" id="filter-words">
                     <label class="filter-label">Search <span class="hotkey-hint">W</span></label>
-                    <input
-                        type="text"
-                        id="search"
-                        placeholder="Filter Chits..."
-                        onkeyup="searchChits()"
-                    />
+                    <input type="text" id="search" placeholder="Filter Chits..." onkeyup="searchChits()" />
                 </div>
 
-                <!-- Status multi-select -->
+                <!-- Status -->
                 <div class="filter-group" id="filter-status">
-                    <label class="filter-label">Status <span class="hotkey-hint">S</span></label>
-                    <div class="multi-select" id="status-multi">
-                        <label><input type="checkbox" value="" data-filter="status" onchange="onFilterChange()" checked /> — Any</label>
-                        <label><input type="checkbox" value="ToDo" data-filter="status" onchange="onFilterChange()" /> ToDo</label>
-                        <label><input type="checkbox" value="In Progress" data-filter="status" onchange="onFilterChange()" /> In Progress</label>
-                        <label><input type="checkbox" value="Blocked" data-filter="status" onchange="onFilterChange()" /> Blocked</label>
-                        <label><input type="checkbox" value="Complete" data-filter="status" onchange="onFilterChange()" /> Complete</label>
+                    <label class="filter-label" onclick="toggleFilterGroup('filter-status')">
+                        <span class="section-toggle">▶</span> Status <span class="hotkey-hint">S</span>
+                    </label>
+                    <div class="filter-group-body" style="display:none;">
+                        <div class="multi-select" id="status-multi">
+                            <label><input type="checkbox" value="" data-filter="status" data-any="true" onchange="onFilterAnyToggle(this); onFilterChange()" checked /> — Any</label>
+                            <label><input type="checkbox" value="ToDo" data-filter="status" onchange="onFilterSpecificToggle('status'); onFilterChange()" /> ToDo</label>
+                            <label><input type="checkbox" value="In Progress" data-filter="status" onchange="onFilterSpecificToggle('status'); onFilterChange()" /> In Progress</label>
+                            <label><input type="checkbox" value="Blocked" data-filter="status" onchange="onFilterSpecificToggle('status'); onFilterChange()" /> Blocked</label>
+                            <label><input type="checkbox" value="Complete" data-filter="status" onchange="onFilterSpecificToggle('status'); onFilterChange()" /> Complete</label>
+                        </div>
+                        <button class="filter-clear-btn" onclick="clearFilterGroup('status-multi')">Clear</button>
                     </div>
                 </div>
 
-                <!-- Label/Tag multi-select (populated from settings) -->
-                <div class="filter-group" id="filter-label">
-                    <label class="filter-label">Tags <span class="hotkey-hint">T</span></label>
-                    <input type="text" id="tag-filter-search" placeholder="Search tags..." oninput="_filterTagCheckboxes()" style="width:100%;padding:3px 6px;font-size:0.8em;margin-bottom:3px;box-sizing:border-box;border:1px solid #6b4e31;border-radius:3px;font-family:inherit;" />
-                    <div class="multi-select" id="label-multi">
-                        <!-- Populated dynamically from settings tags -->
-                    </div>
-                </div>
-
-                <!-- Priority multi-select -->
+                <!-- Priority -->
                 <div class="filter-group" id="filter-priority">
-                    <label class="filter-label">Priority <span class="hotkey-hint">P</span></label>
-                    <div class="multi-select" id="priority-multi">
-                        <label><input type="checkbox" value="Low" data-filter="priority" onchange="onFilterChange()" /> Low</label>
-                        <label><input type="checkbox" value="Medium" data-filter="priority" onchange="onFilterChange()" /> Medium</label>
-                        <label><input type="checkbox" value="High" data-filter="priority" onchange="onFilterChange()" /> High</label>
+                    <label class="filter-label" onclick="toggleFilterGroup('filter-priority')">
+                        <span class="section-toggle">▶</span> Priority <span class="hotkey-hint">P</span>
+                    </label>
+                    <div class="filter-group-body" style="display:none;">
+                        <div class="multi-select" id="priority-multi">
+                            <label><input type="checkbox" value="" data-filter="priority" data-any="true" onchange="onFilterAnyToggle(this); onFilterChange()" checked /> — Any</label>
+                            <label><input type="checkbox" value="Low" data-filter="priority" onchange="onFilterSpecificToggle('priority'); onFilterChange()" /> Low</label>
+                            <label><input type="checkbox" value="Medium" data-filter="priority" onchange="onFilterSpecificToggle('priority'); onFilterChange()" /> Medium</label>
+                            <label><input type="checkbox" value="High" data-filter="priority" onchange="onFilterSpecificToggle('priority'); onFilterChange()" /> High</label>
+                        </div>
+                        <button class="filter-clear-btn" onclick="clearFilterGroup('priority-multi')">Clear</button>
                     </div>
                 </div>
 
-                <!-- Archived / Pinned toggles -->
+                <!-- Tags -->
+                <div class="filter-group" id="filter-label">
+                    <label class="filter-label" onclick="toggleFilterGroup('filter-label')">
+                        <span class="section-toggle">▶</span> Tags <span class="hotkey-hint">T</span>
+                    </label>
+                    <div class="filter-group-body" style="display:none;">
+                        <input type="text" id="tag-filter-search" placeholder="Search tags..." oninput="_filterTagCheckboxes()" style="width:100%;padding:3px 6px;font-size:0.8em;margin-bottom:3px;box-sizing:border-box;border:1px solid #6b4e31;border-radius:3px;font-family:inherit;" />
+                        <div class="multi-select" id="label-multi"></div>
+                        <button class="filter-clear-btn" onclick="clearFilterGroup('label-multi')">Clear</button>
+                    </div>
+                </div>
+
+                <!-- Show (Archive/Pinned) -->
                 <div class="filter-group" id="filter-archive">
-                    <label class="filter-label">Show <span class="hotkey-hint">A/I</span></label>
-                    <div class="multi-select">
-                        <label><input type="checkbox" id="show-pinned" onchange="onFilterChange()" checked /> <i class="fas fa-bookmark" style="color:#8b5a2b;"></i> Pinned</label>
-                        <label><input type="checkbox" id="show-archived" onchange="onFilterChange()" /> 📦 Archived</label>
-                        <label><input type="checkbox" id="show-unmarked" onchange="onFilterChange()" checked /> 📄 Unmarked</label>
+                    <label class="filter-label" onclick="toggleFilterGroup('filter-archive')">
+                        <span class="section-toggle">▶</span> Show <span class="hotkey-hint">A/I</span>
+                    </label>
+                    <div class="filter-group-body" style="display:none;">
+                        <div class="multi-select">
+                            <label><input type="checkbox" id="show-pinned" onchange="onFilterChange()" checked /> <i class="fas fa-bookmark" style="color:#8b5a2b;"></i> Pinned</label>
+                            <label><input type="checkbox" id="show-archived" onchange="onFilterChange()" /> 📦 Archived</label>
+                            <label><input type="checkbox" id="show-unmarked" onchange="onFilterChange()" checked /> 📄 Unmarked</label>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Clear All Filters (shown only when filters are active) -->
+            <!-- Clear All Filters -->
             <div class="sidebar-section" id="section-clear-filters" style="display:none;">
-                <button class="action-button clear-filters-btn" onclick="_clearAllFilters()">
-                    ✕ Clear All Filters
-                </button>
+                <button class="action-button clear-filters-btn" onclick="_clearAllFilters()">✕ Clear All Filters</button>
             </div>
 
             <!-- Settings -->
             <div class="sidebar-section" id="section-settings">
-                <button
-                    class="action-button"
-                    onclick="window.location.href='/frontend/settings.html'"
-                >
+                <button class="action-button" onclick="window.location.href='/frontend/settings.html'">
                     <img src="/static/settings.png" alt="Settings" />
                     Settings <span class="hotkey-hint">S</span>
+                </button>
+            </div>
+
+            <!-- Help -->
+            <div class="sidebar-section" id="section-help">
+                <button class="action-button" onclick="_toggleReference()" title="Keyboard shortcuts & help">
+                    ❓ Help <span class="hotkey-hint">R</span>
                 </button>
             </div>
         </div>
@@ -242,6 +254,7 @@
                         <div><span class="ref-key">A</span> Archived</div>
                         <div><span class="ref-key">I</span> Pinned</div>
                         <div><span class="ref-key">W</span> Words</div>
+                        <div><span class="ref-key">⌫</span> Clear filter / all</div>
                         <h4>Order <span class="ref-key">O</span></h4>
                         <div><span class="ref-key">T</span> Title</div>
                         <div><span class="ref-key">S</span> Start</div>
@@ -252,10 +265,16 @@
                         <div><span class="ref-key">M</span> Manual (drag)</div>
                         <div><span class="ref-key">↑↓</span> Asc / Desc</div>
                     </div>
+                    <div class="ref-col">
+                        <h4>🖱 Mouse (Calendar)</h4>
+                        <div><span class="ref-key">Double-click</span> Open in editor</div>
+                        <div><span class="ref-key">Shift+click</span> Quick Edit modal</div>
+                        <div><span class="ref-key">Dbl-click empty</span> New chit at time</div>
+                        <div><span class="ref-key">Drag</span> Move / resize</div>
+                    </div>
                 </div>
             </div>
         </div>
-
         <div class="main-content">
             <div class="header">
                 <img

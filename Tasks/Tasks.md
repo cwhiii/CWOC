@@ -81,15 +81,15 @@
 ### Phase R2: Instance Editing + Completion
 **Files:** `frontend/editor.js`, `frontend/main.js`, `frontend/shared.js`, `backend/main.py`
 
-- `[ ]` When opening a recurring chit from calendar, show prompt:
+- `[x]` When opening a recurring chit from calendar, show prompt:
   - "Complete this instance" / "Complete entire series"
   - "Edit this instance" / "Edit all instances" / "Break off from series"
-- `[ ]` "Complete this instance" — add `{ date, completed: true }` to exceptions
-- `[ ]` "Complete entire series" — set parent chit status to Complete
-- `[ ]` "Edit this instance" — add exception with modified fields for that date
-- `[ ]` "Edit all instances" — open parent chit in editor normally
-- `[ ]` "Break off" — create new standalone chit with this instance's data, add date to exceptions as broken_off
-- `[ ]` Delete: "Delete this instance" vs "Delete entire series"
+- `[x]` "Complete this instance" — add `{ date, completed: true }` to exceptions
+- `[x]` "Complete entire series" — set parent chit status to Complete
+- `[x]` "Edit this instance" — add exception with modified fields for that date
+- `[x]` "Edit all instances" — open parent chit in editor normally
+- `[x]` "Break off" — create new standalone chit with this instance's data, add date to exceptions as broken_off
+- `[x]` Delete: "Skip this instance" vs "Delete entire series"
 
 ### Phase R3: Series Management + Reporting
 **Files:** `frontend/main.js`, `frontend/editor.js`

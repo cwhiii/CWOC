@@ -212,7 +212,9 @@ function displayMapInUI(lat, lon, address) {
 }
 
 function initializeChitId() {
-  chitId = new URLSearchParams(window.location.search).get("id");
+  const params = new URLSearchParams(window.location.search);
+  chitId = params.get("id");
+  window._editingInstance = params.get("instance") || null; // YYYY-MM-DD for recurrence instance editing
   if (!chitId) {
     chitId = generateUniqueId(); // Fallback to a new ID
     window.currentChitId = chitId;
@@ -426,6 +428,27 @@ function onDateModeChange() {
   }
 
   if (!_dateModeSuppressUnsaved) setSaveButtonUnsaved();
+}
+
+/** Toggle status to Complete when the Due date Complete checkbox is checked */
+function onDueCompleteToggle() {
+  const cb = document.getElementById('dueComplete');
+  const statusSel = document.getElementById('status');
+  if (!cb || !statusSel) return;
+  if (cb.checked) {
+    statusSel.value = 'Complete';
+  } else {
+    if (statusSel.value === 'Complete') statusSel.value = '';
+  }
+  setSaveButtonUnsaved();
+}
+
+/** Sync the Due Complete checkbox when status dropdown changes */
+function onStatusChange() {
+  const statusSel = document.getElementById('status');
+  const cb = document.getElementById('dueComplete');
+  if (cb) cb.checked = (statusSel && statusSel.value === 'Complete');
+  setSaveButtonUnsaved();
 }
 
 // Determine date mode from chit data
@@ -800,7 +823,7 @@ function renderTags(tags, selectedTags = []) {
     favContainer.innerHTML = "";
     tags.filter(t => t.favorite).forEach(tag => {
       const chip = document.createElement("span");
-      chip.style.cssText = `display:inline-block;padding:2px 8px;border-radius:12px;font-size:0.8em;cursor:pointer;margin:1px;background:${tag.color || getPastelColor(tag.name)};color:#000;${selectedTags.includes(tag.name) ? 'outline:2px solid #8b5a2b;' : ''}`;
+      chip.style.cssText = `display:inline-block;padding:2px 8px;border-radius:4px;font-size:0.8em;cursor:pointer;margin:1px;background:${tag.color || getPastelColor(tag.name)};color:#000;${selectedTags.includes(tag.name) ? 'outline:2px solid #8b5a2b;' : ''}`;
       chip.textContent = "⭐ " + tag.name.split('/').pop();
       chip.title = tag.name;
       chip.addEventListener("click", () => {
@@ -823,7 +846,7 @@ function renderTags(tags, selectedTags = []) {
       const tag = tags.find(t => t.name === path);
       if (!tag) return;
       const chip = document.createElement("span");
-      chip.style.cssText = `display:inline-block;padding:2px 8px;border-radius:12px;font-size:0.8em;cursor:pointer;margin:1px;background:${tag.color || getPastelColor(tag.name)};color:#000;${selectedTags.includes(tag.name) ? 'outline:2px solid #8b5a2b;' : ''}`;
+      chip.style.cssText = `display:inline-block;padding:2px 8px;border-radius:4px;font-size:0.8em;cursor:pointer;margin:1px;background:${tag.color || getPastelColor(tag.name)};color:#000;${selectedTags.includes(tag.name) ? 'outline:2px solid #8b5a2b;' : ''}`;
       chip.textContent = tag.name.split('/').pop();
       chip.title = tag.name;
       chip.addEventListener("click", () => {
@@ -843,7 +866,7 @@ function renderTags(tags, selectedTags = []) {
   selectedTags.filter(t => !isSystemTag(t)).forEach(tagName => {
     const tag = tags.find(t => t.name === tagName) || { name: tagName, color: null };
     const chip = document.createElement("span");
-    chip.style.cssText = `display:inline-flex;align-items:center;gap:4px;background:${tag.color || getPastelColor(tag.name)};color:#000;padding:2px 8px;border-radius:12px;font-size:0.9em;margin:2px;`;
+    chip.style.cssText = `display:inline-flex;align-items:center;gap:4px;background:${tag.color || getPastelColor(tag.name)};color:#000;padding:2px 8px;border-radius:4px;font-size:0.9em;margin:2px;`;
     chip.textContent = tag.name;
 
     const removeBtn = document.createElement("button");
@@ -1151,6 +1174,31 @@ async function buildChitObject() {
     chit.child_chits = window._loadedChildChits || [];
   }
 
+  // Validate: if a date mode is active, require a date + time (or all-day)
+  if (dateMode === 'startend') {
+    const startDate = startDateInput ? startDateInput.value.trim() : '';
+    const startTime = startTimeInput ? startTimeInput.value.trim() : '';
+    if (!startDate) {
+      alert('Start date is required when Start & End is selected.');
+      return null;
+    }
+    if (!isAllDay && !startTime) {
+      alert('Start time is required (or check All Day).');
+      return null;
+    }
+  } else if (dateMode === 'due') {
+    const dueDate = dueDateInput ? dueDateInput.value.trim() : '';
+    const dueTime = dueTimeInput ? dueTimeInput.value.trim() : '';
+    if (!dueDate) {
+      alert('Due date is required when Due is selected.');
+      return null;
+    }
+    if (!isAllDay && !dueTime) {
+      alert('Due time is required (or check All Day).');
+      return null;
+    }
+  }
+
   // Validate minimum required fields
   if (
     !chit.title &&
@@ -1168,7 +1216,72 @@ async function buildChitObject() {
   return chit;
 }
 
+/**
+ * Show a banner at the top of the editor indicating we're editing a single
+ * recurrence instance, not the whole series.
+ */
+function _showInstanceBanner(dateStr) {
+  const existing = document.getElementById('instance-banner');
+  if (existing) existing.remove();
+
+  const banner = document.createElement('div');
+  banner.id = 'instance-banner';
+  banner.style.cssText = 'background:#fff3cd;border:1px solid #ffc107;border-radius:4px;padding:8px 14px;margin:8px 0;font-family:"Courier New",monospace;font-size:0.9em;display:flex;align-items:center;gap:8px;';
+  banner.innerHTML = `<span style="font-size:1.2em;">✏️🔁</span> <span>Editing instance for <strong>${dateStr}</strong>. Changes will only apply to this date.</span>`;
+
+  // Insert at the top of the editor form
+  const form = document.querySelector('.editor-form') || document.querySelector('.editor-content') || document.body;
+  form.insertBefore(banner, form.firstChild);
+}
+
+/**
+ * Save changes as a recurrence exception for a single instance.
+ * Only saves the fields that differ from the parent chit.
+ */
+async function _saveInstanceException(dateStr) {
+  try {
+    const chit = await buildChitObject();
+    if (!chit) return;
+
+    // Build exception object with the modified fields
+    const exception = { date: dateStr };
+
+    // Always save title (user may have changed it)
+    if (chit.title) exception.title = chit.title;
+
+    // Save date/time changes
+    if (chit.start_datetime) exception.start_datetime = chit.start_datetime;
+    if (chit.end_datetime) exception.end_datetime = chit.end_datetime;
+    if (chit.due_datetime) exception.due_datetime = chit.due_datetime;
+
+    // Save note changes
+    if (chit.note) exception.note = chit.note;
+
+    // Save location changes
+    if (chit.location) exception.location = chit.location;
+
+    const resp = await fetch(`/api/chits/${chit.id}/recurrence-exceptions`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ exception })
+    });
+
+    if (!resp.ok) throw new Error(await resp.text());
+
+    markEditorSaved();
+    window.location.href = '/';
+  } catch (error) {
+    console.error('[_saveInstanceException] Error:', error);
+    alert('Failed to save instance changes.');
+  }
+}
+
 async function saveChitData() {
+  // If editing a single recurrence instance, save as exception instead
+  if (window._editingInstance) {
+    return _saveInstanceException(window._editingInstance);
+  }
+
   try {
     const chit = await buildChitObject();
     if (!chit) return;
@@ -2418,6 +2531,9 @@ async function loadChitData(chitId) {
 
     const statusSelect = document.getElementById("status");
     setSelectValue(statusSelect, chit.status);
+    // Sync the Due Complete checkbox
+    const dueCompleteCb = document.getElementById('dueComplete');
+    if (dueCompleteCb) dueCompleteCb.checked = (chit.status === 'Complete');
     console.log(
       `[loadChitData] Set status to: "${statusSelect ? statusSelect.value : "N/A"}"`,
     );
@@ -2609,6 +2725,11 @@ async function loadChitData(chitId) {
     }
 
     markEditorSaved();
+
+    // Show instance editing banner if editing a single recurrence instance
+    if (window._editingInstance && chit.recurrence_rule) {
+      _showInstanceBanner(window._editingInstance);
+    }
   } catch (error) {
     console.error("[loadChitData] Error loading chit:", error);
   }
@@ -2626,7 +2747,7 @@ function applyZoneStates(chit) {
       () => !!(chit.start_datetime || chit.end_datetime || chit.due_datetime || chit.recurrence),
     ],
     [
-      "weightSection", "weightContent",
+      "taskSection", "taskContent",
       () => !!(chit.priority || chit.severity || chit.status),
     ],
     [
@@ -2881,6 +3002,40 @@ document.addEventListener("DOMContentLoaded", function () {
   } else {
     console.log("No valid chitId for loading, initializing new chit");
     resetEditorForNewChit();
+
+    // Pre-populate start/end from URL params (e.g. from calendar empty slot dblclick)
+    const params = new URLSearchParams(window.location.search);
+    const preStart = params.get('start');
+    const preEnd = params.get('end');
+    if (preStart) {
+      _dateModeSuppressUnsaved = true;
+      _setDateMode('startend');
+      _dateModeSuppressUnsaved = false;
+      const s = new Date(preStart);
+      const startDateInput = document.getElementById('start_datetime');
+      const startTimeInput = document.getElementById('start_time');
+      if (startDateInput) {
+        const fp = startDateInput._flatpickr;
+        if (fp) fp.setDate(s, true); else startDateInput.value = preStart.slice(0, 10);
+      }
+      if (startTimeInput) {
+        const pad = (n) => String(n).padStart(2, '0');
+        startTimeInput.value = `${pad(s.getHours())}:${pad(s.getMinutes())}`;
+      }
+      if (preEnd) {
+        const e = new Date(preEnd);
+        const endDateInput = document.getElementById('end_datetime');
+        const endTimeInput = document.getElementById('end_time');
+        if (endDateInput) {
+          const fp = endDateInput._flatpickr;
+          if (fp) fp.setDate(e, true); else endDateInput.value = preEnd.slice(0, 10);
+        }
+        if (endTimeInput) {
+          const pad = (n) => String(n).padStart(2, '0');
+          endTimeInput.value = `${pad(e.getHours())}:${pad(e.getMinutes())}`;
+        }
+      }
+    }
   }
 
   setInterval(checkNotifications, 60000);
@@ -3036,6 +3191,33 @@ function navigateToSettings() {
  * Save the chit and stay on the editor page (don't navigate away).
  */
 async function saveChitAndStay() {
+  // If editing a single recurrence instance, save as exception
+  if (window._editingInstance) {
+    try {
+      const chit = await buildChitObject();
+      if (!chit) return;
+      const exception = { date: window._editingInstance };
+      if (chit.title) exception.title = chit.title;
+      if (chit.start_datetime) exception.start_datetime = chit.start_datetime;
+      if (chit.end_datetime) exception.end_datetime = chit.end_datetime;
+      if (chit.due_datetime) exception.due_datetime = chit.due_datetime;
+      if (chit.note) exception.note = chit.note;
+      if (chit.location) exception.location = chit.location;
+      const resp = await fetch(`/api/chits/${chit.id}/recurrence-exceptions`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ exception })
+      });
+      if (!resp.ok) throw new Error(await resp.text());
+      setSaveButtonSaved();
+      console.log("Saved instance exception & staying on editor.");
+    } catch (error) {
+      console.error("[saveChitAndStay] Instance error:", error);
+      alert("Failed to save instance changes.");
+    }
+    return;
+  }
+
   try {
     const chit = await buildChitObject();
     if (!chit) return; // validation failed inside buildChitObject

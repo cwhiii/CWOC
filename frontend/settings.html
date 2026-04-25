@@ -620,10 +620,18 @@
                     <h2><img src="/static/settings.png" alt="Logo" /> Settings</h2>
                     <div class="header-buttons">
                         <button
+                            onclick="saveSettingsAndStay()"
+                            class="standard-button save-settings"
+                            id="save-stay-btn"
+                        >
+                            💾 Save & Stay
+                        </button>
+                        <button
                             onclick="saveSettings()"
                             class="standard-button save-settings"
+                            id="save-exit-btn"
                         >
-                            💾 Save
+                            💾 Save & Exit
                         </button>
                         <button
                             onclick="cancelSettings()"
@@ -943,6 +951,10 @@
                     <label for="tag-color">Tag Color:</label>
                     <input type="color" id="tag-color" value="#8b5a2b" />
                     <div class="color-options" id="tag-color-options"></div>
+                    <label style="display:flex;align-items:center;gap:6px;margin:8px 0;cursor:pointer;">
+                        <span id="tag-favorite-star" onclick="toggleTagFavorite()" style="font-size:1.4em;cursor:pointer;" title="Favorite this Tag">☆</span>
+                        <span style="font-size:0.9em;">Favorite</span>
+                    </label>
                     <button onclick="saveTag()" class="standard-button">
                         💾 Save
                     </button>

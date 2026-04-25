@@ -12,6 +12,15 @@ let currentSortDir = 'asc';    // 'asc' | 'desc'
 // ── Hotkey submenu state ─────────────────────────────────────────────────────
 let _hotkeyMode = null;  // null | 'PERIOD' | 'FILTER' | 'ORDER' | 'FILTER_STATUS' | 'FILTER_LABEL' | 'FILTER_PRIORITY'
 
+// Global tag objects cache for color lookups
+let _cachedTagObjects = [];
+
+/** Get tag color from cached settings tags, fallback to pastel */
+function _getTagColor(tagName) {
+  const tag = _cachedTagObjects.find(t => t.name === tagName);
+  return (tag && tag.color) ? tag.color : getPastelColor(tagName);
+}
+
 function onSortSelectChange() {
   const sel = document.getElementById('sort-select');
   currentSortField = sel ? sel.value || null : null;
@@ -41,6 +50,47 @@ function _updateSortUI() {
 function onFilterChange() {
   displayChits();
   _updateClearFiltersButton();
+}
+
+/** When "Any" is checked, uncheck all specific options. When unchecked, do nothing special. */
+function onFilterAnyToggle(anyCb) {
+  if (anyCb.checked) {
+    const filterType = anyCb.dataset.filter;
+    const container = anyCb.closest('.multi-select');
+    if (container) {
+      container.querySelectorAll(`input[data-filter="${filterType}"]`).forEach(cb => {
+        if (cb !== anyCb) cb.checked = false;
+      });
+    }
+  }
+}
+
+/** When a specific filter option is checked, uncheck "Any". If all unchecked, re-check "Any". */
+function onFilterSpecificToggle(filterType) {
+  const containerId = filterType === 'status' ? 'status-multi' : 'priority-multi';
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  const anyCb = container.querySelector('input[data-any="true"]');
+  const specificCbs = container.querySelectorAll(`input[data-filter="${filterType}"]:not([data-any])`);
+  const anySpecificChecked = Array.from(specificCbs).some(cb => cb.checked);
+  if (anyCb) {
+    if (anySpecificChecked) {
+      anyCb.checked = false;
+    } else {
+      anyCb.checked = true;
+    }
+  }
+}
+
+/** Clear all checkboxes in a filter group (same as Backspace hotkey) */
+function clearFilterGroup(containerId) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  container.querySelectorAll('input[type="checkbox"]').forEach(cb => { cb.checked = false; });
+  // Re-check "Any" if it exists
+  const anyCb = container.querySelector('input[data-any="true"]');
+  if (anyCb) anyCb.checked = true;
+  onFilterChange();
 }
 
 function _filterTagCheckboxes() {
@@ -247,7 +297,15 @@ function _buildChitHeader(chit, titleHtml) {
   if (chit.modified_datetime) addMeta(`Upd: ${formatDate(new Date(chit.modified_datetime))}`, 'updated');
   if (chit.created_datetime) addMeta(`Cre: ${formatDate(new Date(chit.created_datetime))}`, 'created');
   const tags = (chit.tags || []).filter(t => !isSystemTag(t));
-  if (tags.length > 0) addMeta(tags.join(', '), null);
+  if (tags.length > 0) {
+    tags.forEach(tagName => {
+      const tagColor = _getTagColor(tagName);
+      const chip = document.createElement('span');
+      chip.style.cssText = `display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.75em;margin-left:4px;background:${tagColor};color:#000;`;
+      chip.textContent = tagName.split('/').pop();
+      right.appendChild(chip);
+    });
+  }
 
   row.appendChild(right);
   return row;
@@ -299,14 +357,17 @@ function _enterFilterSub(type) {
   _hideAllPanels();
   if (type === 'status') {
     _hotkeyMode = 'FILTER_STATUS';
+    expandFilterGroup('filter-status');
     _buildFilterSubPanel('panel-status-options', '#status-multi input[data-filter="status"]');
     _showPanel('panel-filter-status');
   } else if (type === 'label') {
     _hotkeyMode = 'FILTER_LABEL';
-    _buildFilterSubPanel('panel-label-options', '#label-multi input[data-filter="label"]');
+    expandFilterGroup('filter-label');
+    _buildTagFilterPanel();
     _showPanel('panel-filter-label');
   } else if (type === 'priority') {
     _hotkeyMode = 'FILTER_PRIORITY';
+    expandFilterGroup('filter-priority');
     _buildFilterSubPanel('panel-priority-options', '#priority-multi input[data-filter="priority"]');
     _showPanel('panel-filter-priority');
   }
@@ -317,17 +378,100 @@ function _buildFilterSubPanel(containerId, checkboxSelector) {
   if (!container) return;
   container.innerHTML = '';
   const boxes = document.querySelectorAll(checkboxSelector);
-  boxes.forEach((cb, i) => {
-    const label = cb.parentElement?.textContent?.trim() || cb.value || '—';
+  // Cap at 9 items (keys 1-9)
+  const maxItems = Math.min(boxes.length, 9);
+  for (let i = 0; i < maxItems; i++) {
+    const cb = boxes[i];
+    const label = cb.value || (cb.dataset.any ? '— Any' : '—');
     const div = document.createElement('div');
     div.className = 'hotkey-panel-option' + (cb.checked ? ' selected' : '');
     div.innerHTML = `<span class="panel-key">${i + 1}</span><span class="panel-label">${label}</span>`;
     div.onclick = () => {
       cb.checked = !cb.checked;
       div.classList.toggle('selected', cb.checked);
+      // Handle Any toggle
+      if (cb.dataset.any) {
+        onFilterAnyToggle(cb);
+      } else {
+        const filterType = cb.dataset.filter;
+        if (filterType) onFilterSpecificToggle(filterType);
+      }
       onFilterChange();
     };
     container.appendChild(div);
+  }
+}
+
+/** Build the tag filter panel with search box and first 9 matching tags */
+function _buildTagFilterPanel() {
+  const container = document.getElementById('panel-label-options');
+  if (!container) return;
+  container.innerHTML = '';
+
+  // Search box
+  const searchInput = document.createElement('input');
+  searchInput.type = 'text';
+  searchInput.placeholder = 'Search tags...';
+  searchInput.style.cssText = 'width:100%;padding:4px 8px;font-size:0.9em;margin-bottom:8px;box-sizing:border-box;border:1px solid #6b4e31;border-radius:3px;font-family:inherit;background:#fffaf0;color:#4a2c2a;';
+  searchInput.id = 'tag-panel-search';
+  container.appendChild(searchInput);
+
+  const listDiv = document.createElement('div');
+  listDiv.id = 'tag-panel-list';
+  container.appendChild(listDiv);
+
+  function renderTagList(query) {
+    listDiv.innerHTML = '';
+    // Get all tag checkboxes from the sidebar
+    const allCbs = document.querySelectorAll('#label-multi input[type="checkbox"]');
+    let shown = 0;
+    allCbs.forEach(cb => {
+      if (shown >= 9) return;
+      // Get the tag name from the badge span (sibling after checkbox)
+      const row = cb.closest('div');
+      const badge = row ? row.querySelector('span[style*="border-radius"]') : null;
+      const tagName = badge ? badge.textContent.trim() : (cb.value || '');
+      const fullPath = cb.value || tagName;
+      if (!tagName) return;
+      if (query && !tagName.toLowerCase().includes(query) && !fullPath.toLowerCase().includes(query)) return;
+
+      shown++;
+      const div = document.createElement('div');
+      div.className = 'hotkey-panel-option' + (cb.checked ? ' selected' : '');
+      div.innerHTML = `<span class="panel-key">${shown}</span><span class="panel-label">${fullPath}</span>`;
+      div.onclick = () => {
+        cb.checked = !cb.checked;
+        div.classList.toggle('selected', cb.checked);
+        onFilterChange();
+      };
+      div.dataset.cbIndex = Array.from(allCbs).indexOf(cb);
+      listDiv.appendChild(div);
+    });
+    if (shown === 0) {
+      listDiv.innerHTML = '<div style="opacity:0.5;font-size:0.85em;padding:4px;">No matching tags</div>';
+    }
+  }
+
+  renderTagList('');
+
+  searchInput.addEventListener('input', () => {
+    renderTagList(searchInput.value.trim().toLowerCase());
+  });
+
+  // Focus the search box
+  setTimeout(() => searchInput.focus(), 50);
+
+  // ESC in search box: blur and exit
+  searchInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      e.stopPropagation();
+      searchInput.blur();
+      _exitHotkeyMode();
+    }
+    // Ignore number keys when typing in search
+    if (/^[0-9]$/.test(e.key)) {
+      e.stopPropagation();
+    }
   });
 }
 
@@ -387,6 +531,7 @@ async function _loadLabelFilters() {
         const settings = await resp.json();
         const tags = settings.tags ? (typeof settings.tags === 'string' ? JSON.parse(settings.tags) : settings.tags) : [];
         tagObjects = tags.map(t => typeof t === 'string' ? { name: t, color: null, favorite: false } : t).filter(t => t.name);
+        _cachedTagObjects = tagObjects;
       }
     } catch (e) { /* ignore */ }
 
@@ -755,6 +900,73 @@ function storePreviousState() {
   localStorage.setItem('cwoc_ui_state', JSON.stringify(state));
 }
 
+/**
+ * Open a chit in the editor. For recurring virtual instances, opens the parent (edit all).
+ */
+function openChitForEdit(chit) {
+  storePreviousState();
+  const id = chit._isVirtual && chit._parentId ? chit._parentId : chit.id;
+  window.location.href = `/editor?id=${id}`;
+}
+
+/**
+ * Attach dblclick (edit) and shift+click (quick edit modal) to a calendar event element.
+ * Works for ALL chits. Recurring chits get extra recurrence options in the modal.
+ */
+function attachCalendarChitEvents(el, chit) {
+  el.addEventListener("dblclick", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    openChitForEdit(chit);
+  });
+  el.addEventListener("click", (e) => {
+    if (e.shiftKey) {
+      e.preventDefault();
+      e.stopPropagation();
+      showQuickEditModal(chit, () => displayChits());
+    }
+  });
+}
+
+/**
+ * Attach dblclick on empty space in a day column to create a new chit at that time.
+ * @param {HTMLElement} col - the day column element (position:relative, 1px = 1min)
+ * @param {Date} day - the date this column represents
+ * @param {number} defaultDurationMin - default event duration in minutes
+ */
+function attachEmptySlotCreate(col, day, defaultDurationMin) {
+  defaultDurationMin = defaultDurationMin || 60;
+  col.addEventListener("dblclick", (e) => {
+    // Only fire if clicking directly on the column, not on a child event
+    if (e.target !== col) return;
+
+    const rect = col.getBoundingClientRect();
+    const scrollTop = col.closest('.week-view')?.scrollTop || 0;
+    const yInCol = e.clientY - rect.top + scrollTop;
+    const totalMin = Math.max(0, Math.min(1439, Math.round(yInCol)));
+
+    // Snap to nearest interval
+    const snap = (typeof _calSnapMinutes !== 'undefined' ? _calSnapMinutes : 15) || 15;
+    const snappedMin = Math.round(totalMin / snap) * snap;
+
+    const startH = Math.floor(snappedMin / 60);
+    const startM = snappedMin % 60;
+    const endMin = snappedMin + defaultDurationMin;
+    const endH = Math.floor(endMin / 60);
+    const endM = endMin % 60;
+
+    const pad = (n) => String(n).padStart(2, '0');
+    const yyyy = day.getFullYear();
+    const mm = pad(day.getMonth() + 1);
+    const dd = pad(day.getDate());
+    const startISO = `${yyyy}-${mm}-${dd}T${pad(startH)}:${pad(startM)}:00`;
+    const endISO = `${yyyy}-${mm}-${dd}T${pad(endH)}:${pad(endM)}:00`;
+
+    storePreviousState();
+    window.location.href = `/editor?start=${encodeURIComponent(startISO)}&end=${encodeURIComponent(endISO)}`;
+  });
+}
+
 function _restoreUIState() {
   try {
     const raw = localStorage.getItem('cwoc_ui_state');
@@ -834,6 +1046,50 @@ function toggleSidebar() {
     localStorage.setItem("sidebarState", "closed");
   }
   window.dispatchEvent(new Event("resize"));
+}
+
+/** Toggle a sidebar section's body visibility */
+function toggleSidebarSection(sectionId) {
+  const section = document.getElementById(sectionId);
+  if (!section) return;
+  const body = section.querySelector('.sidebar-section-body');
+  const toggle = section.querySelector('.section-toggle');
+  if (!body) return;
+  const isHidden = body.style.display === 'none';
+  body.style.display = isHidden ? '' : 'none';
+  if (toggle) toggle.textContent = isHidden ? '▼' : '▶';
+}
+
+/** Expand a sidebar section (used by hotkeys) */
+function expandSidebarSection(sectionId) {
+  const section = document.getElementById(sectionId);
+  if (!section) return;
+  const body = section.querySelector('.sidebar-section-body');
+  const toggle = section.querySelector('.section-toggle');
+  if (body) body.style.display = '';
+  if (toggle) toggle.textContent = '▼';
+}
+
+/** Toggle a filter sub-group's body */
+function toggleFilterGroup(groupId) {
+  const group = document.getElementById(groupId);
+  if (!group) return;
+  const body = group.querySelector('.filter-group-body');
+  const toggle = group.querySelector('.section-toggle');
+  if (!body) return;
+  const isHidden = body.style.display === 'none';
+  body.style.display = isHidden ? '' : 'none';
+  if (toggle) toggle.textContent = isHidden ? '▼' : '▶';
+}
+
+/** Expand a filter sub-group (used by hotkeys) */
+function expandFilterGroup(groupId) {
+  const group = document.getElementById(groupId);
+  if (!group) return;
+  const body = group.querySelector('.filter-group-body');
+  const toggle = group.querySelector('.section-toggle');
+  if (body) body.style.display = '';
+  if (toggle) toggle.textContent = '▼';
 }
 
 function restoreSidebarState() {
@@ -1202,7 +1458,7 @@ function displayWeekView(chitsToDisplay) {
         if (chit.status === "Complete") ev.classList.add("completed-task");
         ev.title = calendarEventTooltip(chit, info);
         ev.innerHTML = calendarEventTitle(chit, info.isDueOnly, info);
-        ev.addEventListener("dblclick", () => { storePreviousState(); window.location.href = `/editor?id=${chit.id}`; });
+        attachCalendarChitEvents(ev, chit);
         cell.appendChild(ev);
       });
       allDayEventsRow.appendChild(cell);
@@ -1255,12 +1511,13 @@ function displayWeekView(chitsToDisplay) {
       ev.title = calendarEventTooltip(chit, info);
       const timeLabel = info.isDueOnly ? `Due: ${formatTime(info.start)}` : `${formatTime(info.start)} - ${formatTime(info.end)}`;
       ev.innerHTML = `${calendarEventTitle(chit, info.isDueOnly, info)}<br>${timeLabel}`;
-      ev.addEventListener("dblclick", () => { storePreviousState(); window.location.href = `/editor?id=${chit.id}`; });
+      attachCalendarChitEvents(ev, chit);
       col.appendChild(ev);
       weekChitsMap.push({ el: ev, chit, info });
     });
 
     weekDayColumns.push(col);
+    attachEmptySlotCreate(col, dd.day);
     scrollGrid.appendChild(col);
   });
 
@@ -1344,10 +1601,7 @@ function displayMonthView(chitsToDisplay) {
         if (chit.status === "Complete") chitElement.classList.add("completed-task");
         chitElement.title = calendarEventTooltip(chit, info);
         chitElement.innerHTML = calendarEventTitle(chit, info.isDueOnly, info);
-        chitElement.addEventListener("dblclick", () => {
-          storePreviousState();
-          window.location.href = `/editor?id=${chit.id}`;
-        });
+        attachCalendarChitEvents(chitElement, chit);
         eventsContainer.appendChild(chitElement);
       });
       monthDay.appendChild(eventsContainer);
@@ -1427,10 +1681,7 @@ function displayItineraryView(chitsToDisplay) {
 
       chitElement.appendChild(timeColumn);
       chitElement.appendChild(detailsColumn);
-      chitElement.addEventListener("dblclick", () => {
-        storePreviousState();
-        window.location.href = `/editor?id=${chit.id}`;
-      });
+      attachCalendarChitEvents(chitElement, chit);
       itineraryView.appendChild(chitElement);
     });
   }
@@ -1477,7 +1728,7 @@ function displayDayView(chitsToDisplay) {
       if (chit.status === "Complete") ev.classList.add("completed-task");
       ev.title = calendarEventTooltip(chit, info);
       ev.innerHTML = calendarEventTitle(chit, info.isDueOnly, info);
-      ev.addEventListener("dblclick", () => { storePreviousState(); window.location.href = `/editor?id=${chit.id}`; });
+      attachCalendarChitEvents(ev, chit);
       allDayRow.appendChild(ev);
     });
     wrapper.appendChild(allDayRow);
@@ -1535,12 +1786,13 @@ function displayDayView(chitsToDisplay) {
     if (chit.status === "Complete") el.classList.add("completed-task");
     const timeLabel = info.isDueOnly ? `Due: ${formatTime(info.start)}` : `${formatTime(info.start)} - ${formatTime(info.end)}`;
     el.innerHTML = `${calendarEventTitle(chit, info.isDueOnly, info)}<br>${timeLabel}`;
-    el.addEventListener("dblclick", () => { storePreviousState(); window.location.href = `/editor?id=${chit.id}`; });
+    attachCalendarChitEvents(el, chit);
     eventsContainer.appendChild(el);
     dayChitsMap.push({ el, chit, info });
   });
 
   dayView.appendChild(eventsContainer);
+  attachEmptySlotCreate(eventsContainer, day);
   wrapper.appendChild(dayView);
   chitList.appendChild(wrapper);
 
@@ -2048,7 +2300,7 @@ function displaySevenDayView(chitsToDisplay) {
         if (chit.status === "Complete") ev.classList.add("completed-task");
         ev.title = calendarEventTooltip(chit, info);
         ev.innerHTML = calendarEventTitle(chit, info.isDueOnly, info);
-        ev.addEventListener("dblclick", () => { storePreviousState(); window.location.href = `/editor?id=${chit.id}`; });
+        attachCalendarChitEvents(ev, chit);
         cell.appendChild(ev);
       });
       allDayEventsRow.appendChild(cell);
@@ -2099,12 +2351,13 @@ function displaySevenDayView(chitsToDisplay) {
       ev.title = calendarEventTooltip(chit, info);
       const timeLabel = info.isDueOnly ? `Due: ${formatTime(info.start)}` : `${formatTime(info.start)} - ${formatTime(info.end)}`;
       ev.innerHTML = `${calendarEventTitle(chit, info.isDueOnly, info)}<br>${timeLabel}`;
-      ev.addEventListener("dblclick", () => { storePreviousState(); window.location.href = `/editor?id=${chit.id}`; });
+      attachCalendarChitEvents(ev, chit);
       col.appendChild(ev);
       sdChitsMap.push({ el: ev, chit, info });
     });
 
     sdDayColumns.push(col);
+    attachEmptySlotCreate(col, dd.day);
     scrollGrid.appendChild(col);
   });
 
@@ -2126,7 +2379,8 @@ function displayProjectsView(chitsToDisplay) {
   const chitList = document.getElementById("chit-list");
   chitList.innerHTML = "";
 
-  const projects = chitsToDisplay.filter((c) => c.is_project_master);
+  // Use all chits (not filtered) to find project masters — filters shouldn't hide projects
+  const projects = chits.filter((c) => c.is_project_master && !c.deleted && !c.archived);
 
   if (projects.length === 0) {
     chitList.innerHTML = "<p>No projects found. Create a chit and enable Project Master in the Projects zone.</p>";
@@ -2506,6 +2760,15 @@ document.addEventListener("DOMContentLoaded", function () {
 
   _loadLabelFilters();
   _updateSortUI();
+
+  // ESC in sidebar tag search box blurs it and clears search
+  const tagSearchInput = document.getElementById('tag-filter-search');
+  if (tagSearchInput) {
+    tagSearchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { e.stopPropagation(); tagSearchInput.blur(); tagSearchInput.value = ''; _filterTagCheckboxes(); }
+    });
+  }
+
   fetchChits();
   updateDateRange();
   restoreSidebarState();
@@ -2647,6 +2910,12 @@ document.addEventListener("DOMContentLoaded", function () {
     // ── FILTER submenu (after 'F') ──
     if (_hotkeyMode === 'FILTER') {
       e.preventDefault();
+      // Backspace/Delete: clear ALL filters
+      if (key === 'Backspace' || key === 'Delete') {
+        _clearAllFilters();
+        _exitHotkeyMode();
+        return;
+      }
       if (keyLower === 's') {
         _enterFilterSub('status');
       } else if (keyLower === 't') {
@@ -2665,11 +2934,31 @@ document.addEventListener("DOMContentLoaded", function () {
 
     // ── Inside a multi-select filter (number keys toggle, Enter/letter confirms) ──
     if (_hotkeyMode === 'FILTER_STATUS' || _hotkeyMode === 'FILTER_LABEL' || _hotkeyMode === 'FILTER_PRIORITY') {
+      // Skip if tag search box is focused (let user type)
+      if (_hotkeyMode === 'FILTER_LABEL' && document.activeElement?.id === 'tag-panel-search') return;
+
       const containerId = _hotkeyMode === 'FILTER_STATUS' ? 'status-multi'
         : _hotkeyMode === 'FILTER_LABEL' ? 'label-multi' : 'priority-multi';
       const panelId = _hotkeyMode === 'FILTER_STATUS' ? 'panel-status-options'
         : _hotkeyMode === 'FILTER_LABEL' ? 'panel-label-options' : 'panel-priority-options';
       const boxes = document.querySelectorAll(`#${containerId} input[type="checkbox"]`);
+
+      // Backspace/Delete: clear this filter
+      if (key === 'Backspace' || key === 'Delete') {
+        e.preventDefault();
+        boxes.forEach(cb => { cb.checked = false; });
+        const anyCb = document.querySelector(`#${containerId} input[data-any="true"]`);
+        if (anyCb) anyCb.checked = true;
+        onFilterChange();
+        // Refresh tag panel if in label mode
+        if (_hotkeyMode === 'FILTER_LABEL') {
+          _buildTagFilterPanel();
+        } else {
+          const panelOptions = document.querySelectorAll(`#${panelId} .hotkey-panel-option`);
+          panelOptions.forEach(opt => opt.classList.remove('selected'));
+        }
+        return;
+      }
 
       if (key === 'Enter') {
         e.preventDefault();
@@ -2678,17 +2967,33 @@ document.addEventListener("DOMContentLoaded", function () {
         return;
       }
 
-      // Number keys toggle checkboxes (1-indexed)
+      // Number keys toggle (1-9)
       const num = parseInt(key);
-      if (num >= 1 && num <= boxes.length) {
+      if (num >= 1 && num <= 9) {
         e.preventDefault();
-        const cb = boxes[num - 1];
-        cb.checked = !cb.checked;
-        onFilterChange();
-        // Update panel visual
-        const panelOptions = document.querySelectorAll(`#${panelId} .hotkey-panel-option`);
-        if (panelOptions[num - 1]) {
-          panelOptions[num - 1].classList.toggle('selected', cb.checked);
+        if (_hotkeyMode === 'FILTER_LABEL') {
+          // Use the visible tag panel list items
+          const panelItems = document.querySelectorAll('#tag-panel-list .hotkey-panel-option');
+          if (num <= panelItems.length) {
+            panelItems[num - 1].click();
+          }
+        } else {
+          if (num <= boxes.length) {
+            const cb = boxes[num - 1];
+            cb.checked = !cb.checked;
+            // Handle Any toggle
+            if (cb.dataset.any) {
+              onFilterAnyToggle(cb);
+            } else {
+              const filterType = cb.dataset.filter;
+              if (filterType) onFilterSpecificToggle(filterType);
+            }
+            onFilterChange();
+            const panelOptions = document.querySelectorAll(`#${panelId} .hotkey-panel-option`);
+            if (panelOptions[num - 1]) {
+              panelOptions[num - 1].classList.toggle('selected', cb.checked);
+            }
+          }
         }
         return;
       }
@@ -2742,6 +3047,7 @@ document.addEventListener("DOMContentLoaded", function () {
       e.preventDefault();
       if (currentTab === 'Calendar') {
         _hotkeyMode = 'PERIOD';
+        expandSidebarSection('section-period');
         _showPanel('panel-period');
       }
       return;
@@ -2750,6 +3056,7 @@ document.addEventListener("DOMContentLoaded", function () {
     if (keyLower === 'f') {
       e.preventDefault();
       _hotkeyMode = 'FILTER';
+      expandSidebarSection('section-filters');
       _showPanel('panel-filter');
       return;
     }
@@ -2757,6 +3064,7 @@ document.addEventListener("DOMContentLoaded", function () {
     if (keyLower === 'o') {
       e.preventDefault();
       _hotkeyMode = 'ORDER';
+      expandSidebarSection('section-order');
       _showPanel('panel-order');
       return;
     }

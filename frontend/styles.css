@@ -23,11 +23,25 @@
     background-color: #e0d4b5;
     border-right: 1px solid #6b4e31;
     padding: 20px;
-    padding-top: 80px;
+    padding-top: 2.5em;
     transition: left 0.3s ease;
     z-index: 999;
     overflow-y: auto;
     overflow-x: hidden;
+}
+.sidebar::-webkit-scrollbar {
+    width: 6px;
+    -webkit-appearance: none;
+}
+.sidebar::-webkit-scrollbar-track {
+    background: rgba(139, 90, 43, 0.08);
+}
+.sidebar::-webkit-scrollbar-thumb {
+    background: rgba(139, 90, 43, 0.3);
+    border-radius: 3px;
+}
+.sidebar::-webkit-scrollbar-thumb:hover {
+    background: rgba(139, 90, 43, 0.5);
 }
 
 .sidebar.active {
@@ -654,6 +668,20 @@ button.delete:hover {
     max-width: 100%;
     overflow-wrap: break-word;
 }
+.notes-view .note-content h1,
+.notes-view .note-content h2,
+.notes-view .note-content h3,
+.notes-view .note-content h4,
+.notes-view .note-content h5,
+.notes-view .note-content h6 {
+    background-color: transparent;
+    padding: 0;
+    margin: 0.4em 0 0.2em 0;
+    height: auto;
+    width: auto;
+    display: block;
+    font-size: revert;
+}
 
 .completed-task {
     opacity: 0.5;
@@ -763,13 +791,27 @@ button.delete:hover {
 }
 
 .sidebar-section-label {
-    display: block;
+    display: flex;
+    align-items: center;
+    gap: 4px;
     font-size: 0.85em;
     font-weight: bold;
     margin-bottom: 4px;
     opacity: 0.8;
     color: #4a3728;
+    cursor: pointer;
+    user-select: none;
+}
+
+.section-toggle {
+    font-size: 0.7em;
+    width: 12px;
     text-align: center;
+    flex-shrink: 0;
+}
+
+.sidebar-section-body {
+    /* collapsible content */
 }
 
 .sidebar-section select {
@@ -815,17 +857,41 @@ button.delete:hover {
 }
 
 .filter-label {
-    display: block;
+    display: flex;
+    align-items: center;
+    gap: 4px;
     font-size: 0.8em;
     margin-bottom: 2px;
     opacity: 0.7;
     color: #4a3728;
+    cursor: pointer;
+    user-select: none;
 }
 
 .filter-group input[type="text"] {
     width: 100%;
     padding: 6px;
     font-family: "Courier New", Courier, monospace;
+}
+
+.filter-clear-btn {
+    display: block;
+    width: 100%;
+    margin-top: 4px;
+    padding: 3px 8px;
+    font-size: 0.75em;
+    font-family: "Courier New", Courier, monospace;
+    background: transparent;
+    border: 1px solid rgba(107, 78, 49, 0.3);
+    border-radius: 3px;
+    color: #6b4e31;
+    cursor: pointer;
+    opacity: 0.7;
+}
+.filter-clear-btn:hover {
+    background: rgba(107, 78, 49, 0.1);
+    opacity: 1;
+}
     border: 1px solid #6b4e31;
     background-color: #ffff0;
     border-radius: 3px;
@@ -1220,7 +1286,22 @@ button.delete:hover {
 /* ── Tag filter scrollbar always visible ──────────────────────────────────── */
 #label-multi {
     overflow-y: scroll !important;
-    max-height: 120px;
+    max-height: 200px;
+}
+#label-multi::-webkit-scrollbar {
+    width: 8px;
+    -webkit-appearance: none;
+}
+#label-multi::-webkit-scrollbar-track {
+    background: rgba(139, 90, 43, 0.1);
+    border-radius: 4px;
+}
+#label-multi::-webkit-scrollbar-thumb {
+    background: rgba(139, 90, 43, 0.35);
+    border-radius: 4px;
+}
+#label-multi::-webkit-scrollbar-thumb:hover {
+    background: rgba(139, 90, 43, 0.55);
 }
 
 /* ── Notes drag drop indicator ────────────────────────────────────────────── */

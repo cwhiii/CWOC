@@ -500,6 +500,14 @@ function openTagModal(tag) {
     this.showPicker();
   };
 
+  // Set favorite star
+  const favStar = document.getElementById('tag-favorite-star');
+  if (favStar) {
+    const isFav = tag.dataset.favorite === 'true';
+    favStar.textContent = isFav ? '★' : '☆';
+    favStar.title = isFav ? 'Unfavorite this Tag' : 'Favorite this Tag';
+  }
+
   modal.style.display = "flex";
 }
 
@@ -548,6 +556,8 @@ function saveTag() {
   // Update the tag element
   currentTag.dataset.color = newColor;
   currentTag.style.backgroundColor = newColor;
+  const favStar = document.getElementById('tag-favorite-star');
+  currentTag.dataset.favorite = favStar && favStar.textContent === '★' ? 'true' : 'false';
   // Rebuild inner HTML safely
   currentTag.innerHTML = "";
   const nameNode = document.createTextNode(newName + " ");
@@ -587,6 +597,15 @@ function closeTagModal() {
   itemToDelete = null;
 }
 
+function toggleTagFavorite() {
+  const star = document.getElementById('tag-favorite-star');
+  if (!star) return;
+  const isFav = star.textContent === '★';
+  star.textContent = isFav ? '☆' : '★';
+  star.title = isFav ? 'Favorite this Tag' : 'Unfavorite this Tag';
+  setSaveButtonUnsaved();
+}
+
 function openDeleteModal(event, item) {
   event.stopPropagation();
   itemToDelete = item;
@@ -599,15 +618,28 @@ function closeDuplicateTagModal() {
 }
 
 function saveSettings() {
-  // Delegate to the SettingsManager instance
+  // Save & Exit — save then navigate back
+  if (window.settingsManager) {
+    window.settingsManager.save().then(ok => {
+      if (ok) {
+        const returnUrl = localStorage.getItem('cwoc_settings_return');
+        localStorage.removeItem('cwoc_settings_return');
+        window.location.href = returnUrl || "/";
+      }
+    });
+  }
+}
+
+function saveSettingsAndStay() {
+  // Save & Stay — save without navigating
   if (window.settingsManager) {
     window.settingsManager.save();
   }
 }
 
 function cancelSettings() {
-  const saveBtn = document.querySelector("button.save-settings");
-  const isUnsaved = !saveBtn.disabled;
+  const saveBtn = document.getElementById("save-exit-btn");
+  const isUnsaved = saveBtn && !saveBtn.disabled;
 
   if (isUnsaved) {
     const modal = document.createElement("div");
@@ -821,6 +853,7 @@ class SettingsManager {
       const tagDiv = document.createElement("div");
       tagDiv.className = "tag";
       tagDiv.dataset.color = tag.color || "#8b5a2b";
+      tagDiv.dataset.favorite = tag.favorite ? 'true' : 'false';
       tagDiv.style.backgroundColor = tag.color || "#8b5a2b";
       tagDiv.innerHTML = `${tag.name} <button onclick="openDeleteModal(event, this.parentElement)">✕</button>`;
       tagDiv.onclick = function (e) {
@@ -855,6 +888,7 @@ class SettingsManager {
       ).map((tag) => ({
         name: (tag.childNodes[0]?.textContent || "").trim(),
         color: tag.dataset.color || "#8b5a2b",
+        favorite: tag.dataset.favorite === 'true',
       })).filter((t) => t.name),
       custom_colors: Array.from(document.querySelectorAll(".color-item")).map(
         (item) => ({
@@ -915,25 +949,31 @@ class SettingsManager {
 }
 
 function setSaveButtonSaved() {
-  const saveBtn = document.querySelector(".save-settings");
+  document.querySelectorAll(".save-settings").forEach(btn => {
+    btn.disabled = true;
+    btn.style.opacity = 0.6;
+    btn.style.pointerEvents = "none";
+  });
+  const stayBtn = document.getElementById('save-stay-btn');
+  if (stayBtn) stayBtn.innerHTML = "✅ Saved";
+  const exitBtn = document.getElementById('save-exit-btn');
+  if (exitBtn) exitBtn.innerHTML = "✅ Saved";
   const cancelBtn = document.querySelector(".cancel-settings");
-  saveBtn.innerHTML = "✅ Saved";
-  saveBtn.disabled = true;
-  saveBtn.style.opacity = 0.6;
-  saveBtn.style.pointerEvents = "none";
-
-  cancelBtn.textContent = "Done";
+  if (cancelBtn) cancelBtn.textContent = "Done";
 }
 
 function setSaveButtonUnsaved() {
-  const saveBtn = document.querySelector(".save-settings");
+  document.querySelectorAll(".save-settings").forEach(btn => {
+    btn.disabled = false;
+    btn.style.opacity = 1;
+    btn.style.pointerEvents = "auto";
+  });
+  const stayBtn = document.getElementById('save-stay-btn');
+  if (stayBtn) stayBtn.innerHTML = "💾 Save & Stay";
+  const exitBtn = document.getElementById('save-exit-btn');
+  if (exitBtn) exitBtn.innerHTML = "💾 Save & Exit";
   const cancelBtn = document.querySelector(".cancel-settings");
-  saveBtn.innerHTML = "💾 Save";
-  saveBtn.disabled = false;
-  saveBtn.style.opacity = 1;
-  saveBtn.style.pointerEvents = "auto";
-
-  cancelBtn.textContent = "❌ Cancel";
+  if (cancelBtn) cancelBtn.textContent = "❌ Cancel";
 }
 
 function closeDeleteModal() {
