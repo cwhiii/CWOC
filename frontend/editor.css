@@ -2893,3 +2893,24 @@ button.archive-btn.archived-active {
     display: inline-flex !important;
     flex-shrink: 0;
 }
+
+/* Time dropdown for snap-increment picker */
+.time-dropdown {
+    position: fixed;
+    background: var(--parchment-light, #fff8e1);
+    border: 1px solid var(--border-color, #6b4e31);
+    border-radius: 4px;
+    z-index: 200;
+    max-height: 150px;
+    overflow-y: auto;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    font-family: "Courier New", Courier, monospace;
+    font-size: 0.9em;
+}
+.time-dropdown-option {
+    padding: 5px 12px;
+    cursor: pointer;
+}
+.time-dropdown-option:hover {
+    background: rgba(139, 90, 43, 0.15);
+}

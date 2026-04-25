@@ -150,12 +150,10 @@ Major feature: draggable calendar events, editor date field restructure, snap-to
 ### Phase 2: Calendar Snapping Setting
 **Files:** `frontend/settings.html`, `frontend/settings.js`, `backend/main.py`
 
-- `[ ]` Add "Calendar Snapping" option to settings page
-  - Options: No Snapping, 5, 10, 15, 20, 25, 30, 60 minutes
-  - Default: 15 minutes
-- `[ ]` Add `calendar_snap` field to settings DB schema + Pydantic model
-- `[ ]` Add migration for existing DBs
-- `[ ]` Load snap setting in editor (for time picker dropdown) and dashboard (for drag)
+- `[x]` Add "Calendar Snapping" option to settings page
+- `[x]` Add `calendar_snap` field to settings DB schema + Pydantic model
+- `[x]` Add migration for existing DBs
+- `[x]` Load snap setting in editor (for time picker dropdown) and dashboard (for drag)
 
 ### Phase 3: Calendar Display — Due Date Chits & All-Day Fix
 **Files:** `frontend/main.js`, `frontend/styles.css`

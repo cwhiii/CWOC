@@ -460,6 +460,49 @@ async function _loadSnapSetting() {
   } catch (e) { /* use default */ }
 }
 
+function _showTimeDropdown(inputEl) {
+  document.querySelectorAll('.time-dropdown').forEach(d => d.remove());
+
+  const currentVal = inputEl.value || '12:00';
+  const parts = currentVal.split(':');
+  const h = parseInt(parts[0]) || 12;
+  const m = parseInt(parts[1]) || 0;
+  const baseMinutes = h * 60 + m;
+
+  const dropdown = document.createElement('div');
+  dropdown.className = 'time-dropdown';
+
+  const snap = _snapMinutes || 15;
+  for (let i = 0; i < 5; i++) {
+    const totalMin = baseMinutes + i * snap;
+    const hr = Math.floor(totalMin / 60) % 24;
+    const mn = totalMin % 60;
+    const timeStr = `${String(hr).padStart(2, '0')}:${String(mn).padStart(2, '0')}`;
+
+    const opt = document.createElement('div');
+    opt.className = 'time-dropdown-option';
+    opt.textContent = timeStr;
+    opt.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      inputEl.value = timeStr;
+      dropdown.remove();
+      setSaveButtonUnsaved();
+    });
+    dropdown.appendChild(opt);
+  }
+
+  const rect = inputEl.getBoundingClientRect();
+  dropdown.style.position = 'fixed';
+  dropdown.style.top = (rect.bottom + 2) + 'px';
+  dropdown.style.left = rect.left + 'px';
+  dropdown.style.minWidth = rect.width + 'px';
+  document.body.appendChild(dropdown);
+
+  inputEl.addEventListener('blur', () => {
+    setTimeout(() => dropdown.remove(), 150);
+  }, { once: true });
+}
+
 async function fetchCustomColors() {
   try {
     const response = await fetch("/api/settings/default_user");
@@ -2659,7 +2702,7 @@ document.addEventListener("DOMContentLoaded", function () {
   // Load snap setting (for future calendar drag use)
   _loadSnapSetting();
 
-  // Auto-colon mask for time inputs (HH:MM format)
+  // Auto-colon mask for time inputs (HH:MM format) + snap dropdown
   document.querySelectorAll('.time-input').forEach(input => {
     input.addEventListener('input', () => {
       let v = input.value.replace(/[^0-9]/g, '');
@@ -2667,6 +2710,7 @@ document.addEventListener("DOMContentLoaded", function () {
       if (v.length > 5) v = v.slice(0, 5);
       input.value = v;
     });
+    input.addEventListener('focus', () => _showTimeDropdown(input));
   });
 
   // Set default date mode to None for new chits (suppress unsaved marking)

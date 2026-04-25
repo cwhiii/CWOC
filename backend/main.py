@@ -35,6 +35,7 @@ class Settings(BaseModel):
     custom_colors: Optional[List[str]] = None
     visual_indicators: Optional[Dict[str, str]] = None
     chit_options: Optional[Dict[str, bool]] = None
+    calendar_snap: Optional[str] = "15"
 
 class Chit(BaseModel):
     id: Optional[str] = None
@@ -114,7 +115,8 @@ def init_db():
             tags TEXT,
             custom_colors TEXT,
             visual_indicators TEXT,
-            chit_options TEXT
+            chit_options TEXT,
+            calendar_snap TEXT DEFAULT '15'
         )
         """)
         conn.commit()
@@ -191,11 +193,27 @@ def migrate_add_alerts():
         logger.error(f"Error adding alerts column: {str(e)}")
         raise
 
+def migrate_add_calendar_snap():
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(settings)")
+        columns = [col[1] for col in cursor.fetchall()]
+        if "calendar_snap" not in columns:
+            cursor.execute("ALTER TABLE settings ADD COLUMN calendar_snap TEXT DEFAULT '15'")
+            conn.commit()
+            logger.info("Added calendar_snap column to settings table")
+        conn.close()
+    except Exception as e:
+        logger.error(f"Error adding calendar_snap column: {str(e)}")
+        raise
+
 # Initialize database and run all migrations
 init_db()
 migrate_labels_to_tags()
 migrate_add_all_day()
 migrate_add_alerts()
+migrate_add_calendar_snap()
 
 # Serve all files from /frontend/ (e.g., index.html, settings.html, editor.html)
 app.mount("/frontend", StaticFiles(directory="/app/frontend"), name="frontend")
@@ -515,8 +533,9 @@ def save_settings(settings: Settings):
             """
             INSERT OR REPLACE INTO settings (
                 user_id, time_format, sex, snooze_length, default_filters,
-                alarm_orientation, tags, custom_colors, visual_indicators, chit_options
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                alarm_orientation, tags, custom_colors, visual_indicators, chit_options,
+                calendar_snap
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 settings.user_id,
@@ -529,7 +548,8 @@ def save_settings(settings: Settings):
                 json.dumps([t.dict() for t in settings.tags]) if settings.tags else None,
                 serialize_json_field(settings.custom_colors),
                 serialize_json_field(settings.visual_indicators),
-                serialize_json_field(settings.chit_options)
+                serialize_json_field(settings.chit_options),
+                settings.calendar_snap or "15"
             )
         )
         conn.commit()

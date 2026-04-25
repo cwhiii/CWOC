@@ -780,6 +780,9 @@ class SettingsManager {
     document.getElementById("snooze-length").value =
       this.settings.snooze_length || "5 minutes";
 
+    document.getElementById("calendar-snap").value =
+      this.settings.calendar_snap || "15";
+
     const filterInputs = [
       "calendar",
       "checklists",
@@ -836,6 +839,7 @@ class SettingsManager {
       time_format: document.getElementById("time-format").value,
       sex: document.getElementById("gender-toggle").checked ? "Woman" : "Man",
       snooze_length: document.getElementById("snooze-length").value,
+      calendar_snap: document.getElementById("calendar-snap").value,
       default_filters: Array.from(document.querySelectorAll(".filter-input"))
         .filter((input) => input.value.startsWith("#"))
         .map(
