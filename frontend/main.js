@@ -402,7 +402,7 @@ function _buildFilterSubPanel(containerId, checkboxSelector) {
   }
 }
 
-/** Build the tag filter panel with search box and first 9 matching tags */
+/** Build the tag filter panel with search box, favorites first, colored tags */
 function _buildTagFilterPanel() {
   const container = document.getElementById('panel-label-options');
   if (!container) return;
@@ -420,31 +420,64 @@ function _buildTagFilterPanel() {
   listDiv.id = 'tag-panel-list';
   container.appendChild(listDiv);
 
+  // Get all non-system tags, sorted: favorites first, then alphabetical
+  const allTags = (_cachedTagObjects || []).filter(t => t.name && !isSystemTag(t.name));
+  const sorted = [...allTags].sort((a, b) => {
+    if (a.favorite && !b.favorite) return -1;
+    if (!a.favorite && b.favorite) return 1;
+    return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+  });
+
+  const selectedTags = window._sidebarTagSelection || [];
+
   function renderTagList(query) {
     listDiv.innerHTML = '';
-    // Get all tag checkboxes from the sidebar
-    const allCbs = document.querySelectorAll('#label-multi input[type="checkbox"]');
     let shown = 0;
-    allCbs.forEach(cb => {
+    sorted.forEach(tag => {
       if (shown >= 9) return;
-      // Get the tag name from the badge span (sibling after checkbox)
-      const row = cb.closest('div');
-      const badge = row ? row.querySelector('span[style*="border-radius"]') : null;
-      const tagName = badge ? badge.textContent.trim() : (cb.value || '');
-      const fullPath = cb.value || tagName;
-      if (!tagName) return;
-      if (query && !tagName.toLowerCase().includes(query) && !fullPath.toLowerCase().includes(query)) return;
+      if (query && !tag.name.toLowerCase().includes(query)) return;
 
       shown++;
+      const isSelected = selectedTags.includes(tag.name);
+      const tagColor = tag.color || getPastelColor(tag.name);
+
       const div = document.createElement('div');
-      div.className = 'hotkey-panel-option' + (cb.checked ? ' selected' : '');
-      div.innerHTML = `<span class="panel-key">${shown}</span><span class="panel-label">${fullPath}</span>`;
-      div.onclick = () => {
-        cb.checked = !cb.checked;
-        div.classList.toggle('selected', cb.checked);
+      div.className = 'hotkey-panel-option' + (isSelected ? ' selected' : '');
+      div.style.cssText = 'display:flex;align-items:center;gap:6px;';
+
+      const keySpan = document.createElement('span');
+      keySpan.className = 'panel-key';
+      keySpan.textContent = shown;
+      div.appendChild(keySpan);
+
+      if (tag.favorite) {
+        const star = document.createElement('span');
+        star.textContent = '★';
+        star.style.cssText = 'font-size:0.9em;color:#DAA520;text-shadow:0 0 1px #000;';
+        star.title = 'Favorite';
+        div.appendChild(star);
+      }
+
+      const badge = document.createElement('span');
+      badge.className = 'panel-label';
+      badge.textContent = tag.name;
+      badge.style.cssText = `background:${tagColor};padding:1px 6px;border-radius:4px;color:#3c2f2f;${isSelected ? 'font-weight:bold;outline:2px solid #4a2c2a;' : ''}`;
+      div.appendChild(badge);
+
+      div.addEventListener('click', () => {
+        const idx = selectedTags.indexOf(tag.name);
+        if (idx === -1) {
+          selectedTags.push(tag.name);
+        } else {
+          selectedTags.splice(idx, 1);
+        }
+        // Sync sidebar checkboxes
+        _syncSidebarTagCheckboxes(document.getElementById('label-multi'), _cachedTagObjects);
         onFilterChange();
-      };
-      div.dataset.cbIndex = Array.from(allCbs).indexOf(cb);
+        // Re-render to update visual state
+        renderTagList(searchInput.value.trim().toLowerCase());
+      });
+
       listDiv.appendChild(div);
     });
     if (shown === 0) {
@@ -458,19 +491,25 @@ function _buildTagFilterPanel() {
     renderTagList(searchInput.value.trim().toLowerCase());
   });
 
-  // Focus the search box
   setTimeout(() => searchInput.focus(), 50);
 
-  // ESC in search box: blur and exit
   searchInput.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
       e.stopPropagation();
       searchInput.blur();
       _exitHotkeyMode();
     }
-    // Ignore number keys when typing in search
+    // Number keys: toggle the corresponding tag instead of typing
     if (/^[0-9]$/.test(e.key)) {
+      e.preventDefault();
       e.stopPropagation();
+      const num = parseInt(e.key);
+      if (num >= 1 && num <= 9) {
+        const items = listDiv.querySelectorAll('.hotkey-panel-option');
+        if (num <= items.length) {
+          items[num - 1].click();
+        }
+      }
     }
   });
 }
@@ -1046,6 +1085,8 @@ function toggleSidebar() {
     localStorage.setItem("sidebarState", "closed");
   }
   window.dispatchEvent(new Event("resize"));
+  // Fire again after CSS transition completes (margin-left 0.3s)
+  setTimeout(() => window.dispatchEvent(new Event("resize")), 350);
 }
 
 /** Toggle a sidebar section's body visibility */
@@ -2946,14 +2987,17 @@ document.addEventListener("DOMContentLoaded", function () {
       // Backspace/Delete: clear this filter
       if (key === 'Backspace' || key === 'Delete') {
         e.preventDefault();
-        boxes.forEach(cb => { cb.checked = false; });
-        const anyCb = document.querySelector(`#${containerId} input[data-any="true"]`);
-        if (anyCb) anyCb.checked = true;
-        onFilterChange();
-        // Refresh tag panel if in label mode
         if (_hotkeyMode === 'FILTER_LABEL') {
+          // Clear tag selection
+          if (window._sidebarTagSelection) window._sidebarTagSelection.length = 0;
+          _syncSidebarTagCheckboxes(document.getElementById('label-multi'), _cachedTagObjects);
+          onFilterChange();
           _buildTagFilterPanel();
         } else {
+          boxes.forEach(cb => { cb.checked = false; });
+          const anyCb = document.querySelector(`#${containerId} input[data-any="true"]`);
+          if (anyCb) anyCb.checked = true;
+          onFilterChange();
           const panelOptions = document.querySelectorAll(`#${panelId} .hotkey-panel-option`);
           panelOptions.forEach(opt => opt.classList.remove('selected'));
         }

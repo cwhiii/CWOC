@@ -1227,7 +1227,7 @@ hr {
 
 .tag-grid-row {
     gap: 5px;
-    width: 40em;
+    width: 100%;
     overflow-x: hidden;
 }
 
@@ -1273,16 +1273,26 @@ hr {
     border-radius: 4px;
     padding: 10px;
     background-color: var(--input-bg);
-    min-height: 4em;
+    max-height: 200px;
     overflow-y: auto;
     width: 100%;
     margin-bottom: 0.5em;
-    display: inline-block;
+    box-sizing: border-box;
+}
+.tag-container::-webkit-scrollbar {
+    width: 6px;
+    -webkit-appearance: none;
+}
+.tag-container::-webkit-scrollbar-track {
+    background: rgba(139, 90, 43, 0.08);
+}
+.tag-container::-webkit-scrollbar-thumb {
+    background: rgba(139, 90, 43, 0.3);
+    border-radius: 3px;
 }
 
 .verticalBox {
-    display: inline-block;
-    width: 48%;
+    width: 100%;
 }
 
 .tag-container-Active {

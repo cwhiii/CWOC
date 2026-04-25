@@ -397,6 +397,7 @@ function confirmDelete() {
     }
     closeDeleteModal();
     setSaveButtonUnsaved();
+    _renderSettingsTagTree();
   }
 }
 
@@ -438,7 +439,7 @@ function addTag() {
   const input = document.getElementById("new-tag");
   const tagText = input.value.trim();
   if (tagText) {
-    const existingTags = Array.from(document.querySelectorAll(".tag")).map(
+    const existingTags = Array.from(document.querySelectorAll("#tag-editor-hidden .tag")).map(
       (tag) =>
         tag.textContent
           .substring(0, tag.textContent.lastIndexOf("✕"))
@@ -463,10 +464,11 @@ function addTag() {
       if (e.target !== this && e.target.tagName === "BUTTON") return;
       openTagModal(this);
     };
-    const tagEditor = document.getElementById("tag-editor");
+    const tagEditor = document.getElementById("tag-editor-hidden");
     tagEditor.appendChild(tagDiv);
     input.value = "";
     setSaveButtonUnsaved();
+    _renderSettingsTagTree();
   }
 }
 
@@ -500,11 +502,11 @@ function openTagModal(tag) {
     this.showPicker();
   };
 
-  // Set favorite star
   const favStar = document.getElementById('tag-favorite-star');
   if (favStar) {
     const isFav = tag.dataset.favorite === 'true';
     favStar.textContent = isFav ? '★' : '☆';
+    favStar.style.color = isFav ? '#DAA520' : '#999';
     favStar.title = isFav ? 'Unfavorite this Tag' : 'Favorite this Tag';
   }
 
@@ -512,7 +514,7 @@ function openTagModal(tag) {
 }
 
 function saveTag() {
-  const tagEditor = document.getElementById("tag-editor");
+  const tagEditor = document.getElementById("tag-editor-hidden");
   if (!tagEditor) return;
 
   if (!currentTag) {
@@ -582,6 +584,7 @@ function saveTag() {
 
   closeTagModal();
   setSaveButtonUnsaved();
+  _renderSettingsTagTree();
 }
 
 function deleteTag() {
@@ -589,7 +592,36 @@ function deleteTag() {
     currentTag.remove();
     closeTagModal();
     setSaveButtonUnsaved();
+    _renderSettingsTagTree();
   }
+}
+
+/** Render the tag tree in the settings page using the shared renderTagTree */
+function _renderSettingsTagTree() {
+  const treeContainer = document.getElementById('settings-tag-tree');
+  if (!treeContainer) return;
+
+  // Build tag objects from the hidden tag divs
+  const tagDivs = document.querySelectorAll('#tag-editor-hidden .tag:not(.tag-input-container .tag)');
+  const tags = Array.from(tagDivs).map(div => ({
+    name: (div.childNodes[0]?.textContent || '').trim(),
+    color: div.dataset.color || '#8b5a2b',
+    favorite: div.dataset.favorite === 'true',
+  })).filter(t => t.name);
+
+  if (tags.length === 0) {
+    treeContainer.innerHTML = '<div style="opacity:0.5;font-size:0.85em;padding:4px;">No tags. Use Add Tag above.</div>';
+    return;
+  }
+
+  // Use shared buildTagTree + renderTagTree
+  const tree = buildTagTree(tags);
+  // Render with no selection (settings doesn't have selected tags), click opens edit modal
+  renderTagTree(treeContainer, tree, [], (fullPath, isNowSelected) => {
+    // Find the hidden tag div for this tag and open its modal
+    const tagDiv = Array.from(tagDivs).find(div => (div.childNodes[0]?.textContent || '').trim() === fullPath);
+    if (tagDiv) openTagModal(tagDiv);
+  });
 }
 
 function closeTagModal() {
@@ -602,6 +634,7 @@ function toggleTagFavorite() {
   if (!star) return;
   const isFav = star.textContent === '★';
   star.textContent = isFav ? '☆' : '★';
+  star.style.color = isFav ? '#999' : '#DAA520';
   star.title = isFav ? 'Favorite this Tag' : 'Unfavorite this Tag';
   setSaveButtonUnsaved();
 }
@@ -845,7 +878,7 @@ class SettingsManager {
       );
     }
 
-    const tagEditor = document.getElementById("tag-editor");
+    const tagEditor = document.getElementById("tag-editor-hidden");
     tagEditor
       .querySelectorAll(".tag:not(.tag-input-container .tag)")
       .forEach((tag) => tag.remove());
@@ -862,6 +895,9 @@ class SettingsManager {
       };
       tagEditor.appendChild(tagDiv);
     });
+
+    // Render tag tree view
+    _renderSettingsTagTree();
 
     renderColors(this.settings.custom_colors);
   }
@@ -884,7 +920,7 @@ class SettingsManager {
         ? "Vertical"
         : "Horizontal",
       tags: Array.from(
-        document.querySelectorAll("#tag-editor .tag:not(.tag-input-container .tag)"),
+        document.querySelectorAll("#tag-editor-hidden .tag:not(.tag-input-container .tag)"),
       ).map((tag) => ({
         name: (tag.childNodes[0]?.textContent || "").trim(),
         color: tag.dataset.color || "#8b5a2b",
@@ -990,7 +1026,7 @@ function monitorChanges() {
   });
 
   const observerTargets = [
-    document.getElementById("tag-editor"),
+    document.getElementById("tag-editor-hidden"),
     document.getElementById("color-list"),
     document.getElementById("inactive-zone"),
     document.getElementById("time-format-grid"),

@@ -1097,8 +1097,9 @@ function renderTagTree(container, tree, selectedTags, onToggle, opts) {
       // Favorite star (inline before name)
       if (node.favorite) {
         const star = document.createElement('span');
-        star.textContent = '⭐';
-        star.style.cssText = 'font-size:0.75em;flex-shrink:0;';
+        star.textContent = '★';
+        star.style.cssText = 'font-size:0.85em;flex-shrink:0;color:#DAA520;text-shadow:0 0 1px #000;';
+        star.title = 'Favorite';
         row.appendChild(star);
       }
 

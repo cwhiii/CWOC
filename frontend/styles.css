@@ -24,6 +24,7 @@
     border-right: 1px solid #6b4e31;
     padding: 20px;
     padding-top: 2.5em;
+    padding-bottom: 3em;
     transition: left 0.3s ease;
     z-index: 999;
     overflow-y: auto;

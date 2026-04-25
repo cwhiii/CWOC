@@ -824,7 +824,12 @@ function renderTags(tags, selectedTags = []) {
     tags.filter(t => t.favorite).forEach(tag => {
       const chip = document.createElement("span");
       chip.style.cssText = `display:inline-block;padding:2px 8px;border-radius:4px;font-size:0.8em;cursor:pointer;margin:1px;background:${tag.color || getPastelColor(tag.name)};color:#000;${selectedTags.includes(tag.name) ? 'outline:2px solid #8b5a2b;' : ''}`;
-      chip.textContent = "⭐ " + tag.name.split('/').pop();
+      chip.textContent = "";
+      const star = document.createElement('span');
+      star.textContent = '★';
+      star.style.cssText = 'color:#DAA520;text-shadow:0 0 1px #000;margin-right:2px;';
+      chip.appendChild(star);
+      chip.appendChild(document.createTextNode(tag.name.split('/').pop()));
       chip.title = tag.name;
       chip.addEventListener("click", () => {
         const idx = selectedTags.indexOf(tag.name);

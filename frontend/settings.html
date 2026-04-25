@@ -848,7 +848,10 @@
                                     onkeypress="handleTagInput(event)"
                                 />
                             </div>
-                            <!-- Tags loaded from settings will be injected here by JS -->
+                            <!-- Tree view of tags -->
+                            <div id="settings-tag-tree" style="width:100%;max-height:300px;overflow-y:auto;border:1px solid #8b5a2b;border-radius:4px;padding:8px;background:#fffaf0;box-sizing:border-box;"></div>
+                            <!-- Hidden container for legacy tag divs (used by gatherSettings) -->
+                            <div id="tag-editor-hidden" style="display:none;"></div>
                         </div>
                     </div>
 
@@ -952,7 +955,7 @@
                     <input type="color" id="tag-color" value="#8b5a2b" />
                     <div class="color-options" id="tag-color-options"></div>
                     <label style="display:flex;align-items:center;gap:6px;margin:8px 0;cursor:pointer;">
-                        <span id="tag-favorite-star" onclick="toggleTagFavorite()" style="font-size:1.4em;cursor:pointer;" title="Favorite this Tag">☆</span>
+                        <span id="tag-favorite-star" onclick="toggleTagFavorite()" style="font-size:1.4em;cursor:pointer;color:#999;" title="Favorite this Tag">☆</span>
                         <span style="font-size:0.9em;">Favorite</span>
                     </label>
                     <button onclick="saveTag()" class="standard-button">
@@ -984,6 +987,7 @@
                     <p>Duplicate tag not created</p>
                 </div>
             </div>
+            <script src="/frontend/shared.js"></script>
             <script src="/frontend/settings.js"></script>
         </body>
     </html>
