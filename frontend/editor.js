@@ -479,29 +479,30 @@ let _snapMinutes = 15; // default, loaded from settings
 // ── Recurrence picker ─────────────────────────────────────────────────────────
 function onRecurrenceChange() {
   const sel = document.getElementById('recurrence');
-  const details = document.getElementById('recurrenceDetails');
   const customRow = document.getElementById('recurrenceCustomRow');
   const icon = document.getElementById('recurrenceIcon');
-  const hasValue = sel && sel.value && sel.value !== '';
 
-  // Hide everything when "Does not repeat"
-  if (details) details.style.display = hasValue ? '' : 'none';
-
-  // Custom row only for Custom — force hide interval/freq when not Custom
-  const isCustom = sel.value === 'CUSTOM';
+  const isCustom = sel && sel.value === 'CUSTOM';
   if (customRow) customRow.style.display = isCustom ? '' : 'none';
   const intervalEl = document.getElementById('recurrenceInterval');
   const freqEl = document.getElementById('recurrenceFreq');
   if (intervalEl) intervalEl.style.display = isCustom ? '' : 'none';
   if (freqEl) freqEl.style.display = isCustom ? '' : 'none';
 
-  // Icon
-  if (icon) icon.style.display = hasValue ? '' : 'none';
+  if (icon) icon.style.display = (document.getElementById('repeatEnabled')?.checked) ? '' : 'none';
 
-  // Day checkboxes only in Custom + weeks
   onRecurrenceFreqChange();
-  if (!hasValue) setSaveButtonUnsaved();
-  else setSaveButtonUnsaved();
+  setSaveButtonUnsaved();
+}
+
+/** Toggle repeat options visibility */
+function onRepeatToggle() {
+  const cb = document.getElementById('repeatEnabled');
+  const block = document.getElementById('repeatOptionsBlock');
+  const icon = document.getElementById('recurrenceIcon');
+  if (block) block.style.display = cb && cb.checked ? 'table-row-group' : 'none';
+  if (icon) icon.style.display = cb && cb.checked ? '' : 'none';
+  setSaveButtonUnsaved();
 }
 
 function onRecurrenceFreqChange() {
@@ -529,39 +530,46 @@ function _updateByDayVisibility() { onRecurrenceFreqChange(); }
 function onRecurrenceToggle() { onRecurrenceChange(); }
 
 function _buildRecurrenceRule() {
+  const enabled = document.getElementById('repeatEnabled')?.checked;
+  if (!enabled) return null;
+
   const sel = document.getElementById('recurrence');
-  if (!sel || !sel.value || sel.value === '') return null;
-
+  const freq = sel ? sel.value : 'DAILY';
   const until = document.getElementById('recurrenceUntil')?.value || null;
+  const endsNever = document.getElementById('recurrenceEndsNever')?.checked;
 
-  if (sel.value === 'CUSTOM') {
-    const freq = document.getElementById('recurrenceFreq')?.value || 'WEEKLY';
+  if (freq === 'CUSTOM') {
+    const customFreq = document.getElementById('recurrenceFreq')?.value || 'WEEKLY';
     const interval = parseInt(document.getElementById('recurrenceInterval')?.value) || 1;
     const byDay = [];
-    if (freq === 'WEEKLY') {
+    if (customFreq === 'WEEKLY') {
       document.querySelectorAll('#recurrenceByDay input:checked').forEach(cb => byDay.push(cb.value));
     }
-    const rule = { freq, interval };
+    const rule = { freq: customFreq, interval };
     if (byDay.length > 0) rule.byDay = byDay;
-    if (until) rule.until = until;
+    if (!endsNever && until) rule.until = until;
     return rule;
   }
 
-  // Preset
-  const rule = { freq: sel.value, interval: 1 };
-  if (until) rule.until = until;
+  const rule = { freq, interval: 1 };
+  if (!endsNever && until) rule.until = until;
   return rule;
 }
 
 function _loadRecurrenceRule(rule) {
+  const repeatCb = document.getElementById('repeatEnabled');
   const sel = document.getElementById('recurrence');
-  if (!sel) return;
+  if (!repeatCb || !sel) return;
 
   if (!rule || !rule.freq) {
-    sel.value = '';
-    onRecurrenceChange();
+    repeatCb.checked = false;
+    onRepeatToggle();
     return;
   }
+
+  // Enable repeat
+  repeatCb.checked = true;
+  onRepeatToggle();
 
   // Load until
   const neverCb = document.getElementById('recurrenceEndsNever');
@@ -839,15 +847,11 @@ function renderTags(tags, selectedTags = []) {
   const activeCount = document.getElementById("activeTagsCount");
   const favContainer = document.getElementById("favTags");
   const recentContainer = document.getElementById("mostRecentTags");
-  const topContainer = document.getElementById("mostUsedTags");
 
   if (!treeContainer || !activeContainer) {
     console.warn("Tag zone containers not found");
     return;
   }
-
-  // Hide the "Top" row (not implemented)
-  if (topContainer) topContainer.parentElement.style.display = "none";
 
   if (!tags || tags.length === 0) {
     treeContainer.innerHTML = '<p style="font-size:0.85em;opacity:0.6;">No tags defined. Create tags in Settings.</p>';
@@ -893,7 +897,6 @@ function renderTags(tags, selectedTags = []) {
       });
       favContainer.appendChild(chip);
     });
-    favContainer.parentElement.style.display = tags.some(t => t.favorite) ? "" : "none";
   }
 
   // Recent row
@@ -916,7 +919,6 @@ function renderTags(tags, selectedTags = []) {
       });
       recentContainer.appendChild(chip);
     });
-    recentContainer.parentElement.style.display = recents.length > 0 ? "" : "none";
   }
 
   // Render active tags panel (exclude system tags)
@@ -1145,8 +1147,8 @@ async function buildChitObject() {
   const severitySelect = document.getElementById("severity");
   chit.severity = severitySelect ? severitySelect.value || null : null;
 
-  const recurrenceSelect = document.getElementById("recurrence");
-  chit.recurrence = recurrenceSelect ? recurrenceSelect.value || null : null;
+  const repeatEnabled = document.getElementById("repeatEnabled");
+  chit.recurrence = repeatEnabled && repeatEnabled.checked ? (document.getElementById('recurrence')?.value || 'DAILY') : null;
   chit.recurrence_rule = _buildRecurrenceRule();
   chit.recurrence_exceptions = window._loadedRecurrenceExceptions || null;
 
@@ -3029,8 +3031,8 @@ document.addEventListener("DOMContentLoaded", function () {
   _dateModeSuppressUnsaved = false;
 
   // Ensure recurrence UI is hidden on init
-  const _recDetails = document.getElementById('recurrenceDetails');
-  if (_recDetails) _recDetails.style.display = 'none';
+  const _repeatBlock = document.getElementById('repeatOptionsBlock');
+  if (_repeatBlock) _repeatBlock.style.display = 'none';
   const _recIcon = document.getElementById('recurrenceIcon');
   if (_recIcon) _recIcon.style.display = 'none';
 

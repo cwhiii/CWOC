@@ -1226,9 +1226,12 @@ hr {
 }
 
 .tag-grid-row {
+    display: flex;
+    align-items: center;
     gap: 5px;
     width: 100%;
     overflow-x: hidden;
+    margin-bottom: 2px;
 }
 
 #tagSearchInputClass {
@@ -1242,10 +1245,13 @@ hr {
 }
 
 .tag-grid-items {
-    gap: 5px;
-    padding-bottom: 5px;
-    width: 100%;
-    overflow-x: visible;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+    padding-bottom: 2px;
+    flex: 1;
+    min-width: 0;
+    overflow-x: hidden;
 }
 
 .tag-item {
@@ -1271,13 +1277,18 @@ hr {
 .tag-container {
     border: 1px solid var(--border-color);
     border-radius: 4px;
-    padding: 10px;
+    padding: 8px;
     background-color: var(--input-bg);
     max-height: 200px;
-    overflow-y: auto;
+    overflow-y: scroll;
     width: 100%;
     margin-bottom: 0.5em;
     box-sizing: border-box;
+}
+.tag-container input[type="checkbox"] {
+    flex: 0 0 auto;
+    width: auto;
+    padding: 0;
 }
 .tag-container::-webkit-scrollbar {
     width: 6px;
@@ -1292,16 +1303,28 @@ hr {
 }
 
 .verticalBox {
+    display: flex;
+    gap: 0.5em;
     width: 100%;
+    align-items: flex-start;
+}
+.verticalBox > .tag-container {
+    flex: 1;
+    min-width: 0;
 }
 
 .tag-container-Active {
+    flex: 1;
+    min-width: 0;
     min-height: 4em;
+    max-height: 200px;
     overflow-y: auto;
-    width: 47%;
     margin-bottom: 0.5em;
-    display: inline-block;
-    float: right;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 8px;
+    background-color: var(--input-bg);
+    box-sizing: border-box;
 }
 
 .tag-container-Active h3 {
@@ -2843,9 +2866,25 @@ button.archive-btn.archived-active {
     vertical-align: middle;
     margin-right: 4px;
 }
+.date-mode-label input[type="checkbox"] {
+    vertical-align: middle;
+    margin-right: 4px;
+    flex: 0 0 auto;
+    width: auto;
+    padding: 0;
+}
 .date-mode-fields {
     display: table-cell;
     vertical-align: middle;
+}
+.date-mode-fields input[type="checkbox"] {
+    flex: 0 0 auto;
+    width: auto;
+    padding: 0;
+}
+.date-mode-fields input[type="number"] {
+    flex: 0 0 auto;
+    padding: 4px 6px;
 }
 .date-mode-fields > * {
     display: inline-flex;

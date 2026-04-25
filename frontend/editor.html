@@ -134,32 +134,27 @@
                                     </div>
                                 </div>
 
-                                <!-- None -->
-                                <div class="date-mode-row">
-                                    <label class="date-mode-label">
-                                        <input type="radio" name="dateMode" value="none" id="dateModeNone" onchange="onDateModeChange()" checked />
-                                        None
+                                <!-- Repeat checkbox (inline with radio buttons) -->
+                                <div class="date-mode-row" id="repeatCheckboxRow">
+                                    <label class="date-mode-label" style="cursor:pointer;">
+                                        <input type="checkbox" id="repeatEnabled" onchange="onRepeatToggle()" />
+                                        🔁 Repeat
                                     </label>
                                 </div>
 
-                                <!-- Repeat -->
-                                <div class="date-mode-row" id="alldayRepeatRow">
-                                    <label class="date-mode-label">&nbsp;</label>
-                                    <div class="date-mode-fields" id="recurrenceFields">
-                                        <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">
-                                            <span>🔁</span>
+                                <!-- Repeat options (hidden until checkbox checked) -->
+                                <div id="repeatOptionsBlock" style="display:none;" class="repeat-options-group">
+                                    <div class="date-mode-row">
+                                        <label class="date-mode-label">&nbsp;</label>
+                                        <div class="date-mode-fields" id="recurrenceFields">
                                             <select id="recurrence" class="date-time" style="width:auto;" onchange="onRecurrenceChange()">
-                                                <option value="">Does not repeat</option>
-                                                <option value="DAILY">Daily</option>
+                                                <option value="DAILY" selected>Daily</option>
                                                 <option value="WEEKLY">Weekly</option>
                                                 <option value="MONTHLY">Monthly</option>
                                                 <option value="YEARLY">Yearly</option>
                                                 <option value="CUSTOM">Custom...</option>
                                             </select>
-                                        </div>
-                                        <!-- Everything below hidden when "Does not repeat" -->
-                                        <div id="recurrenceDetails" style="display:none;">
-                                            <!-- Custom: Every N units -->
+                                            <!-- Custom row -->
                                             <div id="recurrenceCustomRow" style="display:none;margin-top:4px;">
                                                 <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">
                                                     <span style="font-size:0.85em;">Every</span>
@@ -173,7 +168,6 @@
                                                         <option value="YEARLY">years</option>
                                                     </select>
                                                 </div>
-                                                <!-- Day-of-week checkboxes (only when Custom + weeks) -->
                                                 <div id="recurrenceByDay" style="display:none;margin-top:4px;gap:4px;flex-wrap:wrap;">
                                                     <label style="font-size:0.85em;"><input type="checkbox" value="SU" /> Su</label>
                                                     <label style="font-size:0.85em;"><input type="checkbox" value="MO" /> Mo</label>
@@ -184,17 +178,28 @@
                                                     <label style="font-size:0.85em;"><input type="checkbox" value="SA" /> Sa</label>
                                                 </div>
                                             </div>
-                                            <!-- Ends -->
-                                            <div style="margin-top:4px;display:flex;align-items:center;gap:4px;">
-                                                <label style="font-size:0.85em;display:inline-flex;align-items:center;gap:4px;cursor:pointer;">
-                                                    <input type="checkbox" id="recurrenceEndsNever" checked onchange="onRecurrenceEndsToggle()" /> Ends never
-                                                </label>
-                                                <span id="recurrenceEndsDateWrap" style="display:none;">
-                                                    <input type="text" id="recurrenceUntil" class="date-time date-input" placeholder="End date" style="width:90px;" />
-                                                </span>
-                                            </div>
                                         </div>
                                     </div>
+                                    <!-- Ends row -->
+                                    <div class="date-mode-row">
+                                        <label class="date-mode-label">&nbsp;</label>
+                                        <div class="date-mode-fields">
+                                            <label style="font-size:0.85em;display:inline-flex;align-items:center;gap:4px;cursor:pointer;">
+                                                <input type="checkbox" id="recurrenceEndsNever" checked onchange="onRecurrenceEndsToggle()" /> Ends never
+                                            </label>
+                                            <span id="recurrenceEndsDateWrap" style="display:none;">
+                                                <input type="text" id="recurrenceUntil" class="date-time date-input" placeholder="End date" style="width:90px;" />
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- None -->
+                                <div class="date-mode-row">
+                                    <label class="date-mode-label">
+                                        <input type="radio" name="dateMode" value="none" id="dateModeNone" onchange="onDateModeChange()" checked />
+                                        None
+                                    </label>
                                 </div>
                             </div>
                         </div>
@@ -364,52 +369,19 @@
                                 </button>
                             </div>
 
-                            <div class="verticalBox">
-                                <div class="tag-container">
-                                    <div class="tag-grid-row">
-                                        <span class="tag-grid-row-label"
-                                            >Top:</span
-                                        >
-                                        <div
-                                            class="tag-grid-items"
-                                            id="mostUsedTags"
-                                        ></div>
-                                    </div>
-                                    <div class="tag-grid-row">
-                                        <span class="tag-grid-row-label"
-                                            >Recent:</span
-                                        >
-                                        <div
-                                            class="tag-grid-items"
-                                            id="mostRecentTags"
-                                        ></div>
-                                    </div>
-                                    <div class="tag-grid-row">
-                                        <span class="tag-grid-row-label"
-                                            >3 Favs:</span
-                                        >
-                                        <div
-                                            class="tag-grid-items"
-                                            id="favTags"
-                                        ></div>
-                                    </div>
-                                </div>
-
-                                <div
-                                    class="tag-container"
-                                    id="tagTreeContainer"
-                                ></div>
+                            <div style="display:flex;gap:3px;flex-wrap:wrap;margin-bottom:4px;" id="favRecentRow">
+                                <span style="font-size:0.8em;font-weight:bold;color:#6b4e31;">Favs:</span>
+                                <span id="favTags" style="display:inline-flex;gap:3px;flex-wrap:wrap;"></span>
+                                <span style="font-size:0.8em;font-weight:bold;color:#6b4e31;margin-left:8px;">Recent:</span>
+                                <span id="mostRecentTags" style="display:inline-flex;gap:3px;flex-wrap:wrap;"></span>
                             </div>
 
-                            <div
-                                class="tag-container-Active"
-                                id="ActiveTagsBox"
-                            >
-                                <h3>Active Tags</h3>
-                                <div
-                                    class="active-tags-list-container"
-                                    id="activeTagsListContainer"
-                                ></div>
+                            <div class="verticalBox">
+                                <div class="tag-container" id="tagTreeContainer"></div>
+                                <div class="tag-container-Active" id="ActiveTagsBox">
+                                    <h3 style="margin:0 0 4px 0;font-size:0.85em;">Active Tags</h3>
+                                    <div class="active-tags-list-container" id="activeTagsListContainer"></div>
+                                </div>
                             </div>
                             <button type="button" class="zone-button" onclick="navigateToSettings()" style="margin-top:8px;font-size:0.85em;padding:4px 10px;cursor:pointer;">Manage Tags</button>
                         </div>

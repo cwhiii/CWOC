@@ -1289,6 +1289,11 @@ button.delete:hover {
     overflow-y: scroll !important;
     max-height: 200px;
 }
+#label-multi input[type="checkbox"] {
+    flex: 0 0 auto;
+    width: auto;
+    padding: 0;
+}
 #label-multi::-webkit-scrollbar {
     width: 8px;
     -webkit-appearance: none;

@@ -1075,7 +1075,7 @@ function renderTagTree(container, tree, selectedTags, onToggle, opts) {
   function renderLevel(nodes, parentEl, depth) {
     nodes.forEach(node => {
       const row = document.createElement('div');
-      row.style.cssText = `display:flex;align-items:center;gap:4px;padding:2px 0;padding-left:${depth * 16}px;cursor:pointer;`;
+      row.style.cssText = `display:flex;align-items:center;justify-content:flex-start;gap:4px;padding:1px 0;padding-left:${depth * 16}px;cursor:pointer;`;
 
       // Create child container first so toggle can reference it
       let childContainer = null;
@@ -1174,37 +1174,56 @@ function isSystemTag(tagName) {
 /** Advance a date by the recurrence frequency and interval */
 
 /**
- * Render all-day events into day cells with multi-day spanning visuals.
- * Continuation days show no title, with flattened left/right edges.
+ * Render all-day events into the all-day row.
+ * Multi-day events span across multiple day columns as a single div.
+ * Uses CSS Grid with columns matching the day count.
  */
 function renderAllDayEventsInCells(dayData, allDayEventsRow) {
-  dayData.forEach(dd => {
-    const cell = document.createElement("div");
-    cell.style.cssText = "flex:1;min-width:0;padding:2px;border-left:1px solid #d3d3d3;overflow:hidden;";
+  const numDays = dayData.length;
+
+  // Create a grid container for spanning events
+  const grid = document.createElement('div');
+  grid.style.cssText = `display:grid;grid-template-columns:repeat(${numDays}, 1fr);gap:0;width:100%;position:relative;`;
+
+  // Collect all unique all-day chits with their day spans
+  const seen = new Map(); // chitId -> { chit, info, startCol, endCol }
+  dayData.forEach((dd, colIdx) => {
     dd.allDay.forEach(({ chit, info }) => {
-      const ev = document.createElement("div");
-      ev.className = "all-day-event";
-      ev.dataset.chitId = chit.id;
-      ev.style.backgroundColor = chitColor(chit);
-      if (chit.status === "Complete") ev.classList.add("completed-task");
-      ev.title = calendarEventTooltip(chit, info);
-      const _evS = new Date(info.start.getFullYear(), info.start.getMonth(), info.start.getDate()).getTime();
-      const _evE = new Date(info.end.getFullYear(), info.end.getMonth(), info.end.getDate()).getTime();
-      const _thisD = new Date(dd.day.getFullYear(), dd.day.getMonth(), dd.day.getDate()).getTime();
-      if (_evS !== _evE && _thisD > _evS) {
-        ev.style.borderTopLeftRadius = '0'; ev.style.borderBottomLeftRadius = '0'; ev.style.marginLeft = '-3px';
-        ev.innerHTML = '&nbsp;';
+      const key = chit.id + (chit._virtualDate || '');
+      if (!seen.has(key)) {
+        seen.set(key, { chit, info, startCol: colIdx, endCol: colIdx });
       } else {
-        ev.innerHTML = calendarEventTitle(chit, info.isDueOnly, info);
+        seen.get(key).endCol = colIdx;
       }
-      if (_evS !== _evE && _thisD < _evE) {
-        ev.style.borderTopRightRadius = '0'; ev.style.borderBottomRightRadius = '0'; ev.style.marginRight = '-3px';
-      }
-      if (typeof attachCalendarChitEvents === 'function') attachCalendarChitEvents(ev, chit);
-      cell.appendChild(ev);
     });
-    allDayEventsRow.appendChild(cell);
   });
+
+  // Create empty cells for the grid background (borders)
+  for (let i = 0; i < numDays; i++) {
+    const cell = document.createElement('div');
+    cell.style.cssText = `grid-column:${i + 1};grid-row:1;border-left:${i > 0 ? '1px solid #d3d3d3' : 'none'};min-height:4px;`;
+    grid.appendChild(cell);
+  }
+
+  // Render each unique event as a single spanning div
+  let row = 2;
+  seen.forEach(({ chit, info, startCol, endCol }) => {
+    const ev = document.createElement('div');
+    ev.className = 'all-day-event';
+    ev.dataset.chitId = chit.id;
+    ev.style.backgroundColor = chitColor(chit);
+    ev.style.gridColumn = `${startCol + 1} / ${endCol + 2}`; // grid is 1-indexed, end is exclusive
+    ev.style.gridRow = `${row}`;
+    ev.style.margin = '1px 2px';
+    if (chit.status === "Complete") ev.classList.add("completed-task");
+    ev.title = calendarEventTooltip(chit, info);
+    ev.innerHTML = calendarEventTitle(chit, info.isDueOnly, info);
+    if (typeof attachCalendarChitEvents === 'function') attachCalendarChitEvents(ev, chit);
+    grid.appendChild(ev);
+    row++;
+  });
+
+  allDayEventsRow.appendChild(grid);
 }
 
 function _advanceRecurrence(current, freq, interval, byDayNums) {
@@ -1643,8 +1662,8 @@ function showQuickEditModal(chit, onRefresh) {
 
     const editInstanceBtn = document.createElement('button');
     editInstanceBtn.style.cssText = recBtnStyle;
-    editInstanceBtn.textContent = '✏️📌';
-    editInstanceBtn.title = 'Edit only this instance (keeps series)';
+    editInstanceBtn.textContent = '✏️1️⃣';
+    editInstanceBtn.title = 'Edit only this one instance (keeps series)';
     editInstanceBtn.onmouseover = function() { this.style.background = '#f0e6d3'; };
     editInstanceBtn.onmouseout = function() { this.style.background = '#fdf5e6'; };
     editInstanceBtn.addEventListener('click', () => {
