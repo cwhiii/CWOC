@@ -112,6 +112,7 @@ function displayWeatherInCompactSection(weatherData, address) {
     console.warn("compactWeatherSection not found");
     return;
   }
+  compactWeatherSection.classList.remove('weather-placeholder');
 
   if (weatherData && weatherData.daily) {
     const today = weatherData.daily;
@@ -780,7 +781,7 @@ function resetEditorForNewChit() {
 
   // Show weather placeholder for new chits (no location/date yet)
   const cws = document.getElementById("compactWeatherSection");
-  if (cws) cws.innerHTML = `<div style="padding:8px;font-family:'Courier New',monospace;color:#8b5a2b;font-size:0.85em;opacity:0.7;">📍 Date &amp; location needed for weather</div>`;
+  if (cws) cws.classList.add('weather-placeholder'); cws.innerHTML = `<div style="padding:8px;font-family:'Courier New',monospace;color:#8b5a2b;font-size:0.85em;opacity:0.7;">📍 Date &amp; location needed for weather</div>`;
 
   console.log("Editor reset completed.");
 }
@@ -2399,7 +2400,7 @@ async function loadChitData(chitId) {
         console.log("Could not fetch weather on load:", err);
       });
     } else if (compactWeatherSection) {
-      compactWeatherSection.innerHTML = `<div style="padding:8px;font-family:'Courier New',monospace;color:#8b5a2b;font-size:0.85em;opacity:0.7;">📍 Date &amp; location needed for weather</div>`;
+      compactWeatherSection.classList.add('weather-placeholder'); compactWeatherSection.innerHTML = `<div style="padding:8px;font-family:'Courier New',monospace;color:#8b5a2b;font-size:0.85em;opacity:0.7;">📍 Date &amp; location needed for weather</div>`;
     }
 
     window.currentChitId = chit.id || chitId;
@@ -2536,7 +2537,7 @@ function searchLocationMap(event) {
 
   if (!hasDate) {
     const cws = document.getElementById("compactWeatherSection");
-    if (cws) cws.innerHTML = `<div style="padding:8px;font-family:'Courier New',monospace;color:#8b5a2b;font-size:0.85em;opacity:0.7;">📍 Date &amp; location needed for weather</div>`;
+    if (cws) cws.classList.add('weather-placeholder'); cws.innerHTML = `<div style="padding:8px;font-family:'Courier New',monospace;color:#8b5a2b;font-size:0.85em;opacity:0.7;">📍 Date &amp; location needed for weather</div>`;
     // Still show the map
     getCoordinates(address).then((coords) => {
       displayMapInUI(coords.lat, coords.lon, address);

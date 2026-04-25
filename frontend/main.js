@@ -29,7 +29,7 @@ function toggleSortDir() {
 function _updateSortUI() {
   const dirBtn = document.getElementById('sort-dir-btn');
   if (!dirBtn) return;
-  if (currentSortField) {
+  if (currentSortField && currentSortField !== 'manual') {
     dirBtn.style.display = '';
     dirBtn.textContent = currentSortDir === 'asc' ? '▲' : '▼';
     dirBtn.title = currentSortDir === 'asc' ? 'Ascending — click to reverse' : 'Descending — click to reverse';
@@ -137,11 +137,12 @@ function _applyMultiSelectFilters(chitList) {
 
 function _applySort(chitList) {
   if (!currentSortField) return chitList;
-  const LAST_ASC = currentSortDir === 'asc' ? Infinity : -Infinity;
-  const LAST_DESC = currentSortDir === 'asc' ? -Infinity : Infinity;
+  if (currentSortField === 'manual') {
+    return applyManualOrder(currentTab, chitList);
+  }
+  const nullLast = currentSortDir === 'asc' ? Infinity : -Infinity;
   return [...chitList].sort((a, b) => {
     let valA, valB;
-    const nullLast = currentSortDir === 'asc' ? Infinity : -Infinity;
     if (currentSortField === 'title') {
       valA = a.title ? a.title.toLowerCase() : null;
       valB = b.title ? b.title.toLowerCase() : null;
@@ -1587,8 +1588,13 @@ function displayChecklistView(chitsToDisplay) {
   const checklistView = document.createElement("div");
   checklistView.className = "checklist-view";
 
+  // Only show chits that have checklist items
+  const checklistChits = chitsToDisplay.filter(c =>
+    Array.isArray(c.checklist) && c.checklist.length > 0
+  );
+
   // Only apply default sort if no global sort is active
-  const sortedChits = currentSortField ? chitsToDisplay : [...chitsToDisplay].sort((a, b) => {
+  const sortedChits = currentSortField ? checklistChits : [...checklistChits].sort((a, b) => {
     const dateA = new Date(
       a.last_edited || a.created_datetime || a.start_datetime || 0,
     );
@@ -1604,30 +1610,17 @@ function displayChecklistView(chitsToDisplay) {
     sortedChits.forEach((chit) => {
       const chitElement = document.createElement("div");
       chitElement.className = "chit-card";
+      chitElement.draggable = true;
+      chitElement.dataset.chitId = chit.id;
       chitElement.style.backgroundColor = chitColor(chit);
       if (chit.status === "Complete") chitElement.classList.add("completed-task");
       if (chit.archived) chitElement.classList.add("archived-chit");
 
       chitElement.appendChild(_buildChitHeader(chit, `<a href="/editor?id=${chit.id}">${chit.title || '(Untitled)'}</a>`));
 
-      if (chit.checklist && Array.isArray(chit.checklist) && chit.checklist.length > 0) {
-        const checklist = document.createElement("ul");
-        checklist.style.cssText = "margin:0.25em 0 0 0;padding:0;list-style:none;";
-        chit.checklist.forEach((item) => {
-          if (item && typeof item === "object" && item.text) {
-            const listItem = document.createElement("li");
-            listItem.style.cssText = `padding-left:${(item.level || 0) * 18 + 4}px;padding-top:2px;padding-bottom:2px;`;
-            const isDone = item.checked === true || item.done === true;
-            listItem.style.textDecoration = isDone ? "line-through" : "";
-            listItem.style.opacity = isDone ? "0.55" : "1";
-            const bullets = ["•", "◦", "▸", "–", "·"];
-            const bullet = bullets[Math.min(item.level || 0, bullets.length - 1)];
-            listItem.textContent = `${bullet} ${item.text}`;
-            checklist.appendChild(listItem);
-          }
-        });
-        chitElement.appendChild(checklist);
-      }
+      // Interactive checklist from shared.js
+      renderInlineChecklist(chitElement, chit, () => fetchChits());
+
       chitElement.addEventListener("dblclick", () => {
         storePreviousState();
         window.location.href = `/editor?id=${chit.id}`;
@@ -1637,6 +1630,7 @@ function displayChecklistView(chitsToDisplay) {
   }
 
   chitList.appendChild(checklistView);
+  enableDragToReorder(checklistView, 'Checklists', () => displayChits());
 }
 
 function displayTasksView(chitsToDisplay) {
@@ -1658,6 +1652,8 @@ function displayTasksView(chitsToDisplay) {
   taskChits.forEach((chit) => {
     const chitElement = document.createElement("div");
     chitElement.className = "chit-card";
+    chitElement.draggable = true;
+    chitElement.dataset.chitId = chit.id;
     if (chit.archived) chitElement.classList.add("archived-chit");
     chitElement.style.backgroundColor = typeof chitColor === 'function' ? chitColor(chit) : '';
     if (chit.status === "Complete") chitElement.classList.add("completed-task");
@@ -1698,6 +1694,7 @@ function displayTasksView(chitsToDisplay) {
     tasksContainer.appendChild(chitElement);
   });
   chitList.appendChild(tasksContainer);
+  enableDragToReorder(tasksContainer, 'Tasks', () => displayChits());
 }
 
 function displayNotesView(chitsToDisplay) {
@@ -1723,6 +1720,8 @@ function displayNotesView(chitsToDisplay) {
     sortedChits.forEach((chit) => {
       const chitElement = document.createElement("div");
       chitElement.className = "chit-card";
+      chitElement.draggable = true;
+      chitElement.dataset.chitId = chit.id;
       chitElement.style.backgroundColor = chitColor(chit);
       if (chit.archived) chitElement.classList.add("archived-chit");
 
@@ -1755,6 +1754,7 @@ function displayNotesView(chitsToDisplay) {
     });
   }
   chitList.appendChild(notesView);
+  enableDragToReorder(notesView, 'Notes', () => displayChits());
 }
 
 /**
@@ -2112,6 +2112,8 @@ function displayAlarmsView(chitsToDisplay) {
   alertChits.forEach((chit) => {
     const card = document.createElement("div");
     card.className = "chit-card";
+    card.draggable = true;
+    card.dataset.chitId = chit.id;
     if (chit.archived) card.classList.add("archived-chit");
     card.style.backgroundColor = chitColor(chit);
 
@@ -2141,6 +2143,7 @@ function displayAlarmsView(chitsToDisplay) {
   });
 
   chitList.appendChild(view);
+  enableDragToReorder(view, 'Alarms', () => displayChits());
 }
 
 function filterChits(tab) {
@@ -2567,7 +2570,7 @@ document.addEventListener("DOMContentLoaded", function () {
     // ── ORDER submenu (after 'O') ──
     if (_hotkeyMode === 'ORDER') {
       e.preventDefault();
-      const orderMap = { t: 'title', s: 'start', d: 'due', u: 'updated', c: 'created', x: 'status' };
+      const orderMap = { t: 'title', s: 'start', d: 'due', u: 'updated', c: 'created', x: 'status', m: 'manual' };
       if (orderMap[keyLower]) {
         _pickSort(orderMap[keyLower]);
         return;

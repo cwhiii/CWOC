@@ -54,6 +54,7 @@
                         <option value="updated">Updated</option>
                         <option value="created">Created</option>
                         <option value="status">Status</option>
+                        <option value="manual">Manual</option>
                     </select>
                     <button id="sort-dir-btn" onclick="toggleSortDir()" title="Toggle sort direction" style="display:none;">▲</button>
                 </div>
@@ -121,8 +122,8 @@
                 <div class="filter-group" id="filter-archive">
                     <label class="filter-label">Show <span class="hotkey-hint">A/I</span></label>
                     <div class="multi-select">
-                        <label><input type="checkbox" id="show-pinned" onchange="onFilterChange()" checked /> 📌 Pinned</label>
-                        <label><input type="checkbox" id="show-archived" onchange="onFilterChange()" /> 🗃️ Archived</label>
+                        <label><input type="checkbox" id="show-pinned" onchange="onFilterChange()" checked /> <i class="fas fa-bookmark" style="color:#8b5a2b;"></i> Pinned</label>
+                        <label><input type="checkbox" id="show-archived" onchange="onFilterChange()" /> 📦 Archived</label>
                         <label><input type="checkbox" id="show-unmarked" onchange="onFilterChange()" checked /> 📄 Unmarked</label>
                     </div>
                 </div>
@@ -200,6 +201,7 @@
             <div class="hotkey-panel-option" onclick="_pickSort('updated')"><span class="panel-key">U</span><span class="panel-label">Updated</span></div>
             <div class="hotkey-panel-option" onclick="_pickSort('created')"><span class="panel-key">C</span><span class="panel-label">Created</span></div>
             <div class="hotkey-panel-option" onclick="_pickSort('status')"><span class="panel-key">X</span><span class="panel-label">Status</span></div>
+            <div class="hotkey-panel-option" onclick="_pickSort('manual')"><span class="panel-key">M</span><span class="panel-label">Manual (drag)</span></div>
             <div class="hotkey-panel-footer">↑↓ for Asc/Desc · ESC to cancel</div>
         </div>
 
@@ -246,6 +248,7 @@
                         <div><span class="ref-key">U</span> Updated</div>
                         <div><span class="ref-key">C</span> Created</div>
                         <div><span class="ref-key">X</span> Status</div>
+                        <div><span class="ref-key">M</span> Manual (drag)</div>
                         <div><span class="ref-key">↑↓</span> Asc / Desc</div>
                     </div>
                 </div>
@@ -289,6 +292,7 @@
                 <!-- Chits will be populated here -->
             </div>
         </div>
+        <script src="/frontend/shared.js"></script>
         <script src="/frontend/main.js"></script>
     </body>
 </html>
