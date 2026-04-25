@@ -36,6 +36,9 @@
                         <i class="fas fa-times"></i> Exit
                     </button>
                 </div>
+                <button id="archivedButton" class="delete archive-btn" onclick="toggleArchived()" title="Toggle Archived State">
+                    📦 Archive
+                </button>
                 <button id="deleteButton" class="delete" onclick="deleteChit()">
                     <i class="fas fa-trash-alt"></i> Delete
                 </button>
@@ -63,15 +66,6 @@
                                     title="Toggle Pinned State"
                                 >
                                     <i class="far fa-bookmark"></i>
-                                </button>
-                                <button
-                                    type="button"
-                                    id="archivedButton"
-                                    class="status-icon-button"
-                                    onclick="toggleArchived()"
-                                    title="Toggle Archived State"
-                                >
-                                    <i class="far fa-box-open"></i>
                                 </button>
                                 <input
                                     type="hidden"
@@ -426,6 +420,7 @@
                                     id="activeTagsListContainer"
                                 ></div>
                             </div>
+                            <button type="button" class="zone-button" onclick="navigateToSettings()" style="margin-top:8px;font-size:0.85em;padding:4px 10px;cursor:pointer;">Manage Tags</button>
                         </div>
                     </div>
 
@@ -726,7 +721,7 @@
                         </div>
                         <div id="colorContent" class="zone-body">
                             <button
-                                onclick="window.open('/frontend/settings.html', '_blank')"
+                                onclick="navigateToSettings()"
                             >
                                 Manage Colors
                             </button>

@@ -282,7 +282,7 @@ function togglePinned() {
       icon.classList.toggle("fas", isNowPinned);
       icon.classList.toggle("far", !isNowPinned);
     }
-    btn.title = isNowPinned ? "Pinned" : "Toggle Pinned State";
+    btn.title = isNowPinned ? "Pinned (click to unpin)" : "Not pinned (click to pin)";
   }
   setSaveButtonUnsaved();
 }
@@ -294,12 +294,9 @@ function toggleArchived() {
   const isNowArchived = input.value !== "true";
   input.value = isNowArchived ? "true" : "false";
   if (btn) {
-    const icon = btn.querySelector("i");
-    if (icon) {
-      icon.classList.toggle("fas", isNowArchived);
-      icon.classList.toggle("far", !isNowArchived);
-    }
-    btn.title = isNowArchived ? "Archived" : "Toggle Archived State";
+    btn.textContent = isNowArchived ? "📦 Archived" : "📦 Archive";
+    btn.classList.toggle("archived-active", isNowArchived);
+    btn.title = isNowArchived ? "Archived (click to unarchive)" : "Not archived (click to archive)";
   }
   setSaveButtonUnsaved();
 }
@@ -2381,8 +2378,8 @@ async function loadChitData(chitId) {
     if (archivedInput) {
       archivedInput.value = chit.archived ? "true" : "false";
       if (archivedButton) {
-        archivedButton.querySelector("i")?.classList.toggle("fas", !!chit.archived);
-        archivedButton.querySelector("i")?.classList.toggle("far", !chit.archived);
+        archivedButton.textContent = chit.archived ? "📦 Archived" : "📦 Archive";
+        archivedButton.classList.toggle("archived-active", !!chit.archived);
       }
       console.log(`[loadChitData] Set archived to: ${chit.archived}`);
     }
@@ -2764,9 +2761,10 @@ document.addEventListener("DOMContentLoaded", function () {
     if (e.key === "Escape") {
       // Don't intercept if a modal is open
       const openModal = document.querySelector(
-        '.modal-overlay[style*="block"], .modal[style*="block"]'
+        '.modal-overlay[style*="block"], .modal[style*="block"], .flatpickr-calendar.open'
       );
       if (openModal) return;
+      e.preventDefault();
       cancelOrExit();
     }
   });
@@ -2834,6 +2832,18 @@ function cancelOrExit() {
     }
   } else {
     window.location.href = "/";
+  }
+}
+
+function navigateToSettings() {
+  // Save return URL so settings can come back here
+  localStorage.setItem('cwoc_settings_return', window.location.href);
+  if (window._editorHasUnsavedChanges) {
+    if (confirm("You have unsaved changes. Leave without saving?")) {
+      window.location.href = "/frontend/settings.html";
+    }
+  } else {
+    window.location.href = "/frontend/settings.html";
   }
 }
 

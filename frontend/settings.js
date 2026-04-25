@@ -624,14 +624,18 @@ function cancelSettings() {
     document.body.appendChild(modal);
 
     document.getElementById("confirm-exit").onclick = () => {
-      window.location.href = "/";
+      const returnUrl = localStorage.getItem('cwoc_settings_return');
+      localStorage.removeItem('cwoc_settings_return');
+      window.location.href = returnUrl || "/";
     };
 
     document.getElementById("stay-here").onclick = () => {
       modal.remove();
     };
   } else {
-    window.location.href = "/";
+    const returnUrl = localStorage.getItem('cwoc_settings_return');
+    localStorage.removeItem('cwoc_settings_return');
+    window.location.href = returnUrl || "/";
   }
 }
 

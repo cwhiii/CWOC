@@ -14,85 +14,55 @@
             href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css"
         />
         <link rel="stylesheet" href="/frontend/styles.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
         <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
         <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     </head>
     <body>
         <div class="sidebar" id="sidebar">
+            <!-- Date nav (stays at top) -->
             <div id="year-week-container">
                 <div id="year-display"></div>
                 <div class="week-nav" id="week-nav">
-                    <button class="action-button" onclick="previousPeriod()">
-                        ◄
-                    </button>
+                    <button class="action-button" onclick="previousPeriod()">◄</button>
                     <span class="week-range" id="week-range"></span>
-                    <button class="action-button" onclick="nextPeriod()">
-                        ►
-                    </button>
+                    <button class="action-button" onclick="nextPeriod()">►</button>
                 </div>
-            </div>
-            <button
-                class="create-chit action-button"
-                onclick="window.location.href='/frontend/editor.html'"
-            >
-                <img src="/static/create_new.png" alt="" />
-                Create Chit
-            </button>
-
-            <!-- Search bar moved to sidebar -->
-            <div class="sidebar-search">
-                <input
-                    type="text"
-                    id="search"
-                    placeholder="Filter Chits..."
-                    onkeyup="searchChits()"
-                />
+                <button class="action-button today-btn" onclick="goToToday()">Today</button>
             </div>
 
-            <div class="status-filter" style="margin-bottom: 10px">
-                <label for="status-filter">Status:</label>
-                <select id="status-filter" onchange="filterByStatus()">
-                    <option value="">Any Status</option>
-                    <option value="ToDo">ToDo</option>
-                    <option value="In Progress">In Progress</option>
-                    <option value="Blocked">Blocked</option>
-                    <option value="Complete">Complete</option>
-                </select>
+            <!-- 1. Create -->
+            <div class="sidebar-section" id="section-create">
+                <button
+                    class="create-chit action-button"
+                    onclick="window.location.href='/frontend/editor.html'"
+                >
+                    <img src="/static/create_new.png" alt="" />
+                    Create Chit <span class="hotkey-hint">K</span>
+                </button>
             </div>
 
-            <!-- Sort controls -->
-            <div id="sort-controls" style="margin-bottom:10px;">
-                <label for="sort-select" style="display:block;margin-bottom:4px;font-size:0.85em;opacity:0.8;">Sort:</label>
-                <div style="display:flex;gap:4px;align-items:center;">
-                    <select id="sort-select" onchange="onSortSelectChange()" style="flex:1;">
+            <!-- 2. Order -->
+            <div class="sidebar-section" id="section-order">
+                <label class="sidebar-section-label">Order <span class="hotkey-hint">O</span></label>
+                <div id="order-controls">
+                    <select id="sort-select" onchange="onSortSelectChange()">
                         <option value="">— None —</option>
                         <option value="title">Title</option>
                         <option value="start">Start Date</option>
                         <option value="due">Due Date</option>
+                        <option value="updated">Updated</option>
+                        <option value="created">Created</option>
+                        <option value="status">Status</option>
                     </select>
-                    <button id="sort-dir-btn" onclick="toggleSortDir()" title="Toggle sort direction" style="padding:2px 8px;font-size:1em;display:none;">▲</button>
+                    <button id="sort-dir-btn" onclick="toggleSortDir()" title="Toggle sort direction" style="display:none;">▲</button>
                 </div>
             </div>
 
-            <!-- Pinned / Archived multi-select filter -->
-            <div style="margin-bottom:10px;">
-                <label style="display:block;margin-bottom:4px;font-size:0.85em;opacity:0.8;">Show:</label>
-                <div style="display:flex;flex-direction:column;gap:3px;font-size:0.9em;">
-                    <label style="display:flex;align-items:center;gap:5px;cursor:pointer;">
-                        <input type="checkbox" id="show-pinned" onchange="onShowFilterChange()" checked /> 📌 Pinned
-                    </label>
-                    <label style="display:flex;align-items:center;gap:5px;cursor:pointer;">
-                        <input type="checkbox" id="show-archived" onchange="onShowFilterChange()" checked /> 🗃️ Archived
-                    </label>
-                    <label style="display:flex;align-items:center;gap:5px;cursor:pointer;">
-                        <input type="checkbox" id="show-unmarked" onchange="onShowFilterChange()" checked /> 📄 Unmarked
-                    </label>
-                </div>
-            </div>
-
-            <div class="view-selector">
-                <label for="view-select">View:</label>
-                <select id="view-select" onchange="changeView()">
+            <!-- 3. Period (calendar views) -->
+            <div class="sidebar-section" id="section-period">
+                <label class="sidebar-section-label">Period <span class="hotkey-hint">.</span></label>
+                <select id="period-select" onchange="changePeriod()">
                     <option value="Itinerary">Itinerary</option>
                     <option value="Day">Day</option>
                     <option value="Week" selected>Week</option>
@@ -100,17 +70,188 @@
                     <option value="Month">Month</option>
                     <option value="Year">Year</option>
                 </select>
+            </div>
 
-                <!-- Settings button with improved styling and spacing -->
+            <!-- 4. Filters -->
+            <div class="sidebar-section" id="section-filters">
+                <label class="sidebar-section-label">Filters <span class="hotkey-hint">F</span></label>
+
+                <!-- Search -->
+                <div class="filter-group" id="filter-words">
+                    <label class="filter-label">Search <span class="hotkey-hint">W</span></label>
+                    <input
+                        type="text"
+                        id="search"
+                        placeholder="Filter Chits..."
+                        onkeyup="searchChits()"
+                    />
+                </div>
+
+                <!-- Status multi-select -->
+                <div class="filter-group" id="filter-status">
+                    <label class="filter-label">Status <span class="hotkey-hint">S</span></label>
+                    <div class="multi-select" id="status-multi">
+                        <label><input type="checkbox" value="" data-filter="status" onchange="onFilterChange()" checked /> — Any</label>
+                        <label><input type="checkbox" value="ToDo" data-filter="status" onchange="onFilterChange()" /> ToDo</label>
+                        <label><input type="checkbox" value="In Progress" data-filter="status" onchange="onFilterChange()" /> In Progress</label>
+                        <label><input type="checkbox" value="Blocked" data-filter="status" onchange="onFilterChange()" /> Blocked</label>
+                        <label><input type="checkbox" value="Complete" data-filter="status" onchange="onFilterChange()" /> Complete</label>
+                    </div>
+                </div>
+
+                <!-- Label/Tag multi-select (populated from settings) -->
+                <div class="filter-group" id="filter-label">
+                    <label class="filter-label">Tags <span class="hotkey-hint">T</span></label>
+                    <div class="multi-select" id="label-multi">
+                        <!-- Populated dynamically from settings tags -->
+                    </div>
+                </div>
+
+                <!-- Priority multi-select -->
+                <div class="filter-group" id="filter-priority">
+                    <label class="filter-label">Priority <span class="hotkey-hint">P</span></label>
+                    <div class="multi-select" id="priority-multi">
+                        <label><input type="checkbox" value="Low" data-filter="priority" onchange="onFilterChange()" /> Low</label>
+                        <label><input type="checkbox" value="Medium" data-filter="priority" onchange="onFilterChange()" /> Medium</label>
+                        <label><input type="checkbox" value="High" data-filter="priority" onchange="onFilterChange()" /> High</label>
+                    </div>
+                </div>
+
+                <!-- Archived / Pinned toggles -->
+                <div class="filter-group" id="filter-archive">
+                    <label class="filter-label">Show <span class="hotkey-hint">A/I</span></label>
+                    <div class="multi-select">
+                        <label><input type="checkbox" id="show-pinned" onchange="onFilterChange()" checked /> 📌 Pinned</label>
+                        <label><input type="checkbox" id="show-archived" onchange="onFilterChange()" /> 🗃️ Archived</label>
+                        <label><input type="checkbox" id="show-unmarked" onchange="onFilterChange()" checked /> 📄 Unmarked</label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Clear All Filters (shown only when filters are active) -->
+            <div class="sidebar-section" id="section-clear-filters" style="display:none;">
+                <button class="action-button clear-filters-btn" onclick="_clearAllFilters()">
+                    ✕ Clear All Filters
+                </button>
+            </div>
+
+            <!-- Settings -->
+            <div class="sidebar-section" id="section-settings">
                 <button
                     class="action-button"
                     onclick="window.location.href='/frontend/settings.html'"
                 >
                     <img src="/static/settings.png" alt="Settings" />
-                    Settings
+                    Settings <span class="hotkey-hint">S</span>
                 </button>
             </div>
         </div>
+
+        <!-- Hotkey overlay (dims everything) -->
+        <div class="hotkey-overlay" id="hotkey-overlay" onclick="_exitHotkeyMode()"></div>
+
+        <!-- Period submenu panel -->
+        <div class="hotkey-panel" id="panel-period">
+            <h3>📅 Period</h3>
+            <div class="hotkey-panel-option" onclick="_pickPeriod('Itinerary')"><span class="panel-key">I</span><span class="panel-label">Itinerary</span></div>
+            <div class="hotkey-panel-option" onclick="_pickPeriod('Day')"><span class="panel-key">D</span><span class="panel-label">Day</span></div>
+            <div class="hotkey-panel-option" onclick="_pickPeriod('Week')"><span class="panel-key">W</span><span class="panel-label">Week</span></div>
+            <div class="hotkey-panel-option" onclick="_pickPeriod('SevenDay')"><span class="panel-key">S</span><span class="panel-label">7 Days</span></div>
+            <div class="hotkey-panel-option" onclick="_pickPeriod('Month')"><span class="panel-key">M</span><span class="panel-label">Month</span></div>
+            <div class="hotkey-panel-option" onclick="_pickPeriod('Year')"><span class="panel-key">Y</span><span class="panel-label">Year</span></div>
+            <div class="hotkey-panel-footer">ESC to cancel</div>
+        </div>
+
+        <!-- Filter submenu panel -->
+        <div class="hotkey-panel" id="panel-filter">
+            <h3>🔍 Filter By</h3>
+            <div class="hotkey-panel-option" onclick="_enterFilterSub('status')"><span class="panel-key">S</span><span class="panel-label">Status</span></div>
+            <div class="hotkey-panel-option" onclick="_enterFilterSub('label')"><span class="panel-key">T</span><span class="panel-label">Tags</span></div>
+            <div class="hotkey-panel-option" onclick="_enterFilterSub('priority')"><span class="panel-key">P</span><span class="panel-label">Priority</span></div>
+            <div class="hotkey-panel-option" onclick="_toggleFilterArchived()"><span class="panel-key">A</span><span class="panel-label">Archived</span></div>
+            <div class="hotkey-panel-option" onclick="_toggleFilterPinned()"><span class="panel-key">I</span><span class="panel-label">Pinned</span></div>
+            <div class="hotkey-panel-option" onclick="_filterFocusSearch()"><span class="panel-key">W</span><span class="panel-label">Search Words</span></div>
+            <div class="hotkey-panel-footer">ESC to cancel</div>
+        </div>
+
+        <!-- Filter sub-panels (status, label, priority) -->
+        <div class="hotkey-panel" id="panel-filter-status">
+            <h3>Status Filter</h3>
+            <div id="panel-status-options"></div>
+            <div class="hotkey-panel-footer">Number keys to toggle · Enter to confirm · ESC to cancel</div>
+        </div>
+        <div class="hotkey-panel" id="panel-filter-label">
+            <h3>Tags Filter</h3>
+            <div id="panel-label-options"></div>
+            <div class="hotkey-panel-footer">Number keys to toggle · Enter to confirm · ESC to cancel</div>
+        </div>
+        <div class="hotkey-panel" id="panel-filter-priority">
+            <h3>Priority Filter</h3>
+            <div id="panel-priority-options"></div>
+            <div class="hotkey-panel-footer">Number keys to toggle · Enter to confirm · ESC to cancel</div>
+        </div>
+
+        <!-- Order submenu panel -->
+        <div class="hotkey-panel" id="panel-order">
+            <h3>📊 Order By</h3>
+            <div class="hotkey-panel-option" onclick="_pickSort('title')"><span class="panel-key">T</span><span class="panel-label">Title</span></div>
+            <div class="hotkey-panel-option" onclick="_pickSort('start')"><span class="panel-key">S</span><span class="panel-label">Start Date</span></div>
+            <div class="hotkey-panel-option" onclick="_pickSort('due')"><span class="panel-key">D</span><span class="panel-label">Due Date</span></div>
+            <div class="hotkey-panel-option" onclick="_pickSort('updated')"><span class="panel-key">U</span><span class="panel-label">Updated</span></div>
+            <div class="hotkey-panel-option" onclick="_pickSort('created')"><span class="panel-key">C</span><span class="panel-label">Created</span></div>
+            <div class="hotkey-panel-option" onclick="_pickSort('status')"><span class="panel-key">X</span><span class="panel-label">Status</span></div>
+            <div class="hotkey-panel-footer">↑↓ for Asc/Desc · ESC to cancel</div>
+        </div>
+
+        <!-- Reference overlay (R) -->
+        <div class="reference-overlay" id="reference-overlay" onclick="if(event.target===this)_closeReference()">
+            <div class="reference-content">
+                <h3>⌨ Hotkey Reference</h3>
+                <div class="ref-columns">
+                    <div class="ref-col">
+                        <h4>Tabs</h4>
+                        <div><span class="ref-key">C</span> Calendar</div>
+                        <div><span class="ref-key">H</span> Checklists</div>
+                        <div><span class="ref-key">A</span> Alerts</div>
+                        <div><span class="ref-key">P</span> Projects</div>
+                        <div><span class="ref-key">T</span> Tasks</div>
+                        <div><span class="ref-key">N</span> Notes</div>
+                        <h4>General</h4>
+                        <div><span class="ref-key">K</span> Create Chit</div>
+                        <div><span class="ref-key">S</span> Settings</div>
+                        <div><span class="ref-key">R</span> This Reference</div>
+                        <div><span class="ref-key">ESC</span> Close / Exit</div>
+                    </div>
+                    <div class="ref-col">
+                        <h4>Period <span class="ref-key">.</span></h4>
+                        <div><span class="ref-key">I</span> Itinerary</div>
+                        <div><span class="ref-key">D</span> Day</div>
+                        <div><span class="ref-key">W</span> Week</div>
+                        <div><span class="ref-key">S</span> 7 Days</div>
+                        <div><span class="ref-key">M</span> Month</div>
+                        <div><span class="ref-key">Y</span> Year</div>
+                    </div>
+                    <div class="ref-col">
+                        <h4>Filter <span class="ref-key">F</span></h4>
+                        <div><span class="ref-key">S</span> Status</div>
+                        <div><span class="ref-key">T</span> Tags</div>
+                        <div><span class="ref-key">P</span> Priority</div>
+                        <div><span class="ref-key">A</span> Archived</div>
+                        <div><span class="ref-key">I</span> Pinned</div>
+                        <div><span class="ref-key">W</span> Words</div>
+                        <h4>Order <span class="ref-key">O</span></h4>
+                        <div><span class="ref-key">T</span> Title</div>
+                        <div><span class="ref-key">S</span> Start</div>
+                        <div><span class="ref-key">D</span> Due</div>
+                        <div><span class="ref-key">U</span> Updated</div>
+                        <div><span class="ref-key">C</span> Created</div>
+                        <div><span class="ref-key">X</span> Status</div>
+                        <div><span class="ref-key">↑↓</span> Asc / Desc</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="main-content">
             <div class="header">
                 <img

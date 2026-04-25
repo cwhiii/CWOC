@@ -316,16 +316,16 @@ This is partially implemented. The backend auto-generates system tags based on s
 - `[ ]` Projects filter doesn't do anything when clicked
 - `[ ]` Tags in the active zone expand to fill space — should be minimum size to wrap text only
 - `[ ]` Active Tags area overflows the Tags zone
-- `[ ]` Notes are all saving to a single line
+- `[x]` Notes are all saving to a single line — **FIXED**: now uses `marked.parse()` for rendering
 - `[ ]` Weather bar transparent background shouldn't apply when color is removed
-- `[ ]` Health Indicators zone: buttons in the main section collapse the whole zone when clicked (called "LITERALLY UNUSABLE GARBAGE" — fix is high priority)
+- `[x]` Health Indicators zone: buttons in the main section collapse the whole zone when clicked — **FIXED**: `toggleZone()` ignores clicks on buttons/inputs
 - `[ ]` Can't save health indicators
 - `[ ]` The unarchived icon is unavailable — use a different icon
-- `[ ]` When switching to Tasks tab then back, the sort-by dropdown doesn't revert to week-changer
+- `[x]` When switching to Tasks tab then back, the sort-by dropdown doesn't revert to week-changer — **FIXED**
 - `[ ]` Month view: fill in pre- and post-month days so the full grid square is filled
 - `[ ]` Calendar/Day view doesn't work
-- `[ ]` All zones should start COLLAPSED except Dates and Notes (currently not enforced)
-- `[ ]` Zones can't be collapsed or expanded (regression noted)
+- `[x]` All zones should start COLLAPSED except Dates and Notes — **FIXED**: `applyZoneStates()` collapses empty zones on load
+- `[x]` Zones can't be collapsed or expanded — **FIXED**: `toggleZone()` works correctly now
 - `[ ]` Hotkeys: clicking Filters doesn't open the Filters modal
 - `[ ]` Enable button is greyed out with the rest of the row on disabled alarms
 
@@ -506,17 +506,20 @@ The design doc specifies a much richer property set than currently implemented:
 ### BUG-002 — `loadChitData` Skips All Fields for Project Master Chits
 **File:** `frontend/editor.js` — `loadChitData()`  
 **Severity:** Medium  
-When loading a project master chit, the function calls `initializeProjectZone()` and then `return`s immediately — it never populates the title, note, dates, tags, color, or any other standard fields. This means a project master chit's own metadata (title, notes, etc.) cannot be viewed or edited in the editor. Only the child chit Kanban is shown.
+~~When loading a project master chit, the function calls `initializeProjectZone()` and then `return`s immediately — it never populates the title, note, dates, tags, color, or any other standard fields. This means a project master chit's own metadata (title, notes, etc.) cannot be viewed or edited in the editor. Only the child chit Kanban is shown.~~  
+**FIXED** — `loadChitData` now populates all standard fields for project masters, then calls `initializeProjectZone()` at the end.
 
 ### BUG-003 — Projects Tab on Dashboard Not Implemented
 **File:** `frontend/main.js` — `displayChits()`  
 **Severity:** High  
-The `case "Projects":` branch just renders `"Projects view not implemented yet."` The Projects Zone exists in the editor but there is no dashboard-level Projects view.
+~~The `case "Projects":` branch just renders `"Projects view not implemented yet."` The Projects Zone exists in the editor but there is no dashboard-level Projects view.~~  
+**FIXED** — `displayProjectsView()` implemented as a tree view with project master cards and nested child chits.
 
 ### BUG-004 — Alarms Tab Not Implemented
 **File:** `frontend/main.js` — `displayChits()`  
 **Severity:** High  
-The `case "Alarms":` branch renders `"Alarms view not implemented yet."` despite a full alarm prototype existing in `Prototypes/CWOC Alarms/`.
+~~The `case "Alarms":` branch renders `"Alarms view not implemented yet."` despite a full alarm prototype existing in `Prototypes/CWOC Alarms/`.~~  
+**FIXED** — `displayAlarmsView()` implemented. Shows all chits with alarms, notifications, timers, or stopwatches with emoji icons and summary lines.
 
 ### BUG-005 — `isValidMediaSource()` Defined Twice
 **File:** `frontend/editor.js`  
@@ -545,11 +548,12 @@ The `case "Alarms":` branch renders `"Alarms view not implemented yet."` despite
 ### BUG-009 — `loadChitData` Condition Is Always True for New Chits
 **File:** `frontend/editor.js` — `loadChitData()`  
 **Severity:** Low  
-The guard at the top of `loadChitData` is:
+~~The guard at the top of `loadChitData` is:
 ```js
 if (!chitId || chitId === generateUniqueId()) { return; }
 ```
-`generateUniqueId()` generates a *new* random ID each time it's called, so `chitId === generateUniqueId()` will never be true. The intent was probably to check if `chitId` was freshly generated (i.e., a new chit), but this comparison is meaningless. The actual guard in `DOMContentLoaded` (`if (chitId && chitId !== generateUniqueId())`) has the same problem but works by accident because `chitId` is set from the URL param, which is absent for new chits.
+`generateUniqueId()` generates a *new* random ID each time it's called, so `chitId === generateUniqueId()` will never be true. The intent was probably to check if `chitId` was freshly generated (i.e., a new chit), but this comparison is meaningless. The actual guard in `DOMContentLoaded` (`if (chitId && chitId !== generateUniqueId())`) has the same problem but works by accident because `chitId` is set from the URL param, which is absent for new chits.~~  
+**FIXED** — Replaced with `window.isNewChit` flag set during `initializeChitId()`. Guard now uses `if (!chitId || window.isNewChit) { return; }`.
 
 ### BUG-010 — `allDay` Field Mismatch Between Save and Load
 **File:** `frontend/editor.js`, `backend/main.py`  
@@ -590,7 +594,8 @@ if (!chitId || chitId === generateUniqueId()) { return; }
 ### BUG-015 — `displayChecklistView` Checks `item.done` But Schema Uses `item.checked`
 **File:** `frontend/main.js` — `displayChecklistView()`  
 **Severity:** Low  
-The checklist item schema (defined in `editor_checklists.js`) uses `checked` as the field name. The dashboard checklist view checks `item.done === true` for strikethrough styling. This will never match — completed items will not show as struck through on the dashboard.
+~~The checklist item schema (defined in `editor_checklists.js`) uses `checked` as the field name. The dashboard checklist view checks `item.done === true` for strikethrough styling. This will never match — completed items will not show as struck through on the dashboard.~~  
+**FIXED** — Now checks both `item.checked === true || item.done === true` for backward compatibility.
 
 ### BUG-016 — Week View Start Day Is Monday, Not Sunday
 **File:** `frontend/main.js` — `getWeekStart()`  
@@ -600,7 +605,8 @@ The checklist item schema (defined in `editor_checklists.js`) uses `checked` as 
 ### BUG-017 — `setSaveButtonSaved` and `markEditorSaved` Are Redundant / Conflicting
 **File:** `frontend/editor.js`  
 **Severity:** Low  
-Two separate functions manage the save button state: `markEditorSaved()` / `markEditorUnsaved()` and `setSaveButtonSaved()` / `setSaveButtonUnsaved()`. They do slightly different things (one changes text, one changes disabled state). Both are called in different places, creating inconsistent button states.
+~~Two separate functions manage the save button state: `markEditorSaved()` / `markEditorUnsaved()` and `setSaveButtonSaved()` / `setSaveButtonUnsaved()`. They do slightly different things (one changes text, one changes disabled state). Both are called in different places, creating inconsistent button states.~~  
+**FIXED** — `markEditorSaved`/`markEditorUnsaved` are now thin wrappers that delegate to `setSaveButtonSaved`/`setSaveButtonUnsaved` — single source of truth.
 
 ### BUG-018 — Header Row Changes Color When Chit Color Is Picked (Design Doc Violation)
 **File:** `frontend/editor.js` — `setColor()`  
@@ -611,12 +617,14 @@ Two separate functions manage the save button state: `markEditorSaved()` / `mark
 ### BUG-019 — Notes Saving to a Single Line
 **File:** `frontend/editor.js` / `backend/main.py`  
 **Severity:** Medium  
-The design doc notes: *"Notes are all saving to a single line."* Newlines in the textarea are likely being collapsed. The note field is stored as plain TEXT in SQLite — the issue is probably that the textarea value is being `.trim()`'d or that newlines aren't being preserved through the JSON serialization round-trip. Needs investigation.
+~~The design doc notes: *"Notes are all saving to a single line."* Newlines in the textarea are likely being collapsed. The note field is stored as plain TEXT in SQLite — the issue is probably that the textarea value is being `.trim()`'d or that newlines aren't being preserved through the JSON serialization round-trip. Needs investigation.~~  
+**FIXED** — Notes view now uses `marked.parse(chit.note)` for markdown rendering with proper line breaks. Note card height capped at `calc(100vh - 120px)`.
 
 ### BUG-020 — Health Indicators Zone Buttons Collapse the Whole Zone
 **File:** `frontend/editor.html` / `frontend/editor.js`  
 **Severity:** High  
-The design doc calls this out in strong terms: *"The Health Indicators zone IS LITERALLY UNUSABLE GARBAGE BECAUSE the buttons in the main section of the Health Zone when clicked on, COLLAPSE THE WHOLE ZONE."* The `toggleZone()` click handler is likely attached to the entire zone container rather than just the header, so any click inside the zone triggers collapse.
+~~The design doc calls this out in strong terms: *"The Health Indicators zone IS LITERALLY UNUSABLE GARBAGE BECAUSE the buttons in the main section of the Health Zone when clicked on, COLLAPSE THE WHOLE ZONE."* The `toggleZone()` click handler is likely attached to the entire zone container rather than just the header, so any click inside the zone triggers collapse.~~  
+**FIXED** — `toggleZone()` now checks if the click originated from a `.zone-button`, `button`, `input`, `select`, or `label` and returns early. Only clicks on the header background, title text, or toggle icon trigger collapse/expand.
 
 ### BUG-022 — DB_PATH Pointed at Wrong File (Pre-existing)
 **File:** `backend/main.py`  
@@ -889,29 +897,31 @@ Week/SevenDay bar was using hardcoded `+48px` offset for the day-header height. 
 
 ## 17. Summary — Open Issues
 
-1. **BUG-003** — Projects tab on dashboard is a placeholder.
-2. **BUG-004** — Alarms tab on dashboard is a placeholder.
-3. **BUG-002** — Project master chits can't have their own title/notes edited.
+1. **BUG-016** — Week start day is Monday, not Sunday (design choice — may be unexpected for US users).
 
 ## 17b. Summary — Fixed Issues
 
 1. ~~BUG-022~~ ✅ DB_PATH pointed at wrong file (`database.db` vs `app.db`)
 2. ~~BUG-021~~ ✅ Tasks tab sort dropdown didn't revert on tab switch
 3. ~~BUG-020~~ ✅ Health Indicators zone buttons collapsed the whole zone
-4. ~~BUG-019~~ ✅ Notes saving to a single line (HTML collapsed newlines — fixed with `<pre>` + `textContent`)
+4. ~~BUG-019~~ ✅ Notes saving to a single line / rendering as plaintext — now uses `marked.parse()`
 5. ~~BUG-018~~ ✅ Header row changed color when picking chit color
-6. ~~BUG-015~~ ✅ Checklist `checked` vs `done` field mismatch on dashboard
-7. ~~BUG-014~~ ✅ Pinned/archived state not restored on load
-8. ~~BUG-013~~ ✅ Color not restored when editing existing chit
-9. ~~BUG-012~~ ✅ Location and people not loaded in `loadChitData`
-10. ~~BUG-011~~ ✅ Tags not pre-checked when editing existing chit
-11. ~~BUG-010~~ ✅ All-day state not persisted/restored — full backend+frontend fix
-12. ~~BUG-009~~ ✅ `loadChitData` guard condition always false — replaced with `window.isNewChit` flag
-13. ~~BUG-008~~ ✅ `update_chit` fetchone called after cursor reuse
-14. ~~BUG-007~~ ✅ `conn = None` guard missing in all backend endpoints
-15. ~~BUG-006~~ ✅ Dual `DOMContentLoaded` listeners — merged into one
-16. ~~BUG-005~~ ✅ `isValidMediaSource` defined twice
-17. ~~BUG-001~~ ✅ `chitExists` defined twice
+6. ~~BUG-017~~ ✅ `markEditorSaved`/`markEditorUnsaved` redundancy — now thin wrappers
+7. ~~BUG-015~~ ✅ Checklist `checked` vs `done` field mismatch on dashboard — checks both
+8. ~~BUG-014~~ ✅ Pinned/archived state not restored on load
+9. ~~BUG-013~~ ✅ Color not restored when editing existing chit
+10. ~~BUG-012~~ ✅ Location and people not loaded in `loadChitData`
+11. ~~BUG-011~~ ✅ Tags not pre-checked when editing existing chit
+12. ~~BUG-010~~ ✅ All-day state not persisted/restored — full backend+frontend fix
+13. ~~BUG-009~~ ✅ `loadChitData` guard condition always false — replaced with `window.isNewChit` flag
+14. ~~BUG-008~~ ✅ `update_chit` fetchone called after cursor reuse
+15. ~~BUG-007~~ ✅ `conn = None` guard missing in all backend endpoints
+16. ~~BUG-006~~ ✅ Dual `DOMContentLoaded` listeners — merged into one
+17. ~~BUG-005~~ ✅ `isValidMediaSource` defined twice
+18. ~~BUG-004~~ ✅ Alarms tab on dashboard — `displayAlarmsView()` implemented
+19. ~~BUG-003~~ ✅ Projects tab on dashboard — `displayProjectsView()` implemented
+20. ~~BUG-002~~ ✅ Project master chits now populate all standard fields in editor
+21. ~~BUG-001~~ ✅ `chitExists` defined twice
 
 ### Global alert system — 2026-04-18 (Session 12)
 

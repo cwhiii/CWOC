@@ -6,8 +6,11 @@ let currentView = "Week";
 let previousState = { tab: "Calendar", view: "Week" };
 
 // ── Sort & filter state ──────────────────────────────────────────────────────
-let currentSortField = null;   // null | 'title' | 'start' | 'due'
+let currentSortField = null;   // null | 'title' | 'start' | 'due' | 'updated' | 'created'
 let currentSortDir = 'asc';    // 'asc' | 'desc'
+
+// ── Hotkey submenu state ─────────────────────────────────────────────────────
+let _hotkeyMode = null;  // null | 'PERIOD' | 'FILTER' | 'ORDER' | 'FILTER_STATUS' | 'FILTER_LABEL' | 'FILTER_PRIORITY'
 
 function onSortSelectChange() {
   const sel = document.getElementById('sort-select');
@@ -35,8 +38,40 @@ function _updateSortUI() {
   }
 }
 
-function onShowFilterChange() {
+function onFilterChange() {
   displayChits();
+  _updateClearFiltersButton();
+}
+
+function _clearAllFilters() {
+  document.querySelectorAll('#status-multi input[type="checkbox"]').forEach(cb => { cb.checked = false; });
+  document.querySelectorAll('#label-multi input[type="checkbox"]').forEach(cb => { cb.checked = false; });
+  document.querySelectorAll('#priority-multi input[type="checkbox"]').forEach(cb => { cb.checked = false; });
+  const sp = document.getElementById('show-pinned'); if (sp) sp.checked = true;
+  const sa = document.getElementById('show-archived'); if (sa) sa.checked = false;
+  const su = document.getElementById('show-unmarked'); if (su) su.checked = true;
+  const search = document.getElementById('search'); if (search) search.value = '';
+  currentSortField = null;
+  const sortSel = document.getElementById('sort-select'); if (sortSel) sortSel.value = '';
+  _updateSortUI();
+  onFilterChange();
+}
+
+function _updateClearFiltersButton() {
+  const btn = document.getElementById('section-clear-filters');
+  if (!btn) return;
+  // Check if any filters are active
+  const hasStatusFilter = _getSelectedStatuses().length > 0;
+  const hasLabelFilter = _getSelectedLabels().length > 0;
+  const hasPriorityFilter = _getSelectedPriorities().length > 0;
+  const searchText = document.getElementById('search')?.value || '';
+  const showPinned = document.getElementById('show-pinned')?.checked ?? true;
+  const showArchived = document.getElementById('show-archived')?.checked ?? false;
+  const showUnmarked = document.getElementById('show-unmarked')?.checked ?? true;
+  // Default state: pinned=true, archived=false, unmarked=true, no search, no filters, no sort
+  const isDefault = !hasStatusFilter && !hasLabelFilter && !hasPriorityFilter
+    && !searchText && showPinned && !showArchived && showUnmarked && !currentSortField;
+  btn.style.display = isDefault ? 'none' : '';
 }
 
 function _applyArchiveFilter(chitList) {
@@ -44,7 +79,6 @@ function _applyArchiveFilter(chitList) {
   const showArchived = document.getElementById('show-archived')?.checked ?? true;
   const showUnmarked = document.getElementById('show-unmarked')?.checked ?? true;
 
-  // If all checked or all unchecked, show everything
   if (showPinned && showArchived && showUnmarked) return chitList;
   if (!showPinned && !showArchived && !showUnmarked) return chitList;
 
@@ -54,6 +88,51 @@ function _applyArchiveFilter(chitList) {
     const isUnmarked = !isPinned && !isArchived;
     return (isPinned && showPinned) || (isArchived && showArchived) || (isUnmarked && showUnmarked);
   });
+}
+
+function _getSelectedStatuses() {
+  const boxes = document.querySelectorAll('#status-multi input[data-filter="status"]:checked');
+  const vals = [];
+  boxes.forEach(b => { if (b.value) vals.push(b.value); });
+  return vals; // empty = "Any" checked or nothing specific = show all
+}
+
+function _getSelectedLabels() {
+  const boxes = document.querySelectorAll('#label-multi input[data-filter="label"]:checked');
+  const vals = [];
+  boxes.forEach(b => { if (b.value) vals.push(b.value); });
+  return vals;
+}
+
+function _getSelectedPriorities() {
+  const boxes = document.querySelectorAll('#priority-multi input[data-filter="priority"]:checked');
+  const vals = [];
+  boxes.forEach(b => { if (b.value) vals.push(b.value); });
+  return vals;
+}
+
+function _applyMultiSelectFilters(chitList) {
+  let result = chitList;
+
+  const statuses = _getSelectedStatuses();
+  if (statuses.length > 0) {
+    result = result.filter(c => c.status && statuses.includes(c.status));
+  }
+
+  const labels = _getSelectedLabels();
+  if (labels.length > 0) {
+    result = result.filter(c => {
+      const tags = c.tags || [];
+      return labels.some(l => tags.includes(l));
+    });
+  }
+
+  const priorities = _getSelectedPriorities();
+  if (priorities.length > 0) {
+    result = result.filter(c => c.priority && priorities.includes(c.priority));
+  }
+
+  return result;
 }
 
 function _applySort(chitList) {
@@ -69,11 +148,286 @@ function _applySort(chitList) {
     } else if (currentSortField === 'due') {
       valA = a.due_datetime ? new Date(a.due_datetime).getTime() : Infinity;
       valB = b.due_datetime ? new Date(b.due_datetime).getTime() : Infinity;
+    } else if (currentSortField === 'updated') {
+      valA = a.modified_datetime ? new Date(a.modified_datetime).getTime() : 0;
+      valB = b.modified_datetime ? new Date(b.modified_datetime).getTime() : 0;
+    } else if (currentSortField === 'created') {
+      valA = a.created_datetime ? new Date(a.created_datetime).getTime() : 0;
+      valB = b.created_datetime ? new Date(b.created_datetime).getTime() : 0;
+    } else if (currentSortField === 'status') {
+      const order = { 'ToDo': 1, 'In Progress': 2, 'Blocked': 3, 'Complete': 4 };
+      valA = order[a.status] || 5;
+      valB = order[b.status] || 5;
     }
     if (valA < valB) return currentSortDir === 'asc' ? -1 : 1;
     if (valA > valB) return currentSortDir === 'asc' ? 1 : -1;
     return 0;
   });
+}
+
+// ── Sidebar dimming → Full-screen overlay + floating panels ──────────────────
+
+// Helper: build a chit card header row with icons, title, and orderable meta
+// Returns a div with: [pinned icon][archived icon] Title ... meta values
+function _buildChitHeader(chit, titleHtml) {
+  const row = document.createElement('div');
+  row.className = 'chit-header-row';
+
+  const left = document.createElement('div');
+  left.className = 'chit-header-left';
+
+  if (chit.pinned) {
+    const icon = document.createElement('i');
+    icon.className = 'fas fa-bookmark';
+    icon.title = 'Pinned';
+    icon.style.fontSize = '0.85em';
+    left.appendChild(icon);
+  }
+  if (chit.archived) {
+    const icon = document.createElement('span');
+    icon.textContent = '📦';
+    icon.title = 'Archived';
+    left.appendChild(icon);
+  }
+
+  const title = document.createElement('span');
+  title.className = 'chit-header-title';
+  if (titleHtml) {
+    title.innerHTML = titleHtml;
+  } else {
+    title.textContent = chit.title || '(Untitled)';
+  }
+  left.appendChild(title);
+
+  row.appendChild(left);
+
+  // Meta values in a single row on the right
+  const right = document.createElement('div');
+  right.className = 'chit-header-meta';
+
+  if (chit.status) {
+    const s = document.createElement('span'); s.textContent = chit.status; right.appendChild(s);
+  }
+  if (chit.priority) {
+    const s = document.createElement('span'); s.textContent = chit.priority; right.appendChild(s);
+  }
+  if (chit.due_datetime) {
+    const s = document.createElement('span'); s.textContent = `Due: ${formatDate(new Date(chit.due_datetime))}`; right.appendChild(s);
+  }
+  if (chit.start_datetime) {
+    const s = document.createElement('span'); s.textContent = `Start: ${formatDate(new Date(chit.start_datetime))}`; right.appendChild(s);
+  }
+  if (chit.modified_datetime) {
+    const s = document.createElement('span'); s.textContent = `Upd: ${formatDate(new Date(chit.modified_datetime))}`; right.appendChild(s);
+  }
+  if (chit.created_datetime) {
+    const s = document.createElement('span'); s.textContent = `Cre: ${formatDate(new Date(chit.created_datetime))}`; right.appendChild(s);
+  }
+  const tags = chit.tags || [];
+  if (tags.length > 0) {
+    const s = document.createElement('span'); s.textContent = tags.join(', '); right.appendChild(s);
+  }
+
+  row.appendChild(right);
+  return row;
+}
+
+// Compact meta for Notes view (just icons before title, no meta row)
+function _renderChitMeta(chit, mode) {
+  // Legacy — kept for any remaining callers but views should use _buildChitHeader
+  const meta = document.createElement('div');
+  meta.className = 'chit-meta';
+  return meta;
+}
+
+function _showPanel(panelId) {
+  document.getElementById('hotkey-overlay')?.classList.add('active');
+  document.getElementById(panelId)?.classList.add('active');
+}
+
+function _hideAllPanels() {
+  document.getElementById('hotkey-overlay')?.classList.remove('active');
+  document.querySelectorAll('.hotkey-panel').forEach(p => p.classList.remove('active'));
+}
+
+function _dimSidebar(activeId, activeFilterGroupId) {
+  // Now uses full-screen overlay + floating panels instead of sidebar dimming
+}
+
+function _undimSidebar() {
+  _hideAllPanels();
+}
+
+function _exitHotkeyMode() {
+  _hotkeyMode = null;
+  _hideAllPanels();
+}
+
+// ── Panel click handlers ─────────────────────────────────────────────────────
+function _pickPeriod(period) {
+  currentView = period;
+  const sel = document.getElementById('period-select');
+  if (sel) sel.value = currentView;
+  if (currentView === 'SevenDay') currentWeekStart = new Date();
+  updateDateRange();
+  displayChits();
+  _exitHotkeyMode();
+}
+
+function _enterFilterSub(type) {
+  _hideAllPanels();
+  if (type === 'status') {
+    _hotkeyMode = 'FILTER_STATUS';
+    _buildFilterSubPanel('panel-status-options', '#status-multi input[data-filter="status"]');
+    _showPanel('panel-filter-status');
+  } else if (type === 'label') {
+    _hotkeyMode = 'FILTER_LABEL';
+    _buildFilterSubPanel('panel-label-options', '#label-multi input[data-filter="label"]');
+    _showPanel('panel-filter-label');
+  } else if (type === 'priority') {
+    _hotkeyMode = 'FILTER_PRIORITY';
+    _buildFilterSubPanel('panel-priority-options', '#priority-multi input[data-filter="priority"]');
+    _showPanel('panel-filter-priority');
+  }
+}
+
+function _buildFilterSubPanel(containerId, checkboxSelector) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  container.innerHTML = '';
+  const boxes = document.querySelectorAll(checkboxSelector);
+  boxes.forEach((cb, i) => {
+    const label = cb.parentElement?.textContent?.trim() || cb.value || '—';
+    const div = document.createElement('div');
+    div.className = 'hotkey-panel-option' + (cb.checked ? ' selected' : '');
+    div.innerHTML = `<span class="panel-key">${i + 1}</span><span class="panel-label">${label}</span>`;
+    div.onclick = () => {
+      cb.checked = !cb.checked;
+      div.classList.toggle('selected', cb.checked);
+      onFilterChange();
+    };
+    container.appendChild(div);
+  });
+}
+
+function _toggleFilterArchived() {
+  const cb = document.getElementById('show-archived');
+  if (cb) cb.checked = !cb.checked;
+  onFilterChange();
+  _exitHotkeyMode();
+}
+
+function _toggleFilterPinned() {
+  const cb = document.getElementById('show-pinned');
+  if (cb) cb.checked = !cb.checked;
+  onFilterChange();
+  _exitHotkeyMode();
+}
+
+function _filterFocusSearch() {
+  _exitHotkeyMode();
+  const searchInput = document.getElementById('search');
+  if (searchInput) searchInput.focus();
+}
+
+function _pickSort(field) {
+  currentSortField = field;
+  currentSortDir = 'asc';
+  const sel = document.getElementById('sort-select');
+  if (sel) sel.value = currentSortField;
+  _updateSortUI();
+  displayChits();
+  _exitHotkeyMode();
+}
+
+// ── Reference overlay ────────────────────────────────────────────────────────
+function _toggleReference() {
+  const overlay = document.getElementById('reference-overlay');
+  if (!overlay) return;
+  overlay.classList.toggle('active');
+}
+
+function _closeReference() {
+  const overlay = document.getElementById('reference-overlay');
+  if (overlay) overlay.classList.remove('active');
+}
+
+// ── Load label/tag filters from settings ─────────────────────────────────────
+async function _loadLabelFilters() {
+  try {
+    const container = document.getElementById('label-multi');
+    if (!container) return;
+
+    // Collect tags from settings API
+    let tagNames = [];
+    try {
+      const resp = await fetch('/api/settings/default_user');
+      if (resp.ok) {
+        const settings = await resp.json();
+        const tags = settings.tags ? (typeof settings.tags === 'string' ? JSON.parse(settings.tags) : settings.tags) : [];
+        tagNames = tags.map(t => typeof t === 'string' ? t : t.name).filter(Boolean);
+      }
+    } catch (e) { /* ignore */ }
+
+    // Also collect tags from loaded chits as fallback
+    if (tagNames.length === 0 && chits.length > 0) {
+      const seen = new Set();
+      chits.forEach(c => {
+        (c.tags || []).forEach(t => {
+          if (t && !seen.has(t)) { seen.add(t); tagNames.push(t); }
+        });
+      });
+      tagNames.sort();
+    }
+
+    // Preserve current selections (or restore pending from state)
+    const prevSelected = new Set();
+    container.querySelectorAll('input:checked').forEach(cb => prevSelected.add(cb.value));
+    if (window._pendingLabelFilters) {
+      window._pendingLabelFilters.forEach(v => prevSelected.add(v));
+      delete window._pendingLabelFilters;
+    }
+
+    container.innerHTML = '';
+    if (tagNames.length === 0) {
+      container.innerHTML = '<span style="font-size:0.8em;opacity:0.5;">No tags defined</span>';
+      return;
+    }
+    tagNames.forEach(name => {
+      const lbl = document.createElement('label');
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.value = name;
+      cb.dataset.filter = 'label';
+      cb.checked = prevSelected.has(name);
+      cb.onchange = onFilterChange;
+      lbl.appendChild(cb);
+      lbl.appendChild(document.createTextNode(' ' + name));
+      container.appendChild(lbl);
+    });
+  } catch (e) {
+    console.log('Could not load label filters:', e);
+  }
+}
+
+// ── Period (was "View") ──────────────────────────────────────────────────────
+function changePeriod() {
+  const sel = document.getElementById('period-select');
+  if (!sel) return;
+  currentView = sel.value;
+  if (currentView === 'SevenDay') currentWeekStart = new Date();
+  updateDateRange();
+  displayChits();
+}
+
+function goToToday() {
+  const now = new Date();
+  if (currentView === 'Week') currentWeekStart = getWeekStart(now);
+  else if (currentView === 'Month') currentWeekStart = getMonthStart(now);
+  else if (currentView === 'Year') currentWeekStart = getYearStart(now);
+  else currentWeekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  updateDateRange();
+  displayChits();
 }
 
 // ── Global Alert System ──────────────────────────────────────────────────────
@@ -339,6 +693,91 @@ function _startGlobalAlertSystem() {
 
 function storePreviousState() {
   previousState = { tab: currentTab, view: currentView };
+  // Save full UI state to localStorage for restoration after editor
+  const state = {
+    tab: currentTab,
+    view: currentView,
+    sortField: currentSortField,
+    sortDir: currentSortDir,
+    search: document.getElementById('search')?.value || '',
+    statusFilters: Array.from(document.querySelectorAll('#status-multi input:checked')).map(cb => cb.value),
+    labelFilters: Array.from(document.querySelectorAll('#label-multi input:checked')).map(cb => cb.value),
+    priorityFilters: Array.from(document.querySelectorAll('#priority-multi input:checked')).map(cb => cb.value),
+    showPinned: document.getElementById('show-pinned')?.checked ?? true,
+    showArchived: document.getElementById('show-archived')?.checked ?? false,
+    showUnmarked: document.getElementById('show-unmarked')?.checked ?? true,
+  };
+  localStorage.setItem('cwoc_ui_state', JSON.stringify(state));
+}
+
+function _restoreUIState() {
+  try {
+    const raw = localStorage.getItem('cwoc_ui_state');
+    if (!raw) return false;
+    const state = JSON.parse(raw);
+    localStorage.removeItem('cwoc_ui_state'); // one-time restore
+
+    if (state.tab) currentTab = state.tab;
+    if (state.view) currentView = state.view;
+    if (state.sortField !== undefined) currentSortField = state.sortField;
+    if (state.sortDir) currentSortDir = state.sortDir;
+
+    // Restore search
+    const search = document.getElementById('search');
+    if (search && state.search) search.value = state.search;
+
+    // Restore sort UI
+    const sortSel = document.getElementById('sort-select');
+    if (sortSel && state.sortField) sortSel.value = state.sortField;
+    _updateSortUI();
+
+    // Restore status checkboxes
+    if (state.statusFilters) {
+      document.querySelectorAll('#status-multi input[type="checkbox"]').forEach(cb => {
+        cb.checked = state.statusFilters.includes(cb.value);
+      });
+    }
+
+    // Restore priority checkboxes
+    if (state.priorityFilters) {
+      document.querySelectorAll('#priority-multi input[type="checkbox"]').forEach(cb => {
+        cb.checked = state.priorityFilters.includes(cb.value);
+      });
+    }
+
+    // Restore archive/pinned toggles
+    const sp = document.getElementById('show-pinned');
+    const sa = document.getElementById('show-archived');
+    const su = document.getElementById('show-unmarked');
+    if (sp) sp.checked = state.showPinned ?? true;
+    if (sa) sa.checked = state.showArchived ?? false;
+    if (su) su.checked = state.showUnmarked ?? true;
+
+    // Restore tab highlight
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelector(`.tab[onclick="filterChits('${currentTab}')"]`)?.classList.add('active');
+
+    // Restore period select
+    const periodSel = document.getElementById('period-select');
+    if (periodSel) periodSel.value = currentView;
+
+    // Show/hide sections based on tab
+    const periodSection = document.getElementById('section-period');
+    const yearWeekContainer = document.getElementById('year-week-container');
+    const orderSection = document.getElementById('section-order');
+    if (periodSection) periodSection.style.display = (currentTab === 'Calendar') ? '' : 'none';
+    if (yearWeekContainer) yearWeekContainer.style.display = (currentTab === 'Calendar') ? '' : 'none';
+    if (orderSection) orderSection.style.display = (currentTab === 'Calendar') ? 'none' : '';
+
+    // Restore label filters after they load
+    if (state.labelFilters && state.labelFilters.length > 0) {
+      window._pendingLabelFilters = state.labelFilters;
+    }
+
+    return true;
+  } catch (e) {
+    return false;
+  }
 }
 
 function toggleSidebar() {
@@ -552,52 +991,33 @@ function updateDateRange() {
   }
 }
 
-function updateStatusFilterOptions() {
-  const statusFilter = document.getElementById("status-filter");
-  if (!statusFilter) return;
-
-  // Clear existing options
-  statusFilter.innerHTML = "";
-
-  // Always add the null option "-" for Calendar and Notes views
-  if (currentTab === "Calendar" || currentTab === "Notes") {
-    const nullOption = document.createElement("option");
-    nullOption.value = "";
-    nullOption.textContent = "-";
-    statusFilter.appendChild(nullOption);
-  }
-
-  // Add other status options
-  const statuses = ["ToDo", "In Progress", "Blocked", "Complete"];
-  statuses.forEach((status) => {
-    const option = document.createElement("option");
-    option.value = status;
-    option.textContent = status;
-    statusFilter.appendChild(option);
-  });
-
-  // Reset filter to default (null)
-  statusFilter.value = "";
-}
-
 function displayChits() {
   const listContainer = document.getElementById("chit-list");
   if (!listContainer) {
     console.error("Chit list container not found");
     return;
   }
-  const searchText = document.getElementById("search").value.toLowerCase();
-  const statusFilter = document.getElementById("status-filter").value;
+  const searchText = document.getElementById("search")?.value?.toLowerCase() || "";
 
   let filteredChits = chits.filter((chit) => {
-    const matchesSearch =
-      !searchText ||
-      (chit.title && chit.title.toLowerCase().includes(searchText)) ||
-      (chit.description && chit.description.toLowerCase().includes(searchText));
-    const matchesStatus =
-      !statusFilter || statusFilter === "" || chit.status === statusFilter;
-    return matchesSearch && matchesStatus;
+    if (!searchText) return true;
+    // Always search title
+    if (chit.title && chit.title.toLowerCase().includes(searchText)) return true;
+    // Search note content (visible in Notes, Checklists, Projects)
+    if (chit.note && chit.note.toLowerCase().includes(searchText)) return true;
+    // Search tags
+    if (Array.isArray(chit.tags) && chit.tags.some(t => t.toLowerCase().includes(searchText))) return true;
+    // Search status (visible in Tasks)
+    if (chit.status && chit.status.toLowerCase().includes(searchText)) return true;
+    // Search people
+    if (Array.isArray(chit.people) && chit.people.some(p => p.toLowerCase().includes(searchText))) return true;
+    // Search location
+    if (chit.location && chit.location.toLowerCase().includes(searchText)) return true;
+    return false;
   });
+
+  // Apply multi-select filters (status, label, priority)
+  filteredChits = _applyMultiSelectFilters(filteredChits);
 
   // Apply archive/pinned filter
   filteredChits = _applyArchiveFilter(filteredChits);
@@ -704,8 +1124,7 @@ function displayWeekView(chitsToDisplay) {
           allDayEvent.classList.add("completed-task");
         }
 
-        const titlePrefix = chit.due_datetime ? "✅ " : "";
-        allDayEvent.innerHTML = `<span style="font-weight: bold; font-size: 1.1em;">${titlePrefix}${chit.title}</span>`;
+                allDayEvent.innerHTML = `<span style="font-weight: bold; font-size: 1.1em;">${chit.title}</span>`;
         allDayEvent.addEventListener("dblclick", () => {
           storePreviousState();
           window.location.href = `/editor?id=${chit.id}`;
@@ -742,8 +1161,7 @@ function displayWeekView(chitsToDisplay) {
         timedEvent.style.width = "calc(100% - 4px)";
         timedEvent.style.boxSizing = "border-box";
 
-        const titlePrefix = chit.due_datetime ? "✅ " : "";
-        timedEvent.innerHTML = `<span style="font-weight: bold; font-size: 1.1em;">${titlePrefix}${chit.title}</span><br>${formatTime(chitStart)} - ${formatTime(chitEnd)}`;
+                timedEvent.innerHTML = `<span style="font-weight: bold; font-size: 1.1em;">${chit.title}</span><br>${formatTime(chitStart)} - ${formatTime(chitEnd)}`;
         timedEvent.addEventListener("dblclick", () => {
           storePreviousState();
           window.location.href = `/editor?id=${chit.id}`;
@@ -837,8 +1255,7 @@ function displayMonthView(chitsToDisplay) {
           chitElement.classList.add("completed-task");
         }
 
-        const titlePrefix = chit.due_datetime ? "✅ " : "";
-        chitElement.innerHTML = `<span style="font-weight: bold; font-size: 1.1em; text-decoration: none; color: inherit;">${titlePrefix}${chit.title}</span>`;
+                chitElement.innerHTML = `<span style="font-weight: bold; font-size: 1.1em; text-decoration: none; color: inherit;">${chit.title}</span>`;
         chitElement.addEventListener("dblclick", () => {
           storePreviousState();
           window.location.href = `/editor?id=${chit.id}`;
@@ -915,8 +1332,7 @@ function displayItineraryView(chitsToDisplay) {
       detailsColumn.style.textAlign = "center";
       detailsColumn.style.flex = "1";
 
-      const titlePrefix = chit.due_datetime ? "✅ " : "";
-      detailsColumn.innerHTML = `<span style="font-weight: bold; font-size: 1.1em;">${titlePrefix}${chit.title}</span>`;
+            detailsColumn.innerHTML = `<span style="font-weight: bold; font-size: 1.1em;">${chit.title}</span>`;
 
       chitElement.appendChild(timeColumn);
       chitElement.appendChild(detailsColumn);
@@ -1048,9 +1464,8 @@ function displayDayView(chitsToDisplay) {
       chitElement.classList.add("completed-task");
     }
 
-    const titlePrefix = chit.due_datetime ? "✅ " : "";
-
-    chitElement.innerHTML = `<span style="font-weight: bold; font-size: 1.1em;">${titlePrefix}${chit.title}</span><br>${formatTime(chitStart)} - ${formatTime(chitEnd)}`;
+    
+    chitElement.innerHTML = `<span style="font-weight: bold; font-size: 1.1em;">${chit.title}</span><br>${formatTime(chitStart)} - ${formatTime(chitEnd)}`;
     chitElement.addEventListener("dblclick", () => {
       storePreviousState();
       window.location.href = `/editor?id=${chit.id}`;
@@ -1148,7 +1563,7 @@ function displayYearView(chitsToDisplay) {
       dayElement.addEventListener("click", () => {
         currentView = "Day";
         currentWeekStart = dayDate;
-        document.getElementById("view-select").value = "Day";
+        document.getElementById("period-select").value = "Day";
         updateDateRange();
         displayChits();
       });
@@ -1168,7 +1583,8 @@ function displayChecklistView(chitsToDisplay) {
   const checklistView = document.createElement("div");
   checklistView.className = "checklist-view";
 
-  const sortedChits = [...chitsToDisplay].sort((a, b) => {
+  // Only apply default sort if no global sort is active
+  const sortedChits = currentSortField ? chitsToDisplay : [...chitsToDisplay].sort((a, b) => {
     const dateA = new Date(
       a.last_edited || a.created_datetime || a.start_datetime || 0,
     );
@@ -1183,17 +1599,14 @@ function displayChecklistView(chitsToDisplay) {
   else {
     sortedChits.forEach((chit) => {
       const chitElement = document.createElement("div");
-      chitElement.className = "chit";
+      chitElement.className = "chit-card";
       chitElement.style.backgroundColor = chitColor(chit);
+      if (chit.status === "Complete") chitElement.classList.add("completed-task");
+      if (chit.archived) chitElement.classList.add("archived-chit");
 
-      const titlePrefix = chit.due_datetime ? "✅ " : "";
-      chitElement.innerHTML = `<h3><a href="/editor?id=${chit.id}">${titlePrefix}${chit.title}</a></h3>`;
+      chitElement.appendChild(_buildChitHeader(chit, `<a href="/editor?id=${chit.id}">${chit.title || '(Untitled)'}</a>`));
 
-      if (
-        chit.checklist &&
-        Array.isArray(chit.checklist) &&
-        chit.checklist.length > 0
-      ) {
+      if (chit.checklist && Array.isArray(chit.checklist) && chit.checklist.length > 0) {
         const checklist = document.createElement("ul");
         checklist.style.cssText = "margin:0.25em 0 0 0;padding:0;list-style:none;";
         chit.checklist.forEach((item) => {
@@ -1203,7 +1616,6 @@ function displayChecklistView(chitsToDisplay) {
             const isDone = item.checked === true || item.done === true;
             listItem.style.textDecoration = isDone ? "line-through" : "";
             listItem.style.opacity = isDone ? "0.55" : "1";
-            // Bullet varies by level
             const bullets = ["•", "◦", "▸", "–", "·"];
             const bullet = bullets[Math.min(item.level || 0, bullets.length - 1)];
             listItem.textContent = `${bullet} ${item.text}`;
@@ -1212,6 +1624,10 @@ function displayChecklistView(chitsToDisplay) {
         });
         chitElement.appendChild(checklist);
       }
+      chitElement.addEventListener("dblclick", () => {
+        storePreviousState();
+        window.location.href = `/editor?id=${chit.id}`;
+      });
       checklistView.appendChild(chitElement);
     });
   }
@@ -1223,251 +1639,61 @@ function displayTasksView(chitsToDisplay) {
   const chitList = document.getElementById("chit-list");
   chitList.innerHTML = "";
 
-  // Replace week-nav with sorting dropdown only if in Tasks tab
-  const weekNav = document.getElementById("week-nav");
-  if (weekNav) {
-    // Save original week-nav HTML if not already saved
-    if (!weekNav.dataset.originalHtml) {
-      weekNav.dataset.originalHtml = weekNav.innerHTML;
-    }
-    weekNav.innerHTML = ""; // Clear existing content
+  let taskChits = chitsToDisplay.filter(
+    (chit) => chit.status || chit.due_datetime,
+  );
 
-    const sortLabel = document.createElement("label");
-    sortLabel.htmlFor = "task-sort";
-    sortLabel.textContent = "Sort by: ";
-    sortLabel.style.marginRight = "8px";
-
-    const sortSelect = document.createElement("select");
-    sortSelect.id = "task-sort";
-
-    const sortOptions = [
-      { value: "dueNext", text: "Due next" },
-      { value: "dueLast", text: "Due last" },
-      { value: "alphaAsc", text: "Alphabetical (asc)" },
-      { value: "alphaDesc", text: "Alphabetical (desc)" },
-      { value: "status", text: "Status" },
-    ];
-
-    sortOptions.forEach(({ value, text }) => {
-      const option = document.createElement("option");
-      option.value = value;
-      option.textContent = text;
-      sortSelect.appendChild(option);
-    });
-
-    weekNav.appendChild(sortLabel);
-    weekNav.appendChild(sortSelect);
-
-    // Filter tasks that have status or due date
-    let taskChits = chitsToDisplay.filter(
-      (chit) => chit.status || chit.due_datetime,
-    );
-
-    // Sorting function
-    function sortTasks(tasks, criterion) {
-      const sorted = [...tasks];
-      switch (criterion) {
-        case "dueNext":
-          sorted.sort((a, b) => {
-            if (!a.due_datetime) return 1;
-            if (!b.due_datetime) return -1;
-            return new Date(a.due_datetime) - new Date(b.due_datetime);
-          });
-          break;
-        case "dueLast":
-          sorted.sort((a, b) => {
-            if (!a.due_datetime) return 1;
-            if (!b.due_datetime) return -1;
-            return new Date(b.due_datetime) - new Date(a.due_datetime);
-          });
-          break;
-        case "alphaAsc":
-          sorted.sort((a, b) => a.title.localeCompare(b.title));
-          break;
-        case "alphaDesc":
-          sorted.sort((a, b) => b.title.localeCompare(a.title));
-          break;
-        case "status":
-          const statusOrder = {
-            ToDo: 1,
-            "In Progress": 2,
-            Blocked: 3,
-            Complete: 4,
-            null: 5,
-            undefined: 5,
-            "": 5,
-          };
-          sorted.sort((a, b) => {
-            return (statusOrder[a.status] || 5) - (statusOrder[b.status] || 5);
-          });
-          break;
-      }
-      return sorted;
-    }
-
-    // Initial sort by dueNext
-    let sortedTasks = sortTasks(taskChits, "dueNext");
-
-    // Render tasks function
-    function renderTasks(tasks) {
-      chitList.innerHTML = ""; // Clear before rendering
-      if (tasks.length === 0) {
-        chitList.innerHTML = "<p>No tasks found.</p>";
-        return;
-      }
-      tasks.forEach((chit) => {
-        const chitElement = document.createElement("div");
-        chitElement.className = "chit";
-        chitElement.style.display = "flex";
-        chitElement.style.alignItems = "center";
-
-        // Add faded style if completed task
-        if ((chit.due_datetime || chit.status) && chit.status === "Complete") {
-          chitElement.classList.add("completed-task");
-        }
-
-        const statusDropdown = document.createElement("select");
-        statusDropdown.style.marginRight = "10px";
-
-        // No null status option here (per requirement)
-        const statuses = ["ToDo", "In Progress", "Blocked", "Complete"];
-        statuses.forEach((status) => {
-          const option = document.createElement("option");
-          option.value = status;
-          option.textContent = status;
-          if (chit.status === status) option.selected = true;
-          statusDropdown.appendChild(option);
-        });
-
-        if (!chit.status) {
-          statusDropdown.value = "";
-        }
-
-        statusDropdown.addEventListener("change", () => {
-          const updatedChit = { ...chit, status: statusDropdown.value || null };
-          fetch(`/api/chits/${chit.id}`, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(updatedChit),
-          })
-            .then((response) => {
-              if (!response.ok)
-                throw new Error(`HTTP error! status: ${response.status}`);
-              fetchChits();
-            })
-            .catch((err) => {
-              console.error("Error updating status:", err);
-              alert("Failed to update status.");
-            });
-        });
-
-        const chitDetails = document.createElement("div");
-        chitDetails.innerHTML = `<h3><a href="/editor?id=${chit.id}">${chit.title}</a></h3>`;
-        chitDetails.innerHTML += `<p>Status: ${chit.status || "-"}</p>`;
-        if (chit.due_datetime) {
-          chitDetails.innerHTML += `<p>Due: ${formatDate(new Date(chit.due_datetime))}</p>`;
-        }
-
-        chitElement.appendChild(statusDropdown);
-        chitElement.appendChild(chitDetails);
-
-        // Enable double-click to open chit editor even if completed
-        chitElement.addEventListener("dblclick", () => {
-          storePreviousState();
-          window.location.href = `/editor?id=${chit.id}`;
-        });
-
-        chitList.appendChild(chitElement);
-      });
-    }
-
-    // Initial render
-    renderTasks(sortedTasks);
-
-    // On sort change, re-sort and re-render
-    sortSelect.addEventListener("change", () => {
-      sortedTasks = sortTasks(taskChits, sortSelect.value);
-      renderTasks(sortedTasks);
-    });
-  } else {
-    // Fallback if weekNav not found, just render tasks normally
-
-    const tasksView = document.createElement("div");
-    tasksView.className = "checklist-view";
-
-    const taskChits = chitsToDisplay.filter(
-      (chit) => chit.status || chit.due_datetime,
-    );
-
-    if (taskChits.length === 0) {
-      tasksView.innerHTML = "<p>No tasks found.</p>";
-    } else {
-      taskChits.forEach((chit) => {
-        const chitElement = document.createElement("div");
-        chitElement.className = "chit";
-        chitElement.style.display = "flex";
-        chitElement.style.alignItems = "center";
-
-        // Add faded style if completed task
-        if ((chit.due_datetime || chit.status) && chit.status === "Complete") {
-          chitElement.classList.add("completed-task");
-        }
-
-        const statusDropdown = document.createElement("select");
-        statusDropdown.style.marginRight = "10px";
-
-        const statuses = ["ToDo", "In Progress", "Blocked", "Complete"];
-        statuses.forEach((status) => {
-          const option = document.createElement("option");
-          option.value = status;
-          option.textContent = status;
-          if (chit.status === status) option.selected = true;
-          statusDropdown.appendChild(option);
-        });
-
-        if (!chit.status) {
-          statusDropdown.value = "";
-        }
-
-        statusDropdown.addEventListener("change", () => {
-          const updatedChit = { ...chit, status: statusDropdown.value || null };
-          fetch(`/api/chits/${chit.id}`, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(updatedChit),
-          })
-            .then((response) => {
-              if (!response.ok)
-                throw new Error(`HTTP error! status: ${response.status}`);
-              fetchChits();
-            })
-            .catch((err) => {
-              console.error("Error updating status:", err);
-              alert("Failed to update status.");
-            });
-        });
-
-        const chitDetails = document.createElement("div");
-        chitDetails.innerHTML = `<h3><a href="/editor?id=${chit.id}">${chit.title}</a></h3>`;
-        chitDetails.innerHTML += `<p>Status: ${chit.status || "-"}</p>`;
-        if (chit.due_datetime) {
-          chitDetails.innerHTML += `<p>Due: ${formatDate(new Date(chit.due_datetime))}</p>`;
-        }
-
-        chitElement.appendChild(statusDropdown);
-        chitElement.appendChild(chitDetails);
-
-        // Enable double-click to open chit editor even if completed
-        chitElement.addEventListener("dblclick", () => {
-          storePreviousState();
-          window.location.href = `/editor?id=${chit.id}`;
-        });
-
-        tasksView.appendChild(chitElement);
-      });
-    }
-    chitList.appendChild(tasksView);
+  if (taskChits.length === 0) {
+    chitList.innerHTML = "<p>No tasks found.</p>";
+    return;
   }
+
+  const tasksContainer = document.createElement("div");
+  tasksContainer.className = "checklist-view"; // reuse consistent spacing
+
+  taskChits.forEach((chit) => {
+    const chitElement = document.createElement("div");
+    chitElement.className = "chit-card";
+    if (chit.archived) chitElement.classList.add("archived-chit");
+    chitElement.style.backgroundColor = typeof chitColor === 'function' ? chitColor(chit) : '';
+    if (chit.status === "Complete") chitElement.classList.add("completed-task");
+
+    chitElement.appendChild(_buildChitHeader(chit, `<a href="/editor?id=${chit.id}">${chit.title || '(Untitled)'}</a>`));
+
+    // Inline status dropdown
+    const controls = document.createElement("div");
+    controls.style.cssText = "margin-top:0.3em;display:flex;align-items:center;gap:0.5em;font-size:0.9em;";
+    const label = document.createElement("span");
+    label.textContent = "Status:";
+    controls.appendChild(label);
+
+    const statusDropdown = document.createElement("select");
+    statusDropdown.style.cssText = "font-family:inherit;font-size:inherit;";
+    ["ToDo", "In Progress", "Blocked", "Complete"].forEach((status) => {
+      const option = document.createElement("option");
+      option.value = status;
+      option.textContent = status;
+      if (chit.status === status) option.selected = true;
+      statusDropdown.appendChild(option);
+    });
+    if (!chit.status) statusDropdown.value = "";
+    statusDropdown.addEventListener("change", () => {
+      fetch(`/api/chits/${chit.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...chit, status: statusDropdown.value || null }),
+      }).then(r => { if (r.ok) fetchChits(); });
+    });
+    controls.appendChild(statusDropdown);
+    chitElement.appendChild(controls);
+
+    chitElement.addEventListener("dblclick", () => {
+      storePreviousState();
+      window.location.href = `/editor?id=${chit.id}`;
+    });
+    tasksContainer.appendChild(chitElement);
+  });
+  chitList.appendChild(tasksContainer);
 }
 
 function displayNotesView(chitsToDisplay) {
@@ -1475,12 +1701,9 @@ function displayNotesView(chitsToDisplay) {
   chitList.innerHTML = "";
   const notesView = document.createElement("div");
   notesView.className = "notes-view";
-  notesView.style.padding = "0.5em";
-  notesView.style.overflowY = "auto";
 
-  const sortedChits = [...chitsToDisplay]
-    .filter((chit) => chit.note && chit.note.trim() !== "")
-    .sort((a, b) => {
+  const filteredNotes = [...chitsToDisplay].filter((chit) => chit.note && chit.note.trim() !== "");
+  const sortedChits = currentSortField ? filteredNotes : filteredNotes.sort((a, b) => {
       const dateA = new Date(
         a.last_edited || a.created_datetime || a.start_datetime || 0,
       );
@@ -1495,44 +1718,30 @@ function displayNotesView(chitsToDisplay) {
   } else {
     sortedChits.forEach((chit) => {
       const chitElement = document.createElement("div");
-      chitElement.className = "note-chit";
-      chitElement.style.margin = "0";
-      chitElement.style.padding = "0.5em";
+      chitElement.className = "chit-card";
       chitElement.style.backgroundColor = chitColor(chit);
+      if (chit.archived) chitElement.classList.add("archived-chit");
 
-      const titlePrefix = chit.due_datetime ? "✅ " : "";
+      // Simple title with icons
+      const titleRow = document.createElement("div");
+      titleRow.style.cssText = "display:flex;align-items:center;gap:0.3em;font-weight:bold;margin-bottom:0.2em;";
+      if (chit.pinned) { const i = document.createElement('i'); i.className = 'fas fa-bookmark'; i.title = 'Pinned'; i.style.fontSize = '0.85em'; titleRow.appendChild(i); }
+      if (chit.archived) { const i = document.createElement('span'); i.textContent = '📦'; i.title = 'Archived'; titleRow.appendChild(i); }
+      const titleSpan = document.createElement('span');
+      titleSpan.textContent = chit.title || '(Untitled)';
+      titleRow.appendChild(titleSpan);
+      chitElement.appendChild(titleRow);
 
-      const titleEl = document.createElement("h3");
-      titleEl.textContent = `${titlePrefix}${chit.title}`;
-      chitElement.appendChild(titleEl);
-
-      // Render markdown if marked.js is available, otherwise pre-wrap plaintext
       const noteEl = document.createElement("div");
       noteEl.className = "note-content";
-      noteEl.style.cssText = "margin:0.25em 0;overflow:hidden;max-height:calc(100vh - 120px);";
+      noteEl.style.cssText = "overflow:hidden;font-size:0.9em;";
       if (typeof marked !== "undefined" && chit.note) {
         noteEl.innerHTML = marked.parse(chit.note);
       } else {
         noteEl.style.whiteSpace = "pre-wrap";
-        noteEl.style.fontFamily = "inherit";
         noteEl.textContent = chit.note;
       }
       chitElement.appendChild(noteEl);
-
-      const labelsContainer = document.createElement("div");
-      labelsContainer.className = "labels";
-      // Use chit.tags (canonical field name; guard against legacy chit.labels)
-      const tagList = chit.tags || chit.labels || [];
-      if (Array.isArray(tagList) && tagList.length > 0) {
-        tagList.forEach((tag) => {
-          const labelElement = document.createElement("span");
-          labelElement.className = "label";
-          labelElement.style.backgroundColor = getPastelColor(tag);
-          labelElement.textContent = tag;
-          labelsContainer.appendChild(labelElement);
-        });
-      }
-      chitElement.appendChild(labelsContainer);
 
       chitElement.addEventListener("dblclick", () => {
         storePreviousState();
@@ -1739,8 +1948,7 @@ function displaySevenDayView(chitsToDisplay) {
         const allDayEvent = document.createElement("div");
         allDayEvent.className = "all-day-event";
         if (chit.status === "Complete") allDayEvent.classList.add("completed-task");
-        const titlePrefix = chit.due_datetime ? "✅ " : "";
-        allDayEvent.innerHTML = `<span style="font-weight:bold;font-size:1.1em;">${titlePrefix}${chit.title}</span>`;
+                allDayEvent.innerHTML = `<span style="font-weight:bold;font-size:1.1em;">${chit.title}</span>`;
         allDayEvent.addEventListener("dblclick", () => { storePreviousState(); window.location.href = `/editor?id=${chit.id}`; });
         allDaySection.appendChild(allDayEvent);
       } else {
@@ -1763,8 +1971,7 @@ function displaySevenDayView(chitsToDisplay) {
         timedEvent.style.width = "calc(100% - 4px)";
         timedEvent.style.boxSizing = "border-box";
 
-        const titlePrefix = chit.due_datetime ? "✅ " : "";
-        timedEvent.innerHTML = `<span style="font-weight:bold;font-size:1.1em;">${titlePrefix}${chit.title}</span><br>${formatTime(chitStart)} - ${formatTime(chitEnd)}`;
+                timedEvent.innerHTML = `<span style="font-weight:bold;font-size:1.1em;">${chit.title}</span><br>${formatTime(chitStart)} - ${formatTime(chitEnd)}`;
         timedEvent.addEventListener("dblclick", () => { storePreviousState(); window.location.href = `/editor?id=${chit.id}`; });
         dayColumn.appendChild(timedEvent);
       }
@@ -1800,7 +2007,6 @@ function displayProjectsView(chitsToDisplay) {
 
   const view = document.createElement("div");
   view.className = "projects-view";
-  view.style.cssText = "padding:1em;display:flex;flex-direction:column;gap:1em;";
 
   projects.forEach((project) => {
     const childIds = Array.isArray(project.child_chits) ? project.child_chits : [];
@@ -1810,40 +2016,17 @@ function displayProjectsView(chitsToDisplay) {
     const box = document.createElement("div");
     box.style.cssText = `border:2px solid #8b5a2b;border-radius:6px;overflow:hidden;background:${projectColor};`;
 
-    // Project header row
+    // Project header row — use standard header builder
     const header = document.createElement("div");
-    header.style.cssText = `display:flex;align-items:center;justify-content:space-between;padding:0.6em 0.8em;background:${projectColor};cursor:pointer;`;
-
-    const headerLeft = document.createElement("div");
-    const title = document.createElement("strong");
-    title.style.cssText = "font-size:1.05em;";
-    title.textContent = project.title || "(Untitled Project)";
-    headerLeft.appendChild(title);
+    header.style.cssText = `padding:0.5em 0.7em;background:${projectColor};cursor:pointer;`;
+    header.appendChild(_buildChitHeader(project, project.title || "(Untitled Project)"));
 
     if (project.note) {
       const note = document.createElement("div");
-      note.style.cssText = "font-size:0.8em;opacity:0.65;margin-top:2px;";
+      note.style.cssText = "font-size:0.8em;opacity:0.65;margin-top:2px;padding:0 0.7em;";
       note.textContent = project.note.slice(0, 100) + (project.note.length > 100 ? "…" : "");
-      headerLeft.appendChild(note);
+      header.appendChild(note);
     }
-
-    const headerRight = document.createElement("div");
-    headerRight.style.cssText = "display:flex;gap:0.5em;align-items:center;flex-shrink:0;";
-
-    const badge = document.createElement("span");
-    badge.style.cssText = "background:#8b5a2b;color:#fff;border-radius:12px;padding:2px 10px;font-size:0.8em;white-space:nowrap;";
-    badge.textContent = `${childIds.length} chit${childIds.length !== 1 ? "s" : ""}`;
-    headerRight.appendChild(badge);
-
-    if (project.due_datetime) {
-      const due = document.createElement("span");
-      due.style.cssText = "font-size:0.8em;opacity:0.7;";
-      due.textContent = `Due: ${formatDate(new Date(project.due_datetime))}`;
-      headerRight.appendChild(due);
-    }
-
-    header.appendChild(headerLeft);
-    header.appendChild(headerRight);
     header.addEventListener("dblclick", () => {
       storePreviousState();
       window.location.href = `/editor?id=${project.id}`;
@@ -1921,56 +2104,29 @@ function displayAlarmsView(chitsToDisplay) {
 
   const view = document.createElement("div");
   view.className = "alarms-view";
-  view.style.cssText = "padding:1em;display:flex;flex-direction:column;gap:0.75em;";
 
   alertChits.forEach((chit) => {
     const card = document.createElement("div");
-    card.className = "chit";
-    card.style.cssText = "display:flex;align-items:center;justify-content:space-between;padding:0.75em;cursor:pointer;";
+    card.className = "chit-card";
+    if (chit.archived) card.classList.add("archived-chit");
     card.style.backgroundColor = chitColor(chit);
 
-    const left = document.createElement("div");
-    const title = document.createElement("h3");
-    title.style.margin = "0 0 0.25em 0";
-    title.textContent = chit.title || "(Untitled)";
-    left.appendChild(title);
+    card.appendChild(_buildChitHeader(chit, `<a href="/editor?id=${chit.id}">${chit.title || '(Untitled)'}</a>`));
 
-    if (chit.due_datetime) {
-      const due = document.createElement("p");
-      due.style.cssText = "margin:0;font-size:0.85em;opacity:0.7;";
-      due.textContent = `Due: ${formatDate(new Date(chit.due_datetime))}`;
-      left.appendChild(due);
-    }
-
-    // Show alert type summary
+    // Alert summary
     const alerts = Array.isArray(chit.alerts) ? chit.alerts : [];
     const alarmCount = alerts.filter((a) => a._type === "alarm").length;
     const timerCount = alerts.filter((a) => a._type === "timer").length;
     const swCount = alerts.filter((a) => a._type === "stopwatch").length;
     const notifCount = alerts.filter((a) => a._type === "notification").length;
 
-    if (alarmCount + timerCount + swCount + notifCount > 0) {
-      const summary = document.createElement("p");
-      summary.style.cssText = "margin:0.2em 0 0;font-size:0.8em;opacity:0.65;";
-      const parts = [];
-      if (alarmCount) parts.push(`${alarmCount} alarm${alarmCount > 1 ? "s" : ""}`);
-      if (timerCount) parts.push(`${timerCount} timer${timerCount > 1 ? "s" : ""}`);
-      if (swCount) parts.push(`${swCount} stopwatch${swCount > 1 ? "es" : ""}`);
-      if (notifCount) parts.push(`${notifCount} notification${notifCount > 1 ? "s" : ""}`);
-      summary.textContent = parts.join(" · ");
-      left.appendChild(summary);
-    }
-
-    const right = document.createElement("div");
-    right.style.cssText = "display:flex;gap:0.4em;align-items:center;flex-shrink:0;margin-left:1em;font-size:1.3em;";
-
-    if (alarmCount > 0 || chit.alarm) right.appendChild(Object.assign(document.createElement("span"), { title: "Alarm", textContent: "🔔" }));
-    if (timerCount > 0) right.appendChild(Object.assign(document.createElement("span"), { title: "Timer", textContent: "⏱️" }));
-    if (swCount > 0) right.appendChild(Object.assign(document.createElement("span"), { title: "Stopwatch", textContent: "⏲️" }));
-    if (notifCount > 0 || chit.notification) right.appendChild(Object.assign(document.createElement("span"), { title: "Notification", textContent: "📢" }));
-
-    card.appendChild(left);
-    card.appendChild(right);
+    const summaryRow = document.createElement("div");
+    summaryRow.style.cssText = "margin-top:0.3em;display:flex;align-items:center;gap:0.5em;font-size:0.9em;";
+    if (alarmCount > 0 || chit.alarm) summaryRow.appendChild(Object.assign(document.createElement("span"), { textContent: `🔔 ${alarmCount || 1}` }));
+    if (timerCount > 0) summaryRow.appendChild(Object.assign(document.createElement("span"), { textContent: `⏱️ ${timerCount}` }));
+    if (swCount > 0) summaryRow.appendChild(Object.assign(document.createElement("span"), { textContent: `⏲️ ${swCount}` }));
+    if (notifCount > 0 || chit.notification) summaryRow.appendChild(Object.assign(document.createElement("span"), { textContent: `📢 ${notifCount || 1}` }));
+    if (summaryRow.children.length > 0) card.appendChild(summaryRow);
 
     card.addEventListener("dblclick", () => {
       storePreviousState();
@@ -1986,51 +2142,42 @@ function displayAlarmsView(chitsToDisplay) {
 function filterChits(tab) {
   storePreviousState();
 
-  // Restore week-nav if switching away from Tasks
-  if (currentTab === "Tasks" && tab !== "Tasks") {
-    const weekNav = document.getElementById("week-nav");
-    if (weekNav && weekNav.dataset.originalHtml) {
-      weekNav.innerHTML = weekNav.dataset.originalHtml;
-      delete weekNav.dataset.originalHtml;
-    }
-  }
-
   currentTab = tab;
   document
     .querySelectorAll(".tab")
     .forEach((t) => t.classList.remove("active"));
   document
     .querySelector(`.tab[onclick="filterChits('${tab}')"]`)
-    .classList.add("active");
+    ?.classList.add("active");
 
-  updateStatusFilterOptions();
+  // Show/hide period selector and date nav based on Calendar tab
+  const periodSection = document.getElementById('section-period');
+  const yearWeekContainer = document.getElementById('year-week-container');
+  const orderSection = document.getElementById('section-order');
+  if (periodSection) {
+    periodSection.style.display = (tab === 'Calendar') ? '' : 'none';
+  }
+  if (yearWeekContainer) {
+    yearWeekContainer.style.display = (tab === 'Calendar') ? '' : 'none';
+  }
+  if (orderSection) {
+    orderSection.style.display = (tab === 'Calendar') ? 'none' : '';
+  }
+
+  _loadLabelFilters();
 
   updateDateRange();
   displayChits();
 }
 
 function searchChits() {
-  const query = document.getElementById("search").value.toLowerCase();
-  const filteredChits = chits.filter(
-    (chit) =>
-      chit.title.toLowerCase().includes(query) ||
-      (chit.note && chit.note.toLowerCase().includes(query)) ||
-      (chit.labels &&
-        chit.labels.some((label) => label.toLowerCase().includes(query))),
-  );
-  displayChits(filteredChits);
-}
-
-function filterByStatus() {
-  const status = document.getElementById("status-filter").value;
-  const filteredChits =
-    status === "" ? chits : chits.filter((chit) => chit.status === status);
-  displayChits(filteredChits);
+  displayChits();
 }
 
 function changeView() {
   storePreviousState();
-  currentView = document.getElementById("view-select").value;
+  currentView = document.getElementById("period-select")?.value || currentView;
+  if (currentView === 'SevenDay') currentWeekStart = new Date();
   updateDateRange();
   displayChits();
 }
@@ -2177,7 +2324,7 @@ function deleteChit() {
           `.tab:nth-child(${["Calendar", "Checklists", "Tasks", "Notes"].indexOf(currentTab) + 1})`,
         )
         .classList.add("active");
-      document.getElementById("view-select").value = currentView;
+      document.getElementById("period-select").value = currentView;
       fetchChits();
     })
     .catch((err) => {
@@ -2197,14 +2344,32 @@ function cancelEdit() {
       `.tab:nth-child(${["Calendar", "Checklists", "Tasks", "Notes"].indexOf(currentTab) + 1})`,
     )
     .classList.add("active");
-  document.getElementById("view-select").value = currentView;
+  document.getElementById("period-select").value = currentView;
   fetchChits();
 }
 
 document.addEventListener("DOMContentLoaded", function () {
   console.log("DOM fully loaded, initializing...");
-  currentTab = "Calendar"; // default tab
-  updateStatusFilterOptions();
+
+  // Default: hide archived chits, show pinned
+  const saInit = document.getElementById('show-archived');
+  if (saInit) saInit.checked = false;
+
+  // Try to restore previous UI state (from editor return)
+  const restored = _restoreUIState();
+  if (!restored) {
+    currentTab = "Calendar";
+  }
+
+  // Hide Order on Calendar, show date nav + period
+  const orderSection = document.getElementById('section-order');
+  if (orderSection) orderSection.style.display = (currentTab === 'Calendar') ? 'none' : '';
+  const periodSection = document.getElementById('section-period');
+  if (periodSection) periodSection.style.display = (currentTab === 'Calendar') ? '' : 'none';
+  const yearWeekContainer = document.getElementById('year-week-container');
+  if (yearWeekContainer) yearWeekContainer.style.display = (currentTab === 'Calendar') ? '' : 'none';
+
+  _loadLabelFilters();
   _updateSortUI();
   fetchChits();
   updateDateRange();
@@ -2265,44 +2430,200 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   });
 
-  // ── Keyboard shortcuts ──────────────────────────────────────────────────
-  // Don't fire when user is typing in any input/textarea/select/contenteditable
+  // ── Keyboard shortcuts (hotkey state machine) ────────────────────────────
   document.addEventListener("keydown", (e) => {
-    const tag = document.activeElement?.tagName?.toLowerCase();
-    const isTyping = tag === "input" || tag === "textarea" || tag === "select"
-      || document.activeElement?.isContentEditable;
-    if (isTyping) return;
+    const el = document.activeElement;
+    const tag = el?.tagName?.toLowerCase();
+    const inputType = el?.type?.toLowerCase();
+    const isTextInput = (tag === "input" && inputType !== "checkbox" && inputType !== "radio")
+      || tag === "textarea" || tag === "select"
+      || el?.isContentEditable;
+    if (isTextInput) return;
     if (e.ctrlKey || e.metaKey || e.altKey) return;
 
-    const tabOrder = ["Calendar", "Checklists", "Alarms", "Projects", "Tasks", "Notes"];
-    const viewMap = {
-      i: "Itinerary",
-      d: "Day",
-      w: "Week",
-      m: "Month",
-      y: "Year",
-      s: "SevenDay",
-    };
+    const key = e.key;
+    const keyLower = key.toLowerCase();
 
-    const key = e.key.toLowerCase();
-
-    // 1-6: switch tabs
-    if (key >= "1" && key <= "6") {
-      const idx = parseInt(key) - 1;
-      if (idx < tabOrder.length) filterChits(tabOrder[idx]);
+    // ── ESC: exit any submenu or close reference ──
+    // Shift+ESC: clear all values in the active filter panel
+    if (key === "Escape") {
+      if (e.shiftKey && (_hotkeyMode === 'FILTER_STATUS' || _hotkeyMode === 'FILTER_LABEL' || _hotkeyMode === 'FILTER_PRIORITY')) {
+        const containerId = _hotkeyMode === 'FILTER_STATUS' ? 'status-multi'
+          : _hotkeyMode === 'FILTER_LABEL' ? 'label-multi' : 'priority-multi';
+        document.querySelectorAll(`#${containerId} input[type="checkbox"]`).forEach(cb => { cb.checked = false; });
+        onFilterChange();
+        _exitHotkeyMode();
+        return;
+      }
+      if (e.shiftKey && _hotkeyMode === 'FILTER') {
+        // Clear ALL filters
+        document.querySelectorAll('#status-multi input[type="checkbox"]').forEach(cb => { cb.checked = false; });
+        document.querySelectorAll('#label-multi input[type="checkbox"]').forEach(cb => { cb.checked = false; });
+        document.querySelectorAll('#priority-multi input[type="checkbox"]').forEach(cb => { cb.checked = false; });
+        const sp = document.getElementById('show-pinned'); if (sp) sp.checked = true;
+        const sa = document.getElementById('show-archived'); if (sa) sa.checked = true;
+        const su = document.getElementById('show-unmarked'); if (su) su.checked = true;
+        const search = document.getElementById('search'); if (search) search.value = '';
+        onFilterChange();
+        _exitHotkeyMode();
+        return;
+      }
+      if (e.shiftKey && _hotkeyMode === 'ORDER') {
+        currentSortField = null;
+        const sel = document.getElementById('sort-select'); if (sel) sel.value = '';
+        _updateSortUI();
+        displayChits();
+        _exitHotkeyMode();
+        return;
+      }
+      if (document.getElementById('reference-overlay')?.classList.contains('active')) {
+        _closeReference();
+        return;
+      }
+      if (_hotkeyMode) {
+        _exitHotkeyMode();
+        return;
+      }
       return;
     }
 
-    // I/D/W/M/Y/S: switch calendar views (only meaningful in Calendar tab)
-    if (viewMap[key] && currentTab === "Calendar") {
-      const newView = viewMap[key];
-      currentView = newView;
-      const viewSelect = document.getElementById("view-select");
-      if (viewSelect) viewSelect.value = newView;
-      // SevenDay always starts from today
-      if (newView === "SevenDay") currentWeekStart = new Date();
-      updateDateRange();
-      displayChits();
+    // ── Reference overlay toggle ──
+    if (keyLower === 'r' && !_hotkeyMode) {
+      e.preventDefault();
+      _toggleReference();
+      return;
+    }
+
+    // Close reference if open and any other key pressed
+    if (document.getElementById('reference-overlay')?.classList.contains('active')) {
+      _closeReference();
+    }
+
+    // ── PERIOD submenu (after '.') ──
+    if (_hotkeyMode === 'PERIOD') {
+      const periodMap = { i: 'Itinerary', d: 'Day', w: 'Week', s: 'SevenDay', m: 'Month', y: 'Year' };
+      if (periodMap[keyLower]) {
+        e.preventDefault();
+        _pickPeriod(periodMap[keyLower]);
+      }
+      return;
+    }
+
+    // ── FILTER submenu (after 'F') ──
+    if (_hotkeyMode === 'FILTER') {
+      e.preventDefault();
+      if (keyLower === 's') {
+        _enterFilterSub('status');
+      } else if (keyLower === 't') {
+        _enterFilterSub('label');
+      } else if (keyLower === 'p') {
+        _enterFilterSub('priority');
+      } else if (keyLower === 'a') {
+        _toggleFilterArchived();
+      } else if (keyLower === 'i') {
+        _toggleFilterPinned();
+      } else if (keyLower === 'w') {
+        _filterFocusSearch();
+      }
+      return;
+    }
+
+    // ── Inside a multi-select filter (number keys toggle, Enter/letter confirms) ──
+    if (_hotkeyMode === 'FILTER_STATUS' || _hotkeyMode === 'FILTER_LABEL' || _hotkeyMode === 'FILTER_PRIORITY') {
+      const containerId = _hotkeyMode === 'FILTER_STATUS' ? 'status-multi'
+        : _hotkeyMode === 'FILTER_LABEL' ? 'label-multi' : 'priority-multi';
+      const panelId = _hotkeyMode === 'FILTER_STATUS' ? 'panel-status-options'
+        : _hotkeyMode === 'FILTER_LABEL' ? 'panel-label-options' : 'panel-priority-options';
+      const boxes = document.querySelectorAll(`#${containerId} input[type="checkbox"]`);
+
+      if (key === 'Enter') {
+        e.preventDefault();
+        onFilterChange();
+        _exitHotkeyMode();
+        return;
+      }
+
+      // Number keys toggle checkboxes (1-indexed)
+      const num = parseInt(key);
+      if (num >= 1 && num <= boxes.length) {
+        e.preventDefault();
+        const cb = boxes[num - 1];
+        cb.checked = !cb.checked;
+        onFilterChange();
+        // Update panel visual
+        const panelOptions = document.querySelectorAll(`#${panelId} .hotkey-panel-option`);
+        if (panelOptions[num - 1]) {
+          panelOptions[num - 1].classList.toggle('selected', cb.checked);
+        }
+        return;
+      }
+      return;
+    }
+
+    // ── ORDER submenu (after 'O') ──
+    if (_hotkeyMode === 'ORDER') {
+      e.preventDefault();
+      const orderMap = { t: 'title', s: 'start', d: 'due', u: 'updated', c: 'created', x: 'status' };
+      if (orderMap[keyLower]) {
+        _pickSort(orderMap[keyLower]);
+        return;
+      }
+      if (key === 'ArrowUp') {
+        currentSortDir = 'asc';
+        _updateSortUI();
+        displayChits();
+        return;
+      }
+      if (key === 'ArrowDown') {
+        currentSortDir = 'desc';
+        _updateSortUI();
+        displayChits();
+        return;
+      }
+      return;
+    }
+
+    // ── Top-level hotkeys ──
+    const tabMap = { c: 'Calendar', h: 'Checklists', a: 'Alarms', p: 'Projects', t: 'Tasks', n: 'Notes' };
+    if (tabMap[keyLower]) {
+      e.preventDefault();
+      filterChits(tabMap[keyLower]);
+      return;
+    }
+
+    if (keyLower === 'k') {
+      e.preventDefault();
+      window.location.href = '/frontend/editor.html';
+      return;
+    }
+
+    if (keyLower === 's' && !_hotkeyMode) {
+      e.preventDefault();
+      window.location.href = '/frontend/settings.html';
+      return;
+    }
+
+    if (key === '.') {
+      e.preventDefault();
+      if (currentTab === 'Calendar') {
+        _hotkeyMode = 'PERIOD';
+        _showPanel('panel-period');
+      }
+      return;
+    }
+
+    if (keyLower === 'f') {
+      e.preventDefault();
+      _hotkeyMode = 'FILTER';
+      _showPanel('panel-filter');
+      return;
+    }
+
+    if (keyLower === 'o') {
+      e.preventDefault();
+      _hotkeyMode = 'ORDER';
+      _showPanel('panel-order');
+      return;
     }
   });
 });

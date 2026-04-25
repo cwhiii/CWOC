@@ -9,7 +9,7 @@
 }
 
 /* Adjust main content when sidebar is active */
-.sidebar.active + .main-content {
+.sidebar.active ~ .main-content {
     margin-left: 240px;
 }
 
@@ -20,12 +20,14 @@
     left: -240px;
     width: 200px;
     height: calc(100% - 75px);
-    background-color: #e0d4b5; /* Match header color */
+    background-color: #e0d4b5;
     border-right: 1px solid #6b4e31;
     padding: 20px;
     padding-top: 80px;
     transition: left 0.3s ease;
-    z-index: 1000;
+    z-index: 999;
+    overflow-y: auto;
+    overflow-x: hidden;
 }
 
 .sidebar.active {
@@ -344,8 +346,9 @@ h1 {
 
 .all-day-event {
     display: block;
-    padding: 2px;
+    padding: 2px 4px;
     border-bottom: 1px solid #d3d3d3;
+    border-radius: 3px;
 }
 
 .all-day-event.multi-day {
@@ -354,12 +357,14 @@ h1 {
 }
 .month-event {
     border: 0.5px solid ivory;
+    border-radius: 3px;
 }
 
 .timed-event {
     position: absolute;
-    padding: 2px;
+    padding: 2px 4px;
     border: 1px solid #6b4e31;
+    border-radius: 3px;
     background-color: var(--event-bg-color);
     box-sizing: border-box;
     overflow: hidden;
@@ -815,4 +820,418 @@ button.delete:hover {
     max-width: 100%;
     display: inline-block;
     font-size: clamp(0.7rem, 1vw, 1rem);
+}
+
+/* ── Sidebar sections ─────────────────────────────────────────────────────── */
+.sidebar-section {
+    margin-bottom: 12px;
+    transition: opacity 0.2s ease, filter 0.2s ease;
+}
+
+.sidebar-section-label {
+    display: block;
+    font-size: 0.85em;
+    font-weight: bold;
+    margin-bottom: 4px;
+    opacity: 0.8;
+    color: #4a3728;
+    text-align: center;
+}
+
+.sidebar-section select {
+    width: 100%;
+    padding: 5px;
+    font-family: "Courier New", Courier, monospace;
+    border: 1px solid #6b4e31;
+    background-color: #ffff0;
+    border-radius: 3px;
+    box-sizing: border-box;
+}
+
+#order-controls {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+#order-controls select { flex: 1; }
+#sort-dir-btn {
+    padding: 2px 8px;
+    font-size: 1em;
+    cursor: pointer;
+    background: #8b5a2b;
+    color: #fff8e1;
+    border: 1px solid #5a3f2a;
+    border-radius: 3px;
+}
+
+/* ── Hotkey hints ─────────────────────────────────────────────────────────── */
+.hotkey-hint {
+    display: inline-block;
+    font-size: 0.7em;
+    opacity: 0.5;
+    margin-left: 4px;
+    font-weight: normal;
+    vertical-align: middle;
+}
+
+/* ── Multi-select filter groups ───────────────────────────────────────────── */
+.filter-group {
+    margin-bottom: 8px;
+    transition: opacity 0.2s ease, filter 0.2s ease;
+}
+
+.filter-label {
+    display: block;
+    font-size: 0.8em;
+    margin-bottom: 2px;
+    opacity: 0.7;
+    color: #4a3728;
+}
+
+.filter-group input[type="text"] {
+    width: 100%;
+    padding: 6px;
+    font-family: "Courier New", Courier, monospace;
+    border: 1px solid #6b4e31;
+    background-color: #ffff0;
+    border-radius: 3px;
+    box-sizing: border-box;
+    font-size: 0.9em;
+}
+
+.multi-select {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    font-size: 0.85em;
+    max-height: 120px;
+    overflow-y: auto;
+}
+
+.multi-select label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    padding: 1px 0;
+}
+
+.multi-select input[type="checkbox"] {
+    margin: 0;
+    cursor: pointer;
+}
+
+/* ── Sidebar dimming (submenu mode) ───────────────────────────────────────── */
+/* Full-screen grey overlay that dims EVERYTHING */
+.hotkey-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(40, 30, 20, 0.55);
+    z-index: 1500;
+}
+.hotkey-overlay.active {
+    display: block;
+}
+
+/* Floating submenu panel — appears on top of the overlay */
+.hotkey-panel {
+    display: none;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: url("/static/parchment.jpg") center/cover;
+    background-color: #fdf6e3;
+    border: 3px solid #6b4226;
+    border-radius: 12px;
+    padding: 20px 28px;
+    z-index: 1600;
+    font-family: "Courier New", Courier, monospace;
+    color: #3c2f2f;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    min-width: 260px;
+    max-width: 400px;
+}
+.hotkey-panel.active {
+    display: block;
+}
+.hotkey-panel h3 {
+    margin: 0 0 14px 0;
+    font-size: 1.3em;
+    color: #4a3728;
+    text-align: center;
+    border-bottom: 2px solid #c4a882;
+    padding-bottom: 8px;
+}
+.hotkey-panel-option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 10px;
+    margin: 3px 0;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background 0.15s ease;
+    font-size: 1.05em;
+}
+.hotkey-panel-option:hover {
+    background: rgba(139, 90, 43, 0.15);
+}
+.hotkey-panel-option .panel-key {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.8em;
+    height: 1.8em;
+    background: #8b5a2b;
+    color: #fff8e1;
+    font-weight: bold;
+    font-size: 0.95em;
+    border-radius: 4px;
+    border: 1px solid #5a3f2a;
+    flex-shrink: 0;
+}
+.hotkey-panel-option .panel-label {
+    color: #3c2f2f;
+}
+.hotkey-panel-option.selected {
+    background: rgba(139, 90, 43, 0.2);
+    font-weight: bold;
+}
+.hotkey-panel-footer {
+    margin-top: 12px;
+    padding-top: 8px;
+    border-top: 1px solid #c4a882;
+    font-size: 0.85em;
+    color: #8b5a2b;
+    text-align: center;
+    opacity: 0.8;
+}
+
+/* Dim individual filter groups within the filter section — no longer used */
+.sidebar-section.sidebar-dimmed,
+.filter-group.sidebar-dimmed,
+.sidebar-section.sidebar-active,
+.filter-group.sidebar-active {
+    /* cleared — dimming is now via full-screen overlay */
+}
+
+/* ── Reference overlay ────────────────────────────────────────────────────── */
+.reference-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 2000;
+    background: rgba(0, 0, 0, 0.4);
+    justify-content: center;
+    align-items: center;
+}
+
+.reference-overlay.active {
+    display: flex;
+}
+
+.reference-content {
+    background: url("/static/parchment.jpg") center/cover;
+    background-color: #fdf6e3;
+    border: 3px solid #6b4226;
+    border-radius: 12px;
+    padding: 25px 30px;
+    max-width: 650px;
+    width: 90%;
+    font-family: "Courier New", Courier, monospace;
+    color: #3c2f2f;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.reference-content h3 {
+    margin: 0 0 15px 0;
+    font-size: 1.4em;
+    color: #4a3728;
+    text-align: center;
+}
+
+.reference-content h4 {
+    margin: 12px 0 6px 0;
+    font-size: 1em;
+    color: #6b4226;
+    border-bottom: 1px solid #c4a882;
+    padding-bottom: 3px;
+}
+
+.ref-columns {
+    display: flex;
+    gap: 20px;
+}
+
+.ref-col {
+    flex: 1;
+}
+
+.ref-col > div {
+    margin: 3px 0;
+    font-size: 0.9em;
+}
+
+.ref-key {
+    display: inline-block;
+    min-width: 2em;
+    font-weight: bold;
+    color: #8b5a2b;
+    margin-right: 4px;
+}
+
+/* ── Consistent chit card styling ─────────────────────────────────────────── */
+.chit-card {
+    border: 2px solid #8b5a2b;
+    border-radius: 6px;
+    padding: 0.5em 0.7em;
+    overflow: hidden;
+    font-family: "Courier New", Courier, monospace;
+    cursor: pointer;
+}
+.chit-card:hover {
+    border-color: #a0522d;
+    box-shadow: 0 2px 8px rgba(107, 66, 38, 0.15);
+}
+.chit-card h3 {
+    margin: 0;
+    font-size: 1em;
+}
+.chit-card h3 a {
+    color: #3c2f2f;
+    text-decoration: none;
+}
+.chit-card h3 a:hover {
+    text-decoration: underline;
+}
+
+/* Header row: [icons] Title ... meta values */
+.chit-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5em;
+    flex-wrap: nowrap;
+}
+.chit-header-left {
+    display: flex;
+    align-items: center;
+    gap: 0.4em;
+    flex-shrink: 0;
+    font-weight: bold;
+    font-size: 1em;
+}
+.chit-header-left i {
+    font-size: 0.85em;
+    color: #8b5a2b;
+}
+.chit-header-title {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.chit-header-title a {
+    color: #3c2f2f;
+    text-decoration: none;
+}
+.chit-header-title a:hover {
+    text-decoration: underline;
+}
+.chit-header-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.8em;
+    flex-shrink: 1;
+    flex-wrap: nowrap;
+    overflow: hidden;
+    font-size: 0.85em;
+    color: #3c2f2f;
+    white-space: nowrap;
+}
+.chit-header-meta span {
+    white-space: nowrap;
+}
+
+.chit-card .chit-meta {
+    display: none; /* hidden — replaced by chit-header-row */
+}
+.chit-card.completed-task {
+    opacity: 0.5;
+}
+
+/* Consistent spacing for all non-calendar views */
+.checklist-view,
+.alarms-view,
+.projects-view {
+    padding: 0.75em;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5em;
+}
+
+/* ── Order controls styling ───────────────────────────────────────────────── */
+#order-controls select {
+    width: 100%;
+    padding: 5px;
+    font-family: "Courier New", Courier, monospace;
+    border: 1px solid #6b4e31;
+    background-color: #fffff0;
+    border-radius: 3px;
+    box-sizing: border-box;
+    flex: 1;
+}
+
+/* ── Clear All Filters button ─────────────────────────────────────────────── */
+.clear-filters-btn {
+    background-color: #a0522d !important;
+    color: #fff8e1 !important;
+    font-size: 0.85em !important;
+    height: 32px !important;
+    opacity: 0.9;
+}
+.clear-filters-btn:hover {
+    background-color: #8b4513 !important;
+    opacity: 1;
+}
+
+/* ── Notes view card sizing ───────────────────────────────────────────────── */
+.notes-view {
+    padding: 0.75em;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.5em;
+    align-items: start;
+    overflow-y: auto;
+}
+.notes-view .chit-card {
+    max-height: calc(100vh - 160px);
+    overflow: hidden;
+    min-width: 0; /* prevent grid blowout */
+}
+.notes-view .note-content {
+    overflow: hidden;
+    max-height: calc(100vh - 220px);
+}
+
+/* ── Archived chit transparency ───────────────────────────────────────────── */
+.chit-card.archived-chit {
+    opacity: 0.45;
+}
+.chit-card.archived-chit:hover {
+    opacity: 0.7;
+}
+
+/* ── Today button ─────────────────────────────────────────────────────────── */
+.today-btn {
+    height: 28px !important;
+    font-size: 0.85em !important;
+    margin-bottom: 5px !important;
 }
