@@ -77,6 +77,12 @@ body {
     flex-grow: 1;
 }
 
+.buttons .right-buttons {
+    display: flex;
+    gap: 10px;
+    flex-shrink: 0;
+}
+
 button {
     padding: 8px 16px;
     border: 2px outset var(--aged-brown-medium);
@@ -2802,4 +2808,88 @@ button.archive-btn:hover {
 }
 button.archive-btn.archived-active {
     background: #555 !important;
+}
+
+/* ── Date mode radio layout ───────────────────────────────────────────────── */
+.date-mode-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.date-mode-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.date-mode-label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-weight: bold;
+    font-size: 0.9em;
+    white-space: nowrap;
+    min-width: 80px;
+    cursor: pointer;
+}
+.date-mode-fields {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+    flex: 1;
+}
+.date-mode-fields.greyed-out {
+    opacity: 0.3;
+    pointer-events: none;
+}
+.date-mode-separator {
+    font-size: 0.85em;
+    opacity: 0.6;
+    padding: 0 2px;
+}
+.date-clear-btn {
+    padding: 1px 4px;
+    font-size: 0.85em;
+    cursor: pointer;
+    background: none;
+    border: 1px solid var(--border-color);
+    border-radius: 3px;
+}
+.allday-inline {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 0.85em;
+    white-space: nowrap;
+    cursor: pointer;
+}
+.date-mode-fields .date-time {
+    width: 90px;
+    font-size: 0.85em;
+}
+.date-mode-fields .time-input {
+    width: 55px;
+    position: relative;
+}
+
+/* Time dropdown */
+.time-dropdown {
+    position: absolute;
+    background: var(--parchment-light, #fff8e1);
+    border: 1px solid var(--border-color, #6b4e31);
+    border-radius: 4px;
+    z-index: 100;
+    max-height: 150px;
+    overflow-y: auto;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    font-family: "Courier New", Courier, monospace;
+    font-size: 0.85em;
+}
+.time-dropdown-option {
+    padding: 4px 10px;
+    cursor: pointer;
+}
+.time-dropdown-option:hover {
+    background: rgba(139, 90, 43, 0.15);
 }

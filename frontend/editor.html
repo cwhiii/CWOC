@@ -36,12 +36,14 @@
                         <i class="fas fa-times"></i> Exit
                     </button>
                 </div>
-                <button id="archivedButton" class="delete archive-btn" onclick="toggleArchived()" title="Toggle Archived State">
-                    📦 Archive
-                </button>
-                <button id="deleteButton" class="delete" onclick="deleteChit()">
-                    <i class="fas fa-trash-alt"></i> Delete
-                </button>
+                <div class="right-buttons">
+                    <button id="archivedButton" class="delete archive-btn" onclick="toggleArchived()" title="Toggle Archived State">
+                        📦 Archive
+                    </button>
+                    <button id="deleteButton" class="delete" onclick="deleteChit()">
+                        <i class="fas fa-trash-alt"></i> Delete
+                    </button>
+                </div>
             </div>
         </div>
         <div class="editor" id="mainEditor">
@@ -96,99 +98,50 @@
                             onclick="toggleZone(event, 'datesSection', 'datesContent')"
                         >
                             <h2 class="zone-title">📅 Dates & Times</h2>
-                            <div class="zone-actions">
-                                <button
-                                    type="button"
-                                    id="allDayToggleButton"
-                                    class="zone-button"
-                                    onclick="toggleAllDay(event)"
-                                >
-                                    <i class="far fa-sun"></i> All Day
-                                </button>
-                            </div>
                             <span class="zone-toggle-icon">🔼</span>
                         </div>
                         <div id="datesContent" class="zone-body">
-                            <div class="date-time-fields-group">
-                                <div class="field">
-                                    <label class="date-time-field-label"
-                                        >Start Date & Time</label
-                                    >
-                                    <div class="date-time-row">
-                                        <input
-                                            type="text"
-                                            id="start_datetime"
-                                            class="date-time"
-                                            placeholder="YYYY-MMM-DD"
-                                        />
-                                        <input
-                                            type="text"
-                                            id="start_time"
-                                            class="date-time"
-                                            placeholder="HH:MM"
-                                        />
-                                        <button
-                                            type="button"
-                                            onclick="clearStartAndEndDates()"
-                                            style="padding: 1px 3px 1px 3px"
-                                        >
-                                            ❌
-                                        </button>
-                                    </div>
+                            <div class="date-mode-group">
+                                <!-- None -->
+                                <div class="date-mode-row">
+                                    <label class="date-mode-label">
+                                        <input type="radio" name="dateMode" value="none" id="dateModeNone" onchange="onDateModeChange()" checked />
+                                        None
+                                    </label>
                                 </div>
-                                <div class="field">
-                                    <label class="date-time-field-label"
-                                        >End Date & Time</label
-                                    >
-                                    <div class="date-time-row">
-                                        <input
-                                            type="text"
-                                            id="end_datetime"
-                                            class="date-time"
-                                            placeholder="YYYY-MMM-DD"
-                                        />
-                                        <input
-                                            type="text"
-                                            id="end_time"
-                                            class="date-time"
-                                            placeholder="HH:MM"
-                                        />
-                                    </div>
-                                </div>
-                                <div class="field">
-                                    <label class="date-time-field-label"
-                                        >Due Date & Time</label
-                                    >
-                                    <div class="date-time-row">
-                                        <input
-                                            type="text"
-                                            id="due_datetime"
-                                            class="date-time"
-                                            placeholder="YYYY-MMM-DD"
-                                        />
-                                        <input
-                                            type="text"
-                                            id="due_time"
-                                            class="date-time"
-                                            placeholder="HH:MM"
-                                        />
 
-                                        <button
-                                            type="button"
-                                            onclick="clearDueDate()"
-                                            style="padding: 1px 3px 1px 3px"
-                                        >
-                                            ❌
-                                        </button>
+                                <!-- Start/End -->
+                                <div class="date-mode-row" id="startEndRow">
+                                    <label class="date-mode-label">
+                                        <input type="radio" name="dateMode" value="startend" id="dateModeStartEnd" onchange="onDateModeChange()" />
+                                        Start/End
+                                    </label>
+                                    <div class="date-mode-fields" id="startEndFields">
+                                        <input type="text" id="start_datetime" class="date-time" placeholder="Start Date" />
+                                        <input type="text" id="start_time" class="date-time time-input" placeholder="Start" />
+                                        <span class="date-mode-separator">to</span>
+                                        <input type="text" id="end_time" class="date-time time-input" placeholder="End" />
+                                        <input type="text" id="end_datetime" class="date-time" placeholder="End Date" />
+                                        <label class="allday-inline"><input type="checkbox" id="allDay" onchange="toggleAllDay()" /> All Day</label>
+                                        <button type="button" onclick="clearStartAndEndDates()" class="date-clear-btn">❌</button>
                                     </div>
                                 </div>
-                                <input
-                                    type="hidden"
-                                    id="allDay"
-                                    value="false"
-                                />
 
-                                <div class="field">
+                                <!-- Due -->
+                                <div class="date-mode-row" id="dueRow">
+                                    <label class="date-mode-label">
+                                        <input type="radio" name="dateMode" value="due" id="dateModeDue" onchange="onDateModeChange()" />
+                                        Due
+                                    </label>
+                                    <div class="date-mode-fields" id="dueFields">
+                                        <input type="text" id="due_datetime" class="date-time" placeholder="Due Date" />
+                                        <input type="text" id="due_time" class="date-time time-input" placeholder="Time" />
+                                        <button type="button" onclick="clearDueDate()" class="date-clear-btn">❌</button>
+                                    </div>
+                                </div>
+
+                                <!-- Recurrence -->
+                                <div class="field" style="margin-top:8px;">
                                     <label for="recurrence">🔁 Repeat</label>
                                     <select id="recurrence">
                                         <option value="">None</option>

@@ -1202,27 +1202,29 @@ button.delete:hover {
     opacity: 1;
 }
 
-/* ── Notes view card sizing ───────────────────────────────────────────────── */
+/* ── Notes view — masonry layout (Google Keep style) ──────────────────────── */
 .notes-view {
     padding: 0.75em;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5em;
-    align-items: flex-start;
-    align-content: flex-start;
+    column-count: 3;
+    column-gap: 0.5em;
     overflow-y: auto;
     height: 100%;
 }
 .notes-view .chit-card {
-    flex: 1 1 250px;
-    max-width: calc(33.33% - 0.5em);
+    display: block;
+    break-inside: avoid;
+    -webkit-column-break-inside: avoid;
+    margin-bottom: 0.5em;
     overflow: hidden;
     word-wrap: break-word;
     overflow-wrap: break-word;
+    min-width: 0;
+    /* Only as tall as content, capped at viewport */
+    max-height: calc(100vh - 200px);
 }
 .notes-view .note-content {
     overflow: hidden;
-    max-height: calc(100vh - 260px);
+    max-height: calc(100vh - 280px);
     word-wrap: break-word;
     overflow-wrap: break-word;
 }
@@ -1231,10 +1233,10 @@ button.delete:hover {
     overflow-wrap: break-word;
 }
 @media (max-width: 900px) {
-    .notes-view .chit-card { max-width: calc(50% - 0.5em); }
+    .notes-view { column-count: 2; }
 }
 @media (max-width: 600px) {
-    .notes-view .chit-card { max-width: 100%; }
+    .notes-view { column-count: 1; }
 }
 
 /* ── Archived chit transparency ───────────────────────────────────────────── */

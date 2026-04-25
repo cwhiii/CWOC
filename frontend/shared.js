@@ -134,10 +134,8 @@ function renderInlineChecklist(container, chit, onUpdate) {
       textSpan.style.opacity = cb.checked ? '0.55' : '1';
     });
 
-    const bullets = ['•', '◦', '▸', '–', '·'];
-    const bullet = bullets[Math.min(item.level || 0, bullets.length - 1)];
     const textSpan = document.createElement('span');
-    textSpan.textContent = `${bullet} ${item.text}`;
+    textSpan.textContent = item.text;
     textSpan.style.textDecoration = isDone ? 'line-through' : '';
     textSpan.style.opacity = isDone ? '0.55' : '1';
     textSpan.style.flex = '1';

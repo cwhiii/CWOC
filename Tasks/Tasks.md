@@ -131,6 +131,71 @@ All sort options support Asc/Desc via ↑/↓ arrows (except Manual).
 
 ---
 
+## Calendar Drag & Editor Date Overhaul
+
+Major feature: draggable calendar events, editor date field restructure, snap-to-grid, due-date calendar display.
+
+### Phase 1: Editor Date Fields Overhaul
+**Files:** `frontend/editor.html`, `frontend/editor.js`, `frontend/editor.css`
+
+- `[x]` Add radio buttons for date mode: None / Due / Start&End
+- `[x]` Restructure Start/End row: single row layout
+- `[x]` Restructure Due row: single row layout
+- `[x]` None row: just `(○ None)` radio, no fields
+- `[x]` Move All Day checkbox from zone header to inline with Start/End row
+- `[x]` Time picker: click to type in existing box, dropdown shows 5 snap-increment times
+- `[x]` Time inputs preload existing values when clicked/focused
+- `[x]` Greyed-out fields: visible but `opacity: 0.3`, `pointer-events: none`
+
+### Phase 2: Calendar Snapping Setting
+**Files:** `frontend/settings.html`, `frontend/settings.js`, `backend/main.py`
+
+- `[ ]` Add "Calendar Snapping" option to settings page
+  - Options: No Snapping, 5, 10, 15, 20, 25, 30, 60 minutes
+  - Default: 15 minutes
+- `[ ]` Add `calendar_snap` field to settings DB schema + Pydantic model
+- `[ ]` Add migration for existing DBs
+- `[ ]` Load snap setting in editor (for time picker dropdown) and dashboard (for drag)
+
+### Phase 3: Calendar Display — Due Date Chits & All-Day Fix
+**Files:** `frontend/main.js`, `frontend/styles.css`
+
+- `[ ]` Due-date-only chits appear on calendar:
+  - All-day due date → all-day event strip
+  - Timed due date → 10px tall timed event at due time, with ⌚ icon before title
+- `[ ]` If chit has both due AND start/end, use due date (ignore start/end) per editor rules
+- `[ ]` Fix all-day section layout in Day/Week/7-Day views:
+  - Structure: Date header → All-day events (block, not floating) → Scrollable hourly grid
+  - All-day section is above the time grid, not overlapping it
+- `[ ]` ⌚ icon on due-date-only chits (no start/end) in calendar views
+
+### Phase 4: Calendar Drag — Move, Resize, Snap Grid
+**Files:** `frontend/main.js`, `frontend/shared.js`, `frontend/styles.css`
+
+- `[ ]` Drag to move (Day/Week/7-Day views):
+  - Vertical: change time, snap to configured interval
+  - Horizontal: change day (Week/7-Day only)
+  - For start/end chits: update start_datetime, shift end_datetime to preserve duration
+  - For due-date-only chits: update due_datetime
+  - Save on mouse release (PUT to API)
+- `[ ]` Drag bottom edge to resize (Day/Week/7-Day views):
+  - Changes end time, snaps to configured interval
+  - For due-date-only chits: not applicable (no end time)
+  - Save on mouse release
+- `[ ]` Snap grid lines (Day/Week/7-Day views):
+  - Appear only during active drag
+  - Light grey horizontal lines at each snap interval
+  - Time labels in light grey between lines
+  - Appear in all day columns, not just the one being dragged
+- `[ ]` Month view drag:
+  - Drag chit from one day cell to another
+  - Shifts start/end/due dates by the day difference, preserving times
+  - Save on release
+- `[ ]` No drag in Year or Itinerary views
+- `[ ]` All-day events: draggable between days (horizontal only), not vertically
+
+---
+
 ## Open Bugs
 
 ### BUG-016 — Week View Start Day Is Monday, Not Sunday

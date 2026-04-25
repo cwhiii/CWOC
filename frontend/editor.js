@@ -369,23 +369,13 @@ function formatTime(date) {
 const userTimezoneOffset = new Date().getTimezoneOffset();
 console.log(`User timezone offset: ${userTimezoneOffset} minutes`);
 
-function toggleAllDay(event) {
-  const allDayInput = document.getElementById("allDay");
+function toggleAllDay() {
+  const allDayCheckbox = document.getElementById("allDay");
   const startTime = document.getElementById("start_time");
   const endTime = document.getElementById("end_time");
-  const dueTimeInput = document.getElementById("due_time");
 
-  if (!allDayInput) {
-    console.warn("allDay input not found");
-    return;
-  }
-
-  const currentValue = allDayInput.value;
-  const newValue = currentValue === "true" ? "false" : "true";
-  allDayInput.value = newValue;
-  const allDay = newValue === "true";
-
-  console.log(`All-day toggled: ${currentValue} -> ${newValue}`);
+  if (!allDayCheckbox) return;
+  const allDay = allDayCheckbox.checked;
 
   if (startTime) {
     if (allDay) {
@@ -394,18 +384,9 @@ function toggleAllDay(event) {
       startTime.value = "";
     } else {
       startTime.style.display = "";
-      if (startTime.dataset.previousValue) {
-        startTime.value = startTime.dataset.previousValue;
-      } else if (
-        chit &&
-        chit.start_datetime &&
-        chit.start_datetime.includes("T")
-      ) {
-        startTime.value = parseISOTime(chit.start_datetime);
-      }
+      if (startTime.dataset.previousValue) startTime.value = startTime.dataset.previousValue;
     }
   }
-
   if (endTime) {
     if (allDay) {
       endTime.dataset.previousValue = endTime.value;
@@ -413,29 +394,114 @@ function toggleAllDay(event) {
       endTime.value = "";
     } else {
       endTime.style.display = "";
-      if (endTime.dataset.previousValue) {
-        endTime.value = endTime.dataset.previousValue;
-      } else if (chit && chit.end_datetime && chit.end_datetime.includes("T")) {
-        endTime.value = parseISOTime(chit.end_datetime);
-      }
+      if (endTime.dataset.previousValue) endTime.value = endTime.dataset.previousValue;
     }
+  }
+  setSaveButtonUnsaved();
+}
+
+// ── Date mode radio buttons ──────────────────────────────────────────────────
+function onDateModeChange() {
+  const mode = document.querySelector('input[name="dateMode"]:checked')?.value || 'none';
+  const startEndFields = document.getElementById('startEndFields');
+  const dueFields = document.getElementById('dueFields');
+
+  if (startEndFields) {
+    if (mode === 'startend') {
+      startEndFields.classList.remove('greyed-out');
+    } else {
+      startEndFields.classList.add('greyed-out');
+    }
+  }
+  if (dueFields) {
+    if (mode === 'due') {
+      dueFields.classList.remove('greyed-out');
+    } else {
+      dueFields.classList.add('greyed-out');
+    }
+  }
+  setSaveButtonUnsaved();
+}
+
+// Determine date mode from chit data
+function _detectDateMode(chit) {
+  const hasDue = !!(chit.due_datetime);
+  const hasStart = !!(chit.start_datetime);
+  if (hasDue) return 'due';
+  if (hasStart) return 'startend';
+  return 'none';
+}
+
+// Set the radio button and apply greying
+function _setDateMode(mode) {
+  const radio = document.getElementById(
+    mode === 'due' ? 'dateModeDue' : mode === 'startend' ? 'dateModeStartEnd' : 'dateModeNone'
+  );
+  if (radio) radio.checked = true;
+  onDateModeChange();
+}
+
+// ── Time picker dropdown ─────────────────────────────────────────────────────
+let _snapMinutes = 15; // default, loaded from settings
+
+async function _loadSnapSetting() {
+  try {
+    const resp = await fetch('/api/settings/default_user');
+    if (!resp.ok) return;
+    const settings = await resp.json();
+    if (settings.calendar_snap && parseInt(settings.calendar_snap) > 0) {
+      _snapMinutes = parseInt(settings.calendar_snap);
+    }
+  } catch (e) { /* use default */ }
+}
+
+function _showTimeDropdown(inputEl) {
+  // Remove any existing dropdown
+  document.querySelectorAll('.time-dropdown').forEach(d => d.remove());
+
+  const currentVal = inputEl.value || '12:00';
+  const [h, m] = currentVal.split(':').map(Number);
+  const baseMinutes = (isNaN(h) ? 12 : h) * 60 + (isNaN(m) ? 0 : m);
+
+  const dropdown = document.createElement('div');
+  dropdown.className = 'time-dropdown';
+
+  for (let i = 0; i < 5; i++) {
+    const totalMin = baseMinutes + i * _snapMinutes;
+    const hr = Math.floor(totalMin / 60) % 24;
+    const mn = totalMin % 60;
+    const timeStr = `${String(hr).padStart(2, '0')}:${String(mn).padStart(2, '0')}`;
+
+    const opt = document.createElement('div');
+    opt.className = 'time-dropdown-option';
+    opt.textContent = timeStr;
+    opt.addEventListener('mousedown', (e) => {
+      e.preventDefault(); // prevent blur
+      inputEl.value = timeStr;
+      dropdown.remove();
+      setSaveButtonUnsaved();
+    });
+    dropdown.appendChild(opt);
   }
 
-  if (dueTimeInput) {
-    if (allDay) {
-      dueTimeInput.style.display = "none";
-    } else {
-      dueTimeInput.style.display = "";
-      if (
-        !dueTimeInput.value &&
-        chit &&
-        chit.due_datetime &&
-        chit.due_datetime.includes("T")
-      ) {
-        dueTimeInput.value = parseISOTime(chit.due_datetime);
-      }
-    }
-  }
+  // Position below the input
+  const rect = inputEl.getBoundingClientRect();
+  dropdown.style.position = 'fixed';
+  dropdown.style.top = (rect.bottom + 2) + 'px';
+  dropdown.style.left = rect.left + 'px';
+  dropdown.style.minWidth = rect.width + 'px';
+  document.body.appendChild(dropdown);
+
+  // Close on blur
+  inputEl.addEventListener('blur', () => {
+    setTimeout(() => dropdown.remove(), 150);
+  }, { once: true });
+}
+
+function _initTimeDropdowns() {
+  document.querySelectorAll('.time-input').forEach(input => {
+    input.addEventListener('focus', () => _showTimeDropdown(input));
+  });
 }
 
 async function fetchCustomColors() {
@@ -735,8 +801,11 @@ function resetEditorForNewChit() {
 
   const allDayInput = document.getElementById("allDay");
   if (allDayInput) {
-    allDayInput.value = "false";
+    allDayInput.checked = false;
   }
+
+  // Reset date mode to None
+  _setDateMode('none');
 
   const now = new Date();
   const oneHourLater = new Date(now.getTime() + 60 * 60 * 1000);
@@ -910,33 +979,45 @@ async function buildChitObject() {
   const archivedCheckbox = document.getElementById("archived");
   chit.archived = archivedCheckbox ? archivedCheckbox.value === "true" : false;
 
-  const allDayInput = document.getElementById("allDay");
-  const isAllDay = allDayInput ? allDayInput.value === "true" : false;
+  const allDayCheckbox = document.getElementById("allDay");
+  const isAllDay = allDayCheckbox ? allDayCheckbox.checked : false;
   chit.all_day = isAllDay;
+
+  // Respect date mode radio — only include active date fields
+  const dateMode = document.querySelector('input[name="dateMode"]:checked')?.value || 'none';
 
   const startDateInput = document.getElementById("start_datetime");
   const startTimeInput = document.getElementById("start_time");
-  chit.start_datetime = createISODateTimeString(
-    startDateInput ? startDateInput.value : "",
-    startTimeInput ? startTimeInput.value : "",
-    isAllDay, false,
-  );
-
   const endDateInput = document.getElementById("end_datetime");
   const endTimeInput = document.getElementById("end_time");
-  chit.end_datetime = createISODateTimeString(
-    endDateInput ? endDateInput.value : "",
-    endTimeInput ? endTimeInput.value : "",
-    isAllDay, true,
-  );
-
   const dueDateInput = document.getElementById("due_datetime");
   const dueTimeInput = document.getElementById("due_time");
-  chit.due_datetime = createISODateTimeString(
-    dueDateInput ? dueDateInput.value : "",
-    dueTimeInput ? dueTimeInput.value : "",
-    isAllDay, false,
-  );
+
+  if (dateMode === 'startend') {
+    chit.start_datetime = createISODateTimeString(
+      startDateInput ? startDateInput.value : "",
+      startTimeInput ? startTimeInput.value : "",
+      isAllDay, false,
+    );
+    chit.end_datetime = createISODateTimeString(
+      endDateInput ? endDateInput.value : "",
+      endTimeInput ? endTimeInput.value : "",
+      isAllDay, true,
+    );
+    chit.due_datetime = null;
+  } else if (dateMode === 'due') {
+    chit.due_datetime = createISODateTimeString(
+      dueDateInput ? dueDateInput.value : "",
+      dueTimeInput ? dueTimeInput.value : "",
+      isAllDay, false,
+    );
+    chit.start_datetime = null;
+    chit.end_datetime = null;
+  } else {
+    chit.start_datetime = null;
+    chit.end_datetime = null;
+    chit.due_datetime = null;
+  }
 
   // Read tags from the live selection state maintained by renderTags
   chit.tags = Array.isArray(window._currentTagSelection)
@@ -2205,28 +2286,10 @@ async function loadChitData(chitId) {
 
     const allDayInput = document.getElementById("allDay");
     if (allDayInput) {
-      // Field is stored as all_day in DB; guard against legacy allDay key
       const isAllDay = !!(chit.all_day || chit.allDay);
-      allDayInput.value = isAllDay ? "true" : "false";
-      console.log(`[loadChitData] Set allDay to: "${allDayInput.value}"`);
-
-      // Apply UI state: hide/show time inputs to match the stored all-day flag
-      const startTime = document.getElementById("start_time");
-      const endTime = document.getElementById("end_time");
-      const dueTime = document.getElementById("due_time");
-      const allDayBtn = document.getElementById("allDayToggleButton");
-
-      if (isAllDay) {
-        if (startTime) startTime.style.display = "none";
-        if (endTime) endTime.style.display = "none";
-        if (dueTime) dueTime.style.display = "none";
-        if (allDayBtn) allDayBtn.classList.add("active");
-      } else {
-        if (startTime) startTime.style.display = "";
-        if (endTime) endTime.style.display = "";
-        if (dueTime) dueTime.style.display = "";
-        if (allDayBtn) allDayBtn.classList.remove("active");
-      }
+      // This is now handled by the date mode section after date fields are set
+      console.log(`[loadChitData] allDay: ${isAllDay}`);
+    }
     }
 
     const prioritySelect = document.getElementById("priority");
@@ -2320,6 +2383,17 @@ async function loadChitData(chitId) {
     if (dueTimeInput) {
       dueTimeInput.value = (chit.all_day || chit.allDay) ? "" : dueParts.time;
       console.log(`[loadChitData] Set due_time to: "${dueTimeInput.value}"`);
+    }
+
+    // Set date mode radio based on chit data
+    const dateMode = _detectDateMode(chit);
+    _setDateMode(dateMode);
+
+    // Set all-day checkbox
+    const allDayCheckbox = document.getElementById("allDay");
+    if (allDayCheckbox) {
+      allDayCheckbox.checked = !!(chit.all_day || chit.allDay);
+      if (allDayCheckbox.checked) toggleAllDay();
     }
 
     if (window.checklist) {
@@ -2623,6 +2697,12 @@ document.addEventListener("DOMContentLoaded", function () {
 
   initializeChitId();
 
+  // Load snap setting for time picker dropdowns
+  _loadSnapSetting().then(() => _initTimeDropdowns());
+
+  // Set default date mode to None for new chits
+  _setDateMode('none');
+
   // Load time format setting for alarm display
   loadEditorTimeFormat();
 
@@ -2670,7 +2750,7 @@ document.addEventListener("DOMContentLoaded", function () {
         endTimeInput._flatpickr &&
         !endTimeInput._flatpickr.selectedDates.length &&
         allDayInput &&
-        allDayInput.value !== "true"
+        !allDayInput.checked
       ) {
         endTimeInput._flatpickr.setDate(formatTime(endTime));
       }
