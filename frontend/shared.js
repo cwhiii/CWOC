@@ -421,17 +421,579 @@ function calendarEventTitle(chit, isDueOnly, info) {
 
 /**
  * Build a tooltip string for a calendar event.
+ * Uses the time format from settings (loaded into _globalTimeFormat on dashboard).
  */
 function calendarEventTooltip(chit, info) {
   let tooltip = chit.title || '(Untitled)';
   if (info && info.hasDate) {
     if (info.isAllDay) {
       tooltip += ' — All Day';
-    } else if (info.isDueOnly) {
-      tooltip += ' — Due: ' + info.start.toLocaleString();
     } else {
-      tooltip += ' — ' + info.start.toLocaleString() + ' to ' + info.end.toLocaleString();
+      // Format time respecting settings (24hour vs 12hour)
+      const fmt = typeof _globalTimeFormat !== 'undefined' ? _globalTimeFormat : '24hour';
+      const fmtTime = (d) => {
+        const h = d.getHours(), m = d.getMinutes();
+        if (fmt === '12hour' || fmt === '12houranalog') {
+          const ampm = h >= 12 ? 'PM' : 'AM';
+          return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${ampm}`;
+        }
+        return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+      };
+      const dateStr = info.start.toLocaleDateString();
+      if (info.isDueOnly) {
+        tooltip += ` — Due: ${dateStr} ${fmtTime(info.start)}`;
+      } else {
+        tooltip += ` — ${dateStr} ${fmtTime(info.start)} to ${fmtTime(info.end)}`;
+      }
     }
   }
   return tooltip;
+}
+
+
+// ── Calendar Drag — Move & Resize ────────────────────────────────────────────
+
+let _calSnapMinutes = 15; // loaded from settings
+let _calDragState = null; // { el, chit, mode: 'move'|'resize', startY, startX, origTop, origHeight, origDay, dayColumns }
+let _calSnapGrid = null; // the snap grid overlay element
+
+async function _loadCalSnapSetting() {
+  try {
+    const resp = await fetch('/api/settings/default_user');
+    if (!resp.ok) return;
+    const s = await resp.json();
+    if (s.calendar_snap && parseInt(s.calendar_snap) > 0) {
+      _calSnapMinutes = parseInt(s.calendar_snap);
+    } else if (s.calendar_snap === '0') {
+      _calSnapMinutes = 1; // no snapping = 1 min resolution
+    }
+  } catch (e) { /* default */ }
+}
+
+function _snapToGrid(minutes) {
+  if (_calSnapMinutes <= 1) return minutes;
+  return Math.round(minutes / _calSnapMinutes) * _calSnapMinutes;
+}
+
+function _showSnapGrid(container) {
+  _hideSnapGrid();
+  if (_calSnapMinutes <= 1) return;
+  const grid = document.createElement('div');
+  grid.className = 'cal-snap-grid';
+  grid.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:1440px;pointer-events:none;z-index:5;';
+  for (let m = 0; m < 1440; m += _calSnapMinutes) {
+    const line = document.createElement('div');
+    line.style.cssText = `position:absolute;top:${m}px;left:0;width:100%;height:0;border-top:1px solid rgba(139,90,43,0.15);`;
+    grid.appendChild(line);
+    // Time label every hour or every snap if snap >= 30
+    if (m % 60 === 0 || (_calSnapMinutes >= 30 && m % _calSnapMinutes === 0)) {
+      const h = Math.floor(m / 60);
+      const mn = m % 60;
+      const label = document.createElement('span');
+      label.style.cssText = `position:absolute;top:${m}px;left:2px;font-size:0.65em;color:rgba(139,90,43,0.35);pointer-events:none;`;
+      label.textContent = `${String(h).padStart(2,'0')}:${String(mn).padStart(2,'0')}`;
+      grid.appendChild(label);
+    }
+  }
+  container.appendChild(grid);
+  _calSnapGrid = grid;
+}
+
+function _hideSnapGrid() {
+  if (_calSnapGrid) { _calSnapGrid.remove(); _calSnapGrid = null; }
+}
+
+/**
+ * Make timed calendar events draggable (move) and resizable (bottom edge).
+ * Call after rendering a time-based calendar view.
+ * @param {HTMLElement} scrollContainer - the scrollable grid container
+ * @param {HTMLElement[]} dayColumns - array of day column elements (in order)
+ * @param {Date[]} days - array of Date objects corresponding to dayColumns
+ * @param {object[]} chitsMap - map of element -> { chit, info }
+ */
+function enableCalendarDrag(scrollContainer, dayColumns, days, chitsMap) {
+  if (!scrollContainer) return;
+
+  // Add resize handle to each timed event (only for start/end chits, not due-only)
+  chitsMap.forEach(({ el, info }) => {
+    if (!info.isDueOnly) {
+      const handle = document.createElement('div');
+      handle.className = 'cal-resize-handle';
+      handle.style.cssText = 'position:absolute;bottom:0;left:0;width:100%;height:6px;cursor:ns-resize;';
+      el.appendChild(handle);
+
+      // Resize: mousedown on handle
+      handle.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const entry = chitsMap.find(c => c.el === el);
+        if (!entry) return;
+      _calDragState = {
+        el, chit: entry.chit, info: entry.info, mode: 'resize',
+        startY: e.clientY,
+        origTop: parseInt(el.style.top),
+        origHeight: parseInt(el.style.height),
+        dayCol: el.parentElement,
+      };
+      _showSnapGrid(el.parentElement);
+      document.addEventListener('mousemove', _onCalDragMove);
+      document.addEventListener('mouseup', _onCalDragEnd);
+    });
+    } // end if (!info.isDueOnly) — resize only for start/end chits
+
+    // Move: mousedown on event (not on handle)
+    el.addEventListener('mousedown', (e) => {
+      if (e.target.closest('.cal-resize-handle')) return;
+      // Don't interfere with dblclick
+      const entry = chitsMap.find(c => c.el === el);
+      if (!entry) return;
+      e.preventDefault();
+      const colIdx = dayColumns.indexOf(el.parentElement);
+      _calDragState = {
+        el, chit: entry.chit, info: entry.info, mode: 'move',
+        startY: e.clientY, startX: e.clientX,
+        origTop: parseInt(el.style.top),
+        origHeight: parseInt(el.style.height),
+        origColIdx: colIdx,
+        dayColumns, days,
+        dayCol: el.parentElement,
+      };
+      el.style.opacity = '0.6';
+      el.style.zIndex = '50';
+      _showSnapGrid(el.parentElement);
+      document.addEventListener('mousemove', _onCalDragMove);
+      document.addEventListener('mouseup', _onCalDragEnd);
+    });
+  });
+}
+
+function _onCalDragMove(e) {
+  if (!_calDragState) return;
+  const s = _calDragState;
+  const dy = e.clientY - s.startY;
+
+  if (s.mode === 'resize') {
+    let newHeight = s.origHeight + dy;
+    newHeight = _snapToGrid(newHeight);
+    if (newHeight < 15) newHeight = 15;
+    s.el.style.height = `${newHeight}px`;
+  } else if (s.mode === 'move') {
+    let newTop = s.origTop + dy;
+    newTop = _snapToGrid(newTop);
+    if (newTop < 0) newTop = 0;
+    if (newTop > 1440 - 15) newTop = 1440 - 15;
+    s.el.style.top = `${newTop}px`;
+
+    // Horizontal: detect column change
+    if (s.dayColumns && s.dayColumns.length > 1) {
+      const dx = e.clientX - s.startX;
+      const colWidth = s.dayColumns[0].getBoundingClientRect().width;
+      const colShift = Math.round(dx / colWidth);
+      const newColIdx = Math.max(0, Math.min(s.dayColumns.length - 1, s.origColIdx + colShift));
+      if (newColIdx !== s.dayColumns.indexOf(s.el.parentElement)) {
+        s.dayColumns[newColIdx].appendChild(s.el);
+        _hideSnapGrid();
+        _showSnapGrid(s.dayColumns[newColIdx]);
+      }
+    }
+  }
+}
+
+async function _onCalDragEnd(e) {
+  document.removeEventListener('mousemove', _onCalDragMove);
+  document.removeEventListener('mouseup', _onCalDragEnd);
+  _hideSnapGrid();
+  if (!_calDragState) return;
+
+  const s = _calDragState;
+  s.el.style.opacity = '';
+  s.el.style.zIndex = '';
+  _calDragState = null;
+
+  const newTop = parseInt(s.el.style.top);
+  const newHeight = parseInt(s.el.style.height);
+  const newStartMin = newTop;
+  const newEndMin = newTop + newHeight;
+
+  // Determine new day
+  let newDay = null;
+  if (s.dayColumns && s.days) {
+    const colIdx = s.dayColumns.indexOf(s.el.parentElement);
+    if (colIdx >= 0 && colIdx < s.days.length) newDay = s.days[colIdx];
+  }
+
+  // Build new date values
+  const newStartH = Math.floor(newStartMin / 60);
+  const newStartM = newStartMin % 60;
+  const newEndH = Math.floor(newEndMin / 60);
+  const newEndM = newEndMin % 60;
+
+  try {
+    const resp = await fetch(`/api/chit/${s.chit.id}`);
+    if (!resp.ok) return;
+    const chit = await resp.json();
+
+    const info = getCalendarDateInfo(chit);
+    if (!info.hasDate) return;
+
+    if (info.isDueOnly) {
+      // Update due_datetime
+      const d = newDay || info.start;
+      const newDue = new Date(d.getFullYear(), d.getMonth(), d.getDate(), newStartH, newStartM);
+      chit.due_datetime = newDue.toISOString();
+    } else {
+      // Update start/end, preserve duration on move
+      const d = newDay || info.start;
+      if (s.mode === 'move') {
+        const duration = info.end.getTime() - info.start.getTime();
+        const newStart = new Date(d.getFullYear(), d.getMonth(), d.getDate(), newStartH, newStartM);
+        const newEnd = new Date(newStart.getTime() + duration);
+        chit.start_datetime = newStart.toISOString();
+        chit.end_datetime = newEnd.toISOString();
+      } else {
+        // Resize: only change end time
+        const newEnd = new Date(d.getFullYear(), d.getMonth(), d.getDate(), newEndH, newEndM);
+        chit.end_datetime = newEnd.toISOString();
+      }
+    }
+
+    await fetch(`/api/chits/${chit.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(chit),
+    });
+
+    // Don't re-render — DOM is already updated by the drag
+  } catch (err) {
+    console.error('Calendar drag save failed:', err);
+  }
+}
+
+/**
+ * Enable month view drag — move chits between day cells.
+ * @param {HTMLElement} monthGrid - the month grid container
+ * @param {function} onDrop - callback(chitId, newDate) after drop
+ */
+function enableMonthDrag(monthGrid, onDrop) {
+  let draggedChitId = null;
+
+  monthGrid.addEventListener('dragstart', (e) => {
+    const ev = e.target.closest('.month-event');
+    if (!ev || !ev.dataset.chitId) return;
+    draggedChitId = ev.dataset.chitId;
+    e.dataTransfer.setData('text/plain', draggedChitId);
+    e.dataTransfer.effectAllowed = 'move';
+    ev.style.opacity = '0.4';
+  });
+
+  monthGrid.addEventListener('dragend', (e) => {
+    const ev = e.target.closest('.month-event');
+    if (ev) ev.style.opacity = '';
+    draggedChitId = null;
+  });
+
+  monthGrid.addEventListener('dragover', (e) => {
+    if (!draggedChitId) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  });
+
+  monthGrid.addEventListener('drop', async (e) => {
+    if (!draggedChitId) return;
+    e.preventDefault();
+    const dayCell = e.target.closest('.month-day');
+    if (!dayCell || !dayCell.dataset.date) return;
+    const newDate = new Date(dayCell.dataset.date);
+    if (isNaN(newDate.getTime())) return;
+
+    try {
+      const resp = await fetch(`/api/chit/${draggedChitId}`);
+      if (!resp.ok) return;
+      const chit = await resp.json();
+      const info = getCalendarDateInfo(chit);
+      if (!info.hasDate) return;
+
+      // Shift dates by the day difference, preserving times
+      const oldDay = new Date(info.start.getFullYear(), info.start.getMonth(), info.start.getDate());
+      const dayDiff = (newDate.getTime() - oldDay.getTime());
+
+      if (info.isDueOnly) {
+        const d = new Date(new Date(chit.due_datetime).getTime() + dayDiff);
+        chit.due_datetime = d.toISOString();
+      } else {
+        if (chit.start_datetime) {
+          const d = new Date(new Date(chit.start_datetime).getTime() + dayDiff);
+          chit.start_datetime = d.toISOString();
+        }
+        if (chit.end_datetime) {
+          const d = new Date(new Date(chit.end_datetime).getTime() + dayDiff);
+          chit.end_datetime = d.toISOString();
+        }
+      }
+
+      await fetch(`/api/chits/${chit.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(chit),
+      });
+      if (typeof fetchChits === 'function') fetchChits();
+    } catch (err) {
+      console.error('Month drag save failed:', err);
+    }
+    draggedChitId = null;
+  });
+}
+
+
+/**
+ * Enable drag for all-day events between day cells in the all-day row.
+ * @param {HTMLElement} allDayEventsRow - the flex row containing day cells
+ * @param {Date[]} days - array of Date objects for each cell
+ */
+function enableAllDayDrag(allDayEventsRow, days) {
+  if (!allDayEventsRow) return;
+  let draggedEv = null;
+  let draggedChitId = null;
+
+  allDayEventsRow.addEventListener('dragstart', (e) => {
+    const ev = e.target.closest('.all-day-event');
+    if (!ev) return;
+    draggedEv = ev;
+    draggedChitId = null; // will get from chit lookup
+    e.dataTransfer.setData('text/plain', 'allday');
+    e.dataTransfer.effectAllowed = 'move';
+    ev.style.opacity = '0.4';
+  });
+
+  allDayEventsRow.addEventListener('dragend', () => {
+    if (draggedEv) draggedEv.style.opacity = '';
+    draggedEv = null;
+  });
+
+  allDayEventsRow.addEventListener('dragover', (e) => {
+    if (!draggedEv) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  });
+
+  allDayEventsRow.addEventListener('drop', async (e) => {
+    if (!draggedEv) return;
+    e.preventDefault();
+    // Find which day cell was dropped on (skip the spacer — first child)
+    const cells = Array.from(allDayEventsRow.children).slice(1); // skip spacer
+    let targetIdx = -1;
+    for (let i = 0; i < cells.length; i++) {
+      const rect = cells[i].getBoundingClientRect();
+      if (e.clientX >= rect.left && e.clientX <= rect.right) {
+        targetIdx = i;
+        break;
+      }
+    }
+    if (targetIdx < 0 || targetIdx >= days.length) return;
+
+    const chitId = draggedEv.dataset.chitId;
+    if (!chitId) return;
+    const newDay = days[targetIdx];
+
+    try {
+      const resp = await fetch(`/api/chit/${chitId}`);
+      if (!resp.ok) return;
+      const chit = await resp.json();
+      const info = getCalendarDateInfo(chit);
+      if (!info.hasDate) return;
+
+      const oldDay = new Date(info.start.getFullYear(), info.start.getMonth(), info.start.getDate());
+      const dayDiff = newDay.getTime() - oldDay.getTime();
+
+      if (info.isDueOnly) {
+        chit.due_datetime = new Date(new Date(chit.due_datetime).getTime() + dayDiff).toISOString();
+      } else {
+        if (chit.start_datetime) chit.start_datetime = new Date(new Date(chit.start_datetime).getTime() + dayDiff).toISOString();
+        if (chit.end_datetime) chit.end_datetime = new Date(new Date(chit.end_datetime).getTime() + dayDiff).toISOString();
+      }
+
+      await fetch(`/api/chits/${chit.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(chit),
+      });
+      if (typeof fetchChits === 'function') fetchChits();
+    } catch (err) {
+      console.error('All-day drag failed:', err);
+    }
+  });
+
+  // Make all-day events draggable
+  allDayEventsRow.querySelectorAll('.all-day-event').forEach(ev => {
+    ev.draggable = true;
+  });
+}
+
+
+// ── Nested Tag Utilities ─────────────────────────────────────────────────────
+
+/**
+ * Build a nested tree structure from a flat list of tag objects.
+ * Tags with "/" in the name are nested: "Work/Projects/CWOC" → Work → Projects → CWOC
+ * @param {Array} flatTags - Array of { name, color, favorite } objects
+ * @returns {Array} Tree nodes: { name, fullPath, color, favorite, children: [] }
+ */
+function buildTagTree(flatTags) {
+  const root = [];
+  const nodeMap = {};
+
+  flatTags.forEach(tag => {
+    const parts = tag.name.split('/');
+    let currentLevel = root;
+    let pathSoFar = '';
+
+    parts.forEach((part, i) => {
+      pathSoFar = pathSoFar ? pathSoFar + '/' + part : part;
+      if (!nodeMap[pathSoFar]) {
+        const isLeaf = i === parts.length - 1;
+        const node = {
+          name: part,
+          fullPath: pathSoFar,
+          color: isLeaf ? tag.color : null,
+          favorite: isLeaf ? !!tag.favorite : false,
+          children: [],
+        };
+        nodeMap[pathSoFar] = node;
+        currentLevel.push(node);
+      }
+      currentLevel = nodeMap[pathSoFar].children;
+    });
+  });
+
+  return root;
+}
+
+/**
+ * Flatten a tag tree back to a flat list of { name, color, favorite }.
+ * Only includes leaf nodes (or nodes that were originally defined).
+ * @param {Array} tree
+ * @param {Array} originalNames - original flat tag names for reference
+ * @returns {Array}
+ */
+function flattenTagTree(tree, originalNames) {
+  const result = [];
+  function walk(nodes) {
+    nodes.forEach(node => {
+      if (node.children.length === 0 || originalNames.includes(node.fullPath)) {
+        result.push({ name: node.fullPath, color: node.color, favorite: node.favorite });
+      }
+      walk(node.children);
+    });
+  }
+  walk(tree);
+  return result;
+}
+
+/**
+ * Check if a chit's tags match a filter tag (including descendants).
+ * E.g., filter "Work" matches chit tag "Work/Projects/CWOC".
+ * @param {string[]} chitTags - tags on the chit
+ * @param {string} filterTag - the filter tag path
+ * @returns {boolean}
+ */
+function matchesTagFilter(chitTags, filterTag) {
+  if (!Array.isArray(chitTags) || !filterTag) return false;
+  return chitTags.some(t => t === filterTag || t.startsWith(filterTag + '/'));
+}
+
+/**
+ * Render a tag tree as an expandable/collapsible HTML tree.
+ * @param {HTMLElement} container - element to render into
+ * @param {Array} tree - from buildTagTree()
+ * @param {string[]} selectedTags - currently selected full paths
+ * @param {function} onToggle - callback(fullPath, isNowSelected) when a tag is toggled
+ * @param {object} [opts] - { showFavorites: bool }
+ */
+function renderTagTree(container, tree, selectedTags, onToggle, opts) {
+  container.innerHTML = '';
+
+  function renderLevel(nodes, parentEl, depth) {
+    nodes.forEach(node => {
+      const row = document.createElement('div');
+      row.style.cssText = `display:flex;align-items:center;gap:4px;padding:2px 0;padding-left:${depth * 16}px;cursor:pointer;`;
+
+      // Expand/collapse toggle for nodes with children
+      if (node.children.length > 0) {
+        const toggle = document.createElement('span');
+        toggle.style.cssText = 'font-size:0.7em;width:14px;text-align:center;cursor:pointer;user-select:none;';
+        toggle.textContent = '▼';
+        const childContainer = document.createElement('div');
+        toggle.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const isHidden = childContainer.style.display === 'none';
+          childContainer.style.display = isHidden ? '' : 'none';
+          toggle.textContent = isHidden ? '▼' : '▶';
+        });
+        row.appendChild(toggle);
+      } else {
+        const spacer = document.createElement('span');
+        spacer.style.cssText = 'width:14px;';
+        row.appendChild(spacer);
+      }
+
+      // Favorite star
+      if (node.favorite) {
+        const star = document.createElement('span');
+        star.textContent = '⭐';
+        star.style.fontSize = '0.8em';
+        row.appendChild(star);
+      }
+
+      // Color swatch
+      if (node.color) {
+        const swatch = document.createElement('span');
+        swatch.style.cssText = `display:inline-block;width:10px;height:10px;border-radius:50%;background:${node.color};flex-shrink:0;`;
+        row.appendChild(swatch);
+      }
+
+      // Tag name badge
+      const isSelected = selectedTags.includes(node.fullPath);
+      const badge = document.createElement('span');
+      badge.textContent = node.name;
+      badge.style.cssText = `font-size:0.85em;padding:1px 6px;border-radius:10px;${isSelected ? 'background:#8b5a2b;color:#fff;' : 'background:rgba(139,90,43,0.1);color:#3c2f2f;'}`;
+      row.appendChild(badge);
+
+      // Click to toggle selection
+      row.addEventListener('click', () => {
+        if (onToggle) onToggle(node.fullPath, !isSelected);
+      });
+
+      parentEl.appendChild(row);
+
+      // Children
+      if (node.children.length > 0) {
+        const childContainer = document.createElement('div');
+        renderLevel(node.children, childContainer, depth + 1);
+        parentEl.appendChild(childContainer);
+      }
+    });
+  }
+
+  renderLevel(tree, container, 0);
+}
+
+// Session-level recent tags tracking
+let _recentTags = [];
+
+function trackRecentTag(tagPath) {
+  _recentTags = _recentTags.filter(t => t !== tagPath);
+  _recentTags.unshift(tagPath);
+  if (_recentTags.length > 3) _recentTags = _recentTags.slice(0, 3);
+}
+
+function getRecentTags() {
+  return _recentTags.slice(0, 3);
+}
+
+
+// ── System tags (auto-generated by backend, should not appear in user-facing tag lists) ──
+const SYSTEM_TAGS = ['Calendar', 'Checklists', 'Alarms', 'Projects', 'Tasks', 'Notes'];
+
+function isSystemTag(tagName) {
+  return SYSTEM_TAGS.includes(tagName);
 }

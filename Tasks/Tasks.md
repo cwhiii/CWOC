@@ -170,27 +170,27 @@ Major feature: draggable calendar events, editor date field restructure, snap-to
 ### Phase 4: Calendar Drag — Move, Resize, Snap Grid
 **Files:** `frontend/main.js`, `frontend/shared.js`, `frontend/styles.css`
 
-- `[ ]` Drag to move (Day/Week/7-Day views):
+- `[x]` Drag to move (Day/Week/7-Day views):
   - Vertical: change time, snap to configured interval
   - Horizontal: change day (Week/7-Day only)
   - For start/end chits: update start_datetime, shift end_datetime to preserve duration
   - For due-date-only chits: update due_datetime
   - Save on mouse release (PUT to API)
-- `[ ]` Drag bottom edge to resize (Day/Week/7-Day views):
+- `[x]` Drag bottom edge to resize (Day/Week/7-Day views):
   - Changes end time, snaps to configured interval
   - For due-date-only chits: not applicable (no end time)
   - Save on mouse release
-- `[ ]` Snap grid lines (Day/Week/7-Day views):
+- `[x]` Snap grid lines (Day/Week/7-Day views):
   - Appear only during active drag
   - Light grey horizontal lines at each snap interval
   - Time labels in light grey between lines
   - Appear in all day columns, not just the one being dragged
-- `[ ]` Month view drag:
+- `[x]` Month view drag:
   - Drag chit from one day cell to another
   - Shifts start/end/due dates by the day difference, preserving times
   - Save on release
-- `[ ]` No drag in Year or Itinerary views
-- `[ ]` All-day events: draggable between days (horizontal only), not vertically
+- `[x]` No drag in Year or Itinerary views
+- `[x]` All-day events: draggable between days (horizontal only), not vertically
 
 ---
 
@@ -300,3 +300,56 @@ Major feature: draggable calendar events, editor date field restructure, snap-to
 - `[ ]` Automations (if this, then that) — the "A" in C CAPTN
 - `[ ]` Appointments (from other people) — also "A"
 - `[ ]` Fragments to GitHub
+
+
+---
+
+## Nested Tags & Tag System Overhaul
+
+### Overview
+Restructure the tag system to support hierarchical/nested tags using `/` as separator (e.g., `Work/Projects/CWOC`). Add favorites, recent tracking, and shared tag creation code between editor and settings.
+
+### Data Model Changes
+**Files:** `backend/main.py`, `frontend/settings.js`, `frontend/editor.js`
+
+- `[x]` Tags stored as full paths: `"Work/Projects/CWOC"` — the `/` is the nesting separator
+- `[x]` Add `favorite` boolean to tag objects in settings: `{ name, color, favorite }`
+- `[ ]` Add migration for existing tag data (flat tags remain flat, no `/` = top-level)
+- `[x]` Backward compatible: existing flat tags like `"Work"` stay as-is
+
+### Settings Page — Tag Management
+**Files:** `frontend/settings.html`, `frontend/settings.js`
+
+- `[ ]` Support creating nested tags: parent dropdown or drag-to-nest
+- `[ ]` Display tags as expandable tree in settings
+- `[ ]` Toggle favorite (star icon) per tag
+- `[ ]` Creating a child tag auto-prefixes with parent path: adding "CWOC" under "Work/Projects" creates "Work/Projects/CWOC"
+- `[ ]` Color inheritance: child tags inherit parent color unless overridden
+
+### Editor — Tag Zone Overhaul
+**Files:** `frontend/editor.html`, `frontend/editor.js`
+
+- `[x]` Tag tree: expandable/collapsible hierarchy (like file browser)
+  - Clicking a child tag adds the full path (e.g., "Work/Projects/CWOC")
+  - Parent nodes can be expanded/collapsed
+  - Indentation shows nesting level
+- `[x]` Favorites row: show tags marked as favorite (always at top)
+- `[x]` Recent row: 3 most recently used tags in this session (tracked in memory, not persisted)
+- `[x]` Remove "Top" row (was most-used, not implemented)
+- `[ ]` Add button: reuse same tag creation code as settings (shared function)
+- `[x]` Active tags panel: shows selected tags with remove buttons (existing behavior)
+
+### Sidebar — Tag Filter
+**Files:** `frontend/index.html`, `frontend/main.js`
+
+- `[x]` Tag filter scrollbar: always show scrollbar when tags overflow
+- `[x]` Filtering by parent tag matches all descendants (e.g., filtering "Work" matches "Work/Projects/CWOC")
+- `[ ]` Display tags as indented tree in filter panel
+
+### Shared Code
+**Files:** `frontend/shared.js`
+
+- `[ ]` `createTagInline(parentPath, onCreated)` — shared tag creation UI (used by both editor and settings)
+- `[x]` `buildTagTree(flatTags)` — converts flat tag list to nested tree structure
+- `[x]` `flattenTagTree(tree)` — converts tree back to flat list for storage
+- `[x]` `matchesTagFilter(chitTags, filterTag)` — checks if any chit tag starts with the filter tag path

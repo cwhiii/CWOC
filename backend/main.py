@@ -23,6 +23,7 @@ DB_PATH = "/app/data/app.db"
 class Tag(BaseModel):
     name: str
     color: Optional[str] = None
+    favorite: Optional[bool] = False
 
 class Settings(BaseModel):
     user_id: str

@@ -336,7 +336,7 @@ h1 {
 }
 
 .all-day-section {
-    background-color: #fffacd;
+    background-color: #e8dcc8;
     padding: 5px;
     margin-bottom: 0;
     min-height: 0;
@@ -1258,4 +1258,68 @@ button.delete:hover {
 }
 .chit-card[draggable="true"]:active {
     cursor: grabbing;
+}
+
+/* ── Calendar drag resize handle ──────────────────────────────────────────── */
+.cal-resize-handle {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 6px;
+    cursor: ns-resize;
+    background: transparent;
+}
+.cal-resize-handle:hover {
+    background: rgba(139, 90, 43, 0.3);
+}
+.timed-event:hover .cal-resize-handle,
+.day-event:hover .cal-resize-handle {
+    background: rgba(139, 90, 43, 0.2);
+}
+
+/* ── Today highlight in calendar views ────────────────────────────────────── */
+.day-header.today {
+    background-color: #d4c4a0 !important;
+    font-weight: bold;
+}
+.day-column.today {
+    background-color: rgba(212, 196, 160, 0.15);
+}
+.month-day.today {
+    background-color: rgba(212, 196, 160, 0.25) !important;
+}
+/* Current time indicator */
+.time-now-bar {
+    position: absolute;
+    left: 0;
+    width: 100%;
+    height: 2px;
+    background-color: #4a2c2a;
+    z-index: 20;
+    pointer-events: none;
+}
+.time-now-bar::before {
+    content: '';
+    position: absolute;
+    left: -4px;
+    top: -3px;
+    width: 8px;
+    height: 8px;
+    background: #4a2c2a;
+    border-radius: 50%;
+}
+
+.day-separator.today h3 {
+    color: #4a2c2a;
+    background-color: rgba(212, 196, 160, 0.3);
+    padding: 2px 8px;
+    border-radius: 4px;
+    display: inline-block;
+}
+
+/* ── Tag filter scrollbar always visible ──────────────────────────────────── */
+#label-multi {
+    overflow-y: scroll !important;
+    max-height: 120px;
 }

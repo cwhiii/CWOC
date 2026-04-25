@@ -689,55 +689,87 @@ function renderTags(tags, selectedTags = []) {
   const treeContainer = document.getElementById("tagTreeContainer");
   const activeContainer = document.getElementById("activeTagsListContainer");
   const activeCount = document.getElementById("activeTagsCount");
+  const favContainer = document.getElementById("favTags");
+  const recentContainer = document.getElementById("mostRecentTags");
+  const topContainer = document.getElementById("mostUsedTags");
 
   if (!treeContainer || !activeContainer) {
     console.warn("Tag zone containers not found");
     return;
   }
 
-  treeContainer.innerHTML = "";
-  activeContainer.innerHTML = "";
+  // Hide the "Top" row (not implemented)
+  if (topContainer) topContainer.parentElement.style.display = "none";
 
   if (!tags || tags.length === 0) {
     treeContainer.innerHTML = '<p style="font-size:0.85em;opacity:0.6;">No tags defined. Create tags in Settings.</p>';
     if (activeCount) activeCount.textContent = "0";
+    if (favContainer) favContainer.innerHTML = "";
+    if (recentContainer) recentContainer.innerHTML = "";
     return;
   }
 
-  // Build the tree list
-  tags.forEach((tag) => {
-    const isActive = selectedTags.includes(tag.name);
-    const item = document.createElement("div");
-    item.className = "tag-tree-node" + (isActive ? " tag-active" : "");
-    item.style.cssText = "display:flex;align-items:center;gap:6px;padding:3px 0;cursor:pointer;";
-
-    const swatch = document.createElement("span");
-    swatch.style.cssText = `display:inline-block;width:12px;height:12px;border-radius:50%;background:${tag.color || getPastelColor(tag.name)};flex-shrink:0;`;
-
-    const badge = document.createElement("span");
-    badge.textContent = tag.name;
-    badge.style.cssText = `background:${tag.color || getPastelColor(tag.name)};color:#000;padding:2px 8px;border-radius:12px;font-size:0.9em;`;
-
-    item.appendChild(swatch);
-    item.appendChild(badge);
-
-    item.addEventListener("click", () => {
-      const idx = selectedTags.indexOf(tag.name);
-      if (idx === -1) {
-        selectedTags.push(tag.name);
-      } else {
-        selectedTags.splice(idx, 1);
-      }
-      renderTags(tags, selectedTags);
-      setSaveButtonUnsaved();
-    });
-
-    treeContainer.appendChild(item);
+  // Build nested tree and render
+  const tree = buildTagTree(tags);
+  renderTagTree(treeContainer, tree, selectedTags, (fullPath, isNowSelected) => {
+    const idx = selectedTags.indexOf(fullPath);
+    if (isNowSelected && idx === -1) {
+      selectedTags.push(fullPath);
+      trackRecentTag(fullPath);
+    } else if (!isNowSelected && idx !== -1) {
+      selectedTags.splice(idx, 1);
+    }
+    renderTags(tags, selectedTags);
+    setSaveButtonUnsaved();
   });
 
-  // Render active tags panel
-  const activeTags = tags.filter((t) => selectedTags.includes(t.name));
-  activeTags.forEach((tag) => {
+  // Favorites row
+  if (favContainer) {
+    favContainer.innerHTML = "";
+    tags.filter(t => t.favorite).forEach(tag => {
+      const chip = document.createElement("span");
+      chip.style.cssText = `display:inline-block;padding:2px 8px;border-radius:12px;font-size:0.8em;cursor:pointer;margin:1px;background:${tag.color || getPastelColor(tag.name)};color:#000;${selectedTags.includes(tag.name) ? 'outline:2px solid #8b5a2b;' : ''}`;
+      chip.textContent = "⭐ " + tag.name.split('/').pop();
+      chip.title = tag.name;
+      chip.addEventListener("click", () => {
+        const idx = selectedTags.indexOf(tag.name);
+        if (idx === -1) { selectedTags.push(tag.name); trackRecentTag(tag.name); }
+        else selectedTags.splice(idx, 1);
+        renderTags(tags, selectedTags);
+        setSaveButtonUnsaved();
+      });
+      favContainer.appendChild(chip);
+    });
+    favContainer.parentElement.style.display = tags.some(t => t.favorite) ? "" : "none";
+  }
+
+  // Recent row
+  if (recentContainer) {
+    recentContainer.innerHTML = "";
+    const recents = getRecentTags();
+    recents.forEach(path => {
+      const tag = tags.find(t => t.name === path);
+      if (!tag) return;
+      const chip = document.createElement("span");
+      chip.style.cssText = `display:inline-block;padding:2px 8px;border-radius:12px;font-size:0.8em;cursor:pointer;margin:1px;background:${tag.color || getPastelColor(tag.name)};color:#000;${selectedTags.includes(tag.name) ? 'outline:2px solid #8b5a2b;' : ''}`;
+      chip.textContent = tag.name.split('/').pop();
+      chip.title = tag.name;
+      chip.addEventListener("click", () => {
+        const idx = selectedTags.indexOf(tag.name);
+        if (idx === -1) { selectedTags.push(tag.name); trackRecentTag(tag.name); }
+        else selectedTags.splice(idx, 1);
+        renderTags(tags, selectedTags);
+        setSaveButtonUnsaved();
+      });
+      recentContainer.appendChild(chip);
+    });
+    recentContainer.parentElement.style.display = recents.length > 0 ? "" : "none";
+  }
+
+  // Render active tags panel (exclude system tags)
+  activeContainer.innerHTML = "";
+  selectedTags.filter(t => !isSystemTag(t)).forEach(tagName => {
+    const tag = tags.find(t => t.name === tagName) || { name: tagName, color: null };
     const chip = document.createElement("span");
     chip.style.cssText = `display:inline-flex;align-items:center;gap:4px;background:${tag.color || getPastelColor(tag.name)};color:#000;padding:2px 8px;border-radius:12px;font-size:0.9em;margin:2px;`;
     chip.textContent = tag.name;
@@ -747,7 +779,7 @@ function renderTags(tags, selectedTags = []) {
     removeBtn.style.cssText = "background:none;border:none;cursor:pointer;font-size:0.8em;padding:0 0 0 4px;line-height:1;";
     removeBtn.addEventListener("click", (e) => {
       e.stopPropagation();
-      const idx = selectedTags.indexOf(tag.name);
+      const idx = selectedTags.indexOf(tagName);
       if (idx !== -1) selectedTags.splice(idx, 1);
       renderTags(tags, selectedTags);
       setSaveButtonUnsaved();
@@ -757,9 +789,7 @@ function renderTags(tags, selectedTags = []) {
     activeContainer.appendChild(chip);
   });
 
-  if (activeCount) activeCount.textContent = activeTags.length;
-
-  // Keep a reference so saveChitData can read the current selection
+  if (activeCount) activeCount.textContent = selectedTags.filter(t => !isSystemTag(t)).length;
   window._currentTagSelection = selectedTags;
 }
 

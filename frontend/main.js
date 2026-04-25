@@ -43,6 +43,22 @@ function onFilterChange() {
   _updateClearFiltersButton();
 }
 
+function _filterTagCheckboxes() {
+  const query = (document.getElementById('tag-filter-search')?.value || '').toLowerCase();
+  // Filter tree nodes in the sidebar tag panel
+  const container = document.getElementById('label-multi');
+  if (!container) return;
+  container.querySelectorAll('div').forEach(row => {
+    // Only filter visible rows that have tag text
+    const spans = row.querySelectorAll('span');
+    if (spans.length === 0) return;
+    const text = Array.from(spans).map(s => s.textContent).join(' ').toLowerCase();
+    if (row.parentElement === container || row.parentElement?.parentElement === container) {
+      row.style.display = (!query || text.includes(query)) ? '' : 'none';
+    }
+  });
+}
+
 function _clearAllFilters() {
   document.querySelectorAll('#status-multi input[type="checkbox"]').forEach(cb => { cb.checked = false; });
   document.querySelectorAll('#label-multi input[type="checkbox"]').forEach(cb => { cb.checked = false; });
@@ -123,7 +139,7 @@ function _applyMultiSelectFilters(chitList) {
   if (labels.length > 0) {
     result = result.filter(c => {
       const tags = c.tags || [];
-      return labels.some(l => tags.includes(l));
+      return labels.some(l => matchesTagFilter(tags, l));
     });
   }
 
@@ -230,7 +246,7 @@ function _buildChitHeader(chit, titleHtml) {
   if (chit.start_datetime) addMeta(`Start: ${formatDate(new Date(chit.start_datetime))}`, 'start');
   if (chit.modified_datetime) addMeta(`Upd: ${formatDate(new Date(chit.modified_datetime))}`, 'updated');
   if (chit.created_datetime) addMeta(`Cre: ${formatDate(new Date(chit.created_datetime))}`, 'created');
-  const tags = chit.tags || [];
+  const tags = (chit.tags || []).filter(t => !isSystemTag(t));
   if (tags.length > 0) addMeta(tags.join(', '), null);
 
   row.appendChild(right);
@@ -364,55 +380,79 @@ async function _loadLabelFilters() {
     if (!container) return;
 
     // Collect tags from settings API
-    let tagNames = [];
+    let tagObjects = [];
     try {
       const resp = await fetch('/api/settings/default_user');
       if (resp.ok) {
         const settings = await resp.json();
         const tags = settings.tags ? (typeof settings.tags === 'string' ? JSON.parse(settings.tags) : settings.tags) : [];
-        tagNames = tags.map(t => typeof t === 'string' ? t : t.name).filter(Boolean);
+        tagObjects = tags.map(t => typeof t === 'string' ? { name: t, color: null, favorite: false } : t).filter(t => t.name);
       }
     } catch (e) { /* ignore */ }
 
     // Also collect tags from loaded chits as fallback
-    if (tagNames.length === 0 && chits.length > 0) {
+    if (tagObjects.length === 0 && chits.length > 0) {
       const seen = new Set();
       chits.forEach(c => {
         (c.tags || []).forEach(t => {
-          if (t && !seen.has(t)) { seen.add(t); tagNames.push(t); }
+          if (t && !seen.has(t)) { seen.add(t); tagObjects.push({ name: t, color: null, favorite: false }); }
         });
       });
-      tagNames.sort();
+      tagObjects.sort((a, b) => a.name.localeCompare(b.name));
     }
 
+    // Filter out system tags
+    tagObjects = tagObjects.filter(t => !isSystemTag(t.name));
+
     // Preserve current selections (or restore pending from state)
-    const prevSelected = new Set();
-    container.querySelectorAll('input:checked').forEach(cb => prevSelected.add(cb.value));
+    const prevSelected = [];
+    container.querySelectorAll('input:checked').forEach(cb => prevSelected.push(cb.value));
     if (window._pendingLabelFilters) {
-      window._pendingLabelFilters.forEach(v => prevSelected.add(v));
+      window._pendingLabelFilters.forEach(v => { if (!prevSelected.includes(v)) prevSelected.push(v); });
       delete window._pendingLabelFilters;
     }
 
+    // Store selected state for _getSelectedLabels to read
+    window._sidebarTagSelection = [...prevSelected];
+
     container.innerHTML = '';
-    if (tagNames.length === 0) {
+    if (tagObjects.length === 0) {
       container.innerHTML = '<span style="font-size:0.8em;opacity:0.5;">No tags defined</span>';
       return;
     }
-    tagNames.forEach(name => {
-      const lbl = document.createElement('label');
-      const cb = document.createElement('input');
-      cb.type = 'checkbox';
-      cb.value = name;
-      cb.dataset.filter = 'label';
-      cb.checked = prevSelected.has(name);
-      cb.onchange = onFilterChange;
-      lbl.appendChild(cb);
-      lbl.appendChild(document.createTextNode(' ' + name));
-      container.appendChild(lbl);
+
+    // Build tree and render
+    const tree = buildTagTree(tagObjects);
+    renderTagTree(container, tree, window._sidebarTagSelection, (fullPath, isNowSelected) => {
+      const idx = window._sidebarTagSelection.indexOf(fullPath);
+      if (isNowSelected && idx === -1) window._sidebarTagSelection.push(fullPath);
+      else if (!isNowSelected && idx !== -1) window._sidebarTagSelection.splice(idx, 1);
+      // Sync hidden checkboxes for _getSelectedLabels
+      _syncSidebarTagCheckboxes(container, tagObjects);
+      onFilterChange();
     });
+
+    // Also create hidden checkboxes so _getSelectedLabels still works
+    _syncSidebarTagCheckboxes(container, tagObjects);
   } catch (e) {
     console.log('Could not load label filters:', e);
   }
+}
+
+function _syncSidebarTagCheckboxes(container, tagObjects) {
+  // Remove old hidden checkboxes
+  container.querySelectorAll('input[data-filter="label"]').forEach(cb => cb.remove());
+  // Create hidden checkboxes for each selected tag
+  const sel = window._sidebarTagSelection || [];
+  tagObjects.forEach(t => {
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.value = t.name;
+    cb.dataset.filter = 'label';
+    cb.checked = sel.includes(t.name);
+    cb.style.display = 'none';
+    container.appendChild(cb);
+  });
 }
 
 // ── Period (was "View") ──────────────────────────────────────────────────────
@@ -1093,34 +1133,54 @@ function displayWeekView(chitsToDisplay) {
   // Row 1: Day headers
   const headerRow = document.createElement("div");
   headerRow.style.cssText = "display:flex;flex-shrink:0;border-bottom:1px solid #6b4e31;";
-  // Spacer for hour column
+  // Spacer for hour column (contains all-day toggle if needed)
   const headerSpacer = document.createElement("div");
-  headerSpacer.style.cssText = "width:60px;flex-shrink:0;";
+  headerSpacer.style.cssText = "width:60px;flex-shrink:0;display:flex;align-items:center;justify-content:center;";
   headerRow.appendChild(headerSpacer);
   days.forEach(day => {
     const hdr = document.createElement("div");
     hdr.className = "day-header";
+    if (day.toDateString() === new Date().toDateString()) hdr.classList.add("today");
     hdr.style.cssText = "flex:1;min-width:0;text-align:center;padding:6px 2px;";
     hdr.textContent = formatDate(day);
     headerRow.appendChild(hdr);
   });
   wrapper.appendChild(headerRow);
 
-  // Row 2: All-day events
+  // Row 2: All-day events (with collapse toggle and day dividers)
   const hasAnyAllDay = dayData.some(d => d.allDay.length > 0);
   if (hasAnyAllDay) {
-    const allDayRow = document.createElement("div");
-    allDayRow.style.cssText = "display:flex;flex-shrink:0;background:#fffacd;border-bottom:1px solid #6b4e31;min-height:24px;";
-    const allDaySpacer = document.createElement("div");
-    allDaySpacer.style.cssText = "width:60px;flex-shrink:0;font-size:0.75em;padding:4px 2px;color:#8b5a2b;";
-    allDaySpacer.textContent = "all day";
-    allDayRow.appendChild(allDaySpacer);
+    const allDayContainer = document.createElement("div");
+    allDayContainer.style.cssText = "flex-shrink:0;border-bottom:1px solid #6b4e31;";
+
+    const allDayEventsRow = document.createElement("div");
+    allDayEventsRow.style.cssText = "display:flex;background:#e8dcc8;min-height:24px;";
+
+    // Toggle button in the header spacer
+    const toggleBtn = document.createElement("span");
+    toggleBtn.style.cssText = "cursor:pointer;font-size:1.4em;line-height:1;user-select:none;";
+    toggleBtn.textContent = "\u2600"; // sun = all-day visible
+    toggleBtn.title = "Collapse all-day events";
+    toggleBtn.addEventListener("click", () => {
+      const isHidden = allDayContainer.style.display === "none";
+      allDayContainer.style.display = isHidden ? "" : "none";
+      toggleBtn.textContent = isHidden ? "\u2600" : "\u25B2"; // sun vs up triangle
+      toggleBtn.title = isHidden ? "Collapse all-day events" : "Expand all-day events";
+    });
+    headerSpacer.appendChild(toggleBtn);
+
+    // Spacer in events row to align with hour column
+    const rowSpacer = document.createElement("div");
+    rowSpacer.style.cssText = "width:60px;flex-shrink:0;";
+    allDayEventsRow.appendChild(rowSpacer);
+
     dayData.forEach(dd => {
       const cell = document.createElement("div");
-      cell.style.cssText = "flex:1;min-width:0;padding:2px;";
+      cell.style.cssText = "flex:1;min-width:0;padding:2px;border-left:1px solid #d3d3d3;";
       dd.allDay.forEach(({ chit, info }) => {
         const ev = document.createElement("div");
         ev.className = "all-day-event";
+        ev.dataset.chitId = chit.id;
         ev.style.backgroundColor = chitColor(chit);
         if (chit.status === "Complete") ev.classList.add("completed-task");
         ev.title = calendarEventTooltip(chit, info);
@@ -1128,9 +1188,12 @@ function displayWeekView(chitsToDisplay) {
         ev.addEventListener("dblclick", () => { storePreviousState(); window.location.href = `/editor?id=${chit.id}`; });
         cell.appendChild(ev);
       });
-      allDayRow.appendChild(cell);
+      allDayEventsRow.appendChild(cell);
     });
-    wrapper.appendChild(allDayRow);
+
+    allDayContainer.appendChild(allDayEventsRow);
+    wrapper.appendChild(allDayContainer);
+    enableAllDayDrag(allDayEventsRow, days);
   }
 
   // Row 3: Scrollable time grid
@@ -1152,9 +1215,12 @@ function displayWeekView(chitsToDisplay) {
   scrollGrid.appendChild(hourColumn);
 
   // Day columns with timed events only
-  dayData.forEach(dd => {
+  const weekDayColumns = [];
+  const weekChitsMap = [];
+  dayData.forEach((dd, dayIdx) => {
     const col = document.createElement("div");
     col.className = "day-column";
+    if (dd.day.toDateString() === new Date().toDateString()) col.classList.add("today");
     col.style.cssText = "flex:1;min-width:0;position:relative;min-height:1440px;border-left:1px solid #d3d3d3;";
 
     dd.timed.forEach(({ chit, info }) => {
@@ -1174,8 +1240,10 @@ function displayWeekView(chitsToDisplay) {
       ev.innerHTML = `${calendarEventTitle(chit, info.isDueOnly, info)}<br>${timeLabel}`;
       ev.addEventListener("dblclick", () => { storePreviousState(); window.location.href = `/editor?id=${chit.id}`; });
       col.appendChild(ev);
+      weekChitsMap.push({ el: ev, chit, info });
     });
 
+    weekDayColumns.push(col);
     scrollGrid.appendChild(col);
   });
 
@@ -1184,6 +1252,11 @@ function displayWeekView(chitsToDisplay) {
 
   scrollToSixAM();
   renderTimeBar("Week");
+
+  // Enable drag
+  _loadCalSnapSetting().then(() => {
+    enableCalendarDrag(scrollGrid, weekDayColumns, days, weekChitsMap);
+  });
 }
 
 function displayMonthView(chitsToDisplay) {
@@ -1234,6 +1307,8 @@ function displayMonthView(chitsToDisplay) {
     );
     const monthDay = document.createElement("div");
     monthDay.className = "month-day";
+    if (dayDate.toDateString() === new Date().toDateString()) monthDay.classList.add("today");
+    monthDay.dataset.date = dayDate.toISOString().slice(0, 10);
     monthDay.innerHTML = `<div class="day-number">${day}</div>`;
 
     const dayChits = chitsToDisplay.filter((chit) => chitMatchesDay(chit, dayDate));
@@ -1245,6 +1320,8 @@ function displayMonthView(chitsToDisplay) {
         const info = getCalendarDateInfo(chit);
         const chitElement = document.createElement("div");
         chitElement.className = "month-event";
+        chitElement.draggable = true;
+        chitElement.dataset.chitId = chit.id;
         chitElement.style.backgroundColor = chitColor(chit);
         chitElement.style.cursor = "pointer";
         if (chit.status === "Complete") chitElement.classList.add("completed-task");
@@ -1264,6 +1341,8 @@ function displayMonthView(chitsToDisplay) {
 
   monthView.appendChild(monthGrid);
   chitList.appendChild(monthView);
+
+  enableMonthDrag(monthGrid);
 }
 
 function displayItineraryView(chitsToDisplay) {
@@ -1293,6 +1372,7 @@ function displayItineraryView(chitsToDisplay) {
         currentDay = chitDate;
         const daySeparator = document.createElement("div");
         daySeparator.className = "day-separator";
+        if (chitDate.toDateString() === new Date().toDateString()) daySeparator.classList.add("today");
         daySeparator.innerHTML = `<hr><h3>${formatDate(chitDate)}</h3>`;
         itineraryView.appendChild(daySeparator);
       }
@@ -1363,6 +1443,7 @@ function displayDayView(chitsToDisplay) {
   // Row 1: Day header
   const headerRow = document.createElement("div");
   headerRow.className = "day-header";
+  if (day.toDateString() === new Date().toDateString()) headerRow.classList.add("today");
   headerRow.style.cssText = "flex-shrink:0;text-align:center;padding:8px;border-bottom:1px solid #6b4e31;";
   headerRow.textContent = formatDate(day);
   wrapper.appendChild(headerRow);
@@ -1370,10 +1451,11 @@ function displayDayView(chitsToDisplay) {
   // Row 2: All-day events
   if (allDayChits.length > 0) {
     const allDayRow = document.createElement("div");
-    allDayRow.style.cssText = "flex-shrink:0;background:#fffacd;border-bottom:1px solid #6b4e31;padding:4px 8px;";
+    allDayRow.style.cssText = "flex-shrink:0;background:#e8dcc8;border-bottom:1px solid #6b4e31;padding:4px 8px;";
     allDayChits.forEach(({ chit, info }) => {
       const ev = document.createElement("div");
       ev.className = "all-day-event";
+      ev.dataset.chitId = chit.id;
       ev.style.backgroundColor = chitColor(chit);
       if (chit.status === "Complete") ev.classList.add("completed-task");
       ev.title = calendarEventTooltip(chit, info);
@@ -1403,6 +1485,10 @@ function displayDayView(chitsToDisplay) {
 
   const eventsContainer = document.createElement("div");
   eventsContainer.style.cssText = "position:relative;flex:1;margin-left:15px;min-height:1440px;";
+
+  const dayChitsMap = [];
+  const dayViewColumns = [eventsContainer]; // single column for day view
+  const dayViewDays = [day];
 
   const timeSlots = {};
   timedChits.forEach(({ chit, info }) => {
@@ -1434,6 +1520,7 @@ function displayDayView(chitsToDisplay) {
     el.innerHTML = `${calendarEventTitle(chit, info.isDueOnly, info)}<br>${timeLabel}`;
     el.addEventListener("dblclick", () => { storePreviousState(); window.location.href = `/editor?id=${chit.id}`; });
     eventsContainer.appendChild(el);
+    dayChitsMap.push({ el, chit, info });
   });
 
   dayView.appendChild(eventsContainer);
@@ -1442,6 +1529,10 @@ function displayDayView(chitsToDisplay) {
 
   scrollToSixAM();
   renderTimeBar("Day");
+
+  _loadCalSnapSetting().then(() => {
+    enableCalendarDrag(dayView, dayViewColumns, dayViewDays, dayChitsMap);
+  });
 }
 
 function displayYearView(chitsToDisplay) {
@@ -1746,65 +1837,41 @@ function renderTimeBar(viewType) {
 
   function placeBar() {
     // Remove any existing bars
-    document.querySelectorAll(".current-time-bar").forEach((el) => el.remove());
+    document.querySelectorAll(".time-now-bar, .current-time-bar").forEach((el) => el.remove());
 
     const now = new Date();
     const todayStr = now.toDateString();
     const minuteOfDay = now.getHours() * 60 + now.getMinutes();
 
     if (viewType === "Day") {
-      // Day view: events container is position:relative, events use top = minuteOfDay
-      const eventsContainer = document.querySelector(".day-view > div:last-child");
+      // Day view: find the events container inside the day-view
+      const dayView = document.querySelector(".day-view");
+      if (!dayView) return;
+      // Events container is the second child (after hour column)
+      const eventsContainer = dayView.children[1];
       if (!eventsContainer) return;
       const bar = document.createElement("div");
-      bar.className = "current-time-bar";
-      bar.style.cssText = `position:absolute;left:0;right:0;top:${minuteOfDay}px;height:2px;background:#e63946;z-index:10;pointer-events:none;`;
-      const dot = document.createElement("div");
-      dot.style.cssText = `position:absolute;left:-4px;top:-4px;width:10px;height:10px;border-radius:50%;background:#e63946;`;
-      bar.appendChild(dot);
+      bar.className = "time-now-bar";
+      bar.style.top = `${minuteOfDay}px`;
       eventsContainer.appendChild(bar);
     } else if (viewType === "Week" || viewType === "SevenDay") {
-      // Find today's column and measure actual header + all-day section height
-      const dayColumns = document.querySelectorAll(".day-column");
-      dayColumns.forEach((col) => {
-        const headerEl = col.querySelector(".day-header");
-        const headerText = headerEl?.textContent || "";
-        const parts = headerText.trim().split(/\s+/);
-        if (parts.length >= 3) {
-          const monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-          const monthIdx = monthNames.indexOf(parts[0]);
-          const day = parseInt(parts[1]);
-          const year = new Date().getFullYear();
-          if (monthIdx !== -1 && !isNaN(day)) {
-            const colDate = new Date(year, monthIdx, day);
-            if (colDate.toDateString() === todayStr) {
-              // Measure actual offset at runtime
-              const headerH = headerEl ? headerEl.offsetHeight : 0;
-              const allDayEl = col.querySelector(".all-day-section");
-              const allDayH = allDayEl ? allDayEl.offsetHeight : 0;
-              const offset = headerH + allDayH;
-
-              col.style.position = "relative";
-              const bar = document.createElement("div");
-              bar.className = "current-time-bar";
-              bar.style.cssText = `position:absolute;left:0;right:0;top:${minuteOfDay + offset}px;height:2px;background:#e63946;z-index:10;pointer-events:none;`;
-              const dot = document.createElement("div");
-              dot.style.cssText = `position:absolute;left:-4px;top:-4px;width:10px;height:10px;border-radius:50%;background:#e63946;`;
-              bar.appendChild(dot);
-              col.appendChild(bar);
-            }
-          }
-        }
-      });
+      // Find today's column using the .today class
+      const todayCol = document.querySelector(".day-column.today");
+      if (todayCol) {
+        const bar = document.createElement("div");
+        bar.className = "time-now-bar";
+        bar.style.top = `${minuteOfDay}px`;
+        todayCol.appendChild(bar);
+      }
     } else if (viewType === "Itinerary") {
       // In itinerary, show a horizontal rule at "now" between past and future events
       const itineraryView = document.querySelector(".itinerary-view");
       if (!itineraryView) return;
       const bar = document.createElement("div");
       bar.className = "current-time-bar";
-      bar.style.cssText = `width:100%;height:2px;background:#e63946;margin:4px 0;position:relative;`;
+      bar.style.cssText = `width:100%;height:2px;background:#4a2c2a;margin:4px 0;position:relative;`;
       const label = document.createElement("span");
-      label.style.cssText = `position:absolute;left:0;top:-10px;font-size:0.75em;color:#e63946;font-weight:bold;`;
+      label.style.cssText = `position:absolute;left:0;top:-10px;font-size:0.75em;color:#4a2c2a;font-weight:bold;`;
       label.textContent = `▶ Now (${now.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit",hour12:false})})`;
       bar.appendChild(label);
       // Insert before the first future event separator
@@ -1886,27 +1953,47 @@ function displaySevenDayView(chitsToDisplay) {
   days.forEach(day => {
     const hdr = document.createElement("div");
     hdr.className = "day-header";
+    if (day.toDateString() === new Date().toDateString()) hdr.classList.add("today");
     hdr.style.cssText = "flex:1;min-width:0;text-align:center;padding:6px 2px;";
     hdr.textContent = formatDate(day);
     headerRow.appendChild(hdr);
   });
   wrapper.appendChild(headerRow);
 
-  // Row 2: All-day events
+  // Row 2: All-day events (with collapse toggle and day dividers)
   const hasAnyAllDay = dayData.some(d => d.allDay.length > 0);
   if (hasAnyAllDay) {
-    const allDayRow = document.createElement("div");
-    allDayRow.style.cssText = "display:flex;flex-shrink:0;background:#fffacd;border-bottom:1px solid #6b4e31;min-height:24px;";
-    const allDaySpacer = document.createElement("div");
-    allDaySpacer.style.cssText = "width:60px;flex-shrink:0;font-size:0.75em;padding:4px 2px;color:#8b5a2b;";
-    allDaySpacer.textContent = "all day";
-    allDayRow.appendChild(allDaySpacer);
+    const allDayContainer = document.createElement("div");
+    allDayContainer.style.cssText = "flex-shrink:0;border-bottom:1px solid #6b4e31;";
+
+    const allDayEventsRow = document.createElement("div");
+    allDayEventsRow.style.cssText = "display:flex;background:#e8dcc8;min-height:24px;";
+
+    // Toggle button in the header spacer
+    const toggleBtn = document.createElement("span");
+    toggleBtn.style.cssText = "cursor:pointer;font-size:1.4em;line-height:1;user-select:none;";
+    toggleBtn.textContent = "\u2600"; // sun = all-day visible
+    toggleBtn.title = "Collapse all-day events";
+    toggleBtn.addEventListener("click", () => {
+      const isHidden = allDayContainer.style.display === "none";
+      allDayContainer.style.display = isHidden ? "" : "none";
+      toggleBtn.textContent = isHidden ? "\u2600" : "\u25B2"; // sun vs up triangle
+      toggleBtn.title = isHidden ? "Collapse all-day events" : "Expand all-day events";
+    });
+    headerSpacer.appendChild(toggleBtn);
+
+    // Spacer in events row to align with hour column
+    const rowSpacer = document.createElement("div");
+    rowSpacer.style.cssText = "width:60px;flex-shrink:0;";
+    allDayEventsRow.appendChild(rowSpacer);
+
     dayData.forEach(dd => {
       const cell = document.createElement("div");
-      cell.style.cssText = "flex:1;min-width:0;padding:2px;";
+      cell.style.cssText = "flex:1;min-width:0;padding:2px;border-left:1px solid #d3d3d3;";
       dd.allDay.forEach(({ chit, info }) => {
         const ev = document.createElement("div");
         ev.className = "all-day-event";
+        ev.dataset.chitId = chit.id;
         ev.style.backgroundColor = chitColor(chit);
         if (chit.status === "Complete") ev.classList.add("completed-task");
         ev.title = calendarEventTooltip(chit, info);
@@ -1914,9 +2001,12 @@ function displaySevenDayView(chitsToDisplay) {
         ev.addEventListener("dblclick", () => { storePreviousState(); window.location.href = `/editor?id=${chit.id}`; });
         cell.appendChild(ev);
       });
-      allDayRow.appendChild(cell);
+      allDayEventsRow.appendChild(cell);
     });
-    wrapper.appendChild(allDayRow);
+
+    allDayContainer.appendChild(allDayEventsRow);
+    wrapper.appendChild(allDayContainer);
+    enableAllDayDrag(allDayEventsRow, days);
   }
 
   // Row 3: Scrollable time grid
@@ -1936,9 +2026,12 @@ function displaySevenDayView(chitsToDisplay) {
   }
   scrollGrid.appendChild(hourColumn);
 
+  const sdDayColumns = [];
+  const sdChitsMap = [];
   dayData.forEach(dd => {
     const col = document.createElement("div");
     col.className = "day-column";
+    if (dd.day.toDateString() === new Date().toDateString()) col.classList.add("today");
     col.style.cssText = "flex:1;min-width:0;position:relative;min-height:1440px;border-left:1px solid #d3d3d3;";
 
     dd.timed.forEach(({ chit, info }) => {
@@ -1958,8 +2051,10 @@ function displaySevenDayView(chitsToDisplay) {
       ev.innerHTML = `${calendarEventTitle(chit, info.isDueOnly, info)}<br>${timeLabel}`;
       ev.addEventListener("dblclick", () => { storePreviousState(); window.location.href = `/editor?id=${chit.id}`; });
       col.appendChild(ev);
+      sdChitsMap.push({ el: ev, chit, info });
     });
 
+    sdDayColumns.push(col);
     scrollGrid.appendChild(col);
   });
 
@@ -1968,6 +2063,10 @@ function displaySevenDayView(chitsToDisplay) {
 
   scrollToSixAM();
   renderTimeBar("SevenDay");
+
+  _loadCalSnapSetting().then(() => {
+    enableCalendarDrag(scrollGrid, sdDayColumns, days, sdChitsMap);
+  });
 }
 
 /**
