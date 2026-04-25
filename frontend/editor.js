@@ -449,6 +449,78 @@ function _setDateMode(mode) {
 // ── Time picker dropdown ─────────────────────────────────────────────────────
 let _snapMinutes = 15; // default, loaded from settings
 
+// ── Recurrence picker ─────────────────────────────────────────────────────────
+function onRecurrenceChange() {
+  const sel = document.getElementById('recurrence');
+  const customDiv = document.getElementById('recurrenceCustom');
+  const icon = document.getElementById('recurrenceIcon');
+  if (sel.value === 'CUSTOM') {
+    customDiv.style.display = '';
+    _updateByDayVisibility();
+  } else {
+    customDiv.style.display = 'none';
+  }
+  if (icon) icon.style.display = sel.value ? '' : 'none';
+  setSaveButtonUnsaved();
+}
+
+function _updateByDayVisibility() {
+  const freq = document.getElementById('recurrenceFreq');
+  const byDayDiv = document.getElementById('recurrenceByDay');
+  if (freq && byDayDiv) {
+    byDayDiv.style.display = freq.value === 'WEEKLY' ? 'flex' : 'none';
+  }
+}
+
+function _buildRecurrenceRule() {
+  const sel = document.getElementById('recurrence');
+  if (!sel || !sel.value || sel.value === '') return null;
+
+  if (sel.value === 'CUSTOM') {
+    const freq = document.getElementById('recurrenceFreq')?.value || 'DAILY';
+    const interval = parseInt(document.getElementById('recurrenceInterval')?.value) || 1;
+    const byDay = [];
+    document.querySelectorAll('#recurrenceByDay input:checked').forEach(cb => byDay.push(cb.value));
+    const until = document.getElementById('recurrenceUntil')?.value || null;
+    const rule = { freq, interval };
+    if (byDay.length > 0 && freq === 'WEEKLY') rule.byDay = byDay;
+    if (until) rule.until = until;
+    return rule;
+  }
+
+  return { freq: sel.value, interval: 1 };
+}
+
+function _loadRecurrenceRule(rule) {
+  const sel = document.getElementById('recurrence');
+  if (!sel) return;
+  if (!rule || !rule.freq) {
+    sel.value = '';
+    document.getElementById('recurrenceCustom').style.display = 'none';
+    return;
+  }
+
+  // Check if it's a simple preset
+  const isSimple = rule.interval === 1 && (!rule.byDay || rule.byDay.length === 0) && !rule.until;
+  if (isSimple && ['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'].includes(rule.freq)) {
+    sel.value = rule.freq;
+    document.getElementById('recurrenceCustom').style.display = 'none';
+  } else {
+    sel.value = 'CUSTOM';
+    document.getElementById('recurrenceCustom').style.display = '';
+    document.getElementById('recurrenceFreq').value = rule.freq;
+    document.getElementById('recurrenceInterval').value = rule.interval || 1;
+    if (rule.byDay) {
+      rule.byDay.forEach(d => {
+        const cb = document.querySelector(`#recurrenceByDay input[value="${d}"]`);
+        if (cb) cb.checked = true;
+      });
+    }
+    if (rule.until) document.getElementById('recurrenceUntil').value = rule.until;
+    _updateByDayVisibility();
+  }
+}
+
 async function _loadSnapSetting() {
   try {
     const resp = await fetch('/api/settings/default_user');
@@ -994,6 +1066,8 @@ async function buildChitObject() {
 
   const recurrenceSelect = document.getElementById("recurrence");
   chit.recurrence = recurrenceSelect ? recurrenceSelect.value || null : null;
+  chit.recurrence_rule = _buildRecurrenceRule();
+  chit.recurrence_exceptions = window._loadedRecurrenceExceptions || null;
 
   const colorInput = document.getElementById("color");
   chit.color = colorInput ? colorInput.value || null : null;
@@ -2315,6 +2389,14 @@ async function loadChitData(chitId) {
       );
     }
 
+    // Load recurrence rule (new format)
+    if (chit.recurrence_rule) {
+      _loadRecurrenceRule(chit.recurrence_rule);
+      const icon = document.getElementById('recurrenceIcon');
+      if (icon) icon.style.display = '';
+    }
+    window._loadedRecurrenceExceptions = chit.recurrence_exceptions || null;
+
     const allDayInput = document.getElementById("allDay");
     if (allDayInput) {
       const isAllDay = !!(chit.all_day || chit.allDay);
@@ -2778,6 +2860,11 @@ document.addEventListener("DOMContentLoaded", function () {
   initializeFlatpickr("#start_datetime", { dateFormat: "Y-M-d" });
   initializeFlatpickr("#end_datetime", { dateFormat: "Y-M-d" });
   initializeFlatpickr("#due_datetime", { dateFormat: "Y-M-d" });
+  initializeFlatpickr("#recurrenceUntil", { dateFormat: "Y-M-d" });
+
+  // Recurrence freq change shows/hides day checkboxes
+  const recFreq = document.getElementById('recurrenceFreq');
+  if (recFreq) recFreq.addEventListener('change', _updateByDayVisibility);
 
   // Attach listeners to default colors
   attachColorSwatchListeners();

@@ -209,3 +209,100 @@
 - Sidebar sort buttons (Title, Start, Due) with ▲/▼ toggle
 - Archive/pinned cycle button (All → Pinned → Archived → Normal)
 - `_applySort` and `_applyArchiveFilter` in displayChits pipeline
+
+
+---
+
+## Hotkey-Driven UI Overhaul ✅ (2026-04-25)
+
+Fully implemented. Ported from `Prototypes/CWOC UI/UI.html`:
+- Top-level hotkeys: C/H/A/P/T/N (tabs), K (create), S (settings), . (period), F (filter), O (order), R (reference), ESC (exit)
+- Period submenu (. → I/D/W/S/M/Y)
+- Filter submenu (F → S/T/P/A/I/W) with multi-select status, tags, priority
+- Order submenu (O → T/S/D/U/C/X/M) with ↑↓ for asc/desc
+- Full-screen overlay dimming with floating panels for submenus
+- Reference overlay (R) with all hotkeys
+- Sidebar reorganized: Create → Order → Period → Filters → Settings
+- Multi-select filters (status, tags, priority, archived, pinned)
+- Expanded sort options (title, start, due, updated, created, status, manual)
+- Manual drag-to-reorder with per-view localStorage persistence
+- Shift+ESC clears all filters in active panel
+- Clear All Filters button
+- Today button in calendar sidebar
+
+## Calendar Drag & Editor Date Overhaul ✅ (2026-04-25)
+
+### Phase 1: Editor Date Fields ✅
+- Radio buttons: None / Due / Start&End (mutually exclusive)
+- Single-row layouts: Start/End with "to" separator, Due with time
+- All Day checkbox inline, Repeat inline
+- Time picker dropdown with snap increments from settings
+- Greyed-out inactive fields (opacity 0.3, pointer-events none)
+- Auto-colon mask for HH:MM time inputs
+
+### Phase 2: Calendar Snapping Setting ✅
+- Settings page: Calendar Snapping dropdown (None, 5, 10, 15, 20, 25, 30, 60 min)
+- Backend: `calendar_snap` field in Settings model, DB schema, migration
+- Loaded in editor and dashboard
+
+### Phase 3: Calendar Display ✅
+- Due-date-only chits on calendar (all-day or timed with ⌚ icon)
+- Due date takes priority over start/end when both exist
+- All-day section restructured: header → all-day row → scrollable time grid
+- Collapse/expand toggle for all-day bar (☀️/▲)
+- Tooltips on all calendar events with settings-aware time format
+- Today's date highlighted in all calendar views
+
+### Phase 4: Calendar Drag ✅
+- Drag to move (Day/Week/7-Day): vertical=time, horizontal=day, snap to grid
+- Drag bottom edge to resize (start/end chits only, not due-only)
+- Snap grid lines appear during drag only
+- Month view drag between day cells
+- All-day events draggable between days
+- Save on mouse release (PUT to API)
+- No drag in Year or Itinerary views
+- Current time indicator bar (dark brown #4a2c2a)
+
+## Nested Tags — Completed Items ✅ (2026-04-25)
+
+### Data Model
+- Tags stored as full paths with `/` separator
+- `favorite` boolean added to Tag Pydantic model
+- Backward compatible with flat tags
+
+### Editor Tag Zone
+- Expandable/collapsible tag tree hierarchy
+- Favorites row (⭐ tags at top)
+- Recent row (3 most recently used in session)
+- "Top" row removed
+- Active tags panel shows full paths, excludes system tags
+
+### Sidebar Tag Filter
+- Always-visible scrollbar on tag list
+- Descendant matching (filtering "Work" matches "Work/Projects/CWOC")
+- Indented tree display with checkboxes and colors
+- Tag search box for filtering
+
+### Shared Code
+- `buildTagTree()`, `flattenTagTree()`, `matchesTagFilter()`, `renderTagTree()`
+- `trackRecentTag()`, `getRecentTags()`
+- `isSystemTag()` — filters out Calendar/Checklists/Alarms/Projects/Tasks/Notes
+- System tags hidden from sidebar filters, editor active tags, and chit header meta
+
+## Other Completed Items (2026-04-25)
+
+- Calendar view: jump to today button
+- Hide Period option on non-calendar views
+- View → Period rename throughout
+- Drag-drop on calendar for rescheduling events
+- Checklist item check-off from views (interactive checkboxes)
+- Cross-chit checklist item drag
+- Inline checklist rendering in Checklist view
+- UI state preserved across editor visits (localStorage)
+- Archived chits hidden by default, semi-transparent when shown
+- Consistent chit card styling across all views
+- Notes view masonry layout
+- Font Awesome bookmark for pinned, 📦 emoji for archived
+- Archive button in editor header (grey, next to Delete)
+- Manage Tags button in editor
+- Note auto-renders on blur

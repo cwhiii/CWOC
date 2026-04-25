@@ -625,98 +625,34 @@ button.delete:hover {
     width: 20px;
 }
 
-/* Notes view styles */
+/* Notes view styles — column-persistent layout */
 .notes-view {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5em;
-    padding: 1em;
+    padding: 0.75em;
+    padding-right: 1.5em;
+    position: relative;
     overflow-y: auto;
-    background-color: #fffaf0;
-    border: 1px solid #6b4e31;
-    border-radius: 5px;
-    box-sizing: border-box;
-    height: 100%;
-}
-
-.notes-view .note-chit {
-    min-width: 25em;
-    width: 25em;
-    max-height: 25em;
-    min-height: 4em;
-    height: fit-content;
-    background-color: #ffff0;
-    border: 1px solid #6b4e31;
-    border-radius: 5px;
-    padding: 0.5em;
-    margin: 0;
-    display: flex;
-    flex-direction: column;
-    cursor: pointer;
-    font-family: "Courier New", Courier, monospace;
-    color: #333;
-    box-sizing: border-box;
-    flex-shrink: 0;
-}
-
-.note-chit h3 {
-    margin: 0;
-    padding: 0.3em;
-    font-size: 1.2em;
-    font-weight: bold;
-    flex: 0 0 auto;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    border-bottom: 1px solid #6b4e31;
-}
-
-.note-chit p {
-    margin: 0.3em 0;
-    padding: 0.3em;
-    font-size: 1em;
+    overflow-x: hidden;
     flex: 1 1 auto;
-    overflow-y: auto;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
+    width: 100%;
+    min-height: 0;
+    box-sizing: border-box;
 }
-
-.note-chit p::-webkit-scrollbar {
-    display: none;
+.notes-view .chit-card {
+    position: absolute;
+    box-sizing: border-box;
+    overflow: hidden;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
 }
-
-.note-chit .labels {
-    margin: 0;
-    padding: 0.3em;
-    flex: 0 0 auto;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.3em;
-    border-top: 1px solid #6b4e31;
+.notes-view .note-content {
+    overflow: hidden;
+    max-height: calc(100vh - 260px);
+    word-wrap: break-word;
+    overflow-wrap: break-word;
 }
-
-.note-chit .label {
-    display: inline-block;
-    padding: 0.2em 0.5em;
-    border-radius: 3px;
-    font-size: 0.9em;
-    color: #333;
-    background-color: #e0d4b5;
-    border: 1px solid #6b4e31;
-    flex-shrink: 0;
-}
-
-@media (max-width: 600px) {
-    .notes-view {
-        flex-direction: column;
-        gap: 0.5em;
-    }
-
-    .notes-view .note-chit {
-        width: 100%;
-        min-width: 25em;
-        margin: 0;
-    }
+.notes-view .note-content * {
+    max-width: 100%;
+    overflow-wrap: break-word;
 }
 
 .completed-task {
@@ -1200,43 +1136,6 @@ button.delete:hover {
     opacity: 1;
 }
 
-/* ── Notes view — masonry layout (Google Keep style) ──────────────────────── */
-.notes-view {
-    padding: 0.75em;
-    column-count: 3;
-    column-gap: 0.5em;
-    overflow-y: auto;
-    height: 100%;
-}
-.notes-view .chit-card {
-    display: block;
-    break-inside: avoid;
-    -webkit-column-break-inside: avoid;
-    margin-bottom: 0.5em;
-    overflow: hidden;
-    word-wrap: break-word;
-    overflow-wrap: break-word;
-    min-width: 0;
-    /* Only as tall as content, capped at viewport */
-    max-height: calc(100vh - 200px);
-}
-.notes-view .note-content {
-    overflow: hidden;
-    max-height: calc(100vh - 280px);
-    word-wrap: break-word;
-    overflow-wrap: break-word;
-}
-.notes-view .note-content * {
-    max-width: 100%;
-    overflow-wrap: break-word;
-}
-@media (max-width: 900px) {
-    .notes-view { column-count: 2; }
-}
-@media (max-width: 600px) {
-    .notes-view { column-count: 1; }
-}
-
 /* ── Archived chit transparency ───────────────────────────────────────────── */
 .chit-card.archived-chit {
     opacity: 0.45;
@@ -1322,4 +1221,14 @@ button.delete:hover {
 #label-multi {
     overflow-y: scroll !important;
     max-height: 120px;
+}
+
+/* ── Notes drag drop indicator ────────────────────────────────────────────── */
+.notes-drop-indicator {
+    position: absolute;
+    height: 3px;
+    background: #4a2c2a;
+    border-radius: 2px;
+    z-index: 90;
+    pointer-events: none;
 }

@@ -1070,6 +1070,23 @@ function displayChits() {
   // Apply sort
   filteredChits = _applySort(filteredChits);
 
+  // Expand recurring chits for Calendar tab
+  if (currentTab === "Calendar") {
+    const rangeStart = new Date(currentWeekStart || new Date());
+    rangeStart.setDate(rangeStart.getDate() - 7); // buffer
+    const rangeEnd = new Date(rangeStart);
+    rangeEnd.setDate(rangeEnd.getDate() + 60); // ~2 months ahead
+    let expanded = [];
+    filteredChits.forEach(chit => {
+      if (chit.recurrence_rule && chit.recurrence_rule.freq) {
+        expanded = expanded.concat(expandRecurrence(chit, rangeStart, rangeEnd));
+      } else {
+        expanded.push(chit);
+      }
+    });
+    filteredChits = expanded;
+  }
+
   switch (currentTab) {
     case "Calendar":
       if (currentView === "Week") displayWeekView(filteredChits);
@@ -1770,7 +1787,6 @@ function displayNotesView(chitsToDisplay) {
     sortedChits.forEach((chit) => {
       const chitElement = document.createElement("div");
       chitElement.className = "chit-card";
-      chitElement.draggable = true;
       chitElement.dataset.chitId = chit.id;
       chitElement.style.backgroundColor = chitColor(chit);
       if (chit.archived) chitElement.classList.add("archived-chit");
@@ -1804,7 +1820,41 @@ function displayNotesView(chitsToDisplay) {
     });
   }
   chitList.appendChild(notesView);
-  enableDragToReorder(notesView, 'Notes', () => displayChits());
+
+  // Restore saved column assignments from localStorage
+  const savedOrder = getManualOrder('Notes');
+  if (Array.isArray(savedOrder) && savedOrder.length > 0 && typeof savedOrder[0] === 'object') {
+    // New format: [{id, col}, ...]
+    // Check if all are in col 0 (buggy save) — if so, ignore and let auto-distribute
+    const allCol0 = savedOrder.every(e => e.col === 0);
+    if (!allCol0) {
+      const colMap = {};
+      savedOrder.forEach(entry => { if (entry.id && entry.col !== undefined) colMap[entry.id] = entry.col; });
+      notesView.querySelectorAll('.chit-card').forEach(card => {
+        const id = card.dataset.chitId;
+        if (id in colMap) card.dataset.col = colMap[id];
+      });
+    }
+  }
+
+  // Apply column-persistent layout — delay to ensure markdown is rendered
+  setTimeout(() => {
+    applyNotesLayout(notesView);
+    // Re-measure after images/markdown finish rendering
+    setTimeout(() => applyNotesLayout(notesView), 200);
+    // Final safety re-layout in case container width wasn't ready
+    setTimeout(() => applyNotesLayout(notesView), 500);
+  }, 50);
+
+  // Re-layout on window resize
+  const resizeHandler = () => {
+    if (currentTab === 'Notes') applyNotesLayout(notesView);
+  };
+  window.removeEventListener('resize', window._notesResizeHandler);
+  window._notesResizeHandler = resizeHandler;
+  window.addEventListener('resize', resizeHandler);
+
+  enableNotesDragReorder(notesView, 'Notes', () => displayChits());
 }
 
 /**

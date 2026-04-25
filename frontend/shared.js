@@ -228,7 +228,11 @@ const MANUAL_ORDER_KEY = 'cwoc_manual_order';
 function getManualOrder(tab) {
   try {
     const all = JSON.parse(localStorage.getItem(MANUAL_ORDER_KEY) || '{}');
-    return Array.isArray(all[tab]) ? all[tab] : [];
+    const data = all[tab];
+    if (!data) return [];
+    // Support both old format (flat array of IDs) and new format (array of {id, col})
+    if (Array.isArray(data)) return data;
+    return [];
   } catch (e) { return []; }
 }
 
@@ -256,7 +260,11 @@ function applyManualOrder(tab, chitList) {
   const order = getManualOrder(tab);
   if (order.length === 0) return chitList;
   const orderMap = {};
-  order.forEach((id, i) => { orderMap[id] = i; });
+  order.forEach((entry, i) => {
+    // Handle both old format (string ID) and new format ({id, col})
+    const id = typeof entry === 'object' ? entry.id : entry;
+    orderMap[id] = i;
+  });
   return [...chitList].sort((a, b) => {
     const posA = orderMap[a.id] !== undefined ? orderMap[a.id] : Infinity;
     const posB = orderMap[b.id] !== undefined ? orderMap[b.id] : Infinity;
@@ -415,8 +423,9 @@ function chitMatchesDay(chit, day) {
  * @returns {string}
  */
 function calendarEventTitle(chit, isDueOnly, info) {
-  const icon = isDueOnly ? '⌚ ' : '';
-  return `<span style="font-weight:bold;font-size:1.1em;">${icon}${chit.title || '(Untitled)'}</span>`;
+  const dueIcon = isDueOnly ? '⌚ ' : '';
+  const recurIcon = (chit.recurrence_rule && chit.recurrence_rule.freq) || chit._isVirtual ? '🔁 ' : '';
+  return `<span style="font-weight:bold;font-size:1.1em;">${recurIcon}${dueIcon}${chit.title || '(Untitled)'}</span>`;
 }
 
 /**
@@ -425,6 +434,9 @@ function calendarEventTitle(chit, isDueOnly, info) {
  */
 function calendarEventTooltip(chit, info) {
   let tooltip = chit.title || '(Untitled)';
+  if (chit.recurrence_rule && chit.recurrence_rule.freq) {
+    tooltip += ' — ' + formatRecurrenceRule(chit.recurrence_rule);
+  }
   if (info && info.hasDate) {
     if (info.isAllDay) {
       tooltip += ' — All Day';
@@ -951,11 +963,23 @@ function renderTagTree(container, tree, selectedTags, onToggle, opts) {
         row.appendChild(swatch);
       }
 
-      // Tag name badge
+      // Checkbox
       const isSelected = selectedTags.includes(node.fullPath);
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = isSelected;
+      cb.style.cssText = 'margin:0;cursor:pointer;flex-shrink:0;';
+      cb.addEventListener('click', (e) => { e.stopPropagation(); });
+      cb.addEventListener('change', () => {
+        if (onToggle) onToggle(node.fullPath, cb.checked);
+      });
+      row.appendChild(cb);
+
+      // Tag name badge with color
+      const tagColor = node.color || (typeof getPastelColor === 'function' ? getPastelColor(node.fullPath) : 'rgba(139,90,43,0.1)');
       const badge = document.createElement('span');
       badge.textContent = node.name;
-      badge.style.cssText = `font-size:0.85em;padding:1px 6px;border-radius:10px;${isSelected ? 'background:#8b5a2b;color:#fff;' : 'background:rgba(139,90,43,0.1);color:#3c2f2f;'}`;
+      badge.style.cssText = `font-size:0.85em;padding:1px 6px;border-radius:10px;background:${isSelected ? tagColor : 'rgba(139,90,43,0.08)'};color:${isSelected ? '#000' : '#3c2f2f'};${isSelected ? 'font-weight:bold;' : ''}`;
       row.appendChild(badge);
 
       // Click to toggle selection
@@ -996,4 +1020,515 @@ const SYSTEM_TAGS = ['Calendar', 'Checklists', 'Alarms', 'Projects', 'Tasks', 'N
 
 function isSystemTag(tagName) {
   return SYSTEM_TAGS.includes(tagName);
+}
+
+
+// ── Recurrence Expansion ─────────────────────────────────────────────────────
+
+/**
+ * Expand a recurring chit into virtual instances for a date range.
+ * @param {object} chit - the parent chit with recurrence_rule
+ * @param {Date} rangeStart - start of visible range
+ * @param {Date} rangeEnd - end of visible range
+ * @returns {object[]} array of virtual chit instances
+ */
+function expandRecurrence(chit, rangeStart, rangeEnd) {
+  const rule = chit.recurrence_rule;
+  if (!rule || !rule.freq) return [chit]; // not recurring, return as-is
+
+  const exceptions = chit.recurrence_exceptions || [];
+  const exceptionDates = new Set(exceptions.map(e => e.date));
+  const brokenOffDates = new Set(exceptions.filter(e => e.broken_off).map(e => e.date));
+  const completedDates = new Set(exceptions.filter(e => e.completed).map(e => e.date));
+
+  const info = getCalendarDateInfo(chit);
+  if (!info.hasDate) return [chit];
+
+  const baseDate = new Date(info.start);
+  baseDate.setHours(0, 0, 0, 0);
+  const baseTimeMs = info.start.getTime() - baseDate.getTime(); // time-of-day offset
+  const durationMs = info.isAllDay ? 0 : (info.end.getTime() - info.start.getTime());
+
+  const freq = rule.freq;
+  const interval = rule.interval || 1;
+  const byDay = rule.byDay || []; // ["MO","TU","WE","TH","FR","SA","SU"]
+  const until = rule.until ? new Date(rule.until) : null;
+
+  const dayMap = { SU: 0, MO: 1, TU: 2, WE: 3, TH: 4, FR: 5, SA: 6 };
+  const byDayNums = byDay.map(d => dayMap[d]).filter(n => n !== undefined);
+
+  const instances = [];
+  const maxInstances = 365; // safety limit
+  let current = new Date(baseDate);
+  let count = 0;
+
+  while (count < maxInstances) {
+    if (until && current > until) break;
+    if (current > rangeEnd) break;
+
+    const dateStr = current.toISOString().slice(0, 10);
+    const inRange = current >= rangeStart;
+
+    // For weekly with byDay, check if current day matches
+    let dayMatches = true;
+    if (freq === 'WEEKLY' && byDayNums.length > 0) {
+      dayMatches = byDayNums.includes(current.getDay());
+    }
+
+    if (dayMatches && inRange && !brokenOffDates.has(dateStr)) {
+      // Check for exception modifications
+      const exception = exceptions.find(e => e.date === dateStr && !e.broken_off);
+
+      const virtualStart = new Date(current.getTime() + baseTimeMs);
+      const virtualEnd = info.isAllDay ? virtualStart : new Date(virtualStart.getTime() + durationMs);
+
+      const instance = {
+        ...chit,
+        _isVirtual: true,
+        _parentId: chit.id,
+        _virtualDate: dateStr,
+        _isCompleted: completedDates.has(dateStr),
+      };
+
+      // Apply exception overrides
+      if (exception) {
+        if (exception.title) instance.title = exception.title;
+        if (exception.start_datetime) {
+          instance.start_datetime = exception.start_datetime;
+        } else if (!info.isDueOnly) {
+          instance.start_datetime = virtualStart.toISOString();
+          instance.end_datetime = virtualEnd.toISOString();
+        }
+      } else {
+        if (info.isDueOnly) {
+          instance.due_datetime = virtualStart.toISOString();
+        } else {
+          instance.start_datetime = virtualStart.toISOString();
+          instance.end_datetime = virtualEnd.toISOString();
+        }
+      }
+
+      // Update the datetime objects for calendar rendering
+      if (instance.start_datetime) instance.start_datetime_obj = new Date(instance.start_datetime);
+      if (instance.end_datetime) instance.end_datetime_obj = new Date(instance.end_datetime);
+
+      instances.push(instance);
+    }
+
+    // Advance to next occurrence
+    count++;
+    if (freq === 'DAILY') {
+      current.setDate(current.getDate() + interval);
+    } else if (freq === 'WEEKLY') {
+      if (byDayNums.length > 0) {
+        // Advance one day at a time, but count weeks by interval
+        current.setDate(current.getDate() + 1);
+        // If we've wrapped past the week, skip (interval-1) weeks
+        if (current.getDay() === byDayNums[0] && interval > 1) {
+          current.setDate(current.getDate() + (interval - 1) * 7);
+        }
+      } else {
+        current.setDate(current.getDate() + interval * 7);
+      }
+    } else if (freq === 'MONTHLY') {
+      current.setMonth(current.getMonth() + interval);
+    } else if (freq === 'YEARLY') {
+      current.setFullYear(current.getFullYear() + interval);
+    } else {
+      break; // unknown freq
+    }
+  }
+
+  return instances.length > 0 ? instances : [chit];
+}
+
+/**
+ * Format a recurrence rule as a human-readable string.
+ * @param {object} rule - { freq, interval, byDay, until }
+ * @returns {string}
+ */
+function formatRecurrenceRule(rule) {
+  if (!rule || !rule.freq) return '';
+  const freq = rule.freq;
+  const interval = rule.interval || 1;
+  const dayNames = { MO: 'Mon', TU: 'Tue', WE: 'Wed', TH: 'Thu', FR: 'Fri', SA: 'Sat', SU: 'Sun' };
+
+  let text = '';
+  if (freq === 'DAILY') text = interval === 1 ? 'Daily' : `Every ${interval} days`;
+  else if (freq === 'WEEKLY') {
+    const days = (rule.byDay || []).map(d => dayNames[d] || d).join(', ');
+    text = interval === 1 ? `Weekly` : `Every ${interval} weeks`;
+    if (days) text += ` on ${days}`;
+  }
+  else if (freq === 'MONTHLY') text = interval === 1 ? 'Monthly' : `Every ${interval} months`;
+  else if (freq === 'YEARLY') text = interval === 1 ? 'Yearly' : `Every ${interval} years`;
+  else text = freq;
+
+  if (rule.until) text += ` until ${new Date(rule.until).toLocaleDateString()}`;
+  return text;
+}
+
+
+// ── Column-Persistent Layout for Notes View ─────────────────────────────────
+//
+// Each card stores its column as data-col (integer). Layout reads data-col to
+// group cards, then stacks each group top-to-bottom. Dragging within the same
+// column only re-stacks that column. Dragging to a different column changes
+// data-col and re-stacks only the source and target columns.
+//
+// Saved order: array of {id, col} pairs in localStorage.
+
+const NOTES_CARD_WIDTH = 336;
+const NOTES_GAP = 10;
+
+/** Calculate how many columns fit and the actual card width */
+function _notesColMetrics(container) {
+  // clientWidth includes padding; subtract it to get usable content area
+  const style = getComputedStyle(container);
+  const padL = parseFloat(style.paddingLeft) || 0;
+  const padR = parseFloat(style.paddingRight) || 0;
+  const contentWidth = container.clientWidth - padL - padR;
+  const colCount = Math.max(1, Math.floor(contentWidth / (NOTES_CARD_WIDTH + NOTES_GAP)));
+  const actualCardWidth = Math.floor((contentWidth - (colCount - 1) * NOTES_GAP) / colCount);
+  return { colCount, actualCardWidth, contentWidth };
+}
+
+/** Get the left px offset for a given column index */
+function _notesColLeft(colIdx, actualCardWidth) {
+  return NOTES_GAP + colIdx * (actualCardWidth + NOTES_GAP);
+}
+
+/**
+ * Assign initial data-col to cards that don't have one yet.
+ * New cards go to the column with the fewest cards.
+ */
+function _assignMissingCols(cards, colCount) {
+  // Count existing assignments
+  const colCounts = new Array(colCount).fill(0);
+  cards.forEach(card => {
+    const col = parseInt(card.dataset.col, 10);
+    if (!isNaN(col) && col >= 0 && col < colCount) {
+      colCounts[col]++;
+    }
+  });
+  cards.forEach(card => {
+    let col = parseInt(card.dataset.col, 10);
+    if (isNaN(col) || col < 0 || col >= colCount) {
+      // Assign to shortest column
+      col = colCounts.indexOf(Math.min(...colCounts));
+      card.dataset.col = col;
+      colCounts[col]++;
+    }
+  });
+}
+
+/**
+ * Build column groups from cards' data-col attributes.
+ * Returns array of arrays: columns[colIdx] = [card, card, ...]
+ */
+function _buildNoteColumns(cards, colCount) {
+  const columns = Array.from({ length: colCount }, () => []);
+  cards.forEach(card => {
+    const col = parseInt(card.dataset.col, 10);
+    if (!isNaN(col) && col >= 0 && col < colCount) {
+      columns[col].push(card);
+    }
+  });
+  return columns;
+}
+
+/**
+ * Position cards in a single column top-to-bottom.
+ * Optionally skip a card (the one being dragged).
+ */
+function _stackColumn(colCards, colIdx, actualCardWidth, skipCard) {
+  const left = _notesColLeft(colIdx, actualCardWidth);
+  let top = NOTES_GAP;
+  colCards.forEach(card => {
+    if (card === skipCard) return;
+    card.style.position = 'absolute';
+    card.style.width = actualCardWidth + 'px';
+    card.style.left = left + 'px';
+    card.style.top = top + 'px';
+    top += card.offsetHeight + NOTES_GAP;
+  });
+  return top; // total height of this column
+}
+
+/**
+ * Apply column-persistent layout to a notes-view container.
+ * Reads data-col from each card. Cards without data-col get assigned
+ * to the shortest column. Only repositions — never changes DOM order.
+ */
+function applyNotesLayout(container) {
+  if (!container) return;
+  const cards = Array.from(container.querySelectorAll('.chit-card'));
+  if (cards.length === 0) return;
+
+  const { colCount, actualCardWidth } = _notesColMetrics(container);
+
+  // Clamp out-of-range columns (e.g. window resized narrower)
+  // but leave unassigned cards (NaN) for _assignMissingCols to distribute
+  cards.forEach(card => {
+    const col = parseInt(card.dataset.col, 10);
+    if (!isNaN(col) && (col < 0 || col >= colCount)) {
+      // Out of range — reassign to last valid column
+      card.dataset.col = String(colCount - 1);
+    }
+  });
+  _assignMissingCols(cards, colCount);
+
+  const columns = _buildNoteColumns(cards, colCount);
+
+  let maxHeight = 0;
+  columns.forEach((colCards, colIdx) => {
+    const h = _stackColumn(colCards, colIdx, actualCardWidth);
+    if (h > maxHeight) maxHeight = h;
+  });
+
+  // Use a spacer div to create real scrollable content height
+  // (absolute-positioned cards don't contribute to scroll height)
+  let spacer = container.querySelector('.notes-height-spacer');
+  if (!spacer) {
+    spacer = document.createElement('div');
+    spacer.className = 'notes-height-spacer';
+    spacer.style.cssText = 'pointer-events:none;visibility:hidden;width:100%;';
+    container.appendChild(spacer);
+  }
+  spacer.style.height = maxHeight + 'px';
+}
+
+
+// ── Notes View: Column-Aware Drag-to-Reorder ────────────────────────────────
+
+let _notesDragState = null;
+
+function enableNotesDragReorder(container, tab, onReorder) {
+  if (!container) return;
+
+  container.querySelectorAll('.chit-card').forEach(card => {
+    card.style.cursor = 'grab';
+
+    card.addEventListener('mousedown', (e) => {
+      if (e.target.closest('input, textarea, select, button, a, ul, li')) return;
+      if (e.button !== 0) return;
+      e.preventDefault();
+
+      const rect = card.getBoundingClientRect();
+      const containerRect = container.getBoundingClientRect();
+      const { colCount, actualCardWidth } = _notesColMetrics(container);
+
+      // Snapshot every card's {id, col, position-within-col} for cancel restore
+      const allCards = Array.from(container.querySelectorAll('.chit-card'));
+      const columns = _buildNoteColumns(allCards, colCount);
+      const origSnapshot = [];
+      columns.forEach((colCards, ci) => {
+        colCards.forEach((c, ri) => {
+          origSnapshot.push({ id: c.dataset.chitId, col: ci, row: ri });
+        });
+      });
+
+      _notesDragState = {
+        card,
+        container,
+        tab,
+        onReorder,
+        origSnapshot,
+        origCol: parseInt(card.dataset.col, 10),
+        offsetX: e.clientX - rect.left,
+        offsetY: e.clientY - rect.top,
+        colCount,
+        actualCardWidth,
+        cancelled: false,
+        targetCol: undefined,
+        targetInsertIdx: undefined,
+      };
+
+      card.style.zIndex = '100';
+      card.style.opacity = '0.85';
+      card.style.boxShadow = '0 8px 24px rgba(0,0,0,0.3)';
+      card.style.cursor = 'grabbing';
+      card.style.transition = 'none';
+
+      document.addEventListener('mousemove', _onNotesDragMove);
+      document.addEventListener('mouseup', _onNotesDragEnd);
+      document.addEventListener('keydown', _onNotesDragKey);
+    });
+  });
+}
+
+function _onNotesDragMove(e) {
+  if (!_notesDragState) return;
+  const s = _notesDragState;
+  const containerRect = s.container.getBoundingClientRect();
+
+  // Float the dragged card under the cursor
+  const newLeft = e.clientX - containerRect.left - s.offsetX + s.container.scrollLeft;
+  const newTop = e.clientY - containerRect.top - s.offsetY + s.container.scrollTop;
+  s.card.style.left = newLeft + 'px';
+  s.card.style.top = newTop + 'px';
+
+  // Which column is the cursor over?
+  const cursorX = e.clientX - containerRect.left;
+  const targetCol = Math.min(
+    s.colCount - 1,
+    Math.max(0, Math.floor((cursorX - NOTES_GAP) / (s.actualCardWidth + NOTES_GAP)))
+  );
+
+  // Build columns excluding the dragged card
+  const allCards = Array.from(s.container.querySelectorAll('.chit-card'));
+  const columns = _buildNoteColumns(allCards, s.colCount);
+  const colCards = columns[targetCol].filter(c => c !== s.card);
+
+  // Find vertical insert position within target column
+  let insertIdx = colCards.length;
+  for (let i = 0; i < colCards.length; i++) {
+    const r = colCards[i].getBoundingClientRect();
+    if (e.clientY < r.top + r.height / 2) {
+      insertIdx = i;
+      break;
+    }
+  }
+
+  // Live preview: re-stack affected columns with a gap where the card will land
+  // Only re-stack source column and target column (if different)
+  const srcCol = parseInt(s.card.dataset.col, 10);
+  const affectedCols = new Set([srcCol, targetCol]);
+
+  affectedCols.forEach(ci => {
+    const col = columns[ci].filter(c => c !== s.card);
+    const left = _notesColLeft(ci, s.actualCardWidth);
+    let top = NOTES_GAP;
+
+    for (let i = 0; i < col.length; i++) {
+      // If this is the target column, leave a gap at insertIdx
+      if (ci === targetCol && i === insertIdx) {
+        top += s.card.offsetHeight + NOTES_GAP;
+      }
+      const c = col[i];
+      c.style.position = 'absolute';
+      c.style.width = s.actualCardWidth + 'px';
+      c.style.left = left + 'px';
+      c.style.top = top + 'px';
+      c.style.transition = 'top 0.15s ease';
+      top += c.offsetHeight + NOTES_GAP;
+    }
+    // Gap at end of column
+    if (ci === targetCol && insertIdx >= col.length) {
+      top += s.card.offsetHeight + NOTES_GAP;
+    }
+  });
+
+  // Drop indicator line
+  s.container.querySelectorAll('.notes-drop-indicator').forEach(el => el.remove());
+  const indicator = document.createElement('div');
+  indicator.className = 'notes-drop-indicator';
+  const colLeft = _notesColLeft(targetCol, s.actualCardWidth);
+
+  let indicatorTop;
+  if (colCards.length === 0) {
+    indicatorTop = NOTES_GAP;
+  } else if (insertIdx >= colCards.length) {
+    const lastCard = colCards[colCards.length - 1];
+    const r = lastCard.getBoundingClientRect();
+    indicatorTop = r.bottom - containerRect.top + s.container.scrollTop + 2;
+  } else {
+    const r = colCards[insertIdx].getBoundingClientRect();
+    indicatorTop = r.top - containerRect.top + s.container.scrollTop - 2;
+  }
+
+  indicator.style.cssText = `position:absolute;left:${colLeft}px;top:${indicatorTop}px;width:${s.actualCardWidth}px;height:3px;background:#4a2c2a;border-radius:2px;z-index:90;pointer-events:none;`;
+  s.container.appendChild(indicator);
+
+  s.targetCol = targetCol;
+  s.targetInsertIdx = insertIdx;
+}
+
+function _onNotesDragEnd(e) {
+  document.removeEventListener('mousemove', _onNotesDragMove);
+  document.removeEventListener('mouseup', _onNotesDragEnd);
+  document.removeEventListener('keydown', _onNotesDragKey);
+
+  if (!_notesDragState) return;
+  const s = _notesDragState;
+
+  // Clean up indicator and card styles
+  s.container.querySelectorAll('.notes-drop-indicator').forEach(el => el.remove());
+  s.card.style.zIndex = '';
+  s.card.style.opacity = '';
+  s.card.style.boxShadow = '';
+  s.card.style.cursor = 'grab';
+  s.card.style.transition = '';
+
+  // Remove transition from all cards
+  s.container.querySelectorAll('.chit-card').forEach(c => { c.style.transition = ''; });
+
+  if (s.cancelled) {
+    // Restore original column assignments and order
+    s.origSnapshot.forEach(({ id, col }) => {
+      const el = s.container.querySelector(`[data-chit-id="${id}"]`);
+      if (el) el.dataset.col = col;
+    });
+    applyNotesLayout(s.container);
+    _notesDragState = null;
+    return;
+  }
+
+  if (s.targetCol !== undefined) {
+    const srcCol = parseInt(s.card.dataset.col, 10);
+    const targetCol = s.targetCol;
+
+    // Update the dragged card's column assignment
+    s.card.dataset.col = targetCol;
+
+    // Build columns from data-col (card is now in targetCol)
+    const allCards = Array.from(s.container.querySelectorAll('.chit-card'));
+    const columns = _buildNoteColumns(allCards, s.colCount);
+
+    // Remove dragged card from its position in the target column array
+    const targetCards = columns[targetCol].filter(c => c !== s.card);
+    // Insert at the correct position
+    const insertIdx = Math.min(s.targetInsertIdx || 0, targetCards.length);
+    targetCards.splice(insertIdx, 0, s.card);
+    columns[targetCol] = targetCards;
+
+    // Re-stack only affected columns (source and target)
+    const affectedCols = new Set([srcCol, targetCol]);
+    affectedCols.forEach(ci => {
+      if (ci >= 0 && ci < s.colCount) {
+        _stackColumn(columns[ci], ci, s.actualCardWidth);
+      }
+    });
+
+    // Update container height via spacer
+    let maxH = 0;
+    columns.forEach(col => {
+      const h = col.reduce((acc, c) => acc + c.offsetHeight + NOTES_GAP, NOTES_GAP);
+      if (h > maxH) maxH = h;
+    });
+    let spacer = s.container.querySelector('.notes-height-spacer');
+    if (spacer) spacer.style.height = maxH + 'px';
+
+    // Save order as {id, col} pairs, preserving within-column order
+    const orderData = [];
+    columns.forEach((colCards, ci) => {
+      colCards.forEach(c => {
+        orderData.push({ id: c.dataset.chitId, col: ci });
+      });
+    });
+    saveManualOrder(s.tab, orderData);
+    currentSortField = 'manual';
+    const sel = document.getElementById('sort-select');
+    if (sel) sel.value = 'manual';
+    if (typeof _updateSortUI === 'function') _updateSortUI();
+  }
+
+  _notesDragState = null;
+}
+
+function _onNotesDragKey(e) {
+  if (e.key === 'Escape' && _notesDragState) {
+    _notesDragState.cancelled = true;
+    _onNotesDragEnd(e);
+  }
 }

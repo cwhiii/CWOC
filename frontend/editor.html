@@ -60,6 +60,7 @@
                         >
                             Title
                             <div class="pinned-archived-group">
+                                <span id="recurrenceIcon" style="display:none;font-size:1.1em;opacity:0.7;" title="Recurring chit">🔁</span>
                                 <button
                                     type="button"
                                     id="pinnedButton"
@@ -144,14 +145,39 @@
                                         <label class="allday-inline"><input type="checkbox" id="allDay" onchange="toggleAllDay()" /> All Day</label>
                                         <span class="date-mode-separator">|</span>
                                         <label class="allday-inline">🔁</label>
-                                        <select id="recurrence" class="date-time" style="width:auto;">
-                                            <option value="">No Repeat</option>
-                                            <option value="Hourly">Hourly</option>
-                                            <option value="Daily">Daily</option>
-                                            <option value="Weekly">Weekly</option>
-                                            <option value="Monthly">Monthly</option>
-                                            <option value="Yearly">Yearly</option>
+                                        <select id="recurrence" class="date-time" style="width:auto;" onchange="onRecurrenceChange()">
+                                            <option value="">Does not repeat</option>
+                                            <option value="DAILY">Daily</option>
+                                            <option value="WEEKLY">Weekly</option>
+                                            <option value="MONTHLY">Monthly</option>
+                                            <option value="YEARLY">Yearly</option>
+                                            <option value="CUSTOM">Custom...</option>
                                         </select>
+                                        <div id="recurrenceCustom" style="display:none;margin-top:4px;">
+                                            <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">
+                                                <span>Every</span>
+                                                <input type="number" id="recurrenceInterval" value="1" min="1" max="99" style="width:40px;" />
+                                                <select id="recurrenceFreq">
+                                                    <option value="DAILY">days</option>
+                                                    <option value="WEEKLY">weeks</option>
+                                                    <option value="MONTHLY">months</option>
+                                                    <option value="YEARLY">years</option>
+                                                </select>
+                                            </div>
+                                            <div id="recurrenceByDay" style="display:none;margin-top:4px;display:flex;gap:2px;flex-wrap:wrap;">
+                                                <label style="font-size:0.8em;"><input type="checkbox" value="SU" /> Su</label>
+                                                <label style="font-size:0.8em;"><input type="checkbox" value="MO" /> Mo</label>
+                                                <label style="font-size:0.8em;"><input type="checkbox" value="TU" /> Tu</label>
+                                                <label style="font-size:0.8em;"><input type="checkbox" value="WE" /> We</label>
+                                                <label style="font-size:0.8em;"><input type="checkbox" value="TH" /> Th</label>
+                                                <label style="font-size:0.8em;"><input type="checkbox" value="FR" /> Fr</label>
+                                                <label style="font-size:0.8em;"><input type="checkbox" value="SA" /> Sa</label>
+                                            </div>
+                                            <div style="margin-top:4px;display:flex;align-items:center;gap:4px;">
+                                                <span style="font-size:0.85em;">Ends:</span>
+                                                <input type="text" id="recurrenceUntil" class="date-time date-input" placeholder="Never" style="width:90px;" />
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>

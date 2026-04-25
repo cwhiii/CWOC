@@ -55,6 +55,8 @@ class Chit(BaseModel):
     notification: Optional[bool] = None
     recurrence: Optional[str] = None
     recurrence_id: Optional[str] = None
+    recurrence_rule: Optional[Dict[str, Any]] = None  # { freq, interval, byDay, until }
+    recurrence_exceptions: Optional[List[Dict[str, Any]]] = None  # [{ date, completed, title, broken_off }]
     location: Optional[str] = None
     color: Optional[str] = None
     people: Optional[List[str]] = None
@@ -102,7 +104,9 @@ def init_db():
             is_project_master BOOLEAN DEFAULT 0,
             child_chits TEXT,
             all_day BOOLEAN DEFAULT 0,
-            alerts TEXT
+            alerts TEXT,
+            recurrence_rule TEXT,
+            recurrence_exceptions TEXT
         )
         """)
         cursor.execute("""
@@ -209,12 +213,42 @@ def migrate_add_calendar_snap():
         logger.error(f"Error adding calendar_snap column: {str(e)}")
         raise
 
+def migrate_add_recurrence_fields():
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(chits)")
+        columns = [col[1] for col in cursor.fetchall()]
+        if "recurrence_rule" not in columns:
+            cursor.execute("ALTER TABLE chits ADD COLUMN recurrence_rule TEXT")
+            conn.commit()
+            logger.info("Added recurrence_rule column to chits table")
+        if "recurrence_exceptions" not in columns:
+            cursor.execute("ALTER TABLE chits ADD COLUMN recurrence_exceptions TEXT")
+            conn.commit()
+            logger.info("Added recurrence_exceptions column to chits table")
+        # Migrate old recurrence strings to new format
+        cursor.execute("SELECT id, recurrence FROM chits WHERE recurrence IS NOT NULL AND recurrence != ''")
+        rows = cursor.fetchall()
+        for row in rows:
+            chit_id, old_rec = row
+            freq_map = {"Hourly": "HOURLY", "Daily": "DAILY", "Weekly": "WEEKLY", "Monthly": "MONTHLY", "Yearly": "YEARLY"}
+            if old_rec in freq_map:
+                new_rule = json.dumps({"freq": freq_map[old_rec], "interval": 1})
+                cursor.execute("UPDATE chits SET recurrence_rule = ? WHERE id = ?", (new_rule, chit_id))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        logger.error(f"Error adding recurrence fields: {str(e)}")
+        raise
+
 # Initialize database and run all migrations
 init_db()
 migrate_labels_to_tags()
 migrate_add_all_day()
 migrate_add_alerts()
 migrate_add_calendar_snap()
+migrate_add_recurrence_fields()
 
 # Serve all files from /frontend/ (e.g., index.html, settings.html, editor.html)
 app.mount("/frontend", StaticFiles(directory="/app/frontend"), name="frontend")
@@ -255,6 +289,8 @@ def get_chit(chit_id: str):
         chit["is_project_master"] = bool(chit.get("is_project_master"))
         chit["all_day"] = bool(chit.get("all_day"))
         chit["alerts"] = deserialize_json_field(chit.get("alerts"))
+        chit["recurrence_rule"] = deserialize_json_field(chit.get("recurrence_rule"))
+        chit["recurrence_exceptions"] = deserialize_json_field(chit.get("recurrence_exceptions"))
         return chit
     except sqlite3.Error as e:
         logger.error(f"Database error fetching chit {chit_id}: {str(e)}")
@@ -286,6 +322,8 @@ def get_all_chits():
             chit["is_project_master"] = bool(chit.get("is_project_master"))
             chit["all_day"] = bool(chit.get("all_day"))
             chit["alerts"] = deserialize_json_field(chit.get("alerts"))
+            chit["recurrence_rule"] = deserialize_json_field(chit.get("recurrence_rule"))
+            chit["recurrence_exceptions"] = deserialize_json_field(chit.get("recurrence_exceptions"))
             chits.append(chit)
         return chits
     except Exception as e:
@@ -323,8 +361,9 @@ def create_chit(chit: Chit):
                 id, title, note, tags, start_datetime, end_datetime, due_datetime,
                 completed_datetime, status, priority, severity, checklist, alarm, notification,
                 recurrence, recurrence_id, location, color, people, pinned, archived,
-                deleted, created_datetime, modified_datetime, is_project_master, child_chits, all_day, alerts
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                deleted, created_datetime, modified_datetime, is_project_master, child_chits, all_day, alerts,
+                recurrence_rule, recurrence_exceptions
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 chit_id,
@@ -355,6 +394,8 @@ def create_chit(chit: Chit):
                 serialize_json_field(chit.child_chits),
                 chit.all_day if chit.all_day is not None else False,
                 serialize_json_field(chit.alerts),
+                serialize_json_field(chit.recurrence_rule),
+                serialize_json_field(chit.recurrence_exceptions),
             )
         )
         conn.commit()
@@ -397,7 +438,8 @@ def update_chit(chit_id: str, chit: Chit):
                     title = ?, note = ?, tags = ?, start_datetime = ?, end_datetime = ?, due_datetime = ?,
                     completed_datetime = ?, status = ?, priority = ?, severity = ?, checklist = ?, alarm = ?, notification = ?,
                     recurrence = ?, recurrence_id = ?, location = ?, color = ?, people = ?, pinned = ?,
-                    archived = ?, deleted = ?, modified_datetime = ?, is_project_master = ?, child_chits = ?, all_day = ?, alerts = ?
+                    archived = ?, deleted = ?, modified_datetime = ?, is_project_master = ?, child_chits = ?, all_day = ?, alerts = ?,
+                    recurrence_rule = ?, recurrence_exceptions = ?
                 WHERE id = ?
                 """,
                 (
@@ -427,6 +469,8 @@ def update_chit(chit_id: str, chit: Chit):
                     serialize_json_field(chit.child_chits),
                     chit.all_day if chit.all_day is not None else False,
                     serialize_json_field(chit.alerts),
+                    serialize_json_field(chit.recurrence_rule),
+                    serialize_json_field(chit.recurrence_exceptions),
                     chit_id,
                 )
             )
@@ -438,8 +482,9 @@ def update_chit(chit_id: str, chit: Chit):
                     id, title, note, tags, start_datetime, end_datetime, due_datetime,
                     completed_datetime, status, priority, severity, checklist, alarm, notification,
                     recurrence, recurrence_id, location, color, people, pinned, archived,
-                    deleted, created_datetime, modified_datetime, is_project_master, child_chits, all_day, alerts
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    deleted, created_datetime, modified_datetime, is_project_master, child_chits, all_day, alerts,
+                    recurrence_rule, recurrence_exceptions
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     chit_id,
@@ -470,6 +515,8 @@ def update_chit(chit_id: str, chit: Chit):
                     serialize_json_field(chit.child_chits),
                     chit.all_day if chit.all_day is not None else False,
                     serialize_json_field(chit.alerts),
+                    serialize_json_field(chit.recurrence_rule),
+                    serialize_json_field(chit.recurrence_exceptions),
                 )
             )
         conn.commit()
