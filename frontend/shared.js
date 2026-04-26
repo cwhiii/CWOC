@@ -1521,8 +1521,44 @@ function showQuickEditModal(chit, onRefresh) {
   modal.style.cssText = 'background:#fffaf0;border:2px solid #6b4e31;border-radius:8px;padding:24px;min-width:320px;max-width:420px;font-family:"Courier New",monospace;box-shadow:0 8px 32px rgba(0,0,0,0.3);';
 
   const title = document.createElement('h3');
-  title.style.cssText = 'margin:0 0 6px 0;color:#4a2c2a;font-size:1.1em;';
+  title.style.cssText = 'margin:0 0 6px 0;color:#4a2c2a;font-size:1.1em;cursor:text;';
   title.textContent = chit.title || '(Untitled)';
+  title.title = 'Double-click to edit title';
+  title.addEventListener('dblclick', (e) => {
+    e.stopPropagation();
+    title.contentEditable = 'true';
+    title.style.outline = '2px solid #8b4513';
+    title.style.borderRadius = '3px';
+    title.style.padding = '2px 4px';
+    title.focus();
+    // Select all text
+    const range = document.createRange();
+    range.selectNodeContents(title);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+    const saveTitle = () => {
+      title.contentEditable = 'false';
+      title.style.outline = '';
+      title.style.padding = '';
+      const newTitle = title.textContent.trim();
+      if (newTitle && newTitle !== chit.title) {
+        fetch(`/api/chit/${chitId}`).then(r => r.ok ? r.json() : null).then(fullChit => {
+          if (!fullChit) return;
+          fullChit.title = newTitle;
+          return fetch(`/api/chits/${chitId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(fullChit) });
+        }).then(() => {
+          chit.title = newTitle;
+          if (typeof fetchChits === 'function') fetchChits();
+        }).catch(() => {});
+      }
+    };
+    title.addEventListener('blur', saveTitle, { once: true });
+    title.addEventListener('keydown', (ke) => {
+      if (ke.key === 'Enter') { ke.preventDefault(); title.blur(); }
+      if (ke.key === 'Escape') { ke.preventDefault(); title.textContent = chit.title || '(Untitled)'; title.blur(); }
+    });
+  });
   modal.appendChild(title);
 
   if (isRecurring) {
@@ -1798,6 +1834,55 @@ function showQuickEditModal(chit, onRefresh) {
     }
   });
   actionRow.appendChild(delBtn);
+
+  // QR code button
+  const qrBtn = document.createElement('button');
+  qrBtn.style.cssText = iconBtnStyle + 'background:#fdf5e6;';
+  qrBtn.innerHTML = '📱 QR';
+  qrBtn.title = '📦 Data QR (Shift+click for 🔗 Link QR)';
+  qrBtn.addEventListener('click', (ev) => {
+    const url = `${window.location.origin}/frontend/editor.html?id=${chitId}`;
+    const isLink = ev.shiftKey;
+    const qrOverlay = document.createElement('div');
+    qrOverlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:99999;display:flex;align-items:center;justify-content:center;';
+    qrOverlay.addEventListener('click', (e2) => { if (e2.target === qrOverlay) qrOverlay.remove(); });
+    const qrModal = document.createElement('div');
+    qrModal.style.cssText = 'background:#fff8e1;border:2px solid #8b4513;border-radius:10px;padding:24px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,0.4);min-width:280px;';
+    const qrTitle = document.createElement('div');
+    qrTitle.style.cssText = 'font-weight:bold;margin-bottom:12px;color:#4a2c2a;';
+    const qrRender = document.createElement('div');
+    const qrInfo = document.createElement('div');
+    qrInfo.style.cssText = 'font-size:0.75em;opacity:0.6;margin-top:8px;word-break:break-all;max-width:300px;';
+
+    if (isLink) {
+      qrTitle.textContent = '🔗 Link QR Code';
+      qrInfo.textContent = url;
+      if (typeof qrcode !== 'undefined') {
+        const qr = qrcode(0, 'M'); qr.addData(url); qr.make();
+        qrRender.innerHTML = qr.createImgTag(5, 8);
+      }
+    } else {
+      qrTitle.textContent = '📦 Data QR Code';
+      const chitData = { _cwoc: window._instanceId || 'unknown', id: chitId, title: chit.title || '', status: chit.status || '', priority: chit.priority || '', tags: (chit.tags || []).join(';'), note: (chit.note || '').slice(0, 300) };
+      const json = JSON.stringify(chitData);
+      qrInfo.textContent = `${json.length} chars encoded`;
+      if (typeof qrcode !== 'undefined') {
+        try { const qr = qrcode(0, json.length > 500 ? 'L' : 'M'); qr.addData(json); qr.make(); qrRender.innerHTML = qr.createImgTag(4, 6); }
+        catch (err) { qrRender.innerHTML = '<div style="padding:12px;color:#a33;font-size:0.85em;">Data too large for QR.</div>'; }
+      }
+      // Load instance ID
+      if (!window._instanceId) {
+        fetch('/api/instance-id').then(r => r.ok ? r.json() : {}).then(d => { window._instanceId = d.instance_id || 'unknown'; }).catch(() => {});
+      }
+    }
+
+    qrModal.appendChild(qrTitle);
+    qrModal.appendChild(qrRender);
+    qrModal.appendChild(qrInfo);
+    qrOverlay.appendChild(qrModal);
+    document.body.appendChild(qrOverlay);
+  });
+  actionRow.appendChild(qrBtn);
 
   modal.appendChild(actionRow);
 

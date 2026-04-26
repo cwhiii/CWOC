@@ -933,7 +933,7 @@ input.error {
 
 #compactWeatherSection {
     flex: 1;
-    background-color: var(--parchment-dark);
+    background-color: var(--parchment-dark) !important;
     padding: 8px 12px;
     border-radius: 4px;
     text-align: center;

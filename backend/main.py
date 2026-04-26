@@ -42,6 +42,7 @@ class Settings(BaseModel):
     work_end_hour: Optional[str] = "17"
     work_days: Optional[str] = "1,2,3,4,5"  # CSV of day numbers (0=Sun, 1=Mon, ...)
     enabled_periods: Optional[str] = "Itinerary,Day,Week,Work,SevenDay,Month,Year"
+    custom_days_count: Optional[str] = "7"  # for X Days view
 
 class Chit(BaseModel):
     id: Optional[str] = None
@@ -285,6 +286,8 @@ def migrate_add_work_hours():
             cursor.execute("ALTER TABLE settings ADD COLUMN work_days TEXT DEFAULT '1,2,3,4,5'")
         if "enabled_periods" not in columns:
             cursor.execute("ALTER TABLE settings ADD COLUMN enabled_periods TEXT DEFAULT 'Itinerary,Day,Week,Work,SevenDay,Month,Year'")
+        if "custom_days_count" not in columns:
+            cursor.execute("ALTER TABLE settings ADD COLUMN custom_days_count TEXT DEFAULT '7'")
         conn.commit()
         conn.close()
     except Exception as e:
@@ -742,8 +745,8 @@ def save_settings(settings: Settings):
             INSERT OR REPLACE INTO settings (
                 user_id, time_format, sex, snooze_length, default_filters,
                 alarm_orientation, tags, custom_colors, visual_indicators, chit_options,
-                calendar_snap, week_start_day, work_start_hour, work_end_hour, work_days, enabled_periods
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                calendar_snap, week_start_day, work_start_hour, work_end_hour, work_days, enabled_periods, custom_days_count
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 settings.user_id,
@@ -762,7 +765,8 @@ def save_settings(settings: Settings):
                 settings.work_start_hour or "8",
                 settings.work_end_hour or "17",
                 settings.work_days or "1,2,3,4,5",
-                settings.enabled_periods or "Itinerary,Day,Week,Work,SevenDay,Month,Year"
+                settings.enabled_periods or "Itinerary,Day,Week,Work,SevenDay,Month,Year",
+                settings.custom_days_count or "7"
             )
         )
         conn.commit()

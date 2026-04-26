@@ -12,12 +12,12 @@
 
 ### Editor
 - `[X]` Missing favicon on editor page
-- `[ ]` Weather bar transparent background persists when color removed
+- `[X]` Weather bar transparent background persists when color removed
 - `[ ]` Can't save health indicators
 - `[ ]` Enable button greyed out on disabled alarms row
 - `[ ]` Tags in active zone expand to fill space — should wrap to minimum
 - `[ ]` Active Tags area overflows the Tags zone
-- `[ ]` Alarm looping pings continuously instead of once per cycle
+- `[X]` Alarm looping pings continuously instead of once per cycle
 
 ### Views
 - `[X]` Tasks list: sort-by dropdown overflows sidebar
@@ -59,7 +59,7 @@ All three phases complete. See `done.md` for details.
 
 ## Features — Calendar & Scheduling
 
-- `[ ]` Calendar: X Days view (custom number, text input, days wrap if narrow)
+- `[X]` Calendar: X Days view (custom number, text input, days wrap if narrow)
 - `[ ]` Show alarms/notifications/timers on calendar view
 - `[X]` Notify at start time (checkbox)
 - `[X]` Notify at due time (checkbox)
@@ -81,9 +81,9 @@ All three phases complete. See `done.md` for details.
 - `[ ]` Persistent/nag/alarm mode (force acknowledgement)
 - `[ ]` Customizable alarm sounds
 - `[ ]` Create alerts based on: arbitrary time, X units before/after start, X units before/after due
-- `[ ]` "Only if undone" checkbox (default on)
+- `[X]` "Only if undone" checkbox (default on)
 - `[ ]` Setting: default sound/snooze length per priority
-- `[ ]` Notification message = chit title + optional appended text
+- `[X]` Notification message = chit title + optional appended text
 - `[ ]` Android, Linux, Windows, iOS system notifications
 - `[ ]` Proximity-based notifications (your location, someone else's)
 - `[ ]` Biometric triggers (steps, heart rate, cycle state)
@@ -121,8 +121,8 @@ All three phases complete. See `done.md` for details.
 - `[X]` Hide/show tags toggle on all views
 - `[X]` Search all visible fields with "Search All Fields" toggle
 - `[X]` Sidebar: save a search as a one-click button
-- `[ ]` Label/tag-based view filtering (like Google Calendar show/hide)
-- `[ ]` Additional/custom statuses
+- `[X]` Label/tag-based view filtering (like Google Calendar show/hide)
+- `[X]` Additional/custom statuses
 
 ---
 
@@ -144,7 +144,7 @@ All three phases complete. See `done.md` for details.
 ## Features — Notes
 
 - `[ ]` Side-by-side notes view (2 chits for copy/paste/reference)
-- `[ ]` Quick in-place edits in Notes view
+- `[X]` Quick in-place edits in Notes view
 - `[X]` Notes with links to other chits (each chit has a URL by ID)
 - `[ ]` Auto import/export notes as Markdown to sync with Obsidian
 
@@ -174,7 +174,7 @@ All three phases complete. See `done.md` for details.
 - `[X]` Soft delete → trash view with purge and individual restore/nuke
 - `[X]` Export: Markdown, iCal, CSV
 - `[X]` Import from CSV
-- `[ ]` Auto-generated QR codes per chit
+- `[X]` Auto-generated QR codes per chit
 - `[X]` Chit URL (direct link by ID)
 - `[ ]` Audit logs
 - `[X]` Universally unique installation instance ID
@@ -196,7 +196,7 @@ All three phases complete. See `done.md` for details.
 - `[ ]` Show events by map
 - `[X]` Working days/hours configuration
 - `[ ]` Schedule appointment hours and days
-- `[ ]` Hotkey: create chit with submenu for each type (K→X for views, K→R for raw)
+- `[X]` Hotkey: create chit with submenu for each type (K→X for views, K→R for raw)
 - `[X]` Find a place for a clock in views
 
 ---
@@ -213,7 +213,7 @@ All three phases complete. See `done.md` for details.
 - `[ ]` **Alerts: "Filter" button** — `toggleAlertFilterDropdown()` exists but only toggles container visibility, no actual filter logic
 - `[ ]` **Alerts: Alarm sound select** — dropdown present in modal but sounds aren't loaded/played
 - `[ ]` **Projects: "Filter" button** — calls `toggleStatusFilterDropdown()` which doesn't exist in editor.js
-- `[ ]` **Projects: "Move to Project" dropdown** — hardcoded options ("Project Alpha", "Project Beta"), not populated from data
+- `[X]` **Projects: "Move to Project" dropdown** — hardcoded options ("Project Alpha", "Project Beta"), not populated from data
 - `[ ]` **Weather bar** — shows placeholder text, actual weather fetch only works sometimes
 
 ### Settings — Not Applied Anywhere

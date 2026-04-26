@@ -208,11 +208,19 @@
     <h2 id="quick-edit">Quick Edit Modal</h2>
     <p>Shift+click any chit on the calendar to open the Quick Edit modal. It provides:</p>
     <ul>
-        <li><strong>Task fields</strong> — editable dropdowns for Priority, Severity, Status (only shown if the chit already has values). For recurring chits, changes apply to <strong>this instance only</strong> by default. Check "Apply to all instances" to change the entire series.</li>
-        <li><strong>Pin / Archive / Delete</strong> — toggle buttons in a row. Delete shows sub-options for recurring chits (this instance, this and following, all).</li>
+        <li><strong>Title editing</strong> — double-click the title to edit it in place. Enter to save, Escape to cancel.</li>
+        <li><strong>Task fields</strong> — editable dropdowns for Priority, Severity, Status (only shown if the chit already has values). For recurring chits, changes apply to <strong>this instance only</strong> by default. Check "All" to change the entire series.</li>
+        <li><strong>Pin / Archive / Delete / QR</strong> — action buttons in a row. Delete shows sub-options for recurring chits (this instance, this and following, all). QR shows a scannable QR code linking to the chit.</li>
         <li><strong>Recurrence options</strong> — (only for recurring chits) edit series, edit instance, break off &amp; edit</li>
-        <li><strong>Series summary</strong> — collapsible list of all instances with completion status</li>
-        <li><strong>Open in editor</strong> — full editor access</li>
+        <li><strong>Open in editor</strong> — full editor access (non-recurring chits)</li>
+    </ul>
+
+    <h2 id="notes-view">Notes View</h2>
+    <p>Shows all chits with notes as cards with full rendered markdown.</p>
+    <ul>
+        <li><strong>Double-click</strong> — open chit in the full editor</li>
+        <li><strong>Shift+click</strong> — edit the note text in place. Saves on blur, ESC to cancel.</li>
+        <li><strong>[[chit title]]</strong> — auto-links to other chits when rendered</li>
     </ul>
 
     <h2 id="settings">Settings</h2>
@@ -220,9 +228,14 @@
     <ul>
         <li><strong>Time Format</strong> — 24-hour, 12-hour, or metric</li>
         <li><strong>Calendar Snapping</strong> — snap interval for drag operations (5-60 min)</li>
-        <li><strong>Tag Editor</strong> — create, edit, delete, favorite tags with colors. Displayed as a tree view.</li>
+        <li><strong>Period Options</strong> — enable/disable periods, week start day, working hours (start/end), working days (Mon-Fri default), X Days count</li>
+        <li><strong>Tag Editor</strong> — create, edit, delete, favorite tags with colors. Displayed as a tree view. "+" button creates child tags.</li>
         <li><strong>Custom Colors</strong> — add colors for the chit color picker</li>
         <li><strong>Snooze Length</strong> — default snooze duration for alarms</li>
+        <li><strong>Default Filters</strong> — per-tab default search text</li>
+        <li><strong>Chit Options</strong> — fade past chits, highlight overdue, delete past alarm chits</li>
+        <li><strong>Export / Import</strong> — CSV export and import</li>
+        <li><strong>Trash</strong> — view and restore deleted chits</li>
     </ul>
     <p>Save buttons: <strong>Save & Stay</strong>, <strong>Save & Exit</strong>, <strong>Cancel</strong>.</p>
 

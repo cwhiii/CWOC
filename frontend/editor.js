@@ -304,6 +304,114 @@ function toggleArchived() {
   setSaveButtonUnsaved();
 }
 
+function _showQRCode(e) {
+  if (!chitId) { alert('Save the chit first to generate a QR code.'); return; }
+  const existing = document.getElementById('qr-modal-overlay');
+  if (existing) { existing.remove(); return; }
+
+  const overlay = document.createElement('div');
+  overlay.id = 'qr-modal-overlay';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:99999;display:flex;align-items:center;justify-content:center;';
+  overlay.addEventListener('click', (ev) => { if (ev.target === overlay) overlay.remove(); });
+
+  const modal = document.createElement('div');
+  modal.style.cssText = 'background:#fff8e1;border:2px solid #8b4513;border-radius:10px;padding:24px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,0.4);min-width:300px;';
+
+  const titleEl = document.createElement('div');
+  titleEl.style.cssText = 'font-weight:bold;margin-bottom:12px;color:#4a2c2a;';
+  modal.appendChild(titleEl);
+
+  const qrDiv = document.createElement('div');
+  qrDiv.id = 'qr-render-area';
+  modal.appendChild(qrDiv);
+
+  const infoDiv = document.createElement('div');
+  infoDiv.style.cssText = 'font-size:0.75em;opacity:0.6;margin-top:8px;word-break:break-all;max-width:320px;';
+  modal.appendChild(infoDiv);
+
+  // Toggle buttons
+  const toggleRow = document.createElement('div');
+  toggleRow.style.cssText = 'display:flex;gap:6px;margin-top:12px;justify-content:center;';
+  const btnStyle = 'padding:6px 12px;border:1px solid #6b4e31;border-radius:4px;cursor:pointer;font-family:inherit;font-size:0.85em;';
+  const dataBtn = document.createElement('button');
+  dataBtn.style.cssText = btnStyle + 'background:#d4c5a9;font-weight:bold;';
+  dataBtn.textContent = '📦 Data QR';
+  dataBtn.title = 'QR contains chit data for import on another instance';
+  const linkBtn = document.createElement('button');
+  linkBtn.style.cssText = btnStyle + 'background:#fdf5e6;';
+  linkBtn.textContent = '🔗 Link QR';
+  linkBtn.title = 'QR contains a URL link to this chit';
+  toggleRow.appendChild(dataBtn);
+  toggleRow.appendChild(linkBtn);
+  modal.appendChild(toggleRow);
+
+  const closeHint = document.createElement('div');
+  closeHint.style.cssText = 'font-size:0.7em;opacity:0.35;margin-top:8px;';
+  closeHint.textContent = 'Click outside to close';
+  modal.appendChild(closeHint);
+
+  function renderQR(mode) {
+    dataBtn.style.background = mode === 'data' ? '#d4c5a9' : '#fdf5e6';
+    dataBtn.style.fontWeight = mode === 'data' ? 'bold' : 'normal';
+    linkBtn.style.background = mode === 'link' ? '#d4c5a9' : '#fdf5e6';
+    linkBtn.style.fontWeight = mode === 'link' ? 'bold' : 'normal';
+
+    if (mode === 'link') {
+      const url = `${window.location.origin}/frontend/editor.html?id=${chitId}`;
+      titleEl.textContent = '🔗 Link QR Code';
+      infoDiv.textContent = url;
+      if (typeof qrcode !== 'undefined') {
+        const qr = qrcode(0, 'M'); qr.addData(url); qr.make();
+        qrDiv.innerHTML = qr.createImgTag(5, 8);
+      } else { qrDiv.innerHTML = '<div style="padding:12px;opacity:0.6;">QR library not loaded.</div>'; }
+    } else {
+      titleEl.textContent = '📦 Data QR Code';
+      // Build compact chit data payload with instance ID
+      const chitData = {
+        _cwoc: window._instanceId || 'unknown',
+        id: chitId,
+        title: document.getElementById('title')?.value || '',
+        note: document.getElementById('note')?.value || '',
+        status: document.getElementById('status')?.value || '',
+        priority: document.getElementById('priority')?.value || '',
+        tags: (window._currentTagSelection || []).join(';'),
+        due: document.getElementById('due_datetime')?.value || '',
+        start: document.getElementById('start_datetime')?.value || '',
+        end: document.getElementById('end_datetime')?.value || '',
+      };
+      const json = JSON.stringify(chitData);
+      infoDiv.textContent = `${json.length} chars encoded (instance: ${chitData._cwoc.slice(0,8)}…)`;
+      if (typeof qrcode !== 'undefined') {
+        // Use higher error correction for larger data
+        const ecl = json.length > 500 ? 'L' : 'M';
+        try {
+          const qr = qrcode(0, ecl); qr.addData(json); qr.make();
+          qrDiv.innerHTML = qr.createImgTag(4, 6);
+        } catch (err) {
+          qrDiv.innerHTML = '<div style="padding:12px;color:#a33;font-size:0.85em;">Chit data too large for QR code. Try reducing the note length.</div>';
+        }
+      } else { qrDiv.innerHTML = '<div style="padding:12px;opacity:0.6;">QR library not loaded.</div>'; }
+    }
+  }
+
+  dataBtn.addEventListener('click', () => renderQR('data'));
+  linkBtn.addEventListener('click', () => renderQR('link'));
+
+  // Default: data QR. Shift+click on the button = link QR.
+  renderQR(e && e.shiftKey ? 'link' : 'data');
+
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+
+  // Load instance ID if not cached
+  if (!window._instanceId) {
+    fetch('/api/instance-id').then(r => r.ok ? r.json() : {}).then(d => {
+      window._instanceId = d.instance_id || 'unknown';
+      if (dataBtn.style.fontWeight === 'bold') renderQR('data'); // re-render with real ID
+    }).catch(() => {});
+  }
+}
+
 function addChecklistItem(isSubItem) {
   const textInput = document.getElementById("new-item-text");
   if (!textInput) return;
@@ -2349,8 +2457,10 @@ function addNotification() {
   const value = parseInt(document.getElementById("notificationValue")?.value);
   const unit = document.getElementById("notificationUnit")?.value || "minutes";
   const relativeTo = document.getElementById("notificationRelativeToToggle")?.checked || false;
+  const onlyIfUndone = document.getElementById("notificationOnlyIfUndone")?.checked ?? true;
+  const message = document.getElementById("notificationMessage")?.value?.trim() || '';
   if (!value || value <= 0) { alert("Please enter a valid number."); return; }
-  window._alertsData.notifications.push({ _type: "notification", value, unit, relativeTo });
+  window._alertsData.notifications.push({ _type: "notification", value, unit, relativeTo, only_if_undone: onlyIfUndone, message });
   closeNotificationModal(true);
   renderNotificationsContainer();
   setSaveButtonUnsaved();
@@ -3160,6 +3270,18 @@ document.addEventListener("DOMContentLoaded", function () {
 
   initializeChitId();
 
+  // Populate "Move to Project" dropdown with actual project master chits
+  fetch('/api/chits').then(r => r.ok ? r.json() : []).then(allChits => {
+    const dd = document.getElementById('moveToProjectDropdown');
+    if (!dd) return;
+    allChits.filter(c => c.is_project_master && c.id !== chitId).forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c.id;
+      opt.textContent = c.title || '(Untitled Project)';
+      dd.appendChild(opt);
+    });
+  }).catch(() => {});
+
   // Load snap setting (for future calendar drag use)
   _loadSnapSetting();
 
@@ -3343,6 +3465,9 @@ document.addEventListener("DOMContentLoaded", function () {
   // ESC key — same logic as clicking Exit/Cancel
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
+      // Close QR modal first if open
+      const qrModal = document.getElementById('qr-modal-overlay');
+      if (qrModal) { qrModal.remove(); return; }
       // Don't intercept if a modal is open
       const openModal = document.querySelector(
         '.modal-overlay[style*="block"], .modal[style*="block"], .flatpickr-calendar.open'

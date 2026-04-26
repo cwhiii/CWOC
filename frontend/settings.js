@@ -909,6 +909,10 @@ class SettingsManager {
       cb.checked = enabledPeriods.includes(cb.value);
     });
 
+    // Custom days count
+    const customDaysInput = document.getElementById("custom-days-count");
+    if (customDaysInput) customDaysInput.value = this.settings.custom_days_count || "7";
+
     const filterInputs = [
       "calendar",
       "checklists",
@@ -977,6 +981,7 @@ class SettingsManager {
       work_end_hour: document.getElementById("work-end-hour")?.value || "17",
       work_days: Array.from(document.querySelectorAll('.work-day-cb:checked')).map(cb => cb.value).join(',') || "1,2,3,4,5",
       enabled_periods: Array.from(document.querySelectorAll('.period-cb:checked')).map(cb => cb.value).join(',') || "Itinerary,Day,Week,Work,SevenDay,Month,Year",
+      custom_days_count: document.getElementById("custom-days-count")?.value || "7",
       default_filters: (() => {
         const filters = {};
         document.querySelectorAll(".filter-input").forEach(input => {

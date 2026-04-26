@@ -13,6 +13,7 @@
             rel="stylesheet"
             href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"
         />
+        <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
         <link rel="stylesheet" href="/frontend/editor.css" />
     </head>
     <body>
@@ -37,6 +38,9 @@
                     </button>
                 </div>
                 <div class="right-buttons">
+                    <button id="qrButton" onclick="_showQRCode(event)" title="📦 Data QR (Shift+click for 🔗 Link QR)" style="font-size:0.9em;">
+                        📱 QR
+                    </button>
                     <button id="archivedButton" class="delete archive-btn" onclick="toggleArchived()" title="Toggle Archived State">
                         📦 Archive
                     </button>
@@ -804,12 +808,6 @@
                                     style="display: none"
                                 >
                                     <option value="">Move to Project →</option>
-                                    <option value="project-alpha">
-                                        Project Alpha
-                                    </option>
-                                    <option value="project-beta">
-                                        Project Beta
-                                    </option>
                                 </select>
                             </div>
                             <span class="zone-toggle-icon">🔽</span>
@@ -1175,6 +1173,16 @@
                         <p>Current Chit Dates:</p>
                         <p>Start: <span id="currentChitStartDate">N/A</span></p>
                         <p>Due: <span id="currentChitDueDate">N/A</span></p>
+                    </div>
+                    <div class="field">
+                        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+                            <input type="checkbox" id="notificationOnlyIfUndone" checked style="flex:0 0 auto;" />
+                            Only if undone
+                        </label>
+                    </div>
+                    <div class="field">
+                        <label for="notificationMessage">Custom Message (appended to title)</label>
+                        <input type="text" id="notificationMessage" placeholder="Optional extra text" />
                     </div>
                 </div>
                 <div class="modal-buttons">

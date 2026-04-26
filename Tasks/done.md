@@ -579,3 +579,96 @@ Fully implemented. Ported from `Prototypes/CWOC UI/UI.html`:
 ### Help & Reference Updated ✅
 - Reference overlay updated with all new hotkeys (L, K for Week, W for Work, G for Upcoming)
 - Help page updated with new periods, sort options, editor hotkeys, and [[link]] syntax
+
+
+## Completed — Fixes & Polish (2026-04-26)
+
+### Work Hours View — Fixed ✅
+- Rewrote as thin wrapper: `displayWorkView` calls `displayWeekView` with `{ hourStart, hourEnd, filterDays }` opts
+- `displayWeekView` now accepts optional hour range and day filter — defaults to 0-24 / all 7 days
+- Hour column, day column heights, and event positions all parameterized by `hourStart`/`hourEnd`
+- Events outside the hour range are clamped/hidden, events outside working days are excluded
+- Same overlap detection, same drag support, same rendering as Week view
+
+### All-Day Events Row Packing ✅
+- Fixed `renderAllDayEventsInCells` — events now pack into rows using column-span collision detection
+- `rowOccupancy[]` tracks which columns are used per row
+- Each event finds the first row where its column span is free, or creates a new row
+- Multi-day events sharing non-overlapping columns now share the same row
+
+### Period Enable/Disable in Settings ✅
+- "Enabled Periods" checkboxes in Period Options settings block
+- Disabled periods hidden from dropdown, greyed in hotkey panel + reference overlay
+- Greyed items show `cursor: not-allowed` and title tooltip "This period is disabled in Settings"
+- Hotkeys for disabled periods blocked via `_pickPeriod` guard
+- `enabled_periods` field on backend Settings model + DB migration
+
+### Working Days Setting ✅
+- Day-of-week checkboxes (Sun-Sat) in Period Options settings block
+- Defaults to Mon-Fri checked
+- `work_days` CSV field on backend + migration
+- Work Hours view filters to only show checked days
+
+### Sidebar Button Layout Fix ✅
+- Save Search button moved from search input to bottom 2×2 grid
+- Clock, Save Search, Reference, Help all half-width in a flex-wrap grid
+
+### Hide Past-Due Filter ✅
+- "🚫 Hide Past-Due" checkbox in Show filter group
+- Filters out chits with past due dates (keeps completed visible)
+- Wired into state save/restore, clear filters, auto-expand logic
+
+### Hotkey Swaps ✅
+- Week: . → W, Work Hours: . → K
+- Updated in panel, reference overlay, hotkey map, help page
+
+
+## Completed — Tier 1-3 Batch (2026-04-26)
+
+### Alarm Looping Fix ✅
+- Changed from `loop = true` (infinite) to play 3 times then stop
+- `onended` handler counts plays, stops after 3
+- Dismiss/Snooze buttons still stop immediately
+
+### Weather Bar Background Fix ✅
+- Added `!important` to `#compactWeatherSection` background-color
+- Prevents chit color from bleeding through to weather section
+
+### Move to Project Dropdown — Populated from Data ✅
+- Removed hardcoded "Project Alpha/Beta" options
+- On editor load, fetches all chits and populates dropdown with actual project masters
+- Excludes the current chit from the list
+
+### Calendar: X Days View ✅
+- `displaySevenDayView` now uses `_customDaysCount` instead of hardcoded 7
+- Settings: "X Days Count" number input (2-30) in Period Options block
+- `custom_days_count` field on backend Settings model + DB migration
+- Dropdown, panel, and reference labels dynamically show actual count (e.g. "10 Days")
+
+### "Only if Undone" Checkbox on Notifications ✅
+- Checkbox in notification modal (default checked)
+- `only_if_undone` field saved on notification alert objects
+- Notification checker skips firing if chit status is "Complete" and flag is true
+
+### Notification Custom Message ✅
+- Text input in notification modal for optional appended text
+- `message` field saved on notification alert objects
+- Toast and browser notification show "title — message" when message exists
+
+### QR Codes per Chit ✅
+- 📱 QR button in editor header (next to Archive)
+- Uses qrcode-generator CDN library
+- Click shows modal with QR code image + chit URL
+- Click outside to close
+
+### Quick In-Place Edits in Notes View ✅
+- Double-click a note card to edit in-place (contenteditable)
+- Shows raw text for editing, saves on blur via PUT
+- ESC cancels editing
+- Shift+double-click still opens full editor
+- Re-renders markdown after save
+
+### Declined Items (user doesn't want)
+- Label/tag-based view filtering (Google Calendar style) — existing tag filter is sufficient
+- Additional/custom statuses — not needed
+- Hotkey create submenu (K→X) — not needed

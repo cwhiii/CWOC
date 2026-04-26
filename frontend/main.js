@@ -417,16 +417,18 @@ function _pickPeriod(period) {
 
 /** Apply enabled periods: hide disabled options in dropdown, grey out in panels/reference */
 function _applyEnabledPeriods() {
-  // Period select dropdown — hide disabled options
+  // Update X Days labels with actual count
+  const xLabel = `${_customDaysCount} Days`;
   const sel = document.getElementById('period-select');
   if (sel) {
     Array.from(sel.options).forEach(opt => {
+      if (opt.value === 'SevenDay') opt.textContent = xLabel;
       opt.disabled = !_enabledPeriods.includes(opt.value);
       opt.style.display = _enabledPeriods.includes(opt.value) ? '' : 'none';
     });
   }
 
-  // Period hotkey panel — grey out disabled
+  // Period hotkey panel — grey out disabled, update X Days label
   const panel = document.getElementById('panel-period');
   if (panel) {
     panel.querySelectorAll('.hotkey-panel-option').forEach(opt => {
@@ -434,6 +436,11 @@ function _applyEnabledPeriods() {
       const match = onclick.match(/_pickPeriod\('(\w+)'\)/);
       if (match) {
         const period = match[1];
+        // Update X Days label
+        if (period === 'SevenDay') {
+          const labelEl = opt.querySelector('.panel-label');
+          if (labelEl) labelEl.textContent = xLabel;
+        }
         if (_enabledPeriods.includes(period)) {
           opt.style.opacity = '';
           opt.style.cursor = '';
@@ -775,6 +782,7 @@ async function _loadLabelFilters() {
         if (settings.work_end_hour !== undefined) _workEndHour = parseInt(settings.work_end_hour) || 17;
         if (settings.work_days) _workDays = settings.work_days.split(',').map(Number);
         if (settings.enabled_periods) _enabledPeriods = settings.enabled_periods.split(',');
+        if (settings.custom_days_count) _customDaysCount = parseInt(settings.custom_days_count) || 7;
         _applyEnabledPeriods();
       }
     } catch (e) { /* ignore */ }
@@ -889,12 +897,10 @@ function _globalPlayAlarm() {
     _globalAlarmAudio = new Audio("/static/alarm.mp3");
     _globalAlarmAudio.loop = true;
   }
-  // Resume AudioContext if suspended (browser autoplay policy)
   _globalAlarmAudio.currentTime = 0;
   const playPromise = _globalAlarmAudio.play();
   if (playPromise !== undefined) {
     playPromise.catch(() => {
-      // Autoplay blocked — queue it to play on next user interaction
       const unlock = () => {
         _globalAlarmAudio.play().catch(() => {});
         document.removeEventListener("click", unlock);
@@ -904,10 +910,16 @@ function _globalPlayAlarm() {
       document.addEventListener("keydown", unlock, { once: true });
     });
   }
+  // Auto-stop after 5 minutes
+  if (_globalAlarmTimeout) clearTimeout(_globalAlarmTimeout);
+  _globalAlarmTimeout = setTimeout(() => _globalStopAlarm(), 5 * 60 * 1000);
 }
+
+let _globalAlarmTimeout = null;
 
 function _globalStopAlarm() {
   if (_globalAlarmAudio) { _globalAlarmAudio.pause(); _globalAlarmAudio.currentTime = 0; }
+  if (_globalAlarmTimeout) { clearTimeout(_globalAlarmTimeout); _globalAlarmTimeout = null; }
 }
 
 function _globalPlayTimer() {
@@ -1080,6 +1092,10 @@ function _globalCheckNotifications() {
     chit.alerts.forEach((alert, alertIdx) => {
       if (alert._type !== "notification" || !alert.value || !alert.unit) return;
 
+      // "Only if undone" — skip if chit is complete (default: true)
+      const onlyIfUndone = alert.only_if_undone !== false; // default true
+      if (onlyIfUndone && chit.status === 'Complete') return;
+
       const unitMs = { minutes: 60000, hours: 3600000, days: 86400000, weeks: 604800000 };
       const offsetMs = alert.value * (unitMs[alert.unit] || 60000);
 
@@ -1102,8 +1118,9 @@ function _globalCheckNotifications() {
       _globalFiredNotifications.add(key);
 
       const label = `${alert.value} ${alert.unit} before ${alert.relativeTo ? "due/start" : "start"}`;
-      _showGlobalToast("📢", label, chit.title, chit.id, null);
-      _sendBrowserNotification(`📢 Reminder: ${chit.title}`, label, chit.id);
+      const toastTitle = alert.message ? `${chit.title} — ${alert.message}` : chit.title;
+      _showGlobalToast("📢", label, toastTitle, chit.id, null);
+      _sendBrowserNotification(`📢 Reminder: ${toastTitle}`, label, chit.id);
     });
   });
 
@@ -2007,6 +2024,7 @@ let _workStartHour = 8;
 let _workEndHour = 17;
 let _workDays = [1, 2, 3, 4, 5]; // 0=Sun, 1=Mon, ...
 let _enabledPeriods = ['Itinerary', 'Day', 'Week', 'Work', 'SevenDay', 'Month', 'Year'];
+let _customDaysCount = 7;
 
 function displayWorkView(chitsToDisplay) {
   displayWeekView(chitsToDisplay, {
@@ -2630,7 +2648,7 @@ function displayNotesView(chitsToDisplay) {
 
       const noteEl = document.createElement("div");
       noteEl.className = "note-content";
-      noteEl.style.cssText = "overflow:hidden;font-size:0.9em;";
+      noteEl.style.cssText = "overflow-y:auto;";
       if (typeof marked !== "undefined" && chit.note) {
         noteEl.innerHTML = resolveChitLinks(marked.parse(chit.note), chits);
       } else {
@@ -2639,9 +2657,44 @@ function displayNotesView(chitsToDisplay) {
       }
       chitElement.appendChild(noteEl);
 
+      // Double-click: open in editor. Shift+click: edit in place.
       chitElement.addEventListener("dblclick", () => {
         storePreviousState();
         window.location.href = `/editor?id=${chit.id}`;
+      });
+      chitElement.addEventListener("click", (e) => {
+        if (!e.shiftKey) return;
+        e.preventDefault();
+        // Toggle in-place editing
+        if (noteEl.contentEditable === 'true') return;
+        noteEl.contentEditable = 'true';
+        noteEl.style.outline = '2px solid #8b4513';
+        noteEl.style.borderRadius = '4px';
+        noteEl.style.padding = '6px';
+        noteEl.style.whiteSpace = 'pre-wrap';
+        noteEl.textContent = chit.note || '';
+        noteEl.focus();
+        const saveEdit = () => {
+          noteEl.contentEditable = 'false';
+          noteEl.style.outline = '';
+          noteEl.style.padding = '';
+          const newNote = noteEl.textContent;
+          if (newNote !== chit.note) {
+            fetch(`/api/chits/${chit.id}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ ...chit, note: newNote })
+            }).then(r => { if (r.ok) { chit.note = newNote; fetchChits(); } });
+          } else {
+            if (typeof marked !== 'undefined' && chit.note) {
+              noteEl.innerHTML = resolveChitLinks(marked.parse(chit.note), chits);
+            }
+          }
+        };
+        noteEl.addEventListener('blur', saveEdit, { once: true });
+        noteEl.addEventListener('keydown', (ke) => {
+          if (ke.key === 'Escape') { ke.preventDefault(); noteEl.blur(); }
+        });
       });
       notesView.appendChild(chitElement);
     });
@@ -2800,10 +2853,11 @@ function displaySevenDayView(chitsToDisplay) {
   const wrapper = document.createElement("div");
   wrapper.style.cssText = "display:flex;flex-direction:column;height:100%;width:100%;";
 
+  const numDays = _customDaysCount || 7;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const days = [];
-  for (let i = 0; i < 7; i++) {
+  for (let i = 0; i < numDays; i++) {
     const d = new Date(today);
     d.setDate(today.getDate() + i);
     days.push(d);
@@ -3429,6 +3483,7 @@ document.addEventListener("DOMContentLoaded", function () {
     if (s.work_end_hour !== undefined) _workEndHour = parseInt(s.work_end_hour) || 17;
     if (s.work_days) _workDays = s.work_days.split(',').map(Number);
     if (s.enabled_periods) _enabledPeriods = s.enabled_periods.split(',');
+    if (s.custom_days_count) _customDaysCount = parseInt(s.custom_days_count) || 7;
     if (s.chit_options) _chitOptions = { ..._chitOptions, ...s.chit_options };
     // Load default filters per tab
     const df = s.default_filters;
