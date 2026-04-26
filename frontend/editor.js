@@ -3241,6 +3241,14 @@ function openLocationDirections(event) {
 document.addEventListener("DOMContentLoaded", function () {
   console.log("DOM Content Loaded - Initializing editor...");
 
+  // Tag search filter-as-you-type
+  var labelsInput = document.getElementById('labels');
+  if (labelsInput) {
+    labelsInput.addEventListener('input', function () {
+      _filterTagTree(labelsInput.value.trim());
+    });
+  }
+
   // Initialize shared save/cancel button system
   window._cwocSave = new CwocSaveSystem({
     singleBtnId: 'saveButton',
@@ -3533,7 +3541,32 @@ function createTag(event) {
 function clearTagSearch(event) {
   if (event) event.stopPropagation();
   const input = document.getElementById('labels');
-  if (input) { input.value = ''; input.focus(); }
+  if (input) { input.value = ''; _filterTagTree(''); input.focus(); }
+}
+
+/** Filter the tag tree by search text — hides non-matching items */
+function _filterTagTree(query) {
+  const container = document.getElementById('tagTreeContainer');
+  if (!container) return;
+  const q = (query || '').toLowerCase();
+  // Find all label elements (each tag row is a label with a checkbox)
+  const labels = container.querySelectorAll('label');
+  labels.forEach(function (lbl) {
+    var text = (lbl.textContent || '').toLowerCase();
+    lbl.style.display = (!q || text.includes(q)) ? '' : 'none';
+  });
+  // Show/hide group headers (divs that contain the group name)
+  const groups = container.querySelectorAll('.tag-group-header, [data-tag-group]');
+  groups.forEach(function (g) {
+    // Show group if any child label is visible
+    var parent = g.closest('.tag-group') || g.parentElement;
+    if (parent) {
+      var visibleLabels = parent.querySelectorAll('label:not([style*="display: none"])');
+      if (g.classList.contains('tag-group-header') || g.hasAttribute('data-tag-group')) {
+        g.style.display = visibleLabels.length > 0 ? '' : 'none';
+      }
+    }
+  });
 }
 
 /** Add a tag by name from the search input */
@@ -3715,6 +3748,14 @@ function _renderPeopleTree(filter) {
   });
 
   var letters = Object.keys(groups).sort();
+  // Sort each group: favorites first, then alphabetical
+  letters.forEach(function (letter) {
+    groups[letter].sort(function (a, b) {
+      if (a.favorite && !b.favorite) return -1;
+      if (!a.favorite && b.favorite) return 1;
+      return (a.display_name || '').localeCompare(b.display_name || '');
+    });
+  });
   letters.forEach(function (letter) {
     var isExpanded = _peopleGroupsExpanded[letter] !== false; // default expanded
 
@@ -3763,8 +3804,10 @@ function _renderPeopleTree(filter) {
         }
 
         var nameSpan = document.createElement('span');
-        nameSpan.textContent = c.display_name || c.given_name || '(unnamed)';
+        var starPrefix = c.favorite ? '★ ' : '';
+        nameSpan.textContent = starPrefix + (c.display_name || c.given_name || '(unnamed)');
         if (c.color) nameSpan.style.color = c.color;
+        if (c.favorite) nameSpan.style.fontWeight = 'bold';
 
         row.appendChild(cb);
         row.appendChild(thumb);

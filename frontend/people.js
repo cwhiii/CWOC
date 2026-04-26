@@ -118,6 +118,12 @@
         row.className = 'people-row';
         row.dataset.contactId = contact.id;
 
+        // Apply contact color as subtle background tint
+        if (contact.color) {
+            row.style.backgroundColor = contact.color + '22'; // ~13% opacity via hex alpha
+            row.style.borderLeft = '3px solid ' + contact.color;
+        }
+
         // Star toggle
         const star = document.createElement('span');
         star.className = 'star-toggle';

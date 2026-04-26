@@ -135,10 +135,13 @@
     // ── Image Upload ────────────────────────────────────────────────────
     // ═══════════════════════════════════════════════════════════════════════
 
+    var _pendingImageFile = null; // File to upload on next save
+    var _pendingImageRemove = false; // Flag to remove image on next save
+
     function _initImageUpload() {
         var fileInput = document.getElementById('imageFileInput');
         fileInput.addEventListener('change', function () {
-            if (fileInput.files.length > 0) _uploadImage(fileInput.files[0]);
+            if (fileInput.files.length > 0) _stageImage(fileInput.files[0]);
         });
 
         // Click on image opens full-size modal (if image exists)
@@ -155,7 +158,6 @@
 
     window.triggerImageUpload = function () {
         var imgEl = document.getElementById('profileImage');
-        // If image exists, clicking the wrapper opens full-size; use remove btn to change
         if (imgEl.style.display !== 'none' && imgEl.src) {
             var modal = document.getElementById('image-modal');
             document.getElementById('image-modal-img').src = imgEl.src;
@@ -165,30 +167,55 @@
         document.getElementById('imageFileInput').click();
     };
 
-    async function _uploadImage(file) {
-        if (!_contactId) {
-            // Must save contact first
-            var saved = await _saveContact();
-            if (!saved) return;
-        }
+    /** Stage an image locally (preview only) — actual upload happens on save */
+    function _stageImage(file) {
+        _pendingImageFile = file;
+        _pendingImageRemove = false;
+        // Show local preview via data URL
+        var reader = new FileReader();
+        reader.onload = function (e) {
+            var imgEl = document.getElementById('profileImage');
+            var placeholder = document.getElementById('profilePlaceholder');
+            var removeBtn = document.getElementById('removeImageBtn');
+            imgEl.src = e.target.result;
+            imgEl.style.display = '';
+            placeholder.style.display = 'none';
+            removeBtn.style.display = '';
+        };
+        reader.readAsDataURL(file);
+        if (_saveSystem) _saveSystem.markUnsaved();
+    }
+
+    /** Upload the pending image file to the server (called during save) */
+    async function _uploadPendingImage() {
+        if (!_pendingImageFile || !_contactId) return;
         try {
             var formData = new FormData();
-            formData.append('file', file);
+            formData.append('file', _pendingImageFile);
             var resp = await fetch('/api/contacts/' + encodeURIComponent(_contactId) + '/image', {
                 method: 'POST',
                 body: formData
             });
-            if (!resp.ok) {
-                _showBriefMessage('Image upload failed', true);
-                return;
+            if (resp.ok) {
+                var result = await resp.json();
+                _currentImageUrl = result.image_url;
             }
-            var result = await resp.json();
-            _setProfileImage(result.image_url);
-            if (_saveSystem) _saveSystem.markSaved();
         } catch (err) {
             console.error('Image upload error:', err);
-            _showBriefMessage('Image upload error', true);
         }
+        _pendingImageFile = null;
+    }
+
+    /** Remove the pending image on save */
+    async function _removePendingImage() {
+        if (!_contactId) return;
+        try {
+            await fetch('/api/contacts/' + encodeURIComponent(_contactId) + '/image', { method: 'DELETE' });
+            _currentImageUrl = null;
+        } catch (err) {
+            console.error('Error removing image:', err);
+        }
+        _pendingImageRemove = false;
     }
 
     function _setProfileImage(url) {
@@ -209,14 +236,11 @@
         }
     }
 
-    window.removeContactImage = async function () {
-        if (!_contactId) return;
-        try {
-            var resp = await fetch('/api/contacts/' + encodeURIComponent(_contactId) + '/image', { method: 'DELETE' });
-            if (resp.ok) _setProfileImage(null);
-        } catch (err) {
-            console.error('Error removing image:', err);
-        }
+    window.removeContactImage = function () {
+        _pendingImageFile = null;
+        _pendingImageRemove = true;
+        _setProfileImage(null);
+        if (_saveSystem) _saveSystem.markUnsaved();
     };
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -272,8 +296,11 @@
     function _selectColor(hex, fromInput) {
         var preview = document.getElementById('colorPreview');
         var hexInput = document.getElementById('colorHex');
+        var mainEditor = document.getElementById('mainEditor');
         preview.style.backgroundColor = hex || 'transparent';
         if (!fromInput) hexInput.value = hex;
+        // Tint the editor background with the contact's color (like chit editor does)
+        if (mainEditor) mainEditor.style.backgroundColor = hex || '';
 
         // Update swatch selection
         var swatches = document.querySelectorAll('#colorSwatches .color-swatch');
@@ -634,6 +661,14 @@
 
             _isFavorite = !!saved.favorite;
             _updateFavoriteDisplay();
+
+            // Handle pending image upload or removal now that we have an ID
+            if (_pendingImageFile) {
+                await _uploadPendingImage();
+            } else if (_pendingImageRemove) {
+                await _removePendingImage();
+            }
+
             _showBriefMessage('Saved');
             return saved;
         } catch (err) {
