@@ -412,6 +412,12 @@ function onDateModeChange() {
     alldayRow.style.display = (mode === 'none') ? 'none' : '';
   }
 
+  // Hide repeat row unless a date mode is active
+  const repeatRow = document.getElementById('repeatCheckboxRow');
+  const repeatOptions = document.getElementById('repeatOptionsBlock');
+  if (repeatRow) repeatRow.style.display = (mode === 'none') ? 'none' : '';
+  if (mode === 'none' && repeatOptions) repeatOptions.style.display = 'none';
+
   // Show Complete checkbox only when Due mode is active
   const dueCompleteLabel = document.getElementById('dueCompleteLabel');
   if (dueCompleteLabel) {
@@ -430,6 +436,12 @@ function onDateModeChange() {
     const dueTime = document.getElementById('due_time');
     if (dueTime) dueTime.style.display = '';
   }
+
+  // Show/hide notify checkboxes based on date mode
+  const notifyStartLabel = document.getElementById('notifyAtStart')?.parentElement;
+  const notifyDueLabel = document.getElementById('notifyAtDue')?.parentElement;
+  if (notifyStartLabel) notifyStartLabel.style.display = (mode === 'startend') ? '' : 'none';
+  if (notifyDueLabel) notifyDueLabel.style.display = (mode === 'due') ? '' : 'none';
 
   if (!_dateModeSuppressUnsaved) setSaveButtonUnsaved();
 }
@@ -1665,27 +1677,43 @@ function _checkNotificationAlerts() {
 }
 
 function _alertsFromChit(chit) {
-  if (!Array.isArray(chit.alerts)) return;
+  if (!Array.isArray(chit.alerts)) chit.alerts = [];
   window._alertsData = { alarms: [], timers: [], stopwatches: [], notifications: [] };
+  let notifyFlags = null;
   chit.alerts.forEach((a) => {
     if (a._type === "alarm") window._alertsData.alarms.push(a);
     else if (a._type === "timer") window._alertsData.timers.push(a);
     else if (a._type === "stopwatch") window._alertsData.stopwatches.push(a);
     else if (a._type === "notification") window._alertsData.notifications.push(a);
+    else if (a._type === "_notify_flags") notifyFlags = a;
   });
+  // Restore notify checkboxes
+  const startCb = document.getElementById('notifyAtStart');
+  const dueCb = document.getElementById('notifyAtDue');
+  if (startCb) startCb.checked = notifyFlags ? !!notifyFlags.at_start : true;
+  if (dueCb) dueCb.checked = notifyFlags ? !!notifyFlags.at_due : true;
+
   renderAllAlerts();
-  // Start checkers if there are alarms or notifications
   if (window._alertsData.alarms.length > 0) _startAlarmChecker();
   if (window._alertsData.notifications.length > 0) _startNotificationChecker();
 }
 
 function _alertsToArray() {
-  return [
+  const arr = [
     ...window._alertsData.alarms,
     ...window._alertsData.timers,
     ...window._alertsData.stopwatches,
     ...window._alertsData.notifications,
   ];
+  // Save notify flags
+  const startCb = document.getElementById('notifyAtStart');
+  const dueCb = document.getElementById('notifyAtDue');
+  arr.push({
+    _type: '_notify_flags',
+    at_start: startCb ? startCb.checked : true,
+    at_due: dueCb ? dueCb.checked : true,
+  });
+  return arr;
 }
 
 // ── Render all alert containers ──────────────────────────────────────────────

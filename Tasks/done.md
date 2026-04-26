@@ -306,3 +306,157 @@ Fully implemented. Ported from `Prototypes/CWOC UI/UI.html`:
 - Archive button in editor header (grey, next to Delete)
 - Manage Tags button in editor
 - Note auto-renders on blur
+
+
+---
+
+## Completed — Session 2026-04-26
+
+### Recurrence — All 3 Phases Complete ✅
+- Phase R1: Basic recurrence — editor picker, expandRecurrence(), calendar display, 🔁 icon
+- Phase R2: Instance editing — complete/edit/break-off/skip/delete per instance, quick edit modal, PATCH endpoint
+- Phase R3: Series management — Part #X indicator, end date on all types, success rate, auto-archive, series summary (Audit Log zone in editor)
+
+### Calendar & Views
+- End time before start time validation in editor
+- "Apr 22 Wed" date format shortened to "Apr-22 Mon"
+- Month view: prev/next month days shown (grey/white overlays)
+- Month view: removed redundant month/year header (now in sidebar)
+- Month view: double-click empty day creates all-day chit
+- Multi-day timed events span across day columns (clamped per day)
+- Multi-day all-day events span via CSS Grid in all-day bar
+- Calendar empty slot double-click creates new chit at that time
+- Week start day configurable in settings (Sun-Sat)
+- Sidebar shows "2026 · Apr" format for all calendar periods
+- Fade past chits (events that ended) — 45% opacity
+- Highlight overdue chits (due date passed, not complete) — red border all sides
+- Overdue due dates shown in red + bold in all views
+- Pinned indicator (bookmark icon) on calendar events
+- Calendar drag: modifier keys (shift/cmd/ctrl) don't start drag
+- Calendar drag: click-without-move doesn't trigger save
+- Calendar drag: recurring instance "this only" breaks off as standalone
+
+### Quick Edit Modal (Shift+click)
+- Works for ALL chits (not just recurring)
+- Editable dropdowns for Priority/Severity/Status with per-field "All" checkbox for recurring
+- Pin/Archive/Delete action row
+- Delete sub-menu for recurring: this instance / this and following / all
+- Recurrence buttons: icon-only row (✏️🔁, ✏️1️⃣, ✏️✂️)
+- Series info: instance number, success rate
+- All actions call fetchChits() for proper refresh
+
+### Editor
+- "Weight" zone renamed to "Task"
+- Task zone reordered: Status → Priority → Severity
+- Complete checkbox on Due date line (syncs with Status dropdown)
+- Date validation: require date + time (or All Day) when date mode active
+- All Day checkbox moved to zone header
+- All Day hides ALL time inputs (start, end, due), keeps "to" separator
+- Repeat: checkbox-based toggle reveals options (Daily/Weekly/Monthly/Yearly/Custom)
+- Custom recurrence: Every N [minutes/hours/days/weeks/months/years] + day checkboxes for weeks
+- "Ends never" checkbox with date picker
+- Instance editing banner when editing single recurrence instance
+- Audit Log zone for recurring chits (series summary, always collapsed)
+- Pre-populate start/end from URL params (calendar empty slot click)
+- Tag buttons wired up: Expand All, Collapse All, Create New, Clear Search, Add Searched Tag
+- Tags zone layout: tree + active tags side by side, favs/recent row above
+- Tag tree: left-aligned checkboxes (fixed global input flex:1 override)
+
+### Tags
+- Favorite toggle in settings (★/☆ gold star)
+- Tag colors as background everywhere (editor, sidebar, views, filter modal)
+- Tags alphabetically sorted in tree
+- Tag tree expand/collapse fixed (data attributes on child containers)
+- Settings page: tags displayed as tree view (shared renderTagTree)
+- Tag filter modal: proper names, favorites first, colored, searchable, max 9
+
+### Sidebar & Filters
+- Collapsible filter sub-sections (Search, Status, Priority, Tags, Show)
+- Auto-expand filter groups on hotkey activation
+- Auto-expand active filter groups on state restore
+- "Any" option on Status and Priority (auto-deselects when specific checked)
+- Clear button per filter group
+- Backspace hotkey clears active filter / all filters
+- Tag filter modal with search box
+- Split "Clear All" + "Reset Defaults" buttons
+- Default filters per tab (saved as {tab: "text"} in settings)
+- Persistent scrollbar on sidebar and tag panels
+- Sidebar bottom padding for Help button visibility
+- Reference + Help buttons side by side
+- Help page (help.html) with full feature documentation
+
+### Settings
+- Save & Stay / Save & Exit / Cancel buttons
+- Week start day setting (Sunday-Saturday)
+- Calendar snap setting
+- Tag favorite toggle (★/☆)
+- Tags displayed as tree view
+
+### Notes View
+- Column-persistent layout (data-col attribute)
+- Scrolling fixed (spacer div for absolute-positioned cards)
+- Column count recalculates on sidebar toggle
+- Markdown headers in note cards: transparent background, proper sizing
+
+### State Management
+- Full UI state saved/restored: tab, view, weekStart, sort, filters, archive/pinned
+- Settings navigation saves state (sidebar button + S hotkey)
+- Filter groups auto-expand on restore
+
+### Tasks View
+- Default sort by status (ToDo → In Progress → Blocked → Complete)
+- Note preview with rendered markdown (right of status dropdown)
+- Scrollable container
+- Unabbreviated meta labels (Updated, Created)
+- Date format: MMM-DD Day
+
+### Data
+- PATCH endpoint for recurrence exceptions
+- Backend: week_start_day setting field
+- Backend: default_filters accepts object format
+
+
+## Completed — Tier 2 Batch
+
+### Trash View (Settings Page)
+- Backend: GET /api/trash (deleted chits sorted by modified_datetime DESC)
+- Backend: POST /api/trash/{id}/restore (sets deleted=0)
+- Backend: DELETE /api/trash/{id}/purge (permanent delete from DB)
+- Settings page: Trash section with table view (Title, Status, Due, Tags, Deleted date)
+- Restore button (↩) on left edge, Purge button (🗑️) on right
+- Delete now sets modified_datetime for accurate "deleted date"
+
+### Overlapping Calendar Events Side-by-Side
+- Week view: time slot overlap detection, events positioned with left% and width%
+- 7-Day view: same overlap logic
+- Day view: already had overlap logic (unchanged)
+
+### Notify at Start/Due Time
+- Global notification checker now fires browser notifications + toast when:
+  - A chit's start_datetime matches current time (within 60s)
+  - A chit's due_datetime matches current time (within 60s, not complete)
+- Uses existing toast + browser notification infrastructure
+
+
+## Completed — Session 2026-04-26 (continued)
+
+### Trash View — Full Implementation ✅
+- Standalone trash page (`frontend/trash.html`) with editor-matching button styles
+- Buttons match editor CSS: `--danger-red` delete, `--aged-brown-light` restore, `2px outset` borders
+- Restore and Delete buttons side by side in each row
+- Checkboxes on each row for multi-select
+- "Select All" checkbox in table header
+- Bulk "Restore Selected" and "Delete Selected" buttons (appear when rows selected)
+- Selected count indicator
+- Settings page: Trash section merged into Chit Options block (same `setting-group`)
+
+### Editor — Repeat Row Visibility ✅
+- Repeat checkbox row starts hidden in HTML (`display:none`)
+- Only shown when a date mode is active (Start & End or Due)
+- Prevents flash of repeat controls on page load
+
+### Notify at Start/Due — Per-Chit Flags ✅
+- Checkboxes in Alerts zone: "Notify at start" / "Notify at due" (default checked)
+- Stored as `_notify_flags` entry in alerts JSON
+- Checkboxes only visible when relevant date mode is active
+- Global notification checker respects per-chit flags

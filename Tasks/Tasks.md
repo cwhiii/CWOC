@@ -7,9 +7,8 @@
 ## Bugs
 
 ### Calendar
-- `[x]` Events can have end time before start time — validate and prevent
 - `[ ]` Week view starts on Monday, not Sunday — make configurable
-- [ ] in month & week & 7 day view, dragging chits should let me change thair start date .
+- `[ ]` In month & week & 7 day view, dragging chits should let me change their start date
 
 ### Editor
 - `[ ]` Missing favicon on editor page
@@ -21,16 +20,16 @@
 - `[ ]` Alarm looping pings continuously instead of once per cycle
 
 ### Views
-- `[ ]` Tasks list: sort-by dropdown overflows sidebar
+- `[X]` Tasks list: sort-by dropdown overflows sidebar
 - `[ ]` Projects not loading correctly in some cases
 - `[ ]` Projects filter doesn't do anything when clicked
 - `[ ]` Indicators tab: tabbing bugs, symptom tracker multi-select, cycle show/hide
+- `[ ]` Projects view: ckanbad mode or List Mode
 
 ---
 
 ## Decisions Needed
 
-- `[ ]` Overlapping calendar events — side by side? Click to top? Stack indicator? Shrink to fit?
 - `[ ]` Demo/hosting environment — Digital Ocean or other?
 - `[ ]` Server configurator script for deployment
 - `[ ]` Support file attachments on chits?
@@ -48,54 +47,13 @@
 - `[ ]` Settings: child tag auto-prefixes with parent path
 - `[ ]` Settings: color inheritance (child inherits parent unless overridden)
 - `[ ]` Shared `createTagInline()` for editor and settings
-- `[ ]` System tags as sub-tags: System/Calendar, System/Indicators, etc.
+- `[ ]` System tags as sub-tags: CWOC_System/Calendar, CWOC_System/Indicators, etc.
 
 ---
 
-## Feature: Recurrence / Repeating Chits
+## Feature: Recurrence / Repeating Chits ✅
 
-### Architecture
-- ONE chit stored in DB with a recurrence rule (e.g., "Weekly on Mon,Wed,Fri")
-- Frontend expands into virtual instances for the visible calendar date range
-- Exceptions stored as JSON array on the parent chit: `recurrence_exceptions`
-- Each exception: `{ date, title?, start_datetime?, end_datetime?, completed?, broken_off? }`
-- "Break off" creates a new standalone chit and adds that date to exceptions
-- "Complete series" marks the parent chit complete (stops all future instances)
-- 🔁 icon shown near the pinned indicator on recurring chits (editor + views)
-
-### Phase R1: Basic Recurrence — Editor + Calendar Display
-**Files:** `backend/main.py`, `frontend/editor.html`, `frontend/editor.js`, `frontend/main.js`, `frontend/shared.js`
-
-- `[x]` Backend: add `recurrence_rule` JSON field to chits table
-- `[x]` Backend: add `recurrence_exceptions` JSON field to chits table
-- `[x]` Editor: Google Calendar-style recurrence picker
-- `[x]` Editor: show 🔁 icon near pinned indicator when recurrence is set
-- `[x]` shared.js: `expandRecurrence(chit, startDate, endDate)`
-- `[x]` main.js: in `displayChits()`, expand recurring chits for Calendar tab
-- `[x]` Calendar views: virtual instances display with 🔁 icon and recurrence tooltip
-- `[x]` Non-calendar views: show parent chit only, with recurrence info in metadata
-
-### Phase R2: Instance Editing + Completion
-**Files:** `frontend/editor.js`, `frontend/main.js`, `frontend/shared.js`, `backend/main.py`
-
-- `[x]` When opening a recurring chit from calendar, show prompt:
-  - "Complete this instance" / "Complete entire series"
-  - "Edit this instance" / "Edit all instances" / "Break off from series"
-- `[x]` "Complete this instance" — add `{ date, completed: true }` to exceptions
-- `[x]` "Complete entire series" — set parent chit status to Complete
-- `[x]` "Edit this instance" — add exception with modified fields for that date
-- `[x]` "Edit all instances" — open parent chit in editor normally
-- `[x]` "Break off" — create new standalone chit with this instance's data, add date to exceptions as broken_off
-- `[x]` Delete: "Skip this instance" vs "Delete entire series"
-
-### Phase R3: Series Management + Reporting
-**Files:** `frontend/main.js`, `frontend/editor.js`, `frontend/shared.js`
-
-- `[x]` "Part X of series" indicator (count occurrences up to this date) — shown in tooltips and quick edit modal
-- `[x]` End date for recurrence (in the recurrence picker) — available on all types, not just Custom
-- `[x]` Success rate: % of past instances marked completed vs total — shown in quick edit modal
-- `[x]` Auto-archive: when all instances in range are complete, archive parent
-- `[x]` Series summary view: list all instances with their completion status
+All three phases complete. See `done.md` for details.
 
 ---
 
@@ -142,9 +100,7 @@
 - `[ ]` Middle-click Create Chit to open in new tab
 - `[ ]` Editing chits in-place in views (dates, times, notes)
 - `[ ]` Status as multi-select field with "-" (null) option
-- `[ ]` Show note content in Tasks view
 - `[ ]` Tasks view: status images matching editor icons
-- `[ ]` Tasks view: default sort by status, completed to bottom
 - `[ ]` Chit owner field (UUID + friendly name + username)
 - `[ ]` Adding people: mention, tag, contributor (see chit, edit chit)
 - `[ ]` Checkbox to show/hide fields by category
@@ -248,10 +204,6 @@
 ## Non-Functional UI Elements (buttons/settings present but not wired up)
 
 ### Editor — Broken/Missing Functions
-- `[x]` **Tags: "Expand All" button** — `toggleAllTags()` implemented
-- `[x]` **Tags: "Collapse All" button** — `toggleAllTags()` implemented
-- `[x]` **Tags: "Create New" button** — `createTag()` navigates to settings
-- `[x]` **Tags: search input + clear button** — `clearTagSearch()` and `addSearchedTag()` implemented
 - `[ ]` **People: "Filter" button** — calls `toggleRoleFilterDropdown()` which doesn't exist (code is in Prototypes only)
 - `[ ]` **People: "Add Person" button** — calls `addPersonItem()` which doesn't exist (code is in Prototypes only)
 - `[ ]` **People zone** — only a plain text input, no roles/modal/autocomplete
@@ -262,19 +214,14 @@
 - `[ ]` **Alerts: Alarm sound select** — dropdown present in modal but sounds aren't loaded/played
 - `[ ]` **Projects: "Filter" button** — calls `toggleStatusFilterDropdown()` which doesn't exist in editor.js
 - `[ ]` **Projects: "Move to Project" dropdown** — hardcoded options ("Project Alpha", "Project Beta"), not populated from data
-- `[ ]` **Color: "Manage Colors" button** — navigates to settings but doesn't return to the right place
 - `[ ]` **Weather bar** — shows placeholder text, actual weather fetch only works sometimes
 
 ### Settings — Not Applied Anywhere
 - `[ ]` **Visual Indicators** (Alarm/Notification/Weather/People/Indicators: Always/Never/When Space) — saved to DB but never read or applied in any view
-- `[x]` **Chit Options: "Fade Past Chits"** — now applied: past chits faded to 50% opacity
-- `[x]` **Chit Options: "Highlight Overdue Chits"** — now applied: red left border on overdue chits
 - `[ ]` **Chit Options: "Delete Past Alarm Chits"** — saved but never applied
-- `[ ]` **Default Filters (Word Search per tab)** — UI exists for Calendar/Checklists/Alarms/Projects/Tasks/Indicators/Notes but values are never used as default search filters when switching tabs
 - `[ ]` **Alarms: Active/Inactive clock drag-drop ordering** — UI works for reordering but the order isn't used anywhere in the dashboard alarm display
 
 ### Editor — Partially Working
-- `[ ]` **Recurrence** — Phase R1 done (display + basic editing), Phase R2 done (instance editing), Phase R3 not started (series management, success rate)
 - `[ ]` **Projects zone** — Kanban works for project masters, but "Add Chit" creates blank children, "Move to Project" is hardcoded
 
 ---

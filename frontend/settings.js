@@ -1056,3 +1056,6 @@ function monitorChanges() {
 document.addEventListener("DOMContentLoaded", () => {
   window.settingsManager = new SettingsManager();
 });
+
+
+// Trash view moved to /frontend/trash.html

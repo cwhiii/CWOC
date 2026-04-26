@@ -1128,10 +1128,9 @@ button.delete:hover {
     text-decoration: underline;
 }
 
-/* Tame markdown headers in note previews */
-.chit-card h1,
-.chit-card h2,
-.chit-card h3,
+/* Tame markdown headers in note previews (not the card title h3) */
+.chit-card h1:not(.chit-header-row *),
+.chit-card h2:not(.chit-header-row *),
 .chit-card h4,
 .chit-card h5,
 .chit-card h6 {
@@ -1141,7 +1140,7 @@ button.delete:hover {
     padding: 0;
     border: none;
     background: transparent;
-    display: inline;
+    display: block;
     height: auto;
     width: auto;
     line-height: 1.4;
@@ -1210,8 +1209,14 @@ button.delete:hover {
     flex-direction: column;
     gap: 0.5em;
     overflow-y: auto;
+    overflow-x: visible;
     flex: 1 1 auto;
     min-height: 0;
+}
+.checklist-view .chit-card,
+.alarms-view .chit-card,
+.projects-view .chit-card {
+    overflow: visible;
 }
 
 /* ── Order controls styling ───────────────────────────────────────────────── */

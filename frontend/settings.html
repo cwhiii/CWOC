@@ -84,11 +84,10 @@
                     font-family: "Times New Roman", serif;
                     display: flex;
                     flex-direction: column;
-                    justify-content: center;
                     align-items: center;
                     min-height: 100vh;
                     margin: 0;
-                    padding: 1em; /* Changed from 20px to 1em */
+                    padding: 1em;
                 }
                 .settings-panel {
                     background: linear-gradient(to bottom, #fff8e1, #f5e6cc);
@@ -99,7 +98,7 @@
                     max-width: calc(100% - 2em); /* Adjusted to ensure 1em margin on sides */
                     padding: 20px; /* Reverted padding to original, or changed to 1em as preferred based on the strictness of the "1em margin" request. Keeping 20px for minimal change to internal spacing. */
                     position: relative;
-                    overflow: hidden;
+                    overflow: visible;
                     margin-bottom: 15px;
                 }
                 .settings-panel::before {
@@ -954,6 +953,11 @@
                                 🗑️ Delete Past Alarm Chits</label
                             >
                         </div>
+                        <hr style="border:none;border-top:1px solid var(--aged-brown-medium,#8b4513);margin:12px 0 10px;" />
+                        <h3 style="margin-top:0;">🗑️ Trash</h3>
+                        <button onclick="window.location.href='/frontend/trash.html'" class="standard-button" style="width:100%;">
+                            View Deleted Chits →
+                        </button>
                     </div>
                 </div>
                 <div class="loader" id="loader" style="display: none"></div>

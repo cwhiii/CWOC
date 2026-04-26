@@ -319,10 +319,21 @@ function _buildChitHeader(chit, titleHtml) {
 
   if (chit.status) addMeta(chit.status, 'status');
   if (chit.priority) addMeta(chit.priority, null);
-  if (chit.due_datetime) addMeta(`Due: ${formatDate(new Date(chit.due_datetime))}`, 'due');
+
+  // Due date — red + bold if overdue
+  if (chit.due_datetime) {
+    const dueDate = new Date(chit.due_datetime);
+    const isOverdue = dueDate < new Date() && chit.status !== 'Complete';
+    const s = document.createElement('span');
+    s.textContent = `Due: ${formatDate(dueDate)}`;
+    if (isOverdue) { s.style.color = '#b22222'; s.style.fontWeight = 'bold'; }
+    if (currentSortField === 'due') { s.style.fontWeight = 'bold'; s.textContent += (currentSortDir === 'asc' ? ' ▲' : ' ▼'); }
+    right.appendChild(s);
+  }
+
   if (chit.start_datetime) addMeta(`Start: ${formatDate(new Date(chit.start_datetime))}`, 'start');
-  if (chit.modified_datetime) addMeta(`Upd: ${formatDate(new Date(chit.modified_datetime))}`, 'updated');
-  if (chit.created_datetime) addMeta(`Cre: ${formatDate(new Date(chit.created_datetime))}`, 'created');
+  if (chit.modified_datetime) addMeta(`Updated: ${formatDate(new Date(chit.modified_datetime))}`, 'updated');
+  if (chit.created_datetime) addMeta(`Created: ${formatDate(new Date(chit.created_datetime))}`, 'created');
   const tags = (chit.tags || []).filter(t => !isSystemTag(t));
   if (tags.length > 0) {
     tags.forEach(tagName => {
@@ -918,6 +929,40 @@ function _globalCheckNotifications() {
       _sendBrowserNotification(`📢 Reminder: ${chit.title}`, label, chit.id);
     });
   });
+
+  // Check for "notify at start" and "notify at due" (per-chit flags in alerts)
+  const nowMs = now.getTime();
+  chits.forEach((chit) => {
+    // Read notify flags from alerts array
+    const flags = (chit.alerts || []).find(a => a._type === '_notify_flags');
+    const notifyStart = flags ? !!flags.at_start : true; // default true
+    const notifyDue = flags ? !!flags.at_due : true;
+
+    if (notifyStart && chit.start_datetime) {
+      const startMs = new Date(chit.start_datetime).getTime();
+      const diff = nowMs - startMs;
+      if (diff >= 0 && diff < 60000) {
+        const key = `${chit.id}-start-notify`;
+        if (!_globalFiredNotifications.has(key)) {
+          _globalFiredNotifications.add(key);
+          _showGlobalToast("🔔", "Starting now", chit.title, chit.id, null);
+          _sendBrowserNotification(`🔔 Starting: ${chit.title}`, "Event starting now", chit.id);
+        }
+      }
+    }
+    if (notifyDue && chit.due_datetime && chit.status !== 'Complete') {
+      const dueMs = new Date(chit.due_datetime).getTime();
+      const diff = nowMs - dueMs;
+      if (diff >= 0 && diff < 60000) {
+        const key = `${chit.id}-due-notify`;
+        if (!_globalFiredNotifications.has(key)) {
+          _globalFiredNotifications.add(key);
+          _showGlobalToast("⏰", "Due now", chit.title, chit.id, null);
+          _sendBrowserNotification(`⏰ Due: ${chit.title}`, "This chit is due now", chit.id);
+        }
+      }
+    }
+  });
 }
 
 function _startGlobalAlertSystem() {
@@ -1229,22 +1274,9 @@ function getYearStart(date) {
 }
 
 function formatDate(date) {
-  const monthNames = [
-    "Jan",
-    "Feb",
-    "Mar",
-    "Apr",
-    "May",
-    "Jun",
-    "Jul",
-    "Aug",
-    "Sep",
-    "Oct",
-    "Nov",
-    "Dec",
-  ];
+  const monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  return `${dayNames[date.getDay()]} ${date.getDate()}`;
+  return `${monthNames[date.getMonth()]}-${String(date.getDate()).padStart(2,'0')} ${dayNames[date.getDay()]}`;
 }
 
 function formatTime(date) {
@@ -1532,28 +1564,32 @@ function _applyChitDisplayOptions() {
     });
   }
 
-  // Fade past chits in non-calendar views
+  // Fade past chits in non-calendar views (only chits that have ENDED, not overdue ones)
   if (_chitOptions.fade_past_chits && currentTab !== 'Calendar') {
     document.querySelectorAll('.chit-card[data-chit-id]').forEach(el => {
       const chitId = el.dataset.chitId;
       const chit = chits.find(c => c.id === chitId);
       if (!chit) return;
-      const endTime = chit.end_datetime ? new Date(chit.end_datetime) : (chit.due_datetime ? new Date(chit.due_datetime) : null);
+      // Only fade if the event has an end_datetime that's passed (not due_datetime — that's overdue)
+      const endTime = chit.end_datetime ? new Date(chit.end_datetime) : null;
       if (endTime && endTime < now && chit.status !== 'Complete') {
         el.style.opacity = '0.5';
       }
     });
   }
 
-  // Highlight overdue chits (all views)
+  // Highlight overdue chits — due date passed, not complete (all views including calendar)
   if (_chitOptions.highlight_overdue_chits) {
-    document.querySelectorAll('.chit-card[data-chit-id], .timed-event[data-chit-id], .all-day-event[data-chit-id]').forEach(el => {
+    document.querySelectorAll('.chit-card[data-chit-id], .timed-event[data-chit-id], .all-day-event[data-chit-id], .month-event[data-chit-id]').forEach(el => {
       const chitId = el.dataset.chitId;
       const chit = chits.find(c => c.id === chitId);
       if (!chit) return;
       const dueTime = chit.due_datetime ? new Date(chit.due_datetime) : null;
       if (dueTime && dueTime < now && chit.status !== 'Complete') {
-        el.style.borderLeft = '4px solid #b22222';
+        el.style.border = '3px solid #b22222';
+        el.style.borderRadius = '4px';
+        // Don't fade overdue chits — they should stand out
+        el.style.opacity = '';
       }
     });
   }
@@ -1682,23 +1718,37 @@ function displayWeekView(chitsToDisplay) {
     if (dd.day.toDateString() === new Date().toDateString()) col.classList.add("today");
     col.style.cssText = "flex:1;min-width:0;position:relative;min-height:1440px;border-left:1px solid #d3d3d3;";
 
+    // Calculate overlaps for this day's timed events
+    const _timeSlots = {};
+    const _evData = [];
     dd.timed.forEach(({ chit, info }) => {
-      const ev = document.createElement("div");
-      ev.className = "timed-event";
-      ev.dataset.chitId = chit.id;
-      if (chit.status === "Complete") ev.classList.add("completed-task");
-      // Clamp to this day for multi-day events
       const _dayStart = new Date(dd.day.getFullYear(), dd.day.getMonth(), dd.day.getDate());
       const _dayEnd = new Date(_dayStart.getTime() + 86400000);
       const _cs = info.start < _dayStart ? _dayStart : info.start;
       const _ce = info.end > _dayEnd ? _dayEnd : info.end;
-      const top = _cs.getHours() * 60 + _cs.getMinutes();
-      let height = (_ce.getTime() === _dayEnd.getTime()) ? 1440 - top : (_ce.getHours() * 60 + _ce.getMinutes()) - top;
-      if (height < 30) height = 30;
+      const _top = _cs.getHours() * 60 + _cs.getMinutes();
+      let _height = (_ce.getTime() === _dayEnd.getTime()) ? 1440 - _top : (_ce.getHours() * 60 + _ce.getMinutes()) - _top;
+      if (_height < 30) _height = 30;
+      const _startMin = _top, _endMin = _top + _height;
+      for (let t = _startMin; t < _endMin; t++) { if (!_timeSlots[t]) _timeSlots[t] = []; }
+      let _pos = 0;
+      while (true) { let c = false; for (let t = _startMin; t < _endMin; t++) { if (_timeSlots[t].includes(_pos)) { c = true; break; } } if (!c) break; _pos++; }
+      for (let t = _startMin; t < _endMin; t++) { _timeSlots[t].push(_pos); }
+      _evData.push({ chit, info, top: _top, height: _height, pos: _pos });
+    });
+    const _maxOvlp = Math.max(1, ...Object.values(_timeSlots).map(s => s.length));
+
+    _evData.forEach(({ chit, info, top, height, pos }) => {
+      const ev = document.createElement("div");
+      ev.className = "timed-event";
+      ev.dataset.chitId = chit.id;
+      if (chit.status === "Complete") ev.classList.add("completed-task");
+      const _wPct = 95 / _maxOvlp;
       ev.style.top = `${top}px`;
       ev.style.height = `${height}px`;
       ev.style.backgroundColor = chitColor(chit);
-      ev.style.width = "calc(100% - 4px)";
+      ev.style.left = `${pos * _wPct}%`;
+      ev.style.width = `${_wPct - 1}%`;
       ev.style.boxSizing = "border-box";
       ev.title = calendarEventTooltip(chit, info);
       const timeLabel = info.isDueOnly ? `Due: ${formatTime(info.start)}` : `${formatTime(info.start)} - ${formatTime(info.end)}`;
@@ -2621,23 +2671,37 @@ function displaySevenDayView(chitsToDisplay) {
     if (dd.day.toDateString() === new Date().toDateString()) col.classList.add("today");
     col.style.cssText = "flex:1;min-width:0;position:relative;min-height:1440px;border-left:1px solid #d3d3d3;";
 
+    // Calculate overlaps for 7-day view
+    const _ts7 = {};
+    const _ed7 = [];
     dd.timed.forEach(({ chit, info }) => {
-      const ev = document.createElement("div");
-      ev.className = "timed-event";
-      ev.dataset.chitId = chit.id;
-      if (chit.status === "Complete") ev.classList.add("completed-task");
-      // Clamp to this day for multi-day events
       const _dayStart = new Date(dd.day.getFullYear(), dd.day.getMonth(), dd.day.getDate());
       const _dayEnd = new Date(_dayStart.getTime() + 86400000);
       const _cs = info.start < _dayStart ? _dayStart : info.start;
       const _ce = info.end > _dayEnd ? _dayEnd : info.end;
-      const top = _cs.getHours() * 60 + _cs.getMinutes();
-      let height = (_ce.getTime() === _dayEnd.getTime()) ? 1440 - top : (_ce.getHours() * 60 + _ce.getMinutes()) - top;
-      if (height < 30) height = 30;
+      const _top = _cs.getHours() * 60 + _cs.getMinutes();
+      let _height = (_ce.getTime() === _dayEnd.getTime()) ? 1440 - _top : (_ce.getHours() * 60 + _ce.getMinutes()) - _top;
+      if (_height < 30) _height = 30;
+      const _s = _top, _e = _top + _height;
+      for (let t = _s; t < _e; t++) { if (!_ts7[t]) _ts7[t] = []; }
+      let _p = 0;
+      while (true) { let c = false; for (let t = _s; t < _e; t++) { if (_ts7[t].includes(_p)) { c = true; break; } } if (!c) break; _p++; }
+      for (let t = _s; t < _e; t++) { _ts7[t].push(_p); }
+      _ed7.push({ chit, info, top: _top, height: _height, pos: _p });
+    });
+    const _mo7 = Math.max(1, ...Object.values(_ts7).map(s => s.length));
+
+    _ed7.forEach(({ chit, info, top, height, pos }) => {
+      const ev = document.createElement("div");
+      ev.className = "timed-event";
+      ev.dataset.chitId = chit.id;
+      if (chit.status === "Complete") ev.classList.add("completed-task");
+      const _w = 95 / _mo7;
       ev.style.top = `${top}px`;
       ev.style.height = `${height}px`;
       ev.style.backgroundColor = chitColor(chit);
-      ev.style.width = "calc(100% - 4px)";
+      ev.style.left = `${pos * _w}%`;
+      ev.style.width = `${_w - 1}%`;
       ev.style.boxSizing = "border-box";
       ev.title = calendarEventTooltip(chit, info);
       const timeLabel = info.isDueOnly ? `Due: ${formatTime(info.start)}` : `${formatTime(info.start)} - ${formatTime(info.end)}`;

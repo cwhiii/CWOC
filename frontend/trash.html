@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <link rel="icon" type="image/x-icon" href="/static/cwod_logo-favicon.png" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Trash — C.W.'s Omni Chits</title>
+    <link rel="stylesheet" href="/frontend/styles.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
+    <style>
+        :root {
+            --parchment-light: #fdf5e6;
+            --parchment-medium: #faebd7;
+            --parchment-dark: #fff8dc;
+            --aged-brown-dark: #4a2c2a;
+            --aged-brown-medium: #8b4513;
+            --aged-brown-light: #a0522d;
+            --button-bg: #d2b48c;
+            --button-hover: #c4a484;
+            --danger-red: #b22222;
+            --border-color: var(--aged-brown-medium);
+        }
+        body {
+            background: url("https://www.transparenttextures.com/patterns/old-paper.png") repeat;
+            background-color: #f5e6cc;
+            color: #2b1e0f;
+            font-family: "Courier New", Courier, monospace;
+            margin: 0;
+            padding: 0;
+        }
+        .trash-header {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            padding: 15px 20px;
+            background: #d2b48c;
+            border-bottom: 1px solid #6b4e31;
+        }
+        .trash-header img { height: 2em; }
+        .trash-header h1 { margin: 0; color: #4a2c2a; font-size: 1.5em; flex: 1; }
+        .trash-header button {
+            padding: 8px 16px;
+            border: 2px outset var(--aged-brown-medium);
+            border-radius: 4px;
+            background: var(--button-bg);
+            color: var(--aged-brown-dark);
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 14px;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .trash-header button:hover { background: var(--button-hover); }
+        .trash-body {
+            padding: 20px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        .trash-toolbar {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+        .trash-count {
+            font-size: 0.9em;
+            opacity: 0.7;
+        }
+        .bulk-actions {
+            display: flex;
+            gap: 8px;
+            margin-left: auto;
+        }
+        .trash-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9em;
+            background: #fffaf0;
+            border: 1px solid #6b4e31;
+            border-radius: 4px;
+        }
+        .trash-table th {
+            background: #e0d4b5;
+            padding: 8px 10px;
+            text-align: left;
+            border-bottom: 2px solid #6b4e31;
+            font-size: 0.85em;
+            color: #4a2c2a;
+            white-space: nowrap;
+        }
+        .trash-table td {
+            padding: 6px 10px;
+            border-bottom: 1px solid #d4c5a9;
+            vertical-align: top;
+        }
+        .trash-table tr:hover { background: rgba(212,196,160,0.15); }
+        .trash-table .col-check { width: 30px; text-align: center; }
+        .trash-table .col-check input[type="checkbox"] { cursor: pointer; }
+        .trash-table .col-title { max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: bold; }
+        .trash-table .col-note { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: 0.7; font-size: 0.9em; }
+        .trash-table .col-tags { max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .trash-table .col-actions { white-space: nowrap; }
+        .action-cell {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+        }
+        /* Editor-matching button styles */
+        button.btn-restore {
+            padding: 8px 16px;
+            border: 2px outset var(--aged-brown-dark);
+            border-radius: 4px;
+            background: var(--aged-brown-light);
+            color: var(--parchment-light);
+            cursor: pointer;
+            font-size: 14px;
+            font-family: inherit;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+        button.btn-restore:hover { background: var(--aged-brown-medium); }
+        button.btn-purge {
+            padding: 8px 16px;
+            border: 2px outset var(--aged-brown-dark);
+            border-radius: 4px;
+            background: var(--danger-red);
+            color: var(--parchment-light);
+            cursor: pointer;
+            font-size: 14px;
+            font-family: inherit;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+        button.btn-purge:hover { background: #a01c1c; }
+        button.btn-restore i, button.btn-purge i { margin-right: 2px; }
+        .tag-chip {
+            display: inline-block; padding: 1px 5px; border-radius: 3px;
+            font-size: 0.8em; margin: 1px; background: rgba(139,90,43,0.15);
+        }
+        .empty-msg { text-align: center; padding: 2em; opacity: 0.5; font-size: 1.1em; }
+        .selected-count { font-size: 0.85em; color: var(--aged-brown-dark); opacity: 0.8; }
+    </style>
+</head>
+<body>
+    <div class="trash-header">
+        <img src="/static/cwod_logo.png" alt="Logo" />
+        <h1>🗑️ Trash</h1>
+        <button onclick="window.location.href='/frontend/settings.html'"><i class="fas fa-arrow-left"></i> Settings</button>
+        <button onclick="window.location.href='/'"><i class="fas fa-arrow-left"></i> Chits</button>
+    </div>
+    <div class="trash-body">
+        <div class="trash-toolbar">
+            <div class="trash-count" id="trash-count"></div>
+            <span class="selected-count" id="selected-count"></span>
+            <div class="bulk-actions" id="bulk-actions" style="display:none;">
+                <button class="btn-restore" onclick="bulkRestore()"><i class="fas fa-undo"></i> Restore Selected</button>
+                <button class="btn-purge" onclick="bulkPurge()"><i class="fas fa-trash-alt"></i> Delete Selected</button>
+            </div>
+        </div>
+        <div id="trash-table-wrap"></div>
+    </div>
+    <script src="/frontend/shared.js"></script>
+    <script>
+        const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+        const DAYS = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+        let trashData = [];
+        let selectedIds = new Set();
+
+        function fmtDate(iso) {
+            if (!iso) return '—';
+            const d = new Date(iso);
+            if (isNaN(d.getTime())) return '—';
+            return `${MONTHS[d.getMonth()]}-${String(d.getDate()).padStart(2,'0')} ${DAYS[d.getDay()]}`;
+        }
+
+        function fmtDateTime(iso) {
+            if (!iso) return '—';
+            const d = new Date(iso);
+            if (isNaN(d.getTime())) return '—';
+            return `${MONTHS[d.getMonth()]}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+        }
+
+        function updateSelectionUI() {
+            const count = selectedIds.size;
+            const bulkEl = document.getElementById('bulk-actions');
+            const countEl = document.getElementById('selected-count');
+            bulkEl.style.display = count > 0 ? 'flex' : 'none';
+            countEl.textContent = count > 0 ? `${count} selected` : '';
+            // Update select-all checkbox state
+            const selectAll = document.getElementById('select-all');
+            if (selectAll && trashData.length > 0) {
+                selectAll.checked = selectedIds.size === trashData.length;
+                selectAll.indeterminate = selectedIds.size > 0 && selectedIds.size < trashData.length;
+            }
+        }
+
+        function toggleSelectAll() {
+            const selectAll = document.getElementById('select-all');
+            if (selectAll.checked) {
+                trashData.forEach(c => selectedIds.add(c.id));
+            } else {
+                selectedIds.clear();
+            }
+            document.querySelectorAll('.row-check').forEach(cb => { cb.checked = selectAll.checked; });
+            updateSelectionUI();
+        }
+
+        function toggleRow(id) {
+            if (selectedIds.has(id)) selectedIds.delete(id);
+            else selectedIds.add(id);
+            updateSelectionUI();
+        }
+
+        async function bulkRestore() {
+            if (selectedIds.size === 0) return;
+            const ids = [...selectedIds];
+            for (const id of ids) {
+                await fetch(`/api/trash/${id}/restore`, {method:'POST'});
+            }
+            selectedIds.clear();
+            loadTrash();
+        }
+
+        async function bulkPurge() {
+            if (selectedIds.size === 0) return;
+            if (!confirm(`Permanently delete ${selectedIds.size} chit(s)? Cannot be undone.`)) return;
+            const ids = [...selectedIds];
+            for (const id of ids) {
+                await fetch(`/api/trash/${id}/purge`, {method:'DELETE'});
+            }
+            selectedIds.clear();
+            loadTrash();
+        }
+
+        async function loadTrash() {
+            const wrap = document.getElementById('trash-table-wrap');
+            const countEl = document.getElementById('trash-count');
+            selectedIds.clear();
+            updateSelectionUI();
+            try {
+                const resp = await fetch('/api/trash');
+                if (!resp.ok) { wrap.innerHTML = '<p style="color:#a33;">Failed to load.</p>'; return; }
+                trashData = await resp.json();
+                countEl.textContent = `${trashData.length} deleted chit${trashData.length !== 1 ? 's' : ''}`;
+                if (trashData.length === 0) {
+                    wrap.innerHTML = '<div class="empty-msg">Trash is empty.</div>';
+                    return;
+                }
+                renderTable(wrap, trashData);
+            } catch (e) {
+                wrap.innerHTML = '<p style="color:#a33;">Error loading trash.</p>';
+            }
+        }
+
+        function renderTable(wrap, trash) {
+            const table = document.createElement('table');
+            table.className = 'trash-table';
+
+            const thead = document.createElement('thead');
+            thead.innerHTML = `<tr>
+                <th class="col-check"><input type="checkbox" id="select-all" onchange="toggleSelectAll()" title="Select All" /></th>
+                <th>Title</th>
+                <th>Status</th>
+                <th>Priority</th>
+                <th>Due / Start</th>
+                <th>Tags</th>
+                <th>Note</th>
+                <th>Deleted</th>
+                <th class="col-actions">Actions</th>
+            </tr>`;
+            table.appendChild(thead);
+
+            const tbody = document.createElement('tbody');
+            const SYS_TAGS = ['Calendar','Checklists','Alarms','Projects','Tasks','Notes'];
+
+            trash.forEach(chit => {
+                const tr = document.createElement('tr');
+
+                // Checkbox
+                const checkTd = document.createElement('td');
+                checkTd.className = 'col-check';
+                const cb = document.createElement('input');
+                cb.type = 'checkbox';
+                cb.className = 'row-check';
+                cb.checked = selectedIds.has(chit.id);
+                cb.onchange = () => toggleRow(chit.id);
+                checkTd.appendChild(cb);
+                tr.appendChild(checkTd);
+
+                // Title
+                const titleTd = document.createElement('td');
+                titleTd.className = 'col-title';
+                titleTd.textContent = chit.title || '(Untitled)';
+                titleTd.title = chit.title || '';
+                tr.appendChild(titleTd);
+
+                // Status
+                const statusTd = document.createElement('td');
+                statusTd.textContent = chit.status || '—';
+                tr.appendChild(statusTd);
+
+                // Priority
+                const prioTd = document.createElement('td');
+                prioTd.textContent = chit.priority || '—';
+                tr.appendChild(prioTd);
+
+                // Due/Start
+                const dateTd = document.createElement('td');
+                dateTd.textContent = fmtDate(chit.due_datetime || chit.start_datetime);
+                tr.appendChild(dateTd);
+
+                // Tags
+                const tagsTd = document.createElement('td');
+                tagsTd.className = 'col-tags';
+                const tags = (chit.tags || []).filter(t => !SYS_TAGS.includes(t));
+                if (tags.length > 0) {
+                    tags.forEach(t => {
+                        const chip = document.createElement('span');
+                        chip.className = 'tag-chip';
+                        chip.textContent = t.split('/').pop();
+                        tagsTd.appendChild(chip);
+                    });
+                } else {
+                    tagsTd.textContent = '—';
+                }
+                tagsTd.title = tags.join(', ');
+                tr.appendChild(tagsTd);
+
+                // Note preview
+                const noteTd = document.createElement('td');
+                noteTd.className = 'col-note';
+                noteTd.textContent = chit.note ? chit.note.slice(0, 80) + (chit.note.length > 80 ? '…' : '') : '—';
+                noteTd.title = chit.note || '';
+                tr.appendChild(noteTd);
+
+                // Deleted date
+                const delTd = document.createElement('td');
+                delTd.textContent = fmtDateTime(chit.modified_datetime);
+                tr.appendChild(delTd);
+
+                // Actions (side by side)
+                const actTd = document.createElement('td');
+                actTd.className = 'col-actions';
+                const actionDiv = document.createElement('div');
+                actionDiv.className = 'action-cell';
+                const restoreBtn = document.createElement('button');
+                restoreBtn.className = 'btn-restore';
+                restoreBtn.innerHTML = '<i class="fas fa-undo"></i> Restore';
+                restoreBtn.title = 'Restore this chit';
+                restoreBtn.onclick = async () => { await fetch(`/api/trash/${chit.id}/restore`, {method:'POST'}); loadTrash(); };
+                const purgeBtn = document.createElement('button');
+                purgeBtn.className = 'btn-purge';
+                purgeBtn.innerHTML = '<i class="fas fa-trash-alt"></i> Delete';
+                purgeBtn.title = 'Permanently delete';
+                purgeBtn.onclick = async () => { if (confirm('Permanently delete? Cannot be undone.')) { await fetch(`/api/trash/${chit.id}/purge`, {method:'DELETE'}); loadTrash(); } };
+                actionDiv.appendChild(restoreBtn);
+                actionDiv.appendChild(purgeBtn);
+                actTd.appendChild(actionDiv);
+                tr.appendChild(actTd);
+
+                tbody.appendChild(tr);
+            });
+
+            table.appendChild(tbody);
+            wrap.innerHTML = '';
+            wrap.appendChild(table);
+        }
+
+        loadTrash();
+    </script>
+</body>
+</html>

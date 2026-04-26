@@ -135,7 +135,7 @@
                                 </div>
 
                                 <!-- Repeat checkbox (inline with radio buttons) -->
-                                <div class="date-mode-row" id="repeatCheckboxRow">
+                                <div class="date-mode-row" id="repeatCheckboxRow" style="display:none;">
                                     <label class="date-mode-label" style="cursor:pointer;">
                                         <input type="checkbox" id="repeatEnabled" onchange="onRepeatToggle()" />
                                         🔁 Repeat
@@ -577,6 +577,14 @@
                             <span class="zone-toggle-icon">🔽</span>
                         </div>
                         <div id="alertsContent" class="zone-body">
+                            <div style="display:flex;gap:1em;margin-bottom:0.5em;font-size:0.9em;">
+                                <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;" title="Show a notification when this chit's start time arrives">
+                                    <input type="checkbox" id="notifyAtStart" checked /> 🔔 Notify at start
+                                </label>
+                                <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;" title="Show a notification when this chit's due time arrives">
+                                    <input type="checkbox" id="notifyAtDue" checked /> ⏰ Notify at due
+                                </label>
+                            </div>
                             <div class="field">
                                 <div class="checkbox-group">
                                     <input type="checkbox" id="alarm" />
