@@ -671,7 +671,8 @@ function _pickSort(field) {
 
 // ── Reference overlay ────────────────────────────────────────────────────────
 function openHelpPage() {
-  window.open('/frontend/help.html', '_blank');
+  storePreviousState();
+  window.location.href = '/frontend/help.html';
 }
 
 function _toggleReference() {

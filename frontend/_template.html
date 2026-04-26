@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <link rel="icon" type="image/x-icon" href="/static/cwod_logo-favicon.png" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Page Title — C.W.'s Omni Chits</title>
+
+    <!-- ═══ SHARED STYLES — single source of truth ═══
+         Provides: body, .settings-panel, .header-and-buttons, .header-buttons,
+         h2/h3, .standard-button, .settings-grid, .setting-group, .cwoc-table,
+         .cwoc-btn (.danger, .restore), .cwoc-toolbar, .cwoc-tag-chip, .cwoc-empty,
+         .indicator-list, .checkbox-list, .modal, .loader, .author-info,
+         .help-content, select/input styling, CSS variables.
+         Change shared-page.css once → applies to ALL pages. -->
+    <link rel="stylesheet" href="/frontend/shared-page.css" />
+
+    <!-- Font Awesome — include if you need icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
+
+    <style>
+        /* ══ PAGE-SPECIFIC STYLES ONLY ══
+           Everything shared is in shared-page.css.
+           Only add styles here that are unique to THIS page. */
+    </style>
+</head>
+<body>
+    <!--
+        PAGE STRUCTURE (matches Settings, Help, Trash):
+        1. .settings-panel — the parchment card wrapper
+        2. .header-and-buttons — logo + title + nav buttons
+        3. Your content
+        4. .author-info — footer
+
+        AVAILABLE SHARED CLASSES:
+          Layout:    .settings-panel, .header-and-buttons, .settings-grid, .setting-group
+          Buttons:   .standard-button, .cwoc-btn, .cwoc-btn.danger, .cwoc-btn.restore
+          Tables:    .cwoc-table (th/td/hover styled)
+          Tags:      .cwoc-tag-chip
+          Forms:     .checkbox-list, .indicator-list (select/input auto-styled)
+          States:    .cwoc-empty, .cwoc-toolbar
+          Modals:    .modal, .modal-content
+          Docs:      .help-content (h3/h4/kbd/code/a/.index styled)
+          Footer:    .author-info
+          Spinner:   .loader
+    -->
+
+    <div class="settings-panel">
+        <div class="header-and-buttons">
+            <h2><img src="/static/cwod_logo.png" alt="Logo" /> Page Title</h2>
+            <div class="header-buttons">
+                <button onclick="window.location.href='/'" class="standard-button">🏠 Chits</button>
+                <button onclick="window.location.href='/frontend/settings.html'" class="standard-button">⚙️ Settings</button>
+            </div>
+        </div>
+
+        <!-- YOUR CONTENT HERE -->
+        <p>Page content goes here.</p>
+
+        <!-- Example: settings-style grid of blocks -->
+        <!--
+        <div class="settings-grid">
+            <div class="setting-group">
+                <h3>Block Title</h3>
+                <label>Field</label>
+                <select><option>Option</option></select>
+            </div>
+        </div>
+        -->
+
+        <!-- Example: table -->
+        <!--
+        <table class="cwoc-table">
+            <thead><tr><th>Col</th></tr></thead>
+            <tbody><tr><td>Data</td></tr></tbody>
+        </table>
+        -->
+
+        <!-- Example: help/docs content -->
+        <!--
+        <div class="help-content">
+            <h3>Section</h3>
+            <p>Text with <kbd>hotkeys</kbd> and <code>code</code>.</p>
+        </div>
+        -->
+    </div>
+
+    <div class="author-info">C.W.'s Omni Chits — Built with ☕ and 🎵</div>
+
+    <!-- Shared utilities (tag tree, recurrence, etc.) — include if needed -->
+    <script src="/frontend/shared.js"></script>
+</body>
+</html>

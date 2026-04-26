@@ -1,0 +1,284 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   CWOC Shared Page Styles — 1940s Parchment & Magic Aesthetic
+   
+   Single source of truth for ALL secondary pages (settings, help, trash, etc.)
+   Change once here → applies everywhere.
+   
+   The main dashboard (index.html) uses styles.css instead.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── CSS Variables ──────────────────────────────────────────────────────── */
+:root {
+    --parchment-light: #fdf5e6;
+    --parchment-medium: #faebd7;
+    --parchment-dark: #fff8dc;
+    --aged-brown-dark: #4a2c2a;
+    --aged-brown-medium: #8b4513;
+    --aged-brown-light: #a0522d;
+    --accent-gold: #d4af37;
+    --button-bg: #d2b48c;
+    --button-hover: #c4a484;
+    --danger-red: #b22222;
+    --success-green: #228b22;
+    --info-blue: #4682b4;
+    --border-color: var(--aged-brown-medium);
+    --text-color: var(--aged-brown-dark);
+    --header-bg: #e0d4b5;
+}
+
+/* ── Base Body ──────────────────────────────────────────────────────────── */
+body {
+    background-image: url("/static/parchment.jpg");
+    background-size: cover;
+    background-attachment: fixed;
+    font-family: "Courier New", Courier, monospace;
+    color: #2b1e0f;
+    margin: 0;
+    padding: 1em;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+/* ── Page Panel (the main content wrapper) ──────────────────────────────── */
+.settings-panel {
+    background: linear-gradient(to bottom, #fff8e1, #f5e6cc);
+    border: 2px solid #8b5a2b;
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    width: 100%;
+    max-width: calc(100% - 2em);
+    padding: 20px;
+    position: relative;
+    overflow: visible;
+    margin-bottom: 15px;
+}
+.settings-panel::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: radial-gradient(circle, rgba(255, 215, 0, 0.1), transparent);
+    pointer-events: none;
+    border-radius: 10px;
+}
+
+/* ── Page Header Bar (logo + title + buttons) ───────────────────────────── */
+.header-and-buttons {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    border-bottom: 1px solid #8b5a2b;
+    padding-bottom: 10px;
+}
+.header-and-buttons h2 {
+    margin: 0;
+    border-bottom: none;
+    padding-bottom: 0;
+    text-align: left;
+}
+.header-buttons {
+    display: flex;
+    gap: 10px;
+}
+
+/* ── Headings ───────────────────────────────────────────────────────────── */
+h2, h3 {
+    font-size: 24px;
+    color: #2b1e0f;
+    text-align: center;
+    margin-bottom: 20px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    border-bottom: 1px solid #8b5a2b;
+    padding-bottom: 10px;
+}
+h3 { font-size: 20px; }
+h2 img {
+    margin-right: 10px;
+    vertical-align: middle;
+    max-width: 64px;
+}
+
+/* ── Standard Button (gradient, used for nav and actions) ───────────────── */
+.standard-button {
+    background: linear-gradient(#d4a373, #c8965a);
+    color: #2b1e0f;
+    border: none;
+    border-radius: 5px;
+    padding: 6px 12px;
+    cursor: pointer;
+    font-size: 16px;
+    font-family: "Courier New", Courier, monospace;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    transition: box-shadow 0.3s, transform 0.1s;
+}
+.standard-button:hover {
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    transform: translateY(-1px);
+}
+
+/* ── Action Buttons (dark brown, matches main page sidebar buttons) ─────── */
+.cwoc-btn {
+    padding: 10px 14px;
+    height: 40px;
+    background-color: #8b5a2b;
+    border: 1px solid #5a3f2a;
+    border-radius: 3px;
+    color: inherit;
+    cursor: pointer;
+    font-family: "Courier New", Courier, monospace;
+    font-weight: bold;
+    font-size: larger;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    text-decoration: none;
+    box-sizing: border-box;
+    transition: background 0.2s;
+}
+.cwoc-btn:hover { background-color: #6b4e31; color: #d2b48c; }
+.cwoc-btn.danger { background: var(--danger-red); color: var(--parchment-light); border-color: var(--aged-brown-dark); }
+.cwoc-btn.danger:hover { background: #a01c1c; color: #fff; }
+.cwoc-btn.restore { background: var(--aged-brown-light); color: var(--parchment-light); border-color: var(--aged-brown-dark); }
+.cwoc-btn.restore:hover { background: var(--aged-brown-medium); color: #fff; }
+
+/* ── Settings Grid (for settings-like block layouts) ────────────────────── */
+.settings-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 20px;
+}
+.setting-group {
+    margin-bottom: 0;
+    padding: 15px;
+    background: #fff8e1;
+    border: 1px solid #8b5a2b;
+    border-radius: 5px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    box-sizing: border-box;
+}
+.setting-group label {
+    display: block;
+    font-size: 18px;
+    margin-bottom: 8px;
+    color: #2b1e0f;
+}
+
+/* ── Form Elements ──────────────────────────────────────────────────────── */
+select {
+    background: linear-gradient(#d4a373, #c8965a);
+    border: 1px solid #5c4033;
+    border-radius: 5px;
+    padding: 8px 12px;
+    font-size: 16px;
+    color: #2b1e0f;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    cursor: pointer;
+    font-family: "Courier New", Courier, monospace;
+    transition: background 0.3s, transform 0.1s;
+}
+select:hover { background: linear-gradient(#c8965a, #a86b3e); transform: translateY(-1px); }
+input[type="text"], input[type="number"] {
+    border: 1px solid #8b5a2b;
+    border-radius: 5px;
+    padding: 5px 8px;
+    font-size: 16px;
+    color: #2b1e0f;
+    font-family: "Courier New", Courier, monospace;
+    background: #f5e6cc;
+}
+input[type="color"] {
+    border: 1px solid #8b5a2b;
+    border-radius: 5px;
+    padding: 5px;
+}
+
+/* ── Tables ──────────────────────────────────────────────────────────────── */
+.cwoc-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9em;
+    background: #fffaf0;
+    border: 1px solid #6b4e31;
+    border-radius: 4px;
+}
+.cwoc-table th {
+    background: var(--header-bg);
+    padding: 8px 10px;
+    text-align: left;
+    border-bottom: 2px solid #6b4e31;
+    font-size: 0.85em;
+    color: var(--aged-brown-dark);
+    white-space: nowrap;
+}
+.cwoc-table td { padding: 6px 10px; border-bottom: 1px solid #d4c5a9; vertical-align: top; }
+.cwoc-table tr:hover { background: rgba(212,196,160,0.15); }
+
+/* ── Tag Chips ──────────────────────────────────────────────────────────── */
+.cwoc-tag-chip {
+    display: inline-block; padding: 1px 5px; border-radius: 3px;
+    font-size: 0.8em; margin: 1px; background: rgba(139,90,43,0.15);
+}
+
+/* ── Empty State ────────────────────────────────────────────────────────── */
+.cwoc-empty { text-align: center; padding: 2em; opacity: 0.5; font-size: 1.1em; color: var(--aged-brown-dark); }
+
+/* ── Toolbar ────────────────────────────────────────────────────────────── */
+.cwoc-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+
+/* ── Indicator / Checkbox Lists ─────────────────────────────────────────── */
+.indicator-list, .checkbox-list {
+    background: #fff8e1;
+    border: 1px solid #8b5a2b;
+    border-radius: 5px;
+    padding: 10px;
+}
+.checkbox-list label { display: flex; align-items: center; padding: 8px; margin: 5px 0; }
+
+/* ── Help Content ───────────────────────────────────────────────────────── */
+.help-content { line-height: 1.7; color: #2b1e0f; }
+.help-content h3 {
+    font-size: 20px; color: #2b1e0f; text-transform: uppercase;
+    letter-spacing: 1px; border-bottom: 1px solid #d4c5a9; padding-bottom: 6px; margin-top: 2em;
+}
+.help-content h4 { color: #6b4e31; margin-top: 1.5em; font-size: 16px; text-align: left; text-transform: none; letter-spacing: 0; border: none; }
+.help-content a { color: #6b4e31; }
+.help-content a:hover { color: #4a2c2a; }
+.help-content kbd { background: #e0d4b5; border: 1px solid #6b4e31; border-radius: 3px; padding: 1px 5px; font-size: 0.9em; }
+.help-content code { background: #e0d4b5; padding: 1px 4px; border-radius: 3px; }
+.help-content .index {
+    background: #fff8e1; border: 1px solid #8b5a2b; border-radius: 5px;
+    padding: 1em 1.5em; margin-bottom: 2em; box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+.help-content .index ul { columns: 2; column-gap: 2em; list-style: none; padding: 0; margin: 0; }
+.help-content .index li { padding: 2px 0; }
+.help-content .index li a { text-decoration: none; color: #6b4e31; }
+.help-content .index li a:hover { text-decoration: underline; }
+.help-content ul { margin: 0.5em 0; }
+.help-content li { margin: 3px 0; }
+
+/* ── Author Footer ──────────────────────────────────────────────────────── */
+.author-info { font-size: small; color: #2b1e0f; text-align: center; margin-top: 10px; }
+.author-info a { color: #5c4033; text-decoration: none; }
+.author-info a:hover { text-decoration: underline; }
+
+/* ── Modal ───────────────────────────────────────────────────────────────── */
+.modal {
+    display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0, 0, 0, 0.5); justify-content: center; align-items: center; z-index: 1000;
+}
+.modal-content {
+    background: #fff8e1; border: 2px solid #8b5a2b; border-radius: 10px;
+    padding: 20px; width: 90%; max-width: 400px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+.modal-content h3 { margin-top: 0; }
+
+/* ── Loader Spinner ─────────────────────────────────────────────────────── */
+.loader {
+    border: 4px solid #f5e6cc; border-top: 4px solid #5c4033; border-radius: 50%;
+    width: 20px; height: 20px; animation: spin 1s linear infinite; margin: 10px auto;
+}
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }

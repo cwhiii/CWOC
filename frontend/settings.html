@@ -5,184 +5,26 @@
             <meta charset="UTF-8" />
             <meta name="viewport" content="width=device-width, initial-scale=1.0" />
             <title>CWOC Settings</title>
-            <link rel="stylesheet" href="styles.css" />
+            <link rel="stylesheet" href="/frontend/shared-page.css" />
+            <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
             <style>
+                /* ── Settings-specific styles (shared styles come from shared-page.css) ── */
                 .filter-display {
-                    position: absolute;
-                    pointer-events: none;
-                    left: 8px;
-                    right: 8px;
-                    top: 5px;
-                    bottom: 5px;
-                    overflow: hidden;
-                    white-space: nowrap;
-                    display: none;
-                    font-family: inherit;
-                    font-size: inherit;
-                    line-height: inherit;
-                    text-align: left;
+                    position: absolute; pointer-events: none; left: 8px; right: 8px; top: 5px; bottom: 5px;
+                    overflow: hidden; white-space: nowrap; display: none;
+                    font-family: inherit; font-size: inherit; line-height: inherit; text-align: left;
                 }
-
                 .filter-item {
-                    position: relative;
-                    display: flex; /* Keep flex for layout */
-                    align-items: center; /* Vertically center items */
-                    justify-content: space-between;
-                    background: #fff8e1;
-                    border: 1px solid #8b5a2b;
-                    border-radius: 5px;
-                    padding: 8px 12px;
+                    position: relative; display: flex; align-items: center; justify-content: space-between;
+                    background: #fff8e1; border: 1px solid #8b5a2b; border-radius: 5px; padding: 8px 12px;
                 }
-
-                .filter-inputs {
-                    display: flex;
-                    flex-direction: column;
-                    gap: 10px;
-                }
-
-                .filter-item span {
-                    white-space: nowrap; /* Prevent label from wrapping */
-                    margin-right: 10px; /* Space between label and input */
-                }
-
+                .filter-inputs { display: flex; flex-direction: column; gap: 10px; }
+                .filter-item span { white-space: nowrap; margin-right: 10px; }
                 .filter-input {
-                    flex: 1; /* Allow input to take available space */
-                    min-width: 0; /* Crucial for flex items to shrink */
-                    border: 1px solid #8b5a2b;
-                    border-radius: 5px;
-                    padding: 5px 8px;
-                    color: #2b1e0f;
-                    font-family: inherit;
-                    background-color: #f5e6cc;
-                    box-sizing: border-box; /* Include padding in element's total width */
+                    flex: 1; min-width: 0; border: 1px solid #8b5a2b; border-radius: 5px; padding: 5px 8px;
+                    color: #2b1e0f; font-family: inherit; background-color: #f5e6cc; box-sizing: border-box;
                 }
-
-                select {
-                    background: linear-gradient(#d4a373, #c8965a);
-                    border: 1px solid #5c4033;
-                    border-radius: 5px;
-                    padding: 8px 12px;
-                    font-size: 16px;
-                    color: #2b1e0f;
-                    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-                    cursor: pointer;
-                    transition:
-                        background 0.3s,
-                        transform 0.1s;
-                }
-
-                select:hover {
-                    background: linear-gradient(#c8965a, #a86b3e);
-                    transform: translateY(-1px);
-                }
-
-                body {
-                    background: url("https://www.transparenttextures.com/patterns/old-paper.png")
-                        repeat;
-                    background-color: #f5e6cc;
-                    color: #2b1e0f;
-                    font-family: "Times New Roman", serif;
-                    display: flex;
-                    flex-direction: column;
-                    align-items: center;
-                    min-height: 100vh;
-                    margin: 0;
-                    padding: 1em;
-                }
-                .settings-panel {
-                    background: linear-gradient(to bottom, #fff8e1, #f5e6cc);
-                    border: 2px solid #8b5a2b;
-                    border-radius: 10px;
-                    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
-                    width: 100%;
-                    max-width: calc(100% - 2em); /* Adjusted to ensure 1em margin on sides */
-                    padding: 20px; /* Reverted padding to original, or changed to 1em as preferred based on the strictness of the "1em margin" request. Keeping 20px for minimal change to internal spacing. */
-                    position: relative;
-                    overflow: visible;
-                    margin-bottom: 15px;
-                }
-                .settings-panel::before {
-                    content: "";
-                    position: absolute;
-                    top: 0;
-                    left: 0;
-                    width: 100%;
-                    height: 100%;
-                    background: radial-gradient(
-                        circle,
-                        rgba(255, 215, 0, 0.1),
-                        transparent
-                    );
-                    pointer-events: none;
-                }
-                h2,
-                h3 {
-                    font-size: 24px;
-                    color: #2b1e0f;
-                    text-align: center;
-                    margin-bottom: 20px;
-                    text-transform: uppercase;
-                    letter-spacing: 2px;
-                    border-bottom: 1px solid #8b5a2b;
-                    padding-bottom: 10px;
-                }
-                h3 {
-                    font-size: 20px;
-                }
-                .header-and-buttons {
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    margin-bottom: 20px;
-                    border-bottom: 1px solid #8b5a2b;
-                    padding-bottom: 10px;
-                }
-                .header-and-buttons h2 {
-                    margin: 0;
-                    border-bottom: none;
-                    padding-bottom: 0;
-                    text-align: left;
-                }
-                .header-buttons {
-                    display: flex;
-                    gap: 10px;
-                }
-
-                .settings-grid {
-                    display: grid;
-                    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-                    gap: 20px;
-                }
-                .setting-group {
-                    margin-bottom: 0;
-                    padding: 15px;
-                    background: #fff8e1;
-                    border: 1px solid #8b5a2b;
-                    border-radius: 5px;
-                    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-                    box-sizing: border-box;
-                }
-                .setting-group label {
-                    display: block;
-                    font-size: 18px;
-                    margin-bottom: 8px;
-                    color: #2b1e0f;
-                }
-                /* Select and input common styles are already defined */
-                input[type="color"],
-                input[type="text"] {
-                    border: 1px solid #8b5a2b;
-                    border-radius: 5px;
-                    padding: 5px;
-                    font-size: 16px;
-                    color: #2b1e0f;
-                    accent-color: #8b5a2b;
-                }
-                .clocks-section {
-                    margin-top: 20px;
-                    border-top: 1px solid #8b5a2b;
-                    padding-top: 20px;
-                }
+                .clocks-section { margin-top: 20px; border-top: 1px solid #8b5a2b; padding-top: 20px; }
                 .clocks-container {
                     display: flex;
                     flex-direction: column;
@@ -354,263 +196,26 @@
                     justify-content: center;
                     padding: 0;
                 }
-                .indicator-list,
-                .checkbox-list {
-                    background: #fff8e1;
-                    border: 1px solid #8b5a2b;
-                    border-radius: 5px;
-                    padding: 10px;
-                }
-                .indicator-item {
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    padding: 8px;
-                    margin: 5px 0;
-                }
-                .indicator-item span {
-                    white-space: nowrap; /* Prevent label from wrapping */
-                    margin-right: 10px; /* Space between label and select */
-                }
-                .indicator-item select {
-                    flex: 1; /* Allow select to take available space */
-                    min-width: 0; /* Crucial for flex items to shrink */
-                }
-                .checkbox-list label {
-                    display: flex;
-                    align-items: center;
-                    padding: 8px;
-                    margin: 5px 0;
-                }
-                .tag-editor {
-                    display: flex;
-                    flex-wrap: wrap;
-                    gap: 10px;
-                    background: #fff8e1;
-                    border: 1px solid #8b5a2b;
-                    border-radius: 5px;
-                    padding: 10px;
-                }
-                .tag-input-container {
-                    display: flex;
-                    gap: 10px;
-                    width: 100%;
-                    margin-bottom: 10px;
-                    align-items: center;
-                }
-
-                .tag-in-input {
-                    background: #8b5a2b;
-                    color: #fff8e1;
-                    padding: 2px 5px;
-                    border-radius: 12px;
-                    margin: 0 2px;
-                    font-size: 14px;
-                    height: 20px;
-                }
-                .tag {
-                    align-items: center;
-                    background-color: #e0e0e0;
-                    padding: 2px 8px;
-                    border-radius: 12px;
-                    font-size: 0.9em;
-                    margin: 0 2px;
-                    vertical-align: middle;
-                    height: 20px;
-                    line-height: 20px;
-                }
-
-                .tag-input {
-                    align-items: center;
-                    border: 1px solid #ccc;
-                    padding: 5px;
-                    border-radius: 5px;
-                    font-size: 1em;
-                    height: 30px;
-                    line-height: 30px;
-                    vertical-align: middle;
-                }
-
-                .tag-input span {
-                    display: inline;
-                    vertical-align: middle;
-                }
-                .tag button {
-                    background: none;
-                    border: none;
-                    color: #fff8e1;
-                    cursor: pointer;
-                    font-size: 12px;
-                    width: 12px;
-                    height: 12px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    padding: 0;
-                }
-                .checkbox-group {
-                    display: flex;
-                    flex-direction: column;
-                    gap: 10px;
-                }
-                .standard-button {
-                    background: linear-gradient(#d4a373, #c8965a);
-                    color: #2b1e0f;
-                    border: none;
-                    border-radius: 5px;
-                    padding: 6px 12px;
-                    cursor: pointer;
-                    font-size: 16px;
-                    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-                    transition:
-                        box-shadow 0.3s,
-                        transform 0.1s;
-                }
-                .standard-button:hover {
-                    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-                    transform: translateY(-1px);
-                }
-                .tag-input-container .standard-button:hover::after {
-                    content: "Press Shift+Enter or Shift+Click to open tag modal with entered value";
-                    position: absolute;
-                    top: -40px;
-                    left: 50%;
-                    transform: translateX(-50%);
-                    background: #2b1e0f;
-                    color: #fff8e1;
-                    padding: 5px 10px;
-                    font-size: 12px;
-                    border-radius: 3px;
-                    white-space: nowrap;
-                    z-index: 10;
-                }
-                .modal-content .standard-button {
-                    margin-top: 10px;
-                    margin-right: 10px;
-                }
-                .info-icon {
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    border: 1px solid #8b5a2b;
-                    color: #8b5a2b;
-                    border-radius: 50%;
-                    width: 24px;
-                    height: 24px;
-                    font-size: 1em;
-                    line-height: 24px;
-                    text-align: center;
-                    cursor: pointer;
-                }
-                .info-icon:hover::after {
-                    content: "Press Shift+Enter or Shift+Click to open tag modal with entered value";
-                    position: absolute;
-                    top: -40px;
-                    left: 50%;
-                    transform: translateX(-50%);
-                    background: #2b1e0f;
-                    color: #fff8e1;
-                    padding: 5px 10px;
-                    font-size: 12px;
-                    border-radius: 3px;
-                    white-space: nowrap;
-                    z-index: 10;
-                }
-                .loader {
-                    border: 4px solid #f5e6cc;
-                    border-top: 4px solid #5c4033;
-                    border-radius: 50%;
-                    width: 20px;
-                    height: 20px;
-                    animation: spin 1s linear infinite;
-                    margin: 10px auto;
-                }
-                @keyframes spin {
-                    0% {
-                        transform: rotate(0deg);
-                    }
-                    100% {
-                        transform: rotate(360deg);
-                    }
-                }
-                .modal {
-                    display: none;
-                    position: fixed;
-                    top: 0;
-                    left: 0;
-                    width: 100%;
-                    height: 100%;
-                    background: rgba(0, 0, 0, 0.5);
-                    justify-content: center;
-                    align-items: center;
-                    z-index: 1000;
-                }
-                .modal-content {
-                    background: #fff8e1;
-                    border: 2px solid #8b5a2b;
-                    border-radius: 10px;
-                    padding: 20px;
-                    width: 90%;
-                    max-width: 400px;
-                    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
-                }
-                .modal-content h3 {
-                    margin-top: 0;
-                }
-                .modal-content label {
-                    display: block;
-                    margin-bottom: 10px;
-                }
-                .modal-content input,
-                .modal-content select {
-                    width: 100%;
-                    margin-bottom: 10px;
-                }
-                .modal-content .color-options {
-                    display: flex;
-                    flex-wrap: wrap;
-                    gap: 10px;
-                }
-                .modal-content .color-option {
-                    width: 30px;
-                    height: 30px;
-                    border: 1px solid #8b5a2b;
-                    cursor: pointer;
-                }
-
-                #duplicate-tag-modal .modal-content {
-                    animation: fadeOut 2s forwards;
-                }
-                @keyframes fadeOut {
-                    0% {
-                        opacity: 1;
-                    }
-                    80% {
-                        opacity: 1;
-                    }
-                    100% {
-                        opacity: 0;
-                        display: none;
-                    }
-                }
-                .author-info {
-                    font-size: small;
-                    color: #2b1e0f;
-                    text-align: center;
-                    margin-top: 10px;
-                }
-                .author-info a {
-                    color: #5c4033;
-                    text-decoration: none;
-                }
-                .author-info a:hover {
-                    text-decoration: underline;
-                }
-                h2 img {
-                    margin-right: 10px;
-                    vertical-align: middle;
-                    max-width: 64px;
-                }
+                .indicator-item { display: flex; justify-content: space-between; align-items: center; padding: 8px; margin: 5px 0; }
+                .indicator-item span { white-space: nowrap; margin-right: 10px; }
+                .indicator-item select { flex: 1; min-width: 0; }
+                .tag-editor { display: flex; flex-wrap: wrap; gap: 10px; background: #fff8e1; border: 1px solid #8b5a2b; border-radius: 5px; padding: 10px; }
+                .tag-input-container { display: flex; gap: 10px; width: 100%; margin-bottom: 10px; align-items: center; }
+                .tag-in-input { background: #8b5a2b; color: #fff8e1; padding: 2px 5px; border-radius: 12px; margin: 0 2px; font-size: 14px; height: 20px; }
+                .tag { align-items: center; background-color: #e0e0e0; padding: 2px 8px; border-radius: 12px; font-size: 0.9em; margin: 0 2px; vertical-align: middle; height: 20px; line-height: 20px; }
+                .tag-input { align-items: center; border: 1px solid #ccc; padding: 5px; border-radius: 5px; font-size: 1em; height: 30px; line-height: 30px; vertical-align: middle; }
+                .tag-input span { display: inline; vertical-align: middle; }
+                .tag button { background: none; border: none; color: #fff8e1; cursor: pointer; font-size: 12px; width: 12px; height: 12px; display: flex; align-items: center; justify-content: center; padding: 0; }
+                .checkbox-group { display: flex; flex-direction: column; gap: 10px; }
+                .tag-input-container .standard-button:hover::after, .info-icon:hover::after { content: "Shift+Enter or Shift+Click to open tag modal"; position: absolute; top: -40px; left: 50%; transform: translateX(-50%); background: #2b1e0f; color: #fff8e1; padding: 5px 10px; font-size: 12px; border-radius: 3px; white-space: nowrap; z-index: 10; }
+                .modal-content .standard-button { margin-top: 10px; margin-right: 10px; }
+                .info-icon { display: flex; align-items: center; justify-content: center; border: 1px solid #8b5a2b; color: #8b5a2b; border-radius: 50%; width: 24px; height: 24px; font-size: 1em; line-height: 24px; text-align: center; cursor: pointer; }
+                .modal-content label { display: block; margin-bottom: 10px; }
+                .modal-content input, .modal-content select { width: 100%; margin-bottom: 10px; }
+                .modal-content .color-options { display: flex; flex-wrap: wrap; gap: 10px; }
+                .modal-content .color-option { width: 30px; height: 30px; border: 1px solid #8b5a2b; cursor: pointer; }
+                #duplicate-tag-modal .modal-content { animation: fadeOut 2s forwards; }
+                @keyframes fadeOut { 0% { opacity: 1; } 80% { opacity: 1; } 100% { opacity: 0; display: none; } }
             </style>
         </head>
         <body>
