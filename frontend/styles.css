@@ -1524,6 +1524,104 @@ button.delete:hover {
     display: none;
 }
 
+/* ── Mobile Views button: hidden at desktop ───────────────────────────── */
+.mobile-views-btn {
+    display: none;
+    padding: 6px 12px;
+    min-height: 36px;
+    background: var(--btn-bg, #8b5a2b);
+    color: #fff8e1;
+    border: 1px solid var(--btn-border, #5a3f2a);
+    border-radius: 3px;
+    font-family: "Courier New", Courier, monospace;
+    font-weight: bold;
+    font-size: 0.9em;
+    cursor: pointer;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+.mobile-views-btn:hover {
+    background: var(--btn-hover, #6b4e31);
+}
+
+/* ── Mobile Views dropdown ────────────────────────────────────────────── */
+.mobile-views-dropdown {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 2000;
+    justify-content: center;
+    align-items: flex-start;
+    padding-top: 60px;
+}
+.mobile-views-dropdown.active {
+    display: flex;
+}
+.mobile-views-dropdown-content {
+    background: var(--parchment-medium, #faebd7);
+    border: 2px solid var(--aged-brown-medium, #8b4513);
+    border-radius: 8px;
+    padding: 12px;
+    width: calc(100% - 32px);
+    max-width: 320px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+.mobile-views-dropdown-content h3 {
+    margin: 0 0 8px 0;
+    font-size: 1.1em;
+    color: var(--aged-brown-dark, #4a2c2a);
+    text-align: center;
+    border-bottom: 1px solid var(--aged-brown-light, #a0522d);
+    padding-bottom: 6px;
+}
+.mobile-view-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    margin: 4px 0;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: "Courier New", Courier, monospace;
+    font-weight: bold;
+    font-size: 1em;
+    color: var(--aged-brown-dark, #4a2c2a);
+    background: var(--parchment-light, #fdf5e6);
+    border: 1px solid var(--aged-brown-light, #a0522d);
+    min-height: 44px;
+}
+.mobile-view-option:hover {
+    background: var(--button-hover, #c4a484);
+}
+.mobile-view-option.active {
+    background: ivory;
+    border-color: var(--aged-brown-medium, #8b4513);
+    border-width: 2px;
+}
+.mobile-view-option img {
+    height: 1.8em;
+}
+.mobile-views-close {
+    display: block;
+    width: 100%;
+    margin-top: 8px;
+    padding: 8px;
+    text-align: center;
+    font-weight: bold;
+    background: var(--aged-brown-light, #a0522d);
+    color: #fff8e1;
+    border: 1px solid var(--aged-brown-dark, #4a2c2a);
+    border-radius: 4px;
+    cursor: pointer;
+    min-height: 44px;
+    font-family: "Courier New", Courier, monospace;
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
    TABLET RESPONSIVE — max-width: 768px
    Additive rules only; desktop defaults remain untouched above.
@@ -1687,28 +1785,19 @@ button.delete:hover {
         min-width: 0;
     }
 
-    /* ── Tabs: single-row horizontal scroll ───────────────────────────────── */
+    /* ── Tabs: HIDDEN on mobile — replaced by Views button ───────────────── */
     .tabs {
-        flex-wrap: nowrap;
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
-        padding: 2px 0;
-        width: 100%;
-        gap: 2px;
+        display: none !important;
     }
 
-    /* ── Tab: icon-only on mobile for space ────────────────────────────────── */
-    .tab {
-        padding: 6px 8px;
-        font-size: 0.75em;
-        min-height: 44px;
-        min-width: 44px;
-        flex-shrink: 0;
-        white-space: nowrap;
+    /* ── Tab bar spacer: hidden on mobile ─────────────────────────────────── */
+    .top-bar-spacer {
+        display: none !important;
     }
-    .tab > img {
-        height: 1.4em;
-        margin-right: 4px;
+
+    /* ── Views button: visible on mobile ──────────────────────────────────── */
+    .mobile-views-btn {
+        display: inline-flex !important;
     }
 
     /* ── Top bar: hidden on mobile (date range shown in sidebar) ──────────── */
@@ -1746,10 +1835,10 @@ button.delete:hover {
         box-sizing: border-box;
     }
 
-    /* ── Chit list: below fixed header ────────────────────────────────────── */
+    /* ── Chit list: below compact fixed header ───────────────────────────── */
     .chit-list {
-        margin-top: 100px;
-        height: calc(100vh - 100px);
+        margin-top: 50px;
+        height: calc(100vh - 50px);
     }
 
     /* ── Month day: compact cells ─────────────────────────────────────────── */
@@ -1786,11 +1875,37 @@ button.delete:hover {
         padding: 12px 16px;
     }
 
-    /* ── Reference content: full width ────────────────────────────────────── */
+    /* ── Reference content: full-screen scrollable modal ─────────────────── */
+    .reference-overlay {
+        align-items: flex-start;
+        padding: 8px;
+        overflow-y: auto;
+    }
     .reference-content {
-        width: calc(100% - 16px);
+        width: 100%;
         max-width: none;
-        padding: 15px 18px;
+        padding: 12px;
+        box-sizing: border-box;
+        border-radius: 8px;
+        max-height: none;
+        overflow-y: auto;
+        font-size: 0.85em;
+    }
+    .reference-content h3 {
+        font-size: 1.1em;
+        margin-bottom: 8px;
+    }
+    .reference-content h4 {
+        font-size: 0.9em;
+        margin: 8px 0 4px 0;
+    }
+    .ref-key {
+        min-width: 1.5em;
+        font-size: 0.85em;
+    }
+    .ref-col > div {
+        font-size: 0.85em;
+        margin: 2px 0;
     }
 
     /* ── Sidebar controls: compact ────────────────────────────────────────── */
@@ -1823,12 +1938,31 @@ button.delete:hover {
         gap: 1px;
     }
 
-    /* ── Calendar events: touch-friendly ──────────────────────────────────── */
-    .timed-event,
+    /* ── Calendar events: compact, readable ──────────────────────────────── */
+    .timed-event {
+        min-height: 30px;
+        padding: 2px 4px;
+        font-size: 0.65em;
+        line-height: 1.2;
+        overflow: hidden;
+    }
+    .timed-event .label img {
+        width: 1em !important;
+        height: 1em !important;
+    }
+    /* All-day events: compact single-line (NOT 44px — they're display items) */
     .all-day-event {
-        min-height: 44px;
-        padding: 4px 6px;
-        font-size: 0.8em;
+        min-height: 0 !important;
+        max-height: 1.4em !important;
+        padding: 1px 3px !important;
+        font-size: 0.7em !important;
+        line-height: 1.3em !important;
+        border-bottom: none !important;
+    }
+    .all-day-event .label img {
+        width: 1em !important;
+        height: 1em !important;
+        vertical-align: middle;
     }
 
     /* ── Notes view: compact ──────────────────────────────────────────────── */

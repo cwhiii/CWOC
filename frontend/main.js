@@ -3964,6 +3964,12 @@ document.addEventListener("DOMContentLoaded", function () {
   // Initialize mobile sidebar overlay behavior (backdrop, resize handling)
   initMobileSidebar();
 
+  // Initialize mobile Views button (replaces tab bar on mobile)
+  if (typeof initMobileViewsButton === 'function') initMobileViewsButton();
+
+  // Add close button to reference overlay for mobile
+  if (typeof initMobileReferenceClose === 'function') initMobileReferenceClose();
+
   // Default: hide archived chits, show pinned
   const saInit = document.getElementById('show-archived');
   if (saInit) saInit.checked = false;

@@ -3369,3 +3369,106 @@ function enableLongPress(el, callback) {
     _lpFired = false;
   });
 }
+
+
+// ── Mobile Views Button (replaces tab bar on mobile) ─────────────────────────
+
+/**
+ * On mobile (≤480px), add a "Views" button next to the header title.
+ * Tapping it opens a full-screen dropdown with the 6 C CAPTN tabs.
+ * The original .tabs row is hidden via CSS.
+ *
+ * Call once from DOMContentLoaded on the dashboard page.
+ */
+function initMobileViewsButton() {
+  var header = document.querySelector('.header');
+  if (!header) return;
+
+  // Create the Views button
+  var btn = document.createElement('button');
+  btn.className = 'mobile-views-btn';
+  btn.textContent = '☰ Views';
+  // Insert after h1
+  var h1 = header.querySelector('h1');
+  if (h1 && h1.nextSibling) {
+    header.insertBefore(btn, h1.nextSibling);
+  } else {
+    header.appendChild(btn);
+  }
+
+  // Create the dropdown overlay
+  var dropdown = document.createElement('div');
+  dropdown.className = 'mobile-views-dropdown';
+  var content = document.createElement('div');
+  content.className = 'mobile-views-dropdown-content';
+  content.innerHTML = '<h3>Views</h3>';
+
+  // Build options from the existing tabs
+  var tabs = document.querySelectorAll('.tabs .tab');
+  tabs.forEach(function (tab) {
+    var opt = document.createElement('div');
+    opt.className = 'mobile-view-option';
+    if (tab.classList.contains('active')) opt.classList.add('active');
+    // Clone the tab content (image + text)
+    opt.innerHTML = tab.innerHTML;
+    opt.addEventListener('click', function () {
+      dropdown.classList.remove('active');
+      tab.click(); // trigger the original tab's onclick
+      // Update active state
+      content.querySelectorAll('.mobile-view-option').forEach(function (o) { o.classList.remove('active'); });
+      opt.classList.add('active');
+    });
+    content.appendChild(opt);
+  });
+
+  var closeBtn = document.createElement('button');
+  closeBtn.className = 'mobile-views-close';
+  closeBtn.textContent = '✕ Close';
+  closeBtn.addEventListener('click', function () { dropdown.classList.remove('active'); });
+  content.appendChild(closeBtn);
+
+  dropdown.appendChild(content);
+  dropdown.addEventListener('click', function (e) {
+    if (e.target === dropdown) dropdown.classList.remove('active');
+  });
+  document.body.appendChild(dropdown);
+
+  btn.addEventListener('click', function () {
+    // Refresh active state before showing
+    var currentTabs = document.querySelectorAll('.tabs .tab');
+    var opts = content.querySelectorAll('.mobile-view-option');
+    currentTabs.forEach(function (t, i) {
+      if (opts[i]) {
+        if (t.classList.contains('active')) opts[i].classList.add('active');
+        else opts[i].classList.remove('active');
+      }
+    });
+    dropdown.classList.add('active');
+  });
+}
+
+
+// ── Mobile Reference Close Button ────────────────────────────────────────────
+
+/**
+ * Add a close button inside the reference overlay content for mobile.
+ * On desktop, clicking outside the content closes it. On mobile the content
+ * fills the screen so there's no outside area to tap.
+ */
+function initMobileReferenceClose() {
+  var content = document.querySelector('.reference-content');
+  if (!content) return;
+  if (content.querySelector('.ref-close-btn')) return; // already added
+
+  var btn = document.createElement('button');
+  btn.className = 'ref-close-btn';
+  btn.textContent = '✕ Close';
+  btn.style.cssText = 'display:block;width:100%;margin-top:12px;padding:10px;' +
+    'font-size:1em;font-weight:bold;font-family:"Courier New",monospace;' +
+    'background:#8b5a2b;color:#fff8e1;border:1px solid #5a3f2a;border-radius:4px;' +
+    'cursor:pointer;min-height:44px;';
+  btn.addEventListener('click', function () {
+    if (typeof _closeReference === 'function') _closeReference();
+  });
+  content.appendChild(btn);
+}

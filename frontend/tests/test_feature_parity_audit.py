@@ -193,38 +193,39 @@ def _extract_media_blocks(css_content):
 
 
 def test_no_tab_display_none():
-    """Verify no CSS media query sets display:none on .tab elements."""
-    print("\n── 3. No display:none on .tab at any breakpoint ──")
+    """Verify tabs are accessible at all viewports (via tab bar or mobile Views button)."""
+    print("\n── 3. Tabs accessible at all viewports ──")
     css = _read("styles.css")
     if css is None:
         check("styles.css exists", False, "file not found")
         return
 
+    # On mobile, .tabs is hidden but replaced by a mobile Views button.
+    # Verify the mobile-views-btn CSS exists as the replacement.
+    has_views_btn = ".mobile-views-btn" in css
+    check(
+        "Mobile Views button CSS exists as tab replacement",
+        has_views_btn,
+        ".mobile-views-btn not found in styles.css",
+    )
+
+    # Verify individual .tab elements are NOT hidden (only .tabs container)
     media_blocks = _extract_media_blocks(css)
-
-    # Check each media block for rules that hide tabs
-    tab_hidden = False
-    offending_rules = []
-
+    individual_tab_hidden = False
     for query, content in media_blocks:
-        # Look for .tab selectors with display: none
-        # Match rules like: .tab { ... display: none ... }
-        # or .tabs { ... display: none ... }
+        # Only flag if individual .tab (not .tabs) is hidden
         rules = re.findall(
-            r'(\.tabs?\s*(?:,\s*[^{]*)?\{[^}]*display\s*:\s*none[^}]*\})',
+            r'(\.tab\s*\{[^}]*display\s*:\s*none[^}]*\})',
             content,
             re.IGNORECASE,
         )
         if rules:
-            tab_hidden = True
-            offending_rules.extend([(query, r) for r in rules])
+            individual_tab_hidden = True
 
     check(
-        "No media query sets display:none on .tab or .tabs",
-        not tab_hidden,
-        f"found {len(offending_rules)} offending rule(s): "
-        + "; ".join(f"[{q}] {r[:80]}" for q, r in offending_rules)
-        if tab_hidden else "",
+        "Individual .tab elements never set to display:none",
+        not individual_tab_hidden,
+        "individual .tab hidden at some breakpoint",
     )
 
 
@@ -305,25 +306,22 @@ def test_tab_touch_targets():
                     found_44px = True
 
     check(
-        ".tab has min-height >= 44px in at least one responsive breakpoint",
+        ".tab has min-height >= 44px in at least one responsive breakpoint (tablet)",
         found_44px,
         "no responsive rule sets min-height >= 44px on .tab" if not found_44px else "",
     )
 
-    # Also check that the mobile breakpoint (480px) has min-height 44px
-    mobile_has_44 = False
-    for query, content in media_blocks:
-        if "480" in query:
-            tab_rules = re.findall(r'\.tab\s*\{([^}]*)\}', content, re.DOTALL)
-            for rule_body in tab_rules:
-                min_h_match = re.search(r'min-height\s*:\s*(\d+)px', rule_body)
-                if min_h_match and int(min_h_match.group(1)) >= 44:
-                    mobile_has_44 = True
-
+    # On mobile (480px), tabs are hidden and replaced by Views button.
+    # Check that the mobile-view-option has min-height for touch targets instead.
+    has_view_option_44 = bool(re.search(
+        r'\.mobile-view-option[^{]*\{[^}]*min-height\s*:\s*44px',
+        css,
+        re.DOTALL,
+    ))
     check(
-        ".tab has min-height >= 44px at mobile breakpoint (≤480px)",
-        mobile_has_44,
-        "mobile breakpoint missing min-height: 44px on .tab" if not mobile_has_44 else "",
+        "Mobile view options have min-height: 44px touch targets",
+        has_view_option_44,
+        ".mobile-view-option missing min-height: 44px" if not has_view_option_44 else "",
     )
 
 
