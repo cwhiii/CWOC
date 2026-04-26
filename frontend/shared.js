@@ -1441,6 +1441,7 @@ function renderAllDayEventsInCells(dayData, allDayEventsRow) {
     const ev = document.createElement('div');
     ev.className = 'all-day-event';
     ev.dataset.chitId = chit.id;
+    ev.dataset.allDayRow = String(targetRow);
     ev.style.backgroundColor = chitColor(chit);
     ev.style.gridColumn = `${startCol + 1} / ${endCol + 2}`; // grid is 1-indexed, end is exclusive
     ev.style.gridRow = `${targetRow + 2}`; // +2 because row 1 is the border cells
@@ -1453,6 +1454,51 @@ function renderAllDayEventsInCells(dayData, allDayEventsRow) {
   });
 
   allDayEventsRow.appendChild(grid);
+
+  // ── Mobile: limit to 3 visible rows with expand/shrink ─────────────────
+  var totalRows = rowOccupancy.length;
+  var MAX_VISIBLE = 3;
+  if (window.innerWidth <= 768 && totalRows > MAX_VISIBLE) {
+    var _expanded = false;
+
+    // Hide rows beyond MAX_VISIBLE - 1 (reserve last visible slot for the button)
+    function _applyRowVisibility() {
+      var events = grid.querySelectorAll('.all-day-event');
+      events.forEach(function (ev) {
+        var row = parseInt(ev.dataset.allDayRow, 10);
+        if (_expanded) {
+          ev.style.display = '';
+        } else {
+          ev.style.display = (row < MAX_VISIBLE - 1) ? '' : 'none';
+        }
+      });
+    }
+
+    // Create expand/shrink button
+    var toggleBtn = document.createElement('div');
+    toggleBtn.className = 'all-day-expand-btn';
+    var hiddenCount = 0;
+    grid.querySelectorAll('.all-day-event').forEach(function (ev) {
+      if (parseInt(ev.dataset.allDayRow, 10) >= MAX_VISIBLE - 1) hiddenCount++;
+    });
+    toggleBtn.textContent = '▼ ' + hiddenCount + ' more';
+    toggleBtn.style.cssText = 'grid-column:1/-1;grid-row:' + (MAX_VISIBLE + 1) +
+      ';text-align:center;padding:4px;font-size:0.8em;cursor:pointer;' +
+      'background:#e0d4b5;border-radius:3px;margin:2px;font-weight:bold;color:#4a2c2a;';
+    toggleBtn.addEventListener('click', function () {
+      _expanded = !_expanded;
+      _applyRowVisibility();
+      if (_expanded) {
+        toggleBtn.textContent = '▲ Show less';
+        toggleBtn.style.gridRow = String(totalRows + 2);
+      } else {
+        toggleBtn.textContent = '▼ ' + hiddenCount + ' more';
+        toggleBtn.style.gridRow = String(MAX_VISIBLE + 1);
+      }
+    });
+    grid.appendChild(toggleBtn);
+    _applyRowVisibility();
+  }
 }
 
 function _advanceRecurrence(current, freq, interval, byDayNums) {
@@ -3052,6 +3098,7 @@ function _isMobileOverlay() {
  * Initialize mobile sidebar overlay behavior.
  * - On ≤768px: sidebar defaults to closed on page load
  * - Creates/manages the .sidebar-backdrop element
+ * - Adds a visible close button inside the sidebar for mobile
  * - Listens for resize events to handle crossing the 768px boundary
  *
  * Call this once from DOMContentLoaded (e.g., in main.js).
@@ -3063,6 +3110,18 @@ function initMobileSidebar() {
 
   // Ensure backdrop element exists
   _ensureSidebarBackdrop();
+
+  // Add a close button inside the sidebar for mobile (only once)
+  if (!sidebar.querySelector('.sidebar-close-btn')) {
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'sidebar-close-btn';
+    closeBtn.innerHTML = '✕ Close';
+    closeBtn.setAttribute('aria-label', 'Close sidebar');
+    closeBtn.addEventListener('click', function () {
+      _onSidebarBackdropClick();
+    });
+    sidebar.insertBefore(closeBtn, sidebar.firstChild);
+  }
 
   // On page load at ≤768px: force sidebar closed
   if (_isMobileOverlay()) {
@@ -3094,5 +3153,219 @@ function initMobileSidebar() {
     }
 
     _prevWasMobile = isMobile;
+  });
+}
+
+
+// ── Mobile Actions Modal (editor header buttons) ─────────────────────────────
+
+/**
+ * On mobile (≤768px), hide the .buttons container in .header-row and show
+ * a single "☰ Actions" trigger button. Tapping it opens a full-screen modal
+ * with all the original buttons cloned and stacked vertically.
+ *
+ * Call once from DOMContentLoaded on editor pages.
+ */
+function initMobileActionsModal() {
+  var headerRow = document.querySelector('.header-row');
+  var buttonsDiv = headerRow && headerRow.querySelector('.buttons');
+  if (!headerRow || !buttonsDiv) return;
+
+  // Create the trigger button (hidden at desktop via CSS)
+  var trigger = document.createElement('button');
+  trigger.className = 'mobile-actions-trigger';
+  trigger.innerHTML = '☰ Actions';
+  trigger.addEventListener('click', function () { _openMobileActionsModal(); });
+  headerRow.appendChild(trigger);
+
+  // Create the modal container (hidden by default)
+  var modal = document.createElement('div');
+  modal.id = 'mobile-actions-modal';
+  modal.className = 'mobile-actions-modal';
+  modal.innerHTML = '<div class="mobile-actions-modal-content">' +
+    '<h3>Actions</h3>' +
+    '<div class="mobile-actions-list"></div>' +
+    '<button class="mobile-actions-close">✕ Close</button>' +
+    '</div>';
+  document.body.appendChild(modal);
+
+  modal.querySelector('.mobile-actions-close').addEventListener('click', function () {
+    modal.classList.remove('active');
+  });
+  modal.addEventListener('click', function (e) {
+    if (e.target === modal) modal.classList.remove('active');
+  });
+}
+
+function _openMobileActionsModal() {
+  var modal = document.getElementById('mobile-actions-modal');
+  if (!modal) return;
+  var list = modal.querySelector('.mobile-actions-list');
+  list.innerHTML = '';
+
+  // Grab all visible buttons from the header .buttons container
+  var buttonsDiv = document.querySelector('.header-row .buttons');
+  if (!buttonsDiv) return;
+
+  var buttons = buttonsDiv.querySelectorAll('button');
+  buttons.forEach(function (btn) {
+    // Skip hidden buttons (display:none)
+    if (btn.offsetParent === null && btn.style.display === 'none') return;
+    var clone = document.createElement('button');
+    clone.className = 'mobile-action-btn ' + (btn.className || '');
+    clone.innerHTML = btn.innerHTML;
+    clone.disabled = btn.disabled;
+    clone.addEventListener('click', function () {
+      modal.classList.remove('active');
+      btn.click(); // trigger the original button's handler
+    });
+    list.appendChild(clone);
+  });
+
+  modal.classList.add('active');
+}
+
+
+// ── Calendar Pinch-to-Zoom (vertical axis only) ─────────────────────────────
+
+/** Current vertical zoom scale for calendar time views */
+var _calZoomScale = 1.0;
+var _calZoomMin = 0.4;
+var _calZoomMax = 3.0;
+
+/**
+ * Enable pinch-to-zoom on a calendar scroll container.
+ * Scales the vertical axis only (time grid) using CSS transform scaleY.
+ * Works on touch devices with 2-finger pinch gestures.
+ *
+ * @param {HTMLElement} scrollContainer - The .week-view scroll container
+ */
+function enableCalendarPinchZoom(scrollContainer) {
+  if (!scrollContainer) return;
+
+  var _pinchStartDist = 0;
+  var _pinchStartScale = 1;
+  var _isPinching = false;
+
+  // Find the inner content elements to scale (hour column + day columns)
+  function _getScalableChildren() {
+    return scrollContainer.querySelectorAll('.hour-column, .day-column');
+  }
+
+  function _applyZoom(scale) {
+    _calZoomScale = Math.max(_calZoomMin, Math.min(_calZoomMax, scale));
+    var children = _getScalableChildren();
+    children.forEach(function (el) {
+      el.style.transform = 'scaleY(' + _calZoomScale + ')';
+      el.style.transformOrigin = 'top left';
+    });
+    // Also scale hour blocks text to stay readable
+    var hourBlocks = scrollContainer.querySelectorAll('.hour-block');
+    hourBlocks.forEach(function (hb) {
+      hb.style.transform = 'scaleY(' + (1 / _calZoomScale) + ')';
+      hb.style.transformOrigin = 'top right';
+    });
+    // Scale timed event text to stay readable
+    var events = scrollContainer.querySelectorAll('.timed-event');
+    events.forEach(function (ev) {
+      ev.style.transform = 'scaleY(' + (1 / _calZoomScale) + ')';
+      ev.style.transformOrigin = 'top left';
+    });
+  }
+
+  function _getTouchDist(e) {
+    if (e.touches.length < 2) return 0;
+    var t1 = e.touches[0];
+    var t2 = e.touches[1];
+    // Only care about vertical distance for vertical-only zoom
+    return Math.abs(t2.clientY - t1.clientY);
+  }
+
+  scrollContainer.addEventListener('touchstart', function (e) {
+    if (e.touches.length === 2) {
+      _isPinching = true;
+      _pinchStartDist = _getTouchDist(e);
+      _pinchStartScale = _calZoomScale;
+    }
+  }, { passive: true });
+
+  scrollContainer.addEventListener('touchmove', function (e) {
+    if (!_isPinching || e.touches.length < 2) return;
+    e.preventDefault();
+    var dist = _getTouchDist(e);
+    if (_pinchStartDist === 0) return;
+    var ratio = dist / _pinchStartDist;
+    _applyZoom(_pinchStartScale * ratio);
+  }, { passive: false });
+
+  scrollContainer.addEventListener('touchend', function (e) {
+    if (e.touches.length < 2) {
+      _isPinching = false;
+    }
+  }, { passive: true });
+
+  // Apply current zoom level (persists across re-renders)
+  if (_calZoomScale !== 1.0) {
+    _applyZoom(_calZoomScale);
+  }
+}
+
+
+// ── Long-press to simulate shift-click (mobile quick edit) ───────────────────
+
+/**
+ * Attach a long-press handler to an element. On mobile, a ~500ms press
+ * triggers the callback (used to open quick edit modal, same as shift-click).
+ * Cancels if the finger moves (drag) or lifts early (tap).
+ *
+ * @param {HTMLElement} el - The element to attach to
+ * @param {Function} callback - Called on successful long press, receives the element
+ */
+function enableLongPress(el, callback) {
+  if (!el || !callback) return;
+  var _lpTimer = null;
+  var _lpFired = false;
+  var _startX = 0;
+  var _startY = 0;
+  var HOLD_MS = 500;
+  var MOVE_THRESHOLD = 10;
+
+  el.addEventListener('touchstart', function (e) {
+    if (e.touches.length !== 1) return;
+    _lpFired = false;
+    _startX = e.touches[0].clientX;
+    _startY = e.touches[0].clientY;
+    _lpTimer = setTimeout(function () {
+      _lpFired = true;
+      // Vibrate if available (haptic feedback)
+      if (navigator.vibrate) navigator.vibrate(30);
+      callback(el);
+    }, HOLD_MS);
+  }, { passive: true });
+
+  el.addEventListener('touchmove', function (e) {
+    if (!_lpTimer) return;
+    var dx = e.touches[0].clientX - _startX;
+    var dy = e.touches[0].clientY - _startY;
+    if (Math.abs(dx) > MOVE_THRESHOLD || Math.abs(dy) > MOVE_THRESHOLD) {
+      clearTimeout(_lpTimer);
+      _lpTimer = null;
+    }
+  }, { passive: true });
+
+  el.addEventListener('touchend', function (e) {
+    clearTimeout(_lpTimer);
+    _lpTimer = null;
+    // If long press fired, prevent the subsequent click/tap
+    if (_lpFired) {
+      e.preventDefault();
+      _lpFired = false;
+    }
+  });
+
+  el.addEventListener('touchcancel', function () {
+    clearTimeout(_lpTimer);
+    _lpTimer = null;
+    _lpFired = false;
   });
 }

@@ -2702,29 +2702,281 @@ button.archive-btn.archived-active {
     cursor: pointer;
 }
 
-/* ── Mobile Breakpoint (≤480px) — Editor-specific stacking ─────────────── */
-@media (max-width: 480px) {
+/* ── Tablet Breakpoint (≤768px) — Editor-specific ──────────────────────── */
+@media (max-width: 768px) {
     #titleWeatherContainer {
         flex-direction: column;
+        width: 100%;
+        gap: 8px;
+        align-items: stretch;
+        box-sizing: border-box;
     }
-
+    #titleWeatherContainer #titleField {
+        flex: unset;
+        width: 100%;
+    }
+    #compactWeatherSection {
+        width: 100%;
+        flex: unset;
+        box-sizing: border-box;
+    }
+    .grid-span-2 {
+        grid-column: span 1;
+        flex-direction: column;
+        width: 100%;
+        box-sizing: border-box;
+    }
     .verticalBox {
         flex-direction: column;
     }
-
     .two-column-fields {
         flex-direction: column;
     }
-
     .notes-checklist-container {
         flex-direction: column;
     }
-
     .status-location-container {
         flex-direction: column;
     }
-
-    .flatpickr-input {
+    .priority-status-group {
+        flex-direction: column;
+    }
+    .date-time-row {
+        flex-direction: column;
+        gap: 6px;
+    }
+    .active-tags-list {
+        min-width: unset;
         width: 100%;
+    }
+}
+
+/* ── Mobile Breakpoint (≤480px) — Editor-specific stacking ─────────────── */
+@media (max-width: 480px) {
+    /* Title/weather: stack, full width */
+    #titleWeatherContainer {
+        flex-direction: column;
+        padding: 6px;
+        width: 100% !important;
+        box-sizing: border-box;
+        gap: 8px;
+        align-items: stretch;
+    }
+    #titleWeatherContainer .field {
+        width: 100%;
+    }
+    #titleWeatherContainer #titleField {
+        flex: unset;
+        width: 100%;
+    }
+    #compactWeatherSection {
+        width: 100%;
+        flex: unset;
+        box-sizing: border-box;
+        padding: 6px 8px;
+        min-height: 0;
+    }
+    #compactWeatherSection.weather-placeholder {
+        max-height: none;
+        overflow: visible;
+        padding: 4px 8px;
+        font-size: 0.85em;
+    }
+
+    /* Weather display: compact on mobile */
+    .weather-display {
+        width: 100%;
+        gap: 4px;
+    }
+    .weather-display .weather-info-and-precip {
+        width: 100%;
+        flex-wrap: wrap;
+        gap: 4px;
+    }
+    .weather-display .icon {
+        font-size: 1.2em;
+    }
+    .weather-display .temps {
+        font-size: 0.9em;
+    }
+    .weather-display .temperature-track {
+        width: 100%;
+    }
+    .weather-display .temperature-label {
+        font-size: 0.65em;
+    }
+
+    /* Compact weather day blocks (multi-day forecast) */
+    .compact-weather-day {
+        padding: 0.5em;
+        font-size: 0.9em;
+    }
+    .compact-day-header {
+        gap: 6px;
+    }
+    .compact-icon {
+        font-size: 1.5em;
+    }
+    .compact-date {
+        width: auto;
+        font-size: 0.9em;
+    }
+    .compact-temperatures {
+        width: auto;
+    }
+    .compact-temperature-track {
+        width: 100%;
+    }
+
+    /* All multi-column layouts: stack */
+    .verticalBox {
+        flex-direction: column;
+    }
+    .two-column-fields {
+        flex-direction: column;
+        gap: 8px;
+    }
+    .notes-checklist-container {
+        flex-direction: column;
+        gap: 8px;
+    }
+    .status-location-container {
+        flex-direction: column;
+        gap: 8px;
+    }
+    .priority-status-group {
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    /* Date fields: stack and full width */
+    .date-time-row {
+        flex-direction: column;
+        gap: 4px;
+    }
+    .date-time-row input {
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+    .date-mode-group {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+    .date-mode-row {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+    .date-mode-label {
+        display: flex;
+        width: 100%;
+    }
+    .date-mode-fields {
+        display: flex !important;
+        flex-wrap: wrap !important;
+        gap: 4px;
+        width: 100%;
+    }
+    .date-mode-fields input,
+    .date-mode-fields select {
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+    .date-input {
+        width: 100% !important;
+    }
+    .time-input {
+        width: 80px !important;
+    }
+
+    /* Flatpickr inputs: full width */
+    .flatpickr-input {
+        width: 100% !important;
+    }
+
+    /* Tags: full width */
+    .tag-container,
+    .tag-container-Active {
+        width: 100%;
+        min-width: 0;
+        max-height: 150px;
+    }
+    .active-tags-list {
+        min-width: 0;
+        width: 100%;
+    }
+    .tags-search-row {
+        flex-wrap: wrap;
+    }
+    .tags-search-row input {
+        flex: 1 1 100%;
+    }
+    #tagSearchInputClass {
+        width: 100% !important;
+    }
+
+    /* Location input: full width */
+    input.location {
+        width: 100% !important;
+    }
+
+    /* Checklist: compact */
+    .checklist-container {
+        padding: 6px;
+    }
+    .checklist-item {
+        padding: 4px 2px;
+        gap: 4px;
+    }
+
+    /* Health indicators: stack */
+    .healthBox {
+        flex-direction: column;
+    }
+    .healthInput {
+        width: 100%;
+    }
+
+    /* Color row: wrap */
+    .color-row {
+        flex-wrap: wrap;
+    }
+
+    /* Pinned/archived group: compact */
+    .pinned-archived-group {
+        gap: 6px;
+    }
+
+    /* Notes textarea: full width */
+    #notes-markdown-input {
+        width: 100% !important;
+        min-height: 80px;
+    }
+
+    /* Delete modal: full width, stacked buttons */
+    #deleteChitModal .modal-content {
+        width: calc(100% - 16px);
+        max-width: none;
+    }
+    #deleteChitModal .modal-button {
+        display: block;
+        width: 100%;
+        min-height: 48px;
+        margin: 8px 0;
+        box-sizing: border-box;
+    }
+
+    /* Project items: compact */
+    .project-item {
+        padding: 4px 6px;
+    }
+    .project-item > div:first-child {
+        flex-wrap: wrap;
+        gap: 4px;
+    }
+    .project-item > div:first-child > div.right-container {
+        width: 100%;
+        justify-content: flex-start;
     }
 }

@@ -1577,6 +1577,12 @@ function attachCalendarChitEvents(el, chit) {
       showQuickEditModal(chit, () => displayChits());
     }
   });
+  // Long-press on mobile = shift-click (quick edit)
+  if (typeof enableLongPress === 'function') {
+    enableLongPress(el, function () {
+      showQuickEditModal(chit, () => displayChits());
+    });
+  }
 }
 
 /**
@@ -1778,6 +1784,12 @@ function restoreSidebarState() {
     console.error("Sidebar element not found");
     return;
   }
+  // On mobile/tablet, always start with sidebar closed (initMobileSidebar handles this)
+  if (window.innerWidth <= 768) {
+    sidebar.classList.remove("active");
+    localStorage.setItem("sidebarState", "closed");
+    return;
+  }
   const savedState = localStorage.getItem("sidebarState");
   if (savedState === "open") {
     sidebar.classList.add("active");
@@ -1817,19 +1829,10 @@ function _onDebouncedResize() {
 }
 
 /** Return the number of days to show in week view based on viewport width.
- *  ≤480px → 1 day, 481–768px → 3 days, >768px → 7 days.
+ *  Always returns 7 — the full week is shown at all viewport sizes.
  *  Result is clamped to 1–7. */
 function _getResponsiveDayCount() {
-  const width = window.innerWidth;
-  let days;
-  if (width <= 480) {
-    days = 1;
-  } else if (width <= 768) {
-    days = 3;
-  } else {
-    days = 7;
-  }
-  return Math.max(1, Math.min(7, days));
+  return 7;
 }
 
 function getWeekStart(date) {
@@ -2436,6 +2439,9 @@ function displayWeekView(chitsToDisplay, opts) {
   _loadCalSnapSetting().then(() => {
     enableCalendarDrag(scrollGrid, weekDayColumns, days, weekChitsMap);
   });
+
+  // Enable pinch-to-zoom on mobile (vertical axis only)
+  enableCalendarPinchZoom(scrollGrid);
 }
 
 // ── Working Hours View ───────────────────────────────────────────────────────
@@ -2790,6 +2796,9 @@ function displayDayView(chitsToDisplay) {
   _loadCalSnapSetting().then(() => {
     enableCalendarDrag(dayView, dayViewColumns, dayViewDays, dayChitsMap);
   });
+
+  // Enable pinch-to-zoom on mobile (vertical axis only)
+  enableCalendarPinchZoom(dayView);
 }
 
 function displayYearView(chitsToDisplay) {
@@ -2932,6 +2941,11 @@ function displayChecklistView(chitsToDisplay) {
         storePreviousState();
         window.location.href = `/editor?id=${chit.id}`;
       });
+      if (typeof enableLongPress === 'function') {
+        enableLongPress(chitElement, function () {
+          showQuickEditModal(chit, () => displayChits());
+        });
+      }
       checklistView.appendChild(chitElement);
     });
   }
@@ -3022,6 +3036,11 @@ function displayTasksView(chitsToDisplay) {
       storePreviousState();
       window.location.href = `/editor?id=${chit.id}`;
     });
+    if (typeof enableLongPress === 'function') {
+      enableLongPress(chitElement, function () {
+        showQuickEditModal(chit, () => displayChits());
+      });
+    }
     tasksContainer.appendChild(chitElement);
   });
   chitList.appendChild(tasksContainer);
@@ -3115,6 +3134,37 @@ function displayNotesView(chitsToDisplay) {
           if (ke.key === 'Escape') { ke.preventDefault(); noteEl.blur(); }
         });
       });
+      // Long-press on mobile: toggle in-place editing (same as shift-click)
+      if (typeof enableLongPress === 'function') {
+        enableLongPress(chitElement, function () {
+          if (noteEl.contentEditable === 'true') return;
+          noteEl.contentEditable = 'true';
+          noteEl.style.outline = '2px solid #8b4513';
+          noteEl.style.borderRadius = '4px';
+          noteEl.style.padding = '6px';
+          noteEl.style.whiteSpace = 'pre-wrap';
+          noteEl.textContent = chit.note || '';
+          noteEl.focus();
+          var _lpSaveEdit = function () {
+            noteEl.contentEditable = 'false';
+            noteEl.style.outline = '';
+            noteEl.style.padding = '';
+            var newNote = noteEl.textContent;
+            if (newNote !== chit.note) {
+              fetch('/api/chits/' + chit.id, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(Object.assign({}, chit, { note: newNote }))
+              }).then(function (r) { if (r.ok) { chit.note = newNote; fetchChits(); } });
+            } else {
+              if (typeof marked !== 'undefined' && chit.note) {
+                noteEl.innerHTML = resolveChitLinks(marked.parse(chit.note), chits);
+              }
+            }
+          };
+          noteEl.addEventListener('blur', _lpSaveEdit, { once: true });
+        });
+      }
       notesView.appendChild(chitElement);
     });
   }
@@ -3482,6 +3532,9 @@ function displaySevenDayView(chitsToDisplay) {
   _loadCalSnapSetting().then(() => {
     enableCalendarDrag(scrollGrid, sdDayColumns, days, sdChitsMap);
   });
+
+  // Enable pinch-to-zoom on mobile (vertical axis only)
+  enableCalendarPinchZoom(scrollGrid);
 }
 
 /**

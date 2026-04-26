@@ -108,6 +108,32 @@
             .dropdown-custom-group select { min-width: 100px; }
             .dropdown-custom-group .custom-input { display: none; flex: 1; }
             .dropdown-custom-group .custom-input.visible { display: block; }
+
+            /* ── Responsive: collapse grid on narrow viewports ──────────── */
+            @media (max-width: 768px) {
+                .main-zones-grid {
+                    grid-template-columns: 1fr !important;
+                }
+                .grid-span-3 {
+                    grid-column: span 1;
+                }
+                .profile-image-area {
+                    grid-column: span 1;
+                    flex-direction: column;
+                    text-align: center;
+                }
+            }
+            @media (max-width: 480px) {
+                .multi-value-row {
+                    flex-wrap: wrap;
+                }
+                .multi-value-row input.mv-label {
+                    width: 100%;
+                }
+                .dropdown-custom-group {
+                    flex-wrap: wrap;
+                }
+            }
 </style>
         <style>
             /* Multi-value entry rows */

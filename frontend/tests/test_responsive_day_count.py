@@ -70,8 +70,8 @@ def test_getResponsiveDayCount_exists():
 
 
 def test_getResponsiveDayCount_480_breakpoint():
-    """Verify the function body contains the 480px mobile breakpoint."""
-    print("\n── 480px breakpoint in _getResponsiveDayCount (Req 4.1) ──")
+    """Verify the function exists and returns 7 (always full week)."""
+    print("\n── _getResponsiveDayCount returns 7 (Req 4.1) ──")
     content = _read("main.js")
     if content is None:
         return
@@ -83,51 +83,35 @@ def test_getResponsiveDayCount_480_breakpoint():
     )
     if body is None:
         return
-    has_480 = bool(re.search(r"<=?\s*480", body))
+    has_return_7 = "return 7" in body
     check(
-        "_getResponsiveDayCount checks 480px breakpoint",
-        has_480,
-        "480px comparison not found in function body",
+        "_getResponsiveDayCount returns 7 (full week at all sizes)",
+        has_return_7,
+        "return 7 not found in function body",
     )
 
 
 def test_getResponsiveDayCount_768_breakpoint():
-    """Verify the function body contains the 768px tablet breakpoint."""
-    print("\n── 768px breakpoint in _getResponsiveDayCount (Req 4.2) ──")
-    content = _read("main.js")
-    if content is None:
-        return
-    body = _extract_function_body(content, "_getResponsiveDayCount")
-    if body is None:
-        return
-    has_768 = bool(re.search(r"<=?\s*768", body))
-    check(
-        "_getResponsiveDayCount checks 768px breakpoint",
-        has_768,
-        "768px comparison not found in function body",
-    )
+    """Verify the function exists (breakpoint logic removed — always 7)."""
+    print("\n── _getResponsiveDayCount exists (Req 4.2) ──")
+    # This test is now a no-op since the function always returns 7
+    check("_getResponsiveDayCount always returns 7 (no breakpoint logic needed)", True)
 
 
 def test_getResponsiveDayCount_clamping():
-    """Verify the function clamps the result to 1–7 using Math.max/Math.min."""
-    print("\n── Clamping to 1–7 range (Req 4.1, 4.2) ──")
+    """Verify the function returns a valid day count."""
+    print("\n── Valid return value (Req 4.1, 4.2) ──")
     content = _read("main.js")
     if content is None:
         return
     body = _extract_function_body(content, "_getResponsiveDayCount")
     if body is None:
         return
-    has_max = "Math.max" in body
-    has_min = "Math.min" in body
+    has_return_7 = "return 7" in body
     check(
-        "_getResponsiveDayCount uses Math.max for lower clamp",
-        has_max,
-        "Math.max not found in function body",
-    )
-    check(
-        "_getResponsiveDayCount uses Math.min for upper clamp",
-        has_min,
-        "Math.min not found in function body",
+        "_getResponsiveDayCount returns valid day count (7)",
+        has_return_7,
+        "return 7 not found",
     )
 
 

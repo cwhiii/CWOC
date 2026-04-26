@@ -3241,6 +3241,9 @@ function openLocationDirections(event) {
 document.addEventListener("DOMContentLoaded", function () {
   console.log("DOM Content Loaded - Initializing editor...");
 
+  // Initialize mobile actions modal (replaces header buttons on mobile)
+  if (typeof initMobileActionsModal === 'function') initMobileActionsModal();
+
   // Tag search filter-as-you-type
   var labelsInput = document.getElementById('labels');
   if (labelsInput) {

@@ -321,4 +321,22 @@ input[type="color"] {
     h2, h3 {
         font-size: 18px;
     }
+
+    /* ── Confirmation modals: full-screen on mobile ───────────────────────── */
+    .modal-content {
+        width: calc(100% - 24px) !important;
+        max-width: none !important;
+        padding: 16px !important;
+        box-sizing: border-box;
+    }
+    .modal-content button,
+    .modal-content .standard-button {
+        display: block;
+        width: 100%;
+        min-height: 48px;
+        margin: 8px 0;
+        font-size: 1em;
+        padding: 12px;
+        box-sizing: border-box;
+    }
 }

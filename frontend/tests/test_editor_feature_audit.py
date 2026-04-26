@@ -232,7 +232,8 @@ def test_no_zone_container_display_none():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 BUTTON_SELECTORS = [
-    (r"\.buttons",       ".buttons"),
+    # .buttons is intentionally hidden on mobile (replaced by mobile actions modal)
+    # so we only check individual button IDs are not hidden
     (r"#saveButton",     "#saveButton"),
     (r"#saveStayButton", "#saveStayButton"),
     (r"#saveExitButton", "#saveExitButton"),

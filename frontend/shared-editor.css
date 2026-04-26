@@ -421,17 +421,241 @@ input:checked + .slider:before {
     .hideWhenNarrow {
         display: none;
     }
+
+    /* Editor container: full width */
+    .editor {
+        max-width: 100%;
+        padding: 10px;
+    }
+
+    /* Header row: full width */
+    .header-row {
+        width: 100%;
+        padding: 10px;
+        gap: 8px;
+        box-sizing: border-box;
+    }
+
+    /* Zone headers: wrap actions */
+    .zone-header {
+        flex-wrap: wrap;
+        padding: 8px;
+    }
+    .zone-actions {
+        flex-wrap: wrap;
+        gap: 4px;
+    }
+    .zone-button {
+        min-height: 36px;
+    }
 }
 
 /* ── Mobile Breakpoint (≤480px) ────────────────────────────────────────── */
 @media (max-width: 480px) {
-    .header-row {
-        flex-direction: column;
-        padding: 10px;
+    /* Body: minimal padding */
+    body {
+        padding: 4px;
     }
 
-    .buttons {
+    /* Header row: stack everything vertically */
+    .header-row {
         flex-direction: column;
+        padding: 8px;
+        width: 100%;
+        margin-bottom: 8px;
+        gap: 6px;
+        box-sizing: border-box;
+    }
+    .header-row h1 {
+        font-size: 1.1em;
+        margin-bottom: 0;
+    }
+    .headerImage {
+        height: 1.5em;
+    }
+
+    /* Buttons: wrap on mobile, full width */
+    .buttons {
+        flex-direction: row;
+        flex-wrap: wrap;
+        width: 100%;
+        gap: 4px;
+    }
+    .buttons .left-buttons,
+    .buttons .right-buttons {
+        flex-wrap: wrap;
+        width: 100%;
+        gap: 4px;
+    }
+    .buttons button {
+        flex: 1 1 auto;
+        min-height: 44px;
+        font-size: 0.8em;
+        padding: 4px 6px;
+        white-space: nowrap;
+    }
+
+    /* Actions trigger: NOT used — keep hidden */
+    .mobile-actions-trigger {
+        display: none !important;
+    }
+
+    /* Editor container: full width, no margin */
+    .editor {
+        max-width: 100%;
+        padding: 6px;
+        margin: 0;
+        border-radius: 4px;
+    }
+
+    /* Grid: single column, tight gap */
+    .main-zones-grid {
+        grid-template-columns: 1fr;
+        gap: 8px;
+    }
+
+    /* Zone containers: full width */
+    .zone-container {
+        flex: unset;
         width: 100%;
     }
+
+    /* Zone headers: compact */
+    .zone-header {
+        flex-wrap: wrap;
+        padding: 6px 8px;
+    }
+    .zone-header h2.zone-title {
+        width: 100%;
+        font-size: 1em;
+        margin-bottom: 4px;
+    }
+    .zone-actions {
+        width: 100%;
+        flex-wrap: wrap;
+        gap: 4px;
+    }
+    .zone-button {
+        flex: 1 1 auto;
+        min-height: 36px;
+        padding: 4px 8px;
+        font-size: 11px;
+    }
+
+    /* Zone body: compact padding */
+    .zone-body {
+        padding: 6px;
+    }
+
+    /* Form fields: full width */
+    .field {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 4px;
+    }
+    .field label {
+        font-size: 0.9em;
+    }
+    input, select, textarea {
+        width: 100% !important;
+        max-width: 100% !important;
+        box-sizing: border-box;
+        font-size: 16px; /* prevents iOS zoom on focus */
+    }
+
+    /* Toggle switch: keep inline */
+    .switch-wrapper {
+        flex-direction: row;
+    }
+}
+
+
+/* ── Mobile Actions Trigger: hidden at desktop ─────────────────────────── */
+.mobile-actions-trigger {
+    display: none;
+}
+
+/* ── Mobile Actions Modal ──────────────────────────────────────────────── */
+.mobile-actions-modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 2000;
+    justify-content: center;
+    align-items: center;
+}
+.mobile-actions-modal.active {
+    display: flex;
+}
+.mobile-actions-modal-content {
+    background: var(--parchment-medium, #faebd7);
+    border: 2px solid var(--aged-brown-medium, #8b4513);
+    border-radius: 8px;
+    padding: 20px;
+    width: calc(100% - 32px);
+    max-width: 400px;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+.mobile-actions-modal-content h3 {
+    margin: 0 0 12px 0;
+    font-size: 1.2em;
+    color: var(--aged-brown-dark, #4a2c2a);
+    text-align: center;
+    border-bottom: 2px solid var(--aged-brown-light, #a0522d);
+    padding-bottom: 8px;
+}
+.mobile-actions-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.mobile-action-btn {
+    width: 100%;
+    min-height: 48px;
+    padding: 12px 16px;
+    font-size: 1em;
+    font-weight: bold;
+    border: 2px outset var(--aged-brown-medium, #8b4513);
+    border-radius: 4px;
+    background: var(--button-bg, #d2b48c);
+    color: var(--aged-brown-dark, #4a2c2a);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+.mobile-action-btn:hover {
+    background: var(--button-hover, #c4a484);
+}
+.mobile-action-btn.delete {
+    background: var(--danger-red, #b22222);
+    color: #fff;
+}
+.mobile-action-btn.archive-btn {
+    background: #888;
+    color: #fff;
+}
+.mobile-action-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+.mobile-actions-close {
+    width: 100%;
+    min-height: 44px;
+    margin-top: 12px;
+    padding: 10px;
+    font-size: 1em;
+    font-weight: bold;
+    background: var(--aged-brown-light, #a0522d);
+    color: #fff8e1;
+    border: 1px solid var(--aged-brown-dark, #4a2c2a);
+    border-radius: 4px;
+    cursor: pointer;
 }

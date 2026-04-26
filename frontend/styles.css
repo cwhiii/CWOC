@@ -1519,6 +1519,11 @@ button.delete:hover {
     display: none;
 }
 
+/* ── Sidebar close button: hidden at desktop, visible at mobile ───────── */
+.sidebar-close-btn {
+    display: none;
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
    TABLET RESPONSIVE — max-width: 768px
    Additive rules only; desktop defaults remain untouched above.
@@ -1529,31 +1534,60 @@ button.delete:hover {
     .header {
         flex-wrap: wrap;
         height: auto;
+        padding: 8px 12px;
     }
 
-    /* ── Tabs: wrap with horizontal scroll fallback ───────────────────────── */
+    /* ── Tabs: horizontal scroll ──────────────────────────────────────────── */
     .tabs {
-        flex-wrap: wrap;
+        flex-wrap: nowrap;
         overflow-x: auto;
-        white-space: normal;
+        -webkit-overflow-scrolling: touch;
+        white-space: nowrap;
+        width: 100%;
     }
 
     /* ── Tab: 44px min-height for touch targets ───────────────────────────── */
     .tab {
         min-height: 44px;
+        flex-shrink: 0;
     }
 
     /* ── Sidebar: full-width overlay (hidden off-screen when closed) ──────── */
     .sidebar {
-        width: 100%;
-        left: -100%;
+        width: 100% !important;
+        left: -110% !important;
         top: 0;
         height: 100%;
-        z-index: 999;
+        z-index: 1003;
+        padding: 10px !important;
+        box-sizing: border-box !important;
     }
 
     .sidebar.active {
-        left: 0;
+        left: 0 !important;
+    }
+
+    /* ── Sidebar close button ─────────────────────────────────────────────── */
+    .sidebar-close-btn {
+        display: block;
+        position: sticky;
+        top: 0;
+        width: 100%;
+        padding: 10px;
+        margin-bottom: 10px;
+        background: var(--aged-brown-medium, #8b4513);
+        color: #fff8e1;
+        border: 1px solid var(--btn-border, #5a3f2a);
+        border-radius: 3px;
+        font-family: "Courier New", Courier, monospace;
+        font-weight: bold;
+        font-size: 1em;
+        cursor: pointer;
+        z-index: 10;
+        min-height: 44px;
+    }
+    .sidebar-close-btn:hover {
+        background: var(--btn-hover, #6b4e31);
     }
 
     /* ── Sidebar backdrop for overlay mode ─────────────────────────────────── */
@@ -1565,7 +1599,7 @@ button.delete:hover {
         width: 100%;
         height: 100%;
         background: rgba(0, 0, 0, 0.4);
-        z-index: 998;
+        z-index: 1002;
     }
     .sidebar-backdrop.active {
         display: block;
@@ -1573,12 +1607,42 @@ button.delete:hover {
 
     /* ── Overlay sidebar should NOT push main content ─────────────────────── */
     .sidebar.active ~ .main-content {
-        margin-left: 0;
+        margin-left: 0 !important;
+    }
+    .main-content {
+        margin-left: 0 !important;
     }
 
-    /* ── Chit header row: wrap metadata below title ───────────────────────── */
+    /* ── Chit cards: full width, metadata wraps ───────────────────────────── */
+    .chit-card {
+        width: 100% !important;
+        box-sizing: border-box;
+    }
     .chit-header-row {
         flex-wrap: wrap;
+    }
+    .chit-header-meta {
+        flex-wrap: wrap;
+        white-space: normal;
+        overflow: visible;
+        font-size: 0.8em;
+    }
+
+    /* ── Chit list: adjust for taller wrapped header ──────────────────────── */
+    .chit-list {
+        margin-top: 110px;
+        height: calc(100vh - 110px);
+    }
+
+    /* ── All-day events: single line, truncated ───────────────────────────── */
+    .all-day-event {
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        max-height: 1.6em;
+        line-height: 1.4em;
+        font-size: 0.8em;
+        padding: 1px 4px !important;
     }
 }
 
@@ -1588,80 +1652,122 @@ button.delete:hover {
    ═══════════════════════════════════════════════════════════════════════════ */
 @media (max-width: 480px) {
 
-    /* ── Header: stack vertically ──────────────────────────────────────────── */
+    /* ── Body: allow natural scrolling on mobile ──────────────────────────── */
+    body {
+        overflow: auto;
+        overflow-x: hidden;
+    }
+
+    /* ── Header: fixed at top, compact, row layout ──────────────────────── */
     .header {
-        flex-direction: column;
+        position: fixed;
+        flex-direction: row;
+        flex-wrap: wrap;
         height: auto;
-        padding: 8px 12px;
-    }
-
-    /* ── Logo: reduce to 48x48 ────────────────────────────────────────────── */
-    .logo {
-        width: 48px;
-        height: 48px;
-        margin-right: 0;
-    }
-
-    /* ── Title: reduce font size ──────────────────────────────────────────── */
-    h1 {
-        font-size: 1.5em;
         padding: 4px 8px;
+        gap: 4px;
+        align-items: center;
     }
 
-    /* ── Tabs: horizontal scroll with touch momentum ──────────────────────── */
+    /* ── Logo: small ──────────────────────────────────────────────────────── */
+    .logo {
+        width: 32px;
+        height: 32px;
+        margin-right: 4px;
+    }
+
+    /* ── Title: compact, inline ───────────────────────────────────────────── */
+    h1 {
+        font-size: 1em;
+        padding: 2px 4px;
+        height: auto;
+        width: auto;
+        display: inline-flex;
+        flex-shrink: 1;
+        min-width: 0;
+    }
+
+    /* ── Tabs: single-row horizontal scroll ───────────────────────────────── */
     .tabs {
         flex-wrap: nowrap;
         overflow-x: auto;
         -webkit-overflow-scrolling: touch;
-        padding: 2px;
+        padding: 2px 0;
+        width: 100%;
+        gap: 2px;
     }
 
-    /* ── Tab: compact touch targets ───────────────────────────────────────── */
+    /* ── Tab: icon-only on mobile for space ────────────────────────────────── */
     .tab {
-        padding: 8px 12px;
-        font-size: 0.85em;
+        padding: 6px 8px;
+        font-size: 0.75em;
         min-height: 44px;
         min-width: 44px;
         flex-shrink: 0;
+        white-space: nowrap;
+    }
+    .tab > img {
+        height: 1.4em;
+        margin-right: 4px;
     }
 
-    /* ── Top bar: reduced padding ─────────────────────────────────────────── */
+    /* ── Top bar: hidden on mobile (date range shown in sidebar) ──────────── */
     .top-bar {
-        padding: 6px 12px;
-        height: auto;
+        display: none;
     }
 
-    /* ── Sidebar: full-width overlay ──────────────────────────────────────── */
+    /* ── Sidebar: full-width overlay, scrollable ──────────────────────────── */
     .sidebar {
-        width: 100%;
-        padding: 12px;
-        padding-top: 1em;
+        width: 100% !important;
+        left: -110% !important;
+        padding: 10px !important;
+        box-sizing: border-box !important;
+    }
+    .sidebar.active {
+        left: 0 !important;
     }
 
-    /* ── Main content: reduced padding ────────────────────────────────────── */
+    /* ── Main content: fill viewport, never shifted by sidebar ───────────── */
     .main-content {
-        padding: 0 4px;
+        padding: 0;
+        height: 100vh;
+        min-height: 0;
+        margin-left: 0 !important;
+    }
+    .sidebar.active ~ .main-content {
+        margin-left: 0 !important;
     }
 
-    /* ── Chit card: full width, compact padding ───────────────────────────── */
+    /* ── Chit card: full width, compact ───────────────────────────────────── */
     .chit-card {
-        width: 100%;
-        margin: 0;
-        padding: 8px 12px;
+        width: 100% !important;
+        margin: 4px 0 !important;
+        padding: 8px 10px;
         box-sizing: border-box;
     }
 
-    /* ── Chit list: adjust for stacked mobile header ─────────────────────── */
+    /* ── Chit list: below fixed header ────────────────────────────────────── */
     .chit-list {
-        margin-top: 140px;
-        height: calc(100vh - 140px);
+        margin-top: 100px;
+        height: calc(100vh - 100px);
     }
 
     /* ── Month day: compact cells ─────────────────────────────────────────── */
     .month-day {
-        min-height: 60px;
-        font-size: 0.75em;
-        padding: 3px;
+        min-height: 50px;
+        font-size: 0.7em;
+        padding: 2px;
+    }
+
+    /* ── Month grid: tighter ──────────────────────────────────────────────── */
+    .month-grid {
+        gap: 1px;
+    }
+
+    /* ── Day headers: compact ─────────────────────────────────────────────── */
+    .day-header {
+        padding: 4px 2px;
+        font-size: 0.8em;
     }
 
     /* ── Reference columns: stack vertically ──────────────────────────────── */
@@ -1687,34 +1793,37 @@ button.delete:hover {
         padding: 15px 18px;
     }
 
-    /* ── Sidebar controls: reduced spacing ────────────────────────────────── */
+    /* ── Sidebar controls: compact ────────────────────────────────────────── */
     .action-button {
-        margin-bottom: 9px;
+        margin-bottom: 8px;
         padding: 6px;
         height: 36px;
+        font-size: 0.9em;
     }
 
     .status-filter {
-        margin-bottom: 9px;
+        margin-bottom: 8px;
     }
 
-    /* ── Search bar: compact ──────────────────────────────────────────────── */
-    .search-bar input {
-        padding: 4px 6px;
-    }
-
-    /* ── Chit header row: tighter spacing ─────────────────────────────────── */
+    /* ── Chit header row: wrap metadata ────────────────────────────────────── */
     .chit-header-row {
+        flex-wrap: wrap;
         gap: 4px;
         padding: 3px 0;
     }
-
-    /* ── Week view: reduced padding ───────────────────────────────────────── */
-    .week-view {
-        padding: 2px;
+    .chit-header-meta {
+        flex-wrap: wrap;
+        white-space: normal;
+        font-size: 0.8em;
     }
 
-    /* ── Calendar event items: touch-friendly ─────────────────────────────── */
+    /* ── Week view: compact ───────────────────────────────────────────────── */
+    .week-view {
+        padding: 0;
+        gap: 1px;
+    }
+
+    /* ── Calendar events: touch-friendly ──────────────────────────────────── */
     .timed-event,
     .all-day-event {
         min-height: 44px;
@@ -1722,8 +1831,15 @@ button.delete:hover {
         font-size: 0.8em;
     }
 
-    /* ── Notes view: reduced gap ──────────────────────────────────────────── */
+    /* ── Notes view: compact ──────────────────────────────────────────────── */
     .notes-view {
+        padding: 4px;
+    }
+
+    /* ── List views: full width cards ─────────────────────────────────────── */
+    .checklist-view,
+    .alarms-view,
+    .projects-view {
         padding: 4px;
     }
 
@@ -1733,7 +1849,7 @@ button.delete:hover {
         font-size: 0.72em;
     }
 
-    /* ── Quick Edit modal: full width with 8px margin ─────────────────────── */
+    /* ── Quick Edit modal: full width ─────────────────────────────────────── */
     .recurrence-modal-overlay > div {
         min-width: 0 !important;
         max-width: none !important;
@@ -1743,7 +1859,7 @@ button.delete:hover {
         box-sizing: border-box !important;
     }
 
-    /* ── Clock modal: full width with padding ─────────────────────────────── */
+    /* ── Clock modal: full width ──────────────────────────────────────────── */
     #clock-modal-overlay > div {
         min-width: 0 !important;
         max-width: none !important;
@@ -1753,7 +1869,7 @@ button.delete:hover {
         box-sizing: border-box !important;
     }
 
-    /* ── Modal interactive elements: 44px touch targets ───────────────────── */
+    /* ── Modal buttons: touch targets ─────────────────────────────────────── */
     .recurrence-modal-overlay button,
     #clock-modal-overlay button,
     #deleteChitModal button {
@@ -1765,5 +1881,169 @@ button.delete:hover {
     .recurrence-modal-overlay input[type="checkbox"] {
         min-height: 44px;
         min-width: 44px;
+    }
+
+    /* ── Delete modal: full width ─────────────────────────────────────────── */
+    #deleteChitModal > div {
+        width: calc(100% - 16px);
+        margin: 20% auto;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════════
+       VIEW-SPECIFIC MOBILE OVERRIDES
+       These use !important to override inline styles set by JS rendering.
+       ═══════════════════════════════════════════════════════════════════════ */
+
+    /* ── All list views: full-width, compact ──────────────────────────────── */
+    .checklist-view,
+    .alarms-view,
+    .projects-view {
+        padding: 4px !important;
+        gap: 6px !important;
+    }
+
+    /* ── Chit cards in all views: full width, readable ────────────────────── */
+    .chit-card {
+        width: 100% !important;
+        max-width: 100% !important;
+        margin: 4px 0 !important;
+        padding: 10px !important;
+        box-sizing: border-box !important;
+        font-size: 0.9em;
+    }
+
+    /* ── Chit header: title on top, meta below ────────────────────────────── */
+    .chit-header-row {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: 4px !important;
+    }
+    .chit-header-left {
+        width: 100%;
+        font-size: 1em;
+    }
+    .chit-header-title {
+        white-space: normal !important;
+        overflow: visible !important;
+        text-overflow: unset !important;
+    }
+    .chit-header-meta {
+        width: 100%;
+        flex-wrap: wrap !important;
+        white-space: normal !important;
+        overflow: visible !important;
+        gap: 4px !important;
+        font-size: 0.78em;
+    }
+
+    /* ── Task view: stack status + note vertically ────────────────────────── */
+    .chit-card > div[style*="display:flex"][style*="align-items:flex-start"] {
+        flex-direction: column !important;
+        gap: 6px !important;
+    }
+
+    /* ── Inline checklists: compact ───────────────────────────────────────── */
+    .chit-card ul[data-chit-id] {
+        padding-left: 8px !important;
+        font-size: 0.9em;
+    }
+    .chit-card ul[data-chit-id] li {
+        padding: 4px 2px !important;
+        min-height: 36px;
+    }
+
+    /* ── Notes view: force single column ──────────────────────────────────── */
+    .notes-view {
+        padding: 4px !important;
+    }
+    .notes-view .chit-card {
+        position: relative !important;
+        left: auto !important;
+        top: auto !important;
+        width: 100% !important;
+        margin: 6px 0 !important;
+    }
+
+    /* ── Note content: constrain to card ──────────────────────────────────── */
+    .notes-view .note-content {
+        max-height: 300px;
+        overflow-y: auto;
+        font-size: 0.9em;
+    }
+    .notes-view .note-content img {
+        max-width: 100% !important;
+        height: auto !important;
+    }
+    .notes-view .note-content pre {
+        max-width: 100% !important;
+        overflow-x: auto !important;
+        font-size: 0.85em;
+    }
+
+    /* ── Projects view: stack kanban columns ───────────────────────────────── */
+    .project-status-section {
+        width: 100% !important;
+    }
+    .status-items-container {
+        width: 100% !important;
+    }
+    .project-item {
+        width: 100% !important;
+        box-sizing: border-box;
+    }
+    .project-item > div:first-child {
+        flex-wrap: wrap !important;
+        gap: 4px !important;
+    }
+    .project-item > div:first-child > div.right-container {
+        width: 100% !important;
+        justify-content: flex-start !important;
+        flex-wrap: wrap !important;
+        gap: 4px !important;
+    }
+
+    /* ── Calendar week view: compact ──────────────────────────────────────── */
+    .hour-block {
+        font-size: 0.7em;
+        padding-right: 2px;
+    }
+    .hour-column {
+        min-width: 0;
+    }
+    .day-column {
+        min-width: 0;
+        padding: 2px;
+    }
+
+    /* ── Year view: reflow months ─────────────────────────────────────────── */
+    .year-view {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 8px !important;
+    }
+    .year-view > div {
+        width: 100% !important;
+    }
+
+    /* ── Itinerary view: compact ──────────────────────────────────────────── */
+    .chit {
+        margin-left: 0 !important;
+        padding: 8px 4px;
+    }
+
+    /* ── All selects and inputs in views: touch-friendly ──────────────────── */
+    .chit-card select,
+    .chit-card input[type="text"],
+    .chit-card button {
+        min-height: 36px;
+        font-size: 14px;
+    }
+
+    /* ── Label/tag chips in cards: compact ─────────────────────────────────── */
+    .chit .label img,
+    .timed-event .label img,
+    .all-day-event .label img {
+        width: 1.8em !important;
+        height: 1.8em !important;
     }
 }
