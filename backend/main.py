@@ -38,6 +38,10 @@ class Settings(BaseModel):
     chit_options: Optional[Dict[str, bool]] = None
     calendar_snap: Optional[str] = "15"
     week_start_day: Optional[str] = "0"  # 0=Sunday, 1=Monday, etc.
+    work_start_hour: Optional[str] = "8"
+    work_end_hour: Optional[str] = "17"
+    work_days: Optional[str] = "1,2,3,4,5"  # CSV of day numbers (0=Sun, 1=Mon, ...)
+    enabled_periods: Optional[str] = "Itinerary,Day,Week,Work,SevenDay,Month,Year"
 
 class Chit(BaseModel):
     id: Optional[str] = None
@@ -131,6 +135,26 @@ def init_db():
         raise
     finally:
         conn.close()
+
+# Instance ID: generate a unique ID for this installation
+def get_or_create_instance_id():
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("CREATE TABLE IF NOT EXISTS instance_meta (key TEXT PRIMARY KEY, value TEXT)")
+        cursor.execute("SELECT value FROM instance_meta WHERE key = 'instance_id'")
+        row = cursor.fetchone()
+        if row:
+            conn.close()
+            return row[0]
+        iid = str(uuid4())
+        cursor.execute("INSERT INTO instance_meta (key, value) VALUES ('instance_id', ?)", (iid,))
+        conn.commit()
+        conn.close()
+        return iid
+    except Exception as e:
+        logger.error(f"Error getting instance ID: {str(e)}")
+        return "unknown"
 
 # Migration: Rename labels to tags
 def migrate_labels_to_tags():
@@ -247,6 +271,26 @@ def migrate_add_recurrence_fields():
         logger.error(f"Error adding recurrence fields: {str(e)}")
         raise
 
+def migrate_add_work_hours():
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(settings)")
+        columns = [col[1] for col in cursor.fetchall()]
+        if "work_start_hour" not in columns:
+            cursor.execute("ALTER TABLE settings ADD COLUMN work_start_hour TEXT DEFAULT '8'")
+        if "work_end_hour" not in columns:
+            cursor.execute("ALTER TABLE settings ADD COLUMN work_end_hour TEXT DEFAULT '17'")
+        if "work_days" not in columns:
+            cursor.execute("ALTER TABLE settings ADD COLUMN work_days TEXT DEFAULT '1,2,3,4,5'")
+        if "enabled_periods" not in columns:
+            cursor.execute("ALTER TABLE settings ADD COLUMN enabled_periods TEXT DEFAULT 'Itinerary,Day,Week,Work,SevenDay,Month,Year'")
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        logger.error(f"Error adding work hours columns: {str(e)}")
+        raise
+
 # Initialize database and run all migrations
 init_db()
 migrate_labels_to_tags()
@@ -254,6 +298,7 @@ migrate_add_all_day()
 migrate_add_alerts()
 migrate_add_calendar_snap()
 migrate_add_recurrence_fields()
+migrate_add_work_hours()
 
 # Serve all files from /frontend/ (e.g., index.html, settings.html, editor.html)
 app.mount("/frontend", StaticFiles(directory="/app/frontend"), name="frontend")
@@ -310,6 +355,10 @@ def get_chit(chit_id: str):
             conn.close()
 
 # API Endpoints (remaining unchanged)
+@app.get("/api/instance-id")
+def get_instance_id():
+    return {"instance_id": get_or_create_instance_id()}
+
 @app.get("/api/chits")
 def get_all_chits():
     conn = None
@@ -693,8 +742,8 @@ def save_settings(settings: Settings):
             INSERT OR REPLACE INTO settings (
                 user_id, time_format, sex, snooze_length, default_filters,
                 alarm_orientation, tags, custom_colors, visual_indicators, chit_options,
-                calendar_snap, week_start_day
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                calendar_snap, week_start_day, work_start_hour, work_end_hour, work_days, enabled_periods
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 settings.user_id,
@@ -709,7 +758,11 @@ def save_settings(settings: Settings):
                 serialize_json_field(settings.visual_indicators),
                 serialize_json_field(settings.chit_options),
                 settings.calendar_snap or "15",
-                settings.week_start_day or "0"
+                settings.week_start_day or "0",
+                settings.work_start_hour or "8",
+                settings.work_end_hour or "17",
+                settings.work_days or "1,2,3,4,5",
+                settings.enabled_periods or "Itinerary,Day,Week,Work,SevenDay,Month,Year"
             )
         )
         conn.commit()

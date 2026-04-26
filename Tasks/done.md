@@ -514,3 +514,68 @@ Fully implemented. Ported from `Prototypes/CWOC UI/UI.html`:
 - Creates new chits (ignores imported IDs)
 - Tags split on ";" separator
 - Boolean fields (pinned, archived, all_day) parsed from "true"/"false"
+
+
+## Completed — Tier 1 & 2 Batch #2 (2026-04-25)
+
+### Middle-click Create Chit ✅
+- `onauxclick` handler opens editor in new tab
+
+### Delete Past Alarm Chits — Wired Up ✅
+- Setting now auto-archives alarm-only chits whose time has passed
+- Only affects chits with no dates/notes (pure alarm chits)
+
+### Notes Auto-Link [[title]] ✅
+- `resolveChitLinks()` in shared.js replaces `[[title]]` with clickable links to matching chits
+- Applied in Notes view and Tasks view note previews (after `marked.parse`)
+- Editor: typing `[[` in the Notes textarea triggers autocomplete dropdown
+- Dropdown shows matching chit titles, navigable with arrow keys, Enter to select
+- Fetches chit list on first `[[` use, caches for session
+
+### Universally Unique Installation Instance ID ✅
+- `instance_meta` table in DB stores a UUID generated on first run
+- `GET /api/instance-id` endpoint returns it
+
+### Clock Modal ✅
+- 🕐 button in sidebar (next to Reference & Help)
+- Hotkey: L opens/closes clock modal
+- Shows live 24h, 12h, and metric time with date
+- Updates every second, ESC or click-outside to close
+
+### Snoozable Notifications ✅
+- Snooze registry (`_snoozeRegistry`) tracks snoozed alarms with expiry timestamps
+- Snooze button on alarm toasts adds chit to registry for configured snooze duration
+- Snooze duration read from settings (`snooze_length`)
+- Alarm checker skips snoozed items until expiry
+
+### Primary Tag Auto-Colors Chit ✅
+- When selecting a tag in the editor, if chit color is "transparent", auto-applies the tag's color
+- Only triggers on first tag selection, doesn't override manually set colors
+
+### Editor Zone Hotkeys ✅
+- Alt+1 through Alt+0 jump to and expand editor zones
+- 1=Dates, 2=Task, 3=Tags, 4=Notes, 5=Checklist, 6=Alerts, 7=Location, 8=People, 9=Color, 0=Projects
+- Smooth scroll to zone, auto-expands if collapsed
+
+### Saved Searches ✅
+- 💾 button next to search input saves current search text
+- Saved searches appear as clickable chips below the search box
+- ✕ button on each chip to remove
+- Stored in localStorage (`cwoc_saved_searches`)
+
+### Working Hours Period View ✅
+- New calendar period "Work Hours" — only shows configured working hours (hides all other hours)
+- Settings: "Working Hours" start/end dropdowns in General Settings
+- Backend: `work_start_hour` and `work_end_hour` fields on Settings model + DB migration
+- Hotkey: . → W for Work Hours (Week moved to . → K)
+- Events outside working hours are hidden, events spanning boundaries are clamped
+
+### Upcoming Sort Option ✅
+- New sort option "Upcoming (Due Soon)" in Order dropdown
+- Sorts by due date (or start date), completed chits always at bottom
+- Hotkey: O → G
+- Direction button hidden (always ascending)
+
+### Help & Reference Updated ✅
+- Reference overlay updated with all new hotkeys (L, K for Week, W for Work, G for Upcoming)
+- Help page updated with new periods, sort options, editor hotkeys, and [[link]] syntax

@@ -737,10 +737,22 @@
                             <option value="30">30 minutes</option>
                             <option value="60">60 minutes</option>
                         </select>
+                    </div>
+                    <div class="setting-group">
+                        <h3>📅 Period Options</h3>
 
-                        <label for="week-start-day" style="margin-top: 15px"
-                            >📅 Week Starts On</label
-                        >
+                        <label>Enabled Periods</label>
+                        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;">
+                            <label style="font-size:0.9em;"><input type="checkbox" class="period-cb" value="Itinerary" checked /> Itinerary</label>
+                            <label style="font-size:0.9em;"><input type="checkbox" class="period-cb" value="Day" checked /> Day</label>
+                            <label style="font-size:0.9em;"><input type="checkbox" class="period-cb" value="Week" checked /> Week</label>
+                            <label style="font-size:0.9em;"><input type="checkbox" class="period-cb" value="Work" checked /> Work Hours</label>
+                            <label style="font-size:0.9em;"><input type="checkbox" class="period-cb" value="SevenDay" checked /> 7 Days</label>
+                            <label style="font-size:0.9em;"><input type="checkbox" class="period-cb" value="Month" checked /> Month</label>
+                            <label style="font-size:0.9em;"><input type="checkbox" class="period-cb" value="Year" checked /> Year</label>
+                        </div>
+
+                        <label for="week-start-day">Week Starts On</label>
                         <select id="week-start-day" name="week-start-day">
                             <option value="0" selected>Sunday</option>
                             <option value="1">Monday</option>
@@ -750,6 +762,38 @@
                             <option value="5">Friday</option>
                             <option value="6">Saturday</option>
                         </select>
+
+                        <label style="margin-top: 15px">🏢 Working Hours</label>
+                        <div style="display:flex;gap:8px;align-items:center;">
+                            <select id="work-start-hour" style="flex:1;">
+                                <option value="5">5:00</option>
+                                <option value="6">6:00</option>
+                                <option value="7">7:00</option>
+                                <option value="8" selected>8:00</option>
+                                <option value="9">9:00</option>
+                                <option value="10">10:00</option>
+                            </select>
+                            <span>to</span>
+                            <select id="work-end-hour" style="flex:1;">
+                                <option value="15">15:00</option>
+                                <option value="16">16:00</option>
+                                <option value="17" selected>17:00</option>
+                                <option value="18">18:00</option>
+                                <option value="19">19:00</option>
+                                <option value="20">20:00</option>
+                            </select>
+                        </div>
+
+                        <label style="margin-top: 15px">📆 Working Days</label>
+                        <div style="display:flex;flex-wrap:wrap;gap:6px;">
+                            <label style="font-size:0.9em;"><input type="checkbox" class="work-day-cb" value="0" /> Sun</label>
+                            <label style="font-size:0.9em;"><input type="checkbox" class="work-day-cb" value="1" checked /> Mon</label>
+                            <label style="font-size:0.9em;"><input type="checkbox" class="work-day-cb" value="2" checked /> Tue</label>
+                            <label style="font-size:0.9em;"><input type="checkbox" class="work-day-cb" value="3" checked /> Wed</label>
+                            <label style="font-size:0.9em;"><input type="checkbox" class="work-day-cb" value="4" checked /> Thu</label>
+                            <label style="font-size:0.9em;"><input type="checkbox" class="work-day-cb" value="5" checked /> Fri</label>
+                            <label style="font-size:0.9em;"><input type="checkbox" class="work-day-cb" value="6" /> Sat</label>
+                        </div>
                     </div>
                     <div class="setting-group">
                         <h3>Default Filters (Word Search)</h3>

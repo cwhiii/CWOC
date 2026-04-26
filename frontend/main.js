@@ -18,6 +18,9 @@ let _cachedTagObjects = [];
 // Chit display options (loaded from settings)
 let _chitOptions = { fade_past_chits: true, highlight_overdue_chits: true, delete_past_alarm_chits: false };
 
+// Snooze registry: { chitId-alertIdx: expiresAtMs }
+let _snoozeRegistry = {};
+
 // Default search filters per tab (loaded from settings)
 let _defaultFilters = {};
 
@@ -44,7 +47,7 @@ function toggleSortDir() {
 function _updateSortUI() {
   const dirBtn = document.getElementById('sort-dir-btn');
   if (!dirBtn) return;
-  if (currentSortField && currentSortField !== 'manual' && currentSortField !== 'random') {
+  if (currentSortField && currentSortField !== 'manual' && currentSortField !== 'random' && currentSortField !== 'upcoming') {
     dirBtn.style.display = '';
     dirBtn.textContent = currentSortDir === 'asc' ? '▲' : '▼';
     dirBtn.title = currentSortDir === 'asc' ? 'Ascending — click to reverse' : 'Descending — click to reverse';
@@ -122,6 +125,7 @@ function _clearAllFilters() {
   const sp = document.getElementById('show-pinned'); if (sp) sp.checked = true;
   const sa = document.getElementById('show-archived'); if (sa) sa.checked = false;
   const su = document.getElementById('show-unmarked'); if (su) su.checked = true;
+  const hpd = document.getElementById('hide-past-due'); if (hpd) hpd.checked = false;
   const search = document.getElementById('search'); if (search) search.value = '';
   // Re-check "Any" checkboxes
   document.querySelectorAll('input[data-any="true"]').forEach(cb => { cb.checked = true; });
@@ -154,8 +158,9 @@ function _updateClearFiltersButton() {
   const showPinned = document.getElementById('show-pinned')?.checked ?? true;
   const showArchived = document.getElementById('show-archived')?.checked ?? false;
   const showUnmarked = document.getElementById('show-unmarked')?.checked ?? true;
+  const hidePastDue = document.getElementById('hide-past-due')?.checked ?? false;
   const isDefault = !hasStatusFilter && !hasLabelFilter && !hasPriorityFilter
-    && !searchText && showPinned && !showArchived && showUnmarked && !currentSortField;
+    && !searchText && showPinned && !showArchived && showUnmarked && !hidePastDue && !currentSortField;
   section.style.display = isDefault ? 'none' : '';
 
   // Show "Reset Default Filters" button if the current tab has a default filter
@@ -240,6 +245,16 @@ function _applySort(chitList) {
       [arr[i], arr[j]] = [arr[j], arr[i]];
     }
     return arr;
+  }
+  if (currentSortField === 'upcoming') {
+    return [...chitList].sort((a, b) => {
+      // Completed always at bottom
+      if (a.status === 'Complete' && b.status !== 'Complete') return 1;
+      if (b.status === 'Complete' && a.status !== 'Complete') return -1;
+      const aDate = a.due_datetime ? new Date(a.due_datetime).getTime() : (a.start_datetime ? new Date(a.start_datetime).getTime() : Infinity);
+      const bDate = b.due_datetime ? new Date(b.due_datetime).getTime() : (b.start_datetime ? new Date(b.start_datetime).getTime() : Infinity);
+      return aDate - bDate;
+    });
   }
   const nullLast = currentSortDir === 'asc' ? Infinity : -Infinity;
   return [...chitList].sort((a, b) => {
@@ -390,6 +405,7 @@ function _exitHotkeyMode() {
 
 // ── Panel click handlers ─────────────────────────────────────────────────────
 function _pickPeriod(period) {
+  if (!_enabledPeriods.includes(period)) return; // disabled in settings
   currentView = period;
   const sel = document.getElementById('period-select');
   if (sel) sel.value = currentView;
@@ -397,6 +413,60 @@ function _pickPeriod(period) {
   updateDateRange();
   displayChits();
   _exitHotkeyMode();
+}
+
+/** Apply enabled periods: hide disabled options in dropdown, grey out in panels/reference */
+function _applyEnabledPeriods() {
+  // Period select dropdown — hide disabled options
+  const sel = document.getElementById('period-select');
+  if (sel) {
+    Array.from(sel.options).forEach(opt => {
+      opt.disabled = !_enabledPeriods.includes(opt.value);
+      opt.style.display = _enabledPeriods.includes(opt.value) ? '' : 'none';
+    });
+  }
+
+  // Period hotkey panel — grey out disabled
+  const panel = document.getElementById('panel-period');
+  if (panel) {
+    panel.querySelectorAll('.hotkey-panel-option').forEach(opt => {
+      const onclick = opt.getAttribute('onclick') || '';
+      const match = onclick.match(/_pickPeriod\('(\w+)'\)/);
+      if (match) {
+        const period = match[1];
+        if (_enabledPeriods.includes(period)) {
+          opt.style.opacity = '';
+          opt.style.cursor = '';
+          opt.title = '';
+        } else {
+          opt.style.opacity = '0.35';
+          opt.style.cursor = 'not-allowed';
+          opt.title = 'This period is disabled in Settings';
+        }
+      }
+    });
+  }
+
+  // Reference overlay — grey out disabled periods
+  const refOverlay = document.getElementById('reference-overlay');
+  if (refOverlay) {
+    const periodMap = { 'I': 'Itinerary', 'D': 'Day', 'W': 'Week', 'K': 'Work', 'S': 'SevenDay', 'M': 'Month', 'Y': 'Year' };
+    refOverlay.querySelectorAll('.ref-col div').forEach(div => {
+      const keyEl = div.querySelector('.ref-key');
+      if (!keyEl) return;
+      const key = keyEl.textContent.trim();
+      const period = periodMap[key];
+      if (period !== undefined) {
+        if (_enabledPeriods.includes(period)) {
+          div.style.opacity = '';
+          div.title = '';
+        } else {
+          div.style.opacity = '0.35';
+          div.title = 'This period is disabled in Settings';
+        }
+      }
+    });
+  }
 }
 
 function _enterFilterSub(type) {
@@ -606,6 +676,76 @@ function _closeReference() {
   if (overlay) overlay.classList.remove('active');
 }
 
+// ── Clock Modal ──────────────────────────────────────────────────────────────
+let _clockModalInterval = null;
+
+function _openClockModal() {
+  // Remove existing
+  const existing = document.getElementById('clock-modal-overlay');
+  if (existing) { _closeClockModal(); return; }
+
+  const overlay = document.createElement('div');
+  overlay.id = 'clock-modal-overlay';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:99998;display:flex;align-items:center;justify-content:center;';
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) _closeClockModal(); });
+
+  const modal = document.createElement('div');
+  modal.style.cssText = 'background:#fff8e1;border:2px solid #8b4513;border-radius:10px;padding:24px 32px;box-shadow:0 8px 32px rgba(0,0,0,0.4);font-family:"Courier New",monospace;min-width:280px;text-align:center;';
+
+  const title = document.createElement('div');
+  title.style.cssText = 'font-size:1.1em;font-weight:bold;color:#4a2c2a;margin-bottom:16px;';
+  title.textContent = '🕐 Clocks';
+  modal.appendChild(title);
+
+  const clocksDiv = document.createElement('div');
+  clocksDiv.id = 'clock-modal-clocks';
+  clocksDiv.style.cssText = 'display:flex;flex-direction:column;gap:12px;align-items:center;';
+  modal.appendChild(clocksDiv);
+
+  const closeBtn = document.createElement('div');
+  closeBtn.style.cssText = 'margin-top:16px;font-size:0.8em;opacity:0.5;cursor:pointer;';
+  closeBtn.textContent = 'ESC or click outside to close';
+  closeBtn.onclick = _closeClockModal;
+  modal.appendChild(closeBtn);
+
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+
+  // Load settings to get time_format
+  _renderClocks(clocksDiv);
+  _clockModalInterval = setInterval(() => _renderClocks(clocksDiv), 1000);
+}
+
+function _renderClocks(container) {
+  const now = new Date();
+  const h24 = now.getHours();
+  const m = String(now.getMinutes()).padStart(2, '0');
+  const s = String(now.getSeconds()).padStart(2, '0');
+  const h12 = h24 % 12 || 12;
+  const ampm = h24 < 12 ? 'AM' : 'PM';
+
+  // Metric time: day fraction (1000 metric minutes per day)
+  const dayFraction = (h24 * 3600 + now.getMinutes() * 60 + now.getSeconds()) / 86400;
+  const metricH = Math.floor(dayFraction * 10);
+  const metricM = String(Math.floor((dayFraction * 10 - metricH) * 100)).padStart(2, '0');
+  const metricS = String(Math.floor(((dayFraction * 10 - metricH) * 100 - parseInt(metricM)) * 100)).padStart(2, '0');
+
+  const dateStr = now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
+  let html = `<div style="font-size:0.85em;opacity:0.7;margin-bottom:4px;">${dateStr}</div>`;
+  html += `<div style="font-size:2.5em;font-weight:bold;color:#4a2c2a;letter-spacing:2px;">${String(h24).padStart(2,'0')}:${m}:${s}</div>`;
+  html += `<div style="font-size:1.4em;opacity:0.7;">${h12}:${m}:${s} ${ampm}</div>`;
+  html += `<div style="font-size:1em;opacity:0.5;" title="Metric time (decimal)">${metricH}:${metricM}:${metricS} metric</div>`;
+
+  container.innerHTML = html;
+}
+
+function _closeClockModal() {
+  const overlay = document.getElementById('clock-modal-overlay');
+  if (overlay) overlay.remove();
+  if (_clockModalInterval) { clearInterval(_clockModalInterval); _clockModalInterval = null; }
+}
+
 // ── Load label/tag filters from settings ─────────────────────────────────────
 async function _loadLabelFilters() {
   try {
@@ -629,6 +769,11 @@ async function _loadLabelFilters() {
         if (settings.week_start_day !== undefined) {
           _weekStartDay = parseInt(settings.week_start_day) || 0;
         }
+        if (settings.work_start_hour !== undefined) _workStartHour = parseInt(settings.work_start_hour) || 8;
+        if (settings.work_end_hour !== undefined) _workEndHour = parseInt(settings.work_end_hour) || 17;
+        if (settings.work_days) _workDays = settings.work_days.split(',').map(Number);
+        if (settings.enabled_periods) _enabledPeriods = settings.enabled_periods.split(',');
+        _applyEnabledPeriods();
       }
     } catch (e) { /* ignore */ }
 
@@ -876,20 +1021,25 @@ function _globalCheckAlarms() {
 
       const key = `${chit.id}-${alertIdx}-${alert.time}-${dateStr}`;
       if (_globalTriggeredAlarms.has(key)) return;
+      // Check snooze registry
+      const snoozeKey = `${chit.id}-${alertIdx}`;
+      if (_snoozeRegistry[snoozeKey] && Date.now() < _snoozeRegistry[snoozeKey]) return;
       _globalTriggeredAlarms.add(key);
 
       const label = `${_globalFmtTime(alert.time)}${alert.name ? " — " + alert.name : ""}`;
       _globalPlayAlarm();
       const toast = _showGlobalToast("🔔", label, chit.title, chit.id, _globalStopAlarm);
 
-      // Snooze: update the alert time +5 min in the chit (requires re-save — just update display for now)
+      // Snooze: add to registry for snooze_length from settings
       const snoozeBtn = toast.querySelector("button:last-child");
       if (snoozeBtn) {
         snoozeBtn.onclick = () => {
           toast.remove();
           _globalStopAlarm();
-          // Re-trigger in 5 minutes by removing the key after 5 min
-          setTimeout(() => _globalTriggeredAlarms.delete(key), 5 * 60 * 1000);
+          // Snooze for configured duration (default 5 min)
+          const snoozeMs = _getSnoozeMs();
+          _snoozeRegistry[snoozeKey] = Date.now() + snoozeMs;
+          _globalTriggeredAlarms.delete(key);
         };
       }
 
@@ -901,6 +1051,23 @@ function _globalCheckAlarms() {
   _globalTriggeredAlarms.forEach((key) => {
     if (!key.endsWith(now.toDateString())) _globalTriggeredAlarms.delete(key);
   });
+
+  // Delete Past Alarm Chits: auto-archive alarm-only chits whose time has passed
+  if (_chitOptions.delete_past_alarm_chits) {
+    chits.forEach((chit) => {
+      if (!Array.isArray(chit.alerts) || chit.alerts.length === 0) return;
+      if (chit.archived || chit.deleted) return;
+      // Only affect chits that are alarm-only (no dates, no notes, no checklist)
+      if (chit.start_datetime || chit.due_datetime || chit.note) return;
+      const hasActiveAlarm = chit.alerts.some(a => a._type === 'alarm' && a.enabled);
+      if (!hasActiveAlarm) return;
+      // Check if all alarm times for today have passed
+      const allPast = chit.alerts.filter(a => a._type === 'alarm' && a.enabled && a.time).every(a => a.time < currentTime);
+      if (allPast) {
+        fetch(`/api/chits/${chit.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...chit, archived: true }) }).catch(() => {});
+      }
+    });
+  }
 }
 
 function _globalCheckNotifications() {
@@ -973,11 +1140,23 @@ function _globalCheckNotifications() {
   });
 }
 
+function _getSnoozeMs() {
+  const s = window._snoozeLength || '5 minutes';
+  const match = s.match(/(\d+)/);
+  return (match ? parseInt(match[1]) : 5) * 60 * 1000;
+}
+
 function _startGlobalAlertSystem() {
   // Request notification permission
   if (typeof Notification !== "undefined" && Notification.permission === "default") {
     Notification.requestPermission();
   }
+
+  // Parse snooze length from settings
+  window._snoozeLength = '5 minutes'; // default
+  fetch('/api/settings/default_user').then(r => r.ok ? r.json() : {}).then(s => {
+    if (s.snooze_length) window._snoozeLength = s.snooze_length;
+  }).catch(() => {});
 
   // Pre-unlock audio on first user interaction so alarms can play immediately
   const unlockAudio = () => {
@@ -1028,6 +1207,7 @@ function storePreviousState() {
     showPinned: document.getElementById('show-pinned')?.checked ?? true,
     showArchived: document.getElementById('show-archived')?.checked ?? false,
     showUnmarked: document.getElementById('show-unmarked')?.checked ?? true,
+    hidePastDue: document.getElementById('hide-past-due')?.checked ?? false,
   };
   localStorage.setItem('cwoc_ui_state', JSON.stringify(state));
 }
@@ -1142,6 +1322,8 @@ function _restoreUIState() {
     if (sp) sp.checked = state.showPinned ?? true;
     if (sa) sa.checked = state.showArchived ?? false;
     if (su) su.checked = state.showUnmarked ?? true;
+    const hpd = document.getElementById('hide-past-due');
+    if (hpd) hpd.checked = state.hidePastDue ?? false;
 
     // Restore tab highlight
     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -1174,7 +1356,7 @@ function _restoreUIState() {
     if (state.labelFilters && state.labelFilters.length > 0) {
       expandFilterGroup('filter-label');
     }
-    if (state.showArchived || !state.showPinned || !state.showUnmarked) {
+    if (state.showArchived || !state.showPinned || !state.showUnmarked || state.hidePastDue) {
       expandFilterGroup('filter-archive');
     }
 
@@ -1467,6 +1649,16 @@ function displayChits() {
   // Apply archive/pinned filter
   filteredChits = _applyArchiveFilter(filteredChits);
 
+  // Apply hide-past-due filter
+  const hidePastDue = document.getElementById('hide-past-due')?.checked ?? false;
+  if (hidePastDue) {
+    const now = new Date();
+    filteredChits = filteredChits.filter(c => {
+      if (!c.due_datetime || c.status === 'Complete') return true;
+      return new Date(c.due_datetime) >= now;
+    });
+  }
+
   // Apply sort
   filteredChits = _applySort(filteredChits);
 
@@ -1490,6 +1682,7 @@ function displayChits() {
   switch (currentTab) {
     case "Calendar":
       if (currentView === "Week") displayWeekView(filteredChits);
+      else if (currentView === "Work") displayWorkView(filteredChits);
       else if (currentView === "Month") displayMonthView(filteredChits);
       else if (currentView === "Itinerary") displayItineraryView(filteredChits);
       else if (currentView === "Day") displayDayView(filteredChits);
@@ -1606,20 +1799,33 @@ function _applyChitDisplayOptions() {
   }
 }
 
-function displayWeekView(chitsToDisplay) {
+function displayWeekView(chitsToDisplay, opts) {
   const chitList = document.getElementById("chit-list");
   chitList.innerHTML = "";
+
+  // Options for Work Hours variant
+  const hourStart = opts?.hourStart ?? 0;
+  const hourEnd = opts?.hourEnd ?? 24;
+  const filterDayNums = opts?.filterDays ?? null; // null = all 7 days
+  const totalMinutes = (hourEnd - hourStart) * 60;
 
   // Wrapper: flex column — headers, all-day, then scrollable time grid
   const wrapper = document.createElement("div");
   wrapper.style.cssText = "display:flex;flex-direction:column;height:100%;width:100%;";
 
   const weekStart = new Date(currentWeekStart);
-  const days = [];
+  let days = [];
   for (let i = 0; i < 7; i++) {
     const d = new Date(weekStart);
     d.setDate(weekStart.getDate() + i);
     days.push(d);
+  }
+  if (filterDayNums) {
+    days = days.filter(d => filterDayNums.includes(d.getDay()));
+  }
+  if (days.length === 0) {
+    chitList.innerHTML = '<p style="padding:2em;opacity:0.5;">No working days this week. Check Period Options in Settings.</p>';
+    return;
   }
 
   // Collect chits per day
@@ -1710,11 +1916,11 @@ function displayWeekView(chitsToDisplay) {
   // Hour column
   const hourColumn = document.createElement("div");
   hourColumn.className = "hour-column";
-  hourColumn.style.cssText = "width:60px;flex-shrink:0;position:relative;height:1440px;";
-  for (let hour = 0; hour < 24; hour++) {
+  hourColumn.style.cssText = `width:60px;flex-shrink:0;position:relative;height:${totalMinutes}px;`;
+  for (let hour = hourStart; hour < hourEnd; hour++) {
     const hb = document.createElement("div");
     hb.className = "hour-block";
-    hb.style.top = `${hour * 60}px`;
+    hb.style.top = `${(hour - hourStart) * 60}px`;
     hb.textContent = `${hour}:00`;
     hourColumn.appendChild(hb);
   }
@@ -1727,18 +1933,26 @@ function displayWeekView(chitsToDisplay) {
     const col = document.createElement("div");
     col.className = "day-column";
     if (dd.day.toDateString() === new Date().toDateString()) col.classList.add("today");
-    col.style.cssText = "flex:1;min-width:0;position:relative;min-height:1440px;border-left:1px solid #d3d3d3;";
+    col.style.cssText = `flex:1;min-width:0;position:relative;min-height:${totalMinutes}px;border-left:1px solid #d3d3d3;`;
 
     // Calculate overlaps for this day's timed events
     const _timeSlots = {};
     const _evData = [];
+    const _rangeStartMin = hourStart * 60;
+    const _rangeEndMin = hourEnd * 60;
     dd.timed.forEach(({ chit, info }) => {
       const _dayStart = new Date(dd.day.getFullYear(), dd.day.getMonth(), dd.day.getDate());
       const _dayEnd = new Date(_dayStart.getTime() + 86400000);
       const _cs = info.start < _dayStart ? _dayStart : info.start;
       const _ce = info.end > _dayEnd ? _dayEnd : info.end;
-      const _top = _cs.getHours() * 60 + _cs.getMinutes();
-      let _height = (_ce.getTime() === _dayEnd.getTime()) ? 1440 - _top : (_ce.getHours() * 60 + _ce.getMinutes()) - _top;
+      let _absTop = _cs.getHours() * 60 + _cs.getMinutes();
+      let _absBottom = (_ce.getTime() === _dayEnd.getTime()) ? 1440 : (_ce.getHours() * 60 + _ce.getMinutes());
+      // Clamp to visible hour range
+      if (_absBottom <= _rangeStartMin || _absTop >= _rangeEndMin) return;
+      _absTop = Math.max(_absTop, _rangeStartMin);
+      _absBottom = Math.min(_absBottom, _rangeEndMin);
+      const _top = _absTop - _rangeStartMin;
+      let _height = _absBottom - _absTop;
       if (_height < 30) _height = 30;
       const _startMin = _top, _endMin = _top + _height;
       for (let t = _startMin; t < _endMin; t++) { if (!_timeSlots[t]) _timeSlots[t] = []; }
@@ -1777,12 +1991,26 @@ function displayWeekView(chitsToDisplay) {
   wrapper.appendChild(scrollGrid);
   chitList.appendChild(wrapper);
 
-  scrollToSixAM();
+  if (!opts) scrollToSixAM(); // Don't scroll for Work view — already starts at work hour
   renderTimeBar("Week");
 
   // Enable drag
   _loadCalSnapSetting().then(() => {
     enableCalendarDrag(scrollGrid, weekDayColumns, days, weekChitsMap);
+  });
+}
+
+// ── Working Hours View ───────────────────────────────────────────────────────
+let _workStartHour = 8;
+let _workEndHour = 17;
+let _workDays = [1, 2, 3, 4, 5]; // 0=Sun, 1=Mon, ...
+let _enabledPeriods = ['Itinerary', 'Day', 'Week', 'Work', 'SevenDay', 'Month', 'Year'];
+
+function displayWorkView(chitsToDisplay) {
+  displayWeekView(chitsToDisplay, {
+    hourStart: _workStartHour,
+    hourEnd: _workEndHour,
+    filterDays: _workDays
   });
 }
 
@@ -2342,7 +2570,7 @@ function displayTasksView(chitsToDisplay) {
       const notePreview = document.createElement("div");
       notePreview.style.cssText = "flex:1;min-width:0;opacity:0.75;overflow:hidden;max-height:4.5em;line-height:1.4em;";
       if (typeof marked !== 'undefined') {
-        notePreview.innerHTML = marked.parse(chit.note.slice(0, 500));
+        notePreview.innerHTML = resolveChitLinks(marked.parse(chit.note.slice(0, 500)), chits);
       } else {
         notePreview.textContent = chit.note.slice(0, 300) + (chit.note.length > 300 ? '…' : '');
       }
@@ -2402,7 +2630,7 @@ function displayNotesView(chitsToDisplay) {
       noteEl.className = "note-content";
       noteEl.style.cssText = "overflow:hidden;font-size:0.9em;";
       if (typeof marked !== "undefined" && chit.note) {
-        noteEl.innerHTML = marked.parse(chit.note);
+        noteEl.innerHTML = resolveChitLinks(marked.parse(chit.note), chits);
       } else {
         noteEl.style.whiteSpace = "pre-wrap";
         noteEl.textContent = chit.note;
@@ -2939,6 +3167,52 @@ function searchChits() {
   displayChits();
 }
 
+// ── Saved Searches ───────────────────────────────────────────────────────────
+function _saveSearch() {
+  const search = document.getElementById('search')?.value?.trim();
+  if (!search) return;
+  const saved = JSON.parse(localStorage.getItem('cwoc_saved_searches') || '[]');
+  if (saved.includes(search)) return;
+  saved.push(search);
+  localStorage.setItem('cwoc_saved_searches', JSON.stringify(saved));
+  _renderSavedSearches();
+}
+
+function _loadSavedSearch(text) {
+  const input = document.getElementById('search');
+  if (input) { input.value = text; searchChits(); }
+}
+
+function _deleteSavedSearch(text) {
+  let saved = JSON.parse(localStorage.getItem('cwoc_saved_searches') || '[]');
+  saved = saved.filter(s => s !== text);
+  localStorage.setItem('cwoc_saved_searches', JSON.stringify(saved));
+  _renderSavedSearches();
+}
+
+function _renderSavedSearches() {
+  const container = document.getElementById('saved-searches');
+  if (!container) return;
+  const saved = JSON.parse(localStorage.getItem('cwoc_saved_searches') || '[]');
+  container.innerHTML = '';
+  saved.forEach(s => {
+    const chip = document.createElement('span');
+    chip.style.cssText = 'display:inline-flex;align-items:center;gap:2px;padding:1px 6px;border-radius:3px;background:rgba(139,90,43,0.15);font-size:0.75em;cursor:pointer;';
+    chip.title = `Click to search: ${s}`;
+    const label = document.createElement('span');
+    label.textContent = s.length > 15 ? s.slice(0, 15) + '…' : s;
+    label.onclick = () => _loadSavedSearch(s);
+    const del = document.createElement('span');
+    del.textContent = '✕';
+    del.style.cssText = 'cursor:pointer;opacity:0.5;font-size:0.9em;margin-left:2px;';
+    del.title = 'Remove saved search';
+    del.onclick = (e) => { e.stopPropagation(); _deleteSavedSearch(s); };
+    chip.appendChild(label);
+    chip.appendChild(del);
+    container.appendChild(chip);
+  });
+}
+
 function changeView() {
   storePreviousState();
   currentView = document.getElementById("period-select")?.value || currentView;
@@ -3135,6 +3409,7 @@ document.addEventListener("DOMContentLoaded", function () {
   if (yearWeekContainer) yearWeekContainer.style.display = (currentTab === 'Calendar') ? '' : 'none';
 
   _loadLabelFilters();
+  _renderSavedSearches();
   _updateSortUI();
 
   // ESC in sidebar tag search box blurs it and clears search
@@ -3148,6 +3423,10 @@ document.addEventListener("DOMContentLoaded", function () {
   // Pre-load week start day setting before rendering calendar
   fetch('/api/settings/default_user').then(r => r.ok ? r.json() : {}).then(s => {
     if (s.week_start_day !== undefined) _weekStartDay = parseInt(s.week_start_day) || 0;
+    if (s.work_start_hour !== undefined) _workStartHour = parseInt(s.work_start_hour) || 8;
+    if (s.work_end_hour !== undefined) _workEndHour = parseInt(s.work_end_hour) || 17;
+    if (s.work_days) _workDays = s.work_days.split(',').map(Number);
+    if (s.enabled_periods) _enabledPeriods = s.enabled_periods.split(',');
     if (s.chit_options) _chitOptions = { ..._chitOptions, ...s.chit_options };
     // Load default filters per tab
     const df = s.default_filters;
@@ -3155,6 +3434,7 @@ document.addEventListener("DOMContentLoaded", function () {
       _defaultFilters = df;
     }
     // Now fetch chits and render with correct settings
+    _applyEnabledPeriods();
     fetchChits();
     updateDateRange();
   }).catch(() => {
@@ -3268,6 +3548,10 @@ document.addEventListener("DOMContentLoaded", function () {
         _closeReference();
         return;
       }
+      if (document.getElementById('clock-modal-overlay')) {
+        _closeClockModal();
+        return;
+      }
       if (_hotkeyMode) {
         _exitHotkeyMode();
         return;
@@ -3293,7 +3577,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
     // ── PERIOD submenu (after '.') ──
     if (_hotkeyMode === 'PERIOD') {
-      const periodMap = { i: 'Itinerary', d: 'Day', w: 'Week', s: 'SevenDay', m: 'Month', y: 'Year' };
+      const periodMap = { i: 'Itinerary', d: 'Day', w: 'Week', k: 'Work', s: 'SevenDay', m: 'Month', y: 'Year' };
       if (periodMap[keyLower]) {
         e.preventDefault();
         _pickPeriod(periodMap[keyLower]);
@@ -3400,7 +3684,7 @@ document.addEventListener("DOMContentLoaded", function () {
     // ── ORDER submenu (after 'O') ──
     if (_hotkeyMode === 'ORDER') {
       e.preventDefault();
-      const orderMap = { t: 'title', s: 'start', d: 'due', u: 'updated', c: 'created', x: 'status', m: 'manual', r: 'random' };
+      const orderMap = { t: 'title', s: 'start', d: 'due', u: 'updated', c: 'created', x: 'status', m: 'manual', r: 'random', g: 'upcoming' };
       if (orderMap[keyLower]) {
         _pickSort(orderMap[keyLower]);
         return;
@@ -3465,6 +3749,12 @@ document.addEventListener("DOMContentLoaded", function () {
       _hotkeyMode = 'ORDER';
       expandSidebarSection('section-order');
       _showPanel('panel-order');
+      return;
+    }
+
+    if (keyLower === 'l' && !_hotkeyMode) {
+      e.preventDefault();
+      _openClockModal();
       return;
     }
   });

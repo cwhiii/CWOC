@@ -880,6 +880,14 @@ function renderTags(tags, selectedTags = []) {
     if (isNowSelected && idx === -1) {
       selectedTags.push(fullPath);
       trackRecentTag(fullPath);
+      // Auto-color: if chit color is transparent and this is the first non-system tag, apply tag color
+      const colorInput = document.getElementById('color');
+      if (colorInput && (!colorInput.value || colorInput.value === 'transparent')) {
+        const tagObj = tags.find(t => t.name === fullPath);
+        if (tagObj && tagObj.color && !isSystemTag(fullPath)) {
+          setColor(tagObj.color, fullPath.split('/').pop());
+        }
+      }
     } else if (!isNowSelected && idx !== -1) {
       selectedTags.splice(idx, 1);
     }
@@ -2390,7 +2398,113 @@ function autoGrowNote(el) {
   el.style.height = "auto";
   const maxH = Math.floor(window.innerHeight * 0.6);
   el.style.height = Math.min(el.scrollHeight, maxH) + "px";
+  _checkChitLinkAutocomplete(el);
 }
+
+// ── [[ ]] Chit Link Autocomplete ──
+let _chitLinkDropdown = null;
+let _chitLinkStart = -1;
+
+async function _checkChitLinkAutocomplete(textarea) {
+  const pos = textarea.selectionStart;
+  const text = textarea.value.substring(0, pos);
+  const openIdx = text.lastIndexOf('[[');
+  const closeIdx = text.lastIndexOf(']]');
+
+  // If [[ is open and not yet closed
+  if (openIdx >= 0 && openIdx > closeIdx) {
+    const query = text.substring(openIdx + 2).toLowerCase();
+    _chitLinkStart = openIdx;
+    if (query.length < 1) { _removeChitLinkDropdown(); return; }
+
+    // Fetch chits if not cached
+    if (!window._allChitTitles) {
+      try {
+        const resp = await fetch('/api/chits');
+        if (resp.ok) window._allChitTitles = await resp.json();
+      } catch (e) { return; }
+    }
+    const matches = (window._allChitTitles || [])
+      .filter(c => c.title && c.title.toLowerCase().includes(query) && c.id !== chitId)
+      .slice(0, 8);
+
+    if (matches.length === 0) { _removeChitLinkDropdown(); return; }
+    _showChitLinkDropdown(textarea, matches);
+  } else {
+    _removeChitLinkDropdown();
+  }
+}
+
+function _showChitLinkDropdown(textarea, matches) {
+  _removeChitLinkDropdown();
+  const dd = document.createElement('div');
+  dd.id = 'chit-link-dropdown';
+  dd.style.cssText = 'position:absolute;z-index:9999;background:#fff8e1;border:2px solid #8b4513;border-radius:6px;max-height:200px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,0.3);font-size:0.9em;min-width:200px;';
+
+  matches.forEach((chit, i) => {
+    const opt = document.createElement('div');
+    opt.style.cssText = 'padding:6px 10px;cursor:pointer;border-bottom:1px solid #e0d4b5;';
+    opt.textContent = chit.title;
+    opt.title = chit.id;
+    if (i === 0) opt.style.background = '#f0e6d0';
+    opt.addEventListener('mouseenter', () => {
+      dd.querySelectorAll('div').forEach(d => d.style.background = '');
+      opt.style.background = '#f0e6d0';
+    });
+    opt.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      _insertChitLink(textarea, chit.title);
+    });
+    dd.appendChild(opt);
+  });
+
+  // Position below cursor
+  const rect = textarea.getBoundingClientRect();
+  dd.style.left = (rect.left + 20) + 'px';
+  dd.style.top = (rect.bottom + 2) + 'px';
+  dd.style.position = 'fixed';
+  document.body.appendChild(dd);
+  _chitLinkDropdown = dd;
+}
+
+function _removeChitLinkDropdown() {
+  if (_chitLinkDropdown) { _chitLinkDropdown.remove(); _chitLinkDropdown = null; }
+}
+
+function _insertChitLink(textarea, title) {
+  const pos = textarea.selectionStart;
+  const before = textarea.value.substring(0, _chitLinkStart + 2);
+  const after = textarea.value.substring(pos);
+  textarea.value = before + title + ']]' + after;
+  const newPos = _chitLinkStart + 2 + title.length + 2;
+  textarea.selectionStart = textarea.selectionEnd = newPos;
+  textarea.focus();
+  _removeChitLinkDropdown();
+  if (typeof markEditorUnsaved === 'function') markEditorUnsaved();
+}
+
+// Close dropdown on blur or Escape
+document.addEventListener('keydown', (e) => {
+  if (!_chitLinkDropdown) return;
+  if (e.key === 'Escape') { _removeChitLinkDropdown(); return; }
+  if (e.key === 'Enter') {
+    const highlighted = _chitLinkDropdown.querySelector('div[style*="f0e6d0"]');
+    if (highlighted) {
+      e.preventDefault();
+      const textarea = document.getElementById('note');
+      _insertChitLink(textarea, highlighted.textContent);
+    }
+  }
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault();
+    const items = Array.from(_chitLinkDropdown.querySelectorAll('div'));
+    const curIdx = items.findIndex(d => d.style.background.includes('f0e6d0'));
+    items.forEach(d => d.style.background = '');
+    const next = e.key === 'ArrowDown' ? Math.min(curIdx + 1, items.length - 1) : Math.max(curIdx - 1, 0);
+    items[next].style.background = '#f0e6d0';
+    items[next].scrollIntoView({ block: 'nearest' });
+  }
+});
 
 function shrinkNoteToFourLines(event) {
   if (event) event.stopPropagation();
@@ -3236,6 +3350,34 @@ document.addEventListener("DOMContentLoaded", function () {
       if (openModal) return;
       e.preventDefault();
       cancelOrExit();
+    }
+
+    // Alt+number: jump to and expand zone
+    if (e.altKey && !e.ctrlKey && !e.metaKey) {
+      const zoneMap = {
+        '1': ['datesSection', 'datesContent'],
+        '2': ['taskSection', 'taskContent'],
+        '3': ['tagsSection', 'tagsContent'],
+        '4': ['notesSection', 'notesContent'],
+        '5': ['checklistSection', 'checklistContent'],
+        '6': ['alertsSection', 'alertsContent'],
+        '7': ['locationSection', 'locationContent'],
+        '8': ['peopleSection', 'peopleContent'],
+        '9': ['colorSection', 'colorContent'],
+        '0': ['projectsSection', 'projectsContent'],
+      };
+      const zone = zoneMap[e.key];
+      if (zone) {
+        e.preventDefault();
+        const section = document.getElementById(zone[0]);
+        const content = document.getElementById(zone[1]);
+        if (section && content) {
+          if (content.style.display === 'none') {
+            toggleZone(new MouseEvent('click'), zone[0], zone[1]);
+          }
+          section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }
     }
   });
 

@@ -892,6 +892,23 @@ class SettingsManager {
     const weekStartSel = document.getElementById("week-start-day");
     if (weekStartSel) weekStartSel.value = this.settings.week_start_day || "0";
 
+    const workStartSel = document.getElementById("work-start-hour");
+    if (workStartSel) workStartSel.value = this.settings.work_start_hour || "8";
+    const workEndSel = document.getElementById("work-end-hour");
+    if (workEndSel) workEndSel.value = this.settings.work_end_hour || "17";
+
+    // Working days checkboxes
+    const workDays = (this.settings.work_days || "1,2,3,4,5").split(',');
+    document.querySelectorAll('.work-day-cb').forEach(cb => {
+      cb.checked = workDays.includes(cb.value);
+    });
+
+    // Enabled periods checkboxes
+    const enabledPeriods = (this.settings.enabled_periods || "Itinerary,Day,Week,Work,SevenDay,Month,Year").split(',');
+    document.querySelectorAll('.period-cb').forEach(cb => {
+      cb.checked = enabledPeriods.includes(cb.value);
+    });
+
     const filterInputs = [
       "calendar",
       "checklists",
@@ -956,6 +973,10 @@ class SettingsManager {
       snooze_length: document.getElementById("snooze-length").value,
       calendar_snap: document.getElementById("calendar-snap").value,
       week_start_day: document.getElementById("week-start-day")?.value || "0",
+      work_start_hour: document.getElementById("work-start-hour")?.value || "8",
+      work_end_hour: document.getElementById("work-end-hour")?.value || "17",
+      work_days: Array.from(document.querySelectorAll('.work-day-cb:checked')).map(cb => cb.value).join(',') || "1,2,3,4,5",
+      enabled_periods: Array.from(document.querySelectorAll('.period-cb:checked')).map(cb => cb.value).join(',') || "Itinerary,Day,Week,Work,SevenDay,Month,Year",
       default_filters: (() => {
         const filters = {};
         document.querySelectorAll(".filter-input").forEach(input => {

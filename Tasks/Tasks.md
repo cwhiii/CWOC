@@ -63,7 +63,7 @@ All three phases complete. See `done.md` for details.
 - `[ ]` Show alarms/notifications/timers on calendar view
 - `[X]` Notify at start time (checkbox)
 - `[X]` Notify at due time (checkbox)
-- `[ ]` Snoozable notifications (1, 3, 5, 10 min options)
+- `[X]` Snoozable notifications (1, 3, 5, 10 min options)
 - `[ ]` Jitter for reminders (±X minutes, configurable globally and per-chit)
 - `[ ]` Alarm: chained variable-length intervals (5 min, then 4, then 4...)
 - `[ ]` Alarm: "Delete After Dismissal" checkbox
@@ -92,12 +92,12 @@ All three phases complete. See `done.md` for details.
 
 ## Features — Editor & Chit Management
 
-- `[ ]` Primary tag auto-colors the chit (make obvious in UI)
+- `[X]` Primary tag auto-colors the chit (make obvious in UI)
 - `[ ]` People zone: modal with autocomplete + multi-select roles (Owners, Stakeholders, Editors, Assignees, Guests, Followers)
 - `[ ]` Multi-line checklist items
-- `[ ]` Hotkeys to jump to and expand each zone
+- `[X]` Hotkeys to jump to and expand each zone
 - `[ ]` When creating chit from a view, hide irrelevant zones, pre-populate relevant ones
-- `[ ]` Middle-click Create Chit to open in new tab
+- `[X]` Middle-click Create Chit to open in new tab
 - `[ ]` Editing chits in-place in views (dates, times, notes)
 - `[ ]` Status as multi-select field with "-" (null) option
 - `[ ]` Tasks view: status images matching editor icons
@@ -120,7 +120,7 @@ All three phases complete. See `done.md` for details.
 - `[X]` Tags: starred/favorite always at top
 - `[X]` Hide/show tags toggle on all views
 - `[X]` Search all visible fields with "Search All Fields" toggle
-- `[ ]` Sidebar: save a search as a one-click button
+- `[X]` Sidebar: save a search as a one-click button
 - `[ ]` Label/tag-based view filtering (like Google Calendar show/hide)
 - `[ ]` Additional/custom statuses
 
@@ -145,7 +145,7 @@ All three phases complete. See `done.md` for details.
 
 - `[ ]` Side-by-side notes view (2 chits for copy/paste/reference)
 - `[ ]` Quick in-place edits in Notes view
-- `[ ]` Notes with links to other chits (each chit has a URL by ID)
+- `[X]` Notes with links to other chits (each chit has a URL by ID)
 - `[ ]` Auto import/export notes as Markdown to sync with Obsidian
 
 ---
@@ -177,7 +177,7 @@ All three phases complete. See `done.md` for details.
 - `[ ]` Auto-generated QR codes per chit
 - `[X]` Chit URL (direct link by ID)
 - `[ ]` Audit logs
-- `[ ]` Universally unique installation instance ID
+- `[X]` Universally unique installation instance ID
 - `[ ]` Server configurator script
 - `[ ]` E2E encryption
 - `[ ]` HTTPS for geolocation access
@@ -192,12 +192,12 @@ All three phases complete. See `done.md` for details.
 - `[ ]` Rolling circular chits view (next task in project, repeat when done)
 - `[ ]` Context switching (hide chits by time schedule + tags)
 - `[X]` Random/shuffle sort order (for recipes, etc.)
-- `[ ]` Upcoming tasks view
+- `[X]` Upcoming tasks view
 - `[ ]` Show events by map
-- `[ ]` Working days/hours configuration
+- `[X]` Working days/hours configuration
 - `[ ]` Schedule appointment hours and days
 - `[ ]` Hotkey: create chit with submenu for each type (K→X for views, K→R for raw)
-- `[ ]` Find a place for a clock in views
+- `[X]` Find a place for a clock in views
 
 ---
 
@@ -218,7 +218,7 @@ All three phases complete. See `done.md` for details.
 
 ### Settings — Not Applied Anywhere
 - `[ ]` **Visual Indicators** (Alarm/Notification/Weather/People/Indicators: Always/Never/When Space) — saved to DB but never read or applied in any view
-- `[ ]` **Chit Options: "Delete Past Alarm Chits"** — saved but never applied
+- `[X]` **Chit Options: "Delete Past Alarm Chits"** — saved but never applied
 - `[ ]` **Alarms: Active/Inactive clock drag-drop ordering** — UI works for reordering but the order isn't used anywhere in the dashboard alarm display
 
 ### Editor — Partially Working

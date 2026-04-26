@@ -33,7 +33,7 @@
 
             <!-- 1. Create -->
             <div class="sidebar-section" id="section-create">
-                <button class="create-chit action-button" onclick="window.location.href='/frontend/editor.html'">
+                <button class="create-chit action-button" onclick="window.location.href='/frontend/editor.html'" onauxclick="window.open('/frontend/editor.html','_blank')">
                     <img src="/static/create_new.png" alt="" />
                     Create Chit <span class="hotkey-hint">K</span>
                 </button>
@@ -53,6 +53,7 @@
                         <option value="status">Status</option>
                         <option value="manual">Manual</option>
                         <option value="random">Random / Shuffle</option>
+                        <option value="upcoming">Upcoming (Due Soon)</option>
                     </select>
                     <button id="sort-dir-btn" onclick="toggleSortDir()" title="Toggle sort direction" style="display:none;">▲</button>
                 </div>
@@ -65,6 +66,7 @@
                     <option value="Itinerary">Itinerary</option>
                     <option value="Day">Day</option>
                     <option value="Week" selected>Week</option>
+                    <option value="Work">Work Hours</option>
                     <option value="SevenDay">7 Days</option>
                     <option value="Month">Month</option>
                     <option value="Year">Year</option>
@@ -79,6 +81,7 @@
                 <div class="filter-group" id="filter-words">
                     <label class="filter-label">Search <span class="hotkey-hint">W</span></label>
                     <input type="text" id="search" placeholder="Filter Chits..." onkeyup="searchChits()" />
+                    <div id="saved-searches" style="display:flex;flex-wrap:wrap;gap:3px;margin-top:3px;"></div>
                 </div>
 
                 <!-- Status -->
@@ -136,6 +139,7 @@
                             <label><input type="checkbox" id="show-pinned" onchange="onFilterChange()" checked /> <i class="fas fa-bookmark" style="color:#8b5a2b;"></i> Pinned</label>
                             <label><input type="checkbox" id="show-archived" onchange="onFilterChange()" /> 📦 Archived</label>
                             <label><input type="checkbox" id="show-unmarked" onchange="onFilterChange()" checked /> 📄 Unmarked</label>
+                            <label><input type="checkbox" id="hide-past-due" onchange="onFilterChange()" /> 🚫 Hide Past-Due</label>
                         </div>
                     </div>
                 </div>
@@ -161,12 +165,18 @@
                 </button>
             </div>
 
-            <!-- Reference & Help -->
-            <div class="sidebar-section" id="section-help" style="display:flex;gap:6px;">
-                <button class="action-button" onclick="_toggleReference()" title="Keyboard shortcuts reference" style="flex:1;margin-bottom:0;font-size:0.8em;padding:6px;">
+            <!-- Reference, Help, Clock, Save Search -->
+            <div class="sidebar-section" id="section-help" style="display:flex;flex-wrap:wrap;gap:6px;">
+                <button class="action-button" onclick="_openClockModal()" title="Live clocks (L)" style="flex:1 1 calc(50% - 3px);margin-bottom:0;font-size:0.8em;padding:6px;">
+                    🕐 Clock
+                </button>
+                <button class="action-button" onclick="_saveSearch()" title="Save current search as quick button" style="flex:1 1 calc(50% - 3px);margin-bottom:0;font-size:0.8em;padding:6px;">
+                    💾 Save Search
+                </button>
+                <button class="action-button" onclick="_toggleReference()" title="Keyboard shortcuts reference" style="flex:1 1 calc(50% - 3px);margin-bottom:0;font-size:0.8em;padding:6px;">
                     📖 Reference
                 </button>
-                <button class="action-button" onclick="openHelpPage()" title="Feature guide & documentation" style="flex:1;margin-bottom:0;font-size:0.8em;padding:6px;">
+                <button class="action-button" onclick="openHelpPage()" title="Feature guide & documentation" style="flex:1 1 calc(50% - 3px);margin-bottom:0;font-size:0.8em;padding:6px;">
                     📘 Help
                 </button>
             </div>
@@ -181,6 +191,7 @@
             <div class="hotkey-panel-option" onclick="_pickPeriod('Itinerary')"><span class="panel-key">I</span><span class="panel-label">Itinerary</span></div>
             <div class="hotkey-panel-option" onclick="_pickPeriod('Day')"><span class="panel-key">D</span><span class="panel-label">Day</span></div>
             <div class="hotkey-panel-option" onclick="_pickPeriod('Week')"><span class="panel-key">W</span><span class="panel-label">Week</span></div>
+            <div class="hotkey-panel-option" onclick="_pickPeriod('Work')"><span class="panel-key">K</span><span class="panel-label">Work Hours</span></div>
             <div class="hotkey-panel-option" onclick="_pickPeriod('SevenDay')"><span class="panel-key">S</span><span class="panel-label">7 Days</span></div>
             <div class="hotkey-panel-option" onclick="_pickPeriod('Month')"><span class="panel-key">M</span><span class="panel-label">Month</span></div>
             <div class="hotkey-panel-option" onclick="_pickPeriod('Year')"><span class="panel-key">Y</span><span class="panel-label">Year</span></div>
@@ -227,6 +238,7 @@
             <div class="hotkey-panel-option" onclick="_pickSort('status')"><span class="panel-key">X</span><span class="panel-label">Status</span></div>
             <div class="hotkey-panel-option" onclick="_pickSort('manual')"><span class="panel-key">M</span><span class="panel-label">Manual (drag)</span></div>
             <div class="hotkey-panel-option" onclick="_pickSort('random')"><span class="panel-key">R</span><span class="panel-label">Random / Shuffle</span></div>
+            <div class="hotkey-panel-option" onclick="_pickSort('upcoming')"><span class="panel-key">G</span><span class="panel-label">Upcoming (Due Soon)</span></div>
             <div class="hotkey-panel-footer">↑↓ for Asc/Desc · ESC to cancel</div>
         </div>
 
@@ -246,6 +258,7 @@
                         <h4>General</h4>
                         <div><span class="ref-key">K</span> Create Chit</div>
                         <div><span class="ref-key">S</span> Settings</div>
+                        <div><span class="ref-key">L</span> Clock</div>
                         <div><span class="ref-key">R</span> This Reference</div>
                         <div><span class="ref-key">ESC</span> Close / Exit</div>
                     </div>
@@ -254,6 +267,7 @@
                         <div><span class="ref-key">I</span> Itinerary</div>
                         <div><span class="ref-key">D</span> Day</div>
                         <div><span class="ref-key">W</span> Week</div>
+                        <div><span class="ref-key">K</span> Work Hours</div>
                         <div><span class="ref-key">S</span> 7 Days</div>
                         <div><span class="ref-key">M</span> Month</div>
                         <div><span class="ref-key">Y</span> Year</div>
@@ -276,6 +290,7 @@
                         <div><span class="ref-key">X</span> Status</div>
                         <div><span class="ref-key">M</span> Manual (drag)</div>
                         <div><span class="ref-key">R</span> Random / Shuffle</div>
+                        <div><span class="ref-key">G</span> Upcoming (Due Soon)</div>
                         <div><span class="ref-key">↑↓</span> Asc / Desc</div>
                     </div>
                     <div class="ref-col">

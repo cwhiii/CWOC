@@ -1179,6 +1179,25 @@ function isSystemTag(tagName) {
   return SYSTEM_TAGS.includes(tagName);
 }
 
+/**
+ * Replace [[title]] patterns in text/HTML with links to matching chits.
+ * Call AFTER marked.parse() so we operate on rendered HTML.
+ * @param {string} html - rendered HTML string
+ * @param {Array} allChits - array of chit objects with id and title
+ * @returns {string} HTML with [[title]] replaced by <a> links
+ */
+function resolveChitLinks(html, allChits) {
+  if (!html || !allChits) return html;
+  return html.replace(/\[\[([^\]]+)\]\]/g, (match, title) => {
+    const lower = title.toLowerCase().trim();
+    const found = allChits.find(c => c.title && c.title.toLowerCase().trim() === lower);
+    if (found) {
+      return `<a href="/frontend/editor.html?id=${found.id}" title="Open chit: ${found.title}" style="color:#4682b4;text-decoration:underline;cursor:pointer;" onclick="event.stopPropagation();">${found.title}</a>`;
+    }
+    return match; // leave as-is if no match
+  });
+}
+
 
 // ── Recurrence Expansion ─────────────────────────────────────────────────────
 
