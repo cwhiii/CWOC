@@ -57,7 +57,9 @@ async function getCoordinates(address) {
     throw new Error("No address provided.");
   }
   const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}`;
-  const response = await fetch(url);
+  const response = await fetch(url, {
+    headers: { 'User-Agent': 'CWOC-Weather/1.0' }
+  });
   const data = await response.json();
   console.log("Geocoding API response:", data);
   if (!data || data.length === 0) {

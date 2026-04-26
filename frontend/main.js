@@ -1135,10 +1135,14 @@ async function _openWeatherModal() {
 
   try {
     // Geocode
-    const geoUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}`;
-    const geoResp = await fetch(geoUrl);
+    const geoUrl = `https://nominatim.openstreetmap.org/search?format=json&limit=5&q=${encodeURIComponent(address)}`;
+    console.log('Weather modal geocoding:', address, geoUrl);
+    const geoResp = await fetch(geoUrl, {
+      headers: { 'User-Agent': 'CWOC-Weather/1.0' }
+    });
     if (!geoResp.ok) throw new Error('geocode_network');
     const geoData = await geoResp.json();
+    console.log('Geocode response:', geoData);
     if (!geoData || geoData.length === 0) throw new Error('geocode_empty');
 
     const lat = parseFloat(geoData[0].lat);

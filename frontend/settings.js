@@ -65,6 +65,8 @@ function _appendLocationRow(container, label, address, isDefault) {
   addressInput.className = "location-address-input";
   addressInput.placeholder = "Address";
   addressInput.value = address;
+  addressInput.autocomplete = "street-address";
+  addressInput.name = "street-address";
   addressInput.addEventListener("input", () => {
     setSaveButtonUnsaved();
     _autoSelectSingleLocation();
@@ -1192,7 +1194,7 @@ class SettingsManager {
           document.getElementById("highlight-overdue").checked,
         delete_past_alarm_chits: document.getElementById("delete-past").checked,
       },
-      saved_locations: collectLocationsData(),
+      saved_locations: JSON.stringify(collectLocationsData()),
     };
   }
 
