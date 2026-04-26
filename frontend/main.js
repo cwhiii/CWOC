@@ -1073,6 +1073,138 @@ function _closeClockModal() {
   if (_clockModalInterval) { clearInterval(_clockModalInterval); _clockModalInterval = null; }
 }
 
+// ── Weather Modal (W hotkey) ─────────────────────────────────────────────────
+
+const _weatherIcons = {
+  0: '☀️', 1: '🌤️', 2: '⛅', 3: '☁️',
+  45: '🌫️', 48: '🌫️',
+  51: '🌦️', 53: '🌦️', 55: '🌦️', 56: '🌦️', 57: '🌦️',
+  61: '🌧️', 63: '🌧️', 65: '🌧️', 66: '🌧️', 67: '🌧️',
+  71: '🌨️', 73: '🌨️', 75: '🌨️', 77: '🌨️',
+  80: '🌧️', 81: '🌧️', 82: '🌧️',
+  85: '🌨️', 86: '🌨️',
+  95: '⛈️', 96: '⛈️', 99: '⛈️'
+};
+
+function _getWeatherIcon(code) {
+  return _weatherIcons[code] || '❓';
+}
+
+function _getPrecipLabel(code) {
+  if ([61, 63, 65, 66, 67, 80, 81, 82].includes(code)) return 'rain';
+  if ([71, 73, 75, 77, 85, 86].includes(code)) return 'snow';
+  if ([95, 96, 99].includes(code)) return 'thunder';
+  if ([51, 53, 55, 56, 57].includes(code)) return 'drizzle';
+  return '';
+}
+
+function _buildWeatherModalHTML(content) {
+  return `<div class="weather-modal">${content}<div class="weather-modal-close" onclick="_closeWeatherModal()">ESC or click outside to close</div></div>`;
+}
+
+async function _openWeatherModal() {
+  // Toggle off if already open
+  const existing = document.getElementById('weather-modal-overlay');
+  if (existing) { _closeWeatherModal(); return; }
+
+  // Ensure saved locations are loaded
+  await loadSavedLocations();
+  const defaultLoc = getDefaultLocation();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'weather-modal-overlay';
+  overlay.addEventListener('click', function (e) { if (e.target === overlay) _closeWeatherModal(); });
+
+  if (!defaultLoc) {
+    overlay.innerHTML = _buildWeatherModalHTML(
+      '<div class="weather-modal-error">No default location configured. Add one in Settings.</div>'
+    );
+    document.body.appendChild(overlay);
+    return;
+  }
+
+  const label = defaultLoc.label || 'Default';
+  const address = defaultLoc.address || '';
+
+  // Show loading state
+  overlay.innerHTML = _buildWeatherModalHTML(
+    `<div class="weather-modal-header"><div class="weather-modal-label">${label}</div><div class="weather-modal-address">${address}</div></div>` +
+    '<div class="weather-modal-body"><div style="opacity:0.6;">Loading weather…</div></div>'
+  );
+  document.body.appendChild(overlay);
+
+  try {
+    // Geocode
+    const geoUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}`;
+    const geoResp = await fetch(geoUrl);
+    if (!geoResp.ok) throw new Error('geocode_network');
+    const geoData = await geoResp.json();
+    if (!geoData || geoData.length === 0) throw new Error('geocode_empty');
+
+    const lat = parseFloat(geoData[0].lat);
+    const lon = parseFloat(geoData[0].lon);
+
+    // Fetch weather
+    const wxUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_sum&timezone=auto&forecast_days=1`;
+    const wxResp = await fetch(wxUrl);
+    if (!wxResp.ok) throw new Error('weather_network');
+    const wxData = await wxResp.json();
+    if (!wxData || !wxData.daily) throw new Error('weather_empty');
+
+    const today = wxData.daily;
+    const weatherCode = today.weathercode[0];
+    const minC = today.temperature_2m_min[0];
+    const maxC = today.temperature_2m_max[0];
+    const precipMm = today.precipitation_sum[0];
+
+    const minF = Math.round((minC * 9) / 5 + 32);
+    const maxF = Math.round((maxC * 9) / 5 + 32);
+    const precipInches = Math.ceil(precipMm * 0.0393701 * 10) / 10;
+
+    const icon = _getWeatherIcon(weatherCode);
+    const precipType = _getPrecipLabel(weatherCode);
+    const precipText = precipType ? `${precipInches}" ${precipType}` : 'No precipitation';
+
+    // Temperature bar markers (range -14°F to 104°F)
+    const barMin = -14, barMax = 104, barRange = barMax - barMin;
+    const lowPct = Math.max(0, Math.min(100, ((minF - barMin) / barRange) * 100));
+    const highPct = Math.max(0, Math.min(100, ((maxF - barMin) / barRange) * 100));
+
+    const modalEl = overlay.querySelector('.weather-modal');
+    if (modalEl) {
+      modalEl.innerHTML =
+        `<div class="weather-modal-header"><div class="weather-modal-label">${label}</div><div class="weather-modal-address">${address}</div></div>` +
+        '<div class="weather-modal-body">' +
+          `<div class="weather-modal-icon">${icon}</div>` +
+          `<div class="weather-modal-temps"><span class="temp-high">${maxF}°F</span> / <span class="temp-low">${minF}°F</span></div>` +
+          `<div class="weather-modal-precip">${precipText}</div>` +
+          `<div class="weather-modal-temp-bar"><div class="temp-bar-marker" style="left:${lowPct}%" title="Low ${minF}°F"></div><div class="temp-bar-marker" style="left:${highPct}%" title="High ${maxF}°F"></div></div>` +
+        '</div>' +
+        '<div class="weather-modal-close" onclick="_closeWeatherModal()">ESC or click outside to close</div>';
+    }
+  } catch (err) {
+    console.error('Weather modal error:', err);
+    let msg = 'Weather unavailable — try again later';
+    if (err.message === 'geocode_empty') msg = `Could not find location: ${address}`;
+    else if (err.message === 'geocode_network') msg = 'Could not reach location service';
+    else if (err.message === 'weather_network') msg = 'Could not reach weather service';
+    else if (err.message === 'weather_empty') msg = `Weather data unavailable for ${address}`;
+
+    const modalEl = overlay.querySelector('.weather-modal');
+    if (modalEl) {
+      modalEl.innerHTML =
+        `<div class="weather-modal-header"><div class="weather-modal-label">${defaultLoc.label || 'Default'}</div><div class="weather-modal-address">${address}</div></div>` +
+        `<div class="weather-modal-error">${msg}</div>` +
+        '<div class="weather-modal-close" onclick="_closeWeatherModal()">ESC or click outside to close</div>';
+    }
+  }
+}
+
+function _closeWeatherModal() {
+  const overlay = document.getElementById('weather-modal-overlay');
+  if (overlay) overlay.remove();
+}
+
 // ── Load label/tag filters from settings ─────────────────────────────────────
 async function _loadLabelFilters() {
   try {
@@ -3992,6 +4124,7 @@ document.addEventListener("DOMContentLoaded", function () {
   _buildPeopleFilterPanel();
   _renderSavedSearches();
   _updateSortUI();
+  loadSavedLocations(); // Pre-cache saved locations for weather modal (W key)
 
   // ESC in sidebar tag search box blurs it and clears search
   const tagSearchInput = document.getElementById('tag-filter-search');
@@ -4137,6 +4270,10 @@ document.addEventListener("DOMContentLoaded", function () {
       }
       if (document.getElementById('clock-modal-overlay')) {
         _closeClockModal();
+        return;
+      }
+      if (document.getElementById('weather-modal-overlay')) {
+        _closeWeatherModal();
         return;
       }
       if (_hotkeyMode) {
@@ -4372,6 +4509,12 @@ document.addEventListener("DOMContentLoaded", function () {
     if (keyLower === 'l' && !_hotkeyMode) {
       e.preventDefault();
       _openClockModal();
+      return;
+    }
+
+    if (keyLower === 'w' && !_hotkeyMode) {
+      e.preventDefault();
+      _openWeatherModal();
       return;
     }
   });

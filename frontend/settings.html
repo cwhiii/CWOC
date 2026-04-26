@@ -276,6 +276,59 @@
                 .modal-content .color-option { width: 30px; height: 30px; border: 1px solid #8b5a2b; cursor: pointer; }
                 #duplicate-tag-modal .modal-content { animation: fadeOut 2s forwards; }
                 @keyframes fadeOut { 0% { opacity: 1; } 80% { opacity: 1; } 100% { opacity: 0; display: none; } }
+
+                /* ── Saved Locations ── */
+                .location-row {
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                    margin-bottom: 6px;
+                    padding: 6px 8px;
+                    background: #fff8e1;
+                    border: 1px solid #8b5a2b;
+                    border-radius: 5px;
+                }
+                .location-row input[type="radio"] {
+                    accent-color: #8b5a2b;
+                    cursor: pointer;
+                    flex-shrink: 0;
+                }
+                .location-row .location-label-input {
+                    width: 80px;
+                    min-width: 60px;
+                    border: 1px solid #8b5a2b;
+                    border-radius: 4px;
+                    padding: 4px 6px;
+                    font-family: inherit;
+                    font-size: 13px;
+                    background: #f5e6cc;
+                    color: #2b1e0f;
+                }
+                .location-row .location-address-input {
+                    flex: 1;
+                    min-width: 0;
+                    border: 1px solid #8b5a2b;
+                    border-radius: 4px;
+                    padding: 4px 6px;
+                    font-family: inherit;
+                    font-size: 13px;
+                    background: #f5e6cc;
+                    color: #2b1e0f;
+                }
+                .location-row .remove-location-btn {
+                    background: #a0522d;
+                    color: #fdf5e6;
+                    border: 1px solid #5c4033;
+                    border-radius: 4px;
+                    padding: 2px 8px;
+                    cursor: pointer;
+                    font-size: 14px;
+                    font-family: inherit;
+                    flex-shrink: 0;
+                }
+                .location-row .remove-location-btn:hover {
+                    background: #8b4513;
+                }
             </style>
         </head>
         <body>
@@ -578,6 +631,13 @@
                             <ul id="color-list"></ul>
                             <button onclick="openColorPicker()">➕ Add Color</button>                            <input type="color" id="color-picker" style="display:none" />
                         </div>
+                    </div>
+                    <div class="setting-group">
+                        <h3>📍 Saved Locations</h3>
+                        <div id="locations-list">
+                            <!-- Location rows rendered dynamically by settings.js -->
+                        </div>
+                        <button type="button" id="add-location-btn" class="standard-button" style="margin-top:8px;" onclick="addLocationRow()">➕ Add Location</button>
                     </div>
                     <div class="setting-group">
                         <h3>Visual Indicators for Chits</h3>

@@ -680,6 +680,35 @@ input.error {
     padding: 4px 12px;
 }
 
+/* Compact location dropdown in title/weather area */
+.compact-location-dropdown {
+    flex: 0 0 auto;
+    width: auto;
+    min-width: 36px;
+    max-width: 160px;
+    padding: 4px 6px;
+    font-size: 0.85em;
+    font-family: 'Courier New', monospace;
+    color: var(--aged-brown-dark);
+    background-color: var(--button-bg);
+    border: 1px outset var(--aged-brown-medium);
+    border-radius: 4px;
+    cursor: pointer;
+    align-self: center;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%236b4e31'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 4px center;
+    padding-right: 18px;
+}
+.compact-location-dropdown:hover {
+    background-color: var(--button-hover);
+}
+.compact-location-dropdown:focus {
+    outline: 1px solid var(--accent-teal);
+}
+
 .weather-display {
     display: flex;
     flex-direction: column;
@@ -2782,6 +2811,10 @@ button.archive-btn.archived-active {
         padding: 4px 8px;
         font-size: 0.85em;
     }
+    .compact-location-dropdown {
+        align-self: flex-start;
+        max-width: 140px;
+    }
 
     /* Weather display: compact on mobile */
     .weather-display {
@@ -2979,4 +3012,38 @@ button.archive-btn.archived-active {
         width: 100%;
         justify-content: flex-start;
     }
+}
+
+/* ── Saved Locations row (above address input in Location zone) ──────── */
+.saved-locations-row {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+#saved-locations-dropdown {
+    flex: 1;
+    padding: 6px 8px;
+    font-size: 0.9em;
+    border: 1px inset var(--aged-brown-medium);
+    border-radius: 4px;
+    background-color: var(--input-bg);
+    color: var(--text-color);
+    font-family: 'Courier New', Courier, monospace;
+}
+
+.clear-location-btn {
+    white-space: nowrap;
+    padding: 6px 10px;
+    font-size: 0.85em;
+    background-color: var(--aged-brown-light);
+    color: var(--parchment-light);
+    border: 1px outset var(--aged-brown-medium);
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.clear-location-btn:hover {
+    background-color: var(--danger-red);
 }

@@ -94,6 +94,9 @@
                             required
                         />
                     </div>
+                    <select id="compact-location-dropdown" class="compact-location-dropdown" title="Quick location select">
+                        <option value="">📍</option>
+                    </select>
                     <div id="compactWeatherSection" style="padding:8px;font-family:'Courier New',monospace;color:#8b5a2b;font-size:0.85em;opacity:0.7;">📍 Date &amp; location needed for weather</div>
                 </div>
 
@@ -285,10 +288,30 @@
                                         >Directions</span
                                     >
                                 </button>
+                                <button
+                                    type="button"
+                                    class="zone-button"
+                                    onclick="onAddDefaultLocation(event)"
+                                    title="Populate from default saved location"
+                                >
+                                    <i class="fas fa-plus"></i>
+                                    <span class="hideWhenNarrow">Location</span>
+                                </button>
                             </div>
                             <span class="zone-toggle-icon">🔽</span>
                         </div>
                         <div id="locationContent" class="zone-body">
+                            <div class="saved-locations-row">
+                                <select id="saved-locations-dropdown" title="Select a saved location">
+                                    <option value="">— Saved Locations —</option>
+                                </select>
+                                <button
+                                    type="button"
+                                    class="zone-button clear-location-btn"
+                                    onclick="onClearLocation(event)"
+                                    title="Clear current location"
+                                >✕ Clear</button>
+                            </div>
                             <div
                                 class="field full-width"
                                 style="margin-bottom: 0"

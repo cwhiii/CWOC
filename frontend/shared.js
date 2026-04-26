@@ -3472,3 +3472,41 @@ function initMobileReferenceClose() {
   });
   content.appendChild(btn);
 }
+
+
+// ── Saved Locations Utilities ────────────────────────────────────────────────
+
+/**
+ * Fetch saved locations from settings and cache them for the page lifetime.
+ * Returns the saved_locations array (or empty array on error / no data).
+ * Subsequent calls return the cached value without re-fetching.
+ * @returns {Promise<object[]>}
+ */
+async function loadSavedLocations() {
+  if (window._savedLocations) return window._savedLocations;
+  try {
+    const resp = await fetch('/api/settings/default_user');
+    if (!resp.ok) {
+      console.error('Failed to load settings for saved locations:', resp.status);
+      window._savedLocations = [];
+      return [];
+    }
+    const settings = await resp.json();
+    window._savedLocations = Array.isArray(settings.saved_locations) ? settings.saved_locations : [];
+    return window._savedLocations;
+  } catch (e) {
+    console.error('Error loading saved locations:', e);
+    window._savedLocations = [];
+    return [];
+  }
+}
+
+/**
+ * Return the saved location marked as default (is_default === true), or null.
+ * Reads from the cached window._savedLocations — call loadSavedLocations() first.
+ * @returns {object|null}
+ */
+function getDefaultLocation() {
+  if (!Array.isArray(window._savedLocations)) return null;
+  return window._savedLocations.find(function (loc) { return loc.is_default === true; }) || null;
+}

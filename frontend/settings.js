@@ -18,6 +18,136 @@ const colorMap = {
   "#A8A2C6": "Muted Lilac",
 };
 
+// ── Saved Locations ──────────────────────────────────────────────────────────
+
+/**
+ * Render saved location rows into #locations-list from data array.
+ * @param {Array<{label:string, address:string, is_default:boolean}>} locations
+ */
+function renderLocationsSection(locations) {
+  const container = document.getElementById("locations-list");
+  if (!container) return;
+  container.innerHTML = "";
+  if (!locations || locations.length === 0) {
+    locations = [{ label: "", address: "", is_default: false }];
+  }
+  locations.forEach((loc, idx) => {
+    _appendLocationRow(container, loc.label || "", loc.address || "", loc.is_default);
+  });
+}
+
+/**
+ * Append a single location row to the container.
+ */
+function _appendLocationRow(container, label, address, isDefault) {
+  const row = document.createElement("div");
+  row.className = "location-row";
+
+  const radio = document.createElement("input");
+  radio.type = "radio";
+  radio.name = "default-location";
+  radio.checked = !!isDefault;
+  radio.title = "Set as default location";
+  radio.addEventListener("change", () => setSaveButtonUnsaved());
+
+  const labelInput = document.createElement("input");
+  labelInput.type = "text";
+  labelInput.className = "location-label-input";
+  labelInput.placeholder = "Label";
+  labelInput.value = label;
+  labelInput.addEventListener("input", () => {
+    setSaveButtonUnsaved();
+    _autoSelectSingleLocation();
+  });
+
+  const addressInput = document.createElement("input");
+  addressInput.type = "text";
+  addressInput.className = "location-address-input";
+  addressInput.placeholder = "Address";
+  addressInput.value = address;
+  addressInput.addEventListener("input", () => {
+    setSaveButtonUnsaved();
+    _autoSelectSingleLocation();
+  });
+
+  const removeBtn = document.createElement("button");
+  removeBtn.type = "button";
+  removeBtn.className = "remove-location-btn";
+  removeBtn.textContent = "✕";
+  removeBtn.title = "Remove location";
+  removeBtn.addEventListener("click", () => {
+    const allRows = container.querySelectorAll(".location-row");
+    if (allRows.length <= 1) {
+      // Don't remove the last row — just clear it
+      labelInput.value = "";
+      addressInput.value = "";
+      radio.checked = false;
+    } else {
+      row.remove();
+      _autoSelectSingleLocation();
+    }
+    setSaveButtonUnsaved();
+  });
+
+  row.appendChild(radio);
+  row.appendChild(labelInput);
+  row.appendChild(addressInput);
+  row.appendChild(removeBtn);
+  container.appendChild(row);
+}
+
+/**
+ * Global function called by the "+" button — adds an empty location row.
+ */
+function addLocationRow() {
+  const container = document.getElementById("locations-list");
+  if (!container) return;
+  _appendLocationRow(container, "", "", false);
+  setSaveButtonUnsaved();
+}
+
+/**
+ * Auto-select logic: if exactly one row has a non-empty address, auto-check its radio.
+ */
+function _autoSelectSingleLocation() {
+  const container = document.getElementById("locations-list");
+  if (!container) return;
+  const rows = container.querySelectorAll(".location-row");
+  const nonEmptyRows = [];
+  rows.forEach(row => {
+    const addr = row.querySelector(".location-address-input");
+    if (addr && addr.value.trim()) nonEmptyRows.push(row);
+  });
+  if (nonEmptyRows.length === 1) {
+    const radio = nonEmptyRows[0].querySelector('input[type="radio"]');
+    if (radio) radio.checked = true;
+  }
+}
+
+/**
+ * Read all location rows from the DOM and return the array for saving.
+ * Filters out empty-address rows (keeps at least one).
+ * @returns {Array<{label:string, address:string, is_default:boolean}>}
+ */
+function collectLocationsData() {
+  const container = document.getElementById("locations-list");
+  if (!container) return [];
+  const rows = container.querySelectorAll(".location-row");
+  const all = [];
+  rows.forEach(row => {
+    const label = row.querySelector(".location-label-input")?.value?.trim() || "";
+    const address = row.querySelector(".location-address-input")?.value?.trim() || "";
+    const isDefault = row.querySelector('input[type="radio"]')?.checked || false;
+    all.push({ label, address, is_default: isDefault });
+  });
+  // Filter out empty-address rows, but keep at least one
+  const nonEmpty = all.filter(loc => loc.address !== "");
+  if (nonEmpty.length === 0) {
+    return [{ label: "", address: "", is_default: false }];
+  }
+  return nonEmpty;
+}
+
 function updateGrid(preserveOrder = false) {
   const activeFormats = Array.from(
     timeFormatGrid.querySelectorAll(".format-item"),
@@ -993,6 +1123,12 @@ class SettingsManager {
     // Render tag tree view
     _renderSettingsTagTree();
 
+    // Render saved locations
+    const savedLocations = Array.isArray(this.settings.saved_locations)
+      ? this.settings.saved_locations
+      : [];
+    renderLocationsSection(savedLocations);
+
     renderColors(this.settings.custom_colors);
   }
 
@@ -1056,6 +1192,7 @@ class SettingsManager {
           document.getElementById("highlight-overdue").checked,
         delete_past_alarm_chits: document.getElementById("delete-past").checked,
       },
+      saved_locations: collectLocationsData(),
     };
   }
 
@@ -1116,6 +1253,7 @@ function monitorChanges() {
     document.getElementById("color-list"),
     document.getElementById("inactive-zone"),
     document.getElementById("time-format-grid"),
+    document.getElementById("locations-list"),
   ];
 
   const observer = new MutationObserver(setSaveButtonUnsaved);

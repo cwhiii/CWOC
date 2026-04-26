@@ -13,7 +13,7 @@ let currentWeatherLat = null;
 let currentWeatherLon = null;
 let currentWeatherData = null;
 
-const defaultAddress = "";
+// defaultAddress removed — weather only fetches when chit.location is set
 
 const weatherIcons = {
   0: "☀️",
@@ -77,6 +77,7 @@ async function getWeather(lat, lon) {
 }
 
 async function fetchWeatherData(address) {
+  const compactWeatherSection = document.getElementById("compactWeatherSection");
   try {
     console.log("Fetching weather for address:", address);
     const coords = await getCoordinates(address);
@@ -93,6 +94,15 @@ async function fetchWeatherData(address) {
     return weather;
   } catch (error) {
     console.error("Error fetching weather data:", error);
+    if (compactWeatherSection) {
+      compactWeatherSection.classList.add('weather-placeholder');
+      const msg = error.message === "Location not found."
+        ? `Location not found: ${address}`
+        : error.message === "No address provided."
+          ? "No address provided"
+          : `Weather data unavailable for ${address}`;
+      compactWeatherSection.innerHTML = `<div style="padding:8px;font-family:'Courier New',monospace;color:#a33;font-size:0.85em;">⚠️ ${msg}</div>`;
+    }
     throw error;
   }
 }
@@ -3006,16 +3016,22 @@ async function loadChitData(chitId) {
       console.log(`[loadChitData] Restored tags:`, chit.tags);
     });
 
-    // Fetch weather for the chit's location (or default)
-    const locationForWeather = chit.location || defaultAddress;
+    // Fetch weather for the chit's location
     const hasDate = !!(chit.start_datetime || chit.due_datetime);
     const compactWeatherSection = document.getElementById("compactWeatherSection");
-    if (locationForWeather && hasDate) {
-      fetchWeatherData(locationForWeather).catch((err) => {
+    if (chit.location && hasDate) {
+      fetchWeatherData(chit.location).catch((err) => {
         console.log("Could not fetch weather on load:", err);
       });
     } else if (compactWeatherSection) {
-      compactWeatherSection.classList.add('weather-placeholder'); compactWeatherSection.innerHTML = `<div style="padding:8px;font-family:'Courier New',monospace;color:#8b5a2b;font-size:0.85em;opacity:0.7;">📍 Date &amp; location needed for weather</div>`;
+      compactWeatherSection.classList.add('weather-placeholder');
+      if (chit.location && !hasDate) {
+        compactWeatherSection.innerHTML = `<div style="padding:8px;font-family:'Courier New',monospace;color:#8b5a2b;font-size:0.85em;opacity:0.7;">📅 Add a date for weather</div>`;
+      } else if (!chit.location && hasDate) {
+        compactWeatherSection.innerHTML = `<div style="padding:8px;font-family:'Courier New',monospace;color:#8b5a2b;font-size:0.85em;opacity:0.7;">📍 Add a location for weather</div>`;
+      } else {
+        compactWeatherSection.innerHTML = `<div style="padding:8px;font-family:'Courier New',monospace;color:#8b5a2b;font-size:0.85em;opacity:0.7;">📍 Date &amp; location needed for weather</div>`;
+      }
     }
 
     window.currentChitId = chit.id || chitId;
@@ -3145,6 +3161,174 @@ function markEditorSaved() {
   setSaveButtonSaved();
 }
 
+// ── Saved Locations helpers ───────────────────────────────────────────────────
+
+/**
+ * Populate the #saved-locations-dropdown from cached saved locations.
+ * Called during editor init and can be re-called to refresh.
+ */
+async function loadSavedLocationsDropdown() {
+  var locations = await loadSavedLocations();
+  var dropdown = document.getElementById('saved-locations-dropdown');
+  if (!dropdown) return;
+
+  // Remove all options except the first null option
+  while (dropdown.options.length > 1) {
+    dropdown.remove(1);
+  }
+
+  locations.forEach(function (loc) {
+    var opt = document.createElement('option');
+    opt.value = loc.address || '';
+    opt.textContent = loc.label || loc.address || '(unnamed)';
+    dropdown.appendChild(opt);
+  });
+
+  // Attach onchange handler (remove previous to avoid duplicates)
+  dropdown.onchange = onSavedLocationSelect;
+}
+
+/**
+ * Handle selection from the saved-locations dropdown.
+ * Populates the location input and triggers weather/map fetch.
+ */
+function onSavedLocationSelect() {
+  var dropdown = document.getElementById('saved-locations-dropdown');
+  if (!dropdown) return;
+  var address = dropdown.value;
+  var locationInput = document.getElementById('location');
+  if (!locationInput) return;
+
+  if (!address) {
+    // Null option selected — clear the field
+    locationInput.value = '';
+    return;
+  }
+
+  locationInput.value = address;
+  setSaveButtonUnsaved();
+  searchLocationMap();
+}
+
+/**
+ * "+Location" button handler — populate from default saved location.
+ */
+function onAddDefaultLocation(event) {
+  if (event) event.stopPropagation();
+  var defaultLoc = getDefaultLocation();
+  if (!defaultLoc) {
+    alert('No default location set — configure in Settings');
+    return;
+  }
+  var locationInput = document.getElementById('location');
+  if (locationInput) {
+    locationInput.value = defaultLoc.address || '';
+    setSaveButtonUnsaved();
+    searchLocationMap();
+  }
+}
+
+/**
+ * Clear location input, map display, and weather section.
+ */
+function onClearLocation(event) {
+  if (event) event.stopPropagation();
+  var locationInput = document.getElementById('location');
+  if (locationInput) locationInput.value = '';
+
+  var mapDisplay = document.getElementById('location-map');
+  if (mapDisplay) mapDisplay.innerHTML = '';
+
+  // Also clear the dynamic map-display iframe if present
+  var mapEmbed = document.getElementById('map-display');
+  if (mapEmbed) mapEmbed.innerHTML = '';
+
+  var compactWeather = document.getElementById('compactWeatherSection');
+  if (compactWeather) {
+    compactWeather.classList.add('weather-placeholder');
+    compactWeather.innerHTML = '📍 Date & location needed for weather';
+  }
+
+  var dropdown = document.getElementById('saved-locations-dropdown');
+  if (dropdown) dropdown.value = '';
+
+  // Also reset compact dropdown
+  var compactDropdown = document.getElementById('compact-location-dropdown');
+  if (compactDropdown) compactDropdown.selectedIndex = 0;
+
+  setSaveButtonUnsaved();
+}
+
+// ── Compact location dropdown (title/weather area) ───────────────────────────
+
+/**
+ * Populate the #compact-location-dropdown from cached saved locations.
+ * Called during editor init alongside loadSavedLocationsDropdown().
+ */
+async function loadCompactLocationDropdown() {
+  var locations = await loadSavedLocations();
+  var dropdown = document.getElementById('compact-location-dropdown');
+  if (!dropdown) return;
+
+  // Remove all options except the first label option
+  while (dropdown.options.length > 1) {
+    dropdown.remove(1);
+  }
+
+  if (!locations || locations.length === 0) {
+    var noOpt = document.createElement('option');
+    noOpt.value = '';
+    noOpt.textContent = 'No saved locations';
+    noOpt.disabled = true;
+    dropdown.appendChild(noOpt);
+  } else {
+    locations.forEach(function (loc) {
+      var opt = document.createElement('option');
+      opt.value = loc.address || '';
+      opt.textContent = loc.label || loc.address || '(unnamed)';
+      dropdown.appendChild(opt);
+    });
+  }
+
+  dropdown.onchange = onCompactLocationSelect;
+}
+
+/**
+ * Handle selection from the compact location dropdown.
+ * Populates the location input and triggers weather/map fetch.
+ */
+function onCompactLocationSelect() {
+  var dropdown = document.getElementById('compact-location-dropdown');
+  if (!dropdown) return;
+  var address = dropdown.value;
+  if (!address) {
+    // Reset to label — no action
+    dropdown.selectedIndex = 0;
+    return;
+  }
+
+  var locationInput = document.getElementById('location');
+  if (locationInput) {
+    locationInput.value = address;
+    setSaveButtonUnsaved();
+    searchLocationMap();
+  }
+
+  // Sync the Location zone dropdown if present
+  var zoneDropdown = document.getElementById('saved-locations-dropdown');
+  if (zoneDropdown) {
+    for (var i = 0; i < zoneDropdown.options.length; i++) {
+      if (zoneDropdown.options[i].value === address) {
+        zoneDropdown.selectedIndex = i;
+        break;
+      }
+    }
+  }
+
+  // Reset compact dropdown back to the label
+  dropdown.selectedIndex = 0;
+}
+
 function searchLocationMap(event) {
   const locationInput = document.getElementById("location");
   if (!locationInput || !locationInput.value.trim()) {
@@ -3157,7 +3341,10 @@ function searchLocationMap(event) {
 
   if (!hasDate) {
     const cws = document.getElementById("compactWeatherSection");
-    if (cws) cws.classList.add('weather-placeholder'); cws.innerHTML = `<div style="padding:8px;font-family:'Courier New',monospace;color:#8b5a2b;font-size:0.85em;opacity:0.7;">📍 Date &amp; location needed for weather</div>`;
+    if (cws) {
+      cws.classList.add('weather-placeholder');
+      cws.innerHTML = `<div style="padding:8px;font-family:'Courier New',monospace;color:#8b5a2b;font-size:0.85em;opacity:0.7;">📅 Add a date for weather</div>`;
+    }
     // Still show the map
     getCoordinates(address).then((coords) => {
       displayMapInUI(coords.lat, coords.lon, address);
@@ -3313,6 +3500,10 @@ document.addEventListener("DOMContentLoaded", function () {
     window.customColors = colors;
     renderCustomColors(colors);
   });
+
+  // Populate saved locations dropdown
+  loadSavedLocationsDropdown();
+  loadCompactLocationDropdown();
 
   const initializeFlatpickr = (selector, options) => {
     const element = document.querySelector(selector);

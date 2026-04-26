@@ -31,6 +31,8 @@
                     <li><a href="#filters">Filtering & Sorting</a></li>
                     <li><a href="#notes-view">Notes View</a></li>
                     <li><a href="#clocks">Clocks</a></li>
+                    <li><a href="#weather">Weather</a></li>
+                    <li><a href="#saved-locations">Saved Locations</a></li>
                     <li><a href="#editor">Chit Editor</a></li>
                     <li><a href="#quick-edit">Quick Edit Modal</a></li>
                     <li><a href="#settings">Settings</a></li>
@@ -88,6 +90,7 @@
                 <li><kbd>.</kbd> — Period: <kbd>I</kbd> <kbd>D</kbd> <kbd>W</kbd>eek <kbd>K</kbd> Work <kbd>S</kbd> X-Day <kbd>M</kbd>onth <kbd>Y</kbd>ear</li>
                 <li><kbd>F</kbd> — Filter: <kbd>S</kbd>tatus <kbd>T</kbd>ags <kbd>P</kbd>riority <kbd>W</kbd>ords</li>
                 <li><kbd>O</kbd> — Order: <kbd>T</kbd>itle <kbd>S</kbd>tart <kbd>D</kbd>ue <kbd>U</kbd>pdated <kbd>C</kbd>reated <kbd>X</kbd> Status <kbd>M</kbd>anual <kbd>R</kbd>andom <kbd>G</kbd> Upcoming</li>
+                <li><kbd>W</kbd> — Weather (default location forecast)</li>
                 <li><kbd>L</kbd> — Clock · <kbd>R</kbd> — Reference · <kbd>Shift+R</kbd> — Help · <kbd>S</kbd> — Settings</li>
                 <li><kbd>ESC</kbd> — Close/exit · <kbd>Backspace</kbd> — Clear filters</li>
             </ul>
@@ -117,8 +120,28 @@
                 <li><strong><a href="https://www.cwholemaniii.com/pages/hss/hst.shtml" target="_blank">HST</a></strong> — Holeman Simplified Time. Represents the day as 0–100 sub-days (sd) shown on a progress bar. Midnight = 0.000 sd, noon = 50.000 sd, end of day = 100.000 sd</li>
             </ul>
             <p>Drag clocks between Active and Inactive zones in Settings to choose which appear. Use "Change Orientation" to switch between horizontal and vertical layout.</p>
+            <h3 id="weather">Weather</h3>
+            <p>Press <kbd>W</kbd> on the dashboard to open the weather modal. It shows the current forecast for your default saved location, including weather icon, high/low temperatures (°F), and precipitation. If no default location is configured, the modal will prompt you to set one in Settings.</p>
+            <p>In the chit editor, weather loads automatically when a chit has both a location and a date. Placeholder messages appear when either is missing.</p>
+            <h3 id="saved-locations">Saved Locations</h3>
+            <p>Manage saved locations in Settings → Saved Locations. Each location has a label and an address. Use the radio button to mark one as the default.</p>
+            <ul>
+                <li><strong>Adding</strong> — Click ➕ Add Location to add a new row. Fill in a label and address.</li>
+                <li><strong>Default</strong> — Select the radio button next to a location to make it the default. If only one location has an address, it is auto-selected.</li>
+                <li><strong>Removing</strong> — Click ✕ to remove a row. At least one row always remains.</li>
+                <li><strong>Saving</strong> — Empty-address rows are cleaned up on save.</li>
+            </ul>
+            <p>Saved locations are used by the editor's Location zone dropdown, the compact 📍 dropdown in the title area, the +Location button, and the dashboard weather modal (<kbd>W</kbd>).</p>
             <h3 id="editor">Chit Editor</h3>
             <p>Collapsible zones: Title, Dates & Times, Task, Location, Tags, People, Notes, Checklist, Alerts, Health Indicators, Color, Projects, Audit Log. 📱 QR button generates data or link QR codes.</p>
+            <h4>Location Zone</h4>
+            <ul>
+                <li><strong>+Location</strong> — Populates the address from your default saved location</li>
+                <li><strong>Saved Locations dropdown</strong> — Select any saved location by label to populate the address</li>
+                <li><strong>✕ Clear</strong> — Clears the address, map, and weather display</li>
+                <li><strong>📍 compact dropdown</strong> — Quick-access dropdown in the title/weather area for selecting a saved location without scrolling to the Location zone</li>
+            </ul>
+            <p>A chit can have at most one location. Weather and map load automatically when a location and date are both present.</p>
             <h3 id="quick-edit">Quick Edit Modal</h3>
             <p>Shift+click any chit. Edit title (double-click), change Priority/Severity/Status, Pin/Archive/Delete/QR. Recurring chits get per-field "All" checkboxes and series edit options.</p>
             <h3 id="settings">Settings</h3>
@@ -128,6 +151,7 @@
                 <li><strong>Default Filters</strong> — Per-tab default search text</li>
                 <li><strong>Clocks</strong> — Choose active clocks, drag to reorder, set orientation (horizontal/vertical)</li>
                 <li><strong>Tag Editor</strong> — Tree view, create/edit/delete/favorite, "+" for child tags</li>
+                <li><strong>Saved Locations</strong> — Add, label, and set a default location for use across the editor and dashboard weather</li>
                 <li><strong>Custom Colors</strong> — Color picker for chit colors</li>
                 <li><strong>Chit Options</strong> — Fade past, highlight overdue, delete past alarms</li>
                 <li><strong>Export / Import</strong> — CSV export and import</li>

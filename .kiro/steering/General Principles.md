@@ -49,3 +49,4 @@ inclusion: always
 - SQLite3 via Python stdlib. Single database file. No ORM.
 - Pydantic v1 models for request validation. All fields use `Optional` with defaults.
 - Soft delete throughout — chits are never hard-deleted. Use the `deleted` flag and `deleted_datetime` column.
+

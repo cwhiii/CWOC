@@ -35,6 +35,7 @@ class Settings(BaseModel):
     default_filters: Optional[Any] = None  # Object {tab: "filter text"} or legacy List[str]
     alarm_orientation: Optional[str] = None
     active_clocks: Optional[str] = None  # JSON array of active clock format values, e.g. '["24hour","12hour"]'
+    saved_locations: Optional[str] = None  # JSON array of saved location objects, e.g. '[{"label":"Home","address":"123 Main St","is_default":true}]'
     tags: Optional[List[Tag]] = None
     custom_colors: Optional[List[str]] = None
     visual_indicators: Optional[Dict[str, str]] = None
@@ -721,6 +722,22 @@ def migrate_add_work_hours():
         logger.error(f"Error adding work hours columns: {str(e)}")
         raise
 
+# Migration: Add saved_locations column if missing
+def migrate_add_saved_locations():
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(settings)")
+        columns = [col[1] for col in cursor.fetchall()]
+        if "saved_locations" not in columns:
+            cursor.execute("ALTER TABLE settings ADD COLUMN saved_locations TEXT")
+            conn.commit()
+            logger.info("Added saved_locations column to settings table")
+        conn.close()
+    except Exception as e:
+        logger.error(f"Error adding saved_locations column: {str(e)}")
+        raise
+
 # Initialize contacts table
 def init_contacts_table():
     try:
@@ -767,6 +784,7 @@ migrate_add_alerts()
 migrate_add_calendar_snap()
 migrate_add_recurrence_fields()
 migrate_add_work_hours()
+migrate_add_saved_locations()
 init_contacts_table()
 
 # ── Contact table migrations ─────────────────────────────────────────────────
@@ -1221,6 +1239,7 @@ def get_settings(user_id: str):
         settings["visual_indicators"] = deserialize_json_field(settings["visual_indicators"])
         settings["chit_options"] = deserialize_json_field(settings["chit_options"])
         settings["active_clocks"] = deserialize_json_field(settings.get("active_clocks"))
+        settings["saved_locations"] = deserialize_json_field(settings.get("saved_locations"))
         return settings
     except Exception as e:
         logger.error(f"Error fetching settings: {str(e)}")
@@ -1239,9 +1258,9 @@ def save_settings(settings: Settings):
             """
             INSERT OR REPLACE INTO settings (
                 user_id, time_format, sex, snooze_length, default_filters,
-                alarm_orientation, active_clocks, tags, custom_colors, visual_indicators, chit_options,
+                alarm_orientation, active_clocks, saved_locations, tags, custom_colors, visual_indicators, chit_options,
                 calendar_snap, week_start_day, work_start_hour, work_end_hour, work_days, enabled_periods, custom_days_count
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 settings.user_id,
@@ -1251,6 +1270,7 @@ def save_settings(settings: Settings):
                 serialize_json_field(settings.default_filters),
                 settings.alarm_orientation,
                 settings.active_clocks,
+                serialize_json_field(settings.saved_locations),
                 # Serialize tags as list of dicts (Pydantic Tag objects need .dict())
                 json.dumps([t.dict() for t in settings.tags]) if settings.tags else None,
                 serialize_json_field(settings.custom_colors),

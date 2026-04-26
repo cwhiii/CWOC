@@ -1622,6 +1622,118 @@ button.delete:hover {
     font-family: "Courier New", Courier, monospace;
 }
 
+/* ── Weather Modal ─────────────────────────────────────────────────────── */
+#weather-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 99998;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.weather-modal {
+    background: #fff8e1;
+    border: 2px solid #8b4513;
+    border-radius: 10px;
+    padding: 24px 32px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    font-family: "Courier New", monospace;
+    min-width: 300px;
+    max-width: 420px;
+    text-align: center;
+    color: #3c2f2f;
+}
+
+.weather-modal-header {
+    margin-bottom: 16px;
+    border-bottom: 2px solid #c4a882;
+    padding-bottom: 10px;
+}
+
+.weather-modal-header .weather-modal-label {
+    font-size: 1.2em;
+    font-weight: bold;
+    color: #4a2c2a;
+    margin: 0 0 4px 0;
+}
+
+.weather-modal-header .weather-modal-address {
+    font-size: 0.85em;
+    color: #6b4e31;
+    opacity: 0.8;
+}
+
+.weather-modal-body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+}
+
+.weather-modal-icon {
+    font-size: 2.5em;
+    line-height: 1;
+}
+
+.weather-modal-temps {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    font-size: 1.3em;
+    font-weight: bold;
+    color: #4a2c2a;
+}
+
+.weather-modal-temps .temp-high {
+    color: #b22222;
+}
+
+.weather-modal-temps .temp-low {
+    color: #4682b4;
+}
+
+.weather-modal-precip {
+    font-size: 0.9em;
+    color: #6b4e31;
+}
+
+.weather-modal-temp-bar {
+    width: 100%;
+    max-width: 260px;
+    height: 10px;
+    border-radius: 5px;
+    background: linear-gradient(to right, #4682b4, #b22222);
+    position: relative;
+    opacity: 0.7;
+}
+
+.weather-modal-temp-bar .temp-bar-marker {
+    position: absolute;
+    top: -3px;
+    width: 4px;
+    height: 16px;
+    background: #4a2c2a;
+    border-radius: 2px;
+}
+
+.weather-modal-close {
+    margin-top: 16px;
+    font-size: 0.8em;
+    opacity: 0.5;
+    cursor: pointer;
+}
+
+.weather-modal-error {
+    font-size: 0.95em;
+    color: #8b4513;
+    padding: 12px 0;
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
    TABLET RESPONSIVE — max-width: 768px
    Additive rules only; desktop defaults remain untouched above.
@@ -2003,9 +2115,20 @@ button.delete:hover {
         box-sizing: border-box !important;
     }
 
+    /* ── Weather modal: full width ────────────────────────────────────────── */
+    #weather-modal-overlay .weather-modal {
+        min-width: 0 !important;
+        max-width: none !important;
+        width: calc(100% - 16px) !important;
+        margin: 8px !important;
+        padding: 16px 20px !important;
+        box-sizing: border-box !important;
+    }
+
     /* ── Modal buttons: touch targets ─────────────────────────────────────── */
     .recurrence-modal-overlay button,
     #clock-modal-overlay button,
+    #weather-modal-overlay button,
     #deleteChitModal button {
         min-height: 44px;
         min-width: 44px;
