@@ -607,6 +607,9 @@
         // Update display name header
         _updateDisplayNameHeader();
 
+        // Show map for first address if available
+        _showContactAddressMap(contact.addresses);
+
         // Show delete/QR buttons for existing contacts
         if (_contactId) {
             document.getElementById('deleteButton').style.display = '';
@@ -753,5 +756,56 @@
         setFavorite: function (v) { _isFavorite = v; _updateFavoriteDisplay(); },
         getSaveSystem: function () { return _saveSystem; }
     };
+
+    // ── Contact Address Map ─────────────────────────────────────────────
+    async function _showContactAddressMap(addresses) {
+        var mapEl = document.getElementById('contact-address-map');
+        if (!mapEl) return;
+        if (!addresses || !Array.isArray(addresses) || addresses.length === 0) {
+            mapEl.style.display = 'none';
+            return;
+        }
+        // Find first address with a non-empty value
+        var addr = null;
+        for (var i = 0; i < addresses.length; i++) {
+            var val = (addresses[i].value || '').trim();
+            if (val) { addr = val; break; }
+        }
+        if (!addr) { mapEl.style.display = 'none'; return; }
+
+        // Geocode with progressive fallback
+        var queries = [addr];
+        var noZip = addr.replace(/\s*\d{5}(-\d{4})?\s*$/, '').trim();
+        if (noZip && noZip !== addr) queries.push(noZip);
+        var parts = addr.split(',');
+        if (parts.length >= 2) queries.push(parts.slice(1).join(',').trim());
+        if (parts.length >= 3) queries.push(parts.slice(-2).join(',').trim());
+
+        var lat, lon, found = false;
+        for (var gi = 0; gi < queries.length; gi++) {
+            var q = queries[gi];
+            if (!q) continue;
+            try {
+                var resp = await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q=' + encodeURIComponent(q), {
+                    headers: { 'User-Agent': 'CWOC-Weather/1.0' }
+                });
+                var data = await resp.json();
+                if (data && data.length > 0) {
+                    lat = parseFloat(data[0].lat);
+                    lon = parseFloat(data[0].lon);
+                    found = true;
+                    break;
+                }
+            } catch (e) { /* skip */ }
+        }
+        if (!found) { mapEl.style.display = 'none'; return; }
+
+        mapEl.style.display = '';
+        mapEl.innerHTML = '<iframe width="100%" height="180" frameborder="0" scrolling="no" ' +
+            'src="https://www.openstreetmap.org/export/embed.html?bbox=' +
+            (lon - 0.01) + ',' + (lat - 0.007) + ',' + (lon + 0.01) + ',' + (lat + 0.007) +
+            '&layer=mapnik&marker=' + lat + ',' + lon + '" style="border:0;border-radius:5px;"></iframe>';
+    }
+    window._showContactAddressMap = _showContactAddressMap;
 
 })();

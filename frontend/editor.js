@@ -56,19 +56,37 @@ async function getCoordinates(address) {
   if (!address) {
     throw new Error("No address provided.");
   }
-  const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}`;
-  const response = await fetch(url, {
-    headers: { 'User-Agent': 'CWOC-Weather/1.0' }
-  });
-  const data = await response.json();
-  console.log("Geocoding API response:", data);
-  if (!data || data.length === 0) {
-    throw new Error("Location not found.");
+  // Try full address first, then progressively simpler queries
+  var queries = [address];
+  // Strip zip code (5-digit or 5+4 at end)
+  var noZip = address.replace(/\s*\d{5}(-\d{4})?\s*$/, '').trim();
+  if (noZip && noZip !== address) queries.push(noZip);
+  // Strip street number + street, keep city/state/zip portion after last comma
+  var parts = address.split(',');
+  if (parts.length >= 2) {
+    queries.push(parts.slice(1).join(',').trim());
   }
-  return {
-    lat: parseFloat(data[0].lat),
-    lon: parseFloat(data[0].lon),
-  };
+  // Try city/state from the end
+  if (parts.length >= 3) {
+    queries.push(parts.slice(-2).join(',').trim());
+  }
+
+  for (var i = 0; i < queries.length; i++) {
+    var q = queries[i];
+    if (!q) continue;
+    try {
+      var url = `https://nominatim.openstreetmap.org/search?format=json&limit=3&q=${encodeURIComponent(q)}`;
+      var response = await fetch(url, { headers: { 'User-Agent': 'CWOC-Weather/1.0' } });
+      var data = await response.json();
+      console.log("Geocoding attempt", i + 1, "query:", q, "results:", data.length);
+      if (data && data.length > 0) {
+        return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
+      }
+    } catch (e) {
+      console.warn("Geocoding attempt", i + 1, "failed:", e);
+    }
+  }
+  throw new Error("Location not found.");
 }
 
 async function getWeather(lat, lon) {

@@ -1650,22 +1650,58 @@ button.delete:hover {
 }
 
 .weather-modal-header {
-    margin-bottom: 16px;
-    border-bottom: 2px solid #c4a882;
-    padding-bottom: 10px;
+    display: none;
 }
 
 .weather-modal-header .weather-modal-label {
-    font-size: 1.2em;
-    font-weight: bold;
-    color: #4a2c2a;
-    margin: 0 0 4px 0;
+    display: none;
 }
 
 .weather-modal-header .weather-modal-address {
+    display: none;
+}
+
+.weather-modal-location-selector select {
+    width: 100%;
+    padding: 8px 10px;
+    font-family: "Courier New", monospace;
+    font-size: 0.9em;
+    border: 1px solid #8b5a2b;
+    border-radius: 5px;
+    background: #f5e6cc;
+    color: #3c2f2f;
+    cursor: pointer;
+    margin-bottom: 8px;
+    appearance: auto;
+}
+
+.weather-modal-location-selector select:focus {
+    outline: 1px solid #a0522d;
+}
+
+.weather-modal-location-selector input[type="text"] {
+    padding: 6px 8px;
+    font-family: "Courier New", monospace;
     font-size: 0.85em;
-    color: #6b4e31;
-    opacity: 0.8;
+    border: 1px solid #8b5a2b;
+    border-radius: 5px;
+    background: #f5e6cc;
+    color: #3c2f2f;
+}
+
+.weather-modal-location-selector button {
+    padding: 6px 10px;
+    font-family: "Courier New", monospace;
+    font-size: 0.85em;
+    border: 1px solid #5c4033;
+    border-radius: 5px;
+    background: #a0522d;
+    color: #fdf5e6;
+    cursor: pointer;
+}
+
+.weather-modal-location-selector button:hover {
+    background: #8b4513;
 }
 
 .weather-modal-body {

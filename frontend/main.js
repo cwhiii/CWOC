@@ -1102,105 +1102,182 @@ function _buildWeatherModalHTML(content) {
   return `<div class="weather-modal">${content}<div class="weather-modal-close" onclick="_closeWeatherModal()">ESC or click outside to close</div></div>`;
 }
 
+function _buildLocationSelectorHTML(locations, selectedAddress) {
+  var opts = '';
+  if (locations && locations.length > 0) {
+    locations.forEach(function (loc) {
+      var sel = (loc.address === selectedAddress) ? ' selected' : '';
+      opts += `<option value="${(loc.address || '').replace(/"/g, '&quot;')}"${sel}>${loc.label || loc.address || '(unnamed)'}</option>`;
+    });
+  }
+  return '<div class="weather-modal-location-selector">' +
+    '<select id="weather-modal-loc-dropdown" onchange="_onWeatherModalLocChange()">' +
+      '<option value="">— Saved Locations —</option>' +
+      opts +
+      '<option value="__manual__">✏️ Type a location…</option>' +
+    '</select>' +
+    '<div id="weather-modal-manual-row" style="display:none;gap:4px;margin-bottom:6px;">' +
+      '<input id="weather-modal-manual-input" type="text" placeholder="Enter address…" />' +
+      '<button onclick="_onWeatherModalManualGo()">Go</button>' +
+    '</div>' +
+  '</div>';
+}
+
+function _onWeatherModalLocChange() {
+  var dd = document.getElementById('weather-modal-loc-dropdown');
+  var manualRow = document.getElementById('weather-modal-manual-row');
+  if (!dd) return;
+  if (dd.value === '__manual__') {
+    if (manualRow) manualRow.style.display = 'flex';
+    var inp = document.getElementById('weather-modal-manual-input');
+    if (inp) inp.focus();
+    return;
+  }
+  if (manualRow) manualRow.style.display = 'none';
+  if (dd.value) {
+    // Find the label for this address
+    var locs = window._savedLocations || [];
+    var loc = locs.find(function (l) { return l.address === dd.value; });
+    _fetchWeatherForModal(dd.value, loc ? loc.label : 'Custom');
+  }
+}
+
+function _onWeatherModalManualGo() {
+  var inp = document.getElementById('weather-modal-manual-input');
+  if (!inp || !inp.value.trim()) return;
+  _fetchWeatherForModal(inp.value.trim(), 'Custom');
+}
+
 async function _openWeatherModal() {
   // Toggle off if already open
-  const existing = document.getElementById('weather-modal-overlay');
+  var existing = document.getElementById('weather-modal-overlay');
   if (existing) { _closeWeatherModal(); return; }
 
   // Ensure saved locations are loaded
   await loadSavedLocations();
-  const defaultLoc = getDefaultLocation();
+  var locations = window._savedLocations || [];
+  var defaultLoc = getDefaultLocation();
 
-  const overlay = document.createElement('div');
+  var overlay = document.createElement('div');
   overlay.id = 'weather-modal-overlay';
+  overlay.setAttribute('tabindex', '-1');
   overlay.addEventListener('click', function (e) { if (e.target === overlay) _closeWeatherModal(); });
+  overlay.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') {
+      e.stopPropagation();
+      e.preventDefault();
+      var dd = document.getElementById('weather-modal-loc-dropdown');
+      var inp = document.getElementById('weather-modal-manual-input');
+      // If dropdown or input is focused, just blur it (first Escape)
+      if (dd && document.activeElement === dd) { dd.blur(); overlay.focus(); return; }
+      if (inp && document.activeElement === inp) { inp.blur(); overlay.focus(); return; }
+      // Otherwise close the modal (second Escape)
+      _closeWeatherModal();
+    }
+  });
 
-  if (!defaultLoc) {
+  if (!defaultLoc && locations.length === 0) {
     overlay.innerHTML = _buildWeatherModalHTML(
-      '<div class="weather-modal-error">No default location configured. Add one in Settings.</div>'
+      '<div class="weather-modal-error">No saved locations configured. Add one in Settings.</div>'
     );
     document.body.appendChild(overlay);
+    overlay.focus();
     return;
   }
 
-  const label = defaultLoc.label || 'Default';
-  const address = defaultLoc.address || '';
+  var startLoc = defaultLoc || locations[0];
+  var label = startLoc.label || 'Default';
+  var address = startLoc.address || '';
 
-  // Show loading state
+  // Show modal with location selector + loading state
   overlay.innerHTML = _buildWeatherModalHTML(
-    `<div class="weather-modal-header"><div class="weather-modal-label">${label}</div><div class="weather-modal-address">${address}</div></div>` +
-    '<div class="weather-modal-body"><div style="opacity:0.6;">Loading weather…</div></div>'
+    _buildLocationSelectorHTML(locations, address) +
+    '<div class="weather-modal-body" id="weather-modal-body"><div style="opacity:0.6;">Loading weather…</div></div>'
   );
   document.body.appendChild(overlay);
+  overlay.focus();
+
+  // Fetch weather for the default/first location
+  _fetchWeatherForModal(address, label);
+}
+
+async function _fetchWeatherForModal(address, label) {
+  var overlay = document.getElementById('weather-modal-overlay');
+  if (!overlay) return;
+
+  // Show loading in body
+  var bodyEl = document.getElementById('weather-modal-body');
+  if (bodyEl) bodyEl.innerHTML = '<div style="opacity:0.6;">Loading weather…</div>';
 
   try {
-    // Geocode
-    const geoUrl = `https://nominatim.openstreetmap.org/search?format=json&limit=5&q=${encodeURIComponent(address)}`;
-    console.log('Weather modal geocoding:', address, geoUrl);
-    const geoResp = await fetch(geoUrl, {
-      headers: { 'User-Agent': 'CWOC-Weather/1.0' }
-    });
-    if (!geoResp.ok) throw new Error('geocode_network');
-    const geoData = await geoResp.json();
-    console.log('Geocode response:', geoData);
-    if (!geoData || geoData.length === 0) throw new Error('geocode_empty');
+    // Geocode with progressive fallback
+    var geoQueries = [address];
+    var noZip = address.replace(/\s*\d{5}(-\d{4})?\s*$/, '').trim();
+    if (noZip && noZip !== address) geoQueries.push(noZip);
+    var addrParts = address.split(',');
+    if (addrParts.length >= 2) geoQueries.push(addrParts.slice(1).join(',').trim());
+    if (addrParts.length >= 3) geoQueries.push(addrParts.slice(-2).join(',').trim());
 
-    const lat = parseFloat(geoData[0].lat);
-    const lon = parseFloat(geoData[0].lon);
+    var lat, lon, geoFound = false;
+    for (var gi = 0; gi < geoQueries.length; gi++) {
+      var q = geoQueries[gi];
+      if (!q) continue;
+      try {
+        var geoUrl = 'https://nominatim.openstreetmap.org/search?format=json&limit=3&q=' + encodeURIComponent(q);
+        var geoResp = await fetch(geoUrl, { headers: { 'User-Agent': 'CWOC-Weather/1.0' } });
+        if (!geoResp.ok) continue;
+        var geoData = await geoResp.json();
+        if (geoData && geoData.length > 0) {
+          lat = parseFloat(geoData[0].lat);
+          lon = parseFloat(geoData[0].lon);
+          geoFound = true;
+          break;
+        }
+      } catch (e) { console.warn('Geocode attempt failed:', e); }
+    }
+    if (!geoFound) throw new Error('geocode_empty');
 
     // Fetch weather
-    const wxUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_sum&timezone=auto&forecast_days=1`;
-    const wxResp = await fetch(wxUrl);
+    var wxUrl = 'https://api.open-meteo.com/v1/forecast?latitude=' + lat + '&longitude=' + lon + '&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_sum&timezone=auto&forecast_days=1';
+    var wxResp = await fetch(wxUrl);
     if (!wxResp.ok) throw new Error('weather_network');
-    const wxData = await wxResp.json();
+    var wxData = await wxResp.json();
     if (!wxData || !wxData.daily) throw new Error('weather_empty');
 
-    const today = wxData.daily;
-    const weatherCode = today.weathercode[0];
-    const minC = today.temperature_2m_min[0];
-    const maxC = today.temperature_2m_max[0];
-    const precipMm = today.precipitation_sum[0];
+    var today = wxData.daily;
+    var weatherCode = today.weathercode[0];
+    var minC = today.temperature_2m_min[0];
+    var maxC = today.temperature_2m_max[0];
+    var precipMm = today.precipitation_sum[0];
 
-    const minF = Math.round((minC * 9) / 5 + 32);
-    const maxF = Math.round((maxC * 9) / 5 + 32);
-    const precipInches = Math.ceil(precipMm * 0.0393701 * 10) / 10;
+    var minF = Math.round((minC * 9) / 5 + 32);
+    var maxF = Math.round((maxC * 9) / 5 + 32);
+    var precipInches = Math.ceil(precipMm * 0.0393701 * 10) / 10;
 
-    const icon = _getWeatherIcon(weatherCode);
-    const precipType = _getPrecipLabel(weatherCode);
-    const precipText = precipType ? `${precipInches}" ${precipType}` : 'No precipitation';
+    var icon = _getWeatherIcon(weatherCode);
+    var precipType = _getPrecipLabel(weatherCode);
+    var precipText = precipType ? precipInches + '" ' + precipType : 'No precipitation';
 
-    // Temperature bar markers (range -14°F to 104°F)
-    const barMin = -14, barMax = 104, barRange = barMax - barMin;
-    const lowPct = Math.max(0, Math.min(100, ((minF - barMin) / barRange) * 100));
-    const highPct = Math.max(0, Math.min(100, ((maxF - barMin) / barRange) * 100));
+    var barMin = -14, barMax = 104, barRange = barMax - barMin;
+    var lowPct = Math.max(0, Math.min(100, ((minF - barMin) / barRange) * 100));
+    var highPct = Math.max(0, Math.min(100, ((maxF - barMin) / barRange) * 100));
 
-    const modalEl = overlay.querySelector('.weather-modal');
-    if (modalEl) {
-      modalEl.innerHTML =
-        `<div class="weather-modal-header"><div class="weather-modal-label">${label}</div><div class="weather-modal-address">${address}</div></div>` +
-        '<div class="weather-modal-body">' +
-          `<div class="weather-modal-icon">${icon}</div>` +
-          `<div class="weather-modal-temps"><span class="temp-high">${maxF}°F</span> / <span class="temp-low">${minF}°F</span></div>` +
-          `<div class="weather-modal-precip">${precipText}</div>` +
-          `<div class="weather-modal-temp-bar"><div class="temp-bar-marker" style="left:${lowPct}%" title="Low ${minF}°F"></div><div class="temp-bar-marker" style="left:${highPct}%" title="High ${maxF}°F"></div></div>` +
-        '</div>' +
-        '<div class="weather-modal-close" onclick="_closeWeatherModal()">ESC or click outside to close</div>';
+    if (bodyEl) {
+      bodyEl.innerHTML =
+        '<div class="weather-modal-icon">' + icon + '</div>' +
+        '<div class="weather-modal-temps"><span class="temp-high">' + maxF + '°F</span> / <span class="temp-low">' + minF + '°F</span></div>' +
+        '<div class="weather-modal-precip">' + precipText + '</div>' +
+        '<div class="weather-modal-temp-bar"><div class="temp-bar-marker" style="left:' + lowPct + '%" title="Low ' + minF + '°F"></div><div class="temp-bar-marker" style="left:' + highPct + '%" title="High ' + maxF + '°F"></div></div>';
     }
   } catch (err) {
     console.error('Weather modal error:', err);
-    let msg = 'Weather unavailable — try again later';
-    if (err.message === 'geocode_empty') msg = `Could not find location: ${address}`;
+    var msg = 'Weather unavailable — try again later';
+    if (err.message === 'geocode_empty') msg = 'Could not find location: ' + address;
     else if (err.message === 'geocode_network') msg = 'Could not reach location service';
     else if (err.message === 'weather_network') msg = 'Could not reach weather service';
-    else if (err.message === 'weather_empty') msg = `Weather data unavailable for ${address}`;
+    else if (err.message === 'weather_empty') msg = 'Weather data unavailable for ' + address;
 
-    const modalEl = overlay.querySelector('.weather-modal');
-    if (modalEl) {
-      modalEl.innerHTML =
-        `<div class="weather-modal-header"><div class="weather-modal-label">${defaultLoc.label || 'Default'}</div><div class="weather-modal-address">${address}</div></div>` +
-        `<div class="weather-modal-error">${msg}</div>` +
-        '<div class="weather-modal-close" onclick="_closeWeatherModal()">ESC or click outside to close</div>';
-    }
+    if (bodyEl) bodyEl.innerHTML = '<div class="weather-modal-error">' + msg + '</div>';
   }
 }
 
@@ -4277,6 +4354,17 @@ document.addEventListener("DOMContentLoaded", function () {
         return;
       }
       if (document.getElementById('weather-modal-overlay')) {
+        // First Escape: blur the dropdown/input if focused; second Escape: close modal
+        var weatherDropdown = document.getElementById('weather-modal-loc-dropdown');
+        var weatherInput = document.getElementById('weather-modal-manual-input');
+        if (weatherDropdown && document.activeElement === weatherDropdown) {
+          weatherDropdown.blur();
+          return;
+        }
+        if (weatherInput && document.activeElement === weatherInput) {
+          weatherInput.blur();
+          return;
+        }
         _closeWeatherModal();
         return;
       }

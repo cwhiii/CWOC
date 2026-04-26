@@ -1765,34 +1765,38 @@ hr {
 .compact-day-header {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 6px;
     justify-content: flex-start;
     flex-wrap: wrap;
+    padding: 4px 0;
 }
 
 .compact-icon {
-    font-size: 2em;
+    font-size: 1.5em;
 }
 
 .compact-date {
-    width: 190px;
+    width: 170px;
+    font-size: 0.9em;
 }
 
 .compact-temperatures {
     display: flex;
-    flex-direction: column;
-    width: 100px;
+    flex-direction: row;
+    gap: 4px;
+    align-items: center;
 }
 
 .compact-high,
 .compact-low {
     font-weight: bold;
-    padding: 5px 15px;
+    padding: 2px 8px;
     border-radius: 20px;
     text-align: center;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    font-size: 0.95em;
 }
 
 .compact-high {
@@ -1804,14 +1808,13 @@ hr {
 }
 
 .compact-precip {
-    font-size: 0.9em;
-    min-width: 100px;
+    font-size: 0.85em;
+    min-width: 80px;
     font-weight: bold;
     background-color: #d0e1ff;
     color: #1a1a1a;
-    padding: 1em 0.5em 1em 0.5em;
+    padding: 3px 6px;
     border-radius: 5px;
-    margin: 0 auto;
 }
 
 .compact-precip:empty {
@@ -1821,18 +1824,11 @@ hr {
 .compact-temperature-track {
     position: relative;
     width: 100%;
-    height: 10px;
-    background: linear-gradient(
-        to right,
-        #1a4b8c 0%,
-        #1a4b8c 25%,
-        #ffff0 50%,
-        #8b0000 75%,
-        #8b0000 100%
-    );
-    border-radius: 5px;
-    margin-top: 1em;
-    margin-bottom: 1em;
+    height: 8px;
+    background: linear-gradient(to right, #4682b4, #b22222);
+    border-radius: 4px;
+    margin-top: 4px;
+    margin-bottom: 10px;
 }
 
 .compact-temperature-mask {
