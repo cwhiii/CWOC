@@ -129,6 +129,17 @@
                     </div>
                 </div>
 
+                <!-- People -->
+                <div class="filter-group" id="filter-people">
+                    <label class="filter-label" onclick="toggleFilterGroup('filter-people')">
+                        <span class="section-toggle">▶</span> People <span class="hotkey-hint">E</span>
+                    </label>
+                    <div class="filter-group-body" style="display:none;">
+                        <div id="people-multi"></div>
+                        <button class="filter-clear-btn" onclick="clearPeopleFilter()">Clear</button>
+                    </div>
+                </div>
+
                 <!-- Show (Archive/Pinned) -->
                 <div class="filter-group" id="filter-archive">
                     <label class="filter-label" onclick="toggleFilterGroup('filter-archive')">
@@ -157,8 +168,12 @@
                 </div>
             </div>
 
-            <!-- Settings -->
+            <!-- People + Settings -->
             <div class="sidebar-section" id="section-settings">
+                <button class="action-button" onclick="window.location.href='/frontend/people.html'" style="margin-bottom:6px;">
+                    <i class="fas fa-address-book" style="font-size:1.1em;vertical-align:middle;margin-right:4px;"></i>
+                    People
+                </button>
                 <button class="action-button" onclick="storePreviousState(); localStorage.setItem('cwoc_settings_return', '/'); window.location.href='/frontend/settings.html'">
                     <img src="/static/settings.png" alt="Settings" />
                     Settings <span class="hotkey-hint">S</span>
@@ -204,6 +219,7 @@
             <div class="hotkey-panel-option" onclick="_enterFilterSub('status')"><span class="panel-key">S</span><span class="panel-label">Status</span></div>
             <div class="hotkey-panel-option" onclick="_enterFilterSub('label')"><span class="panel-key">T</span><span class="panel-label">Tags</span></div>
             <div class="hotkey-panel-option" onclick="_enterFilterSub('priority')"><span class="panel-key">P</span><span class="panel-label">Priority</span></div>
+            <div class="hotkey-panel-option" onclick="_enterFilterSub('people')"><span class="panel-key">E</span><span class="panel-label">People</span></div>
             <div class="hotkey-panel-option" onclick="_toggleFilterArchived()"><span class="panel-key">A</span><span class="panel-label">Archived</span></div>
             <div class="hotkey-panel-option" onclick="_toggleFilterPinned()"><span class="panel-key">I</span><span class="panel-label">Pinned</span></div>
             <div class="hotkey-panel-option" onclick="_filterFocusSearch()"><span class="panel-key">W</span><span class="panel-label">Search Words</span></div>
@@ -224,6 +240,11 @@
         <div class="hotkey-panel" id="panel-filter-priority">
             <h3>Priority Filter</h3>
             <div id="panel-priority-options"></div>
+            <div class="hotkey-panel-footer">Number keys to toggle · ⌫ Clear · Enter to confirm · ESC to cancel</div>
+        </div>
+        <div class="hotkey-panel" id="panel-filter-people">
+            <h3>People Filter</h3>
+            <div id="panel-people-options"></div>
             <div class="hotkey-panel-footer">Number keys to toggle · ⌫ Clear · Enter to confirm · ESC to cancel</div>
         </div>
 

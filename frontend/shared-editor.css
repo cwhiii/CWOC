@@ -1,0 +1,409 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   CWOC Shared Editor Styles
+   
+   Reusable editor patterns shared by the Chit Editor and Contact Editor.
+   Provides: header row, zone containers, zones grid, form fields, buttons.
+   
+   Load this BEFORE any page-specific editor CSS (e.g. editor.css).
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── CSS Variables (editor color palette) ──────────────────────────────── */
+:root {
+    --parchment-light: #fdf5e6;
+    --parchment-medium: #faebd7;
+    --parchment-dark: #fff8dc;
+    --aged-brown-dark: #4a2c2a;
+    --aged-brown-medium: #8b4513;
+    --aged-brown-light: #a0522d;
+    --accent-gold: #d4af37;
+    --accent-teal: #008080;
+    --button-bg: #d2b48c;
+    --button-hover: #c4a484;
+    --danger-red: #b22222;
+    --success-green: #228b22;
+    --info-blue: #4682b4;
+    --warning-orange: #daa520;
+    --light-grey: #e0e0e0;
+    --dark-grey: #6c757d;
+    --border-color: var(--aged-brown-medium);
+    --text-color: var(--aged-brown-dark);
+    --header-bg: var(--button-bg);
+    --zone-header-bg: var(--button-bg);
+    --zone-body-bg: var(--parchment-dark);
+    --input-bg: var(--parchment-light);
+    --modal-bg: var(--parchment-medium);
+    --hover-bg-light: #f0e6d0;
+}
+
+/* ── Base Body ─────────────────────────────────────────────────────────── */
+body {
+    font-family:
+        -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    margin: 0;
+    padding: 20px;
+    background-color: var(--parchment-medium);
+    transition: background-color 0.3s ease;
+}
+
+/* ── Header Row (logo + title + button groups) ─────────────────────────── */
+.header-row {
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    margin: 0 auto;
+    margin-bottom: 20px;
+    padding: 20px;
+    background: var(--header-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    position: relative;
+    transition: background-color 0.3s ease;
+    width: 95%;
+    gap: 15px;
+}
+
+.header-row h1 {
+    margin: 0;
+    color: var(--aged-brown-dark);
+}
+
+.headerImage {
+    height: 2em;
+}
+
+/* ── Header Button Groups (left + right) ───────────────────────────────── */
+.buttons {
+    display: flex;
+    gap: 10px;
+    flex-grow: 1;
+    justify-content: space-between;
+}
+
+.buttons .left-buttons {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    flex-grow: 1;
+}
+
+.buttons .right-buttons {
+    display: flex;
+    gap: 10px;
+    flex-shrink: 0;
+}
+
+/* ── General Button Styles ─────────────────────────────────────────────── */
+button {
+    padding: 8px 16px;
+    border: 2px outset var(--aged-brown-medium);
+    border-radius: 4px;
+    background: var(--button-bg);
+    color: var(--aged-brown-dark);
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+button i {
+    margin-right: 5px;
+    color: var(--aged-brown-dark);
+}
+
+button:hover {
+    background: var(--button-hover);
+}
+
+button.delete {
+    background: var(--danger-red);
+    color: var(--parchment-light);
+    border: 2px outset var(--aged-brown-dark);
+}
+
+button.delete:hover {
+    background: #a01c1c;
+}
+
+button.cancel {
+    background: var(--aged-brown-light);
+    color: var(--parchment-light);
+    border: 2px outset var(--aged-brown-medium);
+}
+
+button.cancel:hover {
+    background: var(--aged-brown-medium);
+}
+
+/* ── Editor Container ──────────────────────────────────────────────────── */
+.editor {
+    background: var(--parchment-dark);
+    padding: 20px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    transition: opacity 0.3s ease;
+    max-width: 95%;
+    margin: 0 auto;
+}
+
+/* ── Form Field Styles ─────────────────────────────────────────────────── */
+.field {
+    margin-bottom: 15px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.field.full-width {
+    flex-direction: column;
+    align-items: stretch;
+}
+
+.field label {
+    font-weight: 500;
+    color: var(--aged-brown-dark);
+}
+
+.field.full-width label {
+    align-self: flex-start;
+    margin-bottom: 5px;
+}
+
+input[type="checkbox"] {
+    margin-right: 5px;
+    accent-color: var(--accent-teal);
+}
+
+input,
+select,
+textarea {
+    padding: 8px 12px;
+    border: 1px inset var(--aged-brown-medium);
+    border-radius: 4px;
+    font-size: 14px;
+    flex: 1;
+    background-color: var(--input-bg);
+    color: var(--text-color);
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+    outline: none;
+    border-color: var(--accent-teal);
+    box-shadow: 0 0 0 2px rgba(0, 128, 128, 0.25);
+}
+
+input:disabled,
+select:disabled,
+textarea:disabled,
+button:disabled:not(.status-icon-button) {
+    background-color: var(--parchment-light);
+    cursor: not-allowed;
+    color: var(--aged-brown-medium);
+    border: 1px dotted var(--aged-brown-light);
+}
+
+/* ── Zone Container Pattern (collapsible sections) ─────────────────────── */
+.zone-container {
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    margin-bottom: 20px;
+    background: var(--zone-body-bg);
+    flex: 1;
+    overflow: hidden;
+    transition: height 0.3s ease;
+}
+
+.zone-container.collapsed {
+    height: 48px;
+    opacity: 0.55;
+    transition: opacity 0.2s, height 0.3s ease;
+}
+
+.zone-container.collapsed:hover {
+    opacity: 0.85;
+}
+
+.zone-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    background-color: var(--zone-header-bg);
+    border-bottom: 1px solid var(--border-color);
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+    transition: background-color 0.3s ease;
+}
+
+.zone-header h2.zone-title {
+    margin: 0;
+    color: var(--aged-brown-dark);
+    font-size: 1.1em;
+    flex-grow: 1;
+}
+
+.zone-header .zone-toggle-icon {
+    font-size: 1.2em;
+    margin-left: 10px;
+    transition: transform 0.2s;
+    cursor: pointer;
+    color: var(--aged-brown-dark);
+}
+
+.zone-container.collapsed .zone-header .zone-toggle-icon {
+    transform: rotate(-90deg);
+}
+
+.zone-container.expanded .zone-header .zone-toggle-icon {
+    transform: rotate(0deg);
+}
+
+.zone-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-direction: row !important;
+}
+
+.zone-header .zone-button {
+    margin-right: 0;
+}
+
+.zone-button {
+    padding: 5px 10px;
+    font-size: 12px;
+    background-color: var(--aged-brown-light);
+    color: var(--parchment-light);
+    border: 1px outset var(--aged-brown-medium);
+}
+
+.zone-button:hover {
+    background-color: #924525;
+}
+
+.zone-body {
+    padding: 10px;
+    background-color: var(--zone-body-bg);
+}
+
+/* ── Main Zones Grid (two-column responsive layout) ────────────────────── */
+.main-zones-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+
+/* ── Toggle Switch (reusable on/off toggle) ────────────────────────────── */
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 40px;
+    height: 20px;
+    margin: 0 5px;
+    vertical-align: middle;
+}
+
+.switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: var(--aged-brown-light);
+    transition: 0.2s;
+    border-radius: 20px;
+    border: 1px solid var(--aged-brown-medium);
+}
+
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 16px;
+    width: 16px;
+    left: 2px;
+    bottom: 2px;
+    background-color: var(--parchment-light);
+    transition: 0.2s;
+    border-radius: 50%;
+}
+
+input:checked + .slider {
+    background-color: var(--accent-teal);
+    border-color: var(--accent-teal);
+}
+
+input:focus + .slider {
+    box-shadow: 0 0 1px var(--accent-teal);
+}
+
+input:checked + .slider:before {
+    transform: translateX(20px);
+}
+
+.slider.round {
+    border-radius: 20px;
+}
+
+.slider.round:before {
+    border-radius: 50%;
+}
+
+.switch-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin-bottom: 10px;
+    font-size: 0.9em;
+}
+
+.toggle-label {
+    color: var(--aged-brown-dark);
+    white-space: nowrap;
+}
+
+/* ── Responsive Breakpoints ────────────────────────────────────────────── */
+@media (max-width: 400px) {
+    .header-row {
+        flex-direction: column;
+        align-items: flex-start;
+        padding: 10px;
+    }
+    .header-row h1 {
+        position: static;
+        margin-bottom: 10px;
+    }
+    .buttons {
+        width: 100%;
+        justify-content: center;
+    }
+    .main-zones-grid {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+    .zone-container {
+        flex: unset;
+    }
+    .zone-header {
+        flex-wrap: wrap;
+    }
+    .zone-header h2.zone-title {
+        width: 100%;
+        margin-bottom: 5px;
+    }
+    .zone-header .zone-button {
+        flex-grow: 1;
+        margin-right: 0;
+    }
+}

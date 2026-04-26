@@ -1578,6 +1578,51 @@ function showQuickEditModal(chit, onRefresh) {
     }
   }
 
+  // --- People chips (read-only) ---
+  if (Array.isArray(chit.people) && chit.people.length > 0) {
+    const peopleRow = document.createElement('div');
+    peopleRow.className = 'cwoc-people-chips-row';
+
+    chit.people.forEach(name => {
+      const chip = document.createElement('span');
+      chip.className = 'cwoc-people-chip';
+      chip.textContent = name;
+      peopleRow.appendChild(chip);
+    });
+
+    modal.appendChild(peopleRow);
+
+    // After render, check for overflow and add "+N more" if needed
+    requestAnimationFrame(() => {
+      const rowHeight = peopleRow.offsetHeight;
+      const chips = Array.from(peopleRow.querySelectorAll('.cwoc-people-chip'));
+      if (chips.length === 0) return;
+      const firstTop = chips[0].offsetTop;
+      // Find chips that overflow past the first row
+      let visibleCount = 0;
+      for (const c of chips) {
+        if (c.offsetTop <= firstTop + chips[0].offsetHeight + 4) {
+          visibleCount++;
+        } else {
+          break;
+        }
+      }
+      const hiddenCount = chips.length - visibleCount;
+      if (hiddenCount > 0) {
+        // Hide overflowing chips
+        for (let i = visibleCount; i < chips.length; i++) {
+          chips[i].style.display = 'none';
+        }
+        // Add "+N more" indicator
+        const more = document.createElement('span');
+        more.className = 'cwoc-people-chip cwoc-people-more';
+        more.textContent = `+${hiddenCount} more`;
+        more.title = chit.people.join(', ');
+        peopleRow.appendChild(more);
+      }
+    });
+  }
+
   const btnStyle = 'display:block;width:100%;padding:10px 12px;margin-bottom:8px;border:1px solid #6b4e31;border-radius:4px;background:#fdf5e6;color:#4a2c2a;font-family:inherit;font-size:0.95em;cursor:pointer;text-align:left;';
   const selStyle = 'padding:4px 6px;border:1px solid #6b4e31;border-radius:4px;background:#fdf5e6;color:#4a2c2a;font-family:inherit;font-size:0.9em;flex:1;';
   const rowStyle = 'display:flex;align-items:center;gap:8px;padding:6px 12px;margin-bottom:6px;border:1px solid #d4c5a9;border-radius:4px;background:#fdf5e6;font-size:0.9em;';

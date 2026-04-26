@@ -1,9 +1,11 @@
 import sqlite3
 import json
 import logging
+import os
+import re
 from datetime import datetime
 from typing import Optional, List, Dict, Any
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query, UploadFile, File, Response
 from pydantic import BaseModel
 from uuid import uuid4
 from fastapi.staticfiles import StaticFiles
@@ -76,6 +78,427 @@ class Chit(BaseModel):
     child_chits: Optional[List[str]] = None    # New field
     all_day: Optional[bool] = False            # All-day event flag
     alerts: Optional[List[Dict[str, Any]]] = None  # Alarms, timers, stopwatches, notifications
+
+class MultiValueEntry(BaseModel):
+    label: Optional[str] = None    # "Work", "Home", "Mobile", custom
+    value: Optional[str] = None
+
+class Contact(BaseModel):
+    id: Optional[str] = None
+    given_name: str                          # Required
+    surname: Optional[str] = None
+    middle_names: Optional[str] = None
+    prefix: Optional[str] = None
+    suffix: Optional[str] = None
+    nickname: Optional[str] = None
+    display_name: Optional[str] = None
+    phones: Optional[List[MultiValueEntry]] = None
+    emails: Optional[List[MultiValueEntry]] = None
+    addresses: Optional[List[MultiValueEntry]] = None
+    call_signs: Optional[List[MultiValueEntry]] = None
+    x_handles: Optional[List[MultiValueEntry]] = None
+    websites: Optional[List[MultiValueEntry]] = None
+    has_signal: Optional[bool] = False
+    signal_username: Optional[str] = None
+    pgp_key: Optional[str] = None
+    favorite: Optional[bool] = False
+    color: Optional[str] = None
+    organization: Optional[str] = None
+    social_context: Optional[str] = None
+    image_url: Optional[str] = None
+    created_datetime: Optional[str] = None
+    modified_datetime: Optional[str] = None
+
+def compute_display_name(contact) -> str:
+    """Concatenate prefix + given_name + middle_names + surname + suffix into a display name."""
+    parts = []
+    # Support both dict and Pydantic model access
+    if isinstance(contact, dict):
+        for field in ["prefix", "given_name", "middle_names", "surname", "suffix"]:
+            val = contact.get(field)
+            if val and val.strip():
+                parts.append(val.strip())
+    else:
+        for field in ["prefix", "given_name", "middle_names", "surname", "suffix"]:
+            val = getattr(contact, field, None)
+            if val and val.strip():
+                parts.append(val.strip())
+    return " ".join(parts)
+
+
+# ── vCard 3.0 Serializer & Printer ──────────────────────────────────────────
+
+def vcard_parse(vcard_string: str) -> dict:
+    """Parse a vCard 3.0 string into a Contact dict.
+
+    Maps standard vCard properties (N, FN, TEL, EMAIL, ADR, URL) and
+    custom X-properties (X-SIGNAL, X-PGP-KEY, X-CALLSIGN, X-XHANDLE)
+    to Contact model fields.  Returns a plain dict suitable for
+    constructing a Contact Pydantic model.
+    """
+    contact: Dict[str, Any] = {
+        "given_name": "",
+        "surname": None,
+        "middle_names": None,
+        "prefix": None,
+        "suffix": None,
+        "phones": [],
+        "emails": [],
+        "addresses": [],
+        "websites": [],
+        "call_signs": [],
+        "x_handles": [],
+        "has_signal": False,
+        "pgp_key": None,
+        "favorite": False,
+    }
+
+    fn_value = None  # fallback display name from FN line
+
+    # Unfold continuation lines (RFC 2425 §5.8.1): a line starting with
+    # a space or tab is a continuation of the previous logical line.
+    unfolded_lines: List[str] = []
+    for raw_line in vcard_string.splitlines():
+        if raw_line.startswith((" ", "\t")) and unfolded_lines:
+            unfolded_lines[-1] += raw_line[1:]
+        else:
+            unfolded_lines.append(raw_line)
+
+    for line in unfolded_lines:
+        line = line.strip()
+        if not line or line.upper() in ("BEGIN:VCARD", "END:VCARD", "VERSION:3.0"):
+            continue
+
+        # Split into property name (with params) and value
+        colon_idx = line.find(":")
+        if colon_idx == -1:
+            continue
+        prop_part = line[:colon_idx]
+        value = line[colon_idx + 1:]
+
+        # Parse property name and parameters (e.g. TEL;TYPE=Work)
+        parts = prop_part.split(";")
+        prop_name = parts[0].upper()
+        params: Dict[str, str] = {}
+        for p in parts[1:]:
+            if "=" in p:
+                pk, pv = p.split("=", 1)
+                params[pk.upper()] = pv
+            else:
+                # Bare parameter (e.g. ";WORK") treated as TYPE
+                params["TYPE"] = p
+
+        label = params.get("TYPE", None)
+
+        if prop_name == "N":
+            # N:Surname;GivenName;MiddleNames;Prefix;Suffix
+            n_parts = value.split(";")
+            while len(n_parts) < 5:
+                n_parts.append("")
+            contact["surname"] = n_parts[0] if n_parts[0] else None
+            contact["given_name"] = n_parts[1] if n_parts[1] else ""
+            contact["middle_names"] = n_parts[2] if n_parts[2] else None
+            contact["prefix"] = n_parts[3] if n_parts[3] else None
+            contact["suffix"] = n_parts[4] if n_parts[4] else None
+
+        elif prop_name == "FN":
+            fn_value = value
+
+        elif prop_name == "TEL":
+            if value:
+                contact["phones"].append({"label": label, "value": value})
+
+        elif prop_name == "EMAIL":
+            if value:
+                contact["emails"].append({"label": label, "value": value})
+
+        elif prop_name == "ADR":
+            # ADR;TYPE=x:PO Box;Extended;Street;City;Region;PostalCode;Country
+            if value:
+                adr_parts = value.split(";")
+                while len(adr_parts) < 7:
+                    adr_parts.append("")
+                # Build a human-readable address string, skipping empty parts
+                formatted_parts = [p.strip() for p in adr_parts if p.strip()]
+                formatted = ", ".join(formatted_parts)
+                if formatted:
+                    contact["addresses"].append({"label": label, "value": formatted})
+
+        elif prop_name == "URL":
+            if value:
+                contact["websites"].append({"label": label, "value": value})
+
+        elif prop_name == "X-SIGNAL":
+            contact["has_signal"] = value.lower() in ("true", "1", "yes")
+
+        elif prop_name == "X-PGP-KEY":
+            contact["pgp_key"] = value if value else None
+
+        elif prop_name == "X-CALLSIGN":
+            if value:
+                contact["call_signs"].append({"label": label, "value": value})
+
+        elif prop_name == "X-XHANDLE":
+            if value:
+                contact["x_handles"].append({"label": label, "value": value})
+
+        elif prop_name == "X-FAVORITE":
+            contact["favorite"] = value.lower() in ("true", "1", "yes")
+
+    # If given_name is still empty, try to extract from FN as a fallback
+    if not contact["given_name"] and fn_value:
+        contact["given_name"] = fn_value
+
+    # Clean up empty multi-value lists → None for consistency
+    for mv_field in ("phones", "emails", "addresses", "websites", "call_signs", "x_handles"):
+        if not contact[mv_field]:
+            contact[mv_field] = None
+
+    return contact
+
+
+def vcard_print(contact) -> str:
+    """Format a Contact (dict or Pydantic model) into a valid vCard 3.0 string.
+
+    Handles all mapped properties including multi-value fields with TYPE
+    parameters and custom X-properties.
+    """
+
+    def _get(field: str, default=None):
+        if isinstance(contact, dict):
+            return contact.get(field, default)
+        return getattr(contact, field, default)
+
+    lines: List[str] = []
+    lines.append("BEGIN:VCARD")
+    lines.append("VERSION:3.0")
+
+    # N property
+    surname = _get("surname") or ""
+    given_name = _get("given_name") or ""
+    middle_names = _get("middle_names") or ""
+    prefix = _get("prefix") or ""
+    suffix = _get("suffix") or ""
+    lines.append(f"N:{surname};{given_name};{middle_names};{prefix};{suffix}")
+
+    # FN property — computed display name
+    display = _get("display_name")
+    if not display:
+        display = compute_display_name(contact)
+    if display:
+        lines.append(f"FN:{display}")
+
+    # Multi-value fields helper
+    def _add_multi(prop: str, field: str):
+        entries = _get(field)
+        if not entries:
+            return
+        for entry in entries:
+            if isinstance(entry, dict):
+                lbl = entry.get("label")
+                val = entry.get("value") or ""
+            else:
+                lbl = getattr(entry, "label", None)
+                val = getattr(entry, "value", None) or ""
+            if not val:
+                continue
+            if lbl:
+                lines.append(f"{prop};TYPE={lbl}:{val}")
+            else:
+                lines.append(f"{prop}:{val}")
+
+    _add_multi("TEL", "phones")
+    _add_multi("EMAIL", "emails")
+
+    # ADR needs special handling — value is a formatted string, we store it
+    # back in the street field of the structured ADR format
+    addresses = _get("addresses")
+    if addresses:
+        for entry in addresses:
+            if isinstance(entry, dict):
+                lbl = entry.get("label")
+                val = entry.get("value") or ""
+            else:
+                lbl = getattr(entry, "label", None)
+                val = getattr(entry, "value", None) or ""
+            if not val:
+                continue
+            # Put the full formatted address in the street field
+            adr_value = f";;{val};;;;"
+            if lbl:
+                lines.append(f"ADR;TYPE={lbl}:{adr_value}")
+            else:
+                lines.append(f"ADR:{adr_value}")
+
+    _add_multi("URL", "websites")
+
+    # X-SIGNAL
+    has_signal = _get("has_signal")
+    if has_signal:
+        lines.append("X-SIGNAL:true")
+
+    # X-PGP-KEY
+    pgp_key = _get("pgp_key")
+    if pgp_key:
+        lines.append(f"X-PGP-KEY:{pgp_key}")
+
+    _add_multi("X-CALLSIGN", "call_signs")
+    _add_multi("X-XHANDLE", "x_handles")
+
+    # X-FAVORITE
+    favorite = _get("favorite")
+    if favorite:
+        lines.append("X-FAVORITE:true")
+
+    lines.append("END:VCARD")
+    return "\r\n".join(lines)
+
+
+# ── CSV Serializer (Export & Import) ─────────────────────────────────────────
+
+import csv
+import io
+
+# Multi-value field names that get flattened into numbered columns (up to 5 each)
+_CSV_MULTI_VALUE_FIELDS = ["phones", "emails", "addresses", "call_signs", "x_handles", "websites"]
+_CSV_MAX_MULTI = 5
+
+
+def _csv_header() -> list:
+    """Build the canonical CSV header row."""
+    cols = ["given_name", "surname", "middle_names", "prefix", "suffix"]
+    for field in _CSV_MULTI_VALUE_FIELDS:
+        # Strip trailing 's' for column prefix (phones -> phone, addresses -> addresse -> address)
+        col_prefix = field.rstrip("es") if field.endswith("sses") else (
+            field.rstrip("s") if field.endswith("s") else field
+        )
+        # Nicer prefixes for known fields
+        _prefix_map = {
+            "phones": "phone",
+            "emails": "email",
+            "addresses": "address",
+            "call_signs": "call_sign",
+            "x_handles": "x_handle",
+            "websites": "website",
+        }
+        col_prefix = _prefix_map.get(field, col_prefix)
+        for i in range(1, _CSV_MAX_MULTI + 1):
+            cols.append(f"{col_prefix}_{i}_label")
+            cols.append(f"{col_prefix}_{i}_value")
+    cols.extend(["has_signal", "pgp_key", "favorite"])
+    return cols
+
+
+def csv_export(contacts: list) -> str:
+    """Flatten a list of Contact dicts/models into a CSV string with header row.
+
+    Multi-value fields (phones, emails, etc.) are expanded into up to 5
+    numbered column pairs: {type}_1_label, {type}_1_value, ...
+    """
+    header = _csv_header()
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(header)
+
+    for contact in contacts:
+        def _get(field, default=None):
+            if isinstance(contact, dict):
+                return contact.get(field, default)
+            return getattr(contact, field, default)
+
+        row = [
+            _get("given_name") or "",
+            _get("surname") or "",
+            _get("middle_names") or "",
+            _get("prefix") or "",
+            _get("suffix") or "",
+        ]
+
+        for field in _CSV_MULTI_VALUE_FIELDS:
+            entries = _get(field) or []
+            for i in range(_CSV_MAX_MULTI):
+                if i < len(entries):
+                    entry = entries[i]
+                    if isinstance(entry, dict):
+                        row.append(entry.get("label") or "")
+                        row.append(entry.get("value") or "")
+                    else:
+                        row.append(getattr(entry, "label", None) or "")
+                        row.append(getattr(entry, "value", None) or "")
+                else:
+                    row.append("")
+                    row.append("")
+
+        row.append("true" if _get("has_signal") else "false")
+        row.append(_get("pgp_key") or "")
+        row.append("true" if _get("favorite") else "false")
+
+        writer.writerow(row)
+
+    return output.getvalue()
+
+
+# Reverse mapping: column prefix -> Contact field name
+_CSV_COL_PREFIX_TO_FIELD = {
+    "phone": "phones",
+    "email": "emails",
+    "address": "addresses",
+    "call_sign": "call_signs",
+    "x_handle": "x_handles",
+    "website": "websites",
+}
+
+
+def csv_import(csv_text: str) -> tuple:
+    """Parse a CSV string back into a list of Contact dicts.
+
+    Returns (contacts, errors) where errors is a list of
+    {"row": <1-based row number>, "reason": "..."} dicts for skipped rows.
+    """
+    contacts = []
+    errors = []
+
+    reader = csv.DictReader(io.StringIO(csv_text))
+
+    for row_idx, row in enumerate(reader, start=2):  # row 1 is header, data starts at 2
+        given_name = (row.get("given_name") or "").strip()
+        if not given_name:
+            errors.append({"row": row_idx, "reason": "Missing given_name"})
+            continue
+
+        contact = {
+            "given_name": given_name,
+            "surname": (row.get("surname") or "").strip() or None,
+            "middle_names": (row.get("middle_names") or "").strip() or None,
+            "prefix": (row.get("prefix") or "").strip() or None,
+            "suffix": (row.get("suffix") or "").strip() or None,
+        }
+
+        # Reconstruct multi-value fields from numbered columns
+        for col_prefix, field_name in _CSV_COL_PREFIX_TO_FIELD.items():
+            entries = []
+            for i in range(1, _CSV_MAX_MULTI + 1):
+                label_key = f"{col_prefix}_{i}_label"
+                value_key = f"{col_prefix}_{i}_value"
+                label = (row.get(label_key) or "").strip()
+                value = (row.get(value_key) or "").strip()
+                if value:
+                    entries.append({"label": label or None, "value": value})
+            contact[field_name] = entries if entries else None
+
+        # Boolean / text fields
+        has_signal_str = (row.get("has_signal") or "").strip().lower()
+        contact["has_signal"] = has_signal_str in ("true", "1", "yes")
+
+        contact["pgp_key"] = (row.get("pgp_key") or "").strip() or None
+
+        fav_str = (row.get("favorite") or "").strip().lower()
+        contact["favorite"] = fav_str in ("true", "1", "yes")
+
+        contacts.append(contact)
+
+    return (contacts, errors)
+
 
 # Database initialization
 def init_db():
@@ -298,6 +721,44 @@ def migrate_add_work_hours():
         logger.error(f"Error adding work hours columns: {str(e)}")
         raise
 
+# Initialize contacts table
+def init_contacts_table():
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS contacts (
+            id TEXT PRIMARY KEY,
+            given_name TEXT NOT NULL,
+            surname TEXT,
+            middle_names TEXT,
+            prefix TEXT,
+            suffix TEXT,
+            display_name TEXT,
+            phones TEXT,
+            emails TEXT,
+            addresses TEXT,
+            call_signs TEXT,
+            x_handles TEXT,
+            websites TEXT,
+            has_signal BOOLEAN DEFAULT 0,
+            pgp_key TEXT,
+            favorite BOOLEAN DEFAULT 0,
+            created_datetime TEXT,
+            modified_datetime TEXT
+        )
+        """)
+        conn.commit()
+    except Exception as e:
+        logger.error(f"Error initializing contacts table: {str(e)}")
+        raise
+    finally:
+        conn.close()
+
+# Create contacts directory for .vcf file storage
+CONTACTS_DIR = "/app/data/contacts/"
+os.makedirs(CONTACTS_DIR, exist_ok=True)
+
 # Initialize database and run all migrations
 init_db()
 migrate_labels_to_tags()
@@ -306,6 +767,35 @@ migrate_add_alerts()
 migrate_add_calendar_snap()
 migrate_add_recurrence_fields()
 migrate_add_work_hours()
+init_contacts_table()
+
+# ── Contact table migrations ─────────────────────────────────────────────────
+def migrate_contacts_add_new_fields():
+    """Add nickname, signal_username, color, organization, social_context, image_url columns."""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("PRAGMA table_info(contacts)")
+    existing = {row[1] for row in cursor.fetchall()}
+    new_cols = [
+        ("nickname", "TEXT"),
+        ("signal_username", "TEXT"),
+        ("color", "TEXT"),
+        ("organization", "TEXT"),
+        ("social_context", "TEXT"),
+        ("image_url", "TEXT"),
+    ]
+    for col_name, col_type in new_cols:
+        if col_name not in existing:
+            cursor.execute(f"ALTER TABLE contacts ADD COLUMN {col_name} {col_type}")
+            logger.info(f"Added column {col_name} to contacts table")
+    conn.commit()
+    conn.close()
+
+migrate_contacts_add_new_fields()
+
+# Create directory for contact images
+CONTACT_IMAGES_DIR = "/app/static/contact_images/"
+os.makedirs(CONTACT_IMAGES_DIR, exist_ok=True)
 
 # Serve all files from /frontend/ (e.g., index.html, settings.html, editor.html)
 app.mount("/frontend", StaticFiles(directory="/app/frontend"), name="frontend")
@@ -783,6 +1273,676 @@ def save_settings(settings: Settings):
     finally:
         if conn:
             conn.close()
+
+# ── Contact CRUD API ──────────────────────────────────────────────────────────
+
+def _serialize_contact_for_db(contact) -> dict:
+    """Extract contact fields into a dict ready for SQLite insertion.
+    Handles both Pydantic models and plain dicts.
+    """
+    def _get(field, default=None):
+        if isinstance(contact, dict):
+            return contact.get(field, default)
+        return getattr(contact, field, default)
+
+    # Convert MultiValueEntry lists to list-of-dicts for JSON serialization
+    def _mv_to_dicts(entries):
+        if not entries:
+            return None
+        result = []
+        for e in entries:
+            if isinstance(e, dict):
+                result.append(e)
+            else:
+                result.append(e.dict())
+        return result if result else None
+
+    return {
+        "given_name": _get("given_name"),
+        "surname": _get("surname"),
+        "middle_names": _get("middle_names"),
+        "prefix": _get("prefix"),
+        "suffix": _get("suffix"),
+        "nickname": _get("nickname"),
+        "display_name": compute_display_name(contact),
+        "phones": serialize_json_field(_mv_to_dicts(_get("phones"))),
+        "emails": serialize_json_field(_mv_to_dicts(_get("emails"))),
+        "addresses": serialize_json_field(_mv_to_dicts(_get("addresses"))),
+        "call_signs": serialize_json_field(_mv_to_dicts(_get("call_signs"))),
+        "x_handles": serialize_json_field(_mv_to_dicts(_get("x_handles"))),
+        "websites": serialize_json_field(_mv_to_dicts(_get("websites"))),
+        "has_signal": 1 if _get("has_signal") else 0,
+        "signal_username": _get("signal_username"),
+        "pgp_key": _get("pgp_key"),
+        "favorite": 1 if _get("favorite") else 0,
+        "color": _get("color"),
+        "organization": _get("organization"),
+        "social_context": _get("social_context"),
+        "image_url": _get("image_url"),
+    }
+
+
+def _row_to_contact(row: dict) -> dict:
+    """Convert a SQLite row dict into a Contact-compatible JSON dict."""
+    row["phones"] = deserialize_json_field(row.get("phones"))
+    row["emails"] = deserialize_json_field(row.get("emails"))
+    row["addresses"] = deserialize_json_field(row.get("addresses"))
+    row["call_signs"] = deserialize_json_field(row.get("call_signs"))
+    row["x_handles"] = deserialize_json_field(row.get("x_handles"))
+    row["websites"] = deserialize_json_field(row.get("websites"))
+    row["has_signal"] = bool(row.get("has_signal"))
+    row["favorite"] = bool(row.get("favorite"))
+    # Ensure new fields have defaults if missing from older rows
+    row.setdefault("nickname", None)
+    row.setdefault("signal_username", None)
+    row.setdefault("color", None)
+    row.setdefault("organization", None)
+    row.setdefault("social_context", None)
+    row.setdefault("image_url", None)
+    return row
+
+
+def _write_vcf_file(contact_id: str, contact) -> None:
+    """Write a .vcf file for the given contact to CONTACTS_DIR."""
+    vcf_content = vcard_print(contact)
+    filepath = os.path.join(CONTACTS_DIR, f"{contact_id}.vcf")
+    with open(filepath, "w", encoding="utf-8") as f:
+        f.write(vcf_content)
+
+
+@app.post("/api/contacts")
+def create_contact(contact: Contact):
+    conn = None
+    try:
+        contact_id = str(uuid4())
+        current_time = datetime.now().isoformat()
+        display_name = compute_display_name(contact)
+
+        # Build a dict for vcard_print that includes all fields
+        contact_dict = contact.dict()
+        contact_dict["id"] = contact_id
+        contact_dict["display_name"] = display_name
+        contact_dict["created_datetime"] = current_time
+        contact_dict["modified_datetime"] = current_time
+
+        # Write .vcf file
+        _write_vcf_file(contact_id, contact_dict)
+
+        # Insert SQLite row
+        db_fields = _serialize_contact_for_db(contact)
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO contacts (
+                id, given_name, surname, middle_names, prefix, suffix,
+                nickname, display_name, phones, emails, addresses, call_signs,
+                x_handles, websites, has_signal, signal_username, pgp_key, favorite,
+                color, organization, social_context, image_url,
+                created_datetime, modified_datetime
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                contact_id,
+                db_fields["given_name"],
+                db_fields["surname"],
+                db_fields["middle_names"],
+                db_fields["prefix"],
+                db_fields["suffix"],
+                db_fields["nickname"],
+                db_fields["display_name"],
+                db_fields["phones"],
+                db_fields["emails"],
+                db_fields["addresses"],
+                db_fields["call_signs"],
+                db_fields["x_handles"],
+                db_fields["websites"],
+                db_fields["has_signal"],
+                db_fields["signal_username"],
+                db_fields["pgp_key"],
+                db_fields["favorite"],
+                db_fields["color"],
+                db_fields["organization"],
+                db_fields["social_context"],
+                db_fields["image_url"],
+                current_time,
+                current_time,
+            ),
+        )
+        conn.commit()
+        return contact_dict
+    except Exception as e:
+        logger.error(f"Error creating contact: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to create contact: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
+@app.get("/api/contacts")
+def get_contacts(q: Optional[str] = Query(None)):
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        if q:
+            like_pattern = f"%{q}%"
+            cursor.execute(
+                """
+                SELECT * FROM contacts
+                WHERE display_name LIKE ? COLLATE NOCASE
+                   OR emails LIKE ? COLLATE NOCASE
+                   OR phones LIKE ? COLLATE NOCASE
+                   OR call_signs LIKE ? COLLATE NOCASE
+                ORDER BY favorite DESC, display_name COLLATE NOCASE ASC
+                """,
+                (like_pattern, like_pattern, like_pattern, like_pattern),
+            )
+        else:
+            cursor.execute(
+                "SELECT * FROM contacts ORDER BY favorite DESC, display_name COLLATE NOCASE ASC"
+            )
+
+        columns = [col[0] for col in cursor.description]
+        contacts = []
+        for row in cursor.fetchall():
+            contact = dict(zip(columns, row))
+            contacts.append(_row_to_contact(contact))
+        return contacts
+    except Exception as e:
+        logger.error(f"Error fetching contacts: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch contacts: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
+# ── Contact Export ─────────────────────────────────────────────────────────
+
+@app.get("/api/contacts/export")
+def export_contacts(format: str = Query(...)):
+    """Export all contacts as a .vcf or .csv file download."""
+    if format not in ("vcf", "csv"):
+        raise HTTPException(status_code=400, detail="Invalid format. Use 'vcf' or 'csv'")
+
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM contacts ORDER BY favorite DESC, display_name COLLATE NOCASE ASC")
+        columns = [col[0] for col in cursor.description]
+        contacts = []
+        for row in cursor.fetchall():
+            contact = dict(zip(columns, row))
+            contacts.append(_row_to_contact(contact))
+
+        if format == "vcf":
+            vcf_parts = [vcard_print(c) for c in contacts]
+            content = "\r\n".join(vcf_parts)
+            return Response(
+                content=content,
+                media_type="text/vcard",
+                headers={"Content-Disposition": "attachment; filename=contacts.vcf"},
+            )
+        else:
+            content = csv_export(contacts)
+            return Response(
+                content=content,
+                media_type="text/csv",
+                headers={"Content-Disposition": "attachment; filename=contacts.csv"},
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error exporting contacts: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to export contacts: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
+@app.get("/api/contacts/{contact_id}/export")
+def export_single_contact(contact_id: str, format: str = Query(...)):
+    """Export a single contact as a .vcf file download."""
+    if format != "vcf":
+        raise HTTPException(status_code=400, detail="Invalid format. Use 'vcf'")
+
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM contacts WHERE id = ?", (contact_id,))
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail=f"Contact {contact_id} not found")
+        columns = [col[0] for col in cursor.description]
+        contact = _row_to_contact(dict(zip(columns, row)))
+
+        vcf_content = vcard_print(contact)
+        display = contact.get("display_name") or contact.get("given_name") or "contact"
+        # Sanitize filename
+        safe_name = re.sub(r'[^\w\s-]', '', display).strip().replace(' ', '_')
+        return Response(
+            content=vcf_content,
+            media_type="text/vcard",
+            headers={"Content-Disposition": f"attachment; filename={safe_name}.vcf"},
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error exporting contact {contact_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to export contact: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
+@app.get("/api/contacts/{contact_id}")
+def get_contact(contact_id: str):
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM contacts WHERE id = ?", (contact_id,))
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail=f"Contact {contact_id} not found")
+        columns = [col[0] for col in cursor.description]
+        contact = dict(zip(columns, row))
+        return _row_to_contact(contact)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching contact {contact_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
+@app.put("/api/contacts/{contact_id}")
+def update_contact(contact_id: str, contact: Contact):
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM contacts WHERE id = ?", (contact_id,))
+        existing = cursor.fetchone()
+        if not existing:
+            raise HTTPException(status_code=404, detail=f"Contact {contact_id} not found")
+
+        current_time = datetime.now().isoformat()
+        display_name = compute_display_name(contact)
+
+        # Build dict for vcf and response
+        contact_dict = contact.dict()
+        contact_dict["id"] = contact_id
+        contact_dict["display_name"] = display_name
+        contact_dict["modified_datetime"] = current_time
+        # Preserve original created_datetime
+        columns = [col[0] for col in cursor.description]
+        existing_row = dict(zip(columns, existing))
+        contact_dict["created_datetime"] = existing_row["created_datetime"]
+
+        # Write updated .vcf file
+        _write_vcf_file(contact_id, contact_dict)
+
+        # Update SQLite row
+        db_fields = _serialize_contact_for_db(contact)
+        cursor.execute(
+            """
+            UPDATE contacts SET
+                given_name = ?, surname = ?, middle_names = ?, prefix = ?, suffix = ?,
+                nickname = ?, display_name = ?, phones = ?, emails = ?, addresses = ?,
+                call_signs = ?, x_handles = ?, websites = ?,
+                has_signal = ?, signal_username = ?, pgp_key = ?, favorite = ?,
+                color = ?, organization = ?, social_context = ?, image_url = ?,
+                modified_datetime = ?
+            WHERE id = ?
+            """,
+            (
+                db_fields["given_name"],
+                db_fields["surname"],
+                db_fields["middle_names"],
+                db_fields["prefix"],
+                db_fields["suffix"],
+                db_fields["nickname"],
+                db_fields["display_name"],
+                db_fields["phones"],
+                db_fields["emails"],
+                db_fields["addresses"],
+                db_fields["call_signs"],
+                db_fields["x_handles"],
+                db_fields["websites"],
+                db_fields["has_signal"],
+                db_fields["signal_username"],
+                db_fields["pgp_key"],
+                db_fields["favorite"],
+                db_fields["color"],
+                db_fields["organization"],
+                db_fields["social_context"],
+                db_fields["image_url"],
+                current_time,
+                contact_id,
+            ),
+        )
+        conn.commit()
+        return contact_dict
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating contact {contact_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to update contact: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
+@app.delete("/api/contacts/{contact_id}")
+def delete_contact(contact_id: str):
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM contacts WHERE id = ?", (contact_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail=f"Contact {contact_id} not found")
+
+        # Remove .vcf file from disk
+        vcf_path = os.path.join(CONTACTS_DIR, f"{contact_id}.vcf")
+        if os.path.exists(vcf_path):
+            os.remove(vcf_path)
+
+        # Delete SQLite row
+        cursor.execute("DELETE FROM contacts WHERE id = ?", (contact_id,))
+        conn.commit()
+        return {"message": f"Contact {contact_id} deleted"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting contact {contact_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete contact: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
+@app.post("/api/contacts/{contact_id}/image")
+async def upload_contact_image(contact_id: str, file: UploadFile = File(...)):
+    """Upload a profile image for a contact. Stores in /static/contact_images/."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM contacts WHERE id = ?", (contact_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail=f"Contact {contact_id} not found")
+
+        # Validate file type
+        allowed = {"image/jpeg", "image/png", "image/gif", "image/webp"}
+        if file.content_type not in allowed:
+            raise HTTPException(status_code=400, detail="Only JPEG, PNG, GIF, and WebP images are allowed")
+
+        # Determine extension from content type
+        ext_map = {"image/jpeg": ".jpg", "image/png": ".png", "image/gif": ".gif", "image/webp": ".webp"}
+        ext = ext_map.get(file.content_type, ".jpg")
+        filename = f"{contact_id}{ext}"
+        filepath = os.path.join(CONTACT_IMAGES_DIR, filename)
+
+        # Remove any existing image for this contact (different extension)
+        for old_ext in ext_map.values():
+            old_path = os.path.join(CONTACT_IMAGES_DIR, f"{contact_id}{old_ext}")
+            if os.path.exists(old_path) and old_path != filepath:
+                os.remove(old_path)
+
+        # Save file
+        contents = await file.read()
+        with open(filepath, "wb") as f:
+            f.write(contents)
+
+        image_url = f"/static/contact_images/{filename}"
+
+        # Update DB
+        cursor.execute("UPDATE contacts SET image_url = ?, modified_datetime = ? WHERE id = ?",
+                        (image_url, datetime.now().isoformat(), contact_id))
+        conn.commit()
+        return {"image_url": image_url}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error uploading image for contact {contact_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to upload image: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
+@app.delete("/api/contacts/{contact_id}/image")
+def delete_contact_image(contact_id: str):
+    """Remove a contact's profile image."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("SELECT image_url FROM contacts WHERE id = ?", (contact_id,))
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail=f"Contact {contact_id} not found")
+
+        image_url = row[0]
+        if image_url:
+            filepath = os.path.join("/app", image_url.lstrip("/"))
+            if os.path.exists(filepath):
+                os.remove(filepath)
+
+        cursor.execute("UPDATE contacts SET image_url = NULL, modified_datetime = ? WHERE id = ?",
+                        (datetime.now().isoformat(), contact_id))
+        conn.commit()
+        return {"message": "Image removed"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting image for contact {contact_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete image: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
+@app.patch("/api/contacts/{contact_id}/favorite")
+def toggle_contact_favorite(contact_id: str):
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM contacts WHERE id = ?", (contact_id,))
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail=f"Contact {contact_id} not found")
+
+        columns = [col[0] for col in cursor.description]
+        contact = dict(zip(columns, row))
+        contact = _row_to_contact(contact)
+
+        # Toggle favorite
+        new_favorite = not contact["favorite"]
+        current_time = datetime.now().isoformat()
+
+        # Update SQLite
+        cursor.execute(
+            "UPDATE contacts SET favorite = ?, modified_datetime = ? WHERE id = ?",
+            (1 if new_favorite else 0, current_time, contact_id),
+        )
+        conn.commit()
+
+        # Update contact dict for vcf write and response
+        contact["favorite"] = new_favorite
+        contact["modified_datetime"] = current_time
+
+        # Rewrite .vcf file with updated favorite
+        _write_vcf_file(contact_id, contact)
+
+        return contact
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error toggling favorite for contact {contact_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to toggle favorite: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
+# ── Contact Import ─────────────────────────────────────────────────────────
+
+@app.post("/api/contacts/import")
+async def import_contacts(file: UploadFile = File(...)):
+    """Import contacts from a .vcf or .csv file upload.
+
+    Returns a summary: {imported, skipped, errors}.
+    """
+    filename = (file.filename or "").lower()
+    if not (filename.endswith(".vcf") or filename.endswith(".csv")):
+        raise HTTPException(status_code=400, detail="Unsupported file type. Use .vcf or .csv")
+
+    content = (await file.read()).decode("utf-8", errors="replace")
+    imported = 0
+    skipped = 0
+    errors_list: List[Dict[str, Any]] = []
+
+    if filename.endswith(".vcf"):
+        # Split on BEGIN:VCARD / END:VCARD boundaries
+        vcard_blocks = re.findall(
+            r"(BEGIN:VCARD.*?END:VCARD)",
+            content,
+            re.DOTALL | re.IGNORECASE,
+        )
+        for idx, block in enumerate(vcard_blocks, start=1):
+            try:
+                parsed = vcard_parse(block)
+                if not parsed.get("given_name"):
+                    errors_list.append({"entry": idx, "reason": "Missing given_name"})
+                    skipped += 1
+                    continue
+
+                # Create contact: assign UUID, compute display_name, write .vcf, insert DB row
+                contact_id = str(uuid4())
+                current_time = datetime.now().isoformat()
+                display_name = compute_display_name(parsed)
+
+                contact_dict = dict(parsed)
+                contact_dict["id"] = contact_id
+                contact_dict["display_name"] = display_name
+                contact_dict["created_datetime"] = current_time
+                contact_dict["modified_datetime"] = current_time
+
+                _write_vcf_file(contact_id, contact_dict)
+
+                db_fields = _serialize_contact_for_db(contact_dict)
+                conn = sqlite3.connect(DB_PATH)
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    INSERT INTO contacts (
+                        id, given_name, surname, middle_names, prefix, suffix,
+                        display_name, phones, emails, addresses, call_signs,
+                        x_handles, websites, has_signal, pgp_key, favorite,
+                        created_datetime, modified_datetime
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        contact_id,
+                        db_fields["given_name"],
+                        db_fields["surname"],
+                        db_fields["middle_names"],
+                        db_fields["prefix"],
+                        db_fields["suffix"],
+                        db_fields["display_name"],
+                        db_fields["phones"],
+                        db_fields["emails"],
+                        db_fields["addresses"],
+                        db_fields["call_signs"],
+                        db_fields["x_handles"],
+                        db_fields["websites"],
+                        db_fields["has_signal"],
+                        db_fields["pgp_key"],
+                        db_fields["favorite"],
+                        current_time,
+                        current_time,
+                    ),
+                )
+                conn.commit()
+                conn.close()
+                imported += 1
+            except Exception as e:
+                errors_list.append({"entry": idx, "reason": str(e)})
+                skipped += 1
+
+    elif filename.endswith(".csv"):
+        contacts_parsed, csv_errors = csv_import(content)
+
+        # csv_errors use "row" key — remap to "entry" for consistent response
+        for err in csv_errors:
+            errors_list.append({"entry": err["row"], "reason": err["reason"]})
+            skipped += 1
+
+        for idx, parsed in enumerate(contacts_parsed):
+            try:
+                contact_id = str(uuid4())
+                current_time = datetime.now().isoformat()
+                display_name = compute_display_name(parsed)
+
+                contact_dict = dict(parsed)
+                contact_dict["id"] = contact_id
+                contact_dict["display_name"] = display_name
+                contact_dict["created_datetime"] = current_time
+                contact_dict["modified_datetime"] = current_time
+
+                _write_vcf_file(contact_id, contact_dict)
+
+                db_fields = _serialize_contact_for_db(contact_dict)
+                conn = sqlite3.connect(DB_PATH)
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    INSERT INTO contacts (
+                        id, given_name, surname, middle_names, prefix, suffix,
+                        display_name, phones, emails, addresses, call_signs,
+                        x_handles, websites, has_signal, pgp_key, favorite,
+                        created_datetime, modified_datetime
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        contact_id,
+                        db_fields["given_name"],
+                        db_fields["surname"],
+                        db_fields["middle_names"],
+                        db_fields["prefix"],
+                        db_fields["suffix"],
+                        db_fields["display_name"],
+                        db_fields["phones"],
+                        db_fields["emails"],
+                        db_fields["addresses"],
+                        db_fields["call_signs"],
+                        db_fields["x_handles"],
+                        db_fields["websites"],
+                        db_fields["has_signal"],
+                        db_fields["pgp_key"],
+                        db_fields["favorite"],
+                        current_time,
+                        current_time,
+                    ),
+                )
+                conn.commit()
+                conn.close()
+                imported += 1
+            except Exception as e:
+                errors_list.append({"entry": idx, "reason": str(e)})
+                skipped += 1
+
+    return {"imported": imported, "skipped": skipped, "errors": errors_list}
+
 
 # Health check
 @app.get("/health")

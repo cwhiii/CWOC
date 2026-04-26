@@ -1,201 +1,9 @@
-/* editor.css */
-
-/* Define the new color palette */
-:root {
-    --parchment-light: #fdf5e6; /* Old Lace - lightest background */
-    --parchment-medium: #faebd7; /* Antique White - general background */
-    --parchment-dark: #fff8dc; /* Cornsilk - content area background */
-    --aged-brown-dark: #4a2c2a; /* Dark brown for text/strong elements */
-    --aged-brown-medium: #8b4513; /* Saddle Brown for borders/accents */
-    --aged-brown-light: #a0522d; /* Sienna for slightly lighter accents */
-    --accent-gold: #d4af37; /* Muted gold for highlights */
-    --accent-teal: #008080; /* Muted teal for some active states */
-    --button-bg: #d2b48c; /* Tan for buttons */
-    --button-hover: #c4a484; /* Fallow for button hover */
-    --danger-red: #b22222; /* Firebrick for delete/danger */
-    --success-green: #228b22; /* ForestGreen for save/success */
-    --info-blue: #4682b4; /* SteelBlue for info/progress */
-    --warning-orange: #daa520; /* Goldenrod for warnings */
-    --light-grey: #e0e0e0; /* For disabled/subtle elements (use sparingly) */
-    --dark-grey: #6c757d; /* For secondary text/icons (use sparingly) */
-    --border-color: var(--aged-brown-medium);
-    --text-color: var(--aged-brown-dark);
-    --header-bg: var(--button-bg);
-    --zone-header-bg: var(--button-bg);
-    --zone-body-bg: var(--parchment-dark);
-    --input-bg: var(--parchment-light);
-    --modal-bg: var(--parchment-medium);
-    --hover-bg-light: #f0e6d0; /* Lighter parchment for subtle hovers */
-}
-
-body {
-    font-family:
-        -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    margin: 0;
-    padding: 20px;
-    background-color: var(--parchment-medium);
-    transition: background-color 0.3s ease;
-}
-
-.header-row {
-    display: flex;
-    justify-content: flex-start;
-    align-items: center;
-    margin: 0 auto;
-    margin-bottom: 20px;
-    padding: 20px;
-    background: var(--header-bg);
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    position: relative;
-    transition: background-color 0.3s ease;
-    width: 95%;
-    gap: 15px;
-}
-
-.header-row h1 {
-    margin: 0;
-    color: var(--aged-brown-dark);
-}
-
-.headerImage {
-    height: 2em;
-}
-
-.buttons {
-    display: flex;
-    gap: 10px;
-    flex-grow: 1;
-    justify-content: space-between;
-}
-
-.buttons .left-buttons {
-    display: flex;
-    gap: 10px;
-    justify-content: center;
-    flex-grow: 1;
-}
-
-.buttons .right-buttons {
-    display: flex;
-    gap: 10px;
-    flex-shrink: 0;
-}
-
-button {
-    padding: 8px 16px;
-    border: 2px outset var(--aged-brown-medium);
-    border-radius: 4px;
-    background: var(--button-bg);
-    color: var(--aged-brown-dark);
-    cursor: pointer;
-    font-size: 14px;
-    transition: background-color 0.2s;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-button i {
-    margin-right: 5px;
-    color: var(--aged-brown-dark);
-}
-
-button:hover {
-    background: var(--button-hover);
-}
-
-button.delete {
-    background: var(--danger-red);
-    color: var(--parchment-light);
-    border: 2px outset var(--aged-brown-dark);
-}
-
-button.delete:hover {
-    background: #a01c1c;
-}
-
-button.cancel {
-    background: var(--aged-brown-light);
-    color: var(--parchment-light);
-    border: 2px outset var(--aged-brown-medium);
-}
-
-button.cancel:hover {
-    background: var(--aged-brown-medium);
-}
-
-.editor {
-    background: var(--parchment-dark);
-    padding: 20px;
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    transition: opacity 0.3s ease;
-    max-width: 95%;
-    margin: 0 auto;
-}
+/* editor.css — Chit-specific styles.
+   Base editor styles (header-row, zones, fields, buttons, toggle switch)
+   are provided by shared-editor.css which is loaded first. */
 
 .editor.archived {
     opacity: 0.6;
-}
-
-.field {
-    margin-bottom: 15px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.field.full-width {
-    flex-direction: column;
-    align-items: stretch;
-}
-
-.field label {
-    font-weight: 500;
-    color: var(--aged-brown-dark);
-}
-
-.field.full-width label {
-    align-self: flex-start;
-    margin-bottom: 5px;
-}
-
-input[type="checkbox"] {
-    margin-right: 5px;
-    accent-color: var(--accent-teal);
-}
-
-input,
-select,
-textarea {
-    padding: 8px 12px;
-    border: 1px inset var(--aged-brown-medium);
-    border-radius: 4px;
-    font-size: 14px;
-    flex: 1;
-    background-color: var(--input-bg);
-    color: var(--text-color);
-}
-
-input:focus,
-select:focus,
-textarea:focus {
-    outline: none;
-    border-color: var(--accent-teal);
-    box-shadow: 0 0 0 2px rgba(0, 128, 128, 0.25);
-}
-
-input:disabled,
-select:disabled,
-textarea:disabled,
-button:disabled:not(.status-icon-button) {
-    background-color: var(--parchment-light);
-    cursor: not-allowed;
-    color: var(--aged-brown-medium);
-    border: 1px dotted var(--aged-brown-light);
 }
 
 .checklist-container {
@@ -315,88 +123,7 @@ button:disabled:not(.status-icon-button) {
     border: 1px solid var(--aged-brown-light);
 }
 
-.zone-container {
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
-    margin-bottom: 20px;
-    background: var(--zone-body-bg);
-    flex: 1;
-    overflow: hidden;
-    transition: height 0.3s ease;
-}
-
-.zone-container.collapsed {
-    height: 48px;
-    opacity: 0.55;
-    transition: opacity 0.2s, height 0.3s ease;
-}
-
-.zone-container.collapsed:hover {
-    opacity: 0.85;
-}
-
-.zone-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 10px;
-    background-color: var(--zone-header-bg);
-    border-bottom: 1px solid var(--border-color);
-    border-top-left-radius: 4px;
-    border-top-right-radius: 4px;
-    transition: background-color 0.3s ease;
-}
-
-.zone-header h2.zone-title {
-    margin: 0;
-    color: var(--aged-brown-dark);
-    font-size: 1.1em;
-    flex-grow: 1;
-}
-
-.zone-header .zone-toggle-icon {
-    font-size: 1.2em;
-    margin-left: 10px;
-    transition: transform 0.2s;
-    cursor: pointer;
-    color: var(--aged-brown-dark);
-}
-
-.zone-container.collapsed .zone-header .zone-toggle-icon {
-    transform: rotate(-90deg);
-}
-
-.zone-container.expanded .zone-header .zone-toggle-icon {
-    transform: rotate(0deg);
-}
-
-.zone-actions {
-    display: flex;
-    gap: 8px;
-    align-items: center;
-    flex-direction: row !important;
-}
-
-.zone-header .zone-button {
-    margin-right: 0;
-}
-
-.zone-button {
-    padding: 5px 10px;
-    font-size: 12px;
-    background-color: var(--aged-brown-light);
-    color: var(--parchment-light);
-    border: 1px outset var(--aged-brown-medium);
-}
-
-.zone-button:hover {
-    background-color: #924525;
-}
-
-.zone-body {
-    padding: 10px;
-    background-color: var(--zone-body-bg);
-}
+/* Zone-specific extensions (chit editor only) */
 
 .healthBox {
     display: flex;
@@ -1066,79 +793,7 @@ input.error {
     justify-content: flex-start;
 }
 
-.switch {
-    position: relative;
-    display: inline-block;
-    width: 40px;
-    height: 20px;
-    margin: 0 5px;
-    vertical-align: middle;
-}
-
-.switch input {
-    opacity: 0;
-    width: 0;
-    height: 0;
-}
-
-.slider {
-    position: absolute;
-    cursor: pointer;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: var(--aged-brown-light);
-    transition: 0.2s;
-    border-radius: 20px;
-    border: 1px solid var(--aged-brown-medium);
-}
-
-.slider:before {
-    position: absolute;
-    content: "";
-    height: 16px;
-    width: 16px;
-    left: 2px;
-    bottom: 2px;
-    background-color: var(--parchment-light);
-    transition: 0.2s;
-    border-radius: 50%;
-}
-
-input:checked + .slider {
-    background-color: var(--accent-teal);
-    border-color: var(--accent-teal);
-}
-
-input:focus + .slider {
-    box-shadow: 0 0 1px var(--accent-teal);
-}
-
-input:checked + .slider:before {
-    transform: translateX(20px);
-}
-
-.slider.round {
-    border-radius: 20px;
-}
-
-.slider.round:before {
-    border-radius: 50%;
-}
-
-.switch-wrapper {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    margin-bottom: 10px;
-    font-size: 0.9em;
-}
-
-.toggle-label {
-    color: var(--aged-brown-dark);
-    white-space: nowrap;
-}
+/* Toggle switch extensions are in shared-editor.css */
 
 #completed-checklist-container {
     margin-top: 0;
@@ -1568,11 +1223,7 @@ hr {
     color: #a01c1c;
 }
 
-.main-zones-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 20px;
-}
+/* .main-zones-grid base styles are in shared-editor.css */
 
 .grid-span-2 {
     grid-column: span 2;
@@ -1989,20 +1640,9 @@ hr {
     display: none;
 }
 
+/* Base responsive rules (.header-row, .buttons, .main-zones-grid, .zone-*)
+   are in shared-editor.css @media (max-width: 400px). Chit-specific overrides below. */
 @media (max-width: 400px) {
-    .header-row {
-        flex-direction: column;
-        align-items: flex-start;
-        padding: 10px;
-    }
-    .header-row h1 {
-        position: static;
-        margin-bottom: 10px;
-    }
-    .buttons {
-        width: 100%;
-        justify-content: center;
-    }
     .health-indicators-content .entry {
         flex-direction: column;
         align-items: flex-start;
@@ -2021,7 +1661,6 @@ hr {
     .health-indicators-content .cycle-form button {
         width: 100%;
     }
-    .main-zones-grid,
     .notes-checklist-container,
     .status-location-container,
     #titleWeatherContainer,
@@ -2029,7 +1668,6 @@ hr {
         grid-template-columns: 1fr;
         gap: 10px;
     }
-    .main-zones-grid > *,
     .notes-column,
     .checklist-column,
     .status-fields-group,
@@ -2039,20 +1677,6 @@ hr {
     .priority-status-group > * {
         width: 100%;
         min-width: unset;
-    }
-    .zone-container {
-        flex: unset;
-    }
-    .zone-header {
-        flex-wrap: wrap;
-    }
-    .zone-header h2.zone-title {
-        width: 100%;
-        margin-bottom: 5px;
-    }
-    .zone-header .zone-button {
-        flex-grow: 1;
-        margin-right: 0;
     }
     .all-day-field-container {
         align-items: flex-start;
@@ -2962,4 +2586,75 @@ button.archive-btn.archived-active {
 }
 .time-dropdown-option:hover {
     background: rgba(139, 90, 43, 0.15);
+}
+
+/* ── People Picker Autocomplete Dropdown ──────────────────────────────── */
+.people-ac-dropdown {
+    background: var(--parchment-light, #fff8e1);
+    border: 2px solid var(--aged-brown-medium, #8b4513);
+    border-radius: 6px;
+    max-height: 220px;
+    overflow-y: auto;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+    font-family: "Courier New", Courier, monospace;
+    font-size: 0.9em;
+    z-index: 9999;
+}
+
+.people-ac-item {
+    padding: 6px 10px;
+    cursor: pointer;
+    border-bottom: 1px solid #e0d4b5;
+    color: var(--aged-brown-dark, #4a2c2a);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.people-ac-item:last-child {
+    border-bottom: none;
+}
+
+.people-ac-item.people-ac-highlighted {
+    background: var(--hover-bg-light, #f0e6d0);
+}
+
+/* ── People Chips (tag-like display) ─────────────────────────────────── */
+.people-chips-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 8px;
+    min-height: 4px;
+}
+
+.people-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 0.85em;
+    cursor: pointer;
+    border: 1px solid var(--aged-brown-medium, #8b4513);
+    background: var(--button-bg, #d2b48c);
+    color: var(--aged-brown-dark, #4a2c2a);
+    transition: transform 0.1s;
+    user-select: none;
+}
+
+.people-chip:hover {
+    transform: scale(1.05);
+}
+
+.people-chip .chip-remove {
+    font-size: 0.8em;
+    opacity: 0.6;
+    cursor: pointer;
+    margin-left: 2px;
+}
+
+.people-chip .chip-remove:hover {
+    opacity: 1;
+    color: var(--danger-red, #b22222);
 }

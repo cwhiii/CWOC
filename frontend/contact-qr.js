@@ -1,0 +1,162 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   CWOC Contact QR Sharing — Reusable vCard + QR Code Generation
+   
+   Provides:
+     - generateContactVCard(contact) → vCard 3.0 string
+     - showContactQrCode(contact, modalId, titleId, canvasId) → displays QR
+   
+   Requires: qrcode-generator CDN loaded before this script.
+   Used by: people.js (Task 7.3), contact-editor.js (Task 8.2)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Build a vCard 3.0 string from a contact object (client-side).
+ * Mirrors the backend vcard_print() output format.
+ * @param {Object} contact — contact object from the API
+ * @returns {string} vCard 3.0 string
+ */
+function generateContactVCard(contact) {
+    var lines = [];
+    lines.push('BEGIN:VCARD');
+    lines.push('VERSION:3.0');
+
+    // N property
+    var surname = contact.surname || '';
+    var givenName = contact.given_name || '';
+    var middleNames = contact.middle_names || '';
+    var prefix = contact.prefix || '';
+    var suffix = contact.suffix || '';
+    lines.push('N:' + surname + ';' + givenName + ';' + middleNames + ';' + prefix + ';' + suffix);
+
+    // FN property
+    var displayName = contact.display_name || '';
+    if (!displayName) {
+        displayName = [prefix, givenName, middleNames, surname, suffix]
+            .filter(function (p) { return p; })
+            .join(' ');
+    }
+    if (displayName) {
+        lines.push('FN:' + displayName);
+    }
+
+    // Multi-value helper
+    function addMulti(prop, entries) {
+        if (!entries || !entries.length) return;
+        for (var i = 0; i < entries.length; i++) {
+            var entry = entries[i];
+            var lbl = entry.label || '';
+            var val = entry.value || '';
+            if (!val) continue;
+            if (lbl) {
+                lines.push(prop + ';TYPE=' + lbl + ':' + val);
+            } else {
+                lines.push(prop + ':' + val);
+            }
+        }
+    }
+
+    addMulti('TEL', contact.phones);
+    addMulti('EMAIL', contact.emails);
+
+    // ADR — put full address in street field
+    if (contact.addresses && contact.addresses.length) {
+        for (var i = 0; i < contact.addresses.length; i++) {
+            var entry = contact.addresses[i];
+            var lbl = entry.label || '';
+            var val = entry.value || '';
+            if (!val) continue;
+            var adrValue = ';;' + val + ';;;;';
+            if (lbl) {
+                lines.push('ADR;TYPE=' + lbl + ':' + adrValue);
+            } else {
+                lines.push('ADR:' + adrValue);
+            }
+        }
+    }
+
+    addMulti('URL', contact.websites);
+
+    // X-SIGNAL
+    if (contact.has_signal) {
+        lines.push('X-SIGNAL:true');
+    }
+
+    // X-PGP-KEY
+    if (contact.pgp_key) {
+        lines.push('X-PGP-KEY:' + contact.pgp_key);
+    }
+
+    addMulti('X-CALLSIGN', contact.call_signs);
+    addMulti('X-XHANDLE', contact.x_handles);
+
+    // X-FAVORITE
+    if (contact.favorite) {
+        lines.push('X-FAVORITE:true');
+    }
+
+    lines.push('END:VCARD');
+    return lines.join('\r\n');
+}
+
+// Maximum QR code byte capacity at error correction level L (alphanumeric)
+var _QR_MAX_BYTES = 2953;
+
+/**
+ * Show a QR code for a contact in a modal overlay.
+ * @param {Object} contact — contact object from the API
+ * @param {string} [modalId='qr-modal'] — modal element ID
+ * @param {string} [titleId='qr-modal-title'] — title element ID
+ * @param {string} [canvasId='qr-canvas'] — canvas/container element ID
+ */
+function showContactQrCode(contact, modalId, titleId, canvasId) {
+    modalId = modalId || 'qr-modal';
+    titleId = titleId || 'qr-modal-title';
+    canvasId = canvasId || 'qr-canvas';
+
+    var modal = document.getElementById(modalId);
+    var titleEl = document.getElementById(titleId);
+    var canvasEl = document.getElementById(canvasId);
+
+    var name = contact.display_name || contact.given_name || 'Contact';
+    titleEl.textContent = 'Share: ' + name;
+
+    // Generate vCard string
+    var vcardStr = generateContactVCard(contact);
+
+    // Check byte length (UTF-8)
+    var byteLength = new Blob([vcardStr]).size;
+
+    if (byteLength > _QR_MAX_BYTES) {
+        canvasEl.innerHTML =
+            '<p style="color:#8b5a2b; font-family: Courier New, monospace; padding: 10px;">' +
+            '⚠️ This contact has too much data for a single QR code (' +
+            byteLength + ' bytes, max ~' + _QR_MAX_BYTES + ').<br><br>' +
+            'Please use <strong>Export</strong> to share as a .vcf file instead.</p>';
+        modal.style.display = 'flex';
+        return;
+    }
+
+    // Generate QR code using qrcode-generator library
+    // typeNumber 0 = auto-detect, 'L' = lowest error correction for max capacity
+    try {
+        var qr = qrcode(0, 'L');
+        qr.addData(vcardStr);
+        qr.make();
+
+        // Calculate cell size to fit modal (max-width 350px, with 40px padding)
+        var moduleCount = qr.getModuleCount();
+        var availableSize = 280; // 350 - 40px padding - some margin
+        var cellSize = Math.max(2, Math.floor(availableSize / moduleCount));
+        var margin = 4;
+
+        canvasEl.innerHTML = qr.createImgTag(cellSize, margin);
+    } catch (err) {
+        console.error('QR code generation failed:', err);
+        canvasEl.innerHTML =
+            '<p style="color:#8b5a2b; font-family: Courier New, monospace; padding: 10px;">' +
+            '⚠️ Failed to generate QR code. The contact data may be too large.<br><br>' +
+            'Please use <strong>Export</strong> to share as a .vcf file instead.</p>';
+    }
+
+    modal.style.display = 'flex';
+}

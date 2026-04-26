@@ -227,35 +227,8 @@ function initializeChitId() {
 }
 
 function toggleZone(event, sectionId, contentId) {
-  // Only toggle if the click was on the header background, title, or toggle icon —
-  // not on any button or interactive element inside the header.
-  const target = event.target;
-  if (
-    target.closest(".zone-button") ||
-    target.closest("button") ||
-    target.closest("input") ||
-    target.closest("select") ||
-    target.closest("label")
-  ) {
-    return;
-  }
-
-  const section = document.getElementById(sectionId);
-  const content = document.getElementById(contentId);
-  if (!section || !content) return;
-
-  const isCollapsing = !content.classList.contains("collapsed");
-  content.classList.toggle("collapsed");
-  section.classList.toggle("collapsed");
-
-  const zoneButtons = section.querySelectorAll(".zone-button");
-  zoneButtons.forEach((button) => {
-    if (isCollapsing) {
-      button.style.display = "none";
-    } else {
-      button.style.display = "";
-    }
-  });
+  // Delegate to shared editor framework
+  cwocToggleZone(event, sectionId, contentId);
 }
 
 function toggleSection(contentId, button) {
@@ -1261,9 +1234,9 @@ async function buildChitObject() {
   const locationInput = document.getElementById("location");
   chit.location = locationInput ? locationInput.value.trim() : "";
 
-  const peopleInput = document.getElementById("people");
-  chit.people = peopleInput
-    ? peopleInput.value.split(",").map((p) => p.trim()).filter((p) => p)
+  // Collect people from chips
+  chit.people = (typeof _peopleChipData !== 'undefined' && _peopleChipData.length > 0)
+    ? _peopleChipData.map(c => c.display_name)
     : [];
 
   const statusSelect = document.getElementById("status");
@@ -2984,14 +2957,14 @@ async function loadChitData(chitId) {
       console.log(`[loadChitData] Set location to: "${locationInput.value}"`);
     }
 
-    // Restore people (stored as array, display as comma-separated)
-    const peopleInput = document.getElementById("people");
-    if (peopleInput) {
-      peopleInput.value = Array.isArray(chit.people)
-        ? chit.people.join(", ")
-        : chit.people || "";
-      console.log(`[loadChitData] Set people to: "${peopleInput.value}"`);
+    // Restore people (stored as array, display as chips)
+    const peopleArray = Array.isArray(chit.people)
+      ? chit.people
+      : (chit.people ? chit.people.split(',').map(p => p.trim()).filter(Boolean) : []);
+    if (typeof _setPeopleFromArray === 'function') {
+      _setPeopleFromArray(peopleArray);
     }
+    console.log(`[loadChitData] Set people chips: ${peopleArray.length} people`);
 
     // Restore color
     if (chit.color) {
@@ -3486,33 +3459,20 @@ document.addEventListener("DOMContentLoaded", function () {
       cancelOrExit();
     }
 
-    // Alt+number: jump to and expand zone
-    if (e.altKey && !e.ctrlKey && !e.metaKey) {
-      const zoneMap = {
-        '1': ['datesSection', 'datesContent'],
-        '2': ['taskSection', 'taskContent'],
-        '3': ['tagsSection', 'tagsContent'],
-        '4': ['notesSection', 'notesContent'],
-        '5': ['checklistSection', 'checklistContent'],
-        '6': ['alertsSection', 'alertsContent'],
-        '7': ['locationSection', 'locationContent'],
-        '8': ['peopleSection', 'peopleContent'],
-        '9': ['colorSection', 'colorContent'],
-        '0': ['projectsSection', 'projectsContent'],
-      };
-      const zone = zoneMap[e.key];
-      if (zone) {
-        e.preventDefault();
-        const section = document.getElementById(zone[0]);
-        const content = document.getElementById(zone[1]);
-        if (section && content) {
-          if (content.style.display === 'none') {
-            toggleZone(new MouseEvent('click'), zone[0], zone[1]);
-          }
-          section.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
-      }
-    }
+    // Alt+number hotkeys delegated to shared editor framework
+  });
+
+  cwocInitEditorHotkeys({
+    '1': ['datesSection', 'datesContent'],
+    '2': ['taskSection', 'taskContent'],
+    '3': ['tagsSection', 'tagsContent'],
+    '4': ['notesSection', 'notesContent'],
+    '5': ['checklistSection', 'checklistContent'],
+    '6': ['alertsSection', 'alertsContent'],
+    '7': ['locationSection', 'locationContent'],
+    '8': ['peopleSection', 'peopleContent'],
+    '9': ['colorSection', 'colorContent'],
+    '0': ['projectsSection', 'projectsContent'],
   });
 
   console.log("Editor initialization completed.");
@@ -3681,3 +3641,270 @@ async function saveChitAndStay() {
 }
 
 console.log("Editor script loaded successfully.");
+
+// ── People Chips Autocomplete ────────────────────────────────────────────────
+// Replaces the old comma-separated text field with tag-like chips.
+// Queries GET /api/contacts?q= with debounce, renders dropdown.
+// Chips are colored with the contact's color. Double-click opens contact editor.
+
+let _peopleDropdown = null;
+let _peopleDebounceTimer = null;
+let _peopleApiAvailable = true;
+let _peopleChipData = []; // Array of {display_name, id, color}
+
+function _focusPeopleSearch() {
+  var input = document.getElementById('peopleSearchInput');
+  if (input) input.focus();
+}
+
+function _initPeopleAutocomplete() {
+  const input = document.getElementById('peopleSearchInput');
+  if (!input) return;
+
+  input.addEventListener('keyup', (e) => {
+    if (['ArrowDown', 'ArrowUp', 'Enter', 'Escape'].includes(e.key)) return;
+    _debouncePeopleSearch(input);
+  });
+
+  input.addEventListener('keydown', (e) => {
+    // Backspace on empty input removes last chip
+    if (e.key === 'Backspace' && !input.value && _peopleChipData.length > 0) {
+      _removePeopleChip(_peopleChipData.length - 1);
+      return;
+    }
+
+    if (!_peopleDropdown) return;
+    const items = Array.from(_peopleDropdown.querySelectorAll('.people-ac-item'));
+    if (items.length === 0) return;
+
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      _removePeopleDropdown();
+      return;
+    }
+
+    const curIdx = items.findIndex(d => d.classList.contains('people-ac-highlighted'));
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      items.forEach(d => d.classList.remove('people-ac-highlighted'));
+      const next = curIdx < items.length - 1 ? curIdx + 1 : 0;
+      items[next].classList.add('people-ac-highlighted');
+      items[next].scrollIntoView({ block: 'nearest' });
+      return;
+    }
+
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      items.forEach(d => d.classList.remove('people-ac-highlighted'));
+      const prev = curIdx > 0 ? curIdx - 1 : items.length - 1;
+      items[prev].classList.add('people-ac-highlighted');
+      items[prev].scrollIntoView({ block: 'nearest' });
+      return;
+    }
+
+    if (e.key === 'Enter') {
+      const highlighted = _peopleDropdown.querySelector('.people-ac-highlighted');
+      if (highlighted) {
+        e.preventDefault();
+        _addPeopleChip({
+          display_name: highlighted.dataset.displayName,
+          id: highlighted.dataset.contactId || null,
+          color: highlighted.dataset.color || null
+        });
+        input.value = '';
+        _removePeopleDropdown();
+      }
+    }
+  });
+
+  input.addEventListener('blur', () => {
+    setTimeout(() => _removePeopleDropdown(), 150);
+  });
+}
+
+function _debouncePeopleSearch(input) {
+  if (_peopleDebounceTimer) clearTimeout(_peopleDebounceTimer);
+  _peopleDebounceTimer = setTimeout(() => _fetchPeopleSuggestions(input), 250);
+}
+
+async function _fetchPeopleSuggestions(input) {
+  if (!_peopleApiAvailable) return;
+  const query = input.value.trim();
+  if (query.length < 1) { _removePeopleDropdown(); return; }
+
+  try {
+    const resp = await fetch(`/api/contacts?q=${encodeURIComponent(query)}`);
+    if (!resp.ok) { _peopleApiAvailable = false; _removePeopleDropdown(); return; }
+    const contacts = await resp.json();
+    if (!Array.isArray(contacts) || contacts.length === 0) { _removePeopleDropdown(); return; }
+
+    // Filter out already-added people
+    const existingNames = _peopleChipData.map(c => (c.display_name || '').toLowerCase());
+    const filtered = contacts.filter(c =>
+      c.display_name && !existingNames.includes(c.display_name.toLowerCase())
+    );
+    if (filtered.length === 0) { _removePeopleDropdown(); return; }
+    _showPeopleDropdown(input, filtered);
+  } catch (e) {
+    console.error('[PeoplePicker] API unreachable:', e);
+    _peopleApiAvailable = false;
+    _removePeopleDropdown();
+  }
+}
+
+function _showPeopleDropdown(input, contacts) {
+  _removePeopleDropdown();
+  const dd = document.createElement('div');
+  dd.id = 'people-autocomplete-dropdown';
+  dd.className = 'people-ac-dropdown';
+
+  contacts.slice(0, 10).forEach((contact, i) => {
+    const item = document.createElement('div');
+    item.className = 'people-ac-item';
+    if (i === 0) item.classList.add('people-ac-highlighted');
+    item.dataset.displayName = contact.display_name;
+    item.dataset.contactId = contact.id || '';
+    item.dataset.color = contact.color || '';
+
+    const star = contact.favorite ? '★ ' : '';
+    item.textContent = star + contact.display_name;
+    if (contact.color) {
+      item.style.borderLeft = '4px solid ' + contact.color;
+      item.style.paddingLeft = '8px';
+    }
+
+    item.addEventListener('mouseenter', () => {
+      dd.querySelectorAll('.people-ac-item').forEach(d => d.classList.remove('people-ac-highlighted'));
+      item.classList.add('people-ac-highlighted');
+    });
+    item.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      _addPeopleChip({
+        display_name: contact.display_name,
+        id: contact.id || null,
+        color: contact.color || null
+      });
+      input.value = '';
+      _removePeopleDropdown();
+    });
+    dd.appendChild(item);
+  });
+
+  const rect = input.getBoundingClientRect();
+  dd.style.position = 'fixed';
+  dd.style.top = (rect.bottom + 2) + 'px';
+  dd.style.left = rect.left + 'px';
+  dd.style.minWidth = rect.width + 'px';
+  document.body.appendChild(dd);
+  _peopleDropdown = dd;
+}
+
+function _removePeopleDropdown() {
+  if (_peopleDropdown) { _peopleDropdown.remove(); _peopleDropdown = null; }
+}
+
+function _addPeopleChip(data) {
+  // Avoid duplicates
+  if (_peopleChipData.some(c => c.display_name.toLowerCase() === data.display_name.toLowerCase())) return;
+  _peopleChipData.push(data);
+  _renderPeopleChips();
+  _syncPeopleHiddenField();
+  setSaveButtonUnsaved();
+}
+
+function _removePeopleChip(index) {
+  _peopleChipData.splice(index, 1);
+  _renderPeopleChips();
+  _syncPeopleHiddenField();
+  setSaveButtonUnsaved();
+}
+
+function _renderPeopleChips() {
+  const container = document.getElementById('peopleChips');
+  if (!container) return;
+  container.innerHTML = '';
+  _peopleChipData.forEach((data, idx) => {
+    const chip = document.createElement('span');
+    chip.className = 'people-chip';
+    if (data.color) {
+      chip.style.backgroundColor = data.color;
+      // Use dark text on light colors, light text on dark
+      chip.style.color = _isLightColor(data.color) ? '#2b1e0f' : '#fff';
+      chip.style.borderColor = data.color;
+    }
+    chip.textContent = data.display_name;
+
+    // Double-click opens contact editor
+    if (data.id) {
+      chip.title = 'Double-click to edit contact';
+      chip.addEventListener('dblclick', (e) => {
+        e.stopPropagation();
+        window.open('/frontend/contact-editor.html?id=' + encodeURIComponent(data.id), '_blank');
+      });
+    }
+
+    const removeX = document.createElement('span');
+    removeX.className = 'chip-remove';
+    removeX.textContent = '✕';
+    removeX.title = 'Remove';
+    removeX.addEventListener('click', (e) => {
+      e.stopPropagation();
+      _removePeopleChip(idx);
+    });
+    chip.appendChild(removeX);
+    container.appendChild(chip);
+  });
+}
+
+function _syncPeopleHiddenField() {
+  const hidden = document.getElementById('people');
+  if (hidden) {
+    hidden.value = _peopleChipData.map(c => c.display_name).join(', ');
+  }
+}
+
+function _isLightColor(hex) {
+  if (!hex) return true;
+  hex = hex.replace('#', '');
+  var r = parseInt(hex.substr(0, 2), 16);
+  var g = parseInt(hex.substr(2, 2), 16);
+  var b = parseInt(hex.substr(4, 2), 16);
+  return (r * 299 + g * 587 + b * 114) / 1000 > 140;
+}
+
+// Populate chips from a chit's people array (called from loadChitData)
+function _setPeopleFromArray(peopleArray) {
+  _peopleChipData = [];
+  if (!peopleArray || !peopleArray.length) {
+    _renderPeopleChips();
+    return;
+  }
+  // Fetch all contacts to match names to IDs and colors
+  fetch('/api/contacts').then(r => r.ok ? r.json() : []).then(contacts => {
+    var contactMap = {};
+    (contacts || []).forEach(c => {
+      contactMap[(c.display_name || '').toLowerCase()] = c;
+    });
+    peopleArray.forEach(name => {
+      var match = contactMap[name.toLowerCase()];
+      _peopleChipData.push({
+        display_name: name,
+        id: match ? match.id : null,
+        color: match ? (match.color || null) : null
+      });
+    });
+    _renderPeopleChips();
+    _syncPeopleHiddenField();
+  }).catch(() => {
+    // Fallback: just use names without colors/IDs
+    peopleArray.forEach(name => {
+      _peopleChipData.push({ display_name: name, id: null, color: null });
+    });
+    _renderPeopleChips();
+    _syncPeopleHiddenField();
+  });
+}
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', _initPeopleAutocomplete);

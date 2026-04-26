@@ -158,4 +158,19 @@ window.CwocSaveSystem = CwocSaveSystem;
   footer.className = 'cwoc-page-footer';
   footer.innerHTML = "C.W.'s Omni Chits &mdash; Built with ☕ and 🎵";
   body.appendChild(footer);
+
+  // ── ESC to go back (all secondary pages) ──────────────────────────────
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    // Don't navigate if a modal is open or an input is focused
+    if (document.querySelector('.modal[style*="flex"], .qr-modal[style*="flex"], .image-modal[style*="flex"], .import-modal[style*="flex"]')) return;
+    var active = document.activeElement;
+    if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.tagName === 'SELECT')) {
+      active.blur();
+      return;
+    }
+    // Navigate back
+    var returnUrl = localStorage.getItem('cwoc_settings_return') || '/';
+    window.location.href = returnUrl;
+  });
 })();

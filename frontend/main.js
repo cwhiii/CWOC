@@ -10,7 +10,7 @@ let currentSortField = null;   // null | 'title' | 'start' | 'due' | 'updated' |
 let currentSortDir = 'asc';    // 'asc' | 'desc'
 
 // ── Hotkey submenu state ─────────────────────────────────────────────────────
-let _hotkeyMode = null;  // null | 'PERIOD' | 'FILTER' | 'ORDER' | 'FILTER_STATUS' | 'FILTER_LABEL' | 'FILTER_PRIORITY'
+let _hotkeyMode = null;  // null | 'PERIOD' | 'FILTER' | 'ORDER' | 'FILTER_STATUS' | 'FILTER_LABEL' | 'FILTER_PRIORITY' | 'FILTER_PEOPLE'
 
 // Global tag objects cache for color lookups
 let _cachedTagObjects = [];
@@ -129,6 +129,9 @@ function _clearAllFilters() {
   const search = document.getElementById('search'); if (search) search.value = '';
   // Re-check "Any" checkboxes
   document.querySelectorAll('input[data-any="true"]').forEach(cb => { cb.checked = true; });
+  // Clear people filter selection
+  if (window._sidebarPeopleSelection) window._sidebarPeopleSelection.length = 0;
+  if (window._cachedPeopleContacts) _renderPeopleFilterPanel(window._cachedPeopleContacts);
   currentSortField = null;
   const sortSel = document.getElementById('sort-select'); if (sortSel) sortSel.value = '';
   _updateSortUI();
@@ -154,12 +157,13 @@ function _updateClearFiltersButton() {
   const hasStatusFilter = _getSelectedStatuses().length > 0;
   const hasLabelFilter = _getSelectedLabels().length > 0;
   const hasPriorityFilter = _getSelectedPriorities().length > 0;
+  const hasPeopleFilter = (window._sidebarPeopleSelection || []).length > 0;
   const searchText = document.getElementById('search')?.value || '';
   const showPinned = document.getElementById('show-pinned')?.checked ?? true;
   const showArchived = document.getElementById('show-archived')?.checked ?? false;
   const showUnmarked = document.getElementById('show-unmarked')?.checked ?? true;
   const hidePastDue = document.getElementById('hide-past-due')?.checked ?? false;
-  const isDefault = !hasStatusFilter && !hasLabelFilter && !hasPriorityFilter
+  const isDefault = !hasStatusFilter && !hasLabelFilter && !hasPriorityFilter && !hasPeopleFilter
     && !searchText && showPinned && !showArchived && showUnmarked && !hidePastDue && !currentSortField;
   section.style.display = isDefault ? 'none' : '';
 
@@ -228,6 +232,15 @@ function _applyMultiSelectFilters(chitList) {
   const priorities = _getSelectedPriorities();
   if (priorities.length > 0) {
     result = result.filter(c => c.priority && priorities.includes(c.priority));
+  }
+
+  // People filter
+  const selectedPeople = window._sidebarPeopleSelection || [];
+  if (selectedPeople.length > 0) {
+    result = result.filter(c => {
+      const people = c.people || [];
+      return selectedPeople.some(name => people.includes(name));
+    });
   }
 
   return result;
@@ -495,6 +508,11 @@ function _enterFilterSub(type) {
     expandFilterGroup('filter-priority');
     _buildFilterSubPanel('panel-priority-options', '#priority-multi input[data-filter="priority"]');
     _showPanel('panel-filter-priority');
+  } else if (type === 'people') {
+    _hotkeyMode = 'FILTER_PEOPLE';
+    expandFilterGroup('filter-people');
+    if (window._cachedPeopleContacts) _renderPeopleFilterPanel(window._cachedPeopleContacts);
+    _showPanel('panel-filter-people');
   }
 }
 
@@ -527,55 +545,67 @@ function _buildFilterSubPanel(containerId, checkboxSelector) {
   }
 }
 
-/** Build the tag filter panel with search box, favorites first, colored tags */
-function _buildTagFilterPanel() {
-  const container = document.getElementById('panel-label-options');
+/**
+ * CwocSidebarFilter — reusable filter panel for sidebar.
+ * @param {Object} config
+ * @param {string} config.containerId — DOM element ID for the panel
+ * @param {Array}  config.items — [{name, favorite, color?}]
+ * @param {Array}  config.selection — current selected names (mutated in place)
+ * @param {Function} config.onChange — called when selection changes
+ * @param {string} [config.searchPlaceholder] — e.g. "Search tags..."
+ * @param {boolean} [config.showColorBadge] — show colored badge (tags) vs plain text (people)
+ */
+function CwocSidebarFilter(config) {
+  const container = document.getElementById(config.containerId);
   if (!container) return;
   container.innerHTML = '';
 
-  // Search box
+  const items = config.items || [];
+  const selection = config.selection || [];
+  const onChange = config.onChange || function() {};
+  const placeholder = config.searchPlaceholder || 'Search...';
+  const showColorBadge = !!config.showColorBadge;
+
+  // Search input
   const searchInput = document.createElement('input');
   searchInput.type = 'text';
-  searchInput.placeholder = 'Search tags...';
+  searchInput.placeholder = placeholder;
   searchInput.style.cssText = 'width:100%;padding:4px 8px;font-size:0.9em;margin-bottom:8px;box-sizing:border-box;border:1px solid #6b4e31;border-radius:3px;font-family:inherit;background:#fffaf0;color:#4a2c2a;';
-  searchInput.id = 'tag-panel-search';
   container.appendChild(searchInput);
 
   const listDiv = document.createElement('div');
-  listDiv.id = 'tag-panel-list';
+  listDiv.className = 'cwoc-sidebar-filter-list';
   container.appendChild(listDiv);
 
-  // Get all non-system tags, sorted: favorites first, then alphabetical
-  const allTags = (_cachedTagObjects || []).filter(t => t.name && !isSystemTag(t.name));
-  const sorted = [...allTags].sort((a, b) => {
+  // Sort: favorites first, then alphabetical
+  const sorted = [...items].sort((a, b) => {
     if (a.favorite && !b.favorite) return -1;
     if (!a.favorite && b.favorite) return 1;
-    return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+    return (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' });
   });
 
-  const selectedTags = window._sidebarTagSelection || [];
-
-  function renderTagList(query) {
+  function renderList(query) {
     listDiv.innerHTML = '';
     let shown = 0;
-    sorted.forEach(tag => {
+    sorted.forEach(item => {
       if (shown >= 9) return;
-      if (query && !tag.name.toLowerCase().includes(query)) return;
+      if (query && !(item.name || '').toLowerCase().includes(query)) return;
 
       shown++;
-      const isSelected = selectedTags.includes(tag.name);
-      const tagColor = tag.color || getPastelColor(tag.name);
+      const isSelected = selection.includes(item.name);
 
       const div = document.createElement('div');
       div.className = 'hotkey-panel-option' + (isSelected ? ' selected' : '');
       div.style.cssText = 'display:flex;align-items:center;gap:6px;';
 
+      // Hotkey number badge
       const keySpan = document.createElement('span');
       keySpan.className = 'panel-key';
       keySpan.textContent = shown;
       div.appendChild(keySpan);
 
-      if (tag.favorite) {
+      // Favorite star
+      if (item.favorite) {
         const star = document.createElement('span');
         star.textContent = '★';
         star.style.cssText = 'font-size:0.9em;color:#DAA520;text-shadow:0 0 1px #000;';
@@ -583,37 +613,48 @@ function _buildTagFilterPanel() {
         div.appendChild(star);
       }
 
-      const badge = document.createElement('span');
-      badge.className = 'panel-label';
-      badge.textContent = tag.name;
-      badge.style.cssText = `background:${tagColor};padding:1px 6px;border-radius:4px;color:#3c2f2f;${isSelected ? 'font-weight:bold;outline:2px solid #4a2c2a;' : ''}`;
-      div.appendChild(badge);
+      // Label — colored badge or plain text
+      const label = document.createElement('span');
+      label.className = 'panel-label';
+      label.textContent = item.name;
+      if (showColorBadge) {
+        const color = item.color || getPastelColor(item.name);
+        label.style.cssText = `background:${color};padding:1px 6px;border-radius:4px;color:#3c2f2f;${isSelected ? 'font-weight:bold;outline:2px solid #4a2c2a;' : ''}`;
+      } else {
+        label.style.cssText = `padding:1px 6px;border-radius:4px;color:#3c2f2f;${isSelected ? 'font-weight:bold;outline:2px solid #4a2c2a;' : ''}`;
+      }
+      div.appendChild(label);
+
+      // Color dot badge (when showColorBadge is false but item has a color)
+      if (!showColorBadge && item.color) {
+        const dot = document.createElement('span');
+        dot.className = 'cwoc-sidebar-filter-dot';
+        dot.style.cssText = `display:inline-block;width:8px;height:8px;border-radius:50%;background:${item.color};flex-shrink:0;`;
+        div.insertBefore(dot, label);
+      }
 
       div.addEventListener('click', () => {
-        const idx = selectedTags.indexOf(tag.name);
+        const idx = selection.indexOf(item.name);
         if (idx === -1) {
-          selectedTags.push(tag.name);
+          selection.push(item.name);
         } else {
-          selectedTags.splice(idx, 1);
+          selection.splice(idx, 1);
         }
-        // Sync sidebar checkboxes
-        _syncSidebarTagCheckboxes(document.getElementById('label-multi'), _cachedTagObjects);
-        onFilterChange();
-        // Re-render to update visual state
-        renderTagList(searchInput.value.trim().toLowerCase());
+        onChange(selection);
+        renderList(searchInput.value.trim().toLowerCase());
       });
 
       listDiv.appendChild(div);
     });
     if (shown === 0) {
-      listDiv.innerHTML = '<div style="opacity:0.5;font-size:0.85em;padding:4px;">No matching tags</div>';
+      listDiv.innerHTML = '<div style="opacity:0.5;font-size:0.85em;padding:4px;">No matching items</div>';
     }
   }
 
-  renderTagList('');
+  renderList('');
 
   searchInput.addEventListener('input', () => {
-    renderTagList(searchInput.value.trim().toLowerCase());
+    renderList(searchInput.value.trim().toLowerCase());
   });
 
   setTimeout(() => searchInput.focus(), 50);
@@ -624,20 +665,82 @@ function _buildTagFilterPanel() {
       searchInput.blur();
       _exitHotkeyMode();
     }
-    // Number keys: toggle the corresponding tag instead of typing
-    if (/^[0-9]$/.test(e.key)) {
+    // Number keys 1-9: toggle the corresponding visible item
+    if (/^[1-9]$/.test(e.key)) {
       e.preventDefault();
       e.stopPropagation();
       const num = parseInt(e.key);
-      if (num >= 1 && num <= 9) {
-        const items = listDiv.querySelectorAll('.hotkey-panel-option');
-        if (num <= items.length) {
-          items[num - 1].click();
-        }
+      const visibleItems = listDiv.querySelectorAll('.hotkey-panel-option');
+      if (num <= visibleItems.length) {
+        visibleItems[num - 1].click();
       }
     }
   });
 }
+
+/** Build the tag filter panel with search box, favorites first, colored tags.
+ *  Delegates to CwocSidebarFilter with showColorBadge: true. */
+function _buildTagFilterPanel() {
+  const allTags = (_cachedTagObjects || []).filter(t => t.name && !isSystemTag(t.name));
+  if (!window._sidebarTagSelection) window._sidebarTagSelection = [];
+
+  CwocSidebarFilter({
+    containerId: 'panel-label-options',
+    items: allTags.map(t => ({ name: t.name, favorite: !!t.favorite, color: t.color })),
+    selection: window._sidebarTagSelection,
+    onChange: function() {
+      _syncSidebarTagCheckboxes(document.getElementById('label-multi'), _cachedTagObjects);
+      onFilterChange();
+    },
+    searchPlaceholder: 'Search tags...',
+    showColorBadge: true
+  });
+}
+
+/** Build the people filter panel — fetches contacts and delegates to CwocSidebarFilter. */
+async function _buildPeopleFilterPanel() {
+  if (!window._sidebarPeopleSelection) window._sidebarPeopleSelection = [];
+  try {
+    const resp = await fetch('/api/contacts');
+    if (!resp.ok) return;
+    const contacts = await resp.json();
+    window._cachedPeopleContacts = contacts;
+    _renderPeopleFilterPanel(contacts);
+  } catch (e) {
+    console.error('Could not load contacts for people filter:', e);
+  }
+}
+
+/** Render the people filter panel from cached contact data. */
+function _renderPeopleFilterPanel(contacts) {
+  if (!window._sidebarPeopleSelection) window._sidebarPeopleSelection = [];
+  const items = (contacts || []).map(c => ({
+    name: c.display_name || c.given_name || '(Unknown)',
+    favorite: !!c.favorite
+  }));
+  CwocSidebarFilter({
+    containerId: 'panel-people-options',
+    items: items,
+    selection: window._sidebarPeopleSelection,
+    onChange: function() { onFilterChange(); },
+    searchPlaceholder: 'Search people...',
+    showColorBadge: false
+  });
+}
+
+/** Clear the people filter selection. */
+function clearPeopleFilter() {
+  if (window._sidebarPeopleSelection) window._sidebarPeopleSelection.length = 0;
+  if (window._cachedPeopleContacts) _renderPeopleFilterPanel(window._cachedPeopleContacts);
+  onFilterChange();
+}
+
+/** Refresh people filter when returning from another page (e.g. contact editor). */
+document.addEventListener('visibilitychange', function () {
+  if (!document.hidden) {
+    _buildPeopleFilterPanel();
+  }
+});
 
 function _toggleFilterArchived() {
   const cb = document.getElementById('show-archived');
@@ -3580,6 +3683,7 @@ document.addEventListener("DOMContentLoaded", function () {
   if (yearWeekContainer) yearWeekContainer.style.display = (currentTab === 'Calendar') ? '' : 'none';
 
   _loadLabelFilters();
+  _buildPeopleFilterPanel();
   _renderSavedSearches();
   _updateSortUI();
 
@@ -3687,7 +3791,14 @@ document.addEventListener("DOMContentLoaded", function () {
     // ── ESC: exit any submenu or close reference ──
     // Shift+ESC: clear all values in the active filter panel
     if (key === "Escape") {
-      if (e.shiftKey && (_hotkeyMode === 'FILTER_STATUS' || _hotkeyMode === 'FILTER_LABEL' || _hotkeyMode === 'FILTER_PRIORITY')) {
+      if (e.shiftKey && (_hotkeyMode === 'FILTER_STATUS' || _hotkeyMode === 'FILTER_LABEL' || _hotkeyMode === 'FILTER_PRIORITY' || _hotkeyMode === 'FILTER_PEOPLE')) {
+        if (_hotkeyMode === 'FILTER_PEOPLE') {
+          if (window._sidebarPeopleSelection) window._sidebarPeopleSelection.length = 0;
+          if (window._cachedPeopleContacts) _renderPeopleFilterPanel(window._cachedPeopleContacts);
+          onFilterChange();
+          _exitHotkeyMode();
+          return;
+        }
         const containerId = _hotkeyMode === 'FILTER_STATUS' ? 'status-multi'
           : _hotkeyMode === 'FILTER_LABEL' ? 'label-multi' : 'priority-multi';
         document.querySelectorAll(`#${containerId} input[type="checkbox"]`).forEach(cb => { cb.checked = false; });
@@ -3778,6 +3889,8 @@ document.addEventListener("DOMContentLoaded", function () {
         _toggleFilterPinned();
       } else if (keyLower === 'w') {
         _filterFocusSearch();
+      } else if (keyLower === 'e') {
+        _enterFilterSub('people');
       }
       return;
     }
@@ -3785,7 +3898,7 @@ document.addEventListener("DOMContentLoaded", function () {
     // ── Inside a multi-select filter (number keys toggle, Enter/letter confirms) ──
     if (_hotkeyMode === 'FILTER_STATUS' || _hotkeyMode === 'FILTER_LABEL' || _hotkeyMode === 'FILTER_PRIORITY') {
       // Skip if tag search box is focused (let user type)
-      if (_hotkeyMode === 'FILTER_LABEL' && document.activeElement?.id === 'tag-panel-search') return;
+      if (_hotkeyMode === 'FILTER_LABEL' && document.activeElement?.closest('#panel-label-options')) return;
 
       const containerId = _hotkeyMode === 'FILTER_STATUS' ? 'status-multi'
         : _hotkeyMode === 'FILTER_LABEL' ? 'label-multi' : 'priority-multi';
@@ -3826,7 +3939,7 @@ document.addEventListener("DOMContentLoaded", function () {
         e.preventDefault();
         if (_hotkeyMode === 'FILTER_LABEL') {
           // Use the visible tag panel list items
-          const panelItems = document.querySelectorAll('#tag-panel-list .hotkey-panel-option');
+          const panelItems = document.querySelectorAll('#panel-label-options .cwoc-sidebar-filter-list .hotkey-panel-option');
           if (num <= panelItems.length) {
             panelItems[num - 1].click();
           }
@@ -3847,6 +3960,34 @@ document.addEventListener("DOMContentLoaded", function () {
               panelOptions[num - 1].classList.toggle('selected', cb.checked);
             }
           }
+        }
+        return;
+      }
+      return;
+    }
+
+    // ── Inside people filter (number keys toggle, Enter confirms) ──
+    if (_hotkeyMode === 'FILTER_PEOPLE') {
+      if (document.activeElement?.closest('#panel-people-options')) return;
+      if (key === 'Backspace' || key === 'Delete') {
+        e.preventDefault();
+        if (window._sidebarPeopleSelection) window._sidebarPeopleSelection.length = 0;
+        if (window._cachedPeopleContacts) _renderPeopleFilterPanel(window._cachedPeopleContacts);
+        onFilterChange();
+        return;
+      }
+      if (key === 'Enter') {
+        e.preventDefault();
+        onFilterChange();
+        _exitHotkeyMode();
+        return;
+      }
+      const num = parseInt(key);
+      if (num >= 1 && num <= 9) {
+        e.preventDefault();
+        const panelItems = document.querySelectorAll('#panel-people-options .cwoc-sidebar-filter-list .hotkey-panel-option');
+        if (num <= panelItems.length) {
+          panelItems[num - 1].click();
         }
         return;
       }

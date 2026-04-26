@@ -1431,3 +1431,52 @@ button.delete:hover {
     z-index: 90;
     pointer-events: none;
 }
+
+/* ── Quick Editor People Chips ────────────────────────────────────────────── */
+.cwoc-people-chips-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 10px;
+    max-height: 28px;
+    overflow: hidden;
+}
+
+.cwoc-people-chip {
+    display: inline-block;
+    padding: 2px 8px;
+    font-size: 0.78em;
+    font-family: "Courier New", Courier, monospace;
+    background: #e8dcc8;
+    color: #4a2c2a;
+    border: 1px solid #c4a882;
+    border-radius: 12px;
+    white-space: nowrap;
+    line-height: 1.4;
+    user-select: none;
+}
+
+.cwoc-people-more {
+    background: #d4c5a9;
+    border-color: #8b5a2b;
+    cursor: default;
+    font-style: italic;
+    position: relative;
+}
+
+.cwoc-people-more:hover {
+    background: #c4b599;
+}
+
+/* ── CwocSidebarFilter component ──────────────────────────────────────────── */
+.cwoc-sidebar-filter-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    max-height: 320px;
+    overflow-y: auto;
+}
+
+.cwoc-sidebar-filter-dot {
+    flex-shrink: 0;
+}
