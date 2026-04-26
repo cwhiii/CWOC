@@ -2,11 +2,10 @@ const timeFormatGrid = document.getElementById("time-format-grid");
 const inactiveZone = document.getElementById("inactive-zone");
 const clocksContainer = document.getElementById("clocks-container");
 const formats = [
-  { value: "24hour", text: "24 Hour" },
-  { value: "metric", text: "Metric Time" },
-  { value: "metricbar", text: "Metric Bar" },
-  { value: "12hour", text: "12 Hour" },
-  { value: "12houranalog", text: "12 Hour Analog" },
+  { value: "24hour", label: "24 Hour" },
+  { value: "hst", label: "HST" },
+  { value: "12hour", label: "12 Hour" },
+  { value: "12houranalog", label: "12 Hour Analog" },
 ];
 
 // Color mapping from main.js
@@ -49,7 +48,7 @@ function updateGrid(preserveOrder = false) {
       const slot = timeFormatGrid.querySelector(
         `.grid-slot[data-index="${index}"]`,
       );
-      slot.innerHTML = `<div class="format-item" draggable="true" data-value="${format.value}">${format.text}</div>`;
+      slot.innerHTML = `<div class="format-item" draggable="true" data-value="${format.value}">${format.label}</div>`;
     });
   }
   updateInactiveZone();
@@ -124,7 +123,7 @@ function updateInactiveZone() {
       item.className = "inactive-item";
       item.draggable = true;
       item.dataset.value = format.value;
-      item.textContent = format.text;
+      item.textContent = format.label;
       inactiveZone.appendChild(item);
     }
   });
@@ -178,7 +177,7 @@ function handleDropOnGrid(e) {
     newFormatItem.className = "format-item";
     newFormatItem.draggable = true;
     newFormatItem.dataset.value = format.value;
-    newFormatItem.textContent = format.text;
+    newFormatItem.textContent = format.label;
     const newSlot = document.createElement("div");
     newSlot.className = "grid-slot";
     newSlot.dataset.index = timeFormatGrid.children.length;
@@ -712,41 +711,12 @@ function saveSettingsAndStay() {
 }
 
 function cancelSettings() {
-  const saveBtn = document.getElementById("save-exit-btn");
-  const isUnsaved = saveBtn && !saveBtn.disabled;
-
-  if (isUnsaved) {
-    const modal = document.createElement("div");
-    modal.className = "modal";
-    modal.id = "cancel-confirm-modal";
-    modal.style.display = "flex";
-    modal.innerHTML = `
-    <div class="modal-content">
-    <h3>Unsaved Changes</h3>
-    <p>You have unsaved changes. Are you sure you want to leave?</p>
-    <button class="standard-button" id="confirm-exit">Exit Without Saving</button>
-    <button class="standard-button" id="stay-here">Oops! Stay Here</button>
-    </div>`;
-    document.body.appendChild(modal);
-
-    document.getElementById("confirm-exit").onclick = () => {
-      const returnUrl = localStorage.getItem('cwoc_settings_return');
-      localStorage.removeItem('cwoc_settings_return');
-      window.location.href = returnUrl || "/";
-    };
-
-    document.getElementById("stay-here").onclick = () => {
-      modal.remove();
-    };
-  } else {
-    const returnUrl = localStorage.getItem('cwoc_settings_return');
-    localStorage.removeItem('cwoc_settings_return');
-    window.location.href = returnUrl || "/";
-  }
+  if (window._cwocSave) window._cwocSave.cancelOrExit();
 }
 
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
+    // Close any open modal first, then fall through to exit
     if (document.getElementById("tag-modal").style.display === "flex") {
       closeTagModal();
     } else if (
@@ -757,12 +727,19 @@ document.addEventListener("keydown", (event) => {
       document.getElementById("duplicate-tag-modal").style.display === "flex"
     ) {
       closeDuplicateTagModal();
-    } else if (document.getElementById("cancel-confirm-modal")) {
-      // ESC on the unsaved-changes confirm modal = "Oops, stay here"
-      document.getElementById("cancel-confirm-modal").remove();
     } else {
-      // No modal open — same as clicking Cancel
-      cancelSettings();
+      const unsavedModal = document.getElementById("cwoc-unsaved-modal");
+      if (unsavedModal) {
+        unsavedModal.remove();
+      } else {
+        // Blur any focused input first, then exit on next ESC
+        if (document.activeElement && document.activeElement.tagName &&
+            ['INPUT','SELECT','TEXTAREA'].includes(document.activeElement.tagName)) {
+          document.activeElement.blur();
+        } else {
+          cancelSettings();
+        }
+      }
     }
   } else if (event.key === "Enter") {
     if (document.getElementById("tag-modal").style.display === "flex") {
@@ -945,6 +922,56 @@ class SettingsManager {
       );
     }
 
+    // Restore active clocks from saved settings
+    if (this.settings.active_clocks) {
+      let savedClocks = typeof this.settings.active_clocks === 'string'
+        ? JSON.parse(this.settings.active_clocks)
+        : this.settings.active_clocks;
+      if (Array.isArray(savedClocks)) {
+        // Migrate old format values to current names
+        const migrateMap = { metric: 'hst', metricbar: 'hst', hstbar: 'hst' };
+        savedClocks = savedClocks.map(v => migrateMap[v] || v);
+        // Deduplicate (in case metric + metricbar both mapped to hst)
+        savedClocks = [...new Set(savedClocks)];
+
+        // Clear grid and inactive zone, then rebuild based on saved config
+        timeFormatGrid.innerHTML = "";
+        inactiveZone.innerHTML = "";
+        timeFormatGrid.classList.remove("empty");
+        if (savedClocks.length === 0) {
+          timeFormatGrid.classList.add("empty");
+          const addButton = document.createElement("button");
+          addButton.className = "add-clock-button";
+          addButton.textContent = "➕ Add Clock";
+          addButton.onclick = addFirstClock;
+          timeFormatGrid.appendChild(addButton);
+        } else {
+          savedClocks.forEach((val, index) => {
+            const fmt = formats.find(f => f.value === val);
+            if (!fmt) return;
+            const slot = document.createElement("div");
+            slot.className = "grid-slot";
+            slot.dataset.index = index;
+            slot.innerHTML = `<div class="format-item" draggable="true" data-value="${fmt.value}">${fmt.label}</div>`;
+            timeFormatGrid.appendChild(slot);
+          });
+        }
+        // Put remaining formats in inactive zone
+        formats.forEach(fmt => {
+          if (!savedClocks.includes(fmt.value)) {
+            const item = document.createElement("div");
+            item.className = "inactive-item";
+            item.draggable = true;
+            item.dataset.value = fmt.value;
+            item.textContent = fmt.label;
+            inactiveZone.appendChild(item);
+          }
+        });
+        inactiveZone.classList.toggle("empty", inactiveZone.children.length === 0);
+        setupDragListeners();
+      }
+    }
+
     const tagEditor = document.getElementById("tag-editor-hidden");
     tagEditor
       .querySelectorAll(".tag:not(.tag-input-container .tag)")
@@ -995,6 +1022,9 @@ class SettingsManager {
       alarm_orientation: clocksContainer.classList.contains("vertical")
         ? "Vertical"
         : "Horizontal",
+      active_clocks: JSON.stringify(
+        Array.from(timeFormatGrid.querySelectorAll(".format-item")).map(item => item.dataset.value)
+      ),
       tags: Array.from(
         document.querySelectorAll("#tag-editor-hidden .tag:not(.tag-input-container .tag)"),
       ).map((tag) => ({
@@ -1061,31 +1091,11 @@ class SettingsManager {
 }
 
 function setSaveButtonSaved() {
-  document.querySelectorAll(".save-settings").forEach(btn => {
-    btn.disabled = true;
-    btn.style.opacity = 0.6;
-    btn.style.pointerEvents = "none";
-  });
-  const stayBtn = document.getElementById('save-stay-btn');
-  if (stayBtn) stayBtn.innerHTML = "✅ Saved";
-  const exitBtn = document.getElementById('save-exit-btn');
-  if (exitBtn) exitBtn.innerHTML = "✅ Saved";
-  const cancelBtn = document.querySelector(".cancel-settings");
-  if (cancelBtn) cancelBtn.textContent = "Done";
+  if (window._cwocSave) window._cwocSave.markSaved();
 }
 
 function setSaveButtonUnsaved() {
-  document.querySelectorAll(".save-settings").forEach(btn => {
-    btn.disabled = false;
-    btn.style.opacity = 1;
-    btn.style.pointerEvents = "auto";
-  });
-  const stayBtn = document.getElementById('save-stay-btn');
-  if (stayBtn) stayBtn.innerHTML = "💾 Save & Stay";
-  const exitBtn = document.getElementById('save-exit-btn');
-  if (exitBtn) exitBtn.innerHTML = "💾 Save & Exit";
-  const cancelBtn = document.querySelector(".cancel-settings");
-  if (cancelBtn) cancelBtn.textContent = "❌ Cancel";
+  if (window._cwocSave) window._cwocSave.markUnsaved();
 }
 
 function closeDeleteModal() {
@@ -1121,6 +1131,17 @@ function monitorChanges() {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+  window._cwocSave = new CwocSaveSystem({
+    singleBtnId: 'save-single-btn',
+    stayBtnId: 'save-stay-btn',
+    exitBtnId: 'save-exit-btn',
+    cancelSelector: '.cancel-settings',
+    getReturnUrl: () => {
+      const url = localStorage.getItem('cwoc_settings_return');
+      localStorage.removeItem('cwoc_settings_return');
+      return url || '/';
+    },
+  });
   window.settingsManager = new SettingsManager();
 });
 

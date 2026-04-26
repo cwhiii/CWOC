@@ -8,6 +8,70 @@
             <link rel="stylesheet" href="/frontend/shared-page.css" />
             <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
             <style>
+                /* ── Editor-matching header row & button styles ── */
+                .header-row {
+                    display: flex;
+                    justify-content: flex-start;
+                    align-items: center;
+                    margin: 0 auto 20px auto;
+                    padding: 20px;
+                    background: #d2b48c;
+                    border: 1px solid #8b4513;
+                    border-radius: 8px;
+                    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+                    position: relative;
+                    gap: 15px;
+                }
+                .header-row h1 {
+                    margin: 0;
+                    color: #4a2c2a;
+                    white-space: nowrap;
+                }
+                .headerImage {
+                    height: 2em;
+                }
+                .buttons {
+                    display: flex;
+                    gap: 10px;
+                    flex-grow: 1;
+                    justify-content: space-between;
+                }
+                .buttons .left-buttons {
+                    display: flex;
+                    gap: 10px;
+                    justify-content: center;
+                    flex-grow: 1;
+                }
+                .header-row button {
+                    padding: 8px 16px;
+                    border: 2px outset #8b4513;
+                    border-radius: 4px;
+                    background: #d2b48c;
+                    color: #4a2c2a;
+                    cursor: pointer;
+                    font-size: 14px;
+                    transition: background-color 0.2s;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-family: inherit;
+                }
+                .header-row button i {
+                    margin-right: 5px;
+                    color: #4a2c2a;
+                }
+                .header-row button:hover {
+                    background: #c4a484;
+                }
+                .header-row button.cancel {
+                    background: #a0522d;
+                    color: #fdf5e6;
+                    border: 2px outset #8b4513;
+                }
+                .header-row button.cancel:hover {
+                    background: #8b4513;
+                }
+
                 /* ── Settings-specific styles (shared styles come from shared-page.css) ── */
                 .filter-display {
                     position: absolute; pointer-events: none; left: 8px; right: 8px; top: 5px; bottom: 5px;
@@ -199,17 +263,13 @@
                 .indicator-item { display: flex; justify-content: space-between; align-items: center; padding: 8px; margin: 5px 0; }
                 .indicator-item span { white-space: nowrap; margin-right: 10px; }
                 .indicator-item select { flex: 1; min-width: 0; }
-                .tag-editor { display: flex; flex-wrap: wrap; gap: 10px; background: #fff8e1; border: 1px solid #8b5a2b; border-radius: 5px; padding: 10px; }
-                .tag-input-container { display: flex; gap: 10px; width: 100%; margin-bottom: 10px; align-items: center; }
+                .tag-editor { display: flex; flex-direction: column; gap: 8px; }
                 .tag-in-input { background: #8b5a2b; color: #fff8e1; padding: 2px 5px; border-radius: 12px; margin: 0 2px; font-size: 14px; height: 20px; }
                 .tag { align-items: center; background-color: #e0e0e0; padding: 2px 8px; border-radius: 12px; font-size: 0.9em; margin: 0 2px; vertical-align: middle; height: 20px; line-height: 20px; }
-                .tag-input { align-items: center; border: 1px solid #ccc; padding: 5px; border-radius: 5px; font-size: 1em; height: 30px; line-height: 30px; vertical-align: middle; }
-                .tag-input span { display: inline; vertical-align: middle; }
+                .tag-input { border: 1px solid #ccc; padding: 5px; border-radius: 5px; font-size: 1em; }
                 .tag button { background: none; border: none; color: #fff8e1; cursor: pointer; font-size: 12px; width: 12px; height: 12px; display: flex; align-items: center; justify-content: center; padding: 0; }
                 .checkbox-group { display: flex; flex-direction: column; gap: 10px; }
-                .tag-input-container .standard-button:hover::after, .info-icon:hover::after { content: "Shift+Enter or Shift+Click to open tag modal"; position: absolute; top: -40px; left: 50%; transform: translateX(-50%); background: #2b1e0f; color: #fff8e1; padding: 5px 10px; font-size: 12px; border-radius: 3px; white-space: nowrap; z-index: 10; }
                 .modal-content .standard-button { margin-top: 10px; margin-right: 10px; }
-                .info-icon { display: flex; align-items: center; justify-content: center; border: 1px solid #8b5a2b; color: #8b5a2b; border-radius: 50%; width: 24px; height: 24px; font-size: 1em; line-height: 24px; text-align: center; cursor: pointer; }
                 .modal-content label { display: block; margin-bottom: 10px; }
                 .modal-content input, .modal-content select { width: 100%; margin-bottom: 10px; }
                 .modal-content .color-options { display: flex; flex-wrap: wrap; gap: 10px; }
@@ -220,29 +280,42 @@
         </head>
         <body>
             <div class="settings-panel">
-                <div class="header-and-buttons">
-                    <h2><img src="/static/settings.png" alt="Logo" /> Settings</h2>
-                    <div class="header-buttons">
-                        <button
-                            onclick="saveSettingsAndStay()"
-                            class="standard-button save-settings"
-                            id="save-stay-btn"
-                        >
-                            💾 Save & Stay
-                        </button>
-                        <button
-                            onclick="saveSettings()"
-                            class="standard-button save-settings"
-                            id="save-exit-btn"
-                        >
-                            💾 Save & Exit
-                        </button>
-                        <button
-                            onclick="cancelSettings()"
-                            class="standard-button cancel-settings"
-                        >
-                            ❌ Cancel
-                        </button>
+                <div class="header-row">
+                    <img src="/static/settings.png" alt="Logo" class="headerImage" />
+                    <h1>Settings</h1>
+                    <div class="buttons">
+                        <div class="left-buttons">
+                            <button
+                                id="save-single-btn"
+                                class="save-settings"
+                                disabled
+                                style="opacity:0.6;pointer-events:none;"
+                            >
+                                ✅ Saved
+                            </button>
+                            <button
+                                onclick="saveSettingsAndStay()"
+                                class="save-settings"
+                                id="save-stay-btn"
+                                style="display:none;"
+                            >
+                                <i class="fas fa-save"></i> 📌 Save &amp; Stay
+                            </button>
+                            <button
+                                onclick="saveSettings()"
+                                class="save-settings"
+                                id="save-exit-btn"
+                                style="display:none;"
+                            >
+                                <i class="fas fa-save"></i> 🚪 Save &amp; Exit
+                            </button>
+                            <button
+                                onclick="cancelSettings()"
+                                class="cancel cancel-settings"
+                            >
+                                <i class="fas fa-times"></i> Exit
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -253,7 +326,7 @@
                         <select id="time-format" name="time-format">
                             <option value="24hour">🕛 24 Hour</option>
                             <option style="" value="12hour">⏰ 12 Hour</option>
-                            <option value="metric">🔢 Metric Time</option>
+                            <option value="metric">🔢 HST (Holeman Simplified Time)</option>
                         </select>
 
                         <div
@@ -490,33 +563,12 @@
                     </div>
                     <div class="setting-group">
                         <h3>Tag Editor</h3>
-                        <div class="tag-editor" id="tag-editor">
-                            <div class="tag-input-container">
-                                <button
-                                    onclick="addTag()"
-                                    class="standard-button"
-                                    title="Press Shift+Enter or Shift+Click to open tag modal with entered value"
-                                >
-                                    ➕ Add Tag
-                                </button>
-                                <span
-                                    class="info-icon"
-                                    onclick="handleInfoClick(event)"
-                                    title="Press Shift+Enter or Shift+Click to open tag modal with entered value"
-                                    >ℹ</span
-                                >
-                                <input
-                                    type="text"
-                                    id="new-tag"
-                                    placeholder="Add new tag"
-                                    onkeypress="handleTagInput(event)"
-                                />
-                            </div>
-                            <!-- Tree view of tags -->
-                            <div id="settings-tag-tree" style="width:100%;max-height:300px;overflow-y:auto;border:1px solid #8b5a2b;border-radius:4px;padding:8px;background:#fffaf0;box-sizing:border-box;"></div>
-                            <!-- Hidden container for legacy tag divs (used by gatherSettings) -->
-                            <div id="tag-editor-hidden" style="display:none;"></div>
+                        <div style="display:flex;gap:6px;align-items:center;margin-bottom:10px;">
+                            <input type="text" id="new-tag" placeholder="New tag name" onkeypress="handleTagInput(event)" style="flex:1;min-width:0;" />
+                            <button onclick="addTag()" class="standard-button" title="Add tag (Shift+Enter or Shift+Click for tag modal)">➕ Add</button>
                         </div>
+                        <div id="settings-tag-tree" style="max-height:300px;overflow-y:auto;border:1px solid #8b5a2b;border-radius:4px;padding:8px;background:#fffaf0;box-sizing:border-box;"></div>
+                        <div id="tag-editor-hidden" style="display:none;"></div>
                     </div>
 
                     <div class="setting-group">
@@ -664,6 +716,7 @@
                 </div>
             </div>
             <script src="/frontend/shared.js"></script>
+            <script src="/frontend/shared-page.js"></script>
             <script src="/frontend/settings.js"></script>
         </body>
     </html>

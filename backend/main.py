@@ -32,6 +32,7 @@ class Settings(BaseModel):
     snooze_length: Optional[str] = None
     default_filters: Optional[Any] = None  # Object {tab: "filter text"} or legacy List[str]
     alarm_orientation: Optional[str] = None
+    active_clocks: Optional[str] = None  # JSON array of active clock format values, e.g. '["24hour","12hour"]'
     tags: Optional[List[Tag]] = None
     custom_colors: Optional[List[str]] = None
     visual_indicators: Optional[Dict[str, str]] = None
@@ -123,6 +124,7 @@ def init_db():
             snooze_length TEXT,
             default_filters TEXT,
             alarm_orientation TEXT,
+            active_clocks TEXT,
             tags TEXT,
             custom_colors TEXT,
             visual_indicators TEXT,
@@ -288,6 +290,8 @@ def migrate_add_work_hours():
             cursor.execute("ALTER TABLE settings ADD COLUMN enabled_periods TEXT DEFAULT 'Itinerary,Day,Week,Work,SevenDay,Month,Year'")
         if "custom_days_count" not in columns:
             cursor.execute("ALTER TABLE settings ADD COLUMN custom_days_count TEXT DEFAULT '7'")
+        if "active_clocks" not in columns:
+            cursor.execute("ALTER TABLE settings ADD COLUMN active_clocks TEXT")
         conn.commit()
         conn.close()
     except Exception as e:
@@ -726,6 +730,7 @@ def get_settings(user_id: str):
         settings["custom_colors"] = deserialize_json_field(settings["custom_colors"])
         settings["visual_indicators"] = deserialize_json_field(settings["visual_indicators"])
         settings["chit_options"] = deserialize_json_field(settings["chit_options"])
+        settings["active_clocks"] = deserialize_json_field(settings.get("active_clocks"))
         return settings
     except Exception as e:
         logger.error(f"Error fetching settings: {str(e)}")
@@ -744,9 +749,9 @@ def save_settings(settings: Settings):
             """
             INSERT OR REPLACE INTO settings (
                 user_id, time_format, sex, snooze_length, default_filters,
-                alarm_orientation, tags, custom_colors, visual_indicators, chit_options,
+                alarm_orientation, active_clocks, tags, custom_colors, visual_indicators, chit_options,
                 calendar_snap, week_start_day, work_start_hour, work_end_hour, work_days, enabled_periods, custom_days_count
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 settings.user_id,
@@ -755,6 +760,7 @@ def save_settings(settings: Settings):
                 settings.snooze_length,
                 serialize_json_field(settings.default_filters),
                 settings.alarm_orientation,
+                settings.active_clocks,
                 # Serialize tags as list of dicts (Pydantic Tag objects need .dict())
                 json.dumps([t.dict() for t in settings.tags]) if settings.tags else None,
                 serialize_json_field(settings.custom_colors),

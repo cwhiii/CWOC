@@ -3268,6 +3268,15 @@ function openLocationDirections(event) {
 document.addEventListener("DOMContentLoaded", function () {
   console.log("DOM Content Loaded - Initializing editor...");
 
+  // Initialize shared save/cancel button system
+  window._cwocSave = new CwocSaveSystem({
+    singleBtnId: 'saveButton',
+    stayBtnId: 'saveStayButton',
+    exitBtnId: 'saveExitButton',
+    cancelSelector: '.cancel',
+    getReturnUrl: () => '/',
+  });
+
   initializeChitId();
 
   // Populate "Move to Project" dropdown with actual project master chits
@@ -3522,51 +3531,16 @@ function clearDueDate() {
 }
 
 function setSaveButtonSaved() {
-  // Saved state: show single disabled Save button + "Exit" label on cancel
-  const saveBtn = document.getElementById("saveButton");
-  const saveStayBtn = document.getElementById("saveStayButton");
-  const saveExitBtn = document.getElementById("saveExitButton");
-  const cancelBtn = document.querySelector(".cancel");
-
-  if (saveBtn) {
-    saveBtn.style.display = "";
-    saveBtn.innerHTML = "✅ Saved";
-    saveBtn.disabled = true;
-    saveBtn.style.opacity = "0.6";
-    saveBtn.style.pointerEvents = "none";
-  }
-  if (saveStayBtn) saveStayBtn.style.display = "none";
-  if (saveExitBtn) saveExitBtn.style.display = "none";
-  if (cancelBtn) cancelBtn.textContent = "Exit";
-
-  window._editorHasUnsavedChanges = false;
+  if (window._cwocSave) window._cwocSave.markSaved();
 }
 
 function setSaveButtonUnsaved() {
-  // Unsaved state: hide single Save, show Save & Stay + Save & Exit, "Cancel" on exit button
-  const saveBtn = document.getElementById("saveButton");
-  const saveStayBtn = document.getElementById("saveStayButton");
-  const saveExitBtn = document.getElementById("saveExitButton");
-  const cancelBtn = document.querySelector(".cancel");
-
-  if (saveBtn) saveBtn.style.display = "none";
-  if (saveStayBtn) saveStayBtn.style.display = "";
-  if (saveExitBtn) saveExitBtn.style.display = "";
-  if (cancelBtn) cancelBtn.textContent = "❌ Cancel";
-
-  window._editorHasUnsavedChanges = true;
+  if (window._cwocSave) window._cwocSave.markUnsaved();
 }
 
-/**
- * Cancel / Exit button handler.
- * If there are unsaved changes, prompt before leaving.
- * If clean, just navigate home.
- */
 function cancelOrExit() {
-  if (window._editorHasUnsavedChanges) {
-    if (confirm("You have unsaved changes. Leave without saving?")) {
-      window.location.href = "/";
-    }
+  if (window._cwocSave) {
+    window._cwocSave.cancelOrExit();
   } else {
     window.location.href = "/";
   }
@@ -3624,9 +3598,8 @@ function addSearchedTag(event) {
 }
 
 function navigateToSettings() {
-  // Save return URL so settings can come back here
   localStorage.setItem('cwoc_settings_return', window.location.href);
-  if (window._editorHasUnsavedChanges) {
+  if (window._cwocSave && window._cwocSave.hasChanges()) {
     if (confirm("You have unsaved changes. Leave without saving?")) {
       window.location.href = "/frontend/settings.html";
     }

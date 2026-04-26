@@ -689,10 +689,25 @@ function _closeReference() {
 // ── Clock Modal ──────────────────────────────────────────────────────────────
 let _clockModalInterval = null;
 
-function _openClockModal() {
+async function _openClockModal() {
   // Remove existing
   const existing = document.getElementById('clock-modal-overlay');
   if (existing) { _closeClockModal(); return; }
+
+  // Load clock settings
+  let activeClocks = ['24hour', '12hour', 'hst']; // defaults
+  let orientation = 'Horizontal';
+  try {
+    const resp = await fetch('/api/settings/default_user');
+    if (resp.ok) {
+      const s = await resp.json();
+      if (s.active_clocks) {
+        const parsed = typeof s.active_clocks === 'string' ? JSON.parse(s.active_clocks) : s.active_clocks;
+        if (Array.isArray(parsed) && parsed.length > 0) activeClocks = parsed;
+      }
+      if (s.alarm_orientation) orientation = s.alarm_orientation;
+    }
+  } catch (e) { console.error('Failed to load clock settings', e); }
 
   const overlay = document.createElement('div');
   overlay.id = 'clock-modal-overlay';
@@ -707,9 +722,10 @@ function _openClockModal() {
   title.textContent = '🕐 Clocks';
   modal.appendChild(title);
 
+  const isVertical = orientation === 'Vertical';
   const clocksDiv = document.createElement('div');
   clocksDiv.id = 'clock-modal-clocks';
-  clocksDiv.style.cssText = 'display:flex;flex-direction:column;gap:12px;align-items:center;';
+  clocksDiv.style.cssText = `display:flex;flex-direction:${isVertical ? 'column' : 'row'};gap:12px;align-items:center;${isVertical ? '' : 'justify-content:center;flex-wrap:wrap;'}`;
   modal.appendChild(clocksDiv);
 
   const closeBtn = document.createElement('div');
@@ -721,12 +737,11 @@ function _openClockModal() {
   overlay.appendChild(modal);
   document.body.appendChild(overlay);
 
-  // Load settings to get time_format
-  _renderClocks(clocksDiv);
-  _clockModalInterval = setInterval(() => _renderClocks(clocksDiv), 1000);
+  _renderClocks(clocksDiv, activeClocks, isVertical);
+  _clockModalInterval = setInterval(() => _renderClocks(clocksDiv, activeClocks, isVertical), 1000);
 }
 
-function _renderClocks(container) {
+function _renderClocks(container, activeClocks, isVertical) {
   const now = new Date();
   const h24 = now.getHours();
   const m = String(now.getMinutes()).padStart(2, '0');
@@ -734,20 +749,119 @@ function _renderClocks(container) {
   const h12 = h24 % 12 || 12;
   const ampm = h24 < 12 ? 'AM' : 'PM';
 
-  // Metric time: day fraction (1000 metric minutes per day)
+  // HST (Holeman Simplified Time): day fraction in sub-days (sd)
   const dayFraction = (h24 * 3600 + now.getMinutes() * 60 + now.getSeconds()) / 86400;
-  const metricH = Math.floor(dayFraction * 10);
-  const metricM = String(Math.floor((dayFraction * 10 - metricH) * 100)).padStart(2, '0');
-  const metricS = String(Math.floor(((dayFraction * 10 - metricH) * 100 - parseInt(metricM)) * 100)).padStart(2, '0');
+  const hstVal = (dayFraction * 100).toFixed(3);
 
-  const dateStr = now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const dateStr = `${now.getFullYear()}-${months[now.getMonth()]}-${String(now.getDate()).padStart(2,'0')} ${days[now.getDay()]}`;
 
-  let html = `<div style="font-size:0.85em;opacity:0.7;margin-bottom:4px;">${dateStr}</div>`;
-  html += `<div style="font-size:2.5em;font-weight:bold;color:#4a2c2a;letter-spacing:2px;">${String(h24).padStart(2,'0')}:${m}:${s}</div>`;
-  html += `<div style="font-size:1.4em;opacity:0.7;">${h12}:${m}:${s} ${ampm}</div>`;
-  html += `<div style="font-size:1em;opacity:0.5;" title="Metric time (decimal)">${metricH}:${metricM}:${metricS} metric</div>`;
+  let html = `<div style="font-size:1.4em;font-weight:300;color:#6b4e31;letter-spacing:3px;margin-bottom:6px;opacity:0.8;">${dateStr}</div>`;
+
+  const bgColors = ['rgba(139,69,19,0.06)', 'rgba(139,69,19,0.18)'];
+  activeClocks.forEach((clock, idx) => {
+    const isHST = clock === 'hst' || clock === 'metric' || clock === 'hstbar' || clock === 'metricbar';
+    const bg = (!isVertical && !isHST) ? `background:${bgColors[idx % 2]};border-radius:8px;padding:6px 14px;` : '';
+    let inner = '';
+    switch (clock) {
+      case '24hour':
+        inner = `<div style="font-size:2em;font-weight:bold;color:#4a2c2a;letter-spacing:2px;">${String(h24).padStart(2,'0')}:${m}:${s} <span style="font-size:0.65em;">Hours</span></div>`;
+        break;
+      case '12hour':
+        inner = `<div style="font-size:2em;font-weight:bold;color:#4a2c2a;letter-spacing:2px;">${h12}:${m}:${s} <span style="font-size:0.65em;">${ampm}</span></div>`;
+        break;
+      case '12houranalog':
+        inner = _renderAnalogClock(h24, now.getMinutes(), now.getSeconds());
+        break;
+      case 'metric':
+      case 'hst':
+      case 'metricbar':
+      case 'hstbar':
+        inner = _renderHSTClock(dayFraction, hstVal);
+        break;
+    }
+    if (inner) html += `<div style="${bg}">${inner}</div>`;
+  });
 
   container.innerHTML = html;
+}
+
+function _renderHSTClock(dayFraction, hstVal) {
+  // HST clock: progress bar with sd value centered, sized to match 2em text clocks
+  const pct = (dayFraction * 100).toFixed(1);
+  return `<div style="position:relative;width:300px;height:2.4em;margin:2px auto;" title="Holeman Simplified Time — ${hstVal} sd">
+    <div style="width:100%;height:100%;background:#f5e6cc;border:2px solid #8b4513;border-radius:6px;overflow:hidden;box-shadow:inset 0 2px 4px rgba(0,0,0,0.15);">
+      <div style="width:${pct}%;height:100%;background:linear-gradient(90deg,#d4af37 0%,#c8965a 60%,#8b4513 100%);transition:width 1s linear;"></div>
+    </div>
+    <div style="position:absolute;top:0;left:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:1.5em;font-weight:bold;color:#4a2c2a;letter-spacing:2px;text-shadow:0 0 4px #fff8e1,0 0 8px #fff8e1,0 0 2px #fff8e1;">${hstVal} sd</div>
+  </div>`;
+}
+
+function _renderAnalogClock(h24, min, sec) {
+  const size = 220;
+  const cx = size / 2, cy = size / 2;
+  const r = cx - 4;
+
+  // Angles (0° = 12 o'clock, clockwise)
+  const hDeg = ((h24 % 12) + min / 60) * 30;
+  const mDeg = (min + sec / 60) * 6;
+  const sDeg = sec * 6;
+
+  const hand = (deg, len) => {
+    const rad = (deg - 90) * Math.PI / 180;
+    return { x: cx + len * Math.cos(rad), y: cy + len * Math.sin(rad) };
+  };
+  const hTip = hand(hDeg, r * 0.48);
+  const mTip = hand(mDeg, r * 0.70);
+  const sTip = hand(sDeg, r * 0.78);
+  const sTail = hand(sDeg + 180, r * 0.18);
+
+  // Hour markers & minute ticks
+  let markers = '';
+  for (let i = 0; i < 12; i++) {
+    const a = (i * 30 - 90) * Math.PI / 180;
+    const isQ = i % 3 === 0;
+    const o = r - 2, inner = isQ ? r - 16 : r - 9;
+    markers += `<line x1="${cx + o * Math.cos(a)}" y1="${cy + o * Math.sin(a)}" x2="${cx + inner * Math.cos(a)}" y2="${cy + inner * Math.sin(a)}" stroke="#4a2c2a" stroke-width="${isQ ? 4 : 1.5}" stroke-linecap="round"/>`;
+  }
+  let ticks = '';
+  for (let i = 0; i < 60; i++) {
+    if (i % 5 === 0) continue;
+    const a = (i * 6 - 90) * Math.PI / 180;
+    ticks += `<line x1="${cx + (r - 2) * Math.cos(a)}" y1="${cy + (r - 2) * Math.sin(a)}" x2="${cx + (r - 5.5) * Math.cos(a)}" y2="${cy + (r - 5.5) * Math.sin(a)}" stroke="#8b4513" stroke-width="0.8" opacity="0.4"/>`;
+  }
+
+  // Hour numerals
+  let numerals = '';
+  const nums = [12,1,2,3,4,5,6,7,8,9,10,11];
+  nums.forEach((n, i) => {
+    const a = (i * 30 - 90) * Math.PI / 180;
+    const nr = r - 30;
+    numerals += `<text x="${cx + nr * Math.cos(a)}" y="${cy + nr * Math.sin(a)}" text-anchor="middle" dominant-baseline="central" fill="#4a2c2a" font-size="20" font-family="'Courier New',monospace" font-weight="bold">${n}</text>`;
+  });
+
+  return `<div style="display:inline-block;margin:2px auto;">
+    <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+      <defs>
+        <radialGradient id="_cg" cx="45%" cy="40%">
+          <stop offset="0%" stop-color="#fff8e1"/>
+          <stop offset="80%" stop-color="#f5e6cc"/>
+          <stop offset="100%" stop-color="#e8d5b0"/>
+        </radialGradient>
+      </defs>
+      <circle cx="${cx}" cy="${cy}" r="${r + 3}" fill="#5c3a1e"/>
+      <circle cx="${cx}" cy="${cy}" r="${r + 1}" fill="#8b4513"/>
+      <circle cx="${cx}" cy="${cy}" r="${r}" fill="url(#_cg)"/>
+      ${ticks}
+      ${markers}
+      ${numerals}
+      <line x1="${cx}" y1="${cy}" x2="${hTip.x}" y2="${hTip.y}" stroke="#4a2c2a" stroke-width="6" stroke-linecap="round"/>
+      <line x1="${cx}" y1="${cy}" x2="${mTip.x}" y2="${mTip.y}" stroke="#4a2c2a" stroke-width="4" stroke-linecap="round"/>
+      <line x1="${sTail.x}" y1="${sTail.y}" x2="${sTip.x}" y2="${sTip.y}" stroke="#a0522d" stroke-width="1.5" stroke-linecap="round"/>
+      <circle cx="${cx}" cy="${cy}" r="6" fill="#d4af37" stroke="#4a2c2a" stroke-width="1.5"/>
+    </svg>
+  </div>`;
 }
 
 function _closeClockModal() {

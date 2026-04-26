@@ -30,6 +30,7 @@
                     <li><a href="#tags">Tags</a></li>
                     <li><a href="#filters">Filtering & Sorting</a></li>
                     <li><a href="#notes-view">Notes View</a></li>
+                    <li><a href="#clocks">Clocks</a></li>
                     <li><a href="#editor">Chit Editor</a></li>
                     <li><a href="#quick-edit">Quick Edit Modal</a></li>
                     <li><a href="#settings">Settings</a></li>
@@ -107,15 +108,25 @@
             <p>Sidebar: Search, Status, Priority, Tags, Show (Pinned/Archived/Unmarked/Hide Past-Due). 💾 Save Search saves text as a quick-access chip.</p>
             <h3 id="notes-view">Notes View</h3>
             <p>Multi-column masonry layout with full rendered markdown. <code>[[chit title]]</code> auto-links to other chits.</p>
+            <h3 id="clocks">Clocks</h3>
+            <p>Press <kbd>L</kbd> on the dashboard to open the clocks modal. Configure which clocks are displayed and their layout in Settings → Alarms.</p>
+            <ul>
+                <li><strong>24 Hour</strong> — Standard 24-hour digital display (HH:MM:SS)</li>
+                <li><strong>12 Hour</strong> — 12-hour digital display with AM/PM</li>
+                <li><strong>12 Hour Analog</strong> — Traditional analog clock face with hour, minute, and second hands</li>
+                <li><strong><a href="https://www.cwholemaniii.com/pages/hss/hst.shtml" target="_blank">HST</a></strong> — Holeman Simplified Time. Represents the day as 0–100 sub-days (sd) shown on a progress bar. Midnight = 0.000 sd, noon = 50.000 sd, end of day = 100.000 sd</li>
+            </ul>
+            <p>Drag clocks between Active and Inactive zones in Settings to choose which appear. Use "Change Orientation" to switch between horizontal and vertical layout.</p>
             <h3 id="editor">Chit Editor</h3>
             <p>Collapsible zones: Title, Dates & Times, Task, Location, Tags, People, Notes, Checklist, Alerts, Health Indicators, Color, Projects, Audit Log. 📱 QR button generates data or link QR codes.</p>
             <h3 id="quick-edit">Quick Edit Modal</h3>
             <p>Shift+click any chit. Edit title (double-click), change Priority/Severity/Status, Pin/Archive/Delete/QR. Recurring chits get per-field "All" checkboxes and series edit options.</p>
             <h3 id="settings">Settings</h3>
             <ul>
-                <li><strong>General</strong> — Time format, snooze length, calendar snapping</li>
+                <li><strong>General</strong> — Time format (24h, 12h, <a href="https://www.cwholemaniii.com/pages/hss/hst.shtml" target="_blank">HST</a>), snooze length, calendar snapping</li>
                 <li><strong>Period Options</strong> — Enable/disable periods, week start, working hours & days, X Days count</li>
                 <li><strong>Default Filters</strong> — Per-tab default search text</li>
+                <li><strong>Clocks</strong> — Choose active clocks, drag to reorder, set orientation (horizontal/vertical)</li>
                 <li><strong>Tag Editor</strong> — Tree view, create/edit/delete/favorite, "+" for child tags</li>
                 <li><strong>Custom Colors</strong> — Color picker for chit colors</li>
                 <li><strong>Chit Options</strong> — Fade past, highlight overdue, delete past alarms</li>
@@ -125,5 +136,13 @@
         </div>
     </div>
     <div class="author-info">C.W.'s Omni Chits — Built with ☕ and 🎵</div>
+    <script>
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                history.back();
+            }
+        });
+    </script>
 </body>
 </html>
