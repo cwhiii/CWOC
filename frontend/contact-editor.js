@@ -70,24 +70,33 @@
         }
     }
 
+    console.log('live test: 1202');
     // ── ESC to exit ─────────────────────────────────────────────────────
-    document.addEventListener('keydown', function (e) {
-        if (e.key === 'Escape') {
-            // Close modals first
-            var imgModal = document.getElementById('image-modal');
-            if (imgModal && imgModal.style.display === 'flex') {
-                imgModal.style.display = 'none';
-                return;
-            }
-            var qrModal = document.getElementById('qr-modal');
-            if (qrModal && qrModal.style.display === 'flex') {
-                qrModal.style.display = 'none';
-                return;
-            }
-            // Otherwise exit page
-            cancelOrExit();
+    window.addEventListener('keydown', function (e) {
+        if (e.key !== 'Escape') return;
+        // Close modals first
+        var imgModal = document.getElementById('image-modal');
+        if (imgModal && imgModal.style.display === 'flex') {
+            imgModal.style.display = 'none';
+            e.stopImmediatePropagation();
+            return;
         }
-    });
+        var qrModal = document.getElementById('qr-modal');
+        if (qrModal && qrModal.style.display === 'flex') {
+            qrModal.style.display = 'none';
+            e.stopImmediatePropagation();
+            return;
+        }
+        var unsavedModal = document.getElementById('cwoc-unsaved-modal');
+        if (unsavedModal) {
+            unsavedModal.remove();
+            e.stopImmediatePropagation();
+            return;
+        }
+        // Navigate directly
+        e.stopImmediatePropagation();
+        window.location.href = '/frontend/people.html';
+    }, true);
 
     // ── Load contact from API ───────────────────────────────────────────
     async function _loadContact(id) {
@@ -256,13 +265,14 @@
 
     function _initSignalToggle() {
         var cb = document.getElementById('hasSignal');
-        if (cb.checked) document.getElementById('signalUsernameField').style.display = '';
+        if (cb.checked) document.getElementById('signalUsername').style.display = '';
     }
 
     window.onSignalToggle = function () {
         var cb = document.getElementById('hasSignal');
-        document.getElementById('signalUsernameField').style.display = cb.checked ? '' : 'none';
-        if (!cb.checked) document.getElementById('signalUsername').value = '';
+        var input = document.getElementById('signalUsername');
+        input.style.display = cb.checked ? '' : 'none';
+        if (!cb.checked) input.value = '';
         if (_saveSystem) _saveSystem.markUnsaved();
     };
 
@@ -579,7 +589,7 @@
 
         document.getElementById('hasSignal').checked = !!contact.has_signal;
         if (contact.has_signal) {
-            document.getElementById('signalUsernameField').style.display = '';
+            document.getElementById('signalUsername').style.display = '';
         }
         document.getElementById('signalUsername').value = contact.signal_username || '';
         document.getElementById('pgpKey').value = contact.pgp_key || '';

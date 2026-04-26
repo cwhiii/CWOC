@@ -781,9 +781,13 @@ function _renderPeopleChipFilter(containerId, contacts, selection) {
       }
       chip.appendChild(thumb);
 
-      // Star + name
+      // Star + name (without prefix)
       var nameSpan = document.createElement('span');
-      nameSpan.textContent = (c.favorite ? '★ ' : '') + name;
+      var chipDisplayName = name;
+      if (c.prefix && chipDisplayName.startsWith(c.prefix)) {
+        chipDisplayName = chipDisplayName.substring(c.prefix.length).trim();
+      }
+      nameSpan.textContent = (c.favorite ? '★ ' : '') + chipDisplayName;
       chip.appendChild(nameSpan);
 
       chip.addEventListener('click', function () {
@@ -984,13 +988,12 @@ function _renderClocks(container, activeClocks, isVertical) {
 }
 
 function _renderHSTClock(dayFraction, hstVal) {
-  // HST clock: progress bar with sd value centered, sized to match 2em text clocks
   const pct = (dayFraction * 100).toFixed(1);
-  return `<div style="position:relative;width:300px;height:2.4em;margin:2px auto;" title="Holeman Simplified Time — ${hstVal} sd">
-    <div style="width:100%;height:100%;background:#f5e6cc;border:2px solid #8b4513;border-radius:6px;overflow:hidden;box-shadow:inset 0 2px 4px rgba(0,0,0,0.15);">
-      <div style="width:${pct}%;height:100%;background:linear-gradient(90deg,#d4af37 0%,#c8965a 60%,#8b4513 100%);transition:width 1s linear;"></div>
+  return `<div style="position:relative;width:300px;margin:2px auto;" title="Holeman Simplified Time — ${hstVal} sd">
+    <div style="width:100%;height:2.4em;background:#f5e6cc;border:2px solid #8b4513;border-radius:6px;overflow:hidden;box-shadow:inset 0 2px 4px rgba(0,0,0,0.15);display:flex;align-items:center;">
+      <div style="position:absolute;top:2px;left:2px;bottom:2px;width:calc(${pct}% - 4px);background:linear-gradient(90deg,#d4af37 0%,#c8965a 60%,#8b4513 100%);transition:width 1s linear;border-radius:4px;"></div>
+      <div style="position:relative;width:100%;text-align:center;font-size:1.5em;font-weight:bold;color:#4a2c2a;letter-spacing:2px;line-height:2.4em;text-shadow:0 0 4px #fff8e1,0 0 8px #fff8e1,0 0 2px #fff8e1;z-index:1;">${hstVal} sd</div>
     </div>
-    <div style="position:absolute;top:0;left:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:1.5em;font-weight:bold;color:#4a2c2a;letter-spacing:2px;text-shadow:0 0 4px #fff8e1,0 0 8px #fff8e1,0 0 2px #fff8e1;">${hstVal} sd</div>
   </div>`;
 }
 

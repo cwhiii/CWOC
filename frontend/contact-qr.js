@@ -94,6 +94,23 @@ function generateContactVCard(contact) {
         lines.push('X-FAVORITE:true');
     }
 
+    // Standard vCard fields for org and nickname
+    if (contact.organization) {
+        lines.push('ORG:' + contact.organization);
+    }
+    if (contact.nickname) {
+        lines.push('NICKNAME:' + contact.nickname);
+    }
+
+    // NOTE — remaining non-standard fields using vCard escaped newline (\n literal)
+    var extraNotes = [];
+    if (contact.social_context) extraNotes.push('Social Context: ' + contact.social_context);
+    if (contact.signal_username) extraNotes.push('Signal: ' + contact.signal_username);
+    if (contact.color) extraNotes.push('Color: ' + contact.color);
+    if (extraNotes.length > 0) {
+        lines.push('NOTE:' + extraNotes.join('\\n'));
+    }
+
     lines.push('END:VCARD');
     return lines.join('\r\n');
 }

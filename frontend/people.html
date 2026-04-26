@@ -52,6 +52,8 @@
         }
         .people-row:last-child { border-bottom: none; }
         .people-row:hover { background: rgba(212, 196, 160, 0.2); }
+        .people-row.people-header { cursor: default; background: #e8dcc8; padding: 6px 12px; font-size: 0.85em; }
+        .people-row.people-header:hover { background: #e8dcc8; }
         .people-row .star-toggle {
             font-size: 1.3em;
             cursor: pointer;
@@ -91,6 +93,20 @@
             white-space: nowrap;
         }
         .people-row .contact-name.favorite { font-weight: bold; }
+        .people-row .contact-info {
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 1px;
+        }
+        .people-row .contact-detail {
+            font-size: 0.8em;
+            color: #6b4e31;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
         .people-row .share-btn {
             flex-shrink: 0;
             padding: 4px 10px;

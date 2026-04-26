@@ -61,11 +61,19 @@
             _filteredContacts = _allContacts.slice();
         } else {
             _filteredContacts = _allContacts.filter(c => {
-                const dn = (c.display_name || '').toLowerCase();
-                const emails = (c.emails || []).map(e => (e.value || '').toLowerCase()).join(' ');
-                const phones = (c.phones || []).map(p => (p.value || '').toLowerCase()).join(' ');
-                const callSigns = (c.call_signs || []).map(cs => (cs.value || '').toLowerCase()).join(' ');
-                return dn.includes(q) || emails.includes(q) || phones.includes(q) || callSigns.includes(q);
+                const fields = [
+                    c.display_name || '',
+                    c.nickname || '',
+                    c.organization || '',
+                    c.social_context || '',
+                    (c.emails || []).map(e => (e.value || '') + ' ' + (e.label || '')).join(' '),
+                    (c.phones || []).map(p => (p.value || '') + ' ' + (p.label || '')).join(' '),
+                    (c.addresses || []).map(a => (a.value || '')).join(' '),
+                    (c.call_signs || []).map(cs => (cs.value || '')).join(' '),
+                    (c.x_handles || []).map(x => (x.value || '')).join(' '),
+                    (c.websites || []).map(w => (w.value || '')).join(' '),
+                ];
+                return fields.some(f => f.toLowerCase().includes(q));
             });
         }
         _renderList();
@@ -74,21 +82,25 @@
     // ── Render contact list ─────────────────────────────────────────────
     function _renderList() {
         listEl.innerHTML = '';
+        const q = (searchEl.value || '').trim();
 
         if (_filteredContacts.length === 0) {
-            const q = (searchEl.value || '').trim();
             listEl.innerHTML = q
                 ? '<div class="people-empty">No contacts match your search.</div>'
                 : '<div class="people-empty">No contacts yet. Click "New Contact" to add one.</div>';
             return;
         }
 
-        // Split into favorites and non-favorites (API already sorts favorites-first,
-        // but we enforce it client-side too for filtered results)
+        // Table header
+        var header = document.createElement('div');
+        header.className = 'people-row people-header';
+        header.innerHTML = '<span style="width:28px;"></span><span style="width:32px;"></span><span class="contact-info"><span class="contact-name" style="font-weight:bold;font-size:0.8em;opacity:0.7;">Name</span><span class="contact-detail" style="font-weight:bold;opacity:0.7;">Phone · Email · Org</span></span><span style="width:40px;"></span>';
+        listEl.appendChild(header);
+
+        // Split into favorites and non-favorites
         const favorites = _filteredContacts.filter(c => c.favorite);
         const others = _filteredContacts.filter(c => !c.favorite);
 
-        // Sort each group alphabetically by display_name
         const sortFn = (a, b) => (a.display_name || '').localeCompare(b.display_name || '', undefined, { sensitivity: 'base' });
         favorites.sort(sortFn);
         others.sort(sortFn);
@@ -98,7 +110,7 @@
             divider.className = 'people-divider';
             divider.textContent = '★ Favorites';
             listEl.appendChild(divider);
-            favorites.forEach(c => listEl.appendChild(_createRow(c)));
+            favorites.forEach(c => listEl.appendChild(_createRow(c, q)));
         }
 
         if (others.length > 0) {
@@ -108,12 +120,12 @@
                 divider.textContent = 'All Contacts';
                 listEl.appendChild(divider);
             }
-            others.forEach(c => listEl.appendChild(_createRow(c)));
+            others.forEach(c => listEl.appendChild(_createRow(c, q)));
         }
     }
 
     // ── Create a single contact row ─────────────────────────────────────
-    function _createRow(contact) {
+    function _createRow(contact, query) {
         const row = document.createElement('div');
         row.className = 'people-row';
         row.dataset.contactId = contact.id;
@@ -149,16 +161,39 @@
             row.appendChild(placeholder);
         }
 
-        // Display name
+        // Name + details column
+        const infoCol = document.createElement('div');
+        infoCol.className = 'contact-info';
+
         const name = document.createElement('span');
         name.className = 'contact-name' + (contact.favorite ? ' favorite' : '');
-        name.textContent = contact.display_name || contact.given_name || '(unnamed)';
-        row.appendChild(name);
+        name.innerHTML = _highlightMatch(contact.display_name || contact.given_name || '(unnamed)', query);
+        infoCol.appendChild(name);
+
+        // Detail line: email, phone, org
+        const details = [];
+        if (contact.emails && contact.emails.length > 0) {
+            details.push(contact.emails[0].value);
+        }
+        if (contact.phones && contact.phones.length > 0) {
+            details.push(contact.phones[0].value);
+        }
+        if (contact.organization) {
+            details.push(contact.organization);
+        }
+        if (details.length > 0) {
+            const detailSpan = document.createElement('span');
+            detailSpan.className = 'contact-detail';
+            detailSpan.innerHTML = _highlightMatch(details.join(' · '), query);
+            infoCol.appendChild(detailSpan);
+        }
+
+        row.appendChild(infoCol);
 
         // Share (QR) button
         const shareBtn = document.createElement('button');
         shareBtn.className = 'share-btn';
-        shareBtn.innerHTML = '<i class="fas fa-qrcode"></i> Share';
+        shareBtn.innerHTML = '<i class="fas fa-qrcode"></i>';
         shareBtn.title = 'Share contact via QR code';
         shareBtn.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -338,34 +373,51 @@
         }
     });
 
+    console.log('live test: 1202');
     // Close import modal on ESC, or exit page
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') {
-            if (importModal.style.display === 'flex') {
-                importModal.style.display = 'none';
-                return;
-            }
-            var qrM = document.getElementById('qr-modal');
-            if (qrM && qrM.style.display === 'flex') {
-                qrM.style.display = 'none';
-                return;
-            }
-            _hideExportDropdown();
-            // If search is focused, blur it
-            if (document.activeElement === searchEl) {
-                searchEl.blur();
-                return;
-            }
-            // Exit to dashboard
-            window.location.href = '/';
+    window.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape') return;
+
+        // Close modals first
+        if (importModal && importModal.style.display === 'flex') {
+            importModal.style.display = 'none';
+            e.stopImmediatePropagation();
+            return;
         }
-    });
+        var qrM = document.getElementById('qr-modal');
+        if (qrM && qrM.style.display === 'flex') {
+            qrM.style.display = 'none';
+            e.stopImmediatePropagation();
+            return;
+        }
+        if (exportDropdown && exportDropdown.style.display === 'block') {
+            _hideExportDropdown();
+            e.stopImmediatePropagation();
+            return;
+        }
+        // Navigate directly
+        e.stopImmediatePropagation();
+        window.location.href = '/';
+    }, true);
 
     // ── Utility: escape HTML ────────────────────────────────────────
     function _escapeHtml(str) {
         const div = document.createElement('div');
         div.textContent = str;
         return div.innerHTML;
+    }
+
+    /** Highlight matching substring in text (returns HTML string) */
+    function _highlightMatch(text, query) {
+        if (!query || !text) return _escapeHtml(text || '');
+        const escaped = _escapeHtml(text);
+        const q = query.toLowerCase();
+        const idx = text.toLowerCase().indexOf(q);
+        if (idx === -1) return escaped;
+        var before = _escapeHtml(text.substring(0, idx));
+        var match = _escapeHtml(text.substring(idx, idx + query.length));
+        var after = _escapeHtml(text.substring(idx + query.length));
+        return before + '<mark style="background:#ffe082;padding:0 1px;border-radius:2px;">' + match + '</mark>' + after;
     }
 
 })();

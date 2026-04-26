@@ -1614,7 +1614,12 @@ function showQuickEditModal(chit, onRefresh) {
         chip.appendChild(img);
       }
 
-      chip.appendChild(document.createTextNode(name));
+      // Display name without prefix
+      var chipName = name;
+      if (match && match.prefix && chipName.startsWith(match.prefix)) {
+        chipName = chipName.substring(match.prefix.length).trim();
+      }
+      chip.appendChild(document.createTextNode(chipName));
 
       // Double-click to open contact editor
       if (match && match.id) {
@@ -1622,7 +1627,7 @@ function showQuickEditModal(chit, onRefresh) {
         chip.title = 'Double-click to edit contact';
         chip.addEventListener('dblclick', function (e) {
           e.stopPropagation();
-          window.open('/frontend/contact-editor.html?id=' + encodeURIComponent(match.id), '_blank');
+          window.location.href = '/frontend/contact-editor.html?id=' + encodeURIComponent(match.id);
         });
       }
 
@@ -1965,6 +1970,15 @@ function showQuickEditModal(chit, onRefresh) {
     qrModal.appendChild(qrInfo);
     qrOverlay.appendChild(qrModal);
     document.body.appendChild(qrOverlay);
+    // ESC closes QR overlay (not the quick edit behind it)
+    function onQrKey(e2) {
+      if (e2.key === 'Escape') {
+        e2.stopImmediatePropagation();
+        qrOverlay.remove();
+        document.removeEventListener('keydown', onQrKey, true);
+      }
+    }
+    document.addEventListener('keydown', onQrKey, true);
   });
   actionRow.appendChild(qrBtn);
 
