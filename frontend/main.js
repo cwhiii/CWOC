@@ -44,7 +44,7 @@ function toggleSortDir() {
 function _updateSortUI() {
   const dirBtn = document.getElementById('sort-dir-btn');
   if (!dirBtn) return;
-  if (currentSortField && currentSortField !== 'manual') {
+  if (currentSortField && currentSortField !== 'manual' && currentSortField !== 'random') {
     dirBtn.style.display = '';
     dirBtn.textContent = currentSortDir === 'asc' ? '▲' : '▼';
     dirBtn.title = currentSortDir === 'asc' ? 'Ascending — click to reverse' : 'Descending — click to reverse';
@@ -232,6 +232,14 @@ function _applySort(chitList) {
   if (!currentSortField) return chitList;
   if (currentSortField === 'manual') {
     return applyManualOrder(currentTab, chitList);
+  }
+  if (currentSortField === 'random') {
+    const arr = [...chitList];
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
   }
   const nullLast = currentSortDir === 'asc' ? Infinity : -Infinity;
   return [...chitList].sort((a, b) => {
@@ -1447,6 +1455,9 @@ function displayChits() {
     if (Array.isArray(chit.people) && chit.people.some(p => p.toLowerCase().includes(searchText))) return true;
     // Search location
     if (chit.location && chit.location.toLowerCase().includes(searchText)) return true;
+    // Search priority & severity
+    if (chit.priority && chit.priority.toLowerCase().includes(searchText)) return true;
+    if (chit.severity && chit.severity.toLowerCase().includes(searchText)) return true;
     return false;
   });
 
@@ -3389,7 +3400,7 @@ document.addEventListener("DOMContentLoaded", function () {
     // ── ORDER submenu (after 'O') ──
     if (_hotkeyMode === 'ORDER') {
       e.preventDefault();
-      const orderMap = { t: 'title', s: 'start', d: 'due', u: 'updated', c: 'created', x: 'status', m: 'manual' };
+      const orderMap = { t: 'title', s: 'start', d: 'due', u: 'updated', c: 'created', x: 'status', m: 'manual', r: 'random' };
       if (orderMap[keyLower]) {
         _pickSort(orderMap[keyLower]);
         return;

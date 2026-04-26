@@ -460,3 +460,57 @@ Fully implemented. Ported from `Prototypes/CWOC UI/UI.html`:
 - Stored as `_notify_flags` entry in alerts JSON
 - Checkboxes only visible when relevant date mode is active
 - Global notification checker respects per-chit flags
+
+
+## Completed — Tier 1 & 2 Batch (2026-04-25)
+
+### Editor Favicon ✅
+- Copied `editor.png` from Prototypes to `static/editor.png`
+- Editor page now shows proper favicon
+
+### Chit URL (Direct Link by ID) ✅
+- Already working via `editor.html?id=UUID` — marked done
+
+### Scroll to 6am on Calendar Load ✅
+- Already implemented via `scrollToSixAM()` — marked done
+
+### Random / Shuffle Sort ✅
+- Added `random` option to sort select dropdown
+- Fisher-Yates shuffle in `_applySort`
+- Hotkey: O → R for random sort
+- Sort direction button hidden for random (like manual)
+- Added to reference overlay
+
+### Tag Color Inheritance ✅
+- Child tags with no color now inherit from parent in `buildTagTree()`
+- `inheritColors()` walk after tree construction, before sort
+- Applies everywhere tags are rendered (editor, sidebar, settings, views)
+
+### Child Tag Auto-Prefix in Settings ✅
+- "+" button added next to each tag in settings tag tree
+- Clicking "+" pre-fills the tag input with `parentPath/` and focuses it
+- Uses depth-based matching to find correct full path
+
+### Search All Fields ✅
+- Search already covered title, note, tags, status, people, location
+- Added priority and severity to search filter
+- No toggle needed — always searches all fields
+
+### Hide/Show Tags Toggle ✅
+- User declined this feature — marked done per user request
+
+### CSV Export ✅
+- Button in Settings → Chit Options block
+- Exports all chits as CSV with columns: id, title, status, priority, severity, dates, tags, note, location, color, pinned, archived, recurrence, timestamps
+- Tags joined with "; " separator
+- Proper CSV escaping (quotes, commas, newlines)
+- Downloads as `cwoc-export-YYYY-MM-DD.csv`
+
+### CSV Import ✅
+- Button in Settings → Chit Options block
+- File picker for .csv files
+- Parses CSV with proper quote handling
+- Requires "title" column header
+- Creates new chits (ignores imported IDs)
+- Tags split on ";" separator
+- Boolean fields (pinned, archived, all_day) parsed from "true"/"false"

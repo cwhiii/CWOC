@@ -52,6 +52,7 @@
                         <option value="created">Created</option>
                         <option value="status">Status</option>
                         <option value="manual">Manual</option>
+                        <option value="random">Random / Shuffle</option>
                     </select>
                     <button id="sort-dir-btn" onclick="toggleSortDir()" title="Toggle sort direction" style="display:none;">▲</button>
                 </div>
@@ -225,6 +226,7 @@
             <div class="hotkey-panel-option" onclick="_pickSort('created')"><span class="panel-key">C</span><span class="panel-label">Created</span></div>
             <div class="hotkey-panel-option" onclick="_pickSort('status')"><span class="panel-key">X</span><span class="panel-label">Status</span></div>
             <div class="hotkey-panel-option" onclick="_pickSort('manual')"><span class="panel-key">M</span><span class="panel-label">Manual (drag)</span></div>
+            <div class="hotkey-panel-option" onclick="_pickSort('random')"><span class="panel-key">R</span><span class="panel-label">Random / Shuffle</span></div>
             <div class="hotkey-panel-footer">↑↓ for Asc/Desc · ESC to cancel</div>
         </div>
 
@@ -273,6 +275,7 @@
                         <div><span class="ref-key">C</span> Created</div>
                         <div><span class="ref-key">X</span> Status</div>
                         <div><span class="ref-key">M</span> Manual (drag)</div>
+                        <div><span class="ref-key">R</span> Random / Shuffle</div>
                         <div><span class="ref-key">↑↓</span> Asc / Desc</div>
                     </div>
                     <div class="ref-col">

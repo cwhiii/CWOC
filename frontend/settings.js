@@ -622,6 +622,47 @@ function _renderSettingsTagTree() {
     const tagDiv = Array.from(tagDivs).find(div => (div.childNodes[0]?.textContent || '').trim() === fullPath);
     if (tagDiv) openTagModal(tagDiv);
   });
+
+  // Add "+" child-create buttons next to each tag row
+  treeContainer.querySelectorAll('[style*="display:flex"]').forEach(row => {
+    const badge = row.querySelector('span[style*="border-radius"]');
+    if (!badge) return;
+    const tagPath = badge.textContent;
+    // Find the full path by looking at the tag tree
+    const fullPath = _findFullPathForBadge(tree, badge, row);
+    if (!fullPath) return;
+    const addBtn = document.createElement('span');
+    addBtn.textContent = '+';
+    addBtn.title = `Create child tag under "${fullPath}"`;
+    addBtn.style.cssText = 'font-size:0.75em;cursor:pointer;padding:0 4px;border-radius:3px;background:#8b5a2b;color:#fdf5e6;margin-left:4px;flex-shrink:0;line-height:1.4;';
+    addBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const input = document.getElementById('new-tag');
+      if (input) {
+        input.value = fullPath + '/';
+        input.focus();
+      }
+    });
+    row.appendChild(addBtn);
+  });
+}
+
+/** Helper: find the full path for a badge element in the tag tree */
+function _findFullPathForBadge(tree, badge, row) {
+  // Walk the tree to find a node whose name matches the badge text
+  // Use depth from padding-left to disambiguate
+  const paddingMatch = row.style.paddingLeft?.match(/(\d+)px/);
+  const depth = paddingMatch ? parseInt(paddingMatch[1]) / 16 : 0;
+  let found = null;
+  function walk(nodes, d) {
+    for (const n of nodes) {
+      if (d === depth && n.name === badge.textContent) { found = n.fullPath; return; }
+      walk(n.children, d + 1);
+      if (found) return;
+    }
+  }
+  walk(tree, 0);
+  return found;
 }
 
 function closeTagModal() {
@@ -1059,3 +1100,93 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
 // Trash view moved to /frontend/trash.html
+
+// ── CSV Export / Import ──────────────────────────────────────────────────────
+
+async function exportCSV() {
+  try {
+    const resp = await fetch('/api/chits');
+    if (!resp.ok) throw new Error('Failed to fetch chits');
+    const chits = await resp.json();
+    const cols = ['id','title','status','priority','severity','start_datetime','end_datetime','due_datetime','all_day','tags','note','location','color','pinned','archived','recurrence','created_datetime','modified_datetime'];
+    const escape = (v) => {
+      if (v == null) return '';
+      const s = String(v);
+      if (s.includes(',') || s.includes('"') || s.includes('\n')) return '"' + s.replace(/"/g, '""') + '"';
+      return s;
+    };
+    let csv = cols.join(',') + '\n';
+    chits.forEach(c => {
+      csv += cols.map(col => {
+        let val = c[col];
+        if (col === 'tags' && Array.isArray(val)) val = val.join('; ');
+        if (typeof val === 'boolean') val = val ? 'true' : 'false';
+        return escape(val);
+      }).join(',') + '\n';
+    });
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `cwoc-export-${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    alert('Export failed: ' + e.message);
+  }
+}
+
+async function importCSV(input) {
+  const file = input.files[0];
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const lines = text.split('\n').filter(l => l.trim());
+    if (lines.length < 2) { alert('CSV file is empty or has no data rows.'); return; }
+    // Parse header
+    const headers = _parseCSVLine(lines[0]);
+    const titleIdx = headers.indexOf('title');
+    if (titleIdx === -1) { alert('CSV must have a "title" column.'); return; }
+    let imported = 0;
+    for (let i = 1; i < lines.length; i++) {
+      const vals = _parseCSVLine(lines[i]);
+      if (!vals[titleIdx]?.trim()) continue;
+      const chit = {};
+      headers.forEach((h, idx) => {
+        let v = vals[idx] || '';
+        if (h === 'tags') { chit.tags = v ? v.split(';').map(t => t.trim()).filter(Boolean) : []; }
+        else if (h === 'pinned' || h === 'archived' || h === 'all_day') { chit[h] = v === 'true'; }
+        else if (v) { chit[h] = v; }
+      });
+      // Don't import the id — let backend generate a new one
+      delete chit.id;
+      await fetch('/api/chits', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(chit) });
+      imported++;
+    }
+    alert(`Imported ${imported} chit(s) successfully.`);
+    input.value = '';
+  } catch (e) {
+    alert('Import failed: ' + e.message);
+    input.value = '';
+  }
+}
+
+function _parseCSVLine(line) {
+  const result = [];
+  let current = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inQuotes) {
+      if (ch === '"' && line[i + 1] === '"') { current += '"'; i++; }
+      else if (ch === '"') { inQuotes = false; }
+      else { current += ch; }
+    } else {
+      if (ch === '"') { inQuotes = true; }
+      else if (ch === ',') { result.push(current); current = ''; }
+      else { current += ch; }
+    }
+  }
+  result.push(current);
+  return result;
+}

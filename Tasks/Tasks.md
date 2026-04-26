@@ -7,11 +7,11 @@
 ## Bugs
 
 ### Calendar
-- `[ ]` Week view starts on Monday, not Sunday — make configurable
+- `[X]` Week view starts on Monday, not Sunday — make configurable
 - `[ ]` In month & week & 7 day view, dragging chits should let me change their start date
 
 ### Editor
-- `[ ]` Missing favicon on editor page
+- `[X]` Missing favicon on editor page
 - `[ ]` Weather bar transparent background persists when color removed
 - `[ ]` Can't save health indicators
 - `[ ]` Enable button greyed out on disabled alarms row
@@ -42,10 +42,10 @@
 
 - `[ ]` Migration for existing flat tag data
 - `[ ]` Settings: create nested tags (parent dropdown or drag-to-nest)
-- `[ ]` Settings: display tags as expandable tree
-- `[ ]` Settings: toggle favorite (star icon) per tag
-- `[ ]` Settings: child tag auto-prefixes with parent path
-- `[ ]` Settings: color inheritance (child inherits parent unless overridden)
+- `[X]` Settings: display tags as expandable tree
+- `[X]` Settings: toggle favorite (star icon) per tag
+- `[X]` Settings: child tag auto-prefixes with parent path
+- `[X]` Settings: color inheritance (child inherits parent unless overridden)
 - `[ ]` Shared `createTagInline()` for editor and settings
 - `[ ]` System tags as sub-tags: CWOC_System/Calendar, CWOC_System/Indicators, etc.
 
@@ -61,8 +61,8 @@ All three phases complete. See `done.md` for details.
 
 - `[ ]` Calendar: X Days view (custom number, text input, days wrap if narrow)
 - `[ ]` Show alarms/notifications/timers on calendar view
-- `[ ]` Notify at start time (checkbox)
-- `[ ]` Notify at due time (checkbox)
+- `[X]` Notify at start time (checkbox)
+- `[X]` Notify at due time (checkbox)
 - `[ ]` Snoozable notifications (1, 3, 5, 10 min options)
 - `[ ]` Jitter for reminders (±X minutes, configurable globally and per-chit)
 - `[ ]` Alarm: chained variable-length intervals (5 min, then 4, then 4...)
@@ -72,7 +72,7 @@ All three phases complete. See `done.md` for details.
 - `[ ]` Time zones support on chits with dates
 - `[ ]` Weather flag for heavy winds (like precipitation)
 - `[ ]` Visual indicator on calendar if chit is a sub-chit (show/hide toggle)
-- `[ ]` Scroll to 30 min before current time on calendar load (default 05:30)
+- `[X]` Scroll to 30 min before current time on calendar load (default 05:30)
 
 ---
 
@@ -117,9 +117,9 @@ All three phases complete. See `done.md` for details.
 
 ## Features — Tags & Filtering
 
-- `[ ]` Tags: starred/favorite always at top
-- `[ ]` Hide/show tags toggle on all views
-- `[ ]` Search all visible fields with "Search All Fields" toggle
+- `[X]` Tags: starred/favorite always at top
+- `[X]` Hide/show tags toggle on all views
+- `[X]` Search all visible fields with "Search All Fields" toggle
 - `[ ]` Sidebar: save a search as a one-click button
 - `[ ]` Label/tag-based view filtering (like Google Calendar show/hide)
 - `[ ]` Additional/custom statuses
@@ -171,11 +171,11 @@ All three phases complete. See `done.md` for details.
 
 ## Features — Data & Infrastructure
 
-- `[ ]` Soft delete → trash view with purge and individual restore/nuke
-- `[ ]` Export: Markdown, iCal, CSV
-- `[ ]` Import from CSV
+- `[X]` Soft delete → trash view with purge and individual restore/nuke
+- `[X]` Export: Markdown, iCal, CSV
+- `[X]` Import from CSV
 - `[ ]` Auto-generated QR codes per chit
-- `[ ]` Chit URL (direct link by ID)
+- `[X]` Chit URL (direct link by ID)
 - `[ ]` Audit logs
 - `[ ]` Universally unique installation instance ID
 - `[ ]` Server configurator script
@@ -187,11 +187,11 @@ All three phases complete. See `done.md` for details.
 ## Features — UI & Layout
 
 - `[ ]` Mobile friendly / responsive layout
-- `[ ]` Help, About, & "Buy me a coffee" menu (with helptexts for all features)
+- `[X]` Help, About, & "Buy me a coffee" menu (with helptexts for all features)
 - `[ ]` Wall/kiosk view for persistent displays
 - `[ ]` Rolling circular chits view (next task in project, repeat when done)
 - `[ ]` Context switching (hide chits by time schedule + tags)
-- `[ ]` Random/shuffle sort order (for recipes, etc.)
+- `[X]` Random/shuffle sort order (for recipes, etc.)
 - `[ ]` Upcoming tasks view
 - `[ ]` Show events by map
 - `[ ]` Working days/hours configuration

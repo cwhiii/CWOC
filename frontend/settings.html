@@ -954,6 +954,13 @@
                             >
                         </div>
                         <hr style="border:none;border-top:1px solid var(--aged-brown-medium,#8b4513);margin:12px 0 10px;" />
+                        <h3 style="margin-top:0;">📤 Export / Import</h3>
+                        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                            <button onclick="exportCSV()" class="standard-button" style="flex:1;">📄 Export CSV</button>
+                            <button onclick="document.getElementById('csv-import-input').click()" class="standard-button" style="flex:1;">📥 Import CSV</button>
+                            <input type="file" id="csv-import-input" accept=".csv" style="display:none;" onchange="importCSV(this)" />
+                        </div>
+                        <hr style="border:none;border-top:1px solid var(--aged-brown-medium,#8b4513);margin:12px 0 10px;" />
                         <h3 style="margin-top:0;">🗑️ Trash</h3>
                         <button onclick="window.location.href='/frontend/trash.html'" class="standard-button" style="width:100%;">
                             View Deleted Chits →

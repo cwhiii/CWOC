@@ -1018,6 +1018,15 @@ function buildTagTree(flatTags) {
     });
   });
 
+  // Color inheritance: children with no color inherit from parent
+  function inheritColors(nodes, parentColor) {
+    nodes.forEach(n => {
+      if (!n.color && parentColor) n.color = parentColor;
+      if (n.children.length > 0) inheritColors(n.children, n.color || parentColor);
+    });
+  }
+  inheritColors(root, null);
+
   // Sort alphabetically at every level
   function sortLevel(nodes) {
     nodes.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
