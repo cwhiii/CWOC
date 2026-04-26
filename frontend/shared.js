@@ -1235,22 +1235,39 @@ function renderAllDayEventsInCells(dayData, allDayEventsRow) {
     grid.appendChild(cell);
   }
 
-  // Render each unique event as a single spanning div
-  let row = 2;
+  // Render each unique event, packing into rows (reuse rows when spans don't overlap)
+  const rowOccupancy = []; // rowOccupancy[r] = Set of occupied column indices
   seen.forEach(({ chit, info, startCol, endCol }) => {
+    // Find the first row where columns startCol..endCol are all free
+    let targetRow = -1;
+    for (let r = 0; r < rowOccupancy.length; r++) {
+      let fits = true;
+      for (let c = startCol; c <= endCol; c++) {
+        if (rowOccupancy[r].has(c)) { fits = false; break; }
+      }
+      if (fits) { targetRow = r; break; }
+    }
+    if (targetRow === -1) {
+      targetRow = rowOccupancy.length;
+      rowOccupancy.push(new Set());
+    }
+    // Mark columns as occupied in this row
+    for (let c = startCol; c <= endCol; c++) {
+      rowOccupancy[targetRow].add(c);
+    }
+
     const ev = document.createElement('div');
     ev.className = 'all-day-event';
     ev.dataset.chitId = chit.id;
     ev.style.backgroundColor = chitColor(chit);
     ev.style.gridColumn = `${startCol + 1} / ${endCol + 2}`; // grid is 1-indexed, end is exclusive
-    ev.style.gridRow = `${row}`;
+    ev.style.gridRow = `${targetRow + 2}`; // +2 because row 1 is the border cells
     ev.style.margin = '1px 2px';
     if (chit.status === "Complete") ev.classList.add("completed-task");
     ev.title = calendarEventTooltip(chit, info);
     ev.innerHTML = calendarEventTitle(chit, info.isDueOnly, info);
     if (typeof attachCalendarChitEvents === 'function') attachCalendarChitEvents(ev, chit);
     grid.appendChild(ev);
-    row++;
   });
 
   allDayEventsRow.appendChild(grid);

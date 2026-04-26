@@ -459,9 +459,11 @@ function _applyEnabledPeriods() {
       if (period !== undefined) {
         if (_enabledPeriods.includes(period)) {
           div.style.opacity = '';
+          div.style.cursor = '';
           div.title = '';
         } else {
           div.style.opacity = '0.35';
+          div.style.cursor = 'not-allowed';
           div.title = 'This period is disabled in Settings';
         }
       }
