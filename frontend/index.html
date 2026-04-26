@@ -140,14 +140,21 @@
                 </div>
             </div>
 
-            <!-- Clear All Filters -->
+            <!-- Clear Filters -->
             <div class="sidebar-section" id="section-clear-filters" style="display:none;">
-                <button class="action-button clear-filters-btn" onclick="_clearAllFilters()">✕ Clear All Filters</button>
+                <div style="display:flex;gap:6px;">
+                    <button class="action-button clear-filters-btn" onclick="_clearAllFilters()" title="Clear all filters, search, and sort" style="flex:1;margin-bottom:0;font-size:0.8em;padding:6px;">
+                        ✕ Clear All
+                    </button>
+                    <button class="action-button clear-filters-btn" id="reset-defaults-btn" onclick="_resetDefaultFilters()" title="Reset search to this tab's default filter" style="flex:1;margin-bottom:0;font-size:0.8em;padding:6px;display:none;">
+                        🔄 Defaults
+                    </button>
+                </div>
             </div>
 
             <!-- Settings -->
             <div class="sidebar-section" id="section-settings">
-                <button class="action-button" onclick="window.location.href='/frontend/settings.html'">
+                <button class="action-button" onclick="storePreviousState(); localStorage.setItem('cwoc_settings_return', '/'); window.location.href='/frontend/settings.html'">
                     <img src="/static/settings.png" alt="Settings" />
                     Settings <span class="hotkey-hint">S</span>
                 </button>

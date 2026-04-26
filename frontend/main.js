@@ -15,6 +15,12 @@ let _hotkeyMode = null;  // null | 'PERIOD' | 'FILTER' | 'ORDER' | 'FILTER_STATU
 // Global tag objects cache for color lookups
 let _cachedTagObjects = [];
 
+// Chit display options (loaded from settings)
+let _chitOptions = { fade_past_chits: true, highlight_overdue_chits: true, delete_past_alarm_chits: false };
+
+// Default search filters per tab (loaded from settings)
+let _defaultFilters = {};
+
 /** Get tag color from cached settings tags, fallback to pastel */
 function _getTagColor(tagName) {
   const tag = _cachedTagObjects.find(t => t.name === tagName);
@@ -117,16 +123,30 @@ function _clearAllFilters() {
   const sa = document.getElementById('show-archived'); if (sa) sa.checked = false;
   const su = document.getElementById('show-unmarked'); if (su) su.checked = true;
   const search = document.getElementById('search'); if (search) search.value = '';
+  // Re-check "Any" checkboxes
+  document.querySelectorAll('input[data-any="true"]').forEach(cb => { cb.checked = true; });
   currentSortField = null;
   const sortSel = document.getElementById('sort-select'); if (sortSel) sortSel.value = '';
   _updateSortUI();
   onFilterChange();
 }
 
+/** Reset search to the default filter for the current tab */
+function _resetDefaultFilters() {
+  const search = document.getElementById('search');
+  const tabKey = currentTab.toLowerCase();
+  if (search && _defaultFilters && _defaultFilters[tabKey]) {
+    search.value = _defaultFilters[tabKey];
+  } else if (search) {
+    search.value = '';
+  }
+  displayChits();
+  _updateClearFiltersButton();
+}
+
 function _updateClearFiltersButton() {
-  const btn = document.getElementById('section-clear-filters');
-  if (!btn) return;
-  // Check if any filters are active
+  const section = document.getElementById('section-clear-filters');
+  if (!section) return;
   const hasStatusFilter = _getSelectedStatuses().length > 0;
   const hasLabelFilter = _getSelectedLabels().length > 0;
   const hasPriorityFilter = _getSelectedPriorities().length > 0;
@@ -134,10 +154,17 @@ function _updateClearFiltersButton() {
   const showPinned = document.getElementById('show-pinned')?.checked ?? true;
   const showArchived = document.getElementById('show-archived')?.checked ?? false;
   const showUnmarked = document.getElementById('show-unmarked')?.checked ?? true;
-  // Default state: pinned=true, archived=false, unmarked=true, no search, no filters, no sort
   const isDefault = !hasStatusFilter && !hasLabelFilter && !hasPriorityFilter
     && !searchText && showPinned && !showArchived && showUnmarked && !currentSortField;
-  btn.style.display = isDefault ? 'none' : '';
+  section.style.display = isDefault ? 'none' : '';
+
+  // Show "Reset Default Filters" button if the current tab has a default filter
+  const resetBtn = document.getElementById('reset-defaults-btn');
+  if (resetBtn) {
+    const tabKey = currentTab.toLowerCase();
+    const hasDefault = _defaultFilters && _defaultFilters[tabKey];
+    resetBtn.style.display = hasDefault ? '' : 'none';
+  }
 }
 
 function _applyArchiveFilter(chitList) {
@@ -575,6 +602,14 @@ async function _loadLabelFilters() {
         const tags = settings.tags ? (typeof settings.tags === 'string' ? JSON.parse(settings.tags) : settings.tags) : [];
         tagObjects = tags.map(t => typeof t === 'string' ? { name: t, color: null, favorite: false } : t).filter(t => t.name);
         _cachedTagObjects = tagObjects;
+        // Load chit display options
+        if (settings.chit_options) {
+          _chitOptions = { ..._chitOptions, ...settings.chit_options };
+        }
+        // Load week start day
+        if (settings.week_start_day !== undefined) {
+          _weekStartDay = parseInt(settings.week_start_day) || 0;
+        }
       }
     } catch (e) { /* ignore */ }
 
@@ -930,6 +965,7 @@ function storePreviousState() {
   const state = {
     tab: currentTab,
     view: currentView,
+    weekStart: currentWeekStart ? currentWeekStart.toISOString() : null,
     sortField: currentSortField,
     sortDir: currentSortDir,
     search: document.getElementById('search')?.value || '',
@@ -1019,6 +1055,7 @@ function _restoreUIState() {
 
     if (state.tab) currentTab = state.tab;
     if (state.view) currentView = state.view;
+    if (state.weekStart) currentWeekStart = new Date(state.weekStart);
     if (state.sortField !== undefined) currentSortField = state.sortField;
     if (state.sortDir) currentSortDir = state.sortDir;
 
@@ -1072,6 +1109,20 @@ function _restoreUIState() {
     // Restore label filters after they load
     if (state.labelFilters && state.labelFilters.length > 0) {
       window._pendingLabelFilters = state.labelFilters;
+    }
+
+    // Auto-expand sidebar filter groups that have active filters
+    if (state.statusFilters && state.statusFilters.some(v => v !== '')) {
+      expandFilterGroup('filter-status');
+    }
+    if (state.priorityFilters && state.priorityFilters.some(v => v !== '')) {
+      expandFilterGroup('filter-priority');
+    }
+    if (state.labelFilters && state.labelFilters.length > 0) {
+      expandFilterGroup('filter-label');
+    }
+    if (state.showArchived || !state.showPinned || !state.showUnmarked) {
+      expandFilterGroup('filter-archive');
     }
 
     return true;
@@ -1151,10 +1202,13 @@ function restoreSidebarState() {
   }
 }
 
+// Global week start day (0=Sun, 1=Mon, etc.) — loaded from settings
+let _weekStartDay = 0;
+
 function getWeekStart(date) {
   const d = new Date(date);
   const day = d.getDay();
-  const diff = (day + 1) % 7;
+  const diff = (day - _weekStartDay + 7) % 7;
   d.setDate(d.getDate() - diff);
   d.setHours(0, 0, 0, 0);
   return d;
@@ -1190,7 +1244,7 @@ function formatDate(date) {
     "Dec",
   ];
   const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  return `${monthNames[date.getMonth()]}\n${String(date.getDate()).padStart(2, "0")}\n${dayNames[date.getDay()]}`;
+  return `${dayNames[date.getDay()]} ${date.getDate()}`;
 }
 
 function formatTime(date) {
@@ -1308,25 +1362,27 @@ function updateDateRange() {
   if (!currentWeekStart) {
     currentWeekStart = getWeekStart(new Date());
   }
+  const monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
   if (currentView === "Day") {
-    yearElement.textContent = currentWeekStart.getFullYear();
+    yearElement.textContent = `${currentWeekStart.getFullYear()} · ${monthNames[currentWeekStart.getMonth()]}`;
     rangeElement.textContent = formatDate(currentWeekStart);
   } else if (currentView === "Week") {
     const start = new Date(currentWeekStart);
     const end = new Date(start);
     end.setDate(start.getDate() + 6);
-    yearElement.textContent = start.getFullYear();
+    yearElement.textContent = `${start.getFullYear()} · ${monthNames[start.getMonth()]}`;
     rangeElement.innerHTML = formatWeekRange(start, end);
   } else if (currentView === "SevenDay") {
     const start = new Date(currentWeekStart);
     const end = new Date(start);
     end.setDate(start.getDate() + 6);
-    yearElement.textContent = start.getFullYear();
+    yearElement.textContent = `${start.getFullYear()} · ${monthNames[start.getMonth()]}`;
     rangeElement.innerHTML = formatWeekRange(start, end);
   } else if (currentView === "Month") {
     const monthStart = getMonthStart(currentWeekStart);
-    yearElement.textContent = monthStart.getFullYear();
-    rangeElement.textContent = `${monthStart.toLocaleString("default", { month: "long" })}`;
+    yearElement.textContent = `${monthStart.getFullYear()} · ${monthNames[monthStart.getMonth()]}`;
+    rangeElement.textContent = '';
   } else if (currentView === "Year") {
     const yearStart = getYearStart(currentWeekStart);
     yearElement.textContent = yearStart.getFullYear();
@@ -1416,6 +1472,90 @@ function displayChits() {
       break;
     default:
       listContainer.innerHTML = `<p>${currentTab} tab not implemented yet.</p>`;
+  }
+
+  // Post-render: apply chit display options (fade past, highlight overdue)
+  _applyChitDisplayOptions();
+}
+
+function _applyChitDisplayOptions() {
+  if (!_chitOptions.fade_past_chits && !_chitOptions.highlight_overdue_chits) return;
+  const now = new Date();
+
+  // Fade past timed events in calendar
+  if (_chitOptions.fade_past_chits && currentTab === 'Calendar') {
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    document.querySelectorAll('.timed-event, .day-event').forEach(el => {
+      const col = el.closest('.day-column') || el.closest('[style*="position:relative"]');
+      if (!col) return;
+      const isToday = col.classList.contains('today');
+
+      // Determine if this column is a past day by finding its .today sibling
+      let isPastDay = false;
+      if (!isToday && col.parentElement) {
+        const siblings = Array.from(col.parentElement.querySelectorAll('.day-column'));
+        const todayIdx = siblings.findIndex(s => s.classList.contains('today'));
+        const thisIdx = siblings.indexOf(col);
+        if (todayIdx >= 0 && thisIdx >= 0 && thisIdx < todayIdx) isPastDay = true;
+        // If no today column visible, check by date data attribute or skip
+        if (todayIdx < 0) isPastDay = false; // can't determine, don't fade
+      }
+
+      const top = parseInt(el.style.top) || 0;
+      const height = parseInt(el.style.height) || 0;
+      const endMin = top + height;
+
+      // Only fade if: past day, OR today and event has ended
+      if (isPastDay || (isToday && endMin < nowMin)) {
+        el.style.opacity = '0.45';
+      }
+    });
+
+    // Fade past all-day events
+    document.querySelectorAll('.all-day-event').forEach(el => {
+      const chitId = el.dataset.chitId;
+      const chit = chits.find(c => c.id === chitId);
+      if (chit) {
+        const info = getCalendarDateInfo(chit);
+        if (info.hasDate && info.end < now) el.style.opacity = '0.45';
+      }
+    });
+
+    // Fade past month events
+    document.querySelectorAll('.month-event').forEach(el => {
+      const dayCell = el.closest('.month-day');
+      if (!dayCell || !dayCell.dataset.date) return;
+      const cellDate = new Date(dayCell.dataset.date + 'T23:59:59');
+      if (cellDate < todayStart) el.style.opacity = '0.45';
+    });
+  }
+
+  // Fade past chits in non-calendar views
+  if (_chitOptions.fade_past_chits && currentTab !== 'Calendar') {
+    document.querySelectorAll('.chit-card[data-chit-id]').forEach(el => {
+      const chitId = el.dataset.chitId;
+      const chit = chits.find(c => c.id === chitId);
+      if (!chit) return;
+      const endTime = chit.end_datetime ? new Date(chit.end_datetime) : (chit.due_datetime ? new Date(chit.due_datetime) : null);
+      if (endTime && endTime < now && chit.status !== 'Complete') {
+        el.style.opacity = '0.5';
+      }
+    });
+  }
+
+  // Highlight overdue chits (all views)
+  if (_chitOptions.highlight_overdue_chits) {
+    document.querySelectorAll('.chit-card[data-chit-id], .timed-event[data-chit-id], .all-day-event[data-chit-id]').forEach(el => {
+      const chitId = el.dataset.chitId;
+      const chit = chits.find(c => c.id === chitId);
+      if (!chit) return;
+      const dueTime = chit.due_datetime ? new Date(chit.due_datetime) : null;
+      if (dueTime && dueTime < now && chit.status !== 'Complete') {
+        el.style.borderLeft = '4px solid #b22222';
+      }
+    });
   }
 }
 
@@ -1545,6 +1685,7 @@ function displayWeekView(chitsToDisplay) {
     dd.timed.forEach(({ chit, info }) => {
       const ev = document.createElement("div");
       ev.className = "timed-event";
+      ev.dataset.chitId = chit.id;
       if (chit.status === "Complete") ev.classList.add("completed-task");
       // Clamp to this day for multi-day events
       const _dayStart = new Date(dd.day.getFullYear(), dd.day.getMonth(), dd.day.getDate());
@@ -1597,17 +1738,16 @@ function displayMonthView(chitsToDisplay) {
     currentMonth.getMonth() + 1,
     0,
   );
-  const firstDay = monthStart.getDay();
+  const firstDay = (monthStart.getDay() - _weekStartDay + 7) % 7;
   const daysInMonth = monthEnd.getDate();
 
-  const monthHeader = document.createElement("div");
-  monthHeader.className = "month-header";
-  monthHeader.textContent = `${currentMonth.toLocaleString("default", { month: "long" })} ${currentMonth.getFullYear()}`;
-  monthView.appendChild(monthHeader);
+  // Month/year now shown in sidebar — no header bar needed
 
   const dayHeaders = document.createElement("div");
   dayHeaders.className = "day-headers";
-  const daysOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const allDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const daysOfWeek = [];
+  for (let i = 0; i < 7; i++) daysOfWeek.push(allDays[(_weekStartDay + i) % 7]);
   daysOfWeek.forEach((day) => {
     const dayHeader = document.createElement("div");
     dayHeader.className = "day-header";
@@ -1618,12 +1758,36 @@ function displayMonthView(chitsToDisplay) {
 
   const monthGrid = document.createElement("div");
   monthGrid.className = "month-grid";
-  for (let i = 0; i < firstDay; i++) {
-    const emptyDay = document.createElement("div");
-    emptyDay.className = "month-day empty";
-    monthGrid.appendChild(emptyDay);
+
+  // Previous month's trailing days (faded)
+  const prevMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 0); // last day of prev month
+  for (let i = firstDay - 1; i >= 0; i--) {
+    const prevDay = new Date(prevMonth.getFullYear(), prevMonth.getMonth(), prevMonth.getDate() - i);
+    const monthDay = document.createElement("div");
+    monthDay.className = "month-day other-month prev-month";
+    monthDay.dataset.date = prevDay.toISOString().slice(0, 10);
+    monthDay.innerHTML = `<div class="day-number">${prevDay.getDate()}</div>`;
+    const dayChits = chitsToDisplay.filter((chit) => chitMatchesDay(chit, prevDay));
+    if (dayChits.length > 0) {
+      const eventsContainer = document.createElement("div");
+      eventsContainer.className = "day-events";
+      dayChits.forEach((chit) => {
+        const info = getCalendarDateInfo(chit);
+        const chitElement = document.createElement("div");
+        chitElement.className = "month-event";
+        chitElement.dataset.chitId = chit.id;
+        chitElement.style.backgroundColor = chitColor(chit);
+        chitElement.title = calendarEventTooltip(chit, info);
+        chitElement.innerHTML = calendarEventTitle(chit, info.isDueOnly, info);
+        attachCalendarChitEvents(chitElement, chit);
+        eventsContainer.appendChild(chitElement);
+      });
+      monthDay.appendChild(eventsContainer);
+    }
+    monthGrid.appendChild(monthDay);
   }
 
+  // Current month days
   for (let day = 1; day <= daysInMonth; day++) {
     const dayDate = new Date(
       currentMonth.getFullYear(),
@@ -1661,10 +1825,50 @@ function displayMonthView(chitsToDisplay) {
     monthGrid.appendChild(monthDay);
   }
 
+  // Next month's leading days (whitewashed) — fill to complete the grid row
+  const totalCells = firstDay + daysInMonth;
+  const trailingDays = (7 - (totalCells % 7)) % 7;
+  for (let i = 1; i <= trailingDays; i++) {
+    const nextDay = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, i);
+    const monthDay = document.createElement("div");
+    monthDay.className = "month-day other-month next-month";
+    monthDay.dataset.date = nextDay.toISOString().slice(0, 10);
+    monthDay.innerHTML = `<div class="day-number">${nextDay.getDate()}</div>`;
+    const dayChits = chitsToDisplay.filter((chit) => chitMatchesDay(chit, nextDay));
+    if (dayChits.length > 0) {
+      const eventsContainer = document.createElement("div");
+      eventsContainer.className = "day-events";
+      dayChits.forEach((chit) => {
+        const info = getCalendarDateInfo(chit);
+        const chitElement = document.createElement("div");
+        chitElement.className = "month-event";
+        chitElement.dataset.chitId = chit.id;
+        chitElement.style.backgroundColor = chitColor(chit);
+        chitElement.title = calendarEventTooltip(chit, info);
+        chitElement.innerHTML = calendarEventTitle(chit, info.isDueOnly, info);
+        attachCalendarChitEvents(chitElement, chit);
+        eventsContainer.appendChild(chitElement);
+      });
+      monthDay.appendChild(eventsContainer);
+    }
+    monthGrid.appendChild(monthDay);
+  }
+
   monthView.appendChild(monthGrid);
   chitList.appendChild(monthView);
 
   enableMonthDrag(monthGrid);
+
+  // Double-click on empty day cell creates a new all-day chit for that date
+  monthGrid.addEventListener('dblclick', (e) => {
+    // Only fire if clicking on the day cell itself or the day-number, not on an event
+    if (e.target.closest('.month-event')) return;
+    const dayCell = e.target.closest('.month-day');
+    if (!dayCell || !dayCell.dataset.date) return;
+    const dateStr = dayCell.dataset.date;
+    storePreviousState();
+    window.location.href = `/editor?start=${encodeURIComponent(dateStr + 'T00:00:00')}&end=${encodeURIComponent(dateStr + 'T23:59:59')}&allday=1`;
+  });
 }
 
 function displayItineraryView(chitsToDisplay) {
@@ -2016,6 +2220,12 @@ function displayTasksView(chitsToDisplay) {
     (chit) => chit.status || chit.due_datetime,
   );
 
+  // Default sort: by status (ToDo → In Progress → Blocked → Complete at bottom)
+  if (!currentSortField) {
+    const statusOrder = { 'ToDo': 1, 'In Progress': 2, 'Blocked': 3, '': 4, 'Complete': 5 };
+    taskChits.sort((a, b) => (statusOrder[a.status] || 4) - (statusOrder[b.status] || 4));
+  }
+
   if (taskChits.length === 0) {
     chitList.innerHTML = "<p>No tasks found.</p>";
     return;
@@ -2035,12 +2245,16 @@ function displayTasksView(chitsToDisplay) {
 
     chitElement.appendChild(_buildChitHeader(chit, `<a href="/editor?id=${chit.id}">${chit.title || '(Untitled)'}</a>`));
 
-    // Inline status dropdown
+    // Status + note preview in a row
     const controls = document.createElement("div");
-    controls.style.cssText = "margin-top:0.3em;display:flex;align-items:center;gap:0.5em;font-size:0.9em;";
+    controls.style.cssText = "margin-top:0.3em;display:flex;align-items:flex-start;gap:0.8em;";
+
+    // Status dropdown (left)
+    const statusWrap = document.createElement("div");
+    statusWrap.style.cssText = "display:flex;align-items:center;gap:0.5em;flex-shrink:0;";
     const label = document.createElement("span");
     label.textContent = "Status:";
-    controls.appendChild(label);
+    statusWrap.appendChild(label);
 
     const statusDropdown = document.createElement("select");
     statusDropdown.style.cssText = "font-family:inherit;font-size:inherit;";
@@ -2059,7 +2273,21 @@ function displayTasksView(chitsToDisplay) {
         body: JSON.stringify({ ...chit, status: statusDropdown.value || null }),
       }).then(r => { if (r.ok) fetchChits(); });
     });
-    controls.appendChild(statusDropdown);
+    statusWrap.appendChild(statusDropdown);
+    controls.appendChild(statusWrap);
+
+    // Note preview (right, rendered markdown)
+    if (chit.note && chit.note.trim()) {
+      const notePreview = document.createElement("div");
+      notePreview.style.cssText = "flex:1;min-width:0;opacity:0.75;overflow:hidden;max-height:4.5em;line-height:1.4em;";
+      if (typeof marked !== 'undefined') {
+        notePreview.innerHTML = marked.parse(chit.note.slice(0, 500));
+      } else {
+        notePreview.textContent = chit.note.slice(0, 300) + (chit.note.length > 300 ? '…' : '');
+      }
+      controls.appendChild(notePreview);
+    }
+
     chitElement.appendChild(controls);
 
     chitElement.addEventListener("dblclick", () => {
@@ -2396,6 +2624,7 @@ function displaySevenDayView(chitsToDisplay) {
     dd.timed.forEach(({ chit, info }) => {
       const ev = document.createElement("div");
       ev.className = "timed-event";
+      ev.dataset.chitId = chit.id;
       if (chit.status === "Complete") ev.classList.add("completed-task");
       // Clamp to this day for multi-day events
       const _dayStart = new Date(dd.day.getFullYear(), dd.day.getMonth(), dd.day.getDate());
@@ -2617,8 +2846,18 @@ function filterChits(tab) {
 
   _loadLabelFilters();
 
+  // Apply default search filter for this tab (from settings)
+  const search = document.getElementById('search');
+  if (search && _defaultFilters) {
+    const tabKey = tab.toLowerCase();
+    if (_defaultFilters[tabKey] && !search.value) {
+      search.value = _defaultFilters[tabKey];
+    }
+  }
+
   updateDateRange();
   displayChits();
+  _updateClearFiltersButton();
 }
 
 function searchChits() {
@@ -2831,8 +3070,22 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
 
-  fetchChits();
-  updateDateRange();
+  // Pre-load week start day setting before rendering calendar
+  fetch('/api/settings/default_user').then(r => r.ok ? r.json() : {}).then(s => {
+    if (s.week_start_day !== undefined) _weekStartDay = parseInt(s.week_start_day) || 0;
+    if (s.chit_options) _chitOptions = { ..._chitOptions, ...s.chit_options };
+    // Load default filters per tab
+    const df = s.default_filters;
+    if (df && typeof df === 'object' && !Array.isArray(df)) {
+      _defaultFilters = df;
+    }
+    // Now fetch chits and render with correct settings
+    fetchChits();
+    updateDateRange();
+  }).catch(() => {
+    fetchChits();
+    updateDateRange();
+  });
   restoreSidebarState();
   _startGlobalAlertSystem();
 
@@ -3108,6 +3361,8 @@ document.addEventListener("DOMContentLoaded", function () {
 
     if (keyLower === 's' && !_hotkeyMode) {
       e.preventDefault();
+      storePreviousState();
+      localStorage.setItem('cwoc_settings_return', '/');
       window.location.href = '/frontend/settings.html';
       return;
     }

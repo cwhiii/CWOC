@@ -7,10 +7,9 @@
 ## Bugs
 
 ### Calendar
-- `[ ]` Events can have end time before start time — validate and prevent
-- `[ ]` "Apr 22 Wed" format on every day is crowded — shorten
+- `[x]` Events can have end time before start time — validate and prevent
 - `[ ]` Week view starts on Monday, not Sunday — make configurable
-- `[ ]` Month view: fill in pre/post-month days for full grid
+- [ ] in month & week & 7 day view, dragging chits should let me change thair start date .
 
 ### Editor
 - `[ ]` Missing favicon on editor page
@@ -22,9 +21,7 @@
 - `[ ]` Alarm looping pings continuously instead of once per cycle
 
 ### Views
-- `[ ]` Notes view: tags randomly colored — use consistent colors
 - `[ ]` Tasks list: sort-by dropdown overflows sidebar
-- `[ ]` Checklists view: showing chits with no checklists
 - `[ ]` Projects not loading correctly in some cases
 - `[ ]` Projects filter doesn't do anything when clicked
 - `[ ]` Indicators tab: tabbing bugs, symptom tracker multi-select, cycle show/hide
@@ -251,10 +248,10 @@
 ## Non-Functional UI Elements (buttons/settings present but not wired up)
 
 ### Editor — Broken/Missing Functions
-- `[ ]` **Tags: "Expand All" button** — calls `toggleAllTags()` which doesn't exist
-- `[ ]` **Tags: "Collapse All" button** — calls `toggleAllTags()` which doesn't exist
-- `[ ]` **Tags: "Create New" button** — calls `createTag()` which doesn't exist
-- `[ ]` **Tags: search input + clear button** — calls `clearTagSearch()` and `addSearchedTag()` which don't exist
+- `[x]` **Tags: "Expand All" button** — `toggleAllTags()` implemented
+- `[x]` **Tags: "Collapse All" button** — `toggleAllTags()` implemented
+- `[x]` **Tags: "Create New" button** — `createTag()` navigates to settings
+- `[x]` **Tags: search input + clear button** — `clearTagSearch()` and `addSearchedTag()` implemented
 - `[ ]` **People: "Filter" button** — calls `toggleRoleFilterDropdown()` which doesn't exist (code is in Prototypes only)
 - `[ ]` **People: "Add Person" button** — calls `addPersonItem()` which doesn't exist (code is in Prototypes only)
 - `[ ]` **People zone** — only a plain text input, no roles/modal/autocomplete
@@ -270,8 +267,8 @@
 
 ### Settings — Not Applied Anywhere
 - `[ ]` **Visual Indicators** (Alarm/Notification/Weather/People/Indicators: Always/Never/When Space) — saved to DB but never read or applied in any view
-- `[ ]` **Chit Options: "Fade Past Chits"** — saved but never applied in calendar/views
-- `[ ]` **Chit Options: "Highlight Overdue Chits"** — saved but never applied
+- `[x]` **Chit Options: "Fade Past Chits"** — now applied: past chits faded to 50% opacity
+- `[x]` **Chit Options: "Highlight Overdue Chits"** — now applied: red left border on overdue chits
 - `[ ]` **Chit Options: "Delete Past Alarm Chits"** — saved but never applied
 - `[ ]` **Default Filters (Word Search per tab)** — UI exists for Calendar/Checklists/Alarms/Projects/Tasks/Indicators/Notes but values are never used as default search filters when switching tabs
 - `[ ]` **Alarms: Active/Inactive clock drag-drop ordering** — UI works for reordering but the order isn't used anywhere in the dashboard alarm display

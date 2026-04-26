@@ -30,13 +30,14 @@ class Settings(BaseModel):
     time_format: Optional[str] = None
     sex: Optional[str] = None
     snooze_length: Optional[str] = None
-    default_filters: Optional[List[str]] = None
+    default_filters: Optional[Any] = None  # Object {tab: "filter text"} or legacy List[str]
     alarm_orientation: Optional[str] = None
     tags: Optional[List[Tag]] = None
     custom_colors: Optional[List[str]] = None
     visual_indicators: Optional[Dict[str, str]] = None
     chit_options: Optional[Dict[str, bool]] = None
     calendar_snap: Optional[str] = "15"
+    week_start_day: Optional[str] = "0"  # 0=Sunday, 1=Monday, etc.
 
 class Chit(BaseModel):
     id: Optional[str] = None
@@ -208,9 +209,13 @@ def migrate_add_calendar_snap():
             cursor.execute("ALTER TABLE settings ADD COLUMN calendar_snap TEXT DEFAULT '15'")
             conn.commit()
             logger.info("Added calendar_snap column to settings table")
+        if "week_start_day" not in columns:
+            cursor.execute("ALTER TABLE settings ADD COLUMN week_start_day TEXT DEFAULT '0'")
+            conn.commit()
+            logger.info("Added week_start_day column to settings table")
         conn.close()
     except Exception as e:
-        logger.error(f"Error adding calendar_snap column: {str(e)}")
+        logger.error(f"Error adding calendar settings columns: {str(e)}")
         raise
 
 def migrate_add_recurrence_fields():
@@ -620,8 +625,8 @@ def save_settings(settings: Settings):
             INSERT OR REPLACE INTO settings (
                 user_id, time_format, sex, snooze_length, default_filters,
                 alarm_orientation, tags, custom_colors, visual_indicators, chit_options,
-                calendar_snap
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                calendar_snap, week_start_day
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 settings.user_id,
@@ -635,7 +640,8 @@ def save_settings(settings: Settings):
                 serialize_json_field(settings.custom_colors),
                 serialize_json_field(settings.visual_indicators),
                 serialize_json_field(settings.chit_options),
-                settings.calendar_snap or "15"
+                settings.calendar_snap or "15",
+                settings.week_start_day or "0"
             )
         )
         conn.commit()

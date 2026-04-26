@@ -848,6 +848,9 @@ class SettingsManager {
     document.getElementById("calendar-snap").value =
       this.settings.calendar_snap || "15";
 
+    const weekStartSel = document.getElementById("week-start-day");
+    if (weekStartSel) weekStartSel.value = this.settings.week_start_day || "0";
+
     const filterInputs = [
       "calendar",
       "checklists",
@@ -859,11 +862,13 @@ class SettingsManager {
     ];
     filterInputs.forEach((key) => {
       const input = document.getElementById(`filter-${key}`);
-      input.value = this.settings.default_filters?.includes(
-        key.charAt(0).toUpperCase() + key.slice(1),
-      )
-        ? `#${key}`
-        : "";
+      const filters = this.settings.default_filters || {};
+      // Support both old array format and new object format
+      if (Array.isArray(filters)) {
+        input.value = filters.includes(key.charAt(0).toUpperCase() + key.slice(1)) ? `#${key}` : "";
+      } else {
+        input.value = filters[key] || "";
+      }
       processTagsInInput(input);
     });
 
@@ -909,13 +914,17 @@ class SettingsManager {
       sex: document.getElementById("gender-toggle").checked ? "Woman" : "Man",
       snooze_length: document.getElementById("snooze-length").value,
       calendar_snap: document.getElementById("calendar-snap").value,
-      default_filters: Array.from(document.querySelectorAll(".filter-input"))
-        .filter((input) => input.value.startsWith("#"))
-        .map(
-          (input) =>
-            input.id.replace("filter-", "").charAt(0).toUpperCase() +
-            input.id.replace("filter-", "").slice(1),
-        ),
+      week_start_day: document.getElementById("week-start-day")?.value || "0",
+      default_filters: (() => {
+        const filters = {};
+        document.querySelectorAll(".filter-input").forEach(input => {
+          if (input.value.trim()) {
+            const tab = input.id.replace("filter-", "");
+            filters[tab] = input.value.trim();
+          }
+        });
+        return filters;
+      })(),
       alarm_orientation: clocksContainer.classList.contains("vertical")
         ? "Vertical"
         : "Horizontal",

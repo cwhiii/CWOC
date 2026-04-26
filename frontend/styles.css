@@ -420,12 +420,26 @@ h1 {
 .month-day {
     border: 1px solid #d3d3d3;
     padding: 5px;
-    background-color: #ffff0;
+    background-color: #fffaf0;
     min-height: 100px;
 }
 
 .month-day.empty {
     background-color: #f0f0f0;
+}
+
+.month-day.prev-month {
+    background-color: rgba(0, 0, 0, 0.06);
+}
+.month-day.prev-month .day-number {
+    opacity: 0.5;
+}
+
+.month-day.next-month {
+    background-color: rgba(255, 255, 255, 0.7);
+}
+.month-day.next-month .day-number {
+    opacity: 0.5;
 }
 
 .day-number {
@@ -1114,6 +1128,25 @@ button.delete:hover {
     text-decoration: underline;
 }
 
+/* Tame markdown headers in note previews */
+.chit-card h1,
+.chit-card h2,
+.chit-card h3,
+.chit-card h4,
+.chit-card h5,
+.chit-card h6 {
+    font-size: 1.05em;
+    font-weight: bold;
+    margin: 0.2em 0;
+    padding: 0;
+    border: none;
+    background: transparent;
+    display: inline;
+    height: auto;
+    width: auto;
+    line-height: 1.4;
+}
+
 /* Header row: [icons] Title ... meta values */
 .chit-header-row {
     display: flex;
@@ -1176,6 +1209,9 @@ button.delete:hover {
     display: flex;
     flex-direction: column;
     gap: 0.5em;
+    overflow-y: auto;
+    flex: 1 1 auto;
+    min-height: 0;
 }
 
 /* ── Order controls styling ───────────────────────────────────────────────── */

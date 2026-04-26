@@ -1088,6 +1088,7 @@ function renderTagTree(container, tree, selectedTags, onToggle, opts) {
         const toggle = document.createElement('span');
         toggle.style.cssText = 'font-size:0.7em;width:14px;text-align:center;cursor:pointer;user-select:none;flex-shrink:0;';
         toggle.textContent = '▼';
+        toggle.dataset.tagToggle = 'true';
         toggle.addEventListener('click', (e) => {
           e.stopPropagation();
           const isHidden = childContainer.style.display === 'none';
@@ -1138,6 +1139,7 @@ function renderTagTree(container, tree, selectedTags, onToggle, opts) {
 
       // Render children
       if (childContainer) {
+        childContainer.dataset.tagChildren = 'true';
         renderLevel(node.children, childContainer, depth + 1);
         parentEl.appendChild(childContainer);
       }

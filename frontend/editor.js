@@ -1246,6 +1246,13 @@ async function buildChitObject() {
       alert('Start time is required (or check All Day).');
       return null;
     }
+    // Validate end is not before start
+    if (chit.start_datetime && chit.end_datetime) {
+      if (new Date(chit.end_datetime) < new Date(chit.start_datetime)) {
+        alert('End time cannot be before start time.');
+        return null;
+      }
+    }
   } else if (dateMode === 'due') {
     const dueDate = dueDateInput ? dueDateInput.value.trim() : '';
     const dueTime = dueTimeInput ? dueTimeInput.value.trim() : '';
@@ -3121,6 +3128,16 @@ document.addEventListener("DOMContentLoaded", function () {
         }
       }
     }
+
+    // Handle allday param from month view dblclick
+    const preAllDay = params.get('allday');
+    if (preAllDay === '1') {
+      const allDayCb = document.getElementById('allDay');
+      if (allDayCb) {
+        allDayCb.checked = true;
+        toggleAllDay();
+      }
+    }
   }
 
   setInterval(checkNotifications, 60000);
@@ -3258,6 +3275,57 @@ function cancelOrExit() {
   } else {
     window.location.href = "/";
   }
+}
+
+// ── Tag zone button functions ─────────────────────────────────────────────────
+
+/** Expand or collapse all tag tree nodes */
+function toggleAllTags(event, expand) {
+  if (event) event.stopPropagation();
+  const container = document.getElementById('tagTreeContainer');
+  if (!container) return;
+  // Toggle all child containers
+  container.querySelectorAll('[data-tag-children]').forEach(el => {
+    el.style.display = expand ? '' : 'none';
+  });
+  // Update all toggle arrows
+  container.querySelectorAll('[data-tag-toggle]').forEach(el => {
+    el.textContent = expand ? '▼' : '▶';
+  });
+}
+
+/** Create a new tag — navigate to settings tag editor */
+function createTag(event) {
+  if (event) event.stopPropagation();
+  navigateToSettings();
+}
+
+/** Clear the tag search input */
+function clearTagSearch(event) {
+  if (event) event.stopPropagation();
+  const input = document.getElementById('labels');
+  if (input) { input.value = ''; input.focus(); }
+}
+
+/** Add a tag by name from the search input */
+function addSearchedTag(event) {
+  if (event) event.stopPropagation();
+  const input = document.getElementById('labels');
+  if (!input) return;
+  const tagName = input.value.trim();
+  if (!tagName) return;
+
+  // Add to current selection
+  if (!window._currentTagSelection) window._currentTagSelection = [];
+  if (!window._currentTagSelection.includes(tagName)) {
+    window._currentTagSelection.push(tagName);
+    if (typeof trackRecentTag === 'function') trackRecentTag(tagName);
+  }
+  input.value = '';
+
+  // Re-render tags
+  loadTags().then(tags => renderTags(tags, window._currentTagSelection));
+  setSaveButtonUnsaved();
 }
 
 function navigateToSettings() {
