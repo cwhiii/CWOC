@@ -180,6 +180,58 @@ function renderInlineChecklist(container, chit, onUpdate) {
       }
     });
 
+    // Touch drag support for checklist item reorder
+    enableTouchDrag(li, {
+      onStart: function (data) {
+        li._touchDragData = { chitId: chit.id, idx: idx };
+        li.style.opacity = '0.4';
+      },
+      onMove: function (data) {
+        // Clear previous highlights
+        list.querySelectorAll('li[data-idx]').forEach(function (el) { el.style.borderTop = ''; });
+        list.style.borderBottom = '';
+        // Find the element under the touch point
+        var target = document.elementFromPoint(data.clientX, data.clientY);
+        if (!target) return;
+        var targetLi = target.closest('li[data-idx]');
+        if (targetLi && targetLi !== li) {
+          targetLi.style.borderTop = '2px solid #8b5a2b';
+        } else if (!targetLi && target.closest('ul[data-chit-id]')) {
+          list.style.borderBottom = '2px solid #8b5a2b';
+        }
+      },
+      onEnd: function (data) {
+        li.style.opacity = '1';
+        list.querySelectorAll('li[data-idx]').forEach(function (el) { el.style.borderTop = ''; });
+        list.style.borderBottom = '';
+        if (!li._touchDragData) return;
+        var fromChitId = li._touchDragData.chitId;
+        var fromIdx = li._touchDragData.idx;
+        delete li._touchDragData;
+        // Find drop target
+        var target = document.elementFromPoint(data.clientX, data.clientY);
+        if (!target) return;
+        var targetLi = target.closest('li[data-idx]');
+        if (targetLi && targetLi !== li) {
+          var toChitId = targetLi.dataset.chitId || chit.id;
+          var toIdx = parseInt(targetLi.dataset.idx);
+          moveChecklistItemCrossChit(fromChitId, fromIdx, toChitId, toIdx).then(function () {
+            if (onUpdate) onUpdate();
+          });
+        } else if (!targetLi) {
+          // Dropped on the list itself — append to end
+          var targetList = target.closest('ul[data-chit-id]');
+          if (targetList) {
+            var toChitId = targetList.dataset.chitId || chit.id;
+            var toIdx = chit.checklist.length;
+            moveChecklistItemCrossChit(fromChitId, fromIdx, toChitId, toIdx).then(function () {
+              if (onUpdate) onUpdate();
+            });
+          }
+        }
+      },
+    });
+
     list.appendChild(li);
   });
 
@@ -355,6 +407,83 @@ function enableDragToReorder(container, tab, onReorder) {
     if (sel) sel.value = 'manual';
     _updateSortUI();
     if (onReorder) onReorder();
+  });
+
+  // Touch drag support for chit card reorder
+  var _touchDraggedCard = null;
+  container.querySelectorAll('.chit-card[data-chit-id]').forEach(function (card) {
+    // Skip cards inside checklist areas
+    if (card.closest('ul[data-chit-id]')) return;
+
+    enableTouchDrag(card, {
+      onStart: function (data) {
+        // Don't hijack checklist-item touch drags
+        if (data.target && data.target.closest && data.target.closest('li[data-idx]')) return;
+        if (data.target && data.target.closest && data.target.closest('ul[data-chit-id]')) return;
+        _touchDraggedCard = card;
+        card.style.opacity = '0.4';
+      },
+      onMove: function (data) {
+        if (!_touchDraggedCard) return;
+        // Clear previous highlights
+        container.querySelectorAll('.chit-card').forEach(function (c) {
+          c.style.borderTop = '';
+          c.style.borderBottom = '';
+        });
+        // Find the card under the touch point
+        var target = document.elementFromPoint(data.clientX, data.clientY);
+        if (!target) return;
+        var targetCard = target.closest('.chit-card');
+        if (targetCard && targetCard !== _touchDraggedCard) {
+          var rect = targetCard.getBoundingClientRect();
+          var midY = rect.top + rect.height / 2;
+          if (data.clientY < midY) {
+            targetCard.style.borderTop = '3px solid #8b5a2b';
+          } else {
+            targetCard.style.borderBottom = '3px solid #8b5a2b';
+          }
+        }
+      },
+      onEnd: function (data) {
+        if (!_touchDraggedCard) return;
+        _touchDraggedCard.style.opacity = '1';
+        container.querySelectorAll('.chit-card').forEach(function (c) {
+          c.style.borderTop = '';
+          c.style.borderBottom = '';
+        });
+
+        // Find drop target
+        var target = document.elementFromPoint(data.clientX, data.clientY);
+        if (!target) { _touchDraggedCard = null; return; }
+        var targetCard = target.closest('.chit-card');
+        if (!targetCard || targetCard === _touchDraggedCard) { _touchDraggedCard = null; return; }
+
+        // Compute new order
+        var cards = Array.from(container.querySelectorAll('.chit-card[data-chit-id]'));
+        var ids = cards.map(function (c) { return c.dataset.chitId; });
+        var fromId = _touchDraggedCard.dataset.chitId;
+        var toId = targetCard.dataset.chitId;
+        var fromIdx = ids.indexOf(fromId);
+        var toIdx = ids.indexOf(toId);
+        if (fromIdx < 0 || toIdx < 0) { _touchDraggedCard = null; return; }
+
+        // Determine if dropping above or below
+        var rect = targetCard.getBoundingClientRect();
+        if (data.clientY > rect.top + rect.height / 2) toIdx++;
+
+        ids.splice(fromIdx, 1);
+        if (fromIdx < toIdx) toIdx--;
+        ids.splice(toIdx, 0, fromId);
+
+        saveManualOrder(tab, ids);
+        currentSortField = 'manual';
+        var sel = document.getElementById('sort-select');
+        if (sel) sel.value = 'manual';
+        _updateSortUI();
+        _touchDraggedCard = null;
+        if (onReorder) onReorder();
+      },
+    });
   });
 }
 
@@ -560,6 +689,29 @@ function enableCalendarDrag(scrollContainer, dayColumns, days, chitsMap) {
       document.addEventListener('mousemove', _onCalDragMove);
       document.addEventListener('mouseup', _onCalDragEnd);
     });
+
+      // Resize: touch support via enableTouchDrag
+      enableTouchDrag(handle, {
+        onStart: function (data) {
+          const entry = chitsMap.find(c => c.el === el);
+          if (!entry) return;
+          _calDragState = {
+            el, chit: entry.chit, info: entry.info, mode: 'resize',
+            startY: data.clientY,
+            origTop: parseInt(el.style.top),
+            origHeight: parseInt(el.style.height),
+            dayCol: el.parentElement,
+            hasMoved: false,
+          };
+          _showSnapGrid(el.parentElement);
+        },
+        onMove: function (data) {
+          _onCalDragMove({ clientX: data.clientX, clientY: data.clientY });
+        },
+        onEnd: function (data) {
+          _onCalDragEnd({ clientX: data.clientX, clientY: data.clientY });
+        },
+      });
     } // end if (!info.isDueOnly) — resize only for start/end chits
 
     // Move: mousedown on event (not on handle)
@@ -586,6 +738,36 @@ function enableCalendarDrag(scrollContainer, dayColumns, days, chitsMap) {
       _showSnapGrid(el.parentElement);
       document.addEventListener('mousemove', _onCalDragMove);
       document.addEventListener('mouseup', _onCalDragEnd);
+    });
+
+    // Move: touch support via enableTouchDrag
+    enableTouchDrag(el, {
+      onStart: function (data) {
+        // Don't start move if touch is on the resize handle
+        if (data.target && data.target.closest && data.target.closest('.cal-resize-handle')) return;
+        const entry = chitsMap.find(c => c.el === el);
+        if (!entry) return;
+        const colIdx = dayColumns.indexOf(el.parentElement);
+        _calDragState = {
+          el, chit: entry.chit, info: entry.info, mode: 'move',
+          startY: data.clientY, startX: data.clientX,
+          origTop: parseInt(el.style.top),
+          origHeight: parseInt(el.style.height),
+          origColIdx: colIdx,
+          dayColumns, days,
+          dayCol: el.parentElement,
+          hasMoved: false,
+        };
+        el.style.opacity = '0.6';
+        el.style.zIndex = '50';
+        _showSnapGrid(el.parentElement);
+      },
+      onMove: function (data) {
+        _onCalDragMove({ clientX: data.clientX, clientY: data.clientY });
+      },
+      onEnd: function (data) {
+        _onCalDragEnd({ clientX: data.clientX, clientY: data.clientY });
+      },
     });
   });
 }
@@ -2360,14 +2542,27 @@ async function _recurrenceBreakOff(parentId, virtualChit, dateStr) {
 const NOTES_CARD_WIDTH = 336;
 const NOTES_GAP = 10;
 
-/** Calculate how many columns fit and the actual card width */
+/** Calculate how many columns fit and the actual card width.
+ *  Responsive: ≤480px → 1 column, 481–768px → 2 columns, >768px → current masonry. */
 function _notesColMetrics(container) {
   // clientWidth includes padding; subtract it to get usable content area
   const style = getComputedStyle(container);
   const padL = parseFloat(style.paddingLeft) || 0;
   const padR = parseFloat(style.paddingRight) || 0;
   const contentWidth = container.clientWidth - padL - padR;
-  const colCount = Math.max(1, Math.floor(contentWidth / (NOTES_CARD_WIDTH + NOTES_GAP)));
+
+  // Responsive column count based on viewport width
+  const vw = window.innerWidth;
+  let colCount;
+  if (vw <= 480) {
+    colCount = 1;
+  } else if (vw <= 768) {
+    colCount = 2;
+  } else {
+    // Desktop: fit as many columns as the container allows
+    colCount = Math.max(1, Math.floor(contentWidth / (NOTES_CARD_WIDTH + NOTES_GAP)));
+  }
+
   const actualCardWidth = Math.floor((contentWidth - (colCount - 1) * NOTES_GAP) / colCount);
   return { colCount, actualCardWidth, contentWidth };
 }
@@ -2710,4 +2905,194 @@ function _onNotesDragKey(e) {
     _notesDragState.cancelled = true;
     _onNotesDragEnd(e);
   }
+}
+
+
+// ── Touch Event Adapter ──────────────────────────────────────────────────────
+
+/**
+ * Enable touch-based drag on an element by mapping touch events to mouse-like callbacks.
+ * Maps touchstart → onStart, touchmove → onMove (with preventDefault), touchend → onEnd.
+ * Each callback receives { clientX, clientY, target, event }.
+ *
+ * Idempotent — safe to call multiple times on the same element (previous listeners
+ * are removed via the _touchDragCleanup property before attaching new ones).
+ *
+ * @param {HTMLElement} element - The DOM element to attach touch listeners to
+ * @param {object} callbacks - { onStart, onMove, onEnd } functions
+ */
+function enableTouchDrag(element, callbacks) {
+  try {
+    if (!element || !callbacks) return;
+
+    // Clean up previous listeners if called again on the same element (idempotent)
+    if (element._touchDragCleanup) {
+      element._touchDragCleanup();
+    }
+
+    function _extractTouchData(touchEvent) {
+      const touch = touchEvent.touches[0] || touchEvent.changedTouches[0];
+      if (!touch) return null;
+      return {
+        clientX: touch.clientX,
+        clientY: touch.clientY,
+        target: touchEvent.target,
+        event: touchEvent,
+      };
+    }
+
+    function _onTouchStart(e) {
+      const data = _extractTouchData(e);
+      if (!data) return;
+      if (typeof callbacks.onStart === 'function') {
+        callbacks.onStart(data);
+      }
+    }
+
+    function _onTouchMove(e) {
+      e.preventDefault(); // Block browser scroll during drag
+      const data = _extractTouchData(e);
+      if (!data) return;
+      if (typeof callbacks.onMove === 'function') {
+        callbacks.onMove(data);
+      }
+    }
+
+    function _onTouchEnd(e) {
+      const data = _extractTouchData(e);
+      if (!data) return;
+      if (typeof callbacks.onEnd === 'function') {
+        callbacks.onEnd(data);
+      }
+    }
+
+    element.addEventListener('touchstart', _onTouchStart, { passive: true });
+    element.addEventListener('touchmove', _onTouchMove, { passive: false });
+    element.addEventListener('touchend', _onTouchEnd, { passive: true });
+
+    // Store cleanup function for idempotent re-attachment
+    element._touchDragCleanup = function () {
+      element.removeEventListener('touchstart', _onTouchStart);
+      element.removeEventListener('touchmove', _onTouchMove);
+      element.removeEventListener('touchend', _onTouchEnd);
+      delete element._touchDragCleanup;
+    };
+  } catch (e) {
+    // No-op fallback if touch events are unsupported
+  }
+}
+
+
+// ── Mobile Sidebar Overlay Behavior ──────────────────────────────────────────
+
+/** @type {HTMLElement|null} Cached reference to the sidebar backdrop element */
+let _sidebarBackdropEl = null;
+
+/**
+ * Ensure the .sidebar-backdrop element exists in the DOM.
+ * Reuses an existing one if present; otherwise creates and appends it to <body>.
+ * @returns {HTMLElement} The backdrop element
+ */
+function _ensureSidebarBackdrop() {
+  if (_sidebarBackdropEl && document.body.contains(_sidebarBackdropEl)) {
+    return _sidebarBackdropEl;
+  }
+  _sidebarBackdropEl = document.querySelector('.sidebar-backdrop');
+  if (!_sidebarBackdropEl) {
+    _sidebarBackdropEl = document.createElement('div');
+    _sidebarBackdropEl.className = 'sidebar-backdrop';
+    document.body.appendChild(_sidebarBackdropEl);
+  }
+  // Attach click handler (idempotent — remove first to avoid duplicates)
+  _sidebarBackdropEl.removeEventListener('click', _onSidebarBackdropClick);
+  _sidebarBackdropEl.addEventListener('click', _onSidebarBackdropClick);
+  return _sidebarBackdropEl;
+}
+
+/**
+ * Handle click on the sidebar backdrop — close sidebar and hide backdrop.
+ */
+function _onSidebarBackdropClick() {
+  const sidebar = document.getElementById('sidebar');
+  if (sidebar) {
+    sidebar.classList.remove('active');
+    localStorage.setItem('sidebarState', 'closed');
+  }
+  if (_sidebarBackdropEl) {
+    _sidebarBackdropEl.classList.remove('active');
+  }
+}
+
+/**
+ * Show the sidebar backdrop (only meaningful at ≤768px where CSS makes it visible).
+ */
+function _showSidebarBackdrop() {
+  const backdrop = _ensureSidebarBackdrop();
+  backdrop.classList.add('active');
+}
+
+/**
+ * Hide the sidebar backdrop.
+ */
+function _hideSidebarBackdrop() {
+  if (_sidebarBackdropEl) {
+    _sidebarBackdropEl.classList.remove('active');
+  }
+}
+
+/**
+ * Check if the current viewport is in mobile/tablet overlay mode (≤768px).
+ * @returns {boolean}
+ */
+function _isMobileOverlay() {
+  return window.innerWidth <= 768;
+}
+
+/**
+ * Initialize mobile sidebar overlay behavior.
+ * - On ≤768px: sidebar defaults to closed on page load
+ * - Creates/manages the .sidebar-backdrop element
+ * - Listens for resize events to handle crossing the 768px boundary
+ *
+ * Call this once from DOMContentLoaded (e.g., in main.js).
+ * Does NOT call toggleSidebar — it only sets up the overlay infrastructure.
+ */
+function initMobileSidebar() {
+  const sidebar = document.getElementById('sidebar');
+  if (!sidebar) return;
+
+  // Ensure backdrop element exists
+  _ensureSidebarBackdrop();
+
+  // On page load at ≤768px: force sidebar closed
+  if (_isMobileOverlay()) {
+    sidebar.classList.remove('active');
+    localStorage.setItem('sidebarState', 'closed');
+    _hideSidebarBackdrop();
+  }
+
+  // Listen for resize to handle crossing the 768px boundary
+  let _prevWasMobile = _isMobileOverlay();
+  window.addEventListener('resize', function _onMobileSidebarResize() {
+    const isMobile = _isMobileOverlay();
+
+    // Crossing from desktop → mobile: close sidebar, hide backdrop
+    if (isMobile && !_prevWasMobile) {
+      sidebar.classList.remove('active');
+      localStorage.setItem('sidebarState', 'closed');
+      _hideSidebarBackdrop();
+    }
+
+    // Crossing from mobile → desktop: hide backdrop (sidebar state stays as-is)
+    if (!isMobile && _prevWasMobile) {
+      _hideSidebarBackdrop();
+    }
+
+    // If still mobile and sidebar is open, ensure backdrop is shown
+    if (isMobile && sidebar.classList.contains('active')) {
+      _showSidebarBackdrop();
+    }
+
+    _prevWasMobile = isMobile;
+  });
 }

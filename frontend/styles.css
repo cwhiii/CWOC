@@ -761,6 +761,12 @@ button.delete:hover {
     padding: 8px;
     border-radius: 4px;
     overflow-x: auto;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+.notes-view .note-content img {
+    max-width: 100%;
+    height: auto;
 }
 .notes-view .note-content blockquote {
     border-left: 3px solid #8b5a2b;
@@ -1481,4 +1487,283 @@ button.delete:hover {
 
 .cwoc-sidebar-filter-dot {
     flex-shrink: 0;
+}
+
+/* ── Calendar day navigation buttons (responsive week view paging) ──────── */
+.cal-day-nav-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 36px;
+    min-height: 44px;
+    padding: 4px 8px;
+    border: 1px solid #6b4e31;
+    background: var(--header-bg, #d4c4a0);
+    color: #4a2c2a;
+    font-family: 'Courier New', monospace;
+    font-size: 1em;
+    cursor: pointer;
+    flex-shrink: 0;
+    user-select: none;
+}
+.cal-day-nav-btn:hover:not(:disabled) {
+    background: #c4b490;
+}
+.cal-day-nav-btn:disabled {
+    opacity: 0.3;
+    cursor: default;
+}
+
+/* ── Sidebar backdrop: hidden by default at all viewports ─────────────── */
+.sidebar-backdrop {
+    display: none;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   TABLET RESPONSIVE — max-width: 768px
+   Additive rules only; desktop defaults remain untouched above.
+   ═══════════════════════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+
+    /* ── Header: allow tabs to wrap to a second row ────────────────────────── */
+    .header {
+        flex-wrap: wrap;
+        height: auto;
+    }
+
+    /* ── Tabs: wrap with horizontal scroll fallback ───────────────────────── */
+    .tabs {
+        flex-wrap: wrap;
+        overflow-x: auto;
+        white-space: normal;
+    }
+
+    /* ── Tab: 44px min-height for touch targets ───────────────────────────── */
+    .tab {
+        min-height: 44px;
+    }
+
+    /* ── Sidebar: full-width overlay (hidden off-screen when closed) ──────── */
+    .sidebar {
+        width: 100%;
+        left: -100%;
+        top: 0;
+        height: 100%;
+        z-index: 999;
+    }
+
+    .sidebar.active {
+        left: 0;
+    }
+
+    /* ── Sidebar backdrop for overlay mode ─────────────────────────────────── */
+    .sidebar-backdrop {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.4);
+        z-index: 998;
+    }
+    .sidebar-backdrop.active {
+        display: block;
+    }
+
+    /* ── Overlay sidebar should NOT push main content ─────────────────────── */
+    .sidebar.active ~ .main-content {
+        margin-left: 0;
+    }
+
+    /* ── Chit header row: wrap metadata below title ───────────────────────── */
+    .chit-header-row {
+        flex-wrap: wrap;
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   MOBILE RESPONSIVE — max-width: 480px
+   Additive rules only; desktop and tablet defaults remain untouched above.
+   ═══════════════════════════════════════════════════════════════════════════ */
+@media (max-width: 480px) {
+
+    /* ── Header: stack vertically ──────────────────────────────────────────── */
+    .header {
+        flex-direction: column;
+        height: auto;
+        padding: 8px 12px;
+    }
+
+    /* ── Logo: reduce to 48x48 ────────────────────────────────────────────── */
+    .logo {
+        width: 48px;
+        height: 48px;
+        margin-right: 0;
+    }
+
+    /* ── Title: reduce font size ──────────────────────────────────────────── */
+    h1 {
+        font-size: 1.5em;
+        padding: 4px 8px;
+    }
+
+    /* ── Tabs: horizontal scroll with touch momentum ──────────────────────── */
+    .tabs {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        padding: 2px;
+    }
+
+    /* ── Tab: compact touch targets ───────────────────────────────────────── */
+    .tab {
+        padding: 8px 12px;
+        font-size: 0.85em;
+        min-height: 44px;
+        min-width: 44px;
+        flex-shrink: 0;
+    }
+
+    /* ── Top bar: reduced padding ─────────────────────────────────────────── */
+    .top-bar {
+        padding: 6px 12px;
+        height: auto;
+    }
+
+    /* ── Sidebar: full-width overlay ──────────────────────────────────────── */
+    .sidebar {
+        width: 100%;
+        padding: 12px;
+        padding-top: 1em;
+    }
+
+    /* ── Main content: reduced padding ────────────────────────────────────── */
+    .main-content {
+        padding: 0 4px;
+    }
+
+    /* ── Chit card: full width, compact padding ───────────────────────────── */
+    .chit-card {
+        width: 100%;
+        margin: 0;
+        padding: 8px 12px;
+        box-sizing: border-box;
+    }
+
+    /* ── Chit list: adjust for stacked mobile header ─────────────────────── */
+    .chit-list {
+        margin-top: 140px;
+        height: calc(100vh - 140px);
+    }
+
+    /* ── Month day: compact cells ─────────────────────────────────────────── */
+    .month-day {
+        min-height: 60px;
+        font-size: 0.75em;
+        padding: 3px;
+    }
+
+    /* ── Reference columns: stack vertically ──────────────────────────────── */
+    .ref-columns {
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    /* ── Hotkey panel: full viewport width with 8px margin ────────────────── */
+    .hotkey-panel {
+        width: calc(100% - 16px);
+        left: 8px;
+        transform: translate(0, -50%);
+        max-width: none;
+        min-width: 0;
+        padding: 12px 16px;
+    }
+
+    /* ── Reference content: full width ────────────────────────────────────── */
+    .reference-content {
+        width: calc(100% - 16px);
+        max-width: none;
+        padding: 15px 18px;
+    }
+
+    /* ── Sidebar controls: reduced spacing ────────────────────────────────── */
+    .action-button {
+        margin-bottom: 9px;
+        padding: 6px;
+        height: 36px;
+    }
+
+    .status-filter {
+        margin-bottom: 9px;
+    }
+
+    /* ── Search bar: compact ──────────────────────────────────────────────── */
+    .search-bar input {
+        padding: 4px 6px;
+    }
+
+    /* ── Chit header row: tighter spacing ─────────────────────────────────── */
+    .chit-header-row {
+        gap: 4px;
+        padding: 3px 0;
+    }
+
+    /* ── Week view: reduced padding ───────────────────────────────────────── */
+    .week-view {
+        padding: 2px;
+    }
+
+    /* ── Calendar event items: touch-friendly ─────────────────────────────── */
+    .timed-event,
+    .all-day-event {
+        min-height: 44px;
+        padding: 4px 6px;
+        font-size: 0.8em;
+    }
+
+    /* ── Notes view: reduced gap ──────────────────────────────────────────── */
+    .notes-view {
+        padding: 4px;
+    }
+
+    /* ── People chips: compact ────────────────────────────────────────────── */
+    .cwoc-people-chip {
+        padding: 1px 5px 1px 1px;
+        font-size: 0.72em;
+    }
+
+    /* ── Quick Edit modal: full width with 8px margin ─────────────────────── */
+    .recurrence-modal-overlay > div {
+        min-width: 0 !important;
+        max-width: none !important;
+        width: calc(100% - 16px) !important;
+        margin: 8px !important;
+        padding: 16px !important;
+        box-sizing: border-box !important;
+    }
+
+    /* ── Clock modal: full width with padding ─────────────────────────────── */
+    #clock-modal-overlay > div {
+        min-width: 0 !important;
+        max-width: none !important;
+        width: calc(100% - 16px) !important;
+        margin: 8px !important;
+        padding: 16px 20px !important;
+        box-sizing: border-box !important;
+    }
+
+    /* ── Modal interactive elements: 44px touch targets ───────────────────── */
+    .recurrence-modal-overlay button,
+    #clock-modal-overlay button,
+    #deleteChitModal button {
+        min-height: 44px;
+        min-width: 44px;
+    }
+
+    .recurrence-modal-overlay select,
+    .recurrence-modal-overlay input[type="checkbox"] {
+        min-height: 44px;
+        min-width: 44px;
+    }
 }

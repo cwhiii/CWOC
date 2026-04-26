@@ -38,7 +38,7 @@ Make the entire CWOC (C.W.'s Omni Chits) web application mobile-friendly and res
 
 #### Acceptance Criteria
 
-1. WHEN the viewport width is at or below 768px, THE Tab_Bar SHALL wrap tabs onto multiple rows or switch to a compact layout where each tab displays only its icon (hiding the text label).
+1. WHEN the viewport width is at or below 768px, THE Tab_Bar SHALL wrap tabs onto multiple rows or allow horizontal scrolling so that all six C CAPTN tabs remain accessible; tab labels may be abbreviated but all tabs SHALL remain visible and tappable.
 2. WHEN the viewport width is at or below 480px, THE Dashboard header SHALL reduce the logo size and title font size to fit within the mobile viewport width.
 3. THE Tab_Bar SHALL remain accessible via touch targets that are at least 44x44 CSS pixels on mobile viewports.
 4. WHEN the viewport width is at or below 480px, THE Dashboard header SHALL stack vertically (logo and title above the tab bar) instead of displaying in a single horizontal row.
@@ -67,6 +67,8 @@ Make the entire CWOC (C.W.'s Omni Chits) web application mobile-friendly and res
 3. WHEN the viewport width is at or below 480px AND the Calendar_View is in Month mode, THE Calendar_View SHALL reduce the month grid cell size and use abbreviated day names (single letter) to fit within the viewport.
 4. THE Calendar_View timed events SHALL remain tappable with touch targets of at least 44px height on mobile viewports.
 5. WHEN the viewport width is at or below 768px, THE Calendar_View drag-to-move and drag-to-resize interactions SHALL remain functional with touch events (touchstart, touchmove, touchend).
+6. THE Calendar_View SHALL support all seven period modes (Itinerary, Day, Week, Work Hours, X Days, Month, Year) at all viewport sizes — no calendar mode SHALL be disabled or removed on mobile or tablet viewports.
+7. WHEN the viewport width is at or below 480px AND the Calendar_View is in Year mode, THE Calendar_View SHALL reflow the 12-month grid to fit within the viewport width (e.g., 1–2 months per row instead of 3–4).
 
 ### Requirement 5: List Views Responsiveness (Tasks, Checklists, Alerts, Projects)
 
@@ -99,7 +101,7 @@ Make the entire CWOC (C.W.'s Omni Chits) web application mobile-friendly and res
 1. WHEN the viewport width is at or below 768px, THE Editor two-column zone grid (`.main-zones-grid`) SHALL collapse to a single-column layout.
 2. WHEN the viewport width is at or below 480px, THE Editor header row SHALL stack the title, save buttons, and action buttons vertically.
 3. WHEN the viewport width is at or below 480px, THE Editor title-weather container (`#titleWeatherContainer`) SHALL stack the title field above the weather section vertically instead of side by side.
-4. WHEN the viewport width is at or below 768px, THE Editor zone action buttons (Expand, Render, Copy, Download) SHALL use icon-only display, hiding their text labels.
+4. WHEN the viewport width is at or below 768px, THE Editor zone action buttons (Expand, Render, Copy, Download) SHALL use a compact display (icon-only or abbreviated labels) while remaining fully functional and tappable.
 5. THE Editor date picker inputs (Flatpickr) SHALL open in a touch-friendly mode on mobile viewports, using the full available width.
 6. WHEN the viewport width is at or below 480px, THE Editor tag tree and active tags containers (`.verticalBox`) SHALL stack vertically instead of side by side.
 
@@ -111,7 +113,7 @@ Make the entire CWOC (C.W.'s Omni Chits) web application mobile-friendly and res
 
 1. WHEN the viewport width is at or below 768px, THE Secondary_Pages settings grid (`.settings-grid`) SHALL collapse to a single-column layout.
 2. WHEN the viewport width is at or below 480px, THE Secondary_Pages header bar (`.header-and-buttons`) SHALL stack the title and navigation buttons vertically.
-3. WHEN the viewport width is at or below 480px, THE Trash page table (`.cwoc-table`) SHALL hide low-priority columns (Tags, Note preview) and allow horizontal scrolling for remaining columns.
+3. WHEN the viewport width is at or below 480px, THE Trash page table (`.cwoc-table`) SHALL adapt to the narrow viewport by either allowing horizontal scrolling or hiding low-priority columns behind a toggle/expand control so that all data remains accessible.
 4. WHEN the viewport width is at or below 480px, THE Help page table of contents (`.index ul`) SHALL switch from a two-column to a single-column layout.
 5. THE Secondary_Pages `.settings-panel` SHALL use `max-width: 100%` and appropriate padding on mobile viewports to prevent horizontal overflow.
 
@@ -139,7 +141,19 @@ Make the entire CWOC (C.W.'s Omni Chits) web application mobile-friendly and res
 4. THE delete confirmation modal (`#deleteChitModal`) SHALL constrain its width to `max-width: 90%` on all viewport sizes (already implemented).
 5. WHEN the viewport width is at or below 480px, THE clock modal SHALL display at full viewport width with appropriate padding.
 
-### Requirement 11: Typography and Spacing Scaling
+### Requirement 11: Full Feature Parity Across Viewports
+
+**User Story:** As a mobile user, I want access to every feature available on desktop, so that I am not limited by my device choice.
+
+#### Acceptance Criteria
+
+1. THE Responsive_Layout_System SHALL preserve all Dashboard functionality — all six C CAPTN tabs, all seven calendar periods, all sidebar controls (filters, sort, period, search, saved searches), and all hotkey/keyboard shortcuts — at every viewport size.
+2. THE Responsive_Layout_System SHALL preserve all Editor functionality — all collapsible zones (Dates, Task, Location, Tags, People, Notes, Checklist, Alerts, Health Indicators, Color, Projects, Audit Log), QR code generation, and all save/delete/archive actions — at every viewport size.
+3. THE Responsive_Layout_System SHALL preserve all Secondary_Pages functionality — all Settings sections, full Trash table with restore/delete actions, full Help content, full People/Contact management — at every viewport size.
+4. THE Quick_Edit_Modal SHALL provide all fields and actions (title edit, Priority, Severity, Status, Pin, Archive, Delete, QR, recurrence options) at every viewport size.
+5. THE Responsive_Layout_System SHALL NOT remove or disable any interactive control or data at any viewport size; elements MAY be hidden behind toggles, menus, drawers, or expandable sections as long as a visible control exists to reveal them.
+
+### Requirement 12: Typography and Spacing Scaling
 
 **User Story:** As a mobile user, I want text and spacing to scale appropriately on small screens, so that the interface remains readable without excessive scrolling.
 

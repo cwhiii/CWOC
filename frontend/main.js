@@ -5,6 +5,9 @@ let currentWeekStart = null;
 let currentView = "Week";
 let previousState = { tab: "Calendar", view: "Week" };
 
+// ── Responsive week view paging state ────────────────────────────────────────
+let _weekViewDayOffset = 0; // which day index to start from when showing < 7 days
+
 // ── Sort & filter state ──────────────────────────────────────────────────────
 let currentSortField = null;   // null | 'title' | 'start' | 'due' | 'updated' | 'created'
 let currentSortDir = 'asc';    // 'asc' | 'desc'
@@ -419,6 +422,7 @@ function _exitHotkeyMode() {
 // ── Panel click handlers ─────────────────────────────────────────────────────
 function _pickPeriod(period) {
   if (!_enabledPeriods.includes(period)) return; // disabled in settings
+  _weekViewDayOffset = 0; // reset day paging when switching periods
   currentView = period;
   const sel = document.getElementById('period-select');
   if (sel) sel.value = currentView;
@@ -1170,6 +1174,7 @@ function _syncSidebarTagCheckboxes(container, tagObjects) {
 function changePeriod() {
   const sel = document.getElementById('period-select');
   if (!sel) return;
+  _weekViewDayOffset = 0; // reset day paging when switching periods
   currentView = sel.value;
   if (currentView === 'SevenDay') currentWeekStart = new Date();
   updateDateRange();
@@ -1178,6 +1183,7 @@ function changePeriod() {
 
 function goToToday() {
   const now = new Date();
+  _weekViewDayOffset = 0; // reset day paging
   if (currentView === 'Week') currentWeekStart = getWeekStart(now);
   else if (currentView === 'Month') currentWeekStart = getMonthStart(now);
   else if (currentView === 'Year') currentWeekStart = getYearStart(now);
@@ -1707,6 +1713,16 @@ function toggleSidebar() {
   } else {
     localStorage.setItem("sidebarState", "closed");
   }
+
+  // Mobile overlay: show/hide backdrop when sidebar is toggled at ≤768px
+  if (_isMobileOverlay()) {
+    if (sidebar.classList.contains("active")) {
+      _showSidebarBackdrop();
+    } else {
+      _hideSidebarBackdrop();
+    }
+  }
+
   window.dispatchEvent(new Event("resize"));
   // Fire again after CSS transition completes (margin-left 0.3s)
   setTimeout(() => window.dispatchEvent(new Event("resize")), 350);
@@ -1772,6 +1788,49 @@ function restoreSidebarState() {
 
 // Global week start day (0=Sun, 1=Mon, etc.) — loaded from settings
 let _weekStartDay = 0;
+
+// ── Debounced breakpoint-crossing resize state ───────────────────────────────
+let _lastBreakpointCategory = null; // 'mobile' | 'tablet' | 'desktop'
+let _resizeDebounceTimer = null;
+
+/** Return the current breakpoint category based on viewport width.
+ *  ≤480px → "mobile", 481–768px → "tablet", >768px → "desktop". */
+function _getBreakpointCategory() {
+  const w = window.innerWidth;
+  if (w <= 480) return 'mobile';
+  if (w <= 768) return 'tablet';
+  return 'desktop';
+}
+
+/** Debounced resize handler — only re-renders when viewport crosses a
+ *  breakpoint boundary (480px or 768px). Debounced at 200ms. */
+function _onDebouncedResize() {
+  clearTimeout(_resizeDebounceTimer);
+  _resizeDebounceTimer = setTimeout(function () {
+    var category = _getBreakpointCategory();
+    if (category !== _lastBreakpointCategory) {
+      _lastBreakpointCategory = category;
+      _weekViewDayOffset = 0;
+      displayChits();
+    }
+  }, 200);
+}
+
+/** Return the number of days to show in week view based on viewport width.
+ *  ≤480px → 1 day, 481–768px → 3 days, >768px → 7 days.
+ *  Result is clamped to 1–7. */
+function _getResponsiveDayCount() {
+  const width = window.innerWidth;
+  let days;
+  if (width <= 480) {
+    days = 1;
+  } else if (width <= 768) {
+    days = 3;
+  } else {
+    days = 7;
+  }
+  return Math.max(1, Math.min(7, days));
+}
 
 function getWeekStart(date) {
   const d = new Date(date);
@@ -1842,6 +1901,7 @@ function chitColor(chit) {
 
 function previousPeriod() {
   if (!currentWeekStart) currentWeekStart = getWeekStart(new Date());
+  _weekViewDayOffset = 0; // reset day paging when navigating periods
   if (currentView === "Day") {
     currentWeekStart.setDate(currentWeekStart.getDate() - 1);
   } else if (currentView === "Week") {
@@ -1857,6 +1917,7 @@ function previousPeriod() {
 
 function nextPeriod() {
   if (!currentWeekStart) currentWeekStart = getWeekStart(new Date());
+  _weekViewDayOffset = 0; // reset day paging when navigating periods
   if (currentView === "Day") {
     currentWeekStart.setDate(currentWeekStart.getDate() + 1);
   } else if (currentView === "Week") {
@@ -2147,21 +2208,35 @@ function displayWeekView(chitsToDisplay, opts) {
   wrapper.style.cssText = "display:flex;flex-direction:column;height:100%;width:100%;";
 
   const weekStart = new Date(currentWeekStart);
-  let days = [];
+  let allWeekDays = [];
   for (let i = 0; i < 7; i++) {
     const d = new Date(weekStart);
     d.setDate(weekStart.getDate() + i);
-    days.push(d);
+    allWeekDays.push(d);
   }
   if (filterDayNums) {
-    days = days.filter(d => filterDayNums.includes(d.getDay()));
+    allWeekDays = allWeekDays.filter(d => filterDayNums.includes(d.getDay()));
   }
-  if (days.length === 0) {
+  if (allWeekDays.length === 0) {
     chitList.innerHTML = '<p style="padding:2em;opacity:0.5;">No working days this week. Check Period Options in Settings.</p>';
     return;
   }
 
-  // Collect chits per day
+  // Responsive day slicing: show fewer days on narrow viewports
+  const responsiveDayCount = _getResponsiveDayCount();
+  const totalDays = allWeekDays.length;
+  let days;
+  if (responsiveDayCount < totalDays) {
+    // Clamp offset to valid range
+    if (_weekViewDayOffset < 0) _weekViewDayOffset = 0;
+    if (_weekViewDayOffset > totalDays - responsiveDayCount) _weekViewDayOffset = totalDays - responsiveDayCount;
+    days = allWeekDays.slice(_weekViewDayOffset, _weekViewDayOffset + responsiveDayCount);
+  } else {
+    _weekViewDayOffset = 0;
+    days = allWeekDays;
+  }
+
+  // Collect chits per day (for visible days only)
   const dayData = days.map(day => {
     const dayChits = chitsToDisplay.filter(c => chitMatchesDay(c, day));
     const allDay = [], timed = [];
@@ -2174,9 +2249,24 @@ function displayWeekView(chitsToDisplay, opts) {
     return { day, allDay, timed };
   });
 
-  // Row 1: Day headers
+  // Row 1: Day headers (with prev/next nav when showing fewer days)
   const headerRow = document.createElement("div");
-  headerRow.style.cssText = "display:flex;flex-shrink:0;border-bottom:1px solid #6b4e31;";
+  headerRow.style.cssText = "display:flex;flex-shrink:0;border-bottom:1px solid #6b4e31;align-items:stretch;";
+
+  // Prev button (when paging through days)
+  if (responsiveDayCount < totalDays) {
+    const prevBtn = document.createElement("button");
+    prevBtn.className = "cal-day-nav-btn";
+    prevBtn.textContent = "◀";
+    prevBtn.title = "Previous day(s)";
+    prevBtn.disabled = _weekViewDayOffset <= 0;
+    prevBtn.addEventListener("click", () => {
+      _weekViewDayOffset = Math.max(0, _weekViewDayOffset - responsiveDayCount);
+      displayChits();
+    });
+    headerRow.appendChild(prevBtn);
+  }
+
   // Spacer for hour column (contains all-day toggle if needed)
   const headerSpacer = document.createElement("div");
   headerSpacer.style.cssText = "width:60px;flex-shrink:0;display:flex;align-items:center;justify-content:center;";
@@ -2189,6 +2279,21 @@ function displayWeekView(chitsToDisplay, opts) {
     hdr.textContent = formatDate(day);
     headerRow.appendChild(hdr);
   });
+
+  // Next button (when paging through days)
+  if (responsiveDayCount < totalDays) {
+    const nextBtn = document.createElement("button");
+    nextBtn.className = "cal-day-nav-btn";
+    nextBtn.textContent = "▶";
+    nextBtn.title = "Next day(s)";
+    nextBtn.disabled = _weekViewDayOffset >= totalDays - responsiveDayCount;
+    nextBtn.addEventListener("click", () => {
+      _weekViewDayOffset = Math.min(totalDays - responsiveDayCount, _weekViewDayOffset + responsiveDayCount);
+      displayChits();
+    });
+    headerRow.appendChild(nextBtn);
+  }
+
   wrapper.appendChild(headerRow);
 
   // Row 2: All-day events (with collapse toggle and day dividers)
@@ -3170,11 +3275,24 @@ function displaySevenDayView(chitsToDisplay) {
   const numDays = _customDaysCount || 7;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const days = [];
+  const allSevenDays = [];
   for (let i = 0; i < numDays; i++) {
     const d = new Date(today);
     d.setDate(today.getDate() + i);
-    days.push(d);
+    allSevenDays.push(d);
+  }
+
+  // Responsive day slicing
+  const responsiveDayCount = _getResponsiveDayCount();
+  const totalDays = allSevenDays.length;
+  let days;
+  if (responsiveDayCount < totalDays) {
+    if (_weekViewDayOffset < 0) _weekViewDayOffset = 0;
+    if (_weekViewDayOffset > totalDays - responsiveDayCount) _weekViewDayOffset = totalDays - responsiveDayCount;
+    days = allSevenDays.slice(_weekViewDayOffset, _weekViewDayOffset + responsiveDayCount);
+  } else {
+    _weekViewDayOffset = 0;
+    days = allSevenDays;
   }
 
   const dayData = days.map(day => {
@@ -3189,11 +3307,26 @@ function displaySevenDayView(chitsToDisplay) {
     return { day, allDay, timed };
   });
 
-  // Row 1: Day headers
+  // Row 1: Day headers (with prev/next nav when showing fewer days)
   const headerRow = document.createElement("div");
-  headerRow.style.cssText = "display:flex;flex-shrink:0;border-bottom:1px solid #6b4e31;";
+  headerRow.style.cssText = "display:flex;flex-shrink:0;border-bottom:1px solid #6b4e31;align-items:stretch;";
+
+  // Prev button (when paging through days)
+  if (responsiveDayCount < totalDays) {
+    const prevBtn = document.createElement("button");
+    prevBtn.className = "cal-day-nav-btn";
+    prevBtn.textContent = "◀";
+    prevBtn.title = "Previous day(s)";
+    prevBtn.disabled = _weekViewDayOffset <= 0;
+    prevBtn.addEventListener("click", () => {
+      _weekViewDayOffset = Math.max(0, _weekViewDayOffset - responsiveDayCount);
+      displayChits();
+    });
+    headerRow.appendChild(prevBtn);
+  }
+
   const headerSpacer = document.createElement("div");
-  headerSpacer.style.cssText = "width:60px;flex-shrink:0;";
+  headerSpacer.style.cssText = "width:60px;flex-shrink:0;display:flex;align-items:center;justify-content:center;";
   headerRow.appendChild(headerSpacer);
   days.forEach(day => {
     const hdr = document.createElement("div");
@@ -3203,6 +3336,21 @@ function displaySevenDayView(chitsToDisplay) {
     hdr.textContent = formatDate(day);
     headerRow.appendChild(hdr);
   });
+
+  // Next button (when paging through days)
+  if (responsiveDayCount < totalDays) {
+    const nextBtn = document.createElement("button");
+    nextBtn.className = "cal-day-nav-btn";
+    nextBtn.textContent = "▶";
+    nextBtn.title = "Next day(s)";
+    nextBtn.disabled = _weekViewDayOffset >= totalDays - responsiveDayCount;
+    nextBtn.addEventListener("click", () => {
+      _weekViewDayOffset = Math.min(totalDays - responsiveDayCount, _weekViewDayOffset + responsiveDayCount);
+      displayChits();
+    });
+    headerRow.appendChild(nextBtn);
+  }
+
   wrapper.appendChild(headerRow);
 
   // Row 2: All-day events (with collapse toggle and day dividers)
@@ -3760,6 +3908,9 @@ function cancelEdit() {
 document.addEventListener("DOMContentLoaded", function () {
   console.log("DOM fully loaded, initializing...");
 
+  // Initialize mobile sidebar overlay behavior (backdrop, resize handling)
+  initMobileSidebar();
+
   // Default: hide archived chits, show pinned
   const saInit = document.getElementById('show-archived');
   if (saInit) saInit.checked = false;
@@ -3864,11 +4015,9 @@ document.addEventListener("DOMContentLoaded", function () {
     minuteIncrement: 1,
   });
 
-  window.addEventListener("resize", () => {
-    if (currentTab === "Notes") {
-      displayChits();
-    }
-  });
+  // ── Debounced resize listener for breakpoint-crossing re-renders ──────────
+  _lastBreakpointCategory = _getBreakpointCategory();
+  window.addEventListener("resize", _onDebouncedResize);
 
   // ── Keyboard shortcuts (hotkey state machine) ────────────────────────────
   document.addEventListener("keydown", (e) => {

@@ -285,3 +285,40 @@ input[type="color"] {
     width: 20px; height: 20px; animation: spin 1s linear infinite; margin: 10px auto;
 }
 @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+/* ── Tablet Responsive (≤ 768px) ────────────────────────────────────────── */
+@media (max-width: 768px) {
+    .settings-grid {
+        grid-template-columns: 1fr;
+    }
+    .settings-panel {
+        padding: 12px;
+    }
+}
+
+/* ── Mobile Responsive (≤ 480px) ────────────────────────────────────────── */
+@media (max-width: 480px) {
+    .header-and-buttons {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+    .header-buttons {
+        width: 100%;
+        justify-content: flex-start;
+    }
+    .help-content .index ul {
+        columns: 1;
+    }
+    .cwoc-table {
+        display: block;
+        overflow-x: auto;
+    }
+    .settings-panel {
+        padding: 8px;
+        max-width: 100%;
+    }
+    h2, h3 {
+        font-size: 18px;
+    }
+}

@@ -2701,3 +2701,30 @@ button.archive-btn.archived-active {
     pointer-events: auto;
     cursor: pointer;
 }
+
+/* ── Mobile Breakpoint (≤480px) — Editor-specific stacking ─────────────── */
+@media (max-width: 480px) {
+    #titleWeatherContainer {
+        flex-direction: column;
+    }
+
+    .verticalBox {
+        flex-direction: column;
+    }
+
+    .two-column-fields {
+        flex-direction: column;
+    }
+
+    .notes-checklist-container {
+        flex-direction: column;
+    }
+
+    .status-location-container {
+        flex-direction: column;
+    }
+
+    .flatpickr-input {
+        width: 100%;
+    }
+}
