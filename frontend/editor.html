@@ -397,28 +397,47 @@
                             class="zone-header"
                             onclick="toggleZone(event, 'peopleSection', 'peopleContent')"
                         >
-                            <h2 class="zone-title">👥 People</h2>
+                            <h2 class="zone-title">👥 People (<span id="activePeopleCount">0</span> active)</h2>
                             <div class="zone-actions">
                                 <button
                                     type="button"
-                                    id="addNewPersonButton"
+                                    onclick="_toggleAllPeopleGroups(event, true)"
                                     class="zone-button"
-                                    onclick="event.stopPropagation(); _focusPeopleSearch()"
                                 >
-                                    <i class="fas fa-plus"></i> Add
+                                    <i class="fas fa-expand-alt"></i> Expand All
+                                </button>
+                                <button
+                                    type="button"
+                                    onclick="_toggleAllPeopleGroups(event, false)"
+                                    class="zone-button"
+                                >
+                                    <i class="fas fa-compress-alt"></i> Collapse All
                                 </button>
                             </div>
                             <span class="zone-toggle-icon">🔽</span>
                         </div>
                         <div id="peopleContent" class="zone-body">
-                            <div id="peopleChips" class="people-chips-container"></div>
-                            <div class="field" style="margin-bottom:0;position:relative;">
+                            <div class="tags-search-row">
+                                <button
+                                    type="button"
+                                    class="clear-search-button"
+                                    onclick="_clearPeopleSearch(event)"
+                                >
+                                    <i class="fas fa-times"></i>
+                                </button>
                                 <input
                                     type="text"
                                     id="peopleSearchInput"
-                                    placeholder="Type to search contacts..."
+                                    placeholder="Search contacts..."
                                     autocomplete="off"
                                 />
+                            </div>
+                            <div class="verticalBox">
+                                <div class="tag-container" id="peopleTreeContainer"></div>
+                                <div class="tag-container-Active" id="activePeopleBox">
+                                    <h3 style="margin:0 0 4px 0;font-size:0.85em;">Active People</h3>
+                                    <div id="peopleChips" class="people-chips-container"></div>
+                                </div>
                             </div>
                             <input type="hidden" id="people" />
                         </div>

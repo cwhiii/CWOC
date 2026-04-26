@@ -13,6 +13,7 @@
     var _contactId = null;
     var _isFavorite = false;
     var _saveSystem = null;
+    var _currentImageUrl = null;
 
     var params = new URLSearchParams(window.location.search);
     _contactId = params.get('id') || null;
@@ -191,6 +192,7 @@
     }
 
     function _setProfileImage(url) {
+        _currentImageUrl = url || null;
         var imgEl = document.getElementById('profileImage');
         var placeholder = document.getElementById('profilePlaceholder');
         var removeBtn = document.getElementById('removeImageBtn');
@@ -514,7 +516,8 @@
             favorite:        _isFavorite,
             color:           document.getElementById('colorHex').value.trim() || null,
             organization:    document.getElementById('organization').value.trim() || null,
-            social_context:  document.getElementById('socialContext').value.trim() || null
+            social_context:  document.getElementById('socialContext').value.trim() || null,
+            image_url:       _currentImageUrl
         };
     };
 

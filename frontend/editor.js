@@ -3642,15 +3642,16 @@ async function saveChitAndStay() {
 
 console.log("Editor script loaded successfully.");
 
-// ── People Chips Autocomplete ────────────────────────────────────────────────
-// Replaces the old comma-separated text field with tag-like chips.
-// Queries GET /api/contacts?q= with debounce, renders dropdown.
-// Chips are colored with the contact's color. Double-click opens contact editor.
+// ── People Zone (tag-like grouped tree + chips) ─────────────────────────────
+// Loads all contacts, groups by first letter of given_name, renders a scrollable
+// tree with checkboxes. Active people shown as colored chips with thumbnails.
 
 let _peopleDropdown = null;
 let _peopleDebounceTimer = null;
 let _peopleApiAvailable = true;
-let _peopleChipData = []; // Array of {display_name, id, color}
+let _peopleChipData = []; // Array of {display_name, id, color, image_url}
+let _allContactsCache = []; // Full contacts list for the tree
+let _peopleGroupsExpanded = {}; // Track which letter groups are expanded
 
 function _focusPeopleSearch() {
   var input = document.getElementById('peopleSearchInput');
@@ -3658,158 +3659,153 @@ function _focusPeopleSearch() {
 }
 
 function _initPeopleAutocomplete() {
+  _loadAllContactsForTree();
+
   const input = document.getElementById('peopleSearchInput');
   if (!input) return;
 
-  input.addEventListener('keyup', (e) => {
-    if (['ArrowDown', 'ArrowUp', 'Enter', 'Escape'].includes(e.key)) return;
-    _debouncePeopleSearch(input);
+  input.addEventListener('input', function () {
+    _filterPeopleTree(input.value.trim().toLowerCase());
   });
 
-  input.addEventListener('keydown', (e) => {
-    // Backspace on empty input removes last chip
-    if (e.key === 'Backspace' && !input.value && _peopleChipData.length > 0) {
-      _removePeopleChip(_peopleChipData.length - 1);
-      return;
-    }
-
-    if (!_peopleDropdown) return;
-    const items = Array.from(_peopleDropdown.querySelectorAll('.people-ac-item'));
-    if (items.length === 0) return;
-
+  input.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') {
-      e.preventDefault();
-      _removePeopleDropdown();
-      return;
+      input.value = '';
+      _filterPeopleTree('');
+      input.blur();
     }
-
-    const curIdx = items.findIndex(d => d.classList.contains('people-ac-highlighted'));
-
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      items.forEach(d => d.classList.remove('people-ac-highlighted'));
-      const next = curIdx < items.length - 1 ? curIdx + 1 : 0;
-      items[next].classList.add('people-ac-highlighted');
-      items[next].scrollIntoView({ block: 'nearest' });
-      return;
-    }
-
-    if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      items.forEach(d => d.classList.remove('people-ac-highlighted'));
-      const prev = curIdx > 0 ? curIdx - 1 : items.length - 1;
-      items[prev].classList.add('people-ac-highlighted');
-      items[prev].scrollIntoView({ block: 'nearest' });
-      return;
-    }
-
-    if (e.key === 'Enter') {
-      const highlighted = _peopleDropdown.querySelector('.people-ac-highlighted');
-      if (highlighted) {
-        e.preventDefault();
-        _addPeopleChip({
-          display_name: highlighted.dataset.displayName,
-          id: highlighted.dataset.contactId || null,
-          color: highlighted.dataset.color || null
-        });
-        input.value = '';
-        _removePeopleDropdown();
-      }
-    }
-  });
-
-  input.addEventListener('blur', () => {
-    setTimeout(() => _removePeopleDropdown(), 150);
   });
 }
 
-function _debouncePeopleSearch(input) {
-  if (_peopleDebounceTimer) clearTimeout(_peopleDebounceTimer);
-  _peopleDebounceTimer = setTimeout(() => _fetchPeopleSuggestions(input), 250);
+function _clearPeopleSearch(event) {
+  if (event) event.stopPropagation();
+  var input = document.getElementById('peopleSearchInput');
+  if (input) { input.value = ''; _filterPeopleTree(''); }
 }
 
-async function _fetchPeopleSuggestions(input) {
-  if (!_peopleApiAvailable) return;
-  const query = input.value.trim();
-  if (query.length < 1) { _removePeopleDropdown(); return; }
-
+async function _loadAllContactsForTree() {
   try {
-    const resp = await fetch(`/api/contacts?q=${encodeURIComponent(query)}`);
-    if (!resp.ok) { _peopleApiAvailable = false; _removePeopleDropdown(); return; }
-    const contacts = await resp.json();
-    if (!Array.isArray(contacts) || contacts.length === 0) { _removePeopleDropdown(); return; }
-
-    // Filter out already-added people
-    const existingNames = _peopleChipData.map(c => (c.display_name || '').toLowerCase());
-    const filtered = contacts.filter(c =>
-      c.display_name && !existingNames.includes(c.display_name.toLowerCase())
-    );
-    if (filtered.length === 0) { _removePeopleDropdown(); return; }
-    _showPeopleDropdown(input, filtered);
+    var resp = await fetch('/api/contacts');
+    if (!resp.ok) return;
+    _allContactsCache = await resp.json();
+    _renderPeopleTree();
   } catch (e) {
-    console.error('[PeoplePicker] API unreachable:', e);
-    _peopleApiAvailable = false;
-    _removePeopleDropdown();
+    console.error('[People] Failed to load contacts for tree:', e);
   }
 }
 
-function _showPeopleDropdown(input, contacts) {
-  _removePeopleDropdown();
-  const dd = document.createElement('div');
-  dd.id = 'people-autocomplete-dropdown';
-  dd.className = 'people-ac-dropdown';
+function _renderPeopleTree(filter) {
+  var container = document.getElementById('peopleTreeContainer');
+  if (!container) return;
+  container.innerHTML = '';
 
-  contacts.slice(0, 10).forEach((contact, i) => {
-    const item = document.createElement('div');
-    item.className = 'people-ac-item';
-    if (i === 0) item.classList.add('people-ac-highlighted');
-    item.dataset.displayName = contact.display_name;
-    item.dataset.contactId = contact.id || '';
-    item.dataset.color = contact.color || '';
-
-    const star = contact.favorite ? '★ ' : '';
-    item.textContent = star + contact.display_name;
-    if (contact.color) {
-      item.style.borderLeft = '4px solid ' + contact.color;
-      item.style.paddingLeft = '8px';
-    }
-
-    item.addEventListener('mouseenter', () => {
-      dd.querySelectorAll('.people-ac-item').forEach(d => d.classList.remove('people-ac-highlighted'));
-      item.classList.add('people-ac-highlighted');
+  var contacts = _allContactsCache;
+  if (filter) {
+    contacts = contacts.filter(function (c) {
+      return (c.display_name || '').toLowerCase().includes(filter);
     });
-    item.addEventListener('mousedown', (e) => {
-      e.preventDefault();
-      _addPeopleChip({
-        display_name: contact.display_name,
-        id: contact.id || null,
-        color: contact.color || null
-      });
-      input.value = '';
-      _removePeopleDropdown();
-    });
-    dd.appendChild(item);
+  }
+
+  // Group by first letter of given_name
+  var groups = {};
+  contacts.forEach(function (c) {
+    var letter = ((c.given_name || c.display_name || '?')[0] || '?').toUpperCase();
+    if (!groups[letter]) groups[letter] = [];
+    groups[letter].push(c);
   });
 
-  const rect = input.getBoundingClientRect();
-  dd.style.position = 'fixed';
-  dd.style.top = (rect.bottom + 2) + 'px';
-  dd.style.left = rect.left + 'px';
-  dd.style.minWidth = rect.width + 'px';
-  document.body.appendChild(dd);
-  _peopleDropdown = dd;
+  var letters = Object.keys(groups).sort();
+  letters.forEach(function (letter) {
+    var isExpanded = _peopleGroupsExpanded[letter] !== false; // default expanded
+
+    var groupDiv = document.createElement('div');
+    groupDiv.className = 'people-tree-group';
+    groupDiv.dataset.letter = letter;
+
+    var header = document.createElement('div');
+    header.className = 'people-tree-group-header';
+    header.style.cssText = 'cursor:pointer;font-weight:bold;font-size:0.85em;color:#6b4e31;padding:2px 0;user-select:none;display:flex;align-items:center;gap:4px;';
+    header.innerHTML = '<span class="people-tree-arrow">' + (isExpanded ? '▼' : '▶') + '</span> ' + letter + ' <span style="opacity:0.5;font-weight:normal;">(' + groups[letter].length + ')</span>';
+    header.addEventListener('click', function () {
+      _peopleGroupsExpanded[letter] = !isExpanded;
+      _renderPeopleTree(filter);
+    });
+    groupDiv.appendChild(header);
+
+    if (isExpanded) {
+      groups[letter].forEach(function (c) {
+        var isActive = _peopleChipData.some(function (p) {
+          return p.display_name.toLowerCase() === (c.display_name || '').toLowerCase();
+        });
+
+        var row = document.createElement('label');
+        row.style.cssText = 'display:flex;align-items:center;gap:5px;padding:2px 0 2px 12px;cursor:pointer;font-size:0.85em;';
+
+        var cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = isActive;
+        cb.style.cssText = 'flex:0 0 auto;width:auto;padding:0;';
+        cb.addEventListener('change', function () {
+          if (cb.checked) {
+            _addPeopleChip({ display_name: c.display_name, id: c.id, color: c.color || null, image_url: c.image_url || null });
+          } else {
+            var idx = _peopleChipData.findIndex(function (p) { return p.display_name.toLowerCase() === (c.display_name || '').toLowerCase(); });
+            if (idx >= 0) _removePeopleChip(idx);
+          }
+        });
+
+        // Mini thumbnail
+        var thumb = document.createElement('span');
+        if (c.image_url) {
+          thumb.innerHTML = '<img src="' + c.image_url + '" style="width:18px;height:18px;border-radius:50%;object-fit:cover;vertical-align:middle;" />';
+        } else {
+          thumb.innerHTML = '<span style="display:inline-block;width:18px;height:18px;border-radius:50%;background:#e0d4b5;text-align:center;line-height:18px;font-size:10px;color:#8b5a2b;">?</span>';
+        }
+
+        var nameSpan = document.createElement('span');
+        nameSpan.textContent = c.display_name || c.given_name || '(unnamed)';
+        if (c.color) nameSpan.style.color = c.color;
+
+        row.appendChild(cb);
+        row.appendChild(thumb);
+        row.appendChild(nameSpan);
+        groupDiv.appendChild(row);
+      });
+    }
+
+    container.appendChild(groupDiv);
+  });
+
+  if (letters.length === 0) {
+    container.innerHTML = '<div style="opacity:0.5;font-size:0.85em;padding:8px;">No contacts found.</div>';
+  }
 }
 
-function _removePeopleDropdown() {
-  if (_peopleDropdown) { _peopleDropdown.remove(); _peopleDropdown = null; }
+function _filterPeopleTree(query) {
+  _renderPeopleTree(query || undefined);
+}
+
+function _toggleAllPeopleGroups(event, expand) {
+  if (event) event.stopPropagation();
+  var letters = Object.keys(_peopleGroupsExpanded);
+  // Also include all letters from current cache
+  _allContactsCache.forEach(function (c) {
+    var letter = ((c.given_name || c.display_name || '?')[0] || '?').toUpperCase();
+    if (!_peopleGroupsExpanded.hasOwnProperty(letter)) _peopleGroupsExpanded[letter] = true;
+  });
+  Object.keys(_peopleGroupsExpanded).forEach(function (k) {
+    _peopleGroupsExpanded[k] = expand;
+  });
+  _renderPeopleTree();
 }
 
 function _addPeopleChip(data) {
-  // Avoid duplicates
-  if (_peopleChipData.some(c => c.display_name.toLowerCase() === data.display_name.toLowerCase())) return;
+  if (_peopleChipData.some(function (c) { return c.display_name.toLowerCase() === data.display_name.toLowerCase(); })) return;
   _peopleChipData.push(data);
   _renderPeopleChips();
   _syncPeopleHiddenField();
+  _updateActivePeopleCount();
+  _renderPeopleTree(); // update checkboxes
   setSaveButtonUnsaved();
 }
 
@@ -3817,38 +3813,52 @@ function _removePeopleChip(index) {
   _peopleChipData.splice(index, 1);
   _renderPeopleChips();
   _syncPeopleHiddenField();
+  _updateActivePeopleCount();
+  _renderPeopleTree(); // update checkboxes
   setSaveButtonUnsaved();
 }
 
 function _renderPeopleChips() {
-  const container = document.getElementById('peopleChips');
+  var container = document.getElementById('peopleChips');
   if (!container) return;
   container.innerHTML = '';
-  _peopleChipData.forEach((data, idx) => {
-    const chip = document.createElement('span');
+  _peopleChipData.forEach(function (data, idx) {
+    var chip = document.createElement('span');
     chip.className = 'people-chip';
     if (data.color) {
       chip.style.backgroundColor = data.color;
-      // Use dark text on light colors, light text on dark
       chip.style.color = _isLightColor(data.color) ? '#2b1e0f' : '#fff';
       chip.style.borderColor = data.color;
     }
-    chip.textContent = data.display_name;
+
+    // Thumbnail on left edge
+    var thumbEl = document.createElement('span');
+    thumbEl.className = 'chip-thumb';
+    if (data.image_url) {
+      thumbEl.innerHTML = '<img src="' + data.image_url + '" />';
+    } else {
+      thumbEl.innerHTML = '<span class="chip-thumb-placeholder">?</span>';
+    }
+    chip.appendChild(thumbEl);
+
+    var nameSpan = document.createElement('span');
+    nameSpan.textContent = data.display_name;
+    chip.appendChild(nameSpan);
 
     // Double-click opens contact editor
     if (data.id) {
       chip.title = 'Double-click to edit contact';
-      chip.addEventListener('dblclick', (e) => {
+      chip.addEventListener('dblclick', function (e) {
         e.stopPropagation();
         window.open('/frontend/contact-editor.html?id=' + encodeURIComponent(data.id), '_blank');
       });
     }
 
-    const removeX = document.createElement('span');
+    var removeX = document.createElement('span');
     removeX.className = 'chip-remove';
     removeX.textContent = '✕';
     removeX.title = 'Remove';
-    removeX.addEventListener('click', (e) => {
+    removeX.addEventListener('click', function (e) {
       e.stopPropagation();
       _removePeopleChip(idx);
     });
@@ -3858,10 +3868,15 @@ function _renderPeopleChips() {
 }
 
 function _syncPeopleHiddenField() {
-  const hidden = document.getElementById('people');
+  var hidden = document.getElementById('people');
   if (hidden) {
-    hidden.value = _peopleChipData.map(c => c.display_name).join(', ');
+    hidden.value = _peopleChipData.map(function (c) { return c.display_name; }).join(', ');
   }
+}
+
+function _updateActivePeopleCount() {
+  var el = document.getElementById('activePeopleCount');
+  if (el) el.textContent = _peopleChipData.length;
 }
 
 function _isLightColor(hex) {
@@ -3878,32 +3893,40 @@ function _setPeopleFromArray(peopleArray) {
   _peopleChipData = [];
   if (!peopleArray || !peopleArray.length) {
     _renderPeopleChips();
+    _updateActivePeopleCount();
+    _renderPeopleTree();
     return;
   }
-  // Fetch all contacts to match names to IDs and colors
-  fetch('/api/contacts').then(r => r.ok ? r.json() : []).then(contacts => {
+
+  function _buildChips() {
     var contactMap = {};
-    (contacts || []).forEach(c => {
+    (_allContactsCache || []).forEach(function (c) {
       contactMap[(c.display_name || '').toLowerCase()] = c;
     });
-    peopleArray.forEach(name => {
+    _peopleChipData = [];
+    peopleArray.forEach(function (name) {
       var match = contactMap[name.toLowerCase()];
       _peopleChipData.push({
         display_name: name,
         id: match ? match.id : null,
-        color: match ? (match.color || null) : null
+        color: match ? (match.color || null) : null,
+        image_url: match ? (match.image_url || null) : null
       });
     });
     _renderPeopleChips();
-    _syncPeopleHiddenField();
-  }).catch(() => {
-    // Fallback: just use names without colors/IDs
-    peopleArray.forEach(name => {
-      _peopleChipData.push({ display_name: name, id: null, color: null });
-    });
-    _renderPeopleChips();
-    _syncPeopleHiddenField();
-  });
+    _updateActivePeopleCount();
+    _renderPeopleTree();
+  }
+
+  // If cache is empty, fetch first then build
+  if (!_allContactsCache || _allContactsCache.length === 0) {
+    fetch('/api/contacts').then(function (r) { return r.ok ? r.json() : []; }).then(function (contacts) {
+      _allContactsCache = contacts;
+      _buildChips();
+    }).catch(function () { _buildChips(); });
+  } else {
+    _buildChips();
+  }
 }
 
 // Initialize on page load
