@@ -1578,15 +1578,54 @@ function showQuickEditModal(chit, onRefresh) {
     }
   }
 
-  // --- People chips (read-only) ---
+  // --- People chips (read-only, with color + thumbnail like chit editor) ---
   if (Array.isArray(chit.people) && chit.people.length > 0) {
     const peopleRow = document.createElement('div');
     peopleRow.className = 'cwoc-people-chips-row';
 
+    // Try to match people names to contacts for color/image
+    var _qeContactMap = {};
+    if (window._cachedPeopleContacts) {
+      window._cachedPeopleContacts.forEach(function (c) {
+        _qeContactMap[(c.display_name || '').toLowerCase()] = c;
+      });
+    }
+
     chit.people.forEach(name => {
+      var match = _qeContactMap[name.toLowerCase()] || null;
       const chip = document.createElement('span');
       chip.className = 'cwoc-people-chip';
-      chip.textContent = name;
+
+      var bgColor = (match && match.color) ? match.color : '#e8dcc8';
+      chip.style.backgroundColor = bgColor;
+      chip.style.borderColor = bgColor;
+      // Contrast text
+      var hex = bgColor.replace('#', '');
+      if (hex.length === 6) {
+        var lum = (parseInt(hex.substr(0,2),16)*299 + parseInt(hex.substr(2,2),16)*587 + parseInt(hex.substr(4,2),16)*114) / 1000;
+        chip.style.color = lum > 140 ? '#2b1e0f' : '#fff';
+      }
+
+      // Thumbnail
+      if (match && match.image_url) {
+        var img = document.createElement('img');
+        img.src = match.image_url;
+        img.style.cssText = 'width:16px;height:16px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:3px;';
+        chip.appendChild(img);
+      }
+
+      chip.appendChild(document.createTextNode(name));
+
+      // Double-click to open contact editor
+      if (match && match.id) {
+        chip.style.cursor = 'pointer';
+        chip.title = 'Double-click to edit contact';
+        chip.addEventListener('dblclick', function (e) {
+          e.stopPropagation();
+          window.open('/frontend/contact-editor.html?id=' + encodeURIComponent(match.id), '_blank');
+        });
+      }
+
       peopleRow.appendChild(chip);
     });
 

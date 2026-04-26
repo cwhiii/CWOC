@@ -697,7 +697,7 @@ function _buildTagFilterPanel() {
   });
 }
 
-/** Build the people filter panel — fetches contacts and delegates to CwocSidebarFilter. */
+/** Build the people filter panel — fetches contacts and renders chip-based filter. */
 async function _buildPeopleFilterPanel() {
   if (!window._sidebarPeopleSelection) window._sidebarPeopleSelection = [];
   try {
@@ -711,21 +711,114 @@ async function _buildPeopleFilterPanel() {
   }
 }
 
-/** Render the people filter panel from cached contact data. */
+/** Render the people filter panel as chips (like tags) into both sidebar and hotkey panel. */
 function _renderPeopleFilterPanel(contacts) {
   if (!window._sidebarPeopleSelection) window._sidebarPeopleSelection = [];
-  const items = (contacts || []).map(c => ({
-    name: c.display_name || c.given_name || '(Unknown)',
-    favorite: !!c.favorite
-  }));
-  CwocSidebarFilter({
-    containerId: 'panel-people-options',
-    items: items,
-    selection: window._sidebarPeopleSelection,
-    onChange: function() { onFilterChange(); },
-    searchPlaceholder: 'Search people...',
-    showColorBadge: false
+  var selection = window._sidebarPeopleSelection;
+
+  // Render into sidebar container
+  _renderPeopleChipFilter('people-multi', contacts, selection);
+  // Render into hotkey panel container
+  _renderPeopleChipFilter('panel-people-options', contacts, selection);
+}
+
+function _renderPeopleChipFilter(containerId, contacts, selection) {
+  var container = document.getElementById(containerId);
+  if (!container) return;
+  container.innerHTML = '';
+
+  if (!contacts || contacts.length === 0) {
+    container.innerHTML = '<span style="font-size:0.8em;opacity:0.5;">No contacts</span>';
+    return;
+  }
+
+  // Search input
+  var searchInput = document.createElement('input');
+  searchInput.type = 'text';
+  searchInput.placeholder = 'Search people...';
+  searchInput.style.cssText = 'width:100%;padding:3px 6px;font-size:0.8em;margin-bottom:6px;box-sizing:border-box;border:1px solid #6b4e31;border-radius:3px;font-family:inherit;background:#fffaf0;color:#4a2c2a;';
+  container.appendChild(searchInput);
+
+  var chipsDiv = document.createElement('div');
+  chipsDiv.style.cssText = 'display:flex;flex-wrap:wrap;gap:4px;max-height:200px;overflow-y:auto;';
+  container.appendChild(chipsDiv);
+
+  // Sort: favorites first, then alphabetical
+  var sorted = contacts.slice().sort(function (a, b) {
+    if (a.favorite && !b.favorite) return -1;
+    if (!a.favorite && b.favorite) return 1;
+    return (a.display_name || '').localeCompare(b.display_name || '');
   });
+
+  function renderChips(query) {
+    chipsDiv.innerHTML = '';
+    sorted.forEach(function (c) {
+      var name = c.display_name || c.given_name || '(Unknown)';
+      if (query && !name.toLowerCase().includes(query)) return;
+
+      var isSelected = selection.includes(name);
+      var chip = document.createElement('span');
+      chip.style.cssText = 'display:inline-flex;align-items:center;gap:3px;padding:2px 8px 2px 2px;border-radius:12px;font-size:0.8em;cursor:pointer;border:1px solid;user-select:none;transition:transform 0.1s;';
+
+      var bgColor = c.color || '#d2b48c';
+      chip.style.backgroundColor = bgColor;
+      chip.style.borderColor = bgColor;
+      chip.style.color = _isPeopleColorLight(bgColor) ? '#2b1e0f' : '#fff';
+      if (isSelected) {
+        chip.style.outline = '2px solid #4a2c2a';
+        chip.style.fontWeight = 'bold';
+      } else {
+        chip.style.opacity = '0.7';
+      }
+
+      // Thumbnail
+      var thumb = document.createElement('span');
+      thumb.style.cssText = 'display:inline-flex;align-items:center;flex-shrink:0;';
+      if (c.image_url) {
+        thumb.innerHTML = '<img src="' + c.image_url + '" style="width:18px;height:18px;border-radius:50%;object-fit:cover;" />';
+      } else {
+        thumb.innerHTML = '<span style="display:inline-block;width:18px;height:18px;border-radius:50%;background:rgba(0,0,0,0.1);text-align:center;line-height:18px;font-size:9px;">?</span>';
+      }
+      chip.appendChild(thumb);
+
+      // Star + name
+      var nameSpan = document.createElement('span');
+      nameSpan.textContent = (c.favorite ? '★ ' : '') + name;
+      chip.appendChild(nameSpan);
+
+      chip.addEventListener('click', function () {
+        var idx = selection.indexOf(name);
+        if (idx === -1) {
+          selection.push(name);
+        } else {
+          selection.splice(idx, 1);
+        }
+        onFilterChange();
+        _renderPeopleFilterPanel(window._cachedPeopleContacts);
+      });
+
+      chipsDiv.appendChild(chip);
+    });
+
+    if (chipsDiv.children.length === 0) {
+      chipsDiv.innerHTML = '<span style="opacity:0.5;font-size:0.8em;">No matches</span>';
+    }
+  }
+
+  renderChips('');
+  searchInput.addEventListener('input', function () {
+    renderChips(searchInput.value.trim().toLowerCase());
+  });
+}
+
+function _isPeopleColorLight(hex) {
+  if (!hex) return true;
+  hex = hex.replace('#', '');
+  if (hex.length !== 6) return true;
+  var r = parseInt(hex.substr(0, 2), 16);
+  var g = parseInt(hex.substr(2, 2), 16);
+  var b = parseInt(hex.substr(4, 2), 16);
+  return (r * 299 + g * 587 + b * 114) / 1000 > 140;
 }
 
 /** Clear the people filter selection. */

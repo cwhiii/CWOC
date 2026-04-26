@@ -1443,8 +1443,9 @@ button.delete:hover {
 }
 
 .cwoc-people-chip {
-    display: inline-block;
-    padding: 2px 8px;
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px 2px 2px;
     font-size: 0.78em;
     font-family: "Courier New", Courier, monospace;
     background: #e8dcc8;
@@ -1454,6 +1455,7 @@ button.delete:hover {
     white-space: nowrap;
     line-height: 1.4;
     user-select: none;
+    gap: 2px;
 }
 
 .cwoc-people-more {
