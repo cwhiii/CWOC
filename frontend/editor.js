@@ -3722,6 +3722,22 @@ async function _loadAllContactsForTree() {
     if (!resp.ok) return;
     _allContactsCache = await resp.json();
     _renderPeopleTree();
+    // Re-render chips to pick up colors/images if chips were loaded before cache
+    if (_peopleChipData.length > 0) {
+      var contactMap = {};
+      _allContactsCache.forEach(function (c) {
+        contactMap[(c.display_name || '').toLowerCase()] = c;
+      });
+      _peopleChipData.forEach(function (chip) {
+        var match = contactMap[(chip.display_name || '').toLowerCase()];
+        if (match) {
+          chip.color = match.color || chip.color;
+          chip.image_url = match.image_url || chip.image_url;
+          chip.id = match.id || chip.id;
+        }
+      });
+      _renderPeopleChips();
+    }
   } catch (e) {
     console.error('[People] Failed to load contacts for tree:', e);
   }
@@ -3779,40 +3795,43 @@ function _renderPeopleTree(filter) {
           return p.display_name.toLowerCase() === (c.display_name || '').toLowerCase();
         });
 
-        var row = document.createElement('label');
-        row.style.cssText = 'display:flex;align-items:center;gap:5px;padding:2px 0 2px 12px;cursor:pointer;font-size:0.85em;';
-
-        var cb = document.createElement('input');
-        cb.type = 'checkbox';
-        cb.checked = isActive;
-        cb.style.cssText = 'flex:0 0 auto;width:auto;padding:0;';
-        cb.addEventListener('change', function () {
-          if (cb.checked) {
-            _addPeopleChip({ display_name: c.display_name, id: c.id, color: c.color || null, image_url: c.image_url || null });
-          } else {
-            var idx = _peopleChipData.findIndex(function (p) { return p.display_name.toLowerCase() === (c.display_name || '').toLowerCase(); });
-            if (idx >= 0) _removePeopleChip(idx);
-          }
-        });
-
-        // Mini thumbnail
-        var thumb = document.createElement('span');
-        if (c.image_url) {
-          thumb.innerHTML = '<img src="' + c.image_url + '" style="width:18px;height:18px;border-radius:50%;object-fit:cover;vertical-align:middle;" />';
-        } else {
-          thumb.innerHTML = '<span style="display:inline-block;width:18px;height:18px;border-radius:50%;background:#e0d4b5;text-align:center;line-height:18px;font-size:10px;color:#8b5a2b;">?</span>';
+        var chip = document.createElement('span');
+        chip.className = 'people-chip' + (isActive ? ' people-chip-active' : '');
+        chip.style.margin = '2px 0 2px 12px';
+        if (c.color) {
+          chip.style.backgroundColor = c.color;
+          chip.style.color = _isLightColor(c.color) ? '#2b1e0f' : '#fff';
+          chip.style.borderColor = c.color;
         }
+        if (isActive) {
+          chip.style.opacity = '0.5';
+        }
+
+        // Thumbnail on left edge
+        var thumbEl = document.createElement('span');
+        thumbEl.className = 'chip-thumb';
+        if (c.image_url) {
+          thumbEl.innerHTML = '<img src="' + c.image_url + '" />';
+        } else {
+          thumbEl.innerHTML = '<span class="chip-thumb-placeholder">?</span>';
+        }
+        chip.appendChild(thumbEl);
 
         var nameSpan = document.createElement('span');
         var starPrefix = c.favorite ? '★ ' : '';
         nameSpan.textContent = starPrefix + (c.display_name || c.given_name || '(unnamed)');
-        if (c.color) nameSpan.style.color = c.color;
-        if (c.favorite) nameSpan.style.fontWeight = 'bold';
+        chip.appendChild(nameSpan);
 
-        row.appendChild(cb);
-        row.appendChild(thumb);
-        row.appendChild(nameSpan);
-        groupDiv.appendChild(row);
+        chip.addEventListener('click', function () {
+          if (isActive) {
+            var idx = _peopleChipData.findIndex(function (p) { return p.display_name.toLowerCase() === (c.display_name || '').toLowerCase(); });
+            if (idx >= 0) _removePeopleChip(idx);
+          } else {
+            _addPeopleChip({ display_name: c.display_name, id: c.id, color: c.color || null, image_url: c.image_url || null });
+          }
+        });
+
+        groupDiv.appendChild(chip);
       });
     }
 

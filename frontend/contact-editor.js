@@ -157,14 +157,16 @@
     }
 
     window.triggerImageUpload = function () {
+        document.getElementById('imageFileInput').click();
+    };
+
+    window.viewContactImage = function () {
         var imgEl = document.getElementById('profileImage');
         if (imgEl.style.display !== 'none' && imgEl.src) {
             var modal = document.getElementById('image-modal');
             document.getElementById('image-modal-img').src = imgEl.src;
             modal.style.display = 'flex';
-            return;
         }
-        document.getElementById('imageFileInput').click();
     };
 
     /** Stage an image locally (preview only) — actual upload happens on save */
@@ -177,10 +179,12 @@
             var imgEl = document.getElementById('profileImage');
             var placeholder = document.getElementById('profilePlaceholder');
             var removeBtn = document.getElementById('removeImageBtn');
+            var viewBtn = document.getElementById('viewImageBtn');
             imgEl.src = e.target.result;
             imgEl.style.display = '';
             placeholder.style.display = 'none';
             removeBtn.style.display = '';
+            if (viewBtn) viewBtn.style.display = '';
         };
         reader.readAsDataURL(file);
         if (_saveSystem) _saveSystem.markUnsaved();
@@ -223,16 +227,19 @@
         var imgEl = document.getElementById('profileImage');
         var placeholder = document.getElementById('profilePlaceholder');
         var removeBtn = document.getElementById('removeImageBtn');
+        var viewBtn = document.getElementById('viewImageBtn');
         if (url) {
             imgEl.src = url + '?t=' + Date.now();
             imgEl.style.display = '';
             placeholder.style.display = 'none';
             removeBtn.style.display = '';
+            if (viewBtn) viewBtn.style.display = '';
         } else {
             imgEl.style.display = 'none';
             imgEl.src = '';
             placeholder.style.display = '';
             removeBtn.style.display = 'none';
+            if (viewBtn) viewBtn.style.display = 'none';
         }
     }
 

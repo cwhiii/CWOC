@@ -2684,3 +2684,20 @@ button.archive-btn.archived-active {
     opacity: 1;
     color: var(--danger-red, #b22222);
 }
+
+/* ── People Tree Groups ──────────────────────────────────────────────── */
+.people-tree-group {
+    margin-bottom: 4px;
+}
+
+.people-tree-group .people-chip {
+    display: inline-flex;
+    margin: 2px 2px 2px 12px;
+    font-size: 0.8em;
+}
+
+.people-chip-active {
+    opacity: 0.5;
+    pointer-events: auto;
+    cursor: pointer;
+}

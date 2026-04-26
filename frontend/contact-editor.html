@@ -281,6 +281,9 @@
                     </div>
                     <input type="file" id="imageFileInput" accept="image/*" style="display:none;" />
                     <div style="display:flex;flex-direction:column;gap:2px;">
+                        <button type="button" class="profile-remove-img" id="viewImageBtn" onclick="viewContactImage()" style="display:none;background:var(--accent-teal);">
+                            <i class="fas fa-expand"></i> View
+                        </button>
                         <button type="button" class="profile-remove-img" id="removeImageBtn" onclick="removeContactImage()" style="display:none;">
                             <i class="fas fa-times"></i> Remove
                         </button>
