@@ -711,6 +711,14 @@ var _ALERT_ICON_MAP = {
   stopwatch:    '⏲️ '
 };
 
+/** Status icon map for task views */
+var _STATUS_ICONS = {
+  'ToDo':        '<i class="fas fa-circle" style="color:#8b5a2b;font-size:0.85em;"></i>',
+  'In Progress': '<i class="fas fa-spinner" style="color:#d68a59;font-size:0.85em;"></i>',
+  'Blocked':     '<i class="fas fa-ban" style="color:#b22222;font-size:0.85em;"></i>',
+  'Complete':    '<i class="fas fa-check-circle" style="color:#5a8a5b;font-size:0.85em;"></i>'
+};
+
 /**
  * Returns a string of alert indicator icon(s) for a chit,
  * based on visual_indicators settings and rendering context.

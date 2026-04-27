@@ -337,6 +337,20 @@ function _buildChitHeader(chit, titleHtml, settings) {
     left.appendChild(icon);
   }
 
+  // Sub-chit indicator (child of a project)
+  if (!chit.is_project_master) {
+    var isSubChit = chits.some(function(c) {
+      return c.is_project_master && Array.isArray(c.child_chits) && c.child_chits.includes(chit.id);
+    });
+    if (isSubChit) {
+      var subIcon = document.createElement('i');
+      subIcon.className = 'fas fa-project-diagram';
+      subIcon.title = 'Sub-chit (part of a project)';
+      subIcon.style.cssText = 'font-size:0.75em;opacity:0.6;';
+      left.appendChild(subIcon);
+    }
+  }
+
   // Visual indicators (alerts, weather, people, recurrence)
   if (settings && typeof _getAllIndicators === 'function') {
     const indicators = _getAllIndicators(chit, settings, 'card');
@@ -1207,7 +1221,7 @@ async function _fetchAndApplyChitWeather(address, spans) {
   }
 
   // Fetch weather
-  var wxResp = await fetch('https://api.open-meteo.com/v1/forecast?latitude=' + lat + '&longitude=' + lon + '&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_sum&timezone=auto&forecast_days=1');
+  var wxResp = await fetch('https://api.open-meteo.com/v1/forecast?latitude=' + lat + '&longitude=' + lon + '&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max&timezone=auto&forecast_days=1');
   if (!wxResp.ok) return;
   var wxData = await wxResp.json();
   if (!wxData || !wxData.daily) return;
@@ -1215,12 +1229,15 @@ async function _fetchAndApplyChitWeather(address, spans) {
   var today = wxData.daily;
   var weatherCode = today.weathercode[0];
   var minC = today.temperature_2m_min[0], maxC = today.temperature_2m_max[0], precipMm = today.precipitation_sum[0];
+  var windKmh = today.wind_speed_10m_max ? today.wind_speed_10m_max[0] : 0;
+  var windMph = Math.round(windKmh * 0.621371);
   var minF = Math.round((minC * 9) / 5 + 32), maxF = Math.round((maxC * 9) / 5 + 32);
   var precipInches = Math.ceil(precipMm * 0.0393701 * 10) / 10;
   var icon = _getWeatherIcon(weatherCode);
   var precipType = _getPrecipLabel(weatherCode);
   var precipText = precipType ? precipInches + '" ' + precipType : 'No precip';
-  var tooltip = maxF + '°F / ' + minF + '°F · ' + precipText;
+  var windText = windMph >= 20 ? ' · 💨' + windMph + 'mph' : '';
+  var tooltip = maxF + '°F / ' + minF + '°F · ' + precipText + windText;
 
   // Update all spans for this location
   spans.forEach(function(s) {
@@ -1360,7 +1377,7 @@ async function _fetchWeatherForModal(address, label) {
     var lat = coords.lat, lon = coords.lon;
 
     // Fetch weather
-    var wxUrl = 'https://api.open-meteo.com/v1/forecast?latitude=' + lat + '&longitude=' + lon + '&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_sum&timezone=auto&forecast_days=1';
+    var wxUrl = 'https://api.open-meteo.com/v1/forecast?latitude=' + lat + '&longitude=' + lon + '&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max&timezone=auto&forecast_days=1';
     var wxResp = await fetch(wxUrl);
     if (!wxResp.ok) throw new Error('weather_network');
     var wxData = await wxResp.json();
@@ -1371,6 +1388,8 @@ async function _fetchWeatherForModal(address, label) {
     var minC = today.temperature_2m_min[0];
     var maxC = today.temperature_2m_max[0];
     var precipMm = today.precipitation_sum[0];
+    var windKmh = today.wind_speed_10m_max ? today.wind_speed_10m_max[0] : 0;
+    var windMph = Math.round(windKmh * 0.621371);
 
     var minF = Math.round((minC * 9) / 5 + 32);
     var maxF = Math.round((maxC * 9) / 5 + 32);
@@ -1379,6 +1398,7 @@ async function _fetchWeatherForModal(address, label) {
     var icon = _getWeatherIcon(weatherCode);
     var precipType = _getPrecipLabel(weatherCode);
     var precipText = precipType ? precipInches + '" ' + precipType : 'No precipitation';
+    var windText = windMph >= 15 ? '💨 ' + windMph + ' mph wind' : '';
 
     var barMin = -14, barMax = 104, barRange = barMax - barMin;
     var lowPct = Math.max(0, Math.min(100, ((minF - barMin) / barRange) * 100));
@@ -1389,6 +1409,7 @@ async function _fetchWeatherForModal(address, label) {
         '<div class="weather-modal-icon">' + icon + '</div>' +
         '<div class="weather-modal-temps"><span class="temp-high">' + maxF + '°F</span> / <span class="temp-low">' + minF + '°F</span></div>' +
         '<div class="weather-modal-precip">' + precipText + '</div>' +
+        (windText ? '<div class="weather-modal-precip" style="margin-top:2px;">' + windText + '</div>' : '') +
         '<div class="weather-modal-temp-bar"><div class="temp-bar-marker" style="left:' + lowPct + '%" title="Low ' + minF + '°F"></div><div class="temp-bar-marker" style="left:' + highPct + '%" title="High ' + maxF + '°F"></div></div>';
       bodyEl.innerHTML = weatherHtml;
       // Cache the result
@@ -1417,7 +1438,7 @@ async function _fetchWeatherForCache(address, cacheKey) {
   try {
     var coords = await _geocodeAddress(address);
     var lat = coords.lat, lon = coords.lon;
-    var wxResp = await fetch('https://api.open-meteo.com/v1/forecast?latitude=' + lat + '&longitude=' + lon + '&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_sum&timezone=auto&forecast_days=1');
+    var wxResp = await fetch('https://api.open-meteo.com/v1/forecast?latitude=' + lat + '&longitude=' + lon + '&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max&timezone=auto&forecast_days=1');
     if (!wxResp.ok) return;
     var wxData = await wxResp.json();
     if (!wxData || !wxData.daily) return;
@@ -3525,9 +3546,15 @@ function displayTasksView(chitsToDisplay) {
     const controls = document.createElement("div");
     controls.style.cssText = "margin-top:0.3em;display:flex;align-items:flex-start;gap:0.8em;";
 
-    // Status dropdown (left)
+    // Status icon + dropdown (left)
     const statusWrap = document.createElement("div");
     statusWrap.style.cssText = "display:flex;align-items:center;gap:0.5em;flex-shrink:0;";
+    // Status icon
+    if (chit.status && typeof _STATUS_ICONS !== 'undefined' && _STATUS_ICONS[chit.status]) {
+      const iconSpan = document.createElement("span");
+      iconSpan.innerHTML = _STATUS_ICONS[chit.status];
+      statusWrap.appendChild(iconSpan);
+    }
     const label = document.createElement("span");
     label.textContent = "Status:";
     statusWrap.appendChild(label);
@@ -3551,6 +3578,20 @@ function displayTasksView(chitsToDisplay) {
     });
     statusWrap.appendChild(statusDropdown);
     controls.appendChild(statusWrap);
+
+    // Progress % and Time Estimate (inline after status)
+    if (chit.progress_percent != null && chit.progress_percent > 0) {
+      const progSpan = document.createElement("span");
+      progSpan.style.cssText = "font-size:0.85em;opacity:0.7;white-space:nowrap;";
+      progSpan.textContent = chit.progress_percent + '%';
+      controls.appendChild(progSpan);
+    }
+    if (chit.time_estimate) {
+      const estSpan = document.createElement("span");
+      estSpan.style.cssText = "font-size:0.85em;opacity:0.7;white-space:nowrap;";
+      estSpan.textContent = '⏱ ' + chit.time_estimate;
+      controls.appendChild(estSpan);
+    }
 
     // Note preview (right, rendered markdown)
     if (chit.note && chit.note.trim()) {

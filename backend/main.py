@@ -90,6 +90,7 @@ class Settings(BaseModel):
     all_view_start_hour: Optional[str] = "0"  # hour range for non-work views
     all_view_end_hour: Optional[str] = "24"
     day_scroll_to_hour: Optional[str] = "5"  # initial scroll position on calendar load
+    username: Optional[str] = None  # Display name for audit log attribution
 
 class Chit(BaseModel):
     id: Optional[str] = None
@@ -122,6 +123,8 @@ class Chit(BaseModel):
     child_chits: Optional[List[str]] = None    # New field
     all_day: Optional[bool] = False            # All-day event flag
     alerts: Optional[List[Dict[str, Any]]] = None  # Alarms, timers, stopwatches, notifications
+    progress_percent: Optional[int] = None     # 0-100 progress percentage
+    time_estimate: Optional[str] = None        # Free-text time estimate (e.g. "2h 30m")
 
 class MultiValueEntry(BaseModel):
     label: Optional[str] = None    # "Work", "Home", "Mobile", custom
@@ -606,6 +609,45 @@ def migrate_contacts_add_new_fields():
         if conn:
             conn.close()
 
+def migrate_add_progress_and_estimate():
+    """Add progress_percent and time_estimate columns to chits if missing."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(chits)")
+        existing = {row[1] for row in cursor.fetchall()}
+        if "progress_percent" not in existing:
+            cursor.execute("ALTER TABLE chits ADD COLUMN progress_percent INTEGER")
+            logger.info("Added column progress_percent to chits table")
+        if "time_estimate" not in existing:
+            cursor.execute("ALTER TABLE chits ADD COLUMN time_estimate TEXT")
+            logger.info("Added column time_estimate to chits table")
+        conn.commit()
+    except Exception as e:
+        logger.error(f"Error adding progress/estimate fields: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+def migrate_add_username():
+    """Add username column to settings if missing."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(settings)")
+        existing = {row[1] for row in cursor.fetchall()}
+        if "username" not in existing:
+            cursor.execute("ALTER TABLE settings ADD COLUMN username TEXT")
+            logger.info("Added column username to settings table")
+        conn.commit()
+    except Exception as e:
+        logger.error(f"Error adding username field: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
 # Contact DB helpers
 
 def _serialize_contact_for_db(contact) -> dict:
@@ -1076,6 +1118,8 @@ migrate_add_work_hours()
 migrate_add_saved_locations()
 init_contacts_table()
 migrate_contacts_add_new_fields()
+migrate_add_progress_and_estimate()
+migrate_add_username()
 seed_version_info()
 
 # Create directory for contact images

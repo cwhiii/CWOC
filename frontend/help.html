@@ -135,7 +135,7 @@
             <h3 id="weather">Weather</h3>
             <p>Press <kbd>W</kbd> on the dashboard to open the weather modal. It shows the current forecast for your default saved location, including weather icon, high/low temperatures (°F), and precipitation. If no default location is configured, the modal will prompt you to set one in Settings.</p>
             <p>In the chit editor, weather loads automatically when a chit has both a location and a date. Placeholder messages appear when either is missing.</p>
-            <p>On the dashboard, chits with a location display a weather icon (☀️ sunny, 🌧️ rainy, 🌨️ snowy, etc.) next to the title. Hover over the icon to see high/low temperatures and expected precipitation. Weather data is fetched in the background and cached for one hour.</p>
+            <p>On the dashboard, chits with a location display a weather icon (☀️ sunny, 🌧️ rainy, 🌨️ snowy, etc.) next to the title. Hover over the icon to see high/low temperatures, expected precipitation, and wind speed (💨 shown when 15+ mph). Weather data is fetched in the background and cached for one hour.</p>
             <h3 id="saved-locations">Saved Locations</h3>
             <p>Manage saved locations in Settings → Saved Locations. Each location has a label and an address. Use the radio button to mark one as the default.</p>
             <ul>
@@ -152,7 +152,8 @@
             <p>Add alarms, timers, stopwatches, and notifications. Each alarm has a time, days, and optional "Delete chit after dismissal" checkbox — when checked, dismissing the alarm soft-deletes the chit. The 🔄 button on the weather bar refreshes the forecast.</p>
             <p>Alarms trigger system notifications with sound on all platforms (macOS, Linux, Android) via the browser Notification API. On Android and Linux Firefox, the device will also vibrate. If sound cannot autoplay due to browser restrictions, a tap or keypress will unlock audio playback. Grant notification permission when prompted for full functionality.</p>
             <h4>Task Zone</h4>
-            <p>Status (ToDo, In Progress, Blocked, Complete), Priority (High, Medium, Low), and Severity (Critical, Major, Normal, Minor).</p>
+            <p>Status (ToDo, In Progress, Blocked, Complete), Priority (High, Medium, Low), and Severity (Critical, Major, Normal, Minor). Progress % slider (0-100) and free-text Time Estimate field.</p>
+            <p>In the Tasks view, status is shown with matching icons: ● ToDo, ⟳ In Progress, ⊘ Blocked, ✓ Complete. Progress % and time estimate are displayed inline when set.</p>
             <h4>Location Zone</h4>
             <ul>
                 <li><strong>+Location</strong> — Populates the address from your default saved location</li>
@@ -166,7 +167,7 @@
             <p>Shift+click any chit. Edit title (double-click), change Priority/Severity/Status, Pin/Archive/Delete/QR. Recurring chits get per-field "All" checkboxes and series edit options.</p>
             <h3 id="settings">Settings</h3>
             <ul>
-                <li><strong>General</strong> — Time format (24h, 12h, <a href="https://www.cwholemaniii.com/pages/hss/hst.shtml" target="_blank">HST</a>), snooze length, calendar snapping</li>
+                <li><strong>General</strong> — Username, time format (24h, 12h, <a href="https://www.cwholemaniii.com/pages/hss/hst.shtml" target="_blank">HST</a>), snooze length, calendar snapping</li>
                 <li><strong>Period Options</strong> — Enable/disable periods, week start, working hours & days, X Days count</li>
                 <li><strong>Default Filters</strong> — Per-tab default search text</li>
                 <li><strong>Clocks</strong> — Choose active clocks, drag to reorder, set orientation (horizontal/vertical)</li>

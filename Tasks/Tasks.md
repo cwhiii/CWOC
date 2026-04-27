@@ -13,11 +13,7 @@
 
 ## Easy Fixes / Low-Hanging Fruit
 
-- `[ ]` **Calendar: color-code by tag** option (vs chit color)
-- `[ ]` **Username text input in Settings** — simple text field for identifying who made changes (prerequisite for audit log)
-- `[ ]` **Weather flag for heavy winds** (like precipitation indicator)
-- `[ ]` **Visual indicator on calendar** if chit is a sub-chit (show/hide toggle)
-- `[ ]` **Tasks view: status images** matching editor icons . in the view, show both words & image as used in chits 
+*All items from this batch completed — see done.md*
 - `[ ]` **Progress % field** on chits
 - `[ ]` **Time estimate field** on chits
 
@@ -31,13 +27,16 @@
 - `[ ]` Separate controls for **Chit data** and **User data** (settings, tags, colors, locations, contacts)
 - `[ ]` **Export**: download as JSON file that can be re-imported into another CWOC instance
 - `[ ]` **Import**: option to **Add to** existing data or **Replace** existing data
-- `[ ]` **Replace** mode: confirmation dialog ("This will override and replace all [chit/user] data. Are you sure?")
+- `[ ]` **Replace** mode: confirmation dialog ("This will override and replace all [chit/user] data. Are you sure?") (use coling & wording from the delete chit process)
 - `[ ]` Exported format must be self-contained and portable between instances
 
 ### HST Time Format (Global)
 - `[ ]` When "HST" is selected as time format in settings, ALL times throughout the tool should display in HST
 - `[ ]` Calendar hour columns, event times, tooltips, quick edit modal, editor time fields — all use HST
-- `[ ]` HST displays as a plain number (e.g. "42.5 sd") — no progress bar except in the Clock modal
+- `[ ]` HST displays as a plain number (e.g. "42.5 sd") — no progress bar except in the Clock modal. 
+- the other clock modal options are not impacted by this. 
+- the views that use time (such as week & day) update to show 100 HST hours instead of normal hours. 
+- span options become 1,2,3,4,5,10 HST hours.
 - `[ ]` Clock modal keeps the bar-style HST display as-is
 
 ### Visual Indicators — Honor Settings in Views
@@ -105,6 +104,8 @@
 - `[ ]` Full user accounts with login/authentication
 - `[ ]` Each user has their own chits, contacts, and settings
 - `[ ]` User switcher
+- all users get a "Profile" page, with all the info as in a contact. Plus password
+- ALl users on the system are automctiaclly gnereated ass Contacts for all other users, and their contact info is syncted with any changes in the user's profile. 
 - `[ ]` **Sharing by chit** — share a chit so all users on the instance can access it
 - `[ ]` **Sharing by tag** — anything tagged XYZ for user A, user B also gets access (or a clone)
 - `[ ]` Shared calendars between users via tag-based sharing

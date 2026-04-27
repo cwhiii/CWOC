@@ -247,10 +247,21 @@
                                     </select>
                                 </div>
                             </div>
+                            <div class="priority-status-group" style="margin-top:8px;">
+                                <div class="field">
+                                    <label for="progress-percent">Progress %</label>
+                                    <div style="display:flex;align-items:center;gap:6px;">
+                                        <input type="range" id="progress-percent" min="0" max="100" value="0" style="flex:1;" oninput="document.getElementById('progress-value').textContent=this.value+'%'" />
+                                        <span id="progress-value" style="min-width:2.5em;text-align:right;">0%</span>
+                                    </div>
+                                </div>
+                                <div class="field">
+                                    <label for="time-estimate">Time Estimate</label>
+                                    <input type="text" id="time-estimate" placeholder="e.g. 2h 30m" />
+                                </div>
+                            </div>
                         </div>
                     </div>
-
-                    <div id="locationSection" class="zone-container">
                         <div
                             class="zone-header"
                             onclick="toggleZone(event, 'locationSection', 'locationContent')"

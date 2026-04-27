@@ -1202,6 +1202,10 @@ class SettingsManager {
     const timeFormat = document.getElementById("time-format");
     timeFormat.value = this.settings.time_format || "24hour";
 
+    // Username
+    const usernameInput = document.getElementById("username-input");
+    if (usernameInput) usernameInput.value = this.settings.username || "";
+
     // Chit options checkboxes
     const co = this.settings.chit_options || {};
     document.getElementById("fade-past").checked = co.fade_past_chits !== false;
@@ -1402,6 +1406,7 @@ class SettingsManager {
   gatherSettings() {
     return {
       user_id: "default_user",
+      username: (document.getElementById("username-input") || {}).value || null,
       time_format: document.getElementById("time-format").value,
       sex: document.getElementById("gender-toggle").checked ? "Woman" : "Man",
       snooze_length: document.getElementById("snooze-length").value,

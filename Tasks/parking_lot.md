@@ -9,3 +9,5 @@
 - **Health Indicators zone** — `renderHealthIndicator()` is defined twice and both are empty stubs
 - **Health: Unit toggle** (Imperial/Metric) — checkbox present, not wired
 - **Health: Sex toggle** (Female/Male) — checkbox present, not wired
+- **Calendar: color-code by tag** option (vs chit color)
+- **Duration field** on chits
