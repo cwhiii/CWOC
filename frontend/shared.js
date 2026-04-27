@@ -793,6 +793,12 @@ function _getAllIndicators(chit, settings, context) {
     if (_shouldShow(peopleMode, context)) result += '👥 ';
   }
 
+  // Health indicator — show when chit has any health data
+  if (chit.health_indicators && typeof chit.health_indicators === 'object' && Object.keys(chit.health_indicators).length > 0) {
+    var healthMode = s.indicators || 'always';
+    if (_shouldShow(healthMode, context)) result += '❤️ ';
+  }
+
   // Recurrence indicator
   if (chit.recurrence_rule && chit.recurrence_rule.freq) {
     result += '🔁 ';

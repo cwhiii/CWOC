@@ -3117,6 +3117,7 @@ function displayItineraryView(chitsToDisplay) {
   chitList.innerHTML = "";
   const itineraryView = document.createElement("div");
   itineraryView.className = "itinerary-view";
+  const _viSettings = (window._cwocSettings || {}).visual_indicators || {};
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -3193,7 +3194,10 @@ function displayItineraryView(chitsToDisplay) {
       detailsColumn.style.textAlign = "center";
       detailsColumn.style.flex = "1";
 
-            detailsColumn.innerHTML = `<span style="font-weight: bold; font-size: 1.1em;">${chit.title}</span>`;
+      // Visual indicators before title
+      const indicators = typeof _getAllIndicators === 'function' ? _getAllIndicators(chit, _viSettings, 'card') : '';
+      const pinnedIcon = chit.pinned ? '<i class="fas fa-bookmark" style="font-size:0.85em;"></i> ' : '';
+      detailsColumn.innerHTML = `<span style="font-weight: bold; font-size: 1.1em;">${indicators}${pinnedIcon}${chit.title || '(Untitled)'}</span>`;
 
       chitElement.appendChild(timeColumn);
       chitElement.appendChild(detailsColumn);
@@ -3578,20 +3582,6 @@ function displayTasksView(chitsToDisplay) {
     });
     statusWrap.appendChild(statusDropdown);
     controls.appendChild(statusWrap);
-
-    // Progress % and Time Estimate (inline after status)
-    if (chit.progress_percent != null && chit.progress_percent > 0) {
-      const progSpan = document.createElement("span");
-      progSpan.style.cssText = "font-size:0.85em;opacity:0.7;white-space:nowrap;";
-      progSpan.textContent = chit.progress_percent + '%';
-      controls.appendChild(progSpan);
-    }
-    if (chit.time_estimate) {
-      const estSpan = document.createElement("span");
-      estSpan.style.cssText = "font-size:0.85em;opacity:0.7;white-space:nowrap;";
-      estSpan.textContent = '⏱ ' + chit.time_estimate;
-      controls.appendChild(estSpan);
-    }
 
     // Note preview (right, rendered markdown)
     if (chit.note && chit.note.trim()) {

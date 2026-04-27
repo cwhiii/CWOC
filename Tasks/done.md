@@ -927,3 +927,17 @@ Fully implemented. Ported from `Prototypes/CWOC UI/UI.html`:
 - New `delete_after_dismiss` checkbox on each alarm in the editor
 - When checked and alarm is dismissed, the chit is soft-deleted via API
 - Works in both editor and dashboard alarm toasts
+
+
+## Completed — Visual Indicators (2026-04-27)
+
+### Visual Indicators — Honor Settings in Views ✅
+- Settings UI already clean: dropdowns for Alarm, Notification, Timer, Stopwatch, Weather, People, Health with Always/Never/If Space options, plus Combine Alerts toggle
+- `visual_indicators` read from `window._cwocSettings` on dashboard load in all views via `_viSettings`
+- Indicator visibility rules applied in all views via `_getAllIndicators()` + `_shouldShow()`:
+  - `always` — always show the indicator icon
+  - `never` — never show it
+  - `space` ("If Space") — show on cards and calendar slots, hide on month cells
+- Health ❤️ indicator added to `_getAllIndicators()` (shows when chit has health_indicators data)
+- Itinerary view updated to show visual indicators on event cards
+- Help page updated: renamed "Alert Indicators" to "Visual Indicators", documented all indicator types and visibility modes

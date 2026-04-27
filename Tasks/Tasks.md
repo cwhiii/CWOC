@@ -30,24 +30,6 @@
 - `[ ]` **Replace** mode: confirmation dialog ("This will override and replace all [chit/user] data. Are you sure?") (use coling & wording from the delete chit process)
 - `[ ]` Exported format must be self-contained and portable between instances
 
-### HST Time Format (Global)
-- `[ ]` When "HST" is selected as time format in settings, ALL times throughout the tool should display in HST
-- `[ ]` Calendar hour columns, event times, tooltips, quick edit modal, editor time fields — all use HST
-- `[ ]` HST displays as a plain number (e.g. "42.5 sd") — no progress bar except in the Clock modal. 
-- the other clock modal options are not impacted by this. 
-- the views that use time (such as week & day) update to show 100 HST hours instead of normal hours. 
-- span options become 1,2,3,4,5,10 HST hours.
-- `[ ]` Clock modal keeps the bar-style HST display as-is
-
-### Visual Indicators — Honor Settings in Views
-- `[ ]` Clean up the Visual Indicators settings UI (currently saved but never applied)
-- `[ ]` Read `visual_indicators` from settings on dashboard load
-- `[ ]` Apply indicator visibility rules to chit cards in all views:
-  - `always` — always show the indicator icon
-  - `never` — never show it
-  - `space` ("If Space") — show only when the card has room (hide on narrow/mobile)
-- `[ ]` Indicators affected: Alarm 🔔, Notification 📢, Weather 🌤️, People 👥, Health ❤️
-
 ### Nested Tags (remaining)
 - `[ ]` Migration for existing flat tag data
 - `[ ]` Settings: create nested tags (parent dropdown or drag-to-nest)
@@ -75,30 +57,36 @@
 - `[ ]` Proximity-based notifications (your location, someone else's)
 
 ### Editor & Chit Management
-- `[ ]` People zone: modal with autocomplete + multi-select roles (Owners, Stakeholders, Editors, Assignees, Guests, Followers)
+- `[ ]` People zone: modal with autocomplete + multi-select roles (Owners, Stakeholders, Editors, Assignees, Guests, Followers) (ONLY AFTER USERS HAVE BEEN IMPLIMENTS.)
 - `[ ]` Multi-line checklist items
-- `[ ]` Editing chits in-place in views (dates, times, notes)
-- `[ ]` Status as multi-select field with "-" (null) option
 - `[ ]` Linked chits (bidirectional)
 - `[ ]` Dependencies (chits that must be completed first)
-- `[ ]` Visibility (Private/Shared/Public)
-- `[ ]` Move checklist into note / note into checklist (or draggable)
+- `[ ]` Visibility (Private/Shared/Public)  (ONLY AFTER USERS HAVE BEEN IMPLIMENTS.)
+- `[ ]` Move checklist into note / note into checklist 
 
 ### Notes
 - `[ ]` Side-by-side notes view (2 chits for copy/paste/reference)
-- `[ ]` Auto import/export notes as Markdown to sync with Obsidian
+- `[ ]` Auto import/export notes as Markdown to sync with Obsidian. do this via a "import note" button in the note zone header. acceot .md & .txt files.
 
 ### Weather
 - `[ ]` Save expected weather per chit (forecast fields: focus, updated time, high, low, precipitation, weather code)
 - `[ ]` Display weather on calendar views
 - `[ ]` Hourly weather update for chits in next 7 days
 - `[ ]` Daily weather update for chits in next 16 days
-- `[ ]` "Show weather" toggle on sidebar
-- `[ ]` Weather as full view (like week mode)
+- `[ ]` Weather as full page like settings. Available via SHIFT+W, from views, or a button on the weather modal. Shows all saved weather's full corcast, 1 location per row, with each day as a separatte block, with the dates above, basically a large table
 
 ---
 
 ## Major Features / Overhauls
+
+### HST Time Format (Global)
+- `[ ]` When "HST" is selected as time format in settings, ALL times throughout the tool should display in HST
+- `[ ]` Calendar hour columns, event times, tooltips, quick edit modal, editor time fields — all use HST
+- `[ ]` HST displays as a plain number (e.g. "42.5 sd") — no progress bar except in the Clock modal. 
+- the other clock modal options are not impacted by this. 
+- the views that use time (such as week & day) update to show 100 HST hours instead of normal hours. 
+- span options become 1,2,3,4,5,10 HST hours.
+- `[ ]` Clock modal keeps the bar-style HST display as-is
 
 ### Multi-User System
 - `[ ]` Full user accounts with login/authentication

@@ -37,7 +37,7 @@
                     <li><a href="#editor">Chit Editor</a></li>
                     <li><a href="#quick-edit">Quick Edit Modal</a></li>
                     <li><a href="#settings">Settings</a></li>
-                    <li><a href="#alert-indicators">Alert Indicators</a></li>
+                    <li><a href="#alert-indicators">Visual Indicators</a></li>
                     <li><a href="#version-management">Version Management</a></li>
                 </ul>
             </div>
@@ -152,8 +152,8 @@
             <p>Add alarms, timers, stopwatches, and notifications. Each alarm has a time, days, and optional "Delete chit after dismissal" checkbox — when checked, dismissing the alarm soft-deletes the chit. The 🔄 button on the weather bar refreshes the forecast.</p>
             <p>Alarms trigger system notifications with sound on all platforms (macOS, Linux, Android) via the browser Notification API. On Android and Linux Firefox, the device will also vibrate. If sound cannot autoplay due to browser restrictions, a tap or keypress will unlock audio playback. Grant notification permission when prompted for full functionality.</p>
             <h4>Task Zone</h4>
-            <p>Status (ToDo, In Progress, Blocked, Complete), Priority (High, Medium, Low), and Severity (Critical, Major, Normal, Minor). Progress % slider (0-100) and free-text Time Estimate field.</p>
-            <p>In the Tasks view, status is shown with matching icons: ● ToDo, ⟳ In Progress, ⊘ Blocked, ✓ Complete. Progress % and time estimate are displayed inline when set.</p>
+            <p>Status (ToDo, In Progress, Blocked, Complete), Priority (High, Medium, Low), and Severity (Critical, Major, Normal, Minor).</p>
+            <p>In the Tasks view, status is shown with matching icons: ● ToDo, ⟳ In Progress, ⊘ Blocked, ✓ Complete.</p>
             <h4>Location Zone</h4>
             <ul>
                 <li><strong>+Location</strong> — Populates the address from your default saved location</li>
@@ -178,25 +178,33 @@
                 <li><strong>Export / Import</strong> — CSV export and import</li>
                 <li><strong>Trash</strong> — View, restore, or permanently delete chits</li>
             </ul>
-            <h3 id="alert-indicators">Alert Indicators</h3>
-            <p>Alert indicators are small icons displayed alongside chit titles to signal that a chit has one or more alerts (alarms, notifications, timers, or stopwatches). Configure their visibility in Settings → Visual Indicators.</p>
+            <h3 id="alert-indicators">Visual Indicators</h3>
+            <p>Visual indicators are small icons displayed alongside chit titles in all views to signal key properties. Configure their visibility in Settings → Visual Indicators. Each indicator has three visibility modes:</p>
+            <ul>
+                <li><strong>Always</strong> — The indicator icon is always shown</li>
+                <li><strong>Never</strong> — The indicator icon is never shown</li>
+                <li><strong>If Space</strong> — Show the icon on card views and calendar day/week slots, but hide on month cells where space is tight</li>
+            </ul>
+            <h4>Indicator Types</h4>
+            <ul>
+                <li>🔔 <strong>Alarm</strong> — Chit has alarm alerts</li>
+                <li>📢 <strong>Notification</strong> — Chit has notification alerts</li>
+                <li>⏱️ <strong>Timer</strong> — Chit has timer alerts</li>
+                <li>⏲️ <strong>Stopwatch</strong> — Chit has stopwatch alerts</li>
+                <li>🌤️ <strong>Weather</strong> — Chit has a location with weather data</li>
+                <li>👥 <strong>People</strong> — Chit has people assigned</li>
+                <li>❤️ <strong>Health</strong> — Chit has health indicator data</li>
+            </ul>
             <h4>Combine Alerts Toggle</h4>
             <p>The <strong>Combine Alerts</strong> checkbox in Visual Indicators switches between two display modes:</p>
             <ul>
-                <li><strong>Combined mode</strong> (checked) — A single ⚠️ icon represents all alert types. A "Combined Alerts" dropdown controls visibility (Always / Never / If Space).</li>
+                <li><strong>Combined mode</strong> (checked) — A single 🛎️ icon represents all alert types. A "Combined Alerts" dropdown controls visibility (Always / Never / If Space).</li>
                 <li><strong>Individual mode</strong> (unchecked) — Separate icons appear per alert type, each with its own visibility dropdown: 🔔 Alarm, 📢 Notification, ⏱️ Timer, ⏲️ Stopwatch.</li>
             </ul>
-            <h4>Timer & Stopwatch Dropdowns</h4>
-            <p>When Combine Alerts is off, two new dropdowns appear alongside the existing Alarm and Notification controls:</p>
-            <ul>
-                <li><strong>Timer</strong> — Controls visibility of the ⏱️ timer indicator (Always / Never / If Space)</li>
-                <li><strong>Stopwatch</strong> — Controls visibility of the ⏲️ stopwatch indicator (Always / Never / If Space)</li>
-            </ul>
-            <p>Both default to "Always" if not previously configured.</p>
             <h4>Calendar Views</h4>
-            <p>Calendar views (Week, Day, Month, Year, Itinerary, Seven-Day, X-Day) always show a single ⚠️ icon regardless of the Combine Alerts toggle, since calendar cells are space-constrained.</p>
+            <p>Calendar views (Week, Day, Month, Itinerary, Seven-Day, X-Day) always use combined mode for alerts since calendar cells are space-constrained. Weather, People, and Health indicators still respect their individual settings.</p>
             <h4>Card Views</h4>
-            <p>Checklists, Tasks, Notes, and Alarms views respect the Combine Alerts toggle — showing either one combined ⚠️ icon or individual per-type icons depending on the setting. The Projects view does not show alert indicators.</p>
+            <p>Checklists, Tasks, Notes, Alarms, and Projects views respect the Combine Alerts toggle — showing either one combined 🛎️ icon or individual per-type icons depending on the setting.</p>
             <h4>"If Space" Behavior</h4>
             <p>When a visibility dropdown is set to "If Space," indicators always appear on card views and calendar day/week slots (sufficient room). On month cells, indicators may be hidden when the title would be truncated.</p>
             <h3 id="version-management">Version Management</h3>

@@ -1281,12 +1281,6 @@ async function buildChitObject() {
   const severitySelect = document.getElementById("severity");
   chit.severity = severitySelect ? severitySelect.value || null : null;
 
-  // Progress % and Time Estimate
-  var progressSlider = document.getElementById("progress-percent");
-  chit.progress_percent = progressSlider ? parseInt(progressSlider.value) || null : null;
-  var timeEstInput = document.getElementById("time-estimate");
-  chit.time_estimate = timeEstInput ? timeEstInput.value.trim() || null : null;
-
   const repeatEnabled = document.getElementById("repeatEnabled");
   chit.recurrence = repeatEnabled && repeatEnabled.checked ? (document.getElementById('recurrence')?.value || 'DAILY') : null;
   chit.recurrence_rule = _buildRecurrenceRule();
@@ -2851,16 +2845,6 @@ async function loadChitData(chitId) {
 
     const severitySelect = document.getElementById("severity");
     setSelectValue(severitySelect, chit.severity);
-
-    // Progress % and Time Estimate
-    var progressSlider = document.getElementById("progress-percent");
-    var progressValue = document.getElementById("progress-value");
-    if (progressSlider) {
-      progressSlider.value = chit.progress_percent || 0;
-      if (progressValue) progressValue.textContent = (chit.progress_percent || 0) + '%';
-    }
-    var timeEstInput = document.getElementById("time-estimate");
-    if (timeEstInput) timeEstInput.value = chit.time_estimate || '';
 
     const statusSelect = document.getElementById("status");
     setSelectValue(statusSelect, chit.status);

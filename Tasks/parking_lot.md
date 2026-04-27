@@ -11,3 +11,5 @@
 - **Health: Sex toggle** (Female/Male) — checkbox present, not wired
 - **Calendar: color-code by tag** option (vs chit color)
 - **Duration field** on chits
+- **Progress % field** on chits (auto-calculate from checklist/children, or manual — needs design decision)
+- **Time estimate field** on chits
