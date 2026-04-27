@@ -89,7 +89,7 @@
 
                 <!-- Words (always visible) -->
                 <div class="filter-group" id="filter-words">
-                    <label class="filter-label">Search <span class="hotkey-hint">W</span></label>
+                    <label class="filter-label">Filter Text <span class="hotkey-hint">D</span></label>
                     <input type="text" id="search" placeholder="Filter Chits..." onkeyup="searchChits()" />
                     <div id="saved-searches" style="display:flex;flex-wrap:wrap;gap:3px;margin-top:3px;"></div>
                 </div>
@@ -232,7 +232,7 @@
             <div class="hotkey-panel-option" onclick="_enterFilterSub('people')"><span class="panel-key">E</span><span class="panel-label">People</span></div>
             <div class="hotkey-panel-option" onclick="_toggleFilterArchived()"><span class="panel-key">A</span><span class="panel-label">Archived</span></div>
             <div class="hotkey-panel-option" onclick="_toggleFilterPinned()"><span class="panel-key">I</span><span class="panel-label">Pinned</span></div>
-            <div class="hotkey-panel-option" onclick="_filterFocusSearch()"><span class="panel-key">W</span><span class="panel-label">Search Words</span></div>
+            <div class="hotkey-panel-option" onclick="_filterFocusSearch()"><span class="panel-key">D</span><span class="panel-label">Filter Text</span></div>
             <div class="hotkey-panel-footer">⌫ Clear all filters · ESC to cancel</div>
         </div>
 
@@ -310,7 +310,7 @@
                         <div><span class="ref-key">P</span> Priority</div>
                         <div><span class="ref-key">A</span> Archived</div>
                         <div><span class="ref-key">I</span> Pinned</div>
-                        <div><span class="ref-key">W</span> Words</div>
+                        <div><span class="ref-key">D</span> Filter Text</div>
                         <div><span class="ref-key">⌫</span> Clear filter / all</div>
                         <h4>Order <span class="ref-key">O</span></h4>
                         <div><span class="ref-key">T</span> Title</div>
@@ -360,7 +360,7 @@
                         <img src="/static/checklists.png" /><span class="tab-label"> <u>C</u>hecklists</span>
                     </div>
                     <div class="tab" onclick="filterChits('Alarms')" title="Alerts">
-                        <span style="font-size:2em;line-height:1;">🔊</span><span class="tab-label"> <u>A</u>lerts</span>
+                        <img src="/static/alerts.png" /><span class="tab-label"> <u>A</u>lerts</span>
                     </div>
                     <div class="tab" onclick="filterChits('Projects')" title="Projects">
                         <img src="/static/projects.png" /><span class="tab-label"> <u>P</u>rojects</span>
@@ -370,6 +370,9 @@
                     </div>
                     <div class="tab" onclick="filterChits('Notes')" title="Notes">
                         <img src="/static/notes.png" /><span class="tab-label"> <u>N</u>otes</span>
+                    </div>
+                    <div class="tab" onclick="filterChits('Search')" title="Global Search">
+                        <i class="fas fa-search" style="font-size:2em;line-height:1;color:#6b4e31;"></i>
                     </div>
                 </div>
                 <div class="top-bar-spacer"></div>

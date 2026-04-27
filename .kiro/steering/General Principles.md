@@ -2,6 +2,10 @@
 inclusion: always
 ---
 
+no installs, no pip, no npm.
+no installs, no pip, no npm.
+DO NOT INSTALL THINGS!
+
 # General Principles
 
 ## DRY — Don't Repeat Yourself
@@ -59,3 +63,5 @@ inclusion: always
 when adding code, ensure youre doing so in an organized manner. Use the applicable section if there is one, and if not, make a new section. 
 
 Ensure there's no tasks that require installing software (no hypothisys!), or running the server here.
+
+no installs, no pip, no npm.

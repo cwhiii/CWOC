@@ -10,4 +10,4 @@ inclusion: always
 Version numbering is: 
 YYYYMMDD.time, with time in format HHMM.
 
-Update the version number every time you make changes. (via  /app/VERSION)
+As the last step of any change, call the real time and use that to  Update the version number every time you make changes. (via  /app/VERSION)

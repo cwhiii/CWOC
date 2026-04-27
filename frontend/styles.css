@@ -295,6 +295,8 @@ h1 {
     padding: 3px;
     flex-wrap: nowrap;
     overflow: hidden;
+    flex: 1;
+    min-width: 0;
 }
 
 .tab {
@@ -312,6 +314,8 @@ h1 {
     align-items: center;
     justify-content: center;
     white-space: nowrap;
+    overflow: hidden;
+    transition: padding 0.15s ease;
 }
 
 .tab > img {
@@ -329,7 +333,7 @@ h1 {
     display: none;
 }
 .tabs.icon-only .tab {
-    padding: 10px 12px;
+    padding: 10px 6px;
 }
 .tabs.icon-only .tab > img {
     margin-right: 0;
@@ -722,7 +726,6 @@ button.delete:hover {
 /* Notes view styles — column-persistent layout */
 .notes-view {
     padding: 0.75em;
-    padding-right: 1.5em;
     position: relative;
     overflow-y: auto;
     overflow-x: hidden;
@@ -751,8 +754,10 @@ button.delete:hover {
     background: #fff8dc;
     border-radius: 4px;
     margin-top: 4px;
+    color: #2b1e0f !important;
 }
 .notes-view .note-content * {
+    color: inherit !important;
     max-width: 100%;
     overflow-wrap: break-word;
 }
@@ -1304,6 +1309,22 @@ button.delete:hover {
     white-space: nowrap;
 }
 
+/* Weather indicator on chit cards */
+.chit-weather-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 0.85em;
+    white-space: nowrap;
+    margin-right: 4px;
+    cursor: default;
+}
+.chit-wx-detail {
+    font-size: 0.85em;
+    opacity: 0.85;
+    font-weight: normal;
+}
+
 .chit-card .chit-meta {
     display: none; /* hidden — replaced by chit-header-row */
 }
@@ -1826,6 +1847,77 @@ button.delete:hover {
     margin-bottom: 0;
     font-size: 0.8em;
     padding: 6px;
+}
+
+/* ── Global Search View ────────────────────────────────────────────────────── */
+.global-search-bar {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding: 12px 8px;
+    margin-bottom: 12px;
+}
+
+#global-search-input {
+    flex: 1;
+    padding: 8px 12px;
+    font-family: "Courier New", Courier, monospace;
+    font-size: 1em;
+    border: 2px solid #6b4e31;
+    border-radius: 4px;
+    background: var(--parchment-light, #fdf5e6);
+    color: var(--aged-brown-dark, #4a2c2a);
+    outline: none;
+    box-sizing: border-box;
+}
+#global-search-input:focus {
+    border-color: var(--aged-brown-medium, #8b4513);
+    box-shadow: 0 0 0 2px rgba(139, 90, 43, 0.15);
+}
+#global-search-input::placeholder {
+    color: #a08060;
+    opacity: 0.7;
+}
+
+.global-search-bar .action-button {
+    padding: 8px 18px;
+    font-size: 1em;
+    flex-shrink: 0;
+    width: auto;
+    margin-bottom: 0;
+}
+
+.global-search-results {
+    padding: 0 8px;
+    overflow-y: auto;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.global-search-result-card {
+    margin-bottom: 8px;
+}
+
+.global-search-matched-fields {
+    margin-top: 6px;
+    font-size: 0.9em;
+    line-height: 1.5;
+}
+.global-search-matched-fields > div {
+    margin-bottom: 4px;
+}
+.global-search-matched-fields > div > span:first-child {
+    font-weight: bold;
+    color: #6b4e31;
+    margin-right: 6px;
+}
+
+.global-search-matched-fields mark,
+.global-search-result-card mark {
+    background-color: #e6c44c;
+    color: #2b1e0f;
+    padding: 1px 2px;
+    border-radius: 2px;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -2428,5 +2520,17 @@ button.delete:hover {
     /* ── Kanban columns: stack vertically on mobile ───────────────────────── */
     .projects-view [style*="display:flex"][style*="min-height:120px"] {
         flex-direction: column !important;
+    }
+
+    /* ── Global Search: compact on mobile ─────────────────────────────────── */
+    .global-search-bar {
+        padding: 8px 4px;
+    }
+    #global-search-input {
+        font-size: 0.9em;
+        padding: 8px;
+    }
+    .global-search-results {
+        padding: 0 4px;
     }
 }

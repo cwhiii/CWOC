@@ -61,6 +61,11 @@ for dir in "${DIRECTORIES[@]}"; do
     fi
 done
 
+# Push root-level files (VERSION, etc.)
+echo "📤 Pushing: VERSION ..."
+rsync -az "$LOCAL_ROOT/VERSION" "$SERVER:$REMOTE_BASE/VERSION"
+echo "✅ Pushed: VERSION"
+
 echo "--------------------------------------------------"
 
 if [[ "$RESTART" == true ]]; then

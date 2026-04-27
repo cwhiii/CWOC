@@ -133,6 +133,74 @@ function getPastelColor(label) {
   return `rgb(${r}, ${g}, ${b})`;
 }
 
+// ── Shared Geocoding ─────────────────────────────────────────────────────────
+
+/**
+ * Geocode an address using Nominatim with progressive fallback.
+ * Tries: full address → no zip → city/state/zip → city/state.
+ * Returns {lat, lon} or throws Error("Location not found.") / Error("No address provided.").
+ */
+async function _geocodeAddress(address) {
+  console.log('[block removal] _geocodeAddress called with:', address);
+  if (!address) throw new Error("No address provided.");
+  var queries = [address];
+
+  // Strip zip code (5-digit or 5+4 at end)
+  var noZip = address.replace(/\s*\d{5}(-\d{4})?\s*$/, '').trim();
+  if (noZip && noZip !== address) queries.push(noZip);
+
+  // Normalize periods to commas for addresses like "123 Main St. City, ST 12345"
+  var normalized = address.replace(/\.\s+/g, ', ');
+  if (normalized !== address) queries.push(normalized);
+
+  // Comma-split fallbacks
+  var parts = normalized.split(',');
+  if (parts.length >= 2) queries.push(parts.slice(1).join(',').trim());
+  if (parts.length >= 3) queries.push(parts.slice(-2).join(',').trim());
+
+  // Try to extract "City, ST ZIP" or "City, ST" via state abbreviation pattern
+  var stateMatch = address.match(/([A-Za-z\s]+),?\s+([A-Z]{2})\s*(\d{5})?/);
+  if (stateMatch) {
+    var cityState = stateMatch[1].trim() + ', ' + stateMatch[2];
+    if (stateMatch[3]) queries.push(cityState + ' ' + stateMatch[3]);
+    queries.push(cityState);
+  }
+
+  // Deduplicate queries while preserving order
+  var seen = {};
+  var unique = [];
+  for (var u = 0; u < queries.length; u++) {
+    var key = queries[u].toLowerCase().trim();
+    if (!key || seen[key]) continue;
+    seen[key] = true;
+    unique.push(queries[u]);
+  }
+
+  console.log('[block removal] geocode queries:', unique);
+
+  for (var i = 0; i < unique.length; i++) {
+    var q = unique[i];
+    try {
+      console.log('[block removal] trying query', i + 1, ':', q);
+      // Use backend proxy to avoid CORS and rate-limit issues
+      var url = '/api/geocode?q=' + encodeURIComponent(q);
+      var resp = await fetch(url);
+      if (!resp.ok) { console.log('[block removal] query', i + 1, 'HTTP error:', resp.status); continue; }
+      var data = await resp.json();
+      if (data && data.results && data.results.length > 0) {
+        console.log('[block removal] SUCCESS on query', i + 1, ':', q, '→', data.results[0].lat, data.results[0].lon);
+        return { lat: data.results[0].lat, lon: data.results[0].lon };
+      } else {
+        console.log('[block removal] query', i + 1, 'returned empty results');
+      }
+    } catch (e) {
+      console.warn('[block removal] Geocoding attempt', i + 1, 'failed:', e);
+    }
+  }
+  console.error('[block removal] ALL geocode queries failed for:', address);
+  throw new Error("Location not found.");
+}
+
 // ── Inline Checklist Toggle & Reorder (for dashboard views) ──────────────────
 
 /**
@@ -716,11 +784,8 @@ function _getAllIndicators(chit, settings, context) {
   // Alert indicators
   result += _getAlertIndicators(chit, s, context);
 
-  // Weather indicator — show when chit has a location
-  if (chit.location && chit.location.trim()) {
-    var weatherMode = s.weather || 'always';
-    if (_shouldShow(weatherMode, context)) result += '🌤️ ';
-  }
+  // Weather indicator — handled by _buildChitHeader with async fetch
+  // (no longer a static icon here)
 
   // People indicator — show when chit has people assigned
   if (Array.isArray(chit.people) && chit.people.length > 0) {
@@ -854,7 +919,21 @@ function calendarEventTitle(chit, isDueOnly, info, settings, context) {
   const dueIcon = isDueOnly ? '⌚ ' : '';
   // Recurrence icon is already included in _getAllIndicators, so skip if allIcons has it
   const recurIcon = (!allIcons.includes('🔁') && ((chit.recurrence_rule && chit.recurrence_rule.freq) || chit._isVirtual)) ? '🔁 ' : '';
-  return `<span style="font-weight:bold;font-size:1.1em;">${allIcons}${pinnedIcon}${recurIcon}${dueIcon}${chit.title || '(Untitled)'}</span>`;
+  // Weather icon from cache (if chit has location and weather setting allows)
+  var wxIcon = '';
+  if (chit.location && chit.location.trim() && settings) {
+    var wxMode = settings.weather || 'always';
+    if (typeof _shouldShow === 'function' && _shouldShow(wxMode, context || 'calendar-slot')) {
+      var wxKey = 'cwoc_wx_' + chit.location.toLowerCase().trim();
+      try {
+        var wxCached = JSON.parse(localStorage.getItem(wxKey));
+        if (wxCached && wxCached.icon && (Date.now() - wxCached.ts < 3600000)) {
+          wxIcon = '<span class="chit-weather-indicator" title="' + (wxCached.tooltip || '').replace(/"/g, '&quot;') + '">' + wxCached.icon + '</span> ';
+        }
+      } catch (e) {}
+    }
+  }
+  return `<span style="font-weight:bold;font-size:1.1em;">${allIcons}${wxIcon}${pinnedIcon}${recurIcon}${dueIcon}${chit.title || '(Untitled)'}</span>`;
 }
 
 /**
@@ -2988,7 +3067,8 @@ function enableNotesDragReorder(container, tab, onReorder) {
     card.style.cursor = 'grab';
 
     card.addEventListener('mousedown', (e) => {
-      if (e.target.closest('input, textarea, select, button, a, ul, li')) return;
+      if (e.target.closest('input, textarea, select, button, a, ul, li, [contenteditable="true"]')) return;
+      if (card.querySelector('[contenteditable="true"]')) return;
       if (e.button !== 0) return;
       e.preventDefault();
 

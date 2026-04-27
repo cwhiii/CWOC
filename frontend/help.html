@@ -28,6 +28,7 @@
                     <li><a href="#hotkeys">Keyboard Shortcuts</a></li>
                     <li><a href="#recurrence">Recurrence / Repeating</a></li>
                     <li><a href="#tags">Tags</a></li>
+                    <li><a href="#global-search">Global Search</a></li>
                     <li><a href="#filters">Filtering & Sorting</a></li>
                     <li><a href="#notes-view">Notes View</a></li>
                     <li><a href="#clocks">Clocks</a></li>
@@ -90,8 +91,9 @@
                 <li><kbd>C</kbd> <kbd>H</kbd> <kbd>A</kbd> <kbd>P</kbd> <kbd>T</kbd> <kbd>N</kbd> — Switch tabs</li>
                 <li><kbd>K</kbd> — Create chit (middle-click → new tab)</li>
                 <li><kbd>.</kbd> — Period: <kbd>I</kbd> <kbd>D</kbd> <kbd>W</kbd>eek <kbd>K</kbd> Work <kbd>S</kbd> X-Day <kbd>M</kbd>onth <kbd>Y</kbd>ear</li>
-                <li><kbd>F</kbd> — Filter: <kbd>S</kbd>tatus <kbd>T</kbd>ags <kbd>P</kbd>riority <kbd>W</kbd>ords</li>
+                <li><kbd>F</kbd> — Filter: <kbd>S</kbd>tatus <kbd>T</kbd>ags <kbd>P</kbd>riority <kbd>D</kbd> Filter Text</li>
                 <li><kbd>O</kbd> — Order: <kbd>T</kbd>itle <kbd>S</kbd>tart <kbd>D</kbd>ue <kbd>U</kbd>pdated <kbd>C</kbd>reated <kbd>X</kbd> Status <kbd>M</kbd>anual <kbd>R</kbd>andom <kbd>G</kbd> Upcoming</li>
+                <li><kbd>G</kbd> — Global Search</li>
                 <li><kbd>W</kbd> — Weather (default location forecast)</li>
                 <li><kbd>L</kbd> — Clock · <kbd>R</kbd> — Reference · <kbd>Shift+R</kbd> — Help · <kbd>S</kbd> — Settings</li>
                 <li><kbd>ESC</kbd> — Close/exit · <kbd>Backspace</kbd> — Clear filters</li>
@@ -109,10 +111,18 @@
             <p>Drag prompts: This instance only / All in series / All following.</p>
             <h3 id="tags">Tags</h3>
             <p>Hierarchical labels with colors. Nesting via <code>/</code> (e.g., <code>Work/Projects/CWOC</code>). Child tags inherit parent color. ★ Favorites appear at top.</p>
+            <h3 id="global-search">Global Search</h3>
+            <p>Press <kbd>G</kbd> or click the magnifying glass tab (last in the C CAPTN tab bar) to open the Global Search view. Unlike the sidebar filter, Global Search queries ALL fields across ALL chits regardless of which tab they belong to.</p>
+            <ul>
+                <li><strong>Search Input + Go</strong> — Type a query in the search input and press Enter or click Go. The search performs case-insensitive substring matching across every chit field (title, note, tags, status, priority, location, people, checklist items, dates, color, alerts, and more).</li>
+                <li><strong>Result Cards</strong> — Each matching chit is displayed as a card showing the chit title and every matched field with the matching text highlighted. Click a result card to open that chit in the editor.</li>
+                <li><strong>Sidebar Filters</strong> — Sidebar filters (Status, Priority, Tags, etc.) remain active during Global Search, narrowing results further.</li>
+            </ul>
             <h3 id="filters">Filtering & Sorting</h3>
-            <p>Sidebar: Search, Status, Priority, Tags, Show (Pinned/Archived/Unmarked/Hide Past-Due). 💾 Save Search saves text as a quick-access chip.</p>
+            <p>Sidebar: Filter Text, Status, Priority, Tags, Show (Pinned/Archived/Unmarked/Hide Past-Due). 💾 Save Search saves text as a quick-access chip.</p>
             <h3 id="notes-view">Notes View</h3>
             <p>Multi-column masonry layout with full rendered markdown. <code>[[chit title]]</code> auto-links to other chits.</p>
+            <p><strong>Shift+click</strong> (or long-press on mobile) a note card to edit it in place. While editing, drag-and-drop reordering is disabled so you can click to position the cursor. Press <kbd>ESC</kbd> or click outside to save and exit edit mode.</p>
             <h3 id="clocks">Clocks</h3>
             <p>Press <kbd>L</kbd> on the dashboard to open the clocks modal. Configure which clocks are displayed and their layout in Settings → Alarms.</p>
             <ul>
@@ -125,6 +135,7 @@
             <h3 id="weather">Weather</h3>
             <p>Press <kbd>W</kbd> on the dashboard to open the weather modal. It shows the current forecast for your default saved location, including weather icon, high/low temperatures (°F), and precipitation. If no default location is configured, the modal will prompt you to set one in Settings.</p>
             <p>In the chit editor, weather loads automatically when a chit has both a location and a date. Placeholder messages appear when either is missing.</p>
+            <p>On the dashboard, chits with a location display a weather icon (☀️ sunny, 🌧️ rainy, 🌨️ snowy, etc.) next to the title. Hover over the icon to see high/low temperatures and expected precipitation. Weather data is fetched in the background and cached for one hour.</p>
             <h3 id="saved-locations">Saved Locations</h3>
             <p>Manage saved locations in Settings → Saved Locations. Each location has a label and an address. Use the radio button to mark one as the default.</p>
             <ul>

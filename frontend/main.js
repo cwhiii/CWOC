@@ -27,6 +27,10 @@ let _snoozeRegistry = {};
 // Default search filters per tab (loaded from settings)
 let _defaultFilters = {};
 
+// ── Global Search state ──────────────────────────────────────────────────────
+let _globalSearchResults = [];
+let _globalSearchQuery = '';
+
 /** Build a styled empty-state message with an optional Create Chit button. */
 function _emptyState(message) {
   return `<div class="cwoc-empty" style="text-align:center;padding:2em 1em;opacity:0.7;">
@@ -341,6 +345,29 @@ function _buildChitHeader(chit, titleHtml, settings) {
       alertSpan.className = 'alert-indicators';
       alertSpan.textContent = indicators;
       left.appendChild(alertSpan);
+    }
+  }
+
+  // Weather indicator — async-populated with actual forecast
+  if (chit.location && chit.location.trim()) {
+    var weatherMode = (settings || {}).weather || 'always';
+    if (typeof _shouldShow === 'function' && _shouldShow(weatherMode, 'card')) {
+      const wxSpan = document.createElement('span');
+      wxSpan.className = 'chit-weather-indicator';
+      wxSpan.dataset.chitLocation = chit.location;
+      // Check cache first for instant display
+      var wxCacheKey = 'cwoc_wx_' + chit.location.toLowerCase().trim();
+      var wxCached = null;
+      try { wxCached = JSON.parse(localStorage.getItem(wxCacheKey)); } catch (e) {}
+      if (wxCached && wxCached.icon && (Date.now() - wxCached.ts < 3600000)) {
+        wxSpan.innerHTML = wxCached.icon + ' <span class="chit-wx-detail">' + _escHtml(wxCached.tooltip) + '</span> ';
+        wxSpan.title = wxCached.tooltip;
+      } else {
+        wxSpan.textContent = '⏳ ';
+        wxSpan.title = 'Loading weather…';
+        _queueChitWeatherFetch(chit.location, wxSpan);
+      }
+      left.appendChild(wxSpan);
     }
   }
 
@@ -1096,12 +1123,115 @@ function _getWeatherIcon(code) {
   return _weatherIcons[code] || '❓';
 }
 
+function _escHtml(str) {
+  if (!str) return '';
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 function _getPrecipLabel(code) {
   if ([61, 63, 65, 66, 67, 80, 81, 82].includes(code)) return 'rain';
   if ([71, 73, 75, 77, 85, 86].includes(code)) return 'snow';
   if ([95, 96, 99].includes(code)) return 'thunder';
   if ([51, 53, 55, 56, 57].includes(code)) return 'drizzle';
   return '';
+}
+
+// ── Chit Weather Indicators (async fetch for card views) ─────────────────────
+
+var _chitWxQueue = [];       // [{location, span}] — pending fetches
+var _chitWxFetching = false; // true while processing queue
+var _chitWxGeoCache = {};    // location → {lat, lon} (in-memory for session)
+
+/** Queue a weather fetch for a chit indicator span. Batched to avoid flooding APIs. */
+function _queueChitWeatherFetch(location, span) {
+  _chitWxQueue.push({ location: location, span: span });
+  if (!_chitWxFetching) _processChitWxQueue();
+}
+
+async function _processChitWxQueue() {
+  if (_chitWxFetching || _chitWxQueue.length === 0) return;
+  _chitWxFetching = true;
+
+  // Group by location to avoid duplicate fetches
+  var byLoc = {};
+  while (_chitWxQueue.length > 0) {
+    var item = _chitWxQueue.shift();
+    var key = item.location.toLowerCase().trim();
+    if (!byLoc[key]) byLoc[key] = { location: item.location, spans: [] };
+    byLoc[key].spans.push(item.span);
+  }
+
+  var keys = Object.keys(byLoc);
+  for (var i = 0; i < keys.length; i++) {
+    var entry = byLoc[keys[i]];
+    try {
+      await _fetchAndApplyChitWeather(entry.location, entry.spans);
+    } catch (e) { /* silently fail */ }
+    // Rate-limit: small delay between locations to respect Nominatim policy
+    if (i < keys.length - 1) await new Promise(function(r) { setTimeout(r, 300); });
+  }
+
+  _chitWxFetching = false;
+  // Process any items queued while we were fetching
+  if (_chitWxQueue.length > 0) _processChitWxQueue();
+}
+
+async function _fetchAndApplyChitWeather(address, spans) {
+  var cacheKey = 'cwoc_wx_' + address.toLowerCase().trim();
+
+  // Check localStorage cache (1 hour TTL)
+  try {
+    var cached = JSON.parse(localStorage.getItem(cacheKey));
+    if (cached && cached.icon && (Date.now() - cached.ts < 3600000)) {
+      spans.forEach(function(s) {
+        s.innerHTML = cached.icon + ' <span class="chit-wx-detail">' + _escHtml(cached.tooltip) + '</span> ';
+        s.title = cached.tooltip;
+      });
+      return;
+    }
+  } catch (e) {}
+
+  // Geocode using shared progressive fallback
+  var lat, lon;
+  var geoKey = address.toLowerCase().trim();
+  if (_chitWxGeoCache[geoKey]) {
+    lat = _chitWxGeoCache[geoKey].lat;
+    lon = _chitWxGeoCache[geoKey].lon;
+  } else {
+    try {
+      var coords = await _geocodeAddress(address);
+      lat = coords.lat;
+      lon = coords.lon;
+      _chitWxGeoCache[geoKey] = { lat: lat, lon: lon };
+    } catch (e) { return; }
+  }
+
+  // Fetch weather
+  var wxResp = await fetch('https://api.open-meteo.com/v1/forecast?latitude=' + lat + '&longitude=' + lon + '&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_sum&timezone=auto&forecast_days=1');
+  if (!wxResp.ok) return;
+  var wxData = await wxResp.json();
+  if (!wxData || !wxData.daily) return;
+
+  var today = wxData.daily;
+  var weatherCode = today.weathercode[0];
+  var minC = today.temperature_2m_min[0], maxC = today.temperature_2m_max[0], precipMm = today.precipitation_sum[0];
+  var minF = Math.round((minC * 9) / 5 + 32), maxF = Math.round((maxC * 9) / 5 + 32);
+  var precipInches = Math.ceil(precipMm * 0.0393701 * 10) / 10;
+  var icon = _getWeatherIcon(weatherCode);
+  var precipType = _getPrecipLabel(weatherCode);
+  var precipText = precipType ? precipInches + '" ' + precipType : 'No precip';
+  var tooltip = maxF + '°F / ' + minF + '°F · ' + precipText;
+
+  // Update all spans for this location
+  spans.forEach(function(s) {
+    s.innerHTML = icon + ' <span class="chit-wx-detail">' + _escHtml(tooltip) + '</span> ';
+    s.title = tooltip;
+  });
+
+  // Cache
+  try {
+    localStorage.setItem(cacheKey, JSON.stringify({ icon: icon, tooltip: tooltip, ts: Date.now() }));
+  } catch (e) { /* ignore */ }
 }
 
 function _buildWeatherModalHTML(content) {
@@ -1208,6 +1338,7 @@ async function _openWeatherModal() {
 }
 
 async function _fetchWeatherForModal(address, label) {
+  console.log('[block removal] _fetchWeatherForModal called with:', address, label);
   var overlay = document.getElementById('weather-modal-overlay');
   if (!overlay) return;
 
@@ -1225,32 +1356,9 @@ async function _fetchWeatherForModal(address, label) {
   }
 
   try {
-    // Geocode with progressive fallback
-    var geoQueries = [address];
-    var noZip = address.replace(/\s*\d{5}(-\d{4})?\s*$/, '').trim();
-    if (noZip && noZip !== address) geoQueries.push(noZip);
-    var addrParts = address.split(',');
-    if (addrParts.length >= 2) geoQueries.push(addrParts.slice(1).join(',').trim());
-    if (addrParts.length >= 3) geoQueries.push(addrParts.slice(-2).join(',').trim());
-
-    var lat, lon, geoFound = false;
-    for (var gi = 0; gi < geoQueries.length; gi++) {
-      var q = geoQueries[gi];
-      if (!q) continue;
-      try {
-        var geoUrl = 'https://nominatim.openstreetmap.org/search?format=json&limit=3&q=' + encodeURIComponent(q);
-        var geoResp = await fetch(geoUrl, { headers: { 'User-Agent': 'CWOC-Weather/1.0' } });
-        if (!geoResp.ok) continue;
-        var geoData = await geoResp.json();
-        if (geoData && geoData.length > 0) {
-          lat = parseFloat(geoData[0].lat);
-          lon = parseFloat(geoData[0].lon);
-          geoFound = true;
-          break;
-        }
-      } catch (e) { console.warn('Geocode attempt failed:', e); }
-    }
-    if (!geoFound) throw new Error('geocode_empty');
+    // Geocode with shared progressive fallback
+    var coords = await _geocodeAddress(address);
+    var lat = coords.lat, lon = coords.lon;
 
     // Fetch weather
     var wxUrl = 'https://api.open-meteo.com/v1/forecast?latitude=' + lat + '&longitude=' + lon + '&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_sum&timezone=auto&forecast_days=1';
@@ -1290,7 +1398,8 @@ async function _fetchWeatherForModal(address, label) {
   } catch (err) {
     console.error('Weather modal error:', err);
     var msg = 'Weather unavailable — try again later';
-    if (err.message === 'geocode_empty') msg = 'Could not find location: ' + address;
+    if (err.message === 'Location not found.' || err.message === 'geocode_empty') msg = 'Could not find location: ' + address;
+    else if (err.message === 'No address provided.') msg = 'No address provided';
     else if (err.message === 'geocode_network') msg = 'Could not reach location service';
     else if (err.message === 'weather_network') msg = 'Could not reach weather service';
     else if (err.message === 'weather_empty') msg = 'Weather data unavailable for ' + address;
@@ -1307,20 +1416,8 @@ function _closeWeatherModal() {
 /** Pre-fetch weather for a location and store in localStorage cache (background, no UI). */
 async function _fetchWeatherForCache(address, cacheKey) {
   try {
-    var geoQueries = [address];
-    var noZip = address.replace(/\s*\d{5}(-\d{4})?\s*$/, '').trim();
-    if (noZip && noZip !== address) geoQueries.push(noZip);
-    var lat, lon, found = false;
-    for (var gi = 0; gi < geoQueries.length; gi++) {
-      var q = geoQueries[gi];
-      if (!q) continue;
-      try {
-        var resp = await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q=' + encodeURIComponent(q), { headers: { 'User-Agent': 'CWOC-Weather/1.0' } });
-        var data = await resp.json();
-        if (data && data.length > 0) { lat = parseFloat(data[0].lat); lon = parseFloat(data[0].lon); found = true; break; }
-      } catch (e) { /* skip */ }
-    }
-    if (!found) return;
+    var coords = await _geocodeAddress(address);
+    var lat = coords.lat, lon = coords.lon;
     var wxResp = await fetch('https://api.open-meteo.com/v1/forecast?latitude=' + lat + '&longitude=' + lon + '&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_sum&timezone=auto&forecast_days=1');
     if (!wxResp.ok) return;
     var wxData = await wxResp.json();
@@ -1339,6 +1436,26 @@ async function _fetchWeatherForCache(address, cacheKey) {
     var html = '<div class="weather-modal-icon">' + icon + '</div><div class="weather-modal-temps"><span class="temp-high">' + maxF + '°F</span> / <span class="temp-low">' + minF + '°F</span></div><div class="weather-modal-precip">' + precipText + '</div><div class="weather-modal-temp-bar"><div class="temp-bar-marker" style="left:' + lowPct + '%" title="Low ' + minF + '°F"></div><div class="temp-bar-marker" style="left:' + highPct + '%" title="High ' + maxF + '°F"></div></div>';
     try { localStorage.setItem(cacheKey, JSON.stringify({ html: html, ts: Date.now() })); } catch (e) { /* ignore */ }
   } catch (e) { /* background fetch — silently fail */ }
+}
+
+/** Pre-fetch weather for all chits that have locations. Deduplicates by location. */
+function _prefetchChitWeather(chitList) {
+  if (!chitList || !chitList.length) return;
+  var seen = {};
+  chitList.forEach(function(chit) {
+    if (!chit.location || !chit.location.trim()) return;
+    var key = chit.location.toLowerCase().trim();
+    if (seen[key]) return;
+    seen[key] = true;
+    var cacheKey = 'cwoc_wx_' + key;
+    try {
+      var cached = JSON.parse(localStorage.getItem(cacheKey));
+      if (cached && cached.icon && (Date.now() - cached.ts < 3600000)) return; // already cached
+    } catch (e) {}
+    // Queue a fetch with a dummy span (just to populate the cache)
+    var dummy = document.createElement('span');
+    _queueChitWeatherFetch(chit.location, dummy);
+  });
 }
 
 // ── Load label/tag filters from settings ─────────────────────────────────────
@@ -2076,10 +2193,11 @@ function restoreSidebarState() {
     return;
   }
   const savedState = localStorage.getItem("sidebarState");
-  if (savedState === "open") {
-    sidebar.classList.add("active");
-  } else {
+  if (savedState === "closed") {
     sidebar.classList.remove("active");
+  } else {
+    // Default to open on desktop
+    sidebar.classList.add("active");
   }
 }
 
@@ -2230,6 +2348,8 @@ function fetchChits() {
       restoreSidebarState();
       // Re-check notifications immediately after chits refresh
       if (typeof _globalCheckNotifications === "function") _globalCheckNotifications();
+      // Pre-fetch weather for chits with locations (populates cache for all views)
+      _prefetchChitWeather(chits);
     })
     .catch((err) => {
       console.error("Error fetching chits:", err);
@@ -2376,6 +2496,9 @@ function displayChits() {
     case "Projects":
       displayProjectsView(filteredChits);
       break;
+    case "Search":
+      displaySearchView();
+      return; // Search view manages its own rendering; skip post-render steps
     default:
       listContainer.innerHTML = `<p>${currentTab} tab not implemented yet.</p>`;
   }
@@ -3471,6 +3594,26 @@ function displayNotesView(chitsToDisplay) {
         const indicators = _getAllIndicators(chit, _viSettings, 'card');
         if (indicators) { const s = document.createElement('span'); s.className = 'alert-indicators'; s.textContent = indicators; titleRow.appendChild(s); }
       }
+      // Weather indicator
+      if (chit.location && chit.location.trim()) {
+        var _nwMode = (_viSettings || {}).weather || 'always';
+        if (typeof _shouldShow === 'function' && _shouldShow(_nwMode, 'card')) {
+          const wxSpan = document.createElement('span');
+          wxSpan.className = 'chit-weather-indicator';
+          var _nwKey = 'cwoc_wx_' + chit.location.toLowerCase().trim();
+          var _nwCached = null;
+          try { _nwCached = JSON.parse(localStorage.getItem(_nwKey)); } catch (e) {}
+          if (_nwCached && _nwCached.icon && (Date.now() - _nwCached.ts < 3600000)) {
+            wxSpan.innerHTML = _nwCached.icon + ' <span class="chit-wx-detail">' + _escHtml(_nwCached.tooltip) + '</span> ';
+            wxSpan.title = _nwCached.tooltip;
+          } else {
+            wxSpan.textContent = '⏳ ';
+            wxSpan.title = 'Loading weather…';
+            _queueChitWeatherFetch(chit.location, wxSpan);
+          }
+          titleRow.appendChild(wxSpan);
+        }
+      }
       const titleSpan = document.createElement('span');
       titleSpan.textContent = chit.title || '(Untitled)';
       titleRow.appendChild(titleSpan);
@@ -3502,12 +3645,16 @@ function displayNotesView(chitsToDisplay) {
         noteEl.style.borderRadius = '4px';
         noteEl.style.padding = '6px';
         noteEl.style.whiteSpace = 'pre-wrap';
+        chitElement.style.cursor = 'auto';
+        chitElement.setAttribute('draggable', 'false');
         noteEl.textContent = chit.note || '';
         noteEl.focus();
         const saveEdit = () => {
           noteEl.contentEditable = 'false';
           noteEl.style.outline = '';
           noteEl.style.padding = '';
+          chitElement.style.cursor = 'grab';
+          chitElement.removeAttribute('draggable');
           const newNote = noteEl.textContent;
           if (newNote !== chit.note) {
             fetch(`/api/chits/${chit.id}`, {
@@ -3535,12 +3682,16 @@ function displayNotesView(chitsToDisplay) {
           noteEl.style.borderRadius = '4px';
           noteEl.style.padding = '6px';
           noteEl.style.whiteSpace = 'pre-wrap';
+          chitElement.style.cursor = 'auto';
+          chitElement.setAttribute('draggable', 'false');
           noteEl.textContent = chit.note || '';
           noteEl.focus();
           var _lpSaveEdit = function () {
             noteEl.contentEditable = 'false';
             noteEl.style.outline = '';
             noteEl.style.padding = '';
+            chitElement.style.cursor = 'grab';
+            chitElement.removeAttribute('draggable');
             var newNote = noteEl.textContent;
             if (newNote !== chit.note) {
               fetch('/api/chits/' + chit.id, {
@@ -3589,7 +3740,10 @@ function displayNotesView(chitsToDisplay) {
 
   // Re-layout on window resize
   const resizeHandler = () => {
-    if (currentTab === 'Notes') applyNotesLayout(notesView);
+    if (currentTab === 'Notes') {
+      var nv = document.querySelector('.notes-view');
+      if (nv) applyNotesLayout(nv);
+    }
   };
   window.removeEventListener('resize', window._notesResizeHandler);
   window._notesResizeHandler = resizeHandler;
@@ -4488,6 +4642,228 @@ function searchChits() {
   displayChits();
 }
 
+// ═══════════════ GLOBAL SEARCH ═══════════════
+
+/**
+ * HTML-escape text, then wrap all case-insensitive occurrences of `query` in <mark> tags.
+ * Returns original text unchanged if query is empty.
+ */
+function highlightMatch(text, query) {
+  if (!text) return '';
+  if (!query) return text;
+  // HTML-escape the text first
+  var escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+  // Escape regex special chars in query using a loop to avoid replacement issues
+  var specials = '.*+?^${}()|[]\\';
+  var safeQuery = '';
+  for (var i = 0; i < query.length; i++) {
+    if (specials.indexOf(query[i]) !== -1) safeQuery += '\\';
+    safeQuery += query[i];
+  }
+  var regex = new RegExp('(' + safeQuery + ')', 'gi');
+  return escaped.replace(regex, '<mark>$1</mark>');
+}
+
+/** 
+ * Render the Global Search view into #chit-list.
+ * Shows a search bar + Go button, fetches results from the API, applies sidebar filters,
+ * and renders Result_Cards with highlighted match excerpts.
+ */
+async function displaySearchView() {
+  var chitList = document.getElementById('chit-list');
+  if (!chitList) return;
+  chitList.innerHTML = '';
+
+  var _viSettings = (window._cwocSettings || {}).visual_indicators || {};
+
+  // Search bar area
+  var searchBar = document.createElement('div');
+  searchBar.className = 'global-search-bar';
+
+  var input = document.createElement('input');
+  input.type = 'text';
+  input.id = 'global-search-input';
+  input.placeholder = 'Search all chits…';
+  input.value = _globalSearchQuery || '';
+
+  var goBtn = document.createElement('button');
+  goBtn.className = 'action-button';
+  goBtn.textContent = 'Go';
+  goBtn.style.cssText = 'flex-shrink:0;';
+
+  searchBar.appendChild(input);
+  searchBar.appendChild(goBtn);
+  chitList.appendChild(searchBar);
+
+  // Results container
+  var resultsContainer = document.createElement('div');
+  resultsContainer.className = 'global-search-results';
+  chitList.appendChild(resultsContainer);
+
+  // Execute search function
+  async function executeSearch() {
+    var q = input.value.trim();
+    _globalSearchQuery = q;
+    if (!q) {
+      _globalSearchResults = [];
+      resultsContainer.innerHTML = '';
+      return;
+    }
+    try {
+      var resp = await fetch('/api/chits/search?q=' + encodeURIComponent(q));
+      if (!resp.ok) throw new Error('Search failed (HTTP ' + resp.status + ')');
+      var data = await resp.json();
+      _globalSearchResults = Array.isArray(data) ? data : [];
+    } catch (err) {
+      console.error('Global search error:', err);
+      resultsContainer.innerHTML = '<div class="cwoc-empty" style="text-align:center;padding:2em 1em;opacity:0.8;color:#b22222;"><p>⚠ ' + (err.message || 'Search failed') + '</p></div>';
+      return;
+    }
+    _renderSearchResults(resultsContainer, _viSettings);
+  }
+
+  // Wire up Go button and Enter key
+  goBtn.addEventListener('click', executeSearch);
+  input.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') { e.preventDefault(); executeSearch(); }
+  });
+
+  // If we already have results (re-rendering after filter change), show them
+  if (_globalSearchResults.length > 0 && _globalSearchQuery) {
+    _renderSearchResults(resultsContainer, _viSettings);
+  }
+
+  // Auto-focus the search input only if user isn't typing in the sidebar filter
+  var activeEl = document.activeElement;
+  var isSidebarFocused = activeEl && (activeEl.id === 'search' || activeEl.closest('.sidebar'));
+  if (!isSidebarFocused) {
+    setTimeout(function() { input.focus(); }, 50);
+  }
+}
+
+/**
+ * Render search result cards into the given container.
+ * Applies sidebar filters before rendering.
+ */
+function _renderSearchResults(container, viSettings) {
+  container.innerHTML = '';
+  var q = _globalSearchQuery;
+
+  // Extract chit objects and apply sidebar filters
+  var resultChits = _globalSearchResults.map(function(r) {
+    var c = r.chit;
+    c._matchedFields = r.matched_fields || [];
+    return c;
+  });
+  resultChits = _applyMultiSelectFilters(resultChits);
+  resultChits = _applyArchiveFilter(resultChits);
+
+  // Apply sidebar text filter
+  var sidebarText = (document.getElementById('search')?.value || '').toLowerCase();
+  if (sidebarText) {
+    resultChits = resultChits.filter(function(c) {
+      if (c.title && c.title.toLowerCase().includes(sidebarText)) return true;
+      if (c.note && c.note.toLowerCase().includes(sidebarText)) return true;
+      if (Array.isArray(c.tags) && c.tags.some(function(t) { return t.toLowerCase().includes(sidebarText); })) return true;
+      if (c.status && c.status.toLowerCase().includes(sidebarText)) return true;
+      if (Array.isArray(c.people) && c.people.some(function(p) { return p.toLowerCase().includes(sidebarText); })) return true;
+      if (c.location && c.location.toLowerCase().includes(sidebarText)) return true;
+      if (c.priority && c.priority.toLowerCase().includes(sidebarText)) return true;
+      return false;
+    });
+  }
+
+  if (resultChits.length === 0) {
+    container.innerHTML = '<div class="cwoc-empty" style="text-align:center;padding:2em 1em;opacity:0.7;"><p style="font-size:1.1em;">No results found.</p></div>';
+    return;
+  }
+
+  resultChits.forEach(function(chit) {
+    var card = document.createElement('div');
+    card.className = 'chit-card global-search-result-card';
+    card.dataset.chitId = chit.id;
+    applyChitColors(card, typeof chitColor === 'function' ? chitColor(chit) : '#fdf6e3');
+    if (chit.archived) card.classList.add('archived-chit');
+    card.style.cursor = 'pointer';
+
+    // Title row via _buildChitHeader
+    var titleHtml = highlightMatch(chit.title || '(Untitled)', q);
+    card.appendChild(_buildChitHeader(chit, titleHtml, viSettings));
+
+    // Matched fields with highlighted excerpts
+    var matchedFields = chit._matchedFields || [];
+    if (matchedFields.length > 0) {
+      var fieldsDiv = document.createElement('div');
+      fieldsDiv.className = 'global-search-matched-fields';
+
+      matchedFields.forEach(function(fieldName) {
+        var value = _getChitFieldValue(chit, fieldName);
+        if (!value) return;
+
+        var fieldRow = document.createElement('div');
+
+        var label = document.createElement('span');
+        label.textContent = fieldName + ':';
+        fieldRow.appendChild(label);
+
+        var excerpt = document.createElement('span');
+        // Truncate long values for display
+        var displayVal = value.length > 200 ? value.substring(0, 200) + '…' : value;
+        excerpt.innerHTML = highlightMatch(displayVal, q);
+        fieldRow.appendChild(excerpt);
+
+        fieldsDiv.appendChild(fieldRow);
+      });
+      card.appendChild(fieldsDiv);
+    }
+
+    // Click handler: navigate to editor
+    card.addEventListener('click', function() {
+      storePreviousState();
+      window.location.href = '/frontend/editor.html?id=' + chit.id;
+    });
+
+    container.appendChild(card);
+  });
+}
+
+/**
+ * Extract a displayable string value for a chit field by name.
+ */
+function _getChitFieldValue(chit, fieldName) {
+  switch (fieldName) {
+    case 'title': return chit.title || '';
+    case 'note': return chit.note || '';
+    case 'tags':
+      var tags = chit.tags || [];
+      return Array.isArray(tags) ? tags.join(', ') : String(tags);
+    case 'status': return chit.status || '';
+    case 'priority': return chit.priority || '';
+    case 'severity': return chit.severity || '';
+    case 'location': return chit.location || '';
+    case 'people':
+      var people = chit.people || [];
+      return Array.isArray(people) ? people.join(', ') : String(people);
+    case 'checklist':
+      var cl = chit.checklist || [];
+      if (Array.isArray(cl)) return cl.map(function(item) { return typeof item === 'object' ? (item.text || '') : String(item); }).join(', ');
+      return String(cl);
+    case 'color': return chit.color || '';
+    case 'start_datetime': return chit.start_datetime || '';
+    case 'end_datetime': return chit.end_datetime || '';
+    case 'due_datetime': return chit.due_datetime || '';
+    case 'created_datetime': return chit.created_datetime || '';
+    case 'modified_datetime': return chit.modified_datetime || '';
+    case 'alerts':
+      var alerts = chit.alerts || [];
+      if (Array.isArray(alerts)) return alerts.map(function(a) { return typeof a === 'object' ? (a.description || a.label || JSON.stringify(a)) : String(a); }).join(', ');
+      return String(alerts);
+    default: return chit[fieldName] != null ? String(chit[fieldName]) : '';
+  }
+}
+
+// ═══════════════ END GLOBAL SEARCH ═══════════════
+
 // ── Saved Searches ───────────────────────────────────────────────────────────
 function _saveSearch() {
   const search = document.getElementById('search')?.value?.trim();
@@ -4697,24 +5073,35 @@ function cancelEdit() {
   fetchChits();
 }
 
-// ── Tab overflow detection: switch to icon-only when labels don't fit ─────────
+// ── Tab overflow detection: show full labels or icon-only, never partial text ─
 function _checkTabOverflow() {
   var tabs = document.getElementById('cwoc-tabs');
   if (!tabs) return;
-  // Temporarily show labels to measure
+  var allTabs = Array.from(tabs.querySelectorAll('.tab'));
+  if (allTabs.length === 0) return;
+
+  // Reset to full labels
   tabs.classList.remove('icon-only');
-  // Check if tabs overflow their container
-  var overflow = tabs.scrollWidth > tabs.clientWidth + 2;
-  if (overflow) {
-    tabs.classList.add('icon-only');
+  allTabs.forEach(function(t) { t.style.paddingLeft = ''; t.style.paddingRight = ''; });
+  void tabs.offsetWidth; // force reflow
+
+  // Check if all tabs fit with full labels
+  if (tabs.scrollWidth <= tabs.clientWidth + 2) return;
+
+  // Try reducing padding gradually (keeps labels visible, just tighter)
+  for (var pad = 18; pad >= 8; pad -= 2) {
+    allTabs.forEach(function(t) { t.style.paddingLeft = pad + 'px'; t.style.paddingRight = pad + 'px'; });
+    void tabs.offsetWidth;
+    if (tabs.scrollWidth <= tabs.clientWidth + 2) return;
   }
+
+  // Still doesn't fit — hide labels entirely (icon-only)
+  tabs.classList.add('icon-only');
+  allTabs.forEach(function(t) { t.style.paddingLeft = ''; t.style.paddingRight = ''; });
 }
 
 document.addEventListener("DOMContentLoaded", function () {
   console.debug("DOM fully loaded, initializing...");
-
-  // Check tab overflow on load
-  _checkTabOverflow();
 
   // Initialize mobile sidebar overlay behavior (backdrop, resize handling)
   initMobileSidebar();
@@ -4734,6 +5121,8 @@ document.addEventListener("DOMContentLoaded", function () {
   if (!restored) {
     currentTab = "Calendar";
   }
+  // Ensure clear-filters button reflects restored filter state
+  _updateClearFiltersButton();
 
   // Hide Order on Calendar, show date nav + period
   const orderSection = document.getElementById('section-order');
@@ -4793,6 +5182,7 @@ document.addEventListener("DOMContentLoaded", function () {
     updateDateRange();
   });
   restoreSidebarState();
+  _checkTabOverflow();
   _startGlobalAlertSystem();
 
   const now = new Date();
@@ -4975,7 +5365,7 @@ document.addEventListener("DOMContentLoaded", function () {
         _toggleFilterArchived();
       } else if (keyLower === 'i') {
         _toggleFilterPinned();
-      } else if (keyLower === 'w') {
+      } else if (keyLower === 'd') {
         _filterFocusSearch();
       } else if (keyLower === 'e') {
         _enterFilterSub('people');
@@ -5106,7 +5496,7 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     // ── Top-level hotkeys ──
-    const tabMap = { c: 'Calendar', h: 'Checklists', a: 'Alarms', p: 'Projects', t: 'Tasks', n: 'Notes' };
+    const tabMap = { c: 'Calendar', h: 'Checklists', a: 'Alarms', p: 'Projects', t: 'Tasks', n: 'Notes', g: 'Search' };
     if (tabMap[keyLower]) {
       e.preventDefault();
       filterChits(tabMap[keyLower]);

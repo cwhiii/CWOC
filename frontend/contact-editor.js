@@ -837,30 +837,37 @@
         }
         if (!addr) { mapEl.style.display = 'none'; return; }
 
-        // Geocode with progressive fallback
-        var queries = [addr];
-        var noZip = addr.replace(/\s*\d{5}(-\d{4})?\s*$/, '').trim();
-        if (noZip && noZip !== addr) queries.push(noZip);
-        var parts = addr.split(',');
-        if (parts.length >= 2) queries.push(parts.slice(1).join(',').trim());
-        if (parts.length >= 3) queries.push(parts.slice(-2).join(',').trim());
-
+        // Geocode using shared function if available, otherwise use proxy
         var lat, lon, found = false;
-        for (var gi = 0; gi < queries.length; gi++) {
-            var q = queries[gi];
-            if (!q) continue;
+        if (typeof _geocodeAddress === 'function') {
             try {
-                var resp = await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q=' + encodeURIComponent(q), {
-                    headers: { 'User-Agent': 'CWOC-Weather/1.0' }
-                });
-                var data = await resp.json();
-                if (data && data.length > 0) {
-                    lat = parseFloat(data[0].lat);
-                    lon = parseFloat(data[0].lon);
-                    found = true;
-                    break;
-                }
-            } catch (e) { /* skip */ }
+                var coords = await _geocodeAddress(addr);
+                lat = coords.lat;
+                lon = coords.lon;
+                found = true;
+            } catch (e) { /* not found */ }
+        } else {
+            // Fallback: use backend proxy directly
+            var queries = [addr];
+            var noZip = addr.replace(/\s*\d{5}(-\d{4})?\s*$/, '').trim();
+            if (noZip && noZip !== addr) queries.push(noZip);
+            var parts = addr.split(',');
+            if (parts.length >= 2) queries.push(parts.slice(1).join(',').trim());
+            if (parts.length >= 3) queries.push(parts.slice(-2).join(',').trim());
+            for (var gi = 0; gi < queries.length; gi++) {
+                var q = queries[gi];
+                if (!q) continue;
+                try {
+                    var resp = await fetch('/api/geocode?q=' + encodeURIComponent(q));
+                    var data = await resp.json();
+                    if (data && data.results && data.results.length > 0) {
+                        lat = data.results[0].lat;
+                        lon = data.results[0].lon;
+                        found = true;
+                        break;
+                    }
+                } catch (e) { /* skip */ }
+            }
         }
         if (!found) { mapEl.style.display = 'none'; return; }
 

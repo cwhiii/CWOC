@@ -17,6 +17,10 @@ from pydantic import BaseModel
 from uuid import uuid4
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, StreamingResponse
+import urllib.request
+import urllib.parse
+import urllib.error
+import time
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -29,6 +33,22 @@ logger = logging.getLogger(__name__)
 
 # FastAPI app
 app = FastAPI()
+
+# ── No-cache middleware for frontend/static files ─────────────────────────
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request as StarletteRequest
+
+class NoCacheStaticMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: StarletteRequest, call_next):
+        response = await call_next(request)
+        path = request.url.path
+        if path.startswith("/frontend/") or path.startswith("/static/"):
+            response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
+        return response
+
+app.add_middleware(NoCacheStaticMiddleware)
 
 # Database path
 DB_PATH = "/app/data/app.db"
@@ -324,15 +344,11 @@ def update_version_info(version, installed_datetime):
             conn.close()
 
 def seed_version_info():
-    """At startup, seed version + installed_datetime if not already present."""
+    """At startup, always sync version from /app/VERSION into the database."""
     conn = None
     try:
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
-        cursor.execute("SELECT value FROM instance_meta WHERE key = 'version'")
-        row = cursor.fetchone()
-        if row:
-            return  # Already seeded
         # Read version from /app/VERSION
         version = "unknown"
         try:
@@ -343,12 +359,15 @@ def seed_version_info():
         except (FileNotFoundError, IOError):
             pass
         installed_datetime = datetime.utcnow().isoformat() + "Z"
+        # Upsert version
         cursor.execute(
-            "INSERT INTO instance_meta (key, value) VALUES ('version', ?)",
+            "INSERT INTO instance_meta (key, value) VALUES ('version', ?) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
             (version,)
         )
+        # Only set installed_datetime if it doesn't exist yet
         cursor.execute(
-            "INSERT INTO instance_meta (key, value) VALUES ('installed_datetime', ?)",
+            "INSERT OR IGNORE INTO instance_meta (key, value) VALUES ('installed_datetime', ?)",
             (installed_datetime,)
         )
         conn.commit()
@@ -1068,6 +1087,40 @@ os.makedirs(CONTACT_IMAGES_DIR, exist_ok=True)
 # Section 7: Static File Serving & Page Routes
 # ═══════════════════════════════════════════════════════════════════════════
 
+# ── Geocode Proxy (avoids CORS and rate-limit issues with Nominatim) ──────
+_geocode_cache = {}       # key (lowercase query) → {"lat": float, "lon": float, "ts": float}
+_geocode_last_req = 0.0   # timestamp of last Nominatim request (rate-limit to 1/sec)
+
+@app.get("/api/geocode")
+async def geocode_proxy(q: str = Query(..., min_length=1)):
+    key = q.lower().strip()
+    # Return cached result if < 24 hours old
+    if key in _geocode_cache and (time.time() - _geocode_cache[key]["ts"]) < 86400:
+        return {"results": [{"lat": _geocode_cache[key]["lat"], "lon": _geocode_cache[key]["lon"]}]}
+
+    global _geocode_last_req
+    # Rate-limit: wait if less than 1.1 seconds since last request
+    elapsed = time.time() - _geocode_last_req
+    if elapsed < 1.1:
+        await asyncio.sleep(1.1 - elapsed)
+
+    url = "https://nominatim.openstreetmap.org/search?format=json&limit=3&q=" + urllib.parse.quote(q)
+    req = urllib.request.Request(url, headers={"User-Agent": "CWOC-Weather/1.0"})
+    try:
+        _geocode_last_req = time.time()
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode())
+        if data and len(data) > 0:
+            lat = float(data[0]["lat"])
+            lon = float(data[0]["lon"])
+            _geocode_cache[key] = {"lat": lat, "lon": lon, "ts": time.time()}
+            return {"results": [{"lat": lat, "lon": lon}]}
+        return {"results": []}
+    except Exception as e:
+        logger.error(f"Geocode proxy error: {e}")
+        raise HTTPException(status_code=502, detail="Geocoding service unavailable")
+
+
 # Serve all files from /frontend/ (e.g., index.html, settings.html, editor.html)
 app.mount("/frontend", StaticFiles(directory="/app/frontend"), name="frontend")
 
@@ -1127,6 +1180,98 @@ def get_all_chits():
     finally:
         if conn:
             conn.close()
+
+
+@app.get("/api/chits/search")
+def search_chits(q: Optional[str] = Query(None)):
+    """Global search across all chit fields. Returns matching chits with matched field names."""
+    if not q or not q.strip():
+        return []
+
+    query_lower = q.strip().lower()
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM chits WHERE deleted = 0 OR deleted IS NULL")
+        results = []
+
+        for row in cursor.fetchall():
+            chit = dict(zip([col[0] for col in cursor.description], row))
+            # Deserialize JSON fields
+            chit["tags"] = deserialize_json_field(chit["tags"])
+            chit["checklist"] = deserialize_json_field(chit["checklist"])
+            chit["people"] = deserialize_json_field(chit["people"])
+            chit["child_chits"] = deserialize_json_field(chit.get("child_chits"))
+            chit["is_project_master"] = bool(chit.get("is_project_master"))
+            chit["all_day"] = bool(chit.get("all_day"))
+            chit["alerts"] = deserialize_json_field(chit.get("alerts"))
+            chit["recurrence_rule"] = deserialize_json_field(chit.get("recurrence_rule"))
+            chit["recurrence_exceptions"] = deserialize_json_field(chit.get("recurrence_exceptions"))
+
+            matched_fields = []
+
+            # Simple string fields
+            for field_name in [
+                "title", "note", "status", "priority", "severity",
+                "location", "color",
+                "start_datetime", "end_datetime", "due_datetime",
+                "created_datetime", "modified_datetime",
+            ]:
+                value = chit.get(field_name)
+                if value and query_lower in str(value).lower():
+                    matched_fields.append(field_name)
+
+            # Tags — check each tag name individually
+            tags = chit.get("tags")
+            if tags and isinstance(tags, list):
+                for tag in tags:
+                    if isinstance(tag, str) and query_lower in tag.lower():
+                        matched_fields.append("tags")
+                        break
+
+            # People — check each person individually
+            people = chit.get("people")
+            if people and isinstance(people, list):
+                for person in people:
+                    if isinstance(person, str) and query_lower in person.lower():
+                        matched_fields.append("people")
+                        break
+
+            # Checklist — check each item's text field
+            checklist = chit.get("checklist")
+            if checklist and isinstance(checklist, list):
+                for item in checklist:
+                    if isinstance(item, dict):
+                        item_text = item.get("text", "")
+                        if item_text and query_lower in str(item_text).lower():
+                            matched_fields.append("checklist")
+                            break
+
+            # Alerts — check each alert's description/label fields
+            alerts = chit.get("alerts")
+            if alerts and isinstance(alerts, list):
+                for alert in alerts:
+                    if isinstance(alert, dict):
+                        for alert_key in ["description", "label", "name", "type"]:
+                            alert_val = alert.get(alert_key, "")
+                            if alert_val and query_lower in str(alert_val).lower():
+                                matched_fields.append("alerts")
+                                break
+                        if "alerts" in matched_fields:
+                            break
+
+            if matched_fields:
+                results.append({"chit": chit, "matched_fields": matched_fields})
+
+        return results
+    except Exception as e:
+        logger.error(f"Error searching chits: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to search chits: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
 
 @app.post("/api/chits")
 def create_chit(chit: Chit):
