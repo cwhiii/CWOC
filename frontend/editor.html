@@ -139,19 +139,14 @@
                                     </div>
                                 </div>
 
-                                <!-- Repeat checkbox (inline with radio buttons) -->
+                                <!-- Repeat checkbox + options (all on one row) -->
                                 <div class="date-mode-row" id="repeatCheckboxRow" style="display:none;">
                                     <label class="date-mode-label" style="cursor:pointer;">
                                         <input type="checkbox" id="repeatEnabled" onchange="onRepeatToggle()" />
                                         🔁 Repeat
                                     </label>
-                                </div>
-
-                                <!-- Repeat options (hidden until checkbox checked) -->
-                                <div id="repeatOptionsBlock" style="display:none;" class="repeat-options-group">
-                                    <div class="date-mode-row">
-                                        <label class="date-mode-label">&nbsp;</label>
-                                        <div class="date-mode-fields" id="recurrenceFields">
+                                    <div class="date-mode-fields" id="repeatFieldsCell">
+                                        <span id="repeatOptionsInline" style="display:none;">
                                             <select id="recurrence" class="date-time" style="width:auto;" onchange="onRecurrenceChange()">
                                                 <option value="DAILY" selected>Daily</option>
                                                 <option value="WEEKLY">Weekly</option>
@@ -159,8 +154,22 @@
                                                 <option value="YEARLY">Yearly</option>
                                                 <option value="CUSTOM">Custom...</option>
                                             </select>
-                                            <!-- Custom row -->
-                                            <div id="recurrenceCustomRow" style="display:none;margin-top:4px;">
+                                            <label class="cwoc-inline-check cwoc-inline-label-sm" style="margin-left:8px;">
+                                                <input type="checkbox" id="recurrenceEndsNever" checked onchange="onRecurrenceEndsToggle()" /> Ends never
+                                            </label>
+                                            <span id="recurrenceEndsDateWrap" style="display:none;">
+                                                <input type="text" id="recurrenceUntil" class="date-time date-input" placeholder="End date" style="width:90px;" />
+                                            </span>
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <!-- Custom recurrence details (shown below when Custom is selected) -->
+                                <div id="repeatOptionsBlock" style="display:none;" class="repeat-options-group">
+                                    <div class="date-mode-row">
+                                        <label class="date-mode-label">&nbsp;</label>
+                                        <div class="date-mode-fields" id="recurrenceFields">
+                                            <div id="recurrenceCustomRow" style="display:none;">
                                                 <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">
                                                     <span style="font-size:0.85em;">Every</span>
                                                     <input type="number" id="recurrenceInterval" value="1" min="1" max="999" style="width:45px;" />
@@ -183,18 +192,6 @@
                                                     <label class="cwoc-inline-label-sm"><input type="checkbox" value="SA" /> Sa</label>
                                                 </div>
                                             </div>
-                                        </div>
-                                    </div>
-                                    <!-- Ends row -->
-                                    <div class="date-mode-row">
-                                        <label class="date-mode-label">&nbsp;</label>
-                                        <div class="date-mode-fields">
-                                            <label class="cwoc-inline-check cwoc-inline-label-sm">
-                                                <input type="checkbox" id="recurrenceEndsNever" checked onchange="onRecurrenceEndsToggle()" /> Ends never
-                                            </label>
-                                            <span id="recurrenceEndsDateWrap" style="display:none;">
-                                                <input type="text" id="recurrenceUntil" class="date-time date-input" placeholder="End date" style="width:90px;" />
-                                            </span>
                                         </div>
                                     </div>
                                 </div>
@@ -409,7 +406,6 @@
                                     <div class="active-tags-list-container" id="activeTagsListContainer"></div>
                                 </div>
                             </div>
-                            <button type="button" class="zone-button" onclick="navigateToSettings()" style="margin-top:8px;font-size:0.85em;padding:4px 10px;cursor:pointer;">Manage Tags</button>
                         </div>
                     </div>
 
@@ -731,12 +727,6 @@
                             <span class="zone-toggle-icon">🔽</span>
                         </div>
                         <div id="colorContent" class="zone-body">
-                            <button
-                                onclick="navigateToSettings()"
-                            >
-                                Manage Colors
-                            </button>
-
                             <div class="field">
                                 <label for="color">
                                     <span id="selected-color-name"
@@ -873,8 +863,8 @@
                         <button type="button" onclick="toggleModalNotesRender()" id="modal-render-toggle-btn"><i class="fas fa-eye"></i> Render</button>
                         <button type="button" onclick="copyNotesToClipboard(event, 'modal')" title="Copy"><i class="fas fa-clipboard"></i></button>
                         <button type="button" onclick="downloadNotes(event, 'modal')" title="Download"><i class="fas fa-download"></i></button>
-                        <button type="button" class="modal-discard-button" onclick="closeNotesModal(false)">Discard</button>
-                        <button type="button" onclick="closeNotesModal(true)">💾 Save &amp; Close</button>
+                        <button type="button" class="cancel" onclick="closeNotesModal(false)"><i class="fas fa-times"></i> Cancel</button>
+                        <button type="button" onclick="closeNotesModal(true)"><i class="fas fa-check"></i> Done</button>
                     </div>
                 </div>
                 <div class="modal-body" style="flex:1;overflow:auto;padding:0.5em 1em;">

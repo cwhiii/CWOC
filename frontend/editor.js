@@ -336,68 +336,22 @@ function toggleArchived() {
 
 function _showQRCode(e) {
   if (!chitId) { alert('Save the chit first to generate a QR code.'); return; }
-  const existing = document.getElementById('qr-modal-overlay');
+  // Toggle off if already open
+  var existing = document.getElementById('cwoc-qr-overlay');
   if (existing) { existing.remove(); return; }
 
-  const overlay = document.createElement('div');
-  overlay.id = 'qr-modal-overlay';
-  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:99999;display:flex;align-items:center;justify-content:center;';
-  overlay.addEventListener('click', (ev) => { if (ev.target === overlay) overlay.remove(); });
+  var isLink = e && e.shiftKey;
 
-  const modal = document.createElement('div');
-  modal.style.cssText = 'background:#fff8e1;border:2px solid #8b4513;border-radius:10px;padding:24px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,0.4);min-width:280px;max-width:90vw;';
-
-  const titleEl = document.createElement('div');
-  titleEl.style.cssText = 'font-weight:bold;margin-bottom:12px;color:#4a2c2a;';
-  modal.appendChild(titleEl);
-
-  const qrDiv = document.createElement('div');
-  qrDiv.id = 'qr-render-area';
-  modal.appendChild(qrDiv);
-
-  const infoDiv = document.createElement('div');
-  infoDiv.style.cssText = 'font-size:0.75em;opacity:0.6;margin-top:8px;word-break:break-all;max-width:320px;';
-  modal.appendChild(infoDiv);
-
-  // Toggle buttons
-  const toggleRow = document.createElement('div');
-  toggleRow.style.cssText = 'display:flex;gap:6px;margin-top:12px;justify-content:center;';
-  const btnStyle = 'padding:6px 12px;border:1px solid #6b4e31;border-radius:4px;cursor:pointer;font-family:inherit;font-size:0.85em;';
-  const dataBtn = document.createElement('button');
-  dataBtn.style.cssText = btnStyle + 'background:#d4c5a9;font-weight:bold;';
-  dataBtn.textContent = '📦 Data QR';
-  dataBtn.title = 'QR contains chit data for import on another instance';
-  const linkBtn = document.createElement('button');
-  linkBtn.style.cssText = btnStyle + 'background:#fdf5e6;';
-  linkBtn.textContent = '🔗 Link QR';
-  linkBtn.title = 'QR contains a URL link to this chit';
-  toggleRow.appendChild(dataBtn);
-  toggleRow.appendChild(linkBtn);
-  modal.appendChild(toggleRow);
-
-  const closeHint = document.createElement('div');
-  closeHint.style.cssText = 'font-size:0.7em;opacity:0.35;margin-top:8px;';
-  closeHint.textContent = 'Click outside to close';
-  modal.appendChild(closeHint);
-
-  function renderQR(mode) {
-    dataBtn.style.background = mode === 'data' ? '#d4c5a9' : '#fdf5e6';
-    dataBtn.style.fontWeight = mode === 'data' ? 'bold' : 'normal';
-    linkBtn.style.background = mode === 'link' ? '#d4c5a9' : '#fdf5e6';
-    linkBtn.style.fontWeight = mode === 'link' ? 'bold' : 'normal';
+  function _showMode(mode) {
+    var existing2 = document.getElementById('cwoc-qr-overlay');
+    if (existing2) existing2.remove();
 
     if (mode === 'link') {
-      const url = `${window.location.origin}/frontend/editor.html?id=${chitId}`;
-      titleEl.textContent = '🔗 Link QR Code';
-      infoDiv.textContent = url;
-      if (typeof qrcode !== 'undefined') {
-        const qr = qrcode(0, 'M'); qr.addData(url); qr.make();
-        qrDiv.innerHTML = qr.createImgTag(5, 8);
-      } else { qrDiv.innerHTML = '<div style="padding:12px;opacity:0.6;">QR library not loaded.</div>'; }
+      var url = window.location.origin + '/frontend/editor.html?id=' + chitId;
+      var overlay = showQRModal({ title: '🔗 Link QR Code', data: url, info: url });
+      _addModeToggle(overlay, 'link');
     } else {
-      titleEl.textContent = '📦 Data QR Code';
-      // Build compact chit data payload with instance ID
-      const chitData = {
+      var chitData = {
         _cwoc: window._instanceId || 'unknown',
         id: chitId,
         title: document.getElementById('title')?.value || '',
@@ -409,36 +363,45 @@ function _showQRCode(e) {
         start: document.getElementById('start_datetime')?.value || '',
         end: document.getElementById('end_datetime')?.value || '',
       };
-      const json = JSON.stringify(chitData);
-      infoDiv.textContent = `${json.length} chars encoded (instance: ${chitData._cwoc.slice(0,8)}…)`;
-      if (typeof qrcode !== 'undefined') {
-        // Use higher error correction for larger data
-        const ecl = json.length > 500 ? 'L' : 'M';
-        try {
-          const qr = qrcode(0, ecl); qr.addData(json); qr.make();
-          qrDiv.innerHTML = qr.createImgTag(4, 6);
-        } catch (err) {
-          qrDiv.innerHTML = '<div style="padding:12px;color:#a33;font-size:0.85em;">Chit data too large for QR code. Try reducing the note length.</div>';
-        }
-      } else { qrDiv.innerHTML = '<div style="padding:12px;opacity:0.6;">QR library not loaded.</div>'; }
+      var json = JSON.stringify(chitData);
+      var overlay = showQRModal({
+        title: '📦 Data QR Code',
+        data: json,
+        ecl: json.length > 500 ? 'L' : 'M',
+        info: json.length + ' chars encoded',
+      });
+      _addModeToggle(overlay, 'data');
     }
   }
 
-  dataBtn.addEventListener('click', () => renderQR('data'));
-  linkBtn.addEventListener('click', () => renderQR('link'));
+  function _addModeToggle(overlay, activeMode) {
+    var modal = overlay.querySelector('div > div'); // the inner modal div
+    if (!modal) return;
+    var closeBtn = modal.querySelector('button');
+    var toggleRow = document.createElement('div');
+    toggleRow.style.cssText = 'display:flex;gap:6px;margin-top:8px;justify-content:center;';
+    var btnStyle = 'padding:6px 12px;border:1px solid #6b4e31;border-radius:4px;cursor:pointer;font-family:inherit;font-size:0.85em;flex:1;';
+    var dataBtn = document.createElement('button');
+    dataBtn.style.cssText = btnStyle + (activeMode === 'data' ? 'background:#d4c5a9;font-weight:bold;' : 'background:#fdf5e6;');
+    dataBtn.textContent = '📦 Data';
+    dataBtn.addEventListener('click', function () { _showMode('data'); });
+    var linkBtn = document.createElement('button');
+    linkBtn.style.cssText = btnStyle + (activeMode === 'link' ? 'background:#d4c5a9;font-weight:bold;' : 'background:#fdf5e6;');
+    linkBtn.textContent = '🔗 Link';
+    linkBtn.addEventListener('click', function () { _showMode('link'); });
+    toggleRow.appendChild(dataBtn);
+    toggleRow.appendChild(linkBtn);
+    if (closeBtn) modal.insertBefore(toggleRow, closeBtn);
+    else modal.appendChild(toggleRow);
+  }
 
-  // Default: data QR. Shift+click on the button = link QR.
-  renderQR(e && e.shiftKey ? 'link' : 'data');
-
-  overlay.appendChild(modal);
-  document.body.appendChild(overlay);
+  _showMode(isLink ? 'link' : 'data');
 
   // Load instance ID if not cached
   if (!window._instanceId) {
-    fetch('/api/instance-id').then(r => r.ok ? r.json() : {}).then(d => {
+    fetch('/api/instance-id').then(function (r) { return r.ok ? r.json() : {}; }).then(function (d) {
       window._instanceId = d.instance_id || 'unknown';
-      if (dataBtn.style.fontWeight === 'bold') renderQR('data'); // re-render with real ID
-    }).catch(() => {});
+    }).catch(function () {});
   }
 }
 
@@ -520,6 +483,9 @@ function onDateModeChange() {
   if (notifyStartLabel) notifyStartLabel.style.display = (mode === 'startend') ? '' : 'none';
   if (notifyDueLabel) notifyDueLabel.style.display = (mode === 'due') ? '' : 'none';
 
+  // Update recurrence labels when date context changes
+  _updateRecurrenceLabels();
+
   if (!_dateModeSuppressUnsaved) setSaveButtonUnsaved();
 }
 
@@ -565,13 +531,52 @@ function _setDateMode(mode) {
 let _snapMinutes = 15; // default, loaded from settings
 
 // ── Recurrence picker ─────────────────────────────────────────────────────────
+
+/** Update recurrence dropdown labels based on the current date context */
+function _updateRecurrenceLabels() {
+  const sel = document.getElementById('recurrence');
+  if (!sel) return;
+
+  // Get the active date for context
+  const mode = document.querySelector('input[name="dateMode"]:checked')?.value || 'none';
+  let refDate = null;
+  if (mode === 'startend') {
+    const v = document.getElementById('start_datetime')?.value;
+    if (v) refDate = new Date(convertMonthFormat(v) + 'T12:00:00');
+  } else if (mode === 'due') {
+    const v = document.getElementById('due_datetime')?.value;
+    if (v) refDate = new Date(convertMonthFormat(v) + 'T12:00:00');
+  }
+  if (!refDate || isNaN(refDate.getTime())) refDate = new Date();
+
+  const dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const dayName = dayNames[refDate.getDay()];
+  const monthName = monthNames[refDate.getMonth()];
+  const dayOfMonth = refDate.getDate();
+  const ordinal = dayOfMonth === 1 || dayOfMonth === 21 || dayOfMonth === 31 ? 'st' : dayOfMonth === 2 || dayOfMonth === 22 ? 'nd' : dayOfMonth === 3 || dayOfMonth === 23 ? 'rd' : 'th';
+
+  Array.from(sel.options).forEach(opt => {
+    switch (opt.value) {
+      case 'DAILY': opt.textContent = 'Daily'; break;
+      case 'WEEKLY': opt.textContent = 'Weekly on ' + dayName; break;
+      case 'MONTHLY': opt.textContent = 'Monthly on the ' + dayOfMonth + ordinal; break;
+      case 'YEARLY': opt.textContent = 'Yearly on ' + monthName + ' ' + dayOfMonth + ordinal; break;
+      case 'CUSTOM': opt.textContent = 'Custom…'; break;
+    }
+  });
+}
+
 function onRecurrenceChange() {
   const sel = document.getElementById('recurrence');
   const customRow = document.getElementById('recurrenceCustomRow');
+  const block = document.getElementById('repeatOptionsBlock');
   const icon = document.getElementById('recurrenceIcon');
 
   const isCustom = sel && sel.value === 'CUSTOM';
   if (customRow) customRow.style.display = isCustom ? '' : 'none';
+  // Show/hide the custom details block
+  if (block) block.style.display = isCustom ? 'table-row-group' : 'none';
   const intervalEl = document.getElementById('recurrenceInterval');
   const freqEl = document.getElementById('recurrenceFreq');
   if (intervalEl) intervalEl.style.display = isCustom ? '' : 'none';
@@ -586,10 +591,18 @@ function onRecurrenceChange() {
 /** Toggle repeat options visibility */
 function onRepeatToggle() {
   const cb = document.getElementById('repeatEnabled');
+  const inlineOpts = document.getElementById('repeatOptionsInline');
   const block = document.getElementById('repeatOptionsBlock');
   const icon = document.getElementById('recurrenceIcon');
-  if (block) block.style.display = cb && cb.checked ? 'table-row-group' : 'none';
-  if (icon) icon.style.display = cb && cb.checked ? '' : 'none';
+  const isChecked = cb && cb.checked;
+  // Show/hide the inline dropdown + ends-never
+  if (inlineOpts) inlineOpts.style.display = isChecked ? 'inline' : 'none';
+  // Update labels based on current date
+  if (isChecked) _updateRecurrenceLabels();
+  // Show/hide the custom details block (only if Custom is selected)
+  const sel = document.getElementById('recurrence');
+  if (block) block.style.display = (isChecked && sel && sel.value === 'CUSTOM') ? 'table-row-group' : 'none';
+  if (icon) icon.style.display = isChecked ? '' : 'none';
   setSaveButtonUnsaved();
 }
 
@@ -967,7 +980,7 @@ function _renderTags(tags, selectedTags = []) {
     favContainer.innerHTML = "";
     tags.filter(t => t.favorite).forEach(tag => {
       const chip = document.createElement("span");
-      chip.style.cssText = `display:inline-block;padding:2px 8px;border-radius:4px;font-size:0.8em;cursor:pointer;margin:1px;background:${tag.color || getPastelColor(tag.name)};color:#000;${selectedTags.includes(tag.name) ? 'outline:2px solid #8b5a2b;' : ''}`;
+      chip.style.cssText = `display:inline-block;padding:2px 8px;border-radius:4px;font-size:0.8em;cursor:pointer;margin:1px;background:${tag.color || getPastelColor(tag.name)};color:${tag.fontColor || '#2b1e0f'};${selectedTags.includes(tag.name) ? 'outline:2px solid #8b5a2b;' : ''}`;
       chip.textContent = "";
       const star = document.createElement('span');
       star.textContent = '★';
@@ -994,7 +1007,7 @@ function _renderTags(tags, selectedTags = []) {
       const tag = tags.find(t => t.name === path);
       if (!tag) return;
       const chip = document.createElement("span");
-      chip.style.cssText = `display:inline-block;padding:2px 8px;border-radius:4px;font-size:0.8em;cursor:pointer;margin:1px;background:${tag.color || getPastelColor(tag.name)};color:#000;${selectedTags.includes(tag.name) ? 'outline:2px solid #8b5a2b;' : ''}`;
+      chip.style.cssText = `display:inline-block;padding:2px 8px;border-radius:4px;font-size:0.8em;cursor:pointer;margin:1px;background:${tag.color || getPastelColor(tag.name)};color:${tag.fontColor || '#2b1e0f'};${selectedTags.includes(tag.name) ? 'outline:2px solid #8b5a2b;' : ''}`;
       chip.textContent = tag.name.split('/').pop();
       chip.title = tag.name;
       chip.addEventListener("click", () => {
@@ -1013,7 +1026,8 @@ function _renderTags(tags, selectedTags = []) {
   selectedTags.filter(t => !isSystemTag(t)).forEach(tagName => {
     const tag = tags.find(t => t.name === tagName) || { name: tagName, color: null };
     const chip = document.createElement("span");
-    chip.style.cssText = `display:inline-flex;align-items:center;gap:4px;background:${tag.color || getPastelColor(tag.name)};color:#000;padding:2px 8px;border-radius:4px;font-size:0.9em;margin:2px;`;
+    const chipFg = tag.fontColor || '#2b1e0f';
+    chip.style.cssText = `display:inline-flex;align-items:center;gap:4px;background:${tag.color || getPastelColor(tag.name)};color:${chipFg};padding:2px 8px;border-radius:4px;font-size:0.9em;margin:2px;`;
     chip.textContent = tag.name;
 
     const removeBtn = document.createElement("button");
@@ -3026,6 +3040,10 @@ async function loadChitData(chitId) {
 
     markEditorSaved();
 
+    // Re-mark saved after a delay to catch late-firing input events (Flatpickr, autoGrow, etc.)
+    setTimeout(() => markEditorSaved(), 200);
+    setTimeout(() => markEditorSaved(), 500);
+
     // Show instance editing banner if editing a single recurrence instance
     if (window._editingInstance && chit.recurrence_rule) {
       _showInstanceBanner(window._editingInstance);
@@ -3491,9 +3509,9 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   };
 
-  initializeFlatpickr("#start_datetime", { dateFormat: "Y-M-d" });
+  initializeFlatpickr("#start_datetime", { dateFormat: "Y-M-d", onChange: function() { _updateRecurrenceLabels(); } });
   initializeFlatpickr("#end_datetime", { dateFormat: "Y-M-d" });
-  initializeFlatpickr("#due_datetime", { dateFormat: "Y-M-d" });
+  initializeFlatpickr("#due_datetime", { dateFormat: "Y-M-d", onChange: function() { _updateRecurrenceLabels(); } });
   initializeFlatpickr("#recurrenceUntil", { dateFormat: "Y-M-d" });
 
   // Recurrence freq change shows/hides day checkboxes
@@ -3511,7 +3529,12 @@ document.addEventListener("DOMContentLoaded", function () {
 
   // Conditionally load chit data or reset for new chit
   if (chitId && !window.isNewChit) {
-    loadChitData(chitId);
+    loadChitData(chitId).then(() => {
+      // Clear loading guard after data is fully loaded
+      setTimeout(() => { window._cwocEditorLoading = false; }, 600);
+    }).catch(() => {
+      window._cwocEditorLoading = false;
+    });
   } else {
     resetEditorForNewChit();
 
@@ -3558,6 +3581,8 @@ document.addEventListener("DOMContentLoaded", function () {
         toggleAllDay();
       }
     }
+    // Clear loading guard for new chits
+    setTimeout(() => { window._cwocEditorLoading = false; }, 300);
   }
 
   setInterval(_checkNotifications, 60000);
@@ -3617,8 +3642,12 @@ document.addEventListener("DOMContentLoaded", function () {
   setSaveButtonSaved();
 
   // Attach input change listeners to mark editor unsaved on any change
+  // Use a guard flag to suppress during initial load
+  window._cwocEditorLoading = true;
   document.querySelectorAll("input, textarea, select").forEach((input) => {
-    input.addEventListener("input", () => setSaveButtonUnsaved());
+    input.addEventListener("input", () => {
+      if (!window._cwocEditorLoading) setSaveButtonUnsaved();
+    });
   });
 
   // ESC key — layered escape chain:
@@ -3628,7 +3657,7 @@ document.addEventListener("DOMContentLoaded", function () {
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
       // Layer 0: Close QR modal first if open
-      const qrModal = document.getElementById('qr-modal-overlay');
+      const qrModal = document.getElementById('cwoc-qr-overlay');
       if (qrModal) { qrModal.remove(); return; }
 
       // Layer 0b: Close delete modal if open

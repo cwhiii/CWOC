@@ -76,6 +76,9 @@
 
     // ── Init on DOM ready ───────────────────────────────────────────────
     document.addEventListener('DOMContentLoaded', function () {
+        // Initialize mobile actions modal (shared header button pattern)
+        if (typeof initMobileActionsModal === 'function') initMobileActionsModal();
+
         _initSaveSystem();
         _initHotkeys();
         _initColorPicker();
@@ -129,9 +132,9 @@
             e.stopImmediatePropagation();
             return;
         }
-        var qrModal = document.getElementById('qr-modal');
-        if (qrModal && qrModal.style.display === 'flex') {
-            qrModal.style.display = 'none';
+        var qrOverlay = document.getElementById('cwoc-qr-overlay');
+        if (qrOverlay) {
+            qrOverlay.remove();
             e.stopImmediatePropagation();
             return;
         }
@@ -795,21 +798,15 @@
         data.id = _contactId;
         data.display_name = [data.prefix, data.given_name, data.middle_names, data.surname, data.suffix]
             .filter(function (p) { return p; }).join(' ');
-        showContactQrCode(data, 'qr-modal', 'qr-modal-title', 'qr-canvas');
+        showContactQrCode(data);
     };
 
     window.closeQrModal = function () {
-        var modal = document.getElementById('qr-modal');
-        if (modal) modal.style.display = 'none';
+        var modal = document.getElementById('cwoc-qr-overlay');
+        if (modal) modal.remove();
     };
 
-    // Close QR modal on backdrop click
-    var qrModal = document.getElementById('qr-modal');
-    if (qrModal) {
-        qrModal.addEventListener('click', function (e) {
-            if (e.target.id === 'qr-modal') e.target.style.display = 'none';
-        });
-    }
+    // QR modal backdrop — handled by shared showQRModal()
 
     // ── Expose state getters ────────────────────────────────────────────
     window._contactEditorState = {

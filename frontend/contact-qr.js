@@ -122,20 +122,12 @@ var _QR_MAX_BYTES = 2953;
  * Show a QR code for a contact in a modal overlay.
  * @param {Object} contact — contact object from the API
  * @param {string} [modalId='qr-modal'] — modal element ID
- * @param {string} [titleId='qr-modal-title'] — title element ID
- * @param {string} [canvasId='qr-canvas'] — canvas/container element ID
+/**
+ * Show a QR code for a contact using the shared showQRModal.
+ * @param {Object} contact — contact object from the API
  */
-function showContactQrCode(contact, modalId, titleId, canvasId) {
-    modalId = modalId || 'qr-modal';
-    titleId = titleId || 'qr-modal-title';
-    canvasId = canvasId || 'qr-canvas';
-
-    var modal = document.getElementById(modalId);
-    var titleEl = document.getElementById(titleId);
-    var canvasEl = document.getElementById(canvasId);
-
+function showContactQrCode(contact) {
     var name = contact.display_name || contact.given_name || 'Contact';
-    titleEl.textContent = 'Share: ' + name;
 
     // Generate vCard string
     var vcardStr = generateContactVCard(contact);
@@ -144,36 +136,26 @@ function showContactQrCode(contact, modalId, titleId, canvasId) {
     var byteLength = new Blob([vcardStr]).size;
 
     if (byteLength > _QR_MAX_BYTES) {
-        canvasEl.innerHTML =
-            '<p style="color:#8b5a2b; font-family: Courier New, monospace; padding: 10px;">' +
-            '⚠️ This contact has too much data for a single QR code (' +
-            byteLength + ' bytes, max ~' + _QR_MAX_BYTES + ').<br><br>' +
-            'Please use <strong>Export</strong> to share as a .vcf file instead.</p>';
-        modal.style.display = 'flex';
+        // Too large — show error via the shared modal
+        if (typeof showQRModal === 'function') {
+            var overlay = showQRModal({
+                title: 'Share: ' + name,
+                data: 'TOO_LARGE', // will fail gracefully
+                info: 'Contact data too large for QR (' + byteLength + ' bytes). Use Export instead.',
+            });
+        } else {
+            alert('Contact data too large for QR code. Use Export instead.');
+        }
         return;
     }
 
-    // Generate QR code using qrcode-generator library
-    // typeNumber 0 = auto-detect, 'L' = lowest error correction for max capacity
-    try {
-        var qr = qrcode(0, 'L');
-        qr.addData(vcardStr);
-        qr.make();
-
-        // Calculate cell size to fit modal (max-width 350px, with 40px padding)
-        var moduleCount = qr.getModuleCount();
-        var availableSize = 280; // 350 - 40px padding - some margin
-        var cellSize = Math.max(2, Math.floor(availableSize / moduleCount));
-        var margin = 4;
-
-        canvasEl.innerHTML = qr.createImgTag(cellSize, margin);
-    } catch (err) {
-        console.error('QR code generation failed:', err);
-        canvasEl.innerHTML =
-            '<p style="color:#8b5a2b; font-family: Courier New, monospace; padding: 10px;">' +
-            '⚠️ Failed to generate QR code. The contact data may be too large.<br><br>' +
-            'Please use <strong>Export</strong> to share as a .vcf file instead.</p>';
+    // Use the shared QR modal
+    if (typeof showQRModal === 'function') {
+        showQRModal({
+            title: 'Share: ' + name,
+            data: vcardStr,
+            ecl: 'L',
+            info: name + ' — vCard (' + byteLength + ' bytes)',
+        });
     }
-
-    modal.style.display = 'flex';
 }

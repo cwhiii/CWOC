@@ -342,15 +342,14 @@
         </div>
         <div class="main-content">
             <div class="header">
-                <div class="logo-wrap" onclick="toggleSidebar()">
-                    <img
-                        src="/static/cwod_logo.png"
-                        alt="C.W.'s Omni Chits Logo -- CLICK TO TOGGLE SIDEBAR."
-                        title="C.W.'s Omni Chits -- CLICK TO TOGGLE SIDEBAR."
-                        class="logo"
-                    />
-                    <span class="logo-hamburger">☰</span>
-                </div>
+                <button class="mobile-hamburger" onclick="toggleSidebar()" aria-label="Toggle sidebar">☰</button>
+                <img
+                    src="/static/cwod_logo.png"
+                    alt="C.W.'s Omni Chits Logo"
+                    title="C.W.'s Omni Chits — Click to toggle sidebar"
+                    class="logo"
+                    onclick="toggleSidebar()"
+                />
                 <h1 title="C.W.'s Omni Chits">Omni Chits</h1>
 
                 <div class="tabs">

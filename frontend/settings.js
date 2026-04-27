@@ -603,12 +603,32 @@ function addTag() {
 
 let currentTag = null;
 
+// Default tag color palette — warm parchment-themed, high contrast
+var _tagColorPalette = [
+  { bg: '#8b5a2b', fg: '#fff8e1' },  // Dark brown / cream
+  { bg: '#a0522d', fg: '#fff8e1' },  // Sienna / cream
+  { bg: '#4a2c2a', fg: '#fdf5e6' },  // Deep brown / parchment
+  { bg: '#6b4e31', fg: '#fff8e1' },  // Medium brown / cream
+  { bg: '#b22222', fg: '#fff8e1' },  // Firebrick / cream
+  { bg: '#8b0000', fg: '#fdf5e6' },  // Dark red / parchment
+  { bg: '#2e4057', fg: '#fdf5e6' },  // Navy / parchment
+  { bg: '#1b4332', fg: '#e8dcc8' },  // Forest green / tan
+  { bg: '#5c4033', fg: '#faebd7' },  // Coffee / antique white
+  { bg: '#d4af37', fg: '#2b1e0f' },  // Gold / dark brown
+  { bg: '#c4a484', fg: '#2b1e0f' },  // Tan / dark brown
+  { bg: '#e8dcc8', fg: '#4a2c2a' },  // Light parchment / dark brown
+  { bg: '#d2b48c', fg: '#2b1e0f' },  // Burlywood / dark brown
+  { bg: '#f5e6cc', fg: '#4a2c2a' },  // Cream / dark brown
+  { bg: '#fff8e1', fg: '#4a2c2a' },  // Light cream / dark brown
+];
+
 function openTagModal(tag) {
   currentTag = tag;
   const modal = document.getElementById("tag-modal");
   const tagNameInput = document.getElementById("tag-name");
   const colorInput = document.getElementById("tag-color");
-  const colorOptions = document.getElementById("tag-color-options");
+  const fontColorInput = document.getElementById("tag-font-color");
+  const preview = document.getElementById("tag-preview");
 
   // Show the tag's actual name (text content minus the ✕ button)
   const rawText = tag.childNodes[0]?.textContent?.trim() || tag.dataset.color || "";
@@ -616,19 +636,101 @@ function openTagModal(tag) {
   tagNameInput.disabled = false;
 
   colorInput.value = tag.dataset.color || "#8b5a2b";
+  fontColorInput.value = tag.dataset.fontColor || "#2b1e0f";
 
-  if (colorOptions) colorOptions.innerHTML = "";
+  // Live preview updater
+  function _updateTagPreview() {
+    if (preview) {
+      preview.style.backgroundColor = colorInput.value;
+      preview.style.color = fontColorInput.value;
+      preview.textContent = tagNameInput.value || 'Preview';
+    }
+  }
 
-  // Live preview: when color changes, update the tag swatch immediately
-  colorInput.onchange = function () {
-    currentTag.dataset.color = this.value;
-    currentTag.style.backgroundColor = this.value;
-    setSaveButtonUnsaved();
-  };
+  // Build background color swatches: palette + all existing tag colors
+  var bgSwatches = document.getElementById('tag-color-swatches');
+  if (bgSwatches) {
+    bgSwatches.innerHTML = '';
+    var seenBg = new Set();
+    // Palette colors
+    _tagColorPalette.forEach(function (c) {
+      if (seenBg.has(c.bg)) return;
+      seenBg.add(c.bg);
+      var s = document.createElement('span');
+      s.style.cssText = 'width:24px;height:24px;border-radius:50%;cursor:pointer;border:2px solid transparent;display:inline-block;';
+      s.style.backgroundColor = c.bg;
+      s.title = c.bg;
+      if (c.bg === colorInput.value) s.style.borderColor = '#4a2c2a';
+      s.addEventListener('click', function () {
+        colorInput.value = c.bg;
+        fontColorInput.value = c.fg;
+        _updateTagPreview();
+        _highlightSwatches();
+        setSaveButtonUnsaved();
+      });
+      bgSwatches.appendChild(s);
+    });
+    // Existing tag colors
+    document.querySelectorAll('#tag-editor-hidden .tag').forEach(function (t) {
+      var c = t.dataset.color;
+      if (c && !seenBg.has(c)) {
+        seenBg.add(c);
+        var s = document.createElement('span');
+        s.style.cssText = 'width:24px;height:24px;border-radius:50%;cursor:pointer;border:2px solid transparent;display:inline-block;';
+        s.style.backgroundColor = c;
+        s.title = c;
+        if (c === colorInput.value) s.style.borderColor = '#4a2c2a';
+        s.addEventListener('click', function () {
+          colorInput.value = c;
+          _updateTagPreview();
+          _highlightSwatches();
+          setSaveButtonUnsaved();
+        });
+        bgSwatches.appendChild(s);
+      }
+    });
+  }
 
-  colorInput.onclick = function () {
-    this.showPicker();
-  };
+  // Build font color swatches
+  var fgSwatches = document.getElementById('tag-font-color-swatches');
+  if (fgSwatches) {
+    fgSwatches.innerHTML = '';
+    var fgColors = ['#2b1e0f', '#4a2c2a', '#fff8e1', '#fdf5e6', '#faebd7', '#e8dcc8', '#000000', '#ffffff'];
+    fgColors.forEach(function (c) {
+      var s = document.createElement('span');
+      s.style.cssText = 'width:24px;height:24px;border-radius:50%;cursor:pointer;border:2px solid ' + (c === '#ffffff' || c === '#fff8e1' || c === '#fdf5e6' || c === '#faebd7' || c === '#e8dcc8' ? '#8b5a2b' : 'transparent') + ';display:inline-block;';
+      s.style.backgroundColor = c;
+      s.title = c;
+      if (c === fontColorInput.value) s.style.borderColor = '#4a2c2a';
+      s.addEventListener('click', function () {
+        fontColorInput.value = c;
+        _updateTagPreview();
+        _highlightFgSwatches();
+        setSaveButtonUnsaved();
+      });
+      fgSwatches.appendChild(s);
+    });
+  }
+
+  function _highlightSwatches() {
+    if (bgSwatches) bgSwatches.querySelectorAll('span').forEach(function (s) {
+      s.style.borderColor = s.title === colorInput.value ? '#4a2c2a' : 'transparent';
+    });
+  }
+  function _highlightFgSwatches() {
+    if (fgSwatches) fgSwatches.querySelectorAll('span').forEach(function (s) {
+      s.style.borderColor = s.title === fontColorInput.value ? '#4a2c2a' : (
+        ['#ffffff','#fff8e1','#fdf5e6','#faebd7','#e8dcc8'].includes(s.title) ? '#8b5a2b' : 'transparent'
+      );
+    });
+  }
+
+  // Live preview on color picker change
+  colorInput.onchange = function () { _updateTagPreview(); _highlightSwatches(); setSaveButtonUnsaved(); };
+  colorInput.oninput = function () { _updateTagPreview(); };
+  fontColorInput.onchange = function () { _updateTagPreview(); _highlightFgSwatches(); setSaveButtonUnsaved(); };
+  fontColorInput.oninput = function () { _updateTagPreview(); };
+  tagNameInput.oninput = function () { _updateTagPreview(); };
 
   const favStar = document.getElementById('tag-favorite-star');
   if (favStar) {
@@ -638,6 +740,7 @@ function openTagModal(tag) {
     favStar.title = isFav ? 'Unfavorite this Tag' : 'Favorite this Tag';
   }
 
+  _updateTagPreview();
   modal.style.display = "flex";
 }
 
@@ -656,8 +759,10 @@ function saveTag() {
 
   const tagNameInput = document.getElementById("tag-name");
   const colorInput = document.getElementById("tag-color");
+  const fontColorInput = document.getElementById("tag-font-color");
   const newName = tagNameInput.value.trim();
   const newColor = colorInput.value;
+  const newFontColor = fontColorInput ? fontColorInput.value : '#2b1e0f';
 
   if (!newName) {
     alert("Tag name cannot be empty.");
@@ -684,7 +789,9 @@ function saveTag() {
   }
 
   currentTag.dataset.color = newColor;
+  currentTag.dataset.fontColor = newFontColor;
   currentTag.style.backgroundColor = newColor;
+  currentTag.style.color = newFontColor;
   const favStar = document.getElementById('tag-favorite-star');
   currentTag.dataset.favorite = favStar && favStar.textContent === '★' ? 'true' : 'false';
   // Rebuild inner HTML safely
@@ -1110,8 +1217,10 @@ class SettingsManager {
       const tagDiv = document.createElement("div");
       tagDiv.className = "tag";
       tagDiv.dataset.color = tag.color || "#8b5a2b";
+      tagDiv.dataset.fontColor = tag.fontColor || "#2b1e0f";
       tagDiv.dataset.favorite = tag.favorite ? 'true' : 'false';
       tagDiv.style.backgroundColor = tag.color || "#8b5a2b";
+      tagDiv.style.color = tag.fontColor || "#2b1e0f";
       tagDiv.innerHTML = `${tag.name} <button onclick="openDeleteModal(event, this.parentElement)">✕</button>`;
       tagDiv.onclick = function (e) {
         if (e.target !== this && e.target.tagName === "BUTTON") return;
@@ -1166,6 +1275,7 @@ class SettingsManager {
       ).map((tag) => ({
         name: (tag.childNodes[0]?.textContent || "").trim(),
         color: tag.dataset.color || "#8b5a2b",
+        fontColor: tag.dataset.fontColor || "#2b1e0f",
         favorite: tag.dataset.favorite === 'true',
       })).filter((t) => t.name),
       custom_colors: Array.from(document.querySelectorAll(".color-item")).map(
@@ -1263,6 +1373,9 @@ function monitorChanges() {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+  // Initialize mobile actions modal (shared header button pattern)
+  if (typeof initMobileActionsModal === 'function') initMobileActionsModal();
+
   window._cwocSave = new CwocSaveSystem({
     singleBtnId: 'save-single-btn',
     stayBtnId: 'save-stay-btn',
@@ -1275,6 +1388,13 @@ document.addEventListener("DOMContentLoaded", () => {
     },
   });
   window.settingsManager = new SettingsManager();
+  loadVersionInfo();
+
+  // Wire upgrade button and close button for update modal
+  document.getElementById('upgrade-btn').addEventListener('click', startUpgrade);
+  document.getElementById('update-close-btn').addEventListener('click', function() {
+    document.getElementById('update-modal').style.display = 'none';
+  });
 });
 
 
@@ -1368,4 +1488,118 @@ function _parseCSVLine(line) {
   }
   result.push(current);
   return result;
+}
+
+// ── Version Info ─────────────────────────────────────────────────────────────
+
+let _updateEventSource = null;
+
+async function loadVersionInfo() {
+  const versionEl = document.getElementById('version-display');
+  const dateEl = document.getElementById('version-date');
+  try {
+    const res = await fetch('/api/version');
+    if (!res.ok) throw new Error('Failed to fetch version');
+    const data = await res.json();
+    if (data.version === 'unknown' || !data.installed_datetime) {
+      versionEl.textContent = 'No version info available';
+      dateEl.textContent = '';
+      return;
+    }
+    versionEl.textContent = data.version;
+    const dt = new Date(data.installed_datetime);
+    const timeFormat = typeof _globalTimeFormat !== 'undefined' ? _globalTimeFormat : '24hour';
+    const opts = { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' };
+    if (timeFormat === '12hour') {
+      opts.hour12 = true;
+    } else {
+      opts.hour12 = false;
+    }
+    dateEl.textContent = dt.toLocaleString(undefined, opts);
+  } catch (e) {
+    console.error('Error loading version info:', e);
+    versionEl.textContent = 'Unable to load version info';
+    dateEl.innerHTML = '<a href="#" onclick="loadVersionInfo(); return false;" style="color:#8b5a2b;">Retry</a>';
+  }
+}
+
+function startUpgrade() {
+  const btn = document.getElementById('upgrade-btn');
+  const modal = document.getElementById('update-modal');
+  const log = document.getElementById('update-log');
+  const closeBtn = document.getElementById('update-close-btn');
+
+  btn.disabled = true;
+  closeBtn.disabled = true;
+  log.innerHTML = '';
+  modal.style.display = 'flex';
+
+  _updateEventSource = new EventSource('/api/update/run');
+
+  _updateEventSource.onmessage = function(event) {
+    try {
+      const data = JSON.parse(event.data);
+      if (data.type === 'log') {
+        appendLogLine(data.line);
+      } else if (data.type === 'done') {
+        onUpgradeComplete(data);
+        _updateEventSource.close();
+        _updateEventSource = null;
+      } else if (data.type === 'error') {
+        appendLogLine('[ERROR] ' + data.message);
+        closeBtn.disabled = false;
+        btn.disabled = false;
+        _updateEventSource.close();
+        _updateEventSource = null;
+      }
+    } catch (e) {
+      // Malformed JSON — show raw text
+      appendLogLine(event.data);
+    }
+  };
+
+  _updateEventSource.onerror = function() {
+    appendLogLine('[ERROR] Connection lost');
+    closeBtn.disabled = false;
+    btn.disabled = false;
+    if (_updateEventSource) {
+      _updateEventSource.close();
+      _updateEventSource = null;
+    }
+  };
+}
+
+function appendLogLine(line) {
+  const log = document.getElementById('update-log');
+  const span = document.createElement('span');
+  span.style.display = 'block';
+
+  if (line.startsWith('[OK]')) {
+    span.className = 'log-ok';
+  } else if (line.startsWith('[WARN]')) {
+    span.className = 'log-warn';
+  } else if (line.startsWith('[ERROR]')) {
+    span.className = 'log-error';
+  } else if (line.startsWith('[STEP]')) {
+    span.className = 'log-step';
+  }
+
+  span.textContent = line;
+  log.appendChild(span);
+  log.scrollTop = log.scrollHeight;
+}
+
+function onUpgradeComplete(data) {
+  const btn = document.getElementById('upgrade-btn');
+  const closeBtn = document.getElementById('update-close-btn');
+
+  if (data.exit_code === 0) {
+    appendLogLine('[OK] Update complete! Version: ' + (data.version || 'unknown'));
+  } else {
+    appendLogLine('[ERROR] Update failed (exit code ' + data.exit_code + ')');
+  }
+
+  closeBtn.disabled = false;
+  btn.disabled = false;
+  loadVersionInfo();
 }

@@ -2512,6 +2512,9 @@ button.archive-btn.archived-active {
 .date-mode-row {
     display: table-row;
 }
+.repeat-options-group {
+    display: table-row-group;
+}
 .date-mode-label {
     display: table-cell;
     vertical-align: middle;
@@ -2901,27 +2904,38 @@ button.archive-btn.archived-active {
     .date-mode-group {
         display: flex;
         flex-direction: column;
-        gap: 8px;
+        gap: 6px;
     }
     .date-mode-row {
         display: flex;
-        flex-direction: column;
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: center;
         gap: 4px;
     }
     .date-mode-label {
-        display: flex;
-        width: 100%;
+        display: inline-flex;
+        width: auto;
+        flex-shrink: 0;
+        min-width: 80px;
     }
     .date-mode-fields {
-        display: flex !important;
+        display: inline-flex !important;
         flex-wrap: wrap !important;
         gap: 4px;
-        width: 100%;
+        flex: 1;
+        min-width: 0;
     }
     .date-mode-fields input,
     .date-mode-fields select {
         flex: 1 1 auto;
         min-width: 0;
+        max-width: 100%;
+    }
+    .repeat-options-group {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
     }
     .date-input {
         width: 100% !important;

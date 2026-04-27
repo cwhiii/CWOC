@@ -51,3 +51,5 @@ inclusion: always
 - Soft delete throughout — chits are never hard-deleted. Use the `deleted` flag and `deleted_datetime` column.
 
 when adding code, ensure youre doing so in an organized manner. Use the applicable section if there is one, and if not, make a new section. 
+
+Ensure there's no tasks that require installing software (no hypothisys!), or running the server here.

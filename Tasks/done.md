@@ -752,3 +752,93 @@ Fully implemented. Ported from `Prototypes/CWOC UI/UI.html`:
 - Projects: "Move to Project" dropdown — populated from data ✅
 - Chit Options: "Delete Past Alarm Chits" — wired up ✅
 - Recurrence / Repeating Chits — all 3 phases ✅
+
+
+---
+
+## Completed — Bug Fix & Feature Batch (2026-04-27/28)
+
+### Mobile UI Overhaul
+- Sidebar swipe gestures: swipe right from left edge to open, swipe left to close
+- Mobile hamburger ☰ button in dashboard header (left of logo, pushes title right)
+- Mobile ☰ Actions modal for editor/settings/contacts — shared `initMobileActionsModal()` in shared.js
+- Settings page now loads shared-editor.css + shared-editor.js for consistent header/button behavior
+- All 3 editor pages (chit, contact, settings) share identical mobile save/cancel pattern
+- Views panel slides in from right edge with swipe support (swipe left from right edge to open, swipe right to close)
+- Views button in header pushed to right edge via `margin-left: auto`
+- Reference overlay: `max-width: 100vw`, `overflow-x: hidden` to prevent wider-than-screen
+- Tab buttons shrink on tablet (`flex-shrink:1`, smaller padding/font)
+
+### QR Codes — Unified
+- Single `showQRModal()` function in shared.js for ALL QR display
+- Responsive sizing (calculates cell size from viewport), max-width 360px, 12px padding
+- Full-width close button (44px min-height touch target), ESC to close, backdrop click to close
+- Replaced ~150 lines of duplicated QR code across editor.js, shared.js (quick edit), and contact-qr.js
+- Removed old static `#qr-modal` HTML from people.html and contact-editor.html
+- Removed old closeQrModal handlers from people.js and contact-editor.js
+
+### Chit Editor Fixes
+- Cancel button fixed: added `.modal` + `.modal-content` CSS to shared-editor.css (was missing — unsaved-changes modal rendered invisibly)
+- Loading guard flag (`_cwocEditorLoading`) suppresses false unsaved marking during initial data load
+- Delayed `markEditorSaved()` calls (200ms, 500ms) catch late-firing Flatpickr/autoGrow events
+- ESC chain: fullscreen notes modal → inline note render → blur input → exit editor
+- Notes fullscreen "all red" text fixed (`color: red` → `color: var(--text-color)`)
+- Render button race condition fixed (blur handler skips when Render button is click target)
+- Expanded notes modal buttons: "Discard"/"Save & Close" → "✕ Cancel"/"✓ Done" with FA icons
+- New chit collapses all zones except the one matching the source view tab
+- "Manage Tags" and "Manage Colors" jump-to-settings buttons removed
+- "Normal" severity level added to editor dropdown and quick edit modal
+- Repeat row: dropdown + "Ends never" now inline with Repeat checkbox (same table row)
+- Repeat labels: dynamic context — "Weekly on Monday", "Monthly on the 12th", "Yearly on June 12th"
+- Custom recurrence details only shown when "Custom…" selected
+- Zone collapse/expand rewritten: uses `display:none` on content + toggle icon text update
+
+### Tag Editor (Settings)
+- Modal buttons: Done + Cancel side-by-side on left, Delete on right (normal size, one row)
+- Favorite star moved to top row, inline with tag name input
+- Font color picker added (swatches + color input)
+- Background color swatches: 15-color parchment-themed palette + all existing tag colors
+- Live preview shows tag name with both bg and font color
+- Tag name input: `box-sizing: border-box` fixes right-edge overflow
+- `fontColor` field added to Tag model (backend + frontend), flows through all rendering
+
+### Contacts
+- Suffix dropdown reordered: text suffixes (Jr., Sr., Esq., Ph.D., M.D.) before numeric (I–X)
+- Markdown notes field added (Notes zone in contact editor)
+- Tags field added (Tags zone, auto-prefixed with "Contact/")
+- Backend: `notes` and `tags` columns added to contacts table with migration
+- Contact editor hotkeys updated (Alt+7 Notes, Alt+8 Tags)
+
+### Dashboard Views
+- Alerts view: notify-at-start/due flags no longer count as alerts for view filtering
+- Projects view: ID deduplication prevents duplicate "new project" entries
+- Kanban mode: full implementation with List/Kanban toggle in sidebar
+- Kanban: cards draggable between status columns (updates status via API)
+- Kanban: grandchildren as sub-items within cards, draggable between parents
+- Kanban text readability: card font 1em, column headers 0.9em, grandchild 0.95em
+- Project child items: increased padding and min-height in list view
+- Chit card readability: `line-height: 1.5`, explicit `color: #2b1e0f`
+- Inline checklist items: larger padding, gap, min-height
+- Calendar column headers: removed month name (just "28 Mon"), month shown in sidebar range
+- Week range format includes month: "Apr 28 Mon — May 04 Sun"
+
+### Weather
+- Editor: cached weather shown immediately with ⏳ stale badge while refreshing in background
+- Dashboard: weather pre-loaded for default location on page load
+- Dashboard weather modal: shows cached data with ⏳ while refreshing
+
+### Shared Infrastructure
+- `showQRModal()` — single QR display function for entire app
+- `_openMobileActionsModal()` — executes onclick attributes directly via `new Function()` (fixes hidden-button click issue)
+- `cwocToggleZone()` — rewritten with `display:none` + icon text toggle
+- `_updateRecurrenceLabels()` — dynamic repeat dropdown labels based on current date
+- `_collapseAllZonesForNewChit()` — reads `cwoc_source_tab` from localStorage
+- `storePreviousState()` — now also writes `cwoc_source_tab` for editor zone collapse
+- Create Chit button and K hotkey now call `storePreviousState()` before navigating
+- Orphaned CSS fragment in styles.css fixed (stray properties without selector)
+- `shared-editor.css` form field styles scoped to `.editor` to prevent settings page bleed
+
+### Help & Documentation
+- Task zone documented (Status, Priority, Severity including Normal)
+- New chit zone collapse behavior documented
+- Contact Editor section added (notes, tags, suffix ordering)

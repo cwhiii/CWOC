@@ -228,22 +228,10 @@
         }
     }
 
-    // ── Share contact (QR) ─────────────────────────────────────────────
+    // ── Share contact (QR) — uses shared showQRModal via contact-qr.js
     function _shareContact(contact) {
         showContactQrCode(contact);
     }
-
-    // ── Close QR modal ──────────────────────────────────────────────────
-    window.closeQrModal = function () {
-        document.getElementById('qr-modal').style.display = 'none';
-    };
-
-    // Close modal on backdrop click
-    document.getElementById('qr-modal').addEventListener('click', (e) => {
-        if (e.target.id === 'qr-modal') {
-            e.target.style.display = 'none';
-        }
-    });
 
     // ═══════════════════════════════════════════════════════════════════
     // ── Import / Export (Task 7.2) ──────────────────────────────────
@@ -383,10 +371,10 @@
             e.stopImmediatePropagation();
             return;
         }
-        var qrM = document.getElementById('qr-modal');
-        if (qrM && qrM.style.display === 'flex') {
-            qrM.style.display = 'none';
-            e.stopImmediatePropagation();
+        // Shared QR modal handles its own ESC via capture listener
+        var qrOverlay = document.getElementById('cwoc-qr-overlay');
+        if (qrOverlay) {
+            // Let the shared QR ESC handler deal with it
             return;
         }
         if (exportDropdown && exportDropdown.style.display === 'block') {

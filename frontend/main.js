@@ -33,6 +33,12 @@ function _getTagColor(tagName) {
   return (tag && tag.color) ? tag.color : getPastelColor(tagName);
 }
 
+/** Get tag font color from cached settings tags, fallback to dark brown */
+function _getTagFontColor(tagName) {
+  const tag = _cachedTagObjects.find(t => t.name === tagName);
+  return (tag && tag.fontColor) ? tag.fontColor : '#2b1e0f';
+}
+
 function onSortSelectChange() {
   const sel = document.getElementById('sort-select');
   currentSortField = sel ? sel.value || null : null;
@@ -377,8 +383,9 @@ function _buildChitHeader(chit, titleHtml) {
   if (tags.length > 0) {
     tags.forEach(tagName => {
       const tagColor = _getTagColor(tagName);
+      const tagFontColor = _getTagFontColor(tagName);
       const chip = document.createElement('span');
-      chip.style.cssText = `display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.75em;margin-left:4px;background:${tagColor};color:#000;`;
+      chip.style.cssText = `display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.75em;margin-left:4px;background:${tagColor};color:${tagFontColor};`;
       chip.textContent = tagName.split('/').pop();
       right.appendChild(chip);
     });
@@ -2118,18 +2125,18 @@ function getYearStart(date) {
 }
 
 // Dashboard-specific formatDate variant — includes day-of-week for calendar headers.
-// The shared formatDate() in shared.js uses YYYY-Mon-DD format; this one uses Mon-DD Day.
+// The shared formatDate() in shared.js uses YYYY-Mon-DD format; this one uses DD Day.
 function formatDate(date) {
-  const monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  return `${monthNames[date.getMonth()]}-${String(date.getDate()).padStart(2,'0')} ${dayNames[date.getDay()]}`;
+  return `${String(date.getDate()).padStart(2,'0')} ${dayNames[date.getDay()]}`;
 }
 
 // formatTime() is in shared.js
 
 function formatWeekRange(start, end) {
-  const startStr = formatDate(start);
-  const endStr = formatDate(end);
+  const monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const startStr = `${monthNames[start.getMonth()]} ${formatDate(start)}`;
+  const endStr = `${monthNames[end.getMonth()]} ${formatDate(end)}`;
   return `<span>${startStr}</span><span>${endStr}</span>`;
 }
 
@@ -2669,7 +2676,7 @@ function displayWeekView(chitsToDisplay, opts) {
       const _wPct = 95 / _maxOvlp;
       ev.style.top = `${top}px`;
       ev.style.height = `${height}px`;
-      ev.style.backgroundColor = chitColor(chit);
+      applyChitColors(ev, chitColor(chit));
       ev.style.left = `${pos * _wPct}%`;
       ev.style.width = `${_wPct - 1}%`;
       ev.style.boxSizing = "border-box";
@@ -2772,7 +2779,7 @@ function displayMonthView(chitsToDisplay) {
         const chitElement = document.createElement("div");
         chitElement.className = "month-event";
         chitElement.dataset.chitId = chit.id;
-        chitElement.style.backgroundColor = chitColor(chit);
+        applyChitColors(chitElement, chitColor(chit));
         chitElement.title = calendarEventTooltip(chit, info);
         chitElement.innerHTML = calendarEventTitle(chit, info.isDueOnly, info);
         attachCalendarChitEvents(chitElement, chit);
@@ -2807,7 +2814,7 @@ function displayMonthView(chitsToDisplay) {
         chitElement.className = "month-event";
         chitElement.draggable = true;
         chitElement.dataset.chitId = chit.id;
-        chitElement.style.backgroundColor = chitColor(chit);
+        applyChitColors(chitElement, chitColor(chit));
         chitElement.style.cursor = "pointer";
         if (chit.status === "Complete") chitElement.classList.add("completed-task");
         chitElement.title = calendarEventTooltip(chit, info);
@@ -2839,7 +2846,7 @@ function displayMonthView(chitsToDisplay) {
         const chitElement = document.createElement("div");
         chitElement.className = "month-event";
         chitElement.dataset.chitId = chit.id;
-        chitElement.style.backgroundColor = chitColor(chit);
+        applyChitColors(chitElement, chitColor(chit));
         chitElement.title = calendarEventTooltip(chit, info);
         chitElement.innerHTML = calendarEventTitle(chit, info.isDueOnly, info);
         attachCalendarChitEvents(chitElement, chit);
@@ -2905,7 +2912,7 @@ function displayItineraryView(chitsToDisplay) {
       chitElement.style.display = "flex";
       chitElement.style.justifyContent = "flex-start";
       chitElement.style.padding = "10px";
-      chitElement.style.backgroundColor = chitColor(chit);
+      applyChitColors(chitElement, chitColor(chit));
       chitElement.style.marginBottom = "5px";
       chitElement.style.borderRadius = "5px";
       chitElement.style.marginLeft = "100px";
@@ -2976,7 +2983,7 @@ function displayDayView(chitsToDisplay) {
       const ev = document.createElement("div");
       ev.className = "all-day-event";
       ev.dataset.chitId = chit.id;
-      ev.style.backgroundColor = chitColor(chit);
+      applyChitColors(ev, chitColor(chit));
       if (chit.status === "Complete") ev.classList.add("completed-task");
       ev.title = calendarEventTooltip(chit, info);
       ev.innerHTML = calendarEventTitle(chit, info.isDueOnly, info);
@@ -3040,7 +3047,7 @@ function displayDayView(chitsToDisplay) {
     const maxOverlap = Math.max(...Object.values(timeSlots).map(s => s.length));
     const widthPct = 95 / maxOverlap;
     el.style.cssText = `top:${startTime}px;height:${height}px;left:${position * widthPct}%;width:${widthPct - 1}%;position:absolute;box-sizing:border-box;`;
-    el.style.backgroundColor = chitColor(chit);
+    applyChitColors(el, chitColor(chit));
     el.title = calendarEventTooltip(chit, info);
     if (chit.status === "Complete") el.classList.add("completed-task");
     const timeLabel = info.isDueOnly ? `Due: ${formatTime(info.start)}` : `${formatTime(info.start)} - ${formatTime(info.end)}`;
@@ -3195,7 +3202,7 @@ function displayChecklistView(chitsToDisplay) {
       chitElement.className = "chit-card";
       chitElement.draggable = true;
       chitElement.dataset.chitId = chit.id;
-      chitElement.style.backgroundColor = chitColor(chit);
+      applyChitColors(chitElement, chitColor(chit));
       if (chit.status === "Complete") chitElement.classList.add("completed-task");
       if (chit.archived) chitElement.classList.add("archived-chit");
 
@@ -3249,7 +3256,7 @@ function displayTasksView(chitsToDisplay) {
     chitElement.draggable = true;
     chitElement.dataset.chitId = chit.id;
     if (chit.archived) chitElement.classList.add("archived-chit");
-    chitElement.style.backgroundColor = typeof chitColor === 'function' ? chitColor(chit) : '';
+    applyChitColors(chitElement, typeof chitColor === 'function' ? chitColor(chit) : '#fdf6e3');
     if (chit.status === "Complete") chitElement.classList.add("completed-task");
 
     chitElement.appendChild(_buildChitHeader(chit, `<a href="/editor?id=${chit.id}">${chit.title || '(Untitled)'}</a>`));
@@ -3338,7 +3345,7 @@ function displayNotesView(chitsToDisplay) {
       const chitElement = document.createElement("div");
       chitElement.className = "chit-card";
       chitElement.dataset.chitId = chit.id;
-      chitElement.style.backgroundColor = chitColor(chit);
+      applyChitColors(chitElement, chitColor(chit));
       if (chit.archived) chitElement.classList.add("archived-chit");
 
       // Simple title with icons
@@ -3775,7 +3782,7 @@ function displaySevenDayView(chitsToDisplay) {
       const _w = 95 / _mo7;
       ev.style.top = `${top}px`;
       ev.style.height = `${height}px`;
-      ev.style.backgroundColor = chitColor(chit);
+      applyChitColors(ev, chitColor(chit));
       ev.style.left = `${pos * _w}%`;
       ev.style.width = `${_w - 1}%`;
       ev.style.boxSizing = "border-box";
@@ -3854,14 +3861,15 @@ function displayProjectsView(chitsToDisplay) {
   projects.forEach((project) => {
     const childIds = Array.isArray(project.child_chits) ? project.child_chits : [];
     const projectColor = chitColor(project);
+    const projectFontColor = contrastColorForBg(projectColor);
 
     // Outer box colored with project color
     const box = document.createElement("div");
-    box.style.cssText = `border:2px solid #8b5a2b;border-radius:6px;overflow:hidden;background:${projectColor};`;
+    box.style.cssText = `border:2px solid #8b5a2b;border-radius:6px;overflow:hidden;background:${projectColor};color:${projectFontColor};`;
 
     // Project header row — use standard header builder
     const header = document.createElement("div");
-    header.style.cssText = `padding:0.5em 0.7em;background:${projectColor};cursor:pointer;`;
+    header.style.cssText = `padding:0.5em 0.7em;background:${projectColor};color:${projectFontColor};cursor:pointer;`;
     header.appendChild(_buildChitHeader(project, project.title || "(Untitled Project)"));
 
     if (project.note) {
@@ -3883,8 +3891,10 @@ function displayProjectsView(chitsToDisplay) {
 
       childIds.forEach((childId) => {
         const child = chitMap[childId];
+        const childBg = child ? chitColor(child) : "#fdf6e3";
+        const childFont = contrastColorForBg(childBg);
         const li = document.createElement("li");
-        li.style.cssText = `display:flex;align-items:center;gap:0.5em;padding:0.5em 0.8em 0.5em 1.5em;border-bottom:1px solid rgba(139,90,43,0.1);background:${child ? chitColor(child) : "#fdf6e3"};cursor:pointer;min-height:2.2em;font-size:1em;`;
+        li.style.cssText = `display:flex;align-items:center;gap:0.5em;padding:0.5em 0.8em 0.5em 1.5em;border-bottom:1px solid rgba(139,90,43,0.1);background:${childBg};color:${childFont};cursor:pointer;min-height:2.2em;font-size:1em;`;
 
         const bullet = document.createElement("span");
         bullet.style.cssText = "opacity:0.4;font-size:0.8em;flex-shrink:0;";
@@ -3899,13 +3909,13 @@ function displayProjectsView(chitsToDisplay) {
         if (child) {
           if (child.status) {
             const status = document.createElement("span");
-            status.style.cssText = "font-size:0.75em;opacity:0.7;white-space:nowrap;";
+            status.style.cssText = "font-size:0.75em;opacity:0.8;white-space:nowrap;";
             status.textContent = child.status;
             li.appendChild(status);
           }
           if (child.due_datetime) {
             const due = document.createElement("span");
-            due.style.cssText = "font-size:0.75em;opacity:0.6;white-space:nowrap;";
+            due.style.cssText = "font-size:0.75em;opacity:0.8;white-space:nowrap;";
             due.textContent = formatDate(new Date(child.due_datetime));
             li.appendChild(due);
           }
@@ -3962,13 +3972,14 @@ function _displayProjectsKanban(chitsToDisplay) {
   projects.forEach(project => {
     const childIds = Array.isArray(project.child_chits) ? project.child_chits : [];
     const projectColor = chitColor(project);
+    const projectFont = contrastColorForBg(projectColor);
 
     // Project header
     const projectBox = document.createElement("div");
-    projectBox.style.cssText = `margin-bottom:1.5em;border:2px solid #8b5a2b;border-radius:6px;overflow:hidden;background:${projectColor};`;
+    projectBox.style.cssText = `margin-bottom:1.5em;border:2px solid #8b5a2b;border-radius:6px;overflow:hidden;background:${projectColor};color:${projectFont};`;
 
     const header = document.createElement("div");
-    header.style.cssText = `padding:0.5em 0.7em;background:${projectColor};cursor:pointer;font-weight:bold;font-size:1.05em;border-bottom:1px solid rgba(139,90,43,0.2);`;
+    header.style.cssText = `padding:0.5em 0.7em;background:${projectColor};color:${projectFont};cursor:pointer;font-weight:bold;font-size:1.05em;border-bottom:1px solid rgba(139,90,43,0.2);`;
     header.textContent = project.title || "(Untitled Project)";
     header.addEventListener("dblclick", () => {
       storePreviousState();
@@ -3999,7 +4010,7 @@ function _displayProjectsKanban(chitsToDisplay) {
 
       // Column header
       const colHeader = document.createElement("div");
-      colHeader.style.cssText = "font-size:0.75em;font-weight:bold;opacity:0.6;text-align:center;padding:2px 0 4px;border-bottom:1px solid rgba(139,90,43,0.1);margin-bottom:4px;white-space:nowrap;";
+      colHeader.style.cssText = "font-size:0.9em;font-weight:bold;opacity:0.8;text-align:center;padding:4px 0 6px;border-bottom:1px solid rgba(139,90,43,0.15);margin-bottom:6px;white-space:nowrap;";
       colHeader.textContent = status;
       col.appendChild(colHeader);
 
@@ -4010,7 +4021,9 @@ function _displayProjectsKanban(chitsToDisplay) {
         card.draggable = true;
         card.dataset.chitId = child.id;
         card.dataset.projectId = project.id;
-        card.style.cssText = `padding:0.4em 0.5em;font-size:0.85em;background:${chitColor(child)};cursor:grab;margin-bottom:0.25em;border-width:1px;`;
+        const childBg = chitColor(child);
+        const childFont = contrastColorForBg(childBg);
+        card.style.cssText = `padding:0.5em 0.6em;font-size:1em;background:${childBg};color:${childFont};cursor:grab;margin-bottom:0.3em;border-width:1px;line-height:1.4;`;
         if (child.status === "Complete") card.classList.add("completed-task");
 
         const titleEl = document.createElement("div");
@@ -4021,7 +4034,7 @@ function _displayProjectsKanban(chitsToDisplay) {
         // Show due date if present
         if (child.due_datetime) {
           const due = document.createElement("div");
-          due.style.cssText = "font-size:0.75em;opacity:0.6;";
+          due.style.cssText = "font-size:0.75em;opacity:0.8;";
           due.textContent = "Due: " + formatDate(new Date(child.due_datetime));
           card.appendChild(due);
         }
@@ -4030,7 +4043,7 @@ function _displayProjectsKanban(chitsToDisplay) {
         const grandchildIds = Array.isArray(child.child_chits) ? child.child_chits : [];
         if (grandchildIds.length > 0) {
           const subList = document.createElement("ul");
-          subList.style.cssText = "margin:4px 0 0 0;padding:0 0 0 12px;list-style:none;font-size:0.85em;";
+          subList.style.cssText = "margin:4px 0 0 0;padding:0 0 0 12px;list-style:none;font-size:0.95em;";
           grandchildIds.forEach(gcId => {
             const gc = chitMap[gcId];
             if (!gc || gc.deleted) return;
@@ -4198,7 +4211,7 @@ function displayAlarmsView(chitsToDisplay) {
     card.draggable = true;
     card.dataset.chitId = chit.id;
     if (chit.archived) card.classList.add("archived-chit");
-    card.style.backgroundColor = chitColor(chit);
+    applyChitColors(card, chitColor(chit));
 
     card.appendChild(_buildChitHeader(chit, `<a href="/editor?id=${chit.id}">${chit.title || '(Untitled)'}</a>`));
 

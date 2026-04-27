@@ -36,6 +36,7 @@
                     <li><a href="#editor">Chit Editor</a></li>
                     <li><a href="#quick-edit">Quick Edit Modal</a></li>
                     <li><a href="#settings">Settings</a></li>
+                    <li><a href="#version-management">Version Management</a></li>
                 </ul>
             </div>
             <h3 id="what-is-cwoc">What is CWOC?</h3>
@@ -159,6 +160,13 @@
                 <li><strong>Chit Options</strong> — Fade past, highlight overdue, delete past alarms</li>
                 <li><strong>Export / Import</strong> — CSV export and import</li>
                 <li><strong>Trash</strong> — View, restore, or permanently delete chits</li>
+            </ul>
+            <h3 id="version-management">Version Management</h3>
+            <p>The Settings page includes a <strong>Version & Updates</strong> section that shows the currently installed version number and the date/time it was last updated.</p>
+            <ul>
+                <li><strong>Version Info</strong> — Displays the current version and "Last Updated" timestamp. If no version info is available, a fallback message is shown.</li>
+                <li><strong>Upgrade Omni Chits</strong> — Click this button to trigger an update. A modal opens showing real-time output from the update script.</li>
+                <li><strong>Update Modal</strong> — Streams the update log in a terminal-style display. Log lines are color-coded by prefix: <span style="color:green;">[OK]</span> green, <span style="color:goldenrod;">[WARN]</span> yellow, <span style="color:red;">[ERROR]</span> red, <span style="color:steelblue;">[STEP]</span> blue. The Close button is enabled once the update finishes.</li>
             </ul>
             <h3 id="contacts">Contact Editor</h3>
             <p>Contacts have name fields (prefix, given, middle, surname, suffix), phone, email, address, social/web, security (Signal, PGP), and context (organization, social context).</p>

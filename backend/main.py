@@ -2,6 +2,7 @@
 # Section 1: Imports
 # ═══════════════════════════════════════════════════════════════════════════
 
+import asyncio
 import sqlite3
 import json
 import logging
@@ -15,7 +16,7 @@ from fastapi import FastAPI, HTTPException, Query, UploadFile, File, Response
 from pydantic import BaseModel
 from uuid import uuid4
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -32,6 +33,9 @@ app = FastAPI()
 # Database path
 DB_PATH = "/app/data/app.db"
 
+# Lock to prevent concurrent update runs
+_update_lock = asyncio.Lock()
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Section 3: Pydantic Models
@@ -40,6 +44,7 @@ DB_PATH = "/app/data/app.db"
 class Tag(BaseModel):
     name: str
     color: Optional[str] = None
+    fontColor: Optional[str] = None
     favorite: Optional[bool] = False
 
 class Settings(BaseModel):
@@ -249,6 +254,85 @@ def get_or_create_instance_id():
     except Exception as e:
         logger.error(f"Error getting instance ID: {str(e)}")
         return "unknown"
+    finally:
+        if conn:
+            conn.close()
+
+# Version info helpers
+def get_version_info():
+    """Read version + installed_datetime from instance_meta.
+    Returns {"version": str, "installed_datetime": str|None}."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("SELECT key, value FROM instance_meta WHERE key IN ('version', 'installed_datetime')")
+        rows = {row[0]: row[1] for row in cursor.fetchall()}
+        return {
+            "version": rows.get("version", "unknown"),
+            "installed_datetime": rows.get("installed_datetime", None)
+        }
+    except Exception as e:
+        logger.error(f"Error getting version info: {str(e)}")
+        return {"version": "unknown", "installed_datetime": None}
+    finally:
+        if conn:
+            conn.close()
+
+def update_version_info(version, installed_datetime):
+    """Upsert version and installed_datetime into instance_meta."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO instance_meta (key, value) VALUES ('version', ?) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            (version,)
+        )
+        cursor.execute(
+            "INSERT INTO instance_meta (key, value) VALUES ('installed_datetime', ?) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            (installed_datetime,)
+        )
+        conn.commit()
+    except Exception as e:
+        logger.error(f"Error updating version info: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+def seed_version_info():
+    """At startup, seed version + installed_datetime if not already present."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("SELECT value FROM instance_meta WHERE key = 'version'")
+        row = cursor.fetchone()
+        if row:
+            return  # Already seeded
+        # Read version from /app/VERSION
+        version = "unknown"
+        try:
+            with open("/app/VERSION", "r") as f:
+                first_line = f.readline().strip()
+                if first_line:
+                    version = first_line
+        except (FileNotFoundError, IOError):
+            pass
+        installed_datetime = datetime.utcnow().isoformat() + "Z"
+        cursor.execute(
+            "INSERT INTO instance_meta (key, value) VALUES ('version', ?)",
+            (version,)
+        )
+        cursor.execute(
+            "INSERT INTO instance_meta (key, value) VALUES ('installed_datetime', ?)",
+            (installed_datetime,)
+        )
+        conn.commit()
+    except Exception as e:
+        logger.error(f"Error seeding version info: {str(e)}")
     finally:
         if conn:
             conn.close()
@@ -946,6 +1030,7 @@ migrate_add_work_hours()
 migrate_add_saved_locations()
 init_contacts_table()
 migrate_contacts_add_new_fields()
+seed_version_info()
 
 # Create directory for contact images
 CONTACT_IMAGES_DIR = "/app/static/contact_images/"
@@ -983,6 +1068,10 @@ async def editor(id: str = None):
 @app.get("/api/instance-id")
 def get_instance_id():
     return {"instance_id": get_or_create_instance_id()}
+
+@app.get("/api/version")
+def get_version():
+    return get_version_info()
 
 @app.get("/api/chits")
 def get_all_chits():
@@ -2054,7 +2143,77 @@ async def import_contacts(file: UploadFile = File(...)):
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# Section 12: Health Check
+# Section 12: Version Management & Update Streaming
+# ═══════════════════════════════════════════════════════════════════════════
+
+CONFIGURINATOR_PATH = "/app/install/configurinator.sh"
+
+@app.get("/api/update/run")
+async def run_update():
+    async def event_stream():
+        process = None
+        try:
+            # Check if an update is already running
+            if _update_lock.locked():
+                yield 'data: {"type":"error","message":"Update already in progress"}\n\n'
+                return
+
+            async with _update_lock:
+                # Check if the configurinator script exists
+                if not os.path.isfile(CONFIGURINATOR_PATH):
+                    yield 'data: {"type":"error","message":"Configurinator script not found"}\n\n'
+                    return
+
+                try:
+                    process = await asyncio.create_subprocess_exec(
+                        "sudo", CONFIGURINATOR_PATH,
+                        stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.STDOUT,
+                    )
+                except (OSError, PermissionError) as e:
+                    yield f'data: {json.dumps({"type":"error","message":str(e)})}\n\n'
+                    return
+
+                # Stream each line from the subprocess
+                while True:
+                    line = await process.stdout.readline()
+                    if not line:
+                        break
+                    yield f'data: {json.dumps({"type":"log","line":line.decode("utf-8", errors="replace").rstrip()})}\n\n'
+
+                exit_code = await process.wait()
+
+                if exit_code == 0:
+                    # Read version from /app/VERSION
+                    version = "unknown"
+                    try:
+                        with open("/app/VERSION", "r") as f:
+                            first_line = f.readline().strip()
+                            if first_line:
+                                version = first_line
+                    except (FileNotFoundError, IOError):
+                        pass
+                    installed_datetime = datetime.utcnow().isoformat() + "Z"
+                    update_version_info(version, installed_datetime)
+                    yield f'data: {json.dumps({"type":"done","exit_code":0,"version":version})}\n\n'
+                else:
+                    yield f'data: {json.dumps({"type":"done","exit_code":exit_code})}\n\n'
+
+        except asyncio.CancelledError:
+            # Client disconnected — terminate subprocess gracefully
+            if process and process.returncode is None:
+                try:
+                    process.terminate()
+                    await process.wait()
+                except Exception:
+                    pass
+            return
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 13: Health Check
 # ═══════════════════════════════════════════════════════════════════════════
 
 @app.get("/health")

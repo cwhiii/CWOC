@@ -61,6 +61,31 @@ function setSaveButtonUnsaved() {
   if (window._cwocSave) window._cwocSave.markUnsaved();
 }
 
+/**
+ * Returns '#2b1e0f' (dark) or '#fff' (light) for readable text on the given background.
+ * Uses WCAG-style relative luminance to pick the best contrast.
+ */
+function contrastColorForBg(hex) {
+  if (!hex) return '#2b1e0f';
+  hex = hex.replace('#', '');
+  if (hex.length === 3) hex = hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
+  if (hex.length !== 6) return '#2b1e0f';
+  var r = parseInt(hex.substr(0, 2), 16);
+  var g = parseInt(hex.substr(2, 2), 16);
+  var b = parseInt(hex.substr(4, 2), 16);
+  var lum = (r * 299 + g * 587 + b * 114) / 1000;
+  return lum > 150 ? '#2b1e0f' : '#fdf5e6';
+}
+
+/**
+ * Apply background color and auto-contrast font color to an element based on a chit's color.
+ * Call this instead of manually setting el.style.backgroundColor = chitColor(chit).
+ */
+function applyChitColors(el, bgColor) {
+  el.style.backgroundColor = bgColor;
+  el.style.color = contrastColorForBg(bgColor);
+}
+
 // ── Inline Checklist Toggle & Reorder (for dashboard views) ──────────────────
 
 /**
@@ -173,7 +198,7 @@ function renderInlineChecklist(container, chit, onUpdate) {
     if (!item || typeof item !== 'object' || !item.text) return;
 
     const li = document.createElement('li');
-    li.style.cssText = `padding-left:${(item.level || 0) * 18 + 4}px;padding-top:2px;padding-bottom:2px;display:flex;align-items:center;gap:4px;cursor:grab;`;
+    li.style.cssText = `padding-left:${(item.level || 0) * 18 + 4}px;padding-top:4px;padding-bottom:4px;display:flex;align-items:center;gap:6px;cursor:grab;font-size:0.95em;line-height:1.4;min-height:1.8em;`;
     li.draggable = true;
     li.dataset.idx = idx;
     li.dataset.chitId = chit.id;
@@ -1245,6 +1270,7 @@ function buildTagTree(flatTags) {
           name: part,
           fullPath: pathSoFar,
           color: isLeaf ? tag.color : null,
+          fontColor: isLeaf ? (tag.fontColor || null) : null,
           favorite: isLeaf ? !!tag.favorite : false,
           children: [],
         };
@@ -1371,9 +1397,10 @@ function renderTagTree(container, tree, selectedTags, onToggle, opts) {
 
       // Tag name with color background — always shows tag color
       const tagColor = node.color || (typeof getPastelColor === 'function' ? getPastelColor(node.fullPath) : 'rgba(139,90,43,0.15)');
+      const tagFontColor = node.fontColor || '#3c2f2f';
       const badge = document.createElement('span');
       badge.textContent = node.name;
-      badge.style.cssText = `font-size:0.85em;padding:1px 6px;border-radius:4px;background:${tagColor};color:#3c2f2f;white-space:nowrap;${isSelected ? 'font-weight:bold;outline:2px solid #4a2c2a;' : ''}`;
+      badge.style.cssText = `font-size:0.85em;padding:1px 6px;border-radius:4px;background:${tagColor};color:${tagFontColor};white-space:nowrap;${isSelected ? 'font-weight:bold;outline:2px solid #4a2c2a;' : ''}`;
       row.appendChild(badge);
 
       // Click row to toggle selection
@@ -2215,53 +2242,17 @@ function showQuickEditModal(chit, onRefresh) {
   qrBtn.addEventListener('click', (ev) => {
     const url = `${window.location.origin}/frontend/editor.html?id=${chitId}`;
     const isLink = ev.shiftKey;
-    const qrOverlay = document.createElement('div');
-    qrOverlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:99999;display:flex;align-items:center;justify-content:center;';
-    qrOverlay.addEventListener('click', (e2) => { if (e2.target === qrOverlay) qrOverlay.remove(); });
-    const qrModal = document.createElement('div');
-    qrModal.style.cssText = 'background:#fff8e1;border:2px solid #8b4513;border-radius:10px;padding:24px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,0.4);min-width:280px;max-width:90vw;';
-    const qrTitle = document.createElement('div');
-    qrTitle.style.cssText = 'font-weight:bold;margin-bottom:12px;color:#4a2c2a;';
-    const qrRender = document.createElement('div');
-    const qrInfo = document.createElement('div');
-    qrInfo.style.cssText = 'font-size:0.75em;opacity:0.6;margin-top:8px;word-break:break-all;max-width:300px;';
 
     if (isLink) {
-      qrTitle.textContent = '🔗 Link QR Code';
-      qrInfo.textContent = url;
-      if (typeof qrcode !== 'undefined') {
-        const qr = qrcode(0, 'M'); qr.addData(url); qr.make();
-        qrRender.innerHTML = qr.createImgTag(5, 8);
-      }
+      showQRModal({ title: '🔗 Link QR Code', data: url, info: url });
     } else {
-      qrTitle.textContent = '📦 Data QR Code';
       const chitData = { _cwoc: window._instanceId || 'unknown', id: chitId, title: chit.title || '', status: chit.status || '', priority: chit.priority || '', tags: (chit.tags || []).join(';'), note: (chit.note || '').slice(0, 300) };
       const json = JSON.stringify(chitData);
-      qrInfo.textContent = `${json.length} chars encoded`;
-      if (typeof qrcode !== 'undefined') {
-        try { const qr = qrcode(0, json.length > 500 ? 'L' : 'M'); qr.addData(json); qr.make(); qrRender.innerHTML = qr.createImgTag(4, 6); }
-        catch (err) { qrRender.innerHTML = '<div style="padding:12px;color:#a33;font-size:0.85em;">Data too large for QR.</div>'; }
-      }
-      // Load instance ID
+      showQRModal({ title: '📦 Data QR Code', data: json, ecl: json.length > 500 ? 'L' : 'M', info: json.length + ' chars encoded' });
       if (!window._instanceId) {
         fetch('/api/instance-id').then(r => r.ok ? r.json() : {}).then(d => { window._instanceId = d.instance_id || 'unknown'; }).catch(() => {});
       }
     }
-
-    qrModal.appendChild(qrTitle);
-    qrModal.appendChild(qrRender);
-    qrModal.appendChild(qrInfo);
-    qrOverlay.appendChild(qrModal);
-    document.body.appendChild(qrOverlay);
-    // ESC closes QR overlay (not the quick edit behind it)
-    function onQrKey(e2) {
-      if (e2.key === 'Escape') {
-        e2.stopImmediatePropagation();
-        qrOverlay.remove();
-        document.removeEventListener('keydown', onQrKey, true);
-      }
-    }
-    document.addEventListener('keydown', onQrKey, true);
   });
   actionRow.appendChild(qrBtn);
 
@@ -3251,6 +3242,105 @@ function initMobileSidebar() {
 }
 
 
+// ── Shared QR Code Display ────────────────────────────────────────────────────
+
+/**
+ * Show a QR code in a full-screen modal overlay.
+ * Single source of truth for ALL QR display across the app.
+ *
+ * @param {object} opts
+ * @param {string} opts.title   — modal title text (e.g. "🔗 Link QR Code")
+ * @param {string} opts.data    — the string to encode in the QR
+ * @param {string} [opts.info]  — small info text below the QR (e.g. URL or byte count)
+ * @param {string} [opts.ecl]   — error correction level: 'L','M','Q','H' (default 'M')
+ * @param {Function} [opts.onClose] — callback when modal closes
+ * @returns {HTMLElement} the overlay element (for further customization)
+ */
+function showQRModal(opts) {
+  // Remove any existing QR modal
+  var existing = document.getElementById('cwoc-qr-overlay');
+  if (existing) existing.remove();
+
+  var overlay = document.createElement('div');
+  overlay.id = 'cwoc-qr-overlay';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:99999;display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box;';
+
+  var modal = document.createElement('div');
+  modal.style.cssText = 'background:#fff8e1;border:2px solid #8b4513;border-radius:10px;padding:20px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,0.4);width:100%;max-width:360px;box-sizing:border-box;max-height:90vh;overflow-y:auto;';
+
+  // Title
+  var titleEl = document.createElement('div');
+  titleEl.style.cssText = 'font-weight:bold;margin-bottom:12px;color:#4a2c2a;font-size:1.05em;word-wrap:break-word;';
+  titleEl.textContent = opts.title || 'QR Code';
+  modal.appendChild(titleEl);
+
+  // QR render area
+  var qrDiv = document.createElement('div');
+  qrDiv.style.cssText = 'margin:12px auto;display:flex;justify-content:center;';
+
+  if (typeof qrcode !== 'undefined') {
+    try {
+      var ecl = opts.ecl || 'M';
+      var qr = qrcode(0, ecl);
+      qr.addData(opts.data);
+      qr.make();
+      // Size the QR to fit the modal (max ~280px)
+      var moduleCount = qr.getModuleCount();
+      var maxSize = Math.min(280, window.innerWidth - 80);
+      var cellSize = Math.max(2, Math.floor(maxSize / moduleCount));
+      qrDiv.innerHTML = qr.createImgTag(cellSize, 4);
+      // Ensure the image is responsive
+      var img = qrDiv.querySelector('img');
+      if (img) img.style.cssText = 'max-width:100%;height:auto;display:block;';
+    } catch (err) {
+      qrDiv.innerHTML = '<div style="padding:12px;color:#a33;font-size:0.85em;">Data too large for QR code.</div>';
+    }
+  } else {
+    qrDiv.innerHTML = '<div style="padding:12px;opacity:0.6;">QR library not loaded.</div>';
+  }
+  modal.appendChild(qrDiv);
+
+  // Info text
+  if (opts.info) {
+    var infoDiv = document.createElement('div');
+    infoDiv.style.cssText = 'font-size:0.75em;opacity:0.5;margin-top:4px;word-break:break-all;max-width:100%;';
+    infoDiv.textContent = opts.info;
+    modal.appendChild(infoDiv);
+  }
+
+  // Close button
+  var closeBtn = document.createElement('button');
+  closeBtn.style.cssText = 'margin-top:14px;padding:10px 24px;width:100%;min-height:44px;font-size:1em;font-weight:bold;font-family:"Courier New",monospace;background:#8b5a2b;color:#fff8e1;border:1px solid #5a3f2a;border-radius:4px;cursor:pointer;';
+  closeBtn.textContent = '✕ Close';
+  closeBtn.addEventListener('click', function () { _closeQR(); });
+  modal.appendChild(closeBtn);
+
+  overlay.appendChild(modal);
+
+  // Click backdrop to close
+  overlay.addEventListener('click', function (e) { if (e.target === overlay) _closeQR(); });
+
+  // ESC to close (capture phase so it fires before other ESC handlers)
+  function onKey(e) {
+    if (e.key === 'Escape') {
+      e.stopImmediatePropagation();
+      e.preventDefault();
+      _closeQR();
+    }
+  }
+  document.addEventListener('keydown', onKey, true);
+
+  function _closeQR() {
+    overlay.remove();
+    document.removeEventListener('keydown', onKey, true);
+    if (opts.onClose) opts.onClose();
+  }
+
+  document.body.appendChild(overlay);
+  return overlay;
+}
+
+
 // ── Mobile Actions Modal (editor header buttons) ─────────────────────────────
 
 /**
@@ -3297,21 +3387,33 @@ function _openMobileActionsModal() {
   var list = modal.querySelector('.mobile-actions-list');
   list.innerHTML = '';
 
-  // Grab all buttons from the header .buttons container (including hidden save/stay/exit)
+  // Grab all buttons from the header .buttons container (works even when hidden by CSS)
   var buttonsDiv = document.querySelector('.header-row .buttons');
   if (!buttonsDiv) return;
 
   var buttons = buttonsDiv.querySelectorAll('button');
   buttons.forEach(function (btn) {
-    // Skip buttons that are truly irrelevant (not just hidden by save state)
-    if (btn.id === 'saveButton' && btn.disabled) return; // greyed-out "Saved" — skip
+    // Skip disabled "Saved" indicator buttons (any page)
+    if (btn.disabled && btn.style.pointerEvents === 'none') return;
+    // Skip buttons hidden by save-state logic (display:none means not relevant right now)
+    if (btn.style.display === 'none') return;
     var clone = document.createElement('button');
     clone.className = 'mobile-action-btn ' + (btn.className || '');
     clone.innerHTML = btn.innerHTML;
     clone.disabled = btn.disabled;
+
+    // Extract the onclick handler — call it directly instead of btn.click()
+    // (btn.click() can fail on elements inside display:none containers)
+    var onclickAttr = btn.getAttribute('onclick');
     clone.addEventListener('click', function () {
       modal.classList.remove('active');
-      btn.click(); // trigger the original button's handler
+      if (onclickAttr) {
+        // Execute the onclick attribute string
+        new Function(onclickAttr).call(btn);
+      } else {
+        // Fallback: dispatch click on the original
+        btn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      }
     });
     list.appendChild(clone);
   });
@@ -3478,22 +3580,21 @@ function initMobileViewsButton() {
   var header = document.querySelector('.header');
   if (!header) return;
 
+  // Tab button in header, pushed to right edge via margin-left:auto
   var btn = document.createElement('button');
   btn.className = 'mobile-views-btn';
   btn.textContent = '☰ Views';
-  // Insert after h1
-  var h1 = header.querySelector('h1');
-  if (h1 && h1.nextSibling) {
-    header.insertBefore(btn, h1.nextSibling);
-  } else {
-    header.appendChild(btn);
-  }
+  header.appendChild(btn);
 
-  var dropdown = document.createElement('div');
-  dropdown.className = 'mobile-views-dropdown';
-  var content = document.createElement('div');
-  content.className = 'mobile-views-dropdown-content';
-  content.innerHTML = '<h3>Views</h3>';
+  // Backdrop
+  var backdrop = document.createElement('div');
+  backdrop.className = 'mobile-views-backdrop';
+  document.body.appendChild(backdrop);
+
+  // Slide-in panel
+  var panel = document.createElement('div');
+  panel.className = 'mobile-views-panel';
+  panel.innerHTML = '<h3>Views</h3>';
 
   // Build options from the existing tabs
   var tabs = document.querySelectorAll('.tabs .tab');
@@ -3501,42 +3602,75 @@ function initMobileViewsButton() {
     var opt = document.createElement('div');
     opt.className = 'mobile-view-option';
     if (tab.classList.contains('active')) opt.classList.add('active');
-    // Clone the tab content (image + text)
     opt.innerHTML = tab.innerHTML;
     opt.addEventListener('click', function () {
-      dropdown.classList.remove('active');
-      tab.click(); // trigger the original tab's onclick
-      // Update active state
-      content.querySelectorAll('.mobile-view-option').forEach(function (o) { o.classList.remove('active'); });
+      _closeViewsPanel();
+      tab.click();
+      panel.querySelectorAll('.mobile-view-option').forEach(function (o) { o.classList.remove('active'); });
       opt.classList.add('active');
     });
-    content.appendChild(opt);
+    panel.appendChild(opt);
   });
 
   var closeBtn = document.createElement('button');
   closeBtn.className = 'mobile-views-close';
   closeBtn.textContent = '✕ Close';
-  closeBtn.addEventListener('click', function () { dropdown.classList.remove('active'); });
-  content.appendChild(closeBtn);
+  closeBtn.addEventListener('click', function () { _closeViewsPanel(); });
+  panel.appendChild(closeBtn);
 
-  dropdown.appendChild(content);
-  dropdown.addEventListener('click', function (e) {
-    if (e.target === dropdown) dropdown.classList.remove('active');
-  });
-  document.body.appendChild(dropdown);
+  document.body.appendChild(panel);
 
-  btn.addEventListener('click', function () {
-    // Refresh active state before showing
+  function _openViewsPanel() {
+    // Refresh active state
     var currentTabs = document.querySelectorAll('.tabs .tab');
-    var opts = content.querySelectorAll('.mobile-view-option');
+    var opts = panel.querySelectorAll('.mobile-view-option');
     currentTabs.forEach(function (t, i) {
       if (opts[i]) {
-        if (t.classList.contains('active')) opts[i].classList.add('active');
-        else opts[i].classList.remove('active');
+        opts[i].classList.toggle('active', t.classList.contains('active'));
       }
     });
-    dropdown.classList.add('active');
-  });
+    backdrop.classList.add('active');
+    panel.classList.add('active');
+  }
+
+  function _closeViewsPanel() {
+    panel.classList.remove('active');
+    backdrop.classList.remove('active');
+  }
+
+  btn.addEventListener('click', _openViewsPanel);
+  backdrop.addEventListener('click', _closeViewsPanel);
+
+  // ── Swipe from right edge to open, swipe right to close ────────────
+  var _vsStartX = 0, _vsStartY = 0, _vsTracking = false;
+  var EDGE_ZONE = 25; // px from right edge
+  var SWIPE_THRESHOLD = 40;
+
+  document.addEventListener('touchstart', function (e) {
+    if (!_isMobileOverlay()) return;
+    var touch = e.touches[0];
+    _vsStartX = touch.clientX;
+    _vsStartY = touch.clientY;
+    var fromRightEdge = window.innerWidth - touch.clientX < EDGE_ZONE;
+    _vsTracking = fromRightEdge || panel.classList.contains('active');
+  }, { passive: true });
+
+  document.addEventListener('touchend', function (e) {
+    if (!_vsTracking || !_isMobileOverlay()) { _vsTracking = false; return; }
+    var touch = e.changedTouches[0];
+    var dx = touch.clientX - _vsStartX;
+    var dy = Math.abs(touch.clientY - _vsStartY);
+    _vsTracking = false;
+    if (Math.abs(dx) < SWIPE_THRESHOLD || dy > Math.abs(dx)) return;
+
+    if (dx < 0 && !panel.classList.contains('active') && (window.innerWidth - _vsStartX) < EDGE_ZONE) {
+      // Swipe left from right edge → open
+      _openViewsPanel();
+    } else if (dx > 0 && panel.classList.contains('active')) {
+      // Swipe right → close
+      _closeViewsPanel();
+    }
+  }, { passive: true });
 }
 
 

@@ -68,6 +68,8 @@ body {
     transition: background-color 0.3s ease;
     width: 95%;
     gap: 15px;
+    overflow: hidden;
+    box-sizing: border-box;
 }
 
 .header-row h1 {
@@ -85,6 +87,7 @@ body {
     gap: 10px;
     flex-grow: 1;
     justify-content: space-between;
+    flex-wrap: wrap;
 }
 
 .buttons .left-buttons {
@@ -92,12 +95,14 @@ body {
     gap: 10px;
     justify-content: center;
     flex-grow: 1;
+    flex-wrap: wrap;
 }
 
 .buttons .right-buttons {
     display: flex;
     gap: 10px;
     flex-shrink: 0;
+    flex-wrap: wrap;
 }
 
 /* ── General Button Styles ─────────────────────────────────────────────── */
@@ -184,9 +189,9 @@ input[type="checkbox"] {
     accent-color: var(--accent-teal);
 }
 
-input,
-select,
-textarea {
+.editor input,
+.editor select,
+.editor textarea {
     padding: 8px 12px;
     border: 1px inset var(--aged-brown-medium);
     border-radius: 4px;
@@ -196,17 +201,17 @@ textarea {
     color: var(--text-color);
 }
 
-input:focus,
-select:focus,
-textarea:focus {
+.editor input:focus,
+.editor select:focus,
+.editor textarea:focus {
     outline: none;
     border-color: var(--accent-teal);
     box-shadow: 0 0 0 2px rgba(0, 128, 128, 0.25);
 }
 
-input:disabled,
-select:disabled,
-textarea:disabled,
+.editor input:disabled,
+.editor select:disabled,
+.editor textarea:disabled,
 button:disabled:not(.status-icon-button) {
     background-color: var(--parchment-light);
     cursor: not-allowed;
@@ -296,6 +301,34 @@ button:disabled:not(.status-icon-button) {
 .zone-body {
     padding: 10px;
     background-color: var(--zone-body-bg);
+}
+
+/* ── Modal Overlay (unsaved-changes, confirmations) ────────────────────── */
+.modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    justify-content: center;
+    align-items: center;
+    z-index: 10000;
+}
+.modal-content {
+    background: var(--parchment-medium, #faebd7);
+    border: 2px solid var(--aged-brown-medium, #8b4513);
+    border-radius: 10px;
+    padding: 20px;
+    width: 90%;
+    max-width: 400px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    text-align: center;
+}
+.modal-content h3 {
+    margin-top: 0;
+    color: var(--aged-brown-dark, #4a2c2a);
 }
 
 /* ── Main Zones Grid (two-column responsive layout) ────────────────────── */
@@ -571,7 +604,7 @@ input:checked + .slider:before {
     .field label {
         font-size: 0.9em;
     }
-    input, select, textarea {
+    .editor input, .editor select, .editor textarea {
         width: 100% !important;
         max-width: 100% !important;
         box-sizing: border-box;
