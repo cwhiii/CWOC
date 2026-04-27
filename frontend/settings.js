@@ -376,7 +376,7 @@ function toggleOrientation() {
   setSaveButtonUnsaved();
 }
 
-function isColorLight(hexColor) {
+function _isColorLight(hexColor) {
   const c = hexColor.charAt(0) === "#" ? hexColor.substring(1) : hexColor;
   const r = parseInt(c.substr(0, 2), 16);
   const g = parseInt(c.substr(2, 2), 16);
@@ -387,9 +387,7 @@ function isColorLight(hexColor) {
 
 async function loadColors() {
   try {
-    const response = await fetch("/api/settings/default_user");
-    if (!response.ok) throw new Error("Failed to load colors");
-    const data = await response.json();
+    const data = await getCachedSettings();
 
     // Normalize colors: convert strings to objects { hex, name }
     const colors = (data.custom_colors || []).map((c) =>
@@ -441,7 +439,7 @@ async function saveColors(colors) {
       );
     }
 
-    console.log("Colors saved successfully");
+    _invalidateSettingsCache(); // saved data changed
   } catch (error) {
     console.error("Failed to save colors:", error);
     alert("Failed to save colors");
@@ -471,9 +469,8 @@ async function addColor(newColor) {
 async function deleteColor(hex, name) {
   if (!confirm(`Delete color (${name} - ${hex})?`)) return;
   try {
-    const response = await fetch("/api/settings/default_user");
-    if (!response.ok) throw new Error("Failed to load settings");
-    const settings = await response.json();
+    _invalidateSettingsCache(); // need fresh data for read-modify-write
+    const settings = await getCachedSettings();
     settings.custom_colors = (settings.custom_colors || []).filter(
       (color) => !(color.hex === hex && color.name === name),
     );
@@ -483,6 +480,7 @@ async function deleteColor(hex, name) {
       body: JSON.stringify(settings),
     });
     if (!saveResponse.ok) throw new Error("Failed to save settings");
+    _invalidateSettingsCache(); // saved data changed
     await loadColors();
     setSaveButtonUnsaved();
   } catch (e) {
@@ -500,7 +498,7 @@ function renderColors(colors) {
     colorItem.dataset.color = hex;
     colorItem.dataset.name = name || colorMap[hex] || "Custom";
     colorItem.style.backgroundColor = hex;
-    colorItem.style.color = isColorLight(hex) ? "#000" : "#fff";
+    colorItem.style.color = _isColorLight(hex) ? "#000" : "#fff";
     colorItem.textContent = colorItem.dataset.name;
     colorItem.title = `${colorItem.dataset.name} (${hex})`;
 
@@ -617,7 +615,6 @@ function openTagModal(tag) {
   tagNameInput.value = rawText;
   tagNameInput.disabled = false;
 
-  // Set color picker to current tag color
   colorInput.value = tag.dataset.color || "#8b5a2b";
 
   if (colorOptions) colorOptions.innerHTML = "";
@@ -686,7 +683,6 @@ function saveTag() {
     return;
   }
 
-  // Update the tag element
   currentTag.dataset.color = newColor;
   currentTag.style.backgroundColor = newColor;
   const favStar = document.getElementById('tag-favorite-star');
@@ -916,10 +912,11 @@ document
 class SettingsService {
   static async loadAll() {
     try {
-      const response = await fetch("/api/settings/default_user");
-      if (!response.ok)
-        throw new Error(`HTTP error! status: ${response.status}`);
-      return await response.json();
+      const data = await getCachedSettings();
+      if (!data || Object.keys(data).length === 0) {
+        throw new Error('Empty settings response');
+      }
+      return data;
     } catch (error) {
       console.error("Settings load failed:", error);
       throw error;
@@ -943,6 +940,7 @@ class SettingsService {
       });
       if (!response.ok)
         throw new Error(`HTTP error! status: ${response.status}`);
+      _invalidateSettingsCache(); // force fresh data on next load
       return await response.json();
     } catch (error) {
       console.error("Settings save failed:", error);
@@ -1202,7 +1200,6 @@ class SettingsManager {
     document.getElementById("loader").style.display = "block";
     try {
       const settingsToSave = this.gatherSettings();
-      console.log("Saving settings with tags:", JSON.stringify(settingsToSave.tags));
       await SettingsService.saveAll(settingsToSave);
       // Reload from API to get canonical saved state (avoids Pydantic serialization quirks)
       this.settings = await SettingsService.loadAll();
@@ -1211,7 +1208,6 @@ class SettingsManager {
           typeof c === "string" ? { hex: c, name: colorMap[c] || "Custom" } : c,
         );
       }
-      console.log("✅ Settings saved. Reloaded tags:", JSON.stringify(this.settings.tags));
       setSaveButtonSaved();
       document.getElementById("loader").style.display = "none";
       return true;
@@ -1231,10 +1227,6 @@ class SettingsManager {
 
 function setSaveButtonSaved() {
   if (window._cwocSave) window._cwocSave.markSaved();
-}
-
-function setSaveButtonUnsaved() {
-  if (window._cwocSave) window._cwocSave.markUnsaved();
 }
 
 function closeDeleteModal() {

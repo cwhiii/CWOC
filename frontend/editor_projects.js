@@ -1,16 +1,23 @@
 // editor_projects.js
 // Manages the Projects Zone UI inside #projectsContent for project master chits.
 
-// Local state to hold project and child chit data
+// Local state for project and child chit data
 const projectState = {
   projectChit: null, // Current project chit object
   childChits: {}, // Map child chit ID -> chit object
   projectMasters: [], // List of all project master chits for move dropdown
 };
 
+// Single document-level listener to close move-project dropdowns (avoids per-card duplication)
+document.addEventListener("click", () => {
+  document.querySelectorAll(".move-project-dropdown").forEach((dd) => {
+    dd.style.display = "none";
+  });
+});
+
 /**
  * Mark the editor as having unsaved changes.
- * Delegates to setSaveButtonUnsaved() defined in editor.js.
+ * Delegates to setSaveButtonUnsaved() defined in shared.js.
  */
 function saveCurrentChit() {
   if (typeof setSaveButtonUnsaved === "function") {
@@ -18,7 +25,6 @@ function saveCurrentChit() {
   }
 }
 
-// Initialize the Projects Zone for the given project chit ID
 async function initializeProjectZone(projectChitId) {
   if (!projectChitId) {
     console.warn("initializeProjectZone called without projectChitId");
@@ -44,7 +50,6 @@ async function initializeProjectZone(projectChitId) {
   }
 }
 
-// Clear the Projects Zone content
 function clearProjectsContent() {
   const container = document.getElementById("projectsContent");
   if (container) container.innerHTML = "<p>No project data to display.</p>";
@@ -54,8 +59,6 @@ function clearProjectsContent() {
 }
 
 // Update header buttons visibility based on project master status
-// Updates visibility of Add and Filter buttons based on project master status
-// Updates visibility of Add and Filter buttons based on project master status
 function updateHeaderButtonsVisibility() {
   const isMaster = projectState.projectChit?.is_project_master === true;
   const addButton = document.getElementById("addProjectItemBtn");
@@ -66,9 +69,7 @@ function updateHeaderButtonsVisibility() {
     filterButton.style.display = isMaster ? "inline-flex" : "none";
 }
 
-// Render child chits grouped by status inside #projectsContent
-// Renders child chits grouped by status with full-width sections and drag-drop on entire section
-// Renders child chits grouped by status with full-width sections and drag-drop on entire section
+// Render child chits grouped by status with drag-drop between sections
 function renderChildChitsByStatus() {
   const container = document.getElementById("projectsContent");
   if (!container) {
@@ -135,7 +136,6 @@ function renderChildChitsByStatus() {
   container.appendChild(projectContainer);
 }
 
-// Update chit status and re-render
 function updateChitStatus(chitId, newStatus) {
   if (projectState.childChits[chitId]) {
     projectState.childChits[chitId].status = newStatus;
@@ -144,9 +144,7 @@ function updateChitStatus(chitId, newStatus) {
   }
 }
 
-// Create a card element for a child chit with controls and drag-and-drop
-// Creates a child chit card with full width, status dropdown, controls aligned right, and drag-drop support
-// Creates a child chit card with drag handle, status dropdown, title, date, open, move, delete buttons arranged as requested
+// Create a card element for a child chit with controls and drag-drop support
 function createChildChitCard(chit) {
   const card = document.createElement("div");
   card.className = "project-item";
@@ -303,10 +301,6 @@ function createChildChitCard(chit) {
       dropdown.style.display = isVisible ? "none" : "block";
     });
 
-    document.addEventListener("click", () => {
-      dropdown.style.display = "none";
-    });
-
     rightContainer.appendChild(moveBtn);
   }
 
@@ -327,14 +321,12 @@ function createChildChitCard(chit) {
   return card;
 }
 
-// Update local status of a child chit
 function handleStatusChange(childChitId, newStatus) {
   if (projectState.childChits[childChitId]) {
     projectState.childChits[childChitId].status = newStatus;
   }
 }
 
-// Update local due date of a child chit
 function handleDueDateChange(childChitId, newDueDate) {
   if (projectState.childChits[childChitId]) {
     if (newDueDate) {
@@ -347,7 +339,6 @@ function handleDueDateChange(childChitId, newDueDate) {
   }
 }
 
-// Move a child chit to another project locally
 function moveChildChitToProject(childChitId, targetProjectId) {
   if (!projectState.childChits[childChitId]) {
     console.warn(`Child chit ${childChitId} not found`);
@@ -385,7 +376,6 @@ function moveChildChitToProject(childChitId, targetProjectId) {
   saveCurrentChit();
 }
 
-// Fetch all project master chits for move dropdown
 async function fetchProjectMasters() {
   try {
     const response = await fetch("/api/chits");
@@ -418,10 +408,6 @@ async function saveProjectChanges() {
         const isNewChild = !(await chitExists(child.id));
         const method = isNewChild ? "POST" : "PUT";
         const url = isNewChild ? "/api/chits" : `/api/chits/${child.id}`;
-        console.log(
-          `Saving child chit ${child.id} with method ${method}:`,
-          chitUpdate,
-        );
         const res = await fetch(url, {
           method,
           headers: { "Content-Type": "application/json" },
@@ -446,10 +432,6 @@ async function saveProjectChanges() {
     const projectUrl = isNewProject
       ? "/api/chits"
       : `/api/chits/${projectState.projectChit.id}`;
-    console.log(
-      `Saving project chit ${projectState.projectChit.id} with method ${projectMethod}:`,
-      projectUpdate,
-    );
     const projectSavePromise = fetch(projectUrl, {
       method: projectMethod,
       headers: { "Content-Type": "application/json" },
@@ -462,8 +444,6 @@ async function saveProjectChanges() {
     ]);
     if (results.some((res) => res && !res.ok)) {
       console.warn("Some save operations failed:", results);
-    } else {
-      console.log("All project and child chits saved successfully.");
     }
   } catch (error) {
     console.error("Error saving project changes:", error);
@@ -478,9 +458,11 @@ async function openAddChitModal() {
     return;
   }
 
-  // Create or get modal
+  // Create modal once; attach listeners once via delegation to avoid duplication
   let modal = document.getElementById("addChitModalNew");
+  let isNewModal = false;
   if (!modal) {
+    isNewModal = true;
     modal = document.createElement("div");
     modal.id = "addChitModalNew";
     modal.className = "modal-overlay-new";
@@ -529,8 +511,11 @@ async function openAddChitModal() {
       )
       .sort((a, b) => (a.title || "").localeCompare(b.title || ""));
 
+    // Store current chit list on modal so delegated handlers can access it
+    modal._nonProjectChits = nonProjectChits;
+    modal._selectedChitId = null;
+
     const chitList = document.getElementById("chitListNew");
-    let selectedChitId = null;
 
     const renderChits = (chits) => {
       chitList.innerHTML = "";
@@ -542,49 +527,63 @@ async function openAddChitModal() {
           <td>${chit.due_datetime ? new Date(chit.due_datetime).toISOString().slice(0, 10) : ""}</td>
           <td>${chit.start_datetime ? new Date(chit.start_datetime).toISOString().slice(0, 10) : ""}</td>
         `;
-        row.addEventListener("click", () => {
-          selectedChitId = chit.id;
-          chitList
-            .querySelectorAll("tr")
-            .forEach((r) => r.classList.remove("selected"));
-          row.classList.add("selected");
-          document.getElementById("addChitBtnNew").disabled = false;
-        });
-        row.addEventListener("dblclick", () => {
-          addChildChit(chit);
-          modal.style.display = "none";
-        });
         chitList.appendChild(row);
       });
     };
 
     renderChits(nonProjectChits);
 
-    document.getElementById("chitSearchNew").addEventListener("input", (e) => {
-      const searchTerm = e.target.value.toLowerCase();
-      const filteredChits = nonProjectChits.filter((chit) =>
-        (chit.title || "").toLowerCase().includes(searchTerm),
-      );
-      renderChits(filteredChits);
-    });
+    // Only attach listeners once when the modal is first created
+    if (isNewModal) {
+      // Delegate click/dblclick on table rows via the tbody
+      chitList.addEventListener("click", (e) => {
+        const row = e.target.closest("tr");
+        if (!row || !row.dataset.chitId) return;
+        modal._selectedChitId = row.dataset.chitId;
+        chitList.querySelectorAll("tr").forEach((r) => r.classList.remove("selected"));
+        row.classList.add("selected");
+        document.getElementById("addChitBtnNew").disabled = false;
+      });
 
-    document.getElementById("addChitBtnNew").addEventListener("click", () => {
-      if (selectedChitId) {
-        const selectedChit = nonProjectChits.find(
-          (chit) => chit.id === selectedChitId,
-        );
-        if (selectedChit) {
-          addChildChit(selectedChit);
+      chitList.addEventListener("dblclick", (e) => {
+        const row = e.target.closest("tr");
+        if (!row || !row.dataset.chitId) return;
+        const chit = (modal._nonProjectChits || []).find((c) => c.id === row.dataset.chitId);
+        if (chit) {
+          addChildChit(chit);
           modal.style.display = "none";
         }
-      }
-    });
+      });
 
-    document
-      .getElementById("cancelChitBtnNew")
-      .addEventListener("click", () => {
+      document.getElementById("chitSearchNew").addEventListener("input", (e) => {
+        const searchTerm = e.target.value.toLowerCase();
+        const filtered = (modal._nonProjectChits || []).filter((chit) =>
+          (chit.title || "").toLowerCase().includes(searchTerm),
+        );
+        renderChits(filtered);
+      });
+
+      document.getElementById("addChitBtnNew").addEventListener("click", () => {
+        if (modal._selectedChitId) {
+          const selectedChit = (modal._nonProjectChits || []).find(
+            (chit) => chit.id === modal._selectedChitId,
+          );
+          if (selectedChit) {
+            addChildChit(selectedChit);
+            modal.style.display = "none";
+          }
+        }
+      });
+
+      document.getElementById("cancelChitBtnNew").addEventListener("click", () => {
         modal.style.display = "none";
       });
+    }
+
+    // Reset search and selection state each time modal opens
+    document.getElementById("chitSearchNew").value = "";
+    document.getElementById("addChitBtnNew").disabled = true;
+    chitList.querySelectorAll("tr").forEach((r) => r.classList.remove("selected"));
   } catch (error) {
     console.error("Error fetching chits for modal:", error);
     alert("Failed to load chits. Please try again.");
@@ -592,7 +591,6 @@ async function openAddChitModal() {
   }
 }
 
-// Adds a chit as a child to the current project locally
 function addChildChit(chit) {
   if (!projectState.projectChit) {
     console.warn("No project loaded to add child chit.");
@@ -614,9 +612,6 @@ function addChildChit(chit) {
   }
   if (!projectState.projectChit.child_chits.includes(chit.id)) {
     projectState.projectChit.child_chits.push(chit.id);
-    console.log(
-      `Added child chit ${chit.id} to project ${projectState.projectChit.id}`,
-    );
   }
 
   // Re-render the Projects Zone UI
@@ -629,10 +624,7 @@ function addProjectItem() {
   openAddChitModal();
 }
 
-// Toggles the is_project_master status of the current chit
-
-// Toggles project master status with confirmation modal if children exist
-// Toggles project master status with confirmation modal if children exist
+// Toggles project master status, with confirmation if children exist
 async function toggleProjectMaster() {
   const projectMasterInput = document.getElementById("isProjectMaster");
   if (!projectMasterInput) {
@@ -674,7 +666,6 @@ async function toggleProjectMaster() {
   }
 }
 
-// Check if a chit exists in the backend
 async function chitExists(chitId) {
   try {
     const response = await fetch(`/api/chit/${chitId}`);
@@ -684,17 +675,11 @@ async function chitExists(chitId) {
   }
 }
 
-// Generate a unique ID for new chits
-function generateUniqueId() {
-  return Date.now().toString(36) + Math.random().toString(36).substr(2);
-}
-
 // Fetch the project chit and its child chits from backend or use local data for new chits
 async function loadProjectData(projectChitId) {
   // For new chits, create a local project chit if none exists
   const isNewChit = !(await chitExists(projectChitId));
   if (isNewChit) {
-    console.log(`Creating local project chit for new ID: ${projectChitId}`);
     projectState.projectChit = {
       id: projectChitId,
       title: "New Project",
@@ -705,16 +690,13 @@ async function loadProjectData(projectChitId) {
     };
   } else {
     // Fetch existing project chit
-    console.log(`Fetching project chit: ${projectChitId}`);
     const projectResponse = await fetch(`/api/chit/${projectChitId}`);
     if (!projectResponse.ok) {
       throw new Error(`Failed to load project chit ${projectChitId}`);
     }
     projectState.projectChit = await projectResponse.json();
-    console.log("Loaded project chit:", projectState.projectChit);
   }
 
-  // Clear previous child chits
   projectState.childChits = {};
 
   // Fetch each child chit by ID (for existing chits)
@@ -722,10 +704,6 @@ async function loadProjectData(projectChitId) {
     Array.isArray(projectState.projectChit.child_chits) &&
     projectState.projectChit.child_chits.length > 0
   ) {
-    console.log(
-      `Fetching ${projectState.projectChit.child_chits.length} child chits:`,
-      projectState.projectChit.child_chits,
-    );
     const fetches = projectState.projectChit.child_chits.map(
       async (childId) => {
         const res = await fetch(`/api/chit/${childId}`);
@@ -738,8 +716,5 @@ async function loadProjectData(projectChitId) {
       },
     );
     await Promise.all(fetches);
-    console.log("Loaded child chits:", projectState.childChits);
-  } else {
-    console.log("No child chits to load for project:", projectChitId);
   }
 }

@@ -882,6 +882,9 @@ hr {
 
 .active-tags-list {
     min-width: 200px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
 }
 
 .tags-search-row {
@@ -1003,12 +1006,20 @@ hr {
     min-height: 4em;
     max-height: 200px;
     overflow-y: auto;
+    overflow-x: hidden;
     margin-bottom: 0.5em;
     border: 1px solid var(--border-color);
     border-radius: 4px;
     padding: 8px;
     background-color: var(--input-bg);
     box-sizing: border-box;
+}
+
+/* Active tag chips wrap instead of overflowing */
+#activeTagsListContainer {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
 }
 
 .tag-container-Active h3 {
@@ -3042,4 +3053,18 @@ button.archive-btn.archived-active {
 
 .clear-location-btn:hover {
     background-color: var(--danger-red);
+}
+
+/* ── Extracted inline-style utility classes ─────────────────────────────── */
+/* Compact label for inline checkboxes (recurrence day labels, etc.) */
+.cwoc-inline-label-sm {
+    font-size: 0.85em;
+}
+
+/* Inline checkbox label with flex layout and pointer cursor */
+.cwoc-inline-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
 }

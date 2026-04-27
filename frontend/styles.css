@@ -1,24 +1,26 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    CWOC Main Dashboard Styles
-   CSS variables shared with shared-page.css — change once, applies everywhere.
+   
+   The dashboard (index.html) loads ONLY this file — not shared-page.css —
+   so this :root must be self-contained with every variable the dashboard
+   needs.
+   
+   Canonical source of truth for the common variable set is
+   frontend/shared-page.css.  Keep shared values in sync with that file.
    ═══════════════════════════════════════════════════════════════════════════ */
 
+/* ── CSS Variables ──────────────────────────────────────────────────────── */
+/* Shared variables — must match shared-page.css exactly */
 :root {
     --parchment-light: #fdf5e6;
     --parchment-medium: #faebd7;
-    --parchment-dark: #fff8dc;
     --aged-brown-dark: #4a2c2a;
     --aged-brown-medium: #8b4513;
     --aged-brown-light: #a0522d;
-    --accent-gold: #d4af37;
-    --button-bg: #d2b48c;
     --button-hover: #c4a484;
-    --danger-red: #b22222;
-    --success-green: #228b22;
-    --info-blue: #4682b4;
-    --border-color: var(--aged-brown-medium);
-    --text-color: var(--aged-brown-dark);
     --header-bg: #e0d4b5;
+
+    /* Dashboard-specific variables */
     --sidebar-bg: #e0d4b5;
     --sidebar-border: #6b4e31;
     --btn-bg: #8b5a2b;
@@ -1768,6 +1770,14 @@ button.delete:hover {
     font-size: 0.95em;
     color: #8b4513;
     padding: 12px 0;
+}
+
+/* ── Sidebar compact half-width buttons ────────────────────────────────────── */
+.sidebar-compact-btn {
+    flex: 1 1 calc(50% - 3px);
+    margin-bottom: 0;
+    font-size: 0.8em;
+    padding: 6px;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════

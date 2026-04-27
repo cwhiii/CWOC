@@ -70,7 +70,6 @@
         }
     }
 
-    console.log('live test: 1202');
     // ── ESC to exit ─────────────────────────────────────────────────────
     window.addEventListener('keydown', function (e) {
         if (e.key !== 'Escape') return;

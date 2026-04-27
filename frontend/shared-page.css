@@ -8,6 +8,10 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 /* ── CSS Variables ──────────────────────────────────────────────────────── */
+/* CANONICAL SOURCE OF TRUTH for the common CWOC CSS variable set.
+   All other stylesheets (styles.css, shared-editor.css) must mirror these
+   values exactly for any variables they redefine.  Change a value here
+   first, then propagate to the other files. */
 :root {
     --parchment-light: #fdf5e6;
     --parchment-medium: #faebd7;
@@ -19,7 +23,6 @@
     --button-bg: #d2b48c;
     --button-hover: #c4a484;
     --danger-red: #b22222;
-    --success-green: #228b22;
     --info-blue: #4682b4;
     --border-color: var(--aged-brown-medium);
     --text-color: var(--aged-brown-dark);

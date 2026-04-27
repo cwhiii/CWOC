@@ -1,8 +1,14 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 1: Imports
+# ═══════════════════════════════════════════════════════════════════════════
+
 import sqlite3
 import json
 import logging
 import os
 import re
+import csv
+import io
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 from fastapi import FastAPI, HTTPException, Query, UploadFile, File, Response
@@ -10,6 +16,11 @@ from pydantic import BaseModel
 from uuid import uuid4
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 2: Constants & Configuration
+# ═══════════════════════════════════════════════════════════════════════════
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -21,7 +32,11 @@ app = FastAPI()
 # Database path
 DB_PATH = "/app/data/app.db"
 
-# Pydantic Models
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 3: Pydantic Models
+# ═══════════════════════════════════════════════════════════════════════════
+
 class Tag(BaseModel):
     name: str
     color: Optional[str] = None
@@ -110,6 +125,11 @@ class Contact(BaseModel):
     created_datetime: Optional[str] = None
     modified_datetime: Optional[str] = None
 
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 4: Database Helpers (init, migrations, serialize/deserialize)
+# ═══════════════════════════════════════════════════════════════════════════
+
 def compute_display_name(contact) -> str:
     """Concatenate prefix + given_name + middle_names + surname + suffix into a display name."""
     parts = []
@@ -126,8 +146,411 @@ def compute_display_name(contact) -> str:
                 parts.append(val.strip())
     return " ".join(parts)
 
+# JSON serialization/deserialization helpers
+def serialize_json_field(data: Any) -> Optional[str]:
+    if data is None:
+        return None
+    try:
+        return json.dumps(data)
+    except TypeError as e:
+        logger.error(f"Serialization error: {str(e)}")
+        return None
 
-# ── vCard 3.0 Serializer & Printer ──────────────────────────────────────────
+def deserialize_json_field(data: Optional[str]) -> Any:
+    if data is None:
+        return None
+    try:
+        return json.loads(data)
+    except json.JSONDecodeError as e:
+        logger.error(f"Deserialization error: {str(e)}")
+        return None
+
+# Database initialization
+def init_db():
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS chits (
+            id TEXT PRIMARY KEY,
+            title TEXT,
+            note TEXT,
+            tags TEXT,
+            start_datetime TEXT,
+            end_datetime TEXT,
+            due_datetime TEXT,
+            completed_datetime TEXT,
+            status TEXT,
+            priority TEXT,
+            severity TEXT,
+            checklist TEXT,
+            alarm BOOLEAN,
+            notification BOOLEAN,
+            recurrence TEXT,
+            recurrence_id TEXT,
+            location TEXT,
+            color TEXT,
+            people TEXT,
+            pinned BOOLEAN,
+            archived BOOLEAN,
+            deleted BOOLEAN,
+            created_datetime TEXT,
+            modified_datetime TEXT,
+            is_project_master BOOLEAN DEFAULT 0,
+            child_chits TEXT,
+            all_day BOOLEAN DEFAULT 0,
+            alerts TEXT,
+            recurrence_rule TEXT,
+            recurrence_exceptions TEXT
+        )
+        """)
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS settings (
+            user_id TEXT PRIMARY KEY,
+            time_format TEXT,
+            sex TEXT,
+            snooze_length TEXT,
+            default_filters TEXT,
+            alarm_orientation TEXT,
+            active_clocks TEXT,
+            tags TEXT,
+            custom_colors TEXT,
+            visual_indicators TEXT,
+            chit_options TEXT,
+            calendar_snap TEXT DEFAULT '15'
+        )
+        """)
+        conn.commit()
+    except Exception as e:
+        logger.error(f"Error initializing database: {str(e)}")
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+# Instance ID: generate a unique ID for this installation
+def get_or_create_instance_id():
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("CREATE TABLE IF NOT EXISTS instance_meta (key TEXT PRIMARY KEY, value TEXT)")
+        cursor.execute("SELECT value FROM instance_meta WHERE key = 'instance_id'")
+        row = cursor.fetchone()
+        if row:
+            return row[0]
+        iid = str(uuid4())
+        cursor.execute("INSERT INTO instance_meta (key, value) VALUES ('instance_id', ?)", (iid,))
+        conn.commit()
+        return iid
+    except Exception as e:
+        logger.error(f"Error getting instance ID: {str(e)}")
+        return "unknown"
+    finally:
+        if conn:
+            conn.close()
+
+# Migration: Rename labels to tags
+def migrate_labels_to_tags():
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(chits)")
+        columns = [col[1] for col in cursor.fetchall()]
+        if "labels" in columns and "tags" not in columns:
+            cursor.execute("ALTER TABLE chits RENAME COLUMN labels TO tags")
+            conn.commit()
+            logger.info("Migrated labels column to tags")
+    except Exception as e:
+        logger.error(f"Error migrating labels to tags: {str(e)}")
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+# Migration: Add all_day column if missing
+def migrate_add_all_day():
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(chits)")
+        columns = [col[1] for col in cursor.fetchall()]
+        if "all_day" not in columns:
+            cursor.execute("ALTER TABLE chits ADD COLUMN all_day BOOLEAN DEFAULT 0")
+            conn.commit()
+            logger.info("Added all_day column to chits table")
+    except Exception as e:
+        logger.error(f"Error adding all_day column: {str(e)}")
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+# Migration: Add alerts column if missing
+def migrate_add_alerts():
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(chits)")
+        columns = [col[1] for col in cursor.fetchall()]
+        if "alerts" not in columns:
+            cursor.execute("ALTER TABLE chits ADD COLUMN alerts TEXT")
+            conn.commit()
+            logger.info("Added alerts column to chits table")
+    except Exception as e:
+        logger.error(f"Error adding alerts column: {str(e)}")
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+def migrate_add_calendar_snap():
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(settings)")
+        columns = [col[1] for col in cursor.fetchall()]
+        if "calendar_snap" not in columns:
+            cursor.execute("ALTER TABLE settings ADD COLUMN calendar_snap TEXT DEFAULT '15'")
+            conn.commit()
+            logger.info("Added calendar_snap column to settings table")
+        if "week_start_day" not in columns:
+            cursor.execute("ALTER TABLE settings ADD COLUMN week_start_day TEXT DEFAULT '0'")
+            conn.commit()
+            logger.info("Added week_start_day column to settings table")
+    except Exception as e:
+        logger.error(f"Error adding calendar settings columns: {str(e)}")
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+def migrate_add_recurrence_fields():
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(chits)")
+        columns = [col[1] for col in cursor.fetchall()]
+        if "recurrence_rule" not in columns:
+            cursor.execute("ALTER TABLE chits ADD COLUMN recurrence_rule TEXT")
+            conn.commit()
+            logger.info("Added recurrence_rule column to chits table")
+        if "recurrence_exceptions" not in columns:
+            cursor.execute("ALTER TABLE chits ADD COLUMN recurrence_exceptions TEXT")
+            conn.commit()
+            logger.info("Added recurrence_exceptions column to chits table")
+        # Migrate old recurrence strings to new format
+        cursor.execute("SELECT id, recurrence FROM chits WHERE recurrence IS NOT NULL AND recurrence != ''")
+        rows = cursor.fetchall()
+        for row in rows:
+            chit_id, old_rec = row
+            freq_map = {"Hourly": "HOURLY", "Daily": "DAILY", "Weekly": "WEEKLY", "Monthly": "MONTHLY", "Yearly": "YEARLY"}
+            if old_rec in freq_map:
+                new_rule = serialize_json_field({"freq": freq_map[old_rec], "interval": 1})
+                cursor.execute("UPDATE chits SET recurrence_rule = ? WHERE id = ?", (new_rule, chit_id))
+        conn.commit()
+    except Exception as e:
+        logger.error(f"Error adding recurrence fields: {str(e)}")
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+def migrate_add_work_hours():
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(settings)")
+        columns = [col[1] for col in cursor.fetchall()]
+        if "work_start_hour" not in columns:
+            cursor.execute("ALTER TABLE settings ADD COLUMN work_start_hour TEXT DEFAULT '8'")
+        if "work_end_hour" not in columns:
+            cursor.execute("ALTER TABLE settings ADD COLUMN work_end_hour TEXT DEFAULT '17'")
+        if "work_days" not in columns:
+            cursor.execute("ALTER TABLE settings ADD COLUMN work_days TEXT DEFAULT '1,2,3,4,5'")
+        if "enabled_periods" not in columns:
+            cursor.execute("ALTER TABLE settings ADD COLUMN enabled_periods TEXT DEFAULT 'Itinerary,Day,Week,Work,SevenDay,Month,Year'")
+        if "custom_days_count" not in columns:
+            cursor.execute("ALTER TABLE settings ADD COLUMN custom_days_count TEXT DEFAULT '7'")
+        if "active_clocks" not in columns:
+            cursor.execute("ALTER TABLE settings ADD COLUMN active_clocks TEXT")
+        conn.commit()
+    except Exception as e:
+        logger.error(f"Error adding work hours columns: {str(e)}")
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+# Migration: Add saved_locations column if missing
+def migrate_add_saved_locations():
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(settings)")
+        columns = [col[1] for col in cursor.fetchall()]
+        if "saved_locations" not in columns:
+            cursor.execute("ALTER TABLE settings ADD COLUMN saved_locations TEXT")
+            conn.commit()
+            logger.info("Added saved_locations column to settings table")
+    except Exception as e:
+        logger.error(f"Error adding saved_locations column: {str(e)}")
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+# Initialize contacts table
+def init_contacts_table():
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS contacts (
+            id TEXT PRIMARY KEY,
+            given_name TEXT NOT NULL,
+            surname TEXT,
+            middle_names TEXT,
+            prefix TEXT,
+            suffix TEXT,
+            display_name TEXT,
+            phones TEXT,
+            emails TEXT,
+            addresses TEXT,
+            call_signs TEXT,
+            x_handles TEXT,
+            websites TEXT,
+            has_signal BOOLEAN DEFAULT 0,
+            pgp_key TEXT,
+            favorite BOOLEAN DEFAULT 0,
+            created_datetime TEXT,
+            modified_datetime TEXT
+        )
+        """)
+        conn.commit()
+    except Exception as e:
+        logger.error(f"Error initializing contacts table: {str(e)}")
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+def migrate_contacts_add_new_fields():
+    """Add nickname, signal_username, color, organization, social_context, image_url columns."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(contacts)")
+        existing = {row[1] for row in cursor.fetchall()}
+        new_cols = [
+            ("nickname", "TEXT"),
+            ("signal_username", "TEXT"),
+            ("color", "TEXT"),
+            ("organization", "TEXT"),
+            ("social_context", "TEXT"),
+            ("image_url", "TEXT"),
+        ]
+        for col_name, col_type in new_cols:
+            if col_name not in existing:
+                cursor.execute(f"ALTER TABLE contacts ADD COLUMN {col_name} {col_type}")
+                logger.info(f"Added column {col_name} to contacts table")
+        conn.commit()
+    except Exception as e:
+        logger.error(f"Error adding new contact fields: {str(e)}")
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+# Contact DB helpers
+
+def _serialize_contact_for_db(contact) -> dict:
+    """Extract contact fields into a dict ready for SQLite insertion.
+    Handles both Pydantic models and plain dicts.
+    """
+    def _get(field, default=None):
+        if isinstance(contact, dict):
+            return contact.get(field, default)
+        return getattr(contact, field, default)
+
+    # Convert MultiValueEntry lists to list-of-dicts for JSON serialization
+    def _mv_to_dicts(entries):
+        if not entries:
+            return None
+        result = []
+        for e in entries:
+            if isinstance(e, dict):
+                result.append(e)
+            else:
+                result.append(e.dict())
+        return result if result else None
+
+    return {
+        "given_name": _get("given_name"),
+        "surname": _get("surname"),
+        "middle_names": _get("middle_names"),
+        "prefix": _get("prefix"),
+        "suffix": _get("suffix"),
+        "nickname": _get("nickname"),
+        "display_name": compute_display_name(contact),
+        "phones": serialize_json_field(_mv_to_dicts(_get("phones"))),
+        "emails": serialize_json_field(_mv_to_dicts(_get("emails"))),
+        "addresses": serialize_json_field(_mv_to_dicts(_get("addresses"))),
+        "call_signs": serialize_json_field(_mv_to_dicts(_get("call_signs"))),
+        "x_handles": serialize_json_field(_mv_to_dicts(_get("x_handles"))),
+        "websites": serialize_json_field(_mv_to_dicts(_get("websites"))),
+        "has_signal": 1 if _get("has_signal") else 0,
+        "signal_username": _get("signal_username"),
+        "pgp_key": _get("pgp_key"),
+        "favorite": 1 if _get("favorite") else 0,
+        "color": _get("color"),
+        "organization": _get("organization"),
+        "social_context": _get("social_context"),
+        "image_url": _get("image_url"),
+    }
+
+
+def _row_to_contact(row: dict) -> dict:
+    """Convert a SQLite row dict into a Contact-compatible JSON dict."""
+    row["phones"] = deserialize_json_field(row.get("phones"))
+    row["emails"] = deserialize_json_field(row.get("emails"))
+    row["addresses"] = deserialize_json_field(row.get("addresses"))
+    row["call_signs"] = deserialize_json_field(row.get("call_signs"))
+    row["x_handles"] = deserialize_json_field(row.get("x_handles"))
+    row["websites"] = deserialize_json_field(row.get("websites"))
+    row["has_signal"] = bool(row.get("has_signal"))
+    row["favorite"] = bool(row.get("favorite"))
+    # Ensure new fields have defaults if missing from older rows
+    row.setdefault("nickname", None)
+    row.setdefault("signal_username", None)
+    row.setdefault("color", None)
+    row.setdefault("organization", None)
+    row.setdefault("social_context", None)
+    row.setdefault("image_url", None)
+    return row
+
+
+def _write_vcf_file(contact_id: str, contact) -> None:
+    """Write a .vcf file for the given contact to CONTACTS_DIR."""
+    vcf_content = vcard_print(contact)
+    filepath = os.path.join(CONTACTS_DIR, f"{contact_id}.vcf")
+    with open(filepath, "w", encoding="utf-8") as f:
+        f.write(vcf_content)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 5: vCard & CSV Serializers
+# ═══════════════════════════════════════════════════════════════════════════
 
 def vcard_parse(vcard_string: str) -> dict:
     """Parse a vCard 3.0 string into a Contact dict.
@@ -355,11 +778,6 @@ def vcard_print(contact) -> str:
     return "\r\n".join(lines)
 
 
-# ── CSV Serializer (Export & Import) ─────────────────────────────────────────
-
-import csv
-import io
-
 # Multi-value field names that get flattened into numbered columns (up to 5 each)
 _CSV_MULTI_VALUE_FIELDS = ["phones", "emails", "addresses", "call_signs", "x_handles", "websites"]
 _CSV_MAX_MULTI = 5
@@ -501,276 +919,9 @@ def csv_import(csv_text: str) -> tuple:
     return (contacts, errors)
 
 
-# Database initialization
-def init_db():
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS chits (
-            id TEXT PRIMARY KEY,
-            title TEXT,
-            note TEXT,
-            tags TEXT,
-            start_datetime TEXT,
-            end_datetime TEXT,
-            due_datetime TEXT,
-            completed_datetime TEXT,
-            status TEXT,
-            priority TEXT,
-            severity TEXT,
-            checklist TEXT,
-            alarm BOOLEAN,
-            notification BOOLEAN,
-            recurrence TEXT,
-            recurrence_id TEXT,
-            location TEXT,
-            color TEXT,
-            people TEXT,
-            pinned BOOLEAN,
-            archived BOOLEAN,
-            deleted BOOLEAN,
-            created_datetime TEXT,
-            modified_datetime TEXT,
-            is_project_master BOOLEAN DEFAULT 0,
-            child_chits TEXT,
-            all_day BOOLEAN DEFAULT 0,
-            alerts TEXT,
-            recurrence_rule TEXT,
-            recurrence_exceptions TEXT
-        )
-        """)
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS settings (
-            user_id TEXT PRIMARY KEY,
-            time_format TEXT,
-            sex TEXT,
-            snooze_length TEXT,
-            default_filters TEXT,
-            alarm_orientation TEXT,
-            active_clocks TEXT,
-            tags TEXT,
-            custom_colors TEXT,
-            visual_indicators TEXT,
-            chit_options TEXT,
-            calendar_snap TEXT DEFAULT '15'
-        )
-        """)
-        conn.commit()
-    except Exception as e:
-        logger.error(f"Error initializing database: {str(e)}")
-        raise
-    finally:
-        conn.close()
-
-# Instance ID: generate a unique ID for this installation
-def get_or_create_instance_id():
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute("CREATE TABLE IF NOT EXISTS instance_meta (key TEXT PRIMARY KEY, value TEXT)")
-        cursor.execute("SELECT value FROM instance_meta WHERE key = 'instance_id'")
-        row = cursor.fetchone()
-        if row:
-            conn.close()
-            return row[0]
-        iid = str(uuid4())
-        cursor.execute("INSERT INTO instance_meta (key, value) VALUES ('instance_id', ?)", (iid,))
-        conn.commit()
-        conn.close()
-        return iid
-    except Exception as e:
-        logger.error(f"Error getting instance ID: {str(e)}")
-        return "unknown"
-
-# Migration: Rename labels to tags
-def migrate_labels_to_tags():
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute("PRAGMA table_info(chits)")
-        columns = [col[1] for col in cursor.fetchall()]
-        if "labels" in columns and "tags" not in columns:
-            cursor.execute("ALTER TABLE chits RENAME COLUMN labels TO tags")
-            conn.commit()
-            logger.info("Migrated labels column to tags")
-        conn.close()
-    except Exception as e:
-        logger.error(f"Error migrating labels to tags: {str(e)}")
-        raise
-
-# Migration: Add all_day column if missing
-def migrate_add_all_day():
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute("PRAGMA table_info(chits)")
-        columns = [col[1] for col in cursor.fetchall()]
-        if "all_day" not in columns:
-            cursor.execute("ALTER TABLE chits ADD COLUMN all_day BOOLEAN DEFAULT 0")
-            conn.commit()
-            logger.info("Added all_day column to chits table")
-        conn.close()
-    except Exception as e:
-        logger.error(f"Error adding all_day column: {str(e)}")
-        raise
-
-# JSON serialization/deserialization helpers
-def serialize_json_field(data: Any) -> Optional[str]:
-    if data is None:
-        return None
-    try:
-        return json.dumps(data)
-    except TypeError as e:
-        logger.error(f"Serialization error: {str(e)}")
-        return None
-
-def deserialize_json_field(data: Optional[str]) -> Any:
-    if data is None:
-        return None
-    try:
-        return json.loads(data)
-    except json.JSONDecodeError as e:
-        logger.error(f"Deserialization error: {str(e)}")
-        return None
-
-# Migration: Add alerts column if missing
-def migrate_add_alerts():
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute("PRAGMA table_info(chits)")
-        columns = [col[1] for col in cursor.fetchall()]
-        if "alerts" not in columns:
-            cursor.execute("ALTER TABLE chits ADD COLUMN alerts TEXT")
-            conn.commit()
-            logger.info("Added alerts column to chits table")
-        conn.close()
-    except Exception as e:
-        logger.error(f"Error adding alerts column: {str(e)}")
-        raise
-
-def migrate_add_calendar_snap():
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute("PRAGMA table_info(settings)")
-        columns = [col[1] for col in cursor.fetchall()]
-        if "calendar_snap" not in columns:
-            cursor.execute("ALTER TABLE settings ADD COLUMN calendar_snap TEXT DEFAULT '15'")
-            conn.commit()
-            logger.info("Added calendar_snap column to settings table")
-        if "week_start_day" not in columns:
-            cursor.execute("ALTER TABLE settings ADD COLUMN week_start_day TEXT DEFAULT '0'")
-            conn.commit()
-            logger.info("Added week_start_day column to settings table")
-        conn.close()
-    except Exception as e:
-        logger.error(f"Error adding calendar settings columns: {str(e)}")
-        raise
-
-def migrate_add_recurrence_fields():
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute("PRAGMA table_info(chits)")
-        columns = [col[1] for col in cursor.fetchall()]
-        if "recurrence_rule" not in columns:
-            cursor.execute("ALTER TABLE chits ADD COLUMN recurrence_rule TEXT")
-            conn.commit()
-            logger.info("Added recurrence_rule column to chits table")
-        if "recurrence_exceptions" not in columns:
-            cursor.execute("ALTER TABLE chits ADD COLUMN recurrence_exceptions TEXT")
-            conn.commit()
-            logger.info("Added recurrence_exceptions column to chits table")
-        # Migrate old recurrence strings to new format
-        cursor.execute("SELECT id, recurrence FROM chits WHERE recurrence IS NOT NULL AND recurrence != ''")
-        rows = cursor.fetchall()
-        for row in rows:
-            chit_id, old_rec = row
-            freq_map = {"Hourly": "HOURLY", "Daily": "DAILY", "Weekly": "WEEKLY", "Monthly": "MONTHLY", "Yearly": "YEARLY"}
-            if old_rec in freq_map:
-                new_rule = json.dumps({"freq": freq_map[old_rec], "interval": 1})
-                cursor.execute("UPDATE chits SET recurrence_rule = ? WHERE id = ?", (new_rule, chit_id))
-        conn.commit()
-        conn.close()
-    except Exception as e:
-        logger.error(f"Error adding recurrence fields: {str(e)}")
-        raise
-
-def migrate_add_work_hours():
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute("PRAGMA table_info(settings)")
-        columns = [col[1] for col in cursor.fetchall()]
-        if "work_start_hour" not in columns:
-            cursor.execute("ALTER TABLE settings ADD COLUMN work_start_hour TEXT DEFAULT '8'")
-        if "work_end_hour" not in columns:
-            cursor.execute("ALTER TABLE settings ADD COLUMN work_end_hour TEXT DEFAULT '17'")
-        if "work_days" not in columns:
-            cursor.execute("ALTER TABLE settings ADD COLUMN work_days TEXT DEFAULT '1,2,3,4,5'")
-        if "enabled_periods" not in columns:
-            cursor.execute("ALTER TABLE settings ADD COLUMN enabled_periods TEXT DEFAULT 'Itinerary,Day,Week,Work,SevenDay,Month,Year'")
-        if "custom_days_count" not in columns:
-            cursor.execute("ALTER TABLE settings ADD COLUMN custom_days_count TEXT DEFAULT '7'")
-        if "active_clocks" not in columns:
-            cursor.execute("ALTER TABLE settings ADD COLUMN active_clocks TEXT")
-        conn.commit()
-        conn.close()
-    except Exception as e:
-        logger.error(f"Error adding work hours columns: {str(e)}")
-        raise
-
-# Migration: Add saved_locations column if missing
-def migrate_add_saved_locations():
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute("PRAGMA table_info(settings)")
-        columns = [col[1] for col in cursor.fetchall()]
-        if "saved_locations" not in columns:
-            cursor.execute("ALTER TABLE settings ADD COLUMN saved_locations TEXT")
-            conn.commit()
-            logger.info("Added saved_locations column to settings table")
-        conn.close()
-    except Exception as e:
-        logger.error(f"Error adding saved_locations column: {str(e)}")
-        raise
-
-# Initialize contacts table
-def init_contacts_table():
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS contacts (
-            id TEXT PRIMARY KEY,
-            given_name TEXT NOT NULL,
-            surname TEXT,
-            middle_names TEXT,
-            prefix TEXT,
-            suffix TEXT,
-            display_name TEXT,
-            phones TEXT,
-            emails TEXT,
-            addresses TEXT,
-            call_signs TEXT,
-            x_handles TEXT,
-            websites TEXT,
-            has_signal BOOLEAN DEFAULT 0,
-            pgp_key TEXT,
-            favorite BOOLEAN DEFAULT 0,
-            created_datetime TEXT,
-            modified_datetime TEXT
-        )
-        """)
-        conn.commit()
-    except Exception as e:
-        logger.error(f"Error initializing contacts table: {str(e)}")
-        raise
-    finally:
-        conn.close()
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 6: Database Initialization (runs at import time)
+# ═══════════════════════════════════════════════════════════════════════════
 
 # Create contacts directory for .vcf file storage
 CONTACTS_DIR = "/app/data/contacts/"
@@ -786,34 +937,16 @@ migrate_add_recurrence_fields()
 migrate_add_work_hours()
 migrate_add_saved_locations()
 init_contacts_table()
-
-# ── Contact table migrations ─────────────────────────────────────────────────
-def migrate_contacts_add_new_fields():
-    """Add nickname, signal_username, color, organization, social_context, image_url columns."""
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute("PRAGMA table_info(contacts)")
-    existing = {row[1] for row in cursor.fetchall()}
-    new_cols = [
-        ("nickname", "TEXT"),
-        ("signal_username", "TEXT"),
-        ("color", "TEXT"),
-        ("organization", "TEXT"),
-        ("social_context", "TEXT"),
-        ("image_url", "TEXT"),
-    ]
-    for col_name, col_type in new_cols:
-        if col_name not in existing:
-            cursor.execute(f"ALTER TABLE contacts ADD COLUMN {col_name} {col_type}")
-            logger.info(f"Added column {col_name} to contacts table")
-    conn.commit()
-    conn.close()
-
 migrate_contacts_add_new_fields()
 
 # Create directory for contact images
 CONTACT_IMAGES_DIR = "/app/static/contact_images/"
 os.makedirs(CONTACT_IMAGES_DIR, exist_ok=True)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 7: Static File Serving & Page Routes
+# ═══════════════════════════════════════════════════════════════════════════
 
 # Serve all files from /frontend/ (e.g., index.html, settings.html, editor.html)
 app.mount("/frontend", StaticFiles(directory="/app/frontend"), name="frontend")
@@ -834,42 +967,11 @@ async def editor(id: str = None):
         return FileResponse("/app/frontend/editor.html")
     return FileResponse("/app/frontend/editor.html")
 
-# API endpoint to get chit data
-@app.get("/api/chit/{chit_id}")
-def get_chit(chit_id: str):
-    conn = None
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM chits WHERE id = ?", (chit_id,))
-        row = cursor.fetchone()
-        if not row:
-            logger.info(f"Chit not found for ID: {chit_id}")
-            raise HTTPException(status_code=404, detail="Chit not found")
-        chit = dict(zip([col[0] for col in cursor.description], row))
-        chit["tags"] = deserialize_json_field(chit["tags"])
-        chit["checklist"] = deserialize_json_field(chit["checklist"])
-        chit["people"] = deserialize_json_field(chit["people"])
-        chit["child_chits"] = deserialize_json_field(chit.get("child_chits"))
-        chit["is_project_master"] = bool(chit.get("is_project_master"))
-        chit["all_day"] = bool(chit.get("all_day"))
-        chit["alerts"] = deserialize_json_field(chit.get("alerts"))
-        chit["recurrence_rule"] = deserialize_json_field(chit.get("recurrence_rule"))
-        chit["recurrence_exceptions"] = deserialize_json_field(chit.get("recurrence_exceptions"))
-        return chit
-    except sqlite3.Error as e:
-        logger.error(f"Database error fetching chit {chit_id}: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Unexpected error fetching chit {chit_id}: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
-    finally:
-        if conn:
-            conn.close()
 
-# API Endpoints (remaining unchanged)
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 8: Chit API Routes
+# ═══════════════════════════════════════════════════════════════════════════
+
 @app.get("/api/instance-id")
 def get_instance_id():
     return {"instance_id": get_or_create_instance_id()}
@@ -938,7 +1040,7 @@ def create_chit(chit: Chit):
                 chit_id,
                 chit.title,
                 chit.note,
-                json.dumps(chit_tags),
+                serialize_json_field(chit_tags),
                 chit.start_datetime,
                 chit.end_datetime,
                 chit.due_datetime,
@@ -972,6 +1074,41 @@ def create_chit(chit: Chit):
     except Exception as e:
         logger.error(f"Error creating chit: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to create chit: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+# API endpoint to get chit data
+@app.get("/api/chit/{chit_id}")
+def get_chit(chit_id: str):
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM chits WHERE id = ?", (chit_id,))
+        row = cursor.fetchone()
+        if not row:
+            logger.info(f"Chit not found for ID: {chit_id}")
+            raise HTTPException(status_code=404, detail="Chit not found")
+        chit = dict(zip([col[0] for col in cursor.description], row))
+        chit["tags"] = deserialize_json_field(chit["tags"])
+        chit["checklist"] = deserialize_json_field(chit["checklist"])
+        chit["people"] = deserialize_json_field(chit["people"])
+        chit["child_chits"] = deserialize_json_field(chit.get("child_chits"))
+        chit["is_project_master"] = bool(chit.get("is_project_master"))
+        chit["all_day"] = bool(chit.get("all_day"))
+        chit["alerts"] = deserialize_json_field(chit.get("alerts"))
+        chit["recurrence_rule"] = deserialize_json_field(chit.get("recurrence_rule"))
+        chit["recurrence_exceptions"] = deserialize_json_field(chit.get("recurrence_exceptions"))
+        return chit
+    except sqlite3.Error as e:
+        logger.error(f"Database error fetching chit {chit_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error fetching chit {chit_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
     finally:
         if conn:
             conn.close()
@@ -1014,7 +1151,7 @@ def update_chit(chit_id: str, chit: Chit):
                 (
                     chit.title,
                     chit.note,
-                    json.dumps(chit_tags),
+                    serialize_json_field(chit_tags),
                     chit.start_datetime,
                     chit.end_datetime,
                     chit.due_datetime,
@@ -1059,7 +1196,7 @@ def update_chit(chit_id: str, chit: Chit):
                     chit_id,
                     chit.title,
                     chit.note,
-                    json.dumps(chit_tags),
+                    serialize_json_field(chit_tags),
                     chit.start_datetime,
                     chit.end_datetime,
                     chit.due_datetime,
@@ -1117,6 +1254,47 @@ def delete_chit(chit_id: str):
         if conn:
             conn.close()
 
+@app.patch("/api/chits/{chit_id}/recurrence-exceptions")
+def patch_recurrence_exceptions(chit_id: str, body: dict):
+    """Add or update a recurrence exception on a parent chit.
+    Body: { "exception": { "date": "YYYY-MM-DD", "completed": bool, "broken_off": bool, "title": str, ... } }
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT recurrence_exceptions FROM chits WHERE id = ?", (chit_id,))
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Chit not found")
+        exceptions = deserialize_json_field(row["recurrence_exceptions"]) or []
+        new_exc = body.get("exception", {})
+        exc_date = new_exc.get("date")
+        if not exc_date:
+            raise HTTPException(status_code=400, detail="Exception must have a date")
+        # Replace existing exception for this date, or append
+        exceptions = [e for e in exceptions if e.get("date") != exc_date]
+        exceptions.append(new_exc)
+        cursor.execute(
+            "UPDATE chits SET recurrence_exceptions = ?, modified_datetime = ? WHERE id = ?",
+            (serialize_json_field(exceptions), datetime.utcnow().isoformat(), chit_id)
+        )
+        conn.commit()
+        return {"message": "Exception updated", "exceptions": exceptions}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error patching recurrence exceptions: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 9: Trash API Routes
+# ═══════════════════════════════════════════════════════════════════════════
 
 @app.get("/api/trash")
 def get_trash():
@@ -1185,42 +1363,9 @@ def purge_chit(chit_id: str):
             conn.close()
 
 
-@app.patch("/api/chits/{chit_id}/recurrence-exceptions")
-def patch_recurrence_exceptions(chit_id: str, body: dict):
-    """Add or update a recurrence exception on a parent chit.
-    Body: { "exception": { "date": "YYYY-MM-DD", "completed": bool, "broken_off": bool, "title": str, ... } }
-    """
-    conn = None
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
-        cursor.execute("SELECT recurrence_exceptions FROM chits WHERE id = ?", (chit_id,))
-        row = cursor.fetchone()
-        if not row:
-            raise HTTPException(status_code=404, detail="Chit not found")
-        exceptions = deserialize_json_field(row["recurrence_exceptions"]) or []
-        new_exc = body.get("exception", {})
-        exc_date = new_exc.get("date")
-        if not exc_date:
-            raise HTTPException(status_code=400, detail="Exception must have a date")
-        # Replace existing exception for this date, or append
-        exceptions = [e for e in exceptions if e.get("date") != exc_date]
-        exceptions.append(new_exc)
-        cursor.execute(
-            "UPDATE chits SET recurrence_exceptions = ?, modified_datetime = ? WHERE id = ?",
-            (json.dumps(exceptions), datetime.utcnow().isoformat(), chit_id)
-        )
-        conn.commit()
-        return {"message": "Exception updated", "exceptions": exceptions}
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error patching recurrence exceptions: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        if conn:
-            conn.close()
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 10: Settings API Routes
+# ═══════════════════════════════════════════════════════════════════════════
 
 @app.get("/api/settings/{user_id}")
 def get_settings(user_id: str):
@@ -1272,7 +1417,7 @@ def save_settings(settings: Settings):
                 settings.active_clocks,
                 settings.saved_locations,
                 # Serialize tags as list of dicts (Pydantic Tag objects need .dict())
-                json.dumps([t.dict() for t in settings.tags]) if settings.tags else None,
+                serialize_json_field([t.dict() for t in settings.tags]) if settings.tags else None,
                 serialize_json_field(settings.custom_colors),
                 serialize_json_field(settings.visual_indicators),
                 serialize_json_field(settings.chit_options),
@@ -1294,81 +1439,10 @@ def save_settings(settings: Settings):
         if conn:
             conn.close()
 
-# ── Contact CRUD API ──────────────────────────────────────────────────────────
 
-def _serialize_contact_for_db(contact) -> dict:
-    """Extract contact fields into a dict ready for SQLite insertion.
-    Handles both Pydantic models and plain dicts.
-    """
-    def _get(field, default=None):
-        if isinstance(contact, dict):
-            return contact.get(field, default)
-        return getattr(contact, field, default)
-
-    # Convert MultiValueEntry lists to list-of-dicts for JSON serialization
-    def _mv_to_dicts(entries):
-        if not entries:
-            return None
-        result = []
-        for e in entries:
-            if isinstance(e, dict):
-                result.append(e)
-            else:
-                result.append(e.dict())
-        return result if result else None
-
-    return {
-        "given_name": _get("given_name"),
-        "surname": _get("surname"),
-        "middle_names": _get("middle_names"),
-        "prefix": _get("prefix"),
-        "suffix": _get("suffix"),
-        "nickname": _get("nickname"),
-        "display_name": compute_display_name(contact),
-        "phones": serialize_json_field(_mv_to_dicts(_get("phones"))),
-        "emails": serialize_json_field(_mv_to_dicts(_get("emails"))),
-        "addresses": serialize_json_field(_mv_to_dicts(_get("addresses"))),
-        "call_signs": serialize_json_field(_mv_to_dicts(_get("call_signs"))),
-        "x_handles": serialize_json_field(_mv_to_dicts(_get("x_handles"))),
-        "websites": serialize_json_field(_mv_to_dicts(_get("websites"))),
-        "has_signal": 1 if _get("has_signal") else 0,
-        "signal_username": _get("signal_username"),
-        "pgp_key": _get("pgp_key"),
-        "favorite": 1 if _get("favorite") else 0,
-        "color": _get("color"),
-        "organization": _get("organization"),
-        "social_context": _get("social_context"),
-        "image_url": _get("image_url"),
-    }
-
-
-def _row_to_contact(row: dict) -> dict:
-    """Convert a SQLite row dict into a Contact-compatible JSON dict."""
-    row["phones"] = deserialize_json_field(row.get("phones"))
-    row["emails"] = deserialize_json_field(row.get("emails"))
-    row["addresses"] = deserialize_json_field(row.get("addresses"))
-    row["call_signs"] = deserialize_json_field(row.get("call_signs"))
-    row["x_handles"] = deserialize_json_field(row.get("x_handles"))
-    row["websites"] = deserialize_json_field(row.get("websites"))
-    row["has_signal"] = bool(row.get("has_signal"))
-    row["favorite"] = bool(row.get("favorite"))
-    # Ensure new fields have defaults if missing from older rows
-    row.setdefault("nickname", None)
-    row.setdefault("signal_username", None)
-    row.setdefault("color", None)
-    row.setdefault("organization", None)
-    row.setdefault("social_context", None)
-    row.setdefault("image_url", None)
-    return row
-
-
-def _write_vcf_file(contact_id: str, contact) -> None:
-    """Write a .vcf file for the given contact to CONTACTS_DIR."""
-    vcf_content = vcard_print(contact)
-    filepath = os.path.join(CONTACTS_DIR, f"{contact_id}.vcf")
-    with open(filepath, "w", encoding="utf-8") as f:
-        f.write(vcf_content)
-
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 11: Contact API Routes
+# ═══════════════════════════════════════════════════════════════════════════
 
 @app.post("/api/contacts")
 def create_contact(contact: Contact):
@@ -1477,8 +1551,6 @@ def get_contacts(q: Optional[str] = Query(None)):
         if conn:
             conn.close()
 
-
-# ── Contact Export ─────────────────────────────────────────────────────────
 
 @app.get("/api/contacts/export")
 def export_contacts(format: str = Query(...)):
@@ -1814,8 +1886,6 @@ def toggle_contact_favorite(contact_id: str):
             conn.close()
 
 
-# ── Contact Import ─────────────────────────────────────────────────────────
-
 @app.post("/api/contacts/import")
 async def import_contacts(file: UploadFile = File(...)):
     """Import contacts from a .vcf or .csv file upload.
@@ -1839,6 +1909,7 @@ async def import_contacts(file: UploadFile = File(...)):
             re.DOTALL | re.IGNORECASE,
         )
         for idx, block in enumerate(vcard_blocks, start=1):
+            conn = None
             try:
                 parsed = vcard_parse(block)
                 if not parsed.get("given_name"):
@@ -1893,11 +1964,13 @@ async def import_contacts(file: UploadFile = File(...)):
                     ),
                 )
                 conn.commit()
-                conn.close()
                 imported += 1
             except Exception as e:
                 errors_list.append({"entry": idx, "reason": str(e)})
                 skipped += 1
+            finally:
+                if conn:
+                    conn.close()
 
     elif filename.endswith(".csv"):
         contacts_parsed, csv_errors = csv_import(content)
@@ -1908,6 +1981,7 @@ async def import_contacts(file: UploadFile = File(...)):
             skipped += 1
 
         for idx, parsed in enumerate(contacts_parsed):
+            conn = None
             try:
                 contact_id = str(uuid4())
                 current_time = datetime.now().isoformat()
@@ -1955,16 +2029,21 @@ async def import_contacts(file: UploadFile = File(...)):
                     ),
                 )
                 conn.commit()
-                conn.close()
                 imported += 1
             except Exception as e:
                 errors_list.append({"entry": idx, "reason": str(e)})
                 skipped += 1
+            finally:
+                if conn:
+                    conn.close()
 
     return {"imported": imported, "skipped": skipped, "errors": errors_list}
 
 
-# Health check
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 12: Health Check
+# ═══════════════════════════════════════════════════════════════════════════
+
 @app.get("/health")
 def health_check():
     return {"status": "healthy"}

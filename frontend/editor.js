@@ -1,6 +1,6 @@
 const checklistContainer = document.getElementById("checklist-container");
 
-function onChecklistChange() {
+function _onChecklistChange() {
   setSaveButtonUnsaved();
 }
 
@@ -12,8 +12,6 @@ let notificationCheckCount = 0;
 let currentWeatherLat = null;
 let currentWeatherLon = null;
 let currentWeatherData = null;
-
-// defaultAddress removed — weather only fetches when chit.location is set
 
 const weatherIcons = {
   0: "☀️",
@@ -48,11 +46,8 @@ const defaultColors = [
   { hex: "#6B8299", name: "Slate Teal" },
   { hex: "#8B6B99", name: "Muted Lilac" },
 ];
-function generateUniqueId() {
-  return Date.now().toString(36) + Math.random().toString(36).substr(2);
-}
 
-async function getCoordinates(address) {
+async function _getCoordinates(address) {
   if (!address) {
     throw new Error("No address provided.");
   }
@@ -78,7 +73,6 @@ async function getCoordinates(address) {
       var url = `https://nominatim.openstreetmap.org/search?format=json&limit=3&q=${encodeURIComponent(q)}`;
       var response = await fetch(url, { headers: { 'User-Agent': 'CWOC-Weather/1.0' } });
       var data = await response.json();
-      console.log("Geocoding attempt", i + 1, "query:", q, "results:", data.length);
       if (data && data.length > 0) {
         return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
       }
@@ -89,27 +83,24 @@ async function getCoordinates(address) {
   throw new Error("Location not found.");
 }
 
-async function getWeather(lat, lon) {
+async function _getWeather(lat, lon) {
   const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_sum&timezone=auto&forecast_days=1`;
   const response = await fetch(url);
   const data = await response.json();
   return data;
 }
 
-async function fetchWeatherData(address) {
+async function _fetchWeatherData(address) {
   const compactWeatherSection = document.getElementById("compactWeatherSection");
   try {
-    console.log("Fetching weather for address:", address);
-    const coords = await getCoordinates(address);
-    console.log("Coordinates:", coords);
-    const weather = await getWeather(coords.lat, coords.lon);
-    console.log("Weather data:", weather);
+    const coords = await _getCoordinates(address);
+    const weather = await _getWeather(coords.lat, coords.lon);
 
     currentWeatherLat = coords.lat;
     currentWeatherLon = coords.lon;
     currentWeatherData = weather;
 
-    displayWeatherInCompactSection(weather, address);
+    _displayWeatherInCompactSection(weather, address);
 
     return weather;
   } catch (error) {
@@ -127,14 +118,14 @@ async function fetchWeatherData(address) {
   }
 }
 
-function getPrecipType(code) {
+function _getPrecipType(code) {
   if ([61, 63, 65, 80, 81, 82].includes(code)) return "rain";
   if ([71, 73, 75].includes(code)) return "snow";
   if ([95, 96, 99].includes(code)) return "thunder";
   return "";
 }
 
-function displayWeatherInCompactSection(weatherData, address) {
+function _displayWeatherInCompactSection(weatherData, address) {
   const compactWeatherSection = document.getElementById(
     "compactWeatherSection",
   );
@@ -156,7 +147,7 @@ function displayWeatherInCompactSection(weatherData, address) {
     const precipInches = Math.ceil(precipMm * 0.0393701 * 10) / 10;
 
     const icon = weatherIcons[weatherCode] || "❓";
-    const precipType = getPrecipType(weatherCode);
+    const precipType = _getPrecipType(weatherCode);
     const precip = precipType ? `${precipInches} inch ${precipType}` : "";
 
     const d = new Date();
@@ -200,7 +191,7 @@ function displayWeatherInCompactSection(weatherData, address) {
   }
 }
 
-function displayMapInUI(lat, lon, address) {
+function _displayMapInUI(lat, lon, address) {
   const locationSection = document.getElementById("locationSection");
   if (!locationSection) return;
 
@@ -241,7 +232,7 @@ function displayMapInUI(lat, lon, address) {
   `;
 }
 
-function initializeChitId() {
+function _initializeChitId() {
   const params = new URLSearchParams(window.location.search);
   chitId = params.get("id");
   window._editingInstance = params.get("instance") || null; // YYYY-MM-DD for recurrence instance editing
@@ -249,7 +240,6 @@ function initializeChitId() {
     chitId = generateUniqueId(); // Fallback to a new ID
     window.currentChitId = chitId;
     window.isNewChit = true;
-    console.log("Generated new chitId:", chitId);
   } else {
     window.currentChitId = chitId;
     window.isNewChit = false;
@@ -261,7 +251,7 @@ function toggleZone(event, sectionId, contentId) {
   cwocToggleZone(event, sectionId, contentId);
 }
 
-function toggleSection(contentId, button) {
+function _toggleSection(contentId, button) {
   const content = document.getElementById(contentId);
   if (!content) return;
 
@@ -415,72 +405,11 @@ function _showQRCode(e) {
   }
 }
 
-function addChecklistItem(isSubItem) {
-  const textInput = document.getElementById("new-item-text");
-  if (!textInput) return;
 
-  const text = textInput.value.trim();
-  if (!text) return;
-  // Checklist logic removed
-  textInput.value = "";
-}
 
-function toggleChecklistItem(index) {
-  // Checklist logic removed
-}
-
-function dragStart(e) {
-  // Checklist logic removed
-}
-
-function dragEnter(e) {
-  // Checklist logic removed
-}
-
-function dragLeave(e) {
-  // Checklist logic removed
-}
-
-function dragOver(e) {
-  // Checklist logic removed
-}
-
-function drop(e) {
-  // Checklist logic removed
-}
-
-function dragEnd(e) {
-  // Checklist logic removed
-}
-
-function formatDate(date) {
-  const monthNames = [
-    "Jan",
-    "Feb",
-    "Mar",
-    "Apr",
-    "May",
-    "Jun",
-    "Jul",
-    "Aug",
-    "Sep",
-    "Oct",
-    "Nov",
-    "Dec",
-  ];
-  return `${date.getFullYear()}-${monthNames[date.getMonth()]}-${String(date.getDate()).padStart(2, "0")}`;
-}
-
-function formatTime(date) {
-  return date.toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
-}
+// formatDate() and formatTime() are in shared.js
 
 const userTimezoneOffset = new Date().getTimezoneOffset();
-console.log(`User timezone offset: ${userTimezoneOffset} minutes`);
 
 function toggleAllDay() {
   const allDayCheckbox = document.getElementById("allDay");
@@ -578,7 +507,6 @@ function onStatusChange() {
   setSaveButtonUnsaved();
 }
 
-// Determine date mode from chit data
 function _detectDateMode(chit) {
   const hasDue = !!(chit.due_datetime);
   const hasStart = !!(chit.start_datetime);
@@ -730,9 +658,7 @@ function _loadRecurrenceRule(rule) {
 
 async function _loadSnapSetting() {
   try {
-    const resp = await fetch('/api/settings/default_user');
-    if (!resp.ok) return;
-    const settings = await resp.json();
+    const settings = await getCachedSettings();
     if (settings.calendar_snap && parseInt(settings.calendar_snap) > 0) {
       _snapMinutes = parseInt(settings.calendar_snap);
     }
@@ -782,14 +708,9 @@ function _showTimeDropdown(inputEl) {
   }, { once: true });
 }
 
-async function fetchCustomColors() {
+async function _fetchCustomColors() {
   try {
-    const response = await fetch("/api/settings/default_user");
-    if (!response.ok) {
-      console.error(`Failed to fetch custom colors: HTTP ${response.status}`);
-      return [];
-    }
-    const settings = await response.json();
+    const settings = await getCachedSettings();
     if (!settings.custom_colors) {
       console.warn("No custom_colors array found in API response");
       return [];
@@ -813,7 +734,7 @@ async function fetchCustomColors() {
   }
 }
 
-function setColor(hex, name = "Custom") {
+function _setColor(hex, name = "Custom") {
   const colorInput = document.getElementById("color");
   const colorPreview = document.getElementById("selected-color");
   const colorNameLabel = document.getElementById("selected-color-name");
@@ -830,13 +751,13 @@ function setColor(hex, name = "Custom") {
     swatch.classList.toggle("selected", match);
   });
 
-  updateColorPreview(); // Sync preview and selection
+  _updateColorPreview(); // Sync preview and selection
 
   // Enable save button because color changed
   setSaveButtonUnsaved();
 }
 
-function updateColorPreview() {
+function _updateColorPreview() {
   const colorInput = document.getElementById("color");
   const preview = document.getElementById("selected-color");
   const color = colorInput.value;
@@ -860,7 +781,7 @@ function updateColorPreview() {
   });
 }
 
-function renderCustomColors(customColors) {
+function _renderCustomColors(customColors) {
   const customColorsContainer = document.getElementById("custom-colors");
   if (!customColorsContainer) {
     console.warn("#custom-colors container not found");
@@ -880,14 +801,14 @@ function renderCustomColors(customColors) {
     swatch.title = name || hex;
 
     swatch.addEventListener("click", () => {
-      setColor(hex, name || "Custom");
+      _setColor(hex, name || "Custom");
     });
 
     customColorsContainer.appendChild(swatch);
   });
 }
 
-function attachColorSwatchListeners() {
+function _attachColorSwatchListeners() {
   document.querySelectorAll(".color-swatch").forEach((swatch) => {
     swatch.addEventListener("click", () => {
       const hex = swatch.dataset.color;
@@ -896,32 +817,32 @@ function attachColorSwatchListeners() {
         (c) => c.hex.toLowerCase() === hex.toLowerCase(),
       );
       const name = colorObj ? colorObj.name : "Custom";
-      setColor(hex, name);
+      _setColor(hex, name);
     });
   });
 }
 
-function utcToLocalDate(isoString) {
+function _utcToLocalDate(isoString) {
   if (!isoString) return null;
   const date = new Date(isoString);
   return date;
 }
 
-function parseISOTime(isoString) {
+function _parseISOTime(isoString) {
   if (!isoString) return "";
-  const date = utcToLocalDate(isoString);
+  const date = _utcToLocalDate(isoString);
   if (isNaN(date.getTime())) return "";
   return formatTime(date);
 }
 
-function convertDBDateToDisplayDate(dateString) {
+function _convertDBDateToDisplayDate(dateString) {
   if (!dateString) return "";
-  const date = utcToLocalDate(dateString);
+  const date = _utcToLocalDate(dateString);
   if (isNaN(date.getTime())) return "";
   return formatDate(date);
 }
 
-function checkNotifications() {
+function _checkNotifications() {
   notificationCheckCount++;
   const notificationElement = document.getElementById("notification");
   if (
@@ -929,7 +850,6 @@ function checkNotifications() {
     notificationElement.value !== undefined &&
     notificationElement.value !== null
   ) {
-    console.log(`Checking notifications... (${notificationCheckCount})`);
   }
 }
 
@@ -943,10 +863,9 @@ function getPastelColor(str) {
   return `rgb(${r}, ${g}, ${b})`;
 }
 
-async function loadTags() {
+async function _loadTags() {
   try {
-    const response = await fetch("/api/settings/default_user");
-    const settings = await response.json();
+    const settings = await getCachedSettings();
     const tags = settings.tags || [];
     // Normalize: tags may be strings (legacy) or {name, color} objects
     return tags.map((t) =>
@@ -964,7 +883,7 @@ async function loadTags() {
  * @param {Array} tags - Array of {name, color} from settings
  * @param {Array} selectedTags - Array of tag name strings currently on the chit
  */
-function renderTags(tags, selectedTags = []) {
+function _renderTags(tags, selectedTags = []) {
   const treeContainer = document.getElementById("tagTreeContainer");
   const activeContainer = document.getElementById("activeTagsListContainer");
   const activeCount = document.getElementById("activeTagsCount");
@@ -996,13 +915,13 @@ function renderTags(tags, selectedTags = []) {
       if (colorInput && (!colorInput.value || colorInput.value === 'transparent')) {
         const tagObj = tags.find(t => t.name === fullPath);
         if (tagObj && tagObj.color && !isSystemTag(fullPath)) {
-          setColor(tagObj.color, fullPath.split('/').pop());
+          _setColor(tagObj.color, fullPath.split('/').pop());
         }
       }
     } else if (!isNowSelected && idx !== -1) {
       selectedTags.splice(idx, 1);
     }
-    renderTags(tags, selectedTags);
+    _renderTags(tags, selectedTags);
     setSaveButtonUnsaved();
   });
 
@@ -1023,7 +942,7 @@ function renderTags(tags, selectedTags = []) {
         const idx = selectedTags.indexOf(tag.name);
         if (idx === -1) { selectedTags.push(tag.name); trackRecentTag(tag.name); }
         else selectedTags.splice(idx, 1);
-        renderTags(tags, selectedTags);
+        _renderTags(tags, selectedTags);
         setSaveButtonUnsaved();
       });
       favContainer.appendChild(chip);
@@ -1045,7 +964,7 @@ function renderTags(tags, selectedTags = []) {
         const idx = selectedTags.indexOf(tag.name);
         if (idx === -1) { selectedTags.push(tag.name); trackRecentTag(tag.name); }
         else selectedTags.splice(idx, 1);
-        renderTags(tags, selectedTags);
+        _renderTags(tags, selectedTags);
         setSaveButtonUnsaved();
       });
       recentContainer.appendChild(chip);
@@ -1067,7 +986,7 @@ function renderTags(tags, selectedTags = []) {
       e.stopPropagation();
       const idx = selectedTags.indexOf(tagName);
       if (idx !== -1) selectedTags.splice(idx, 1);
-      renderTags(tags, selectedTags);
+      _renderTags(tags, selectedTags);
       setSaveButtonUnsaved();
     });
 
@@ -1080,7 +999,6 @@ function renderTags(tags, selectedTags = []) {
 }
 
 function resetEditorForNewChit() {
-  console.log("Resetting editor for new chit...");
 
   const elementsToReset = [
     { id: "title", defaultValue: "" },
@@ -1153,13 +1071,13 @@ function resetEditorForNewChit() {
     selectedColorName.textContent = "Transparent";
   }
 
-  setColor("transparent", "Transparent");
+  _setColor("transparent", "Transparent");
 
   // Checklist reset removed
 
   window._currentTagSelection = [];
   window._loadedChildChits = [];
-  loadTags().then((tags) => renderTags(tags, []));
+  _loadTags().then((tags) => _renderTags(tags, []));
 
   // Reset alerts
   window._alertsData = { alarms: [], timers: [], stopwatches: [], notifications: [] };
@@ -1168,8 +1086,6 @@ function resetEditorForNewChit() {
   // Show weather placeholder for new chits (no location/date yet)
   const cws = document.getElementById("compactWeatherSection");
   if (cws) cws.classList.add('weather-placeholder'); cws.innerHTML = `<div style="padding:8px;font-family:'Courier New',monospace;color:#8b5a2b;font-size:0.85em;opacity:0.7;">📍 Date &amp; location needed for weather</div>`;
-
-  console.log("Editor reset completed.");
 }
 
 function createISODateTimeString(dateStr, timeStr, isAllDay, isEnd = false) {
@@ -1218,16 +1134,12 @@ function convertMonthFormat(dateStr) {
 }
 
 function setMediaSource(elementId, src) {
-  console.log(
-    `setMediaSource called with elementId: ${elementId}, src: ${src}`,
-  );
   const element = document.getElementById(elementId);
   if (!element) {
     console.error(`Element with ID ${elementId} not found`);
     return;
   }
   if (isValidMediaSource(src)) {
-    console.log(`Setting src for ${elementId} to ${src}`);
     element.src = src;
   } else {
     console.warn(`Invalid media source for ${elementId}: ${src}`);
@@ -1246,7 +1158,6 @@ function isValidMediaSource(src) {
   }
 }
 
-// Updated saveChitData function in editor.js
 /**
  * Collect all form values into a chit object.
  * Returns null if validation fails (and shows alert).
@@ -1488,7 +1399,6 @@ async function saveChitData() {
     const method = isNewChit ? "POST" : "PUT";
     const url = isNewChit ? "/api/chits" : `/api/chits/${chit.id}`;
 
-    console.log(`Saving chit ${chit.id} with method ${method}:`, chit);
     const response = await fetch(url, {
       method,
       headers: { "Content-Type": "application/json" },
@@ -1501,14 +1411,12 @@ async function saveChitData() {
     }
 
     const updatedChit = await response.json();
-    console.log("Saved chit response:", updatedChit);
 
     // If project master, save project child chit changes as well
     if (
       updatedChit.is_project_master &&
       typeof saveProjectChanges === "function"
     ) {
-      console.log("Calling saveProjectChanges for project master");
       await saveProjectChanges();
     }
 
@@ -1531,7 +1439,6 @@ async function chitExists(chitId) {
 }
 
 function saveChit() {
-  console.log("Saving chit...");
   saveChitData();
 }
 
@@ -1590,19 +1497,6 @@ function renderHealthIndicator(indicatorId) {
   }
 }
 
-function renderHealthIndicator(indicatorId) {
-  const element = document.getElementById(indicatorId);
-  if (!element) {
-    if (!healthIndicatorWarningsShown.has(indicatorId)) {
-      console.warn(
-        `Element with ID '${indicatorId}' not found. Skipping rendering for this health indicator.`,
-      );
-      healthIndicatorWarningsShown.add(indicatorId);
-    }
-    return;
-  }
-}
-
 // ── Alerts zone — full implementation ───────────────────────────────────────
 // Alert data is stored in window._alertsData = { alarms: [], timers: [], stopwatches: [], notifications: [] }
 // Each type has its own array. Saved to chit.alerts as a flat array with _type field.
@@ -1614,11 +1508,9 @@ let _stopwatchIntervals = {}; // id -> intervalId
 // Loaded from settings on init; used for alarm time display
 window._editorTimeFormat = "24hour"; // default until settings load
 
-async function loadEditorTimeFormat() {
+async function _loadEditorTimeFormat() {
   try {
-    const res = await fetch("/api/settings/default_user");
-    if (!res.ok) return;
-    const s = await res.json();
+    const s = await getCachedSettings();
     window._editorTimeFormat = s.time_format || "24hour";
   } catch (e) { /* keep default */ }
 }
@@ -2767,10 +2659,8 @@ function toggleModalNotesRender() {
 
 // ── End notes zone functions ──────────────────────────────────────────────────
 async function loadChitData(chitId) {
-  console.log(`[loadChitData] Called with chitId: ${chitId}`);
 
   if (!chitId || window.isNewChit) {
-    console.log("[loadChitData] Skipping load: new chit");
     return;
   }
 
@@ -2778,9 +2668,6 @@ async function loadChitData(chitId) {
     const response = await fetch(`/api/chit/${chitId}`);
     if (!response.ok) {
       if (response.status === 404) {
-        console.log(
-          `[loadChitData] Chit ${chitId} not found, initializing new chit`,
-        );
         resetEditorForNewChit();
         return;
       }
@@ -2788,7 +2675,6 @@ async function loadChitData(chitId) {
     }
 
     const chit = await response.json();
-    console.log("[loadChitData] Loaded chit data:", chit);
 
     // If project master, populate all standard fields AND initialize Projects Zone
     if (chit.is_project_master) {
@@ -2801,7 +2687,6 @@ async function loadChitData(chitId) {
     const titleInput = document.getElementById("title");
     if (titleInput) {
       titleInput.value = chit.title || "";
-      console.log(`[loadChitData] Set title-input to: "${titleInput.value}"`);
     }
 
     const noteTextarea = document.getElementById("note");
@@ -2813,11 +2698,7 @@ async function loadChitData(chitId) {
       if (chit.note && chit.note.trim()) {
         setTimeout(() => toggleNotesViewMode(null), 50);
       }
-      console.log(`[loadChitData] Set note-textarea to: "${noteTextarea.value.slice(0,40)}..."`);
     }
-
-    // Recurrence is now loaded via _loadRecurrenceRule below
-    console.log(`[loadChitData] Recurrence rule:`, chit.recurrence_rule);
 
     // Load recurrence rule (new format)
     if (chit.recurrence_rule) {
@@ -2851,29 +2732,19 @@ async function loadChitData(chitId) {
     if (allDayInput) {
       const isAllDay = !!(chit.all_day || chit.allDay);
       // This is now handled by the date mode section after date fields are set
-      console.log(`[loadChitData] allDay: ${isAllDay}`);
     }
 
     const prioritySelect = document.getElementById("priority");
     setSelectValue(prioritySelect, chit.priority);
-    console.log(
-      `[loadChitData] Set priority to: "${prioritySelect ? prioritySelect.value : "N/A"}"`,
-    );
 
     const severitySelect = document.getElementById("severity");
     setSelectValue(severitySelect, chit.severity);
-    console.log(
-      `[loadChitData] Set severity to: "${severitySelect ? severitySelect.value : "N/A"}"`,
-    );
 
     const statusSelect = document.getElementById("status");
     setSelectValue(statusSelect, chit.status);
     // Sync the Due Complete checkbox
     const dueCompleteCb = document.getElementById('dueComplete');
     if (dueCompleteCb) dueCompleteCb.checked = (chit.status === 'Complete');
-    console.log(
-      `[loadChitData] Set status to: "${statusSelect ? statusSelect.value : "N/A"}"`,
-    );
 
     // Helper to split ISO datetime into date and time parts
     function splitISODateTime(isoString) {
@@ -2911,15 +2782,9 @@ async function loadChitData(chitId) {
     const startParts = splitISODateTime(chit.start_datetime);
     if (startDateInput) {
       startDateInput.value = startParts.date;
-      console.log(
-        `[loadChitData] Set start_datetime to: "${startDateInput.value}"`,
-      );
     }
     if (startTimeInput) {
       startTimeInput.value = (chit.all_day || chit.allDay) ? "" : startParts.time;
-      console.log(
-        `[loadChitData] Set start_time to: "${startTimeInput.value}"`,
-      );
     }
 
     const endDateInput = document.getElementById("end_datetime");
@@ -2927,13 +2792,9 @@ async function loadChitData(chitId) {
     const endParts = splitISODateTime(chit.end_datetime);
     if (endDateInput) {
       endDateInput.value = endParts.date;
-      console.log(
-        `[loadChitData] Set end_datetime to: "${endDateInput.value}"`,
-      );
     }
     if (endTimeInput) {
       endTimeInput.value = (chit.all_day || chit.allDay) ? "" : endParts.time;
-      console.log(`[loadChitData] Set end_time to: "${endTimeInput.value}"`);
     }
 
     const dueDateInput = document.getElementById("due_datetime");
@@ -2941,13 +2802,9 @@ async function loadChitData(chitId) {
     const dueParts = splitISODateTime(chit.due_datetime);
     if (dueDateInput) {
       dueDateInput.value = dueParts.date;
-      console.log(
-        `[loadChitData] Set due_datetime to: "${dueDateInput.value}"`,
-      );
     }
     if (dueTimeInput) {
       dueTimeInput.value = (chit.all_day || chit.allDay) ? "" : dueParts.time;
-      console.log(`[loadChitData] Set due_time to: "${dueTimeInput.value}"`);
     }
 
     // Set date mode radio based on chit data
@@ -2970,10 +2827,8 @@ async function loadChitData(chitId) {
     if (window.checklist) {
       if (Array.isArray(chit.checklist)) {
         window.checklist.loadItems(chit.checklist);
-        console.log(`[loadChitData] Loaded checklist items:`, chit.checklist);
       } else {
         window.checklist.loadItems([]);
-        console.log("[loadChitData] Loaded empty checklist");
       }
     }
 
@@ -2984,7 +2839,6 @@ async function loadChitData(chitId) {
     const locationInput = document.getElementById("location");
     if (locationInput) {
       locationInput.value = chit.location || "";
-      console.log(`[loadChitData] Set location to: "${locationInput.value}"`);
     }
 
     // Restore people (stored as array, display as chips)
@@ -2994,7 +2848,6 @@ async function loadChitData(chitId) {
     if (typeof _setPeopleFromArray === 'function') {
       _setPeopleFromArray(peopleArray);
     }
-    console.log(`[loadChitData] Set people chips: ${peopleArray.length} people`);
 
     // Restore color
     if (chit.color) {
@@ -3002,8 +2855,7 @@ async function loadChitData(chitId) {
       const colorObj = allColors.find(
         (c) => c.hex.toLowerCase() === chit.color.toLowerCase(),
       );
-      setColor(chit.color, colorObj ? colorObj.name : "Custom");
-      console.log(`[loadChitData] Set color to: "${chit.color}"`);
+      _setColor(chit.color, colorObj ? colorObj.name : "Custom");
     }
 
     // Restore pinned state
@@ -3015,7 +2867,6 @@ async function loadChitData(chitId) {
         pinnedButton.querySelector("i")?.classList.toggle("fas", !!chit.pinned);
         pinnedButton.querySelector("i")?.classList.toggle("far", !chit.pinned);
       }
-      console.log(`[loadChitData] Set pinned to: ${chit.pinned}`);
     }
 
     // Restore archived state
@@ -3027,22 +2878,18 @@ async function loadChitData(chitId) {
         archivedButton.textContent = chit.archived ? "📦 Archived" : "📦 Archive";
         archivedButton.classList.toggle("archived-active", !!chit.archived);
       }
-      console.log(`[loadChitData] Set archived to: ${chit.archived}`);
     }
 
     // Restore tags — load all tags then pre-check the ones on this chit
-    loadTags().then((tags) => {
-      renderTags(tags, chit.tags || []);
-      console.log(`[loadChitData] Restored tags:`, chit.tags);
+    _loadTags().then((tags) => {
+      _renderTags(tags, chit.tags || []);
     });
 
     // Fetch weather for the chit's location
     const hasDate = !!(chit.start_datetime || chit.due_datetime);
     const compactWeatherSection = document.getElementById("compactWeatherSection");
     if (chit.location && hasDate) {
-      fetchWeatherData(chit.location).catch((err) => {
-        console.log("Could not fetch weather on load:", err);
-      });
+      _fetchWeatherData(chit.location).catch(() => {});
     } else if (compactWeatherSection) {
       compactWeatherSection.classList.add('weather-placeholder');
       if (chit.location && !hasDate) {
@@ -3057,9 +2904,6 @@ async function loadChitData(chitId) {
     window.currentChitId = chit.id || chitId;
     // Preserve child_chits so buildChitObject doesn't wipe them on save
     window._loadedChildChits = Array.isArray(chit.child_chits) ? chit.child_chits : [];
-    console.log(
-      `[loadChitData] Set currentChitId to: "${window.currentChitId}"`,
-    );
 
     // Collapse zones that have no data, expand zones that do
     applyZoneStates(chit);
@@ -3366,16 +3210,16 @@ function searchLocationMap(event) {
       cws.innerHTML = `<div style="padding:8px;font-family:'Courier New',monospace;color:#8b5a2b;font-size:0.85em;opacity:0.7;">📅 Add a date for weather</div>`;
     }
     // Still show the map
-    getCoordinates(address).then((coords) => {
-      displayMapInUI(coords.lat, coords.lon, address);
+    _getCoordinates(address).then((coords) => {
+      _displayMapInUI(coords.lat, coords.lon, address);
     }).catch(() => {});
     return;
   }
 
-  fetchWeatherData(address)
+  _fetchWeatherData(address)
     .then((weatherData) => {
       if (currentWeatherLat && currentWeatherLon) {
-        displayMapInUI(currentWeatherLat, currentWeatherLon, address);
+        _displayMapInUI(currentWeatherLat, currentWeatherLon, address);
       }
     })
     .catch((error) => {
@@ -3433,9 +3277,6 @@ function openLocationDirections(event) {
       );
     },
     (error) => {
-      console.log(
-        "Could not get location, opening directions without starting point",
-      );
       window.open(
         `https://www.openstreetmap.org/directions?to=${destination}`,
         "_blank",
@@ -3446,7 +3287,6 @@ function openLocationDirections(event) {
 }
 
 document.addEventListener("DOMContentLoaded", function () {
-  console.log("DOM Content Loaded - Initializing editor...");
 
   // Initialize mobile actions modal (replaces header buttons on mobile)
   if (typeof initMobileActionsModal === 'function') initMobileActionsModal();
@@ -3468,7 +3308,7 @@ document.addEventListener("DOMContentLoaded", function () {
     getReturnUrl: () => '/',
   });
 
-  initializeChitId();
+  _initializeChitId();
 
   // Populate "Move to Project" dropdown with actual project master chits
   fetch('/api/chits').then(r => r.ok ? r.json() : []).then(allChits => {
@@ -3508,7 +3348,7 @@ document.addEventListener("DOMContentLoaded", function () {
   if (_recIcon) _recIcon.style.display = 'none';
 
   // Load time format setting for alarm display
-  loadEditorTimeFormat();
+  _loadEditorTimeFormat();
 
   // Request notification permission
   if (typeof Notification !== "undefined" && Notification.permission === "default") {
@@ -3516,9 +3356,9 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   // Load custom colors from settings and render into the color picker
-  fetchCustomColors().then((colors) => {
+  _fetchCustomColors().then((colors) => {
     window.customColors = colors;
-    renderCustomColors(colors);
+    _renderCustomColors(colors);
   });
 
   // Populate saved locations dropdown
@@ -3548,19 +3388,18 @@ document.addEventListener("DOMContentLoaded", function () {
   if (recFreq) recFreq.addEventListener('change', _updateByDayVisibility);
 
   // Attach listeners to default colors
-  attachColorSwatchListeners();
+  _attachColorSwatchListeners();
 
   // Initialize checklist
   const checklistContainer = document.getElementById("checklist-container");
   if (checklistContainer && window.Checklist) {
-    window.checklist = new Checklist(checklistContainer, [], onChecklistChange);
+    window.checklist = new Checklist(checklistContainer, [], _onChecklistChange);
   }
 
   // Conditionally load chit data or reset for new chit
   if (chitId && !window.isNewChit) {
     loadChitData(chitId);
   } else {
-    console.log("No valid chitId for loading, initializing new chit");
     resetEditorForNewChit();
 
     // Pre-populate start/end from URL params (e.g. from calendar empty slot dblclick)
@@ -3608,7 +3447,7 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   }
 
-  setInterval(checkNotifications, 60000);
+  setInterval(_checkNotifications, 60000);
 
   const allDayBtn = document.getElementById("allDayToggleButton");
   if (allDayBtn) allDayBtn.onclick = toggleAllDay;
@@ -3696,8 +3535,6 @@ document.addEventListener("DOMContentLoaded", function () {
     '9': ['colorSection', 'colorContent'],
     '0': ['projectsSection', 'projectsContent'],
   });
-
-  console.log("Editor initialization completed.");
 });
 
 function clearStartAndEndDates() {
@@ -3714,10 +3551,6 @@ function clearDueDate() {
 
 function setSaveButtonSaved() {
   if (window._cwocSave) window._cwocSave.markSaved();
-}
-
-function setSaveButtonUnsaved() {
-  if (window._cwocSave) window._cwocSave.markUnsaved();
 }
 
 function cancelOrExit() {
@@ -3800,7 +3633,7 @@ function addSearchedTag(event) {
   input.value = '';
 
   // Re-render tags
-  loadTags().then(tags => renderTags(tags, window._currentTagSelection));
+  _loadTags().then(tags => _renderTags(tags, window._currentTagSelection));
   setSaveButtonUnsaved();
 }
 
@@ -3838,7 +3671,6 @@ async function saveChitAndStay() {
       });
       if (!resp.ok) throw new Error(await resp.text());
       setSaveButtonSaved();
-      console.log("Saved instance exception & staying on editor.");
     } catch (error) {
       console.error("[saveChitAndStay] Instance error:", error);
       alert("Failed to save instance changes.");
@@ -3880,14 +3712,11 @@ async function saveChitAndStay() {
     }
 
     setSaveButtonSaved();
-    console.log("Saved & staying on editor.");
   } catch (error) {
     console.error("[saveChitAndStay] Error:", error);
     alert("Failed to save chit. Check console for details.");
   }
 }
-
-console.log("Editor script loaded successfully.");
 
 // ── People Zone (tag-like grouped tree + chips) ─────────────────────────────
 // Loads all contacts, groups by first letter of given_name, renders a scrollable
@@ -4205,5 +4034,4 @@ function _setPeopleFromArray(peopleArray) {
   }
 }
 
-// Initialize on page load
 document.addEventListener('DOMContentLoaded', _initPeopleAutocomplete);

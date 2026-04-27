@@ -902,15 +902,12 @@ async function _openClockModal() {
   let activeClocks = ['24hour', '12hour', 'hst']; // defaults
   let orientation = 'Horizontal';
   try {
-    const resp = await fetch('/api/settings/default_user');
-    if (resp.ok) {
-      const s = await resp.json();
-      if (s.active_clocks) {
-        const parsed = typeof s.active_clocks === 'string' ? JSON.parse(s.active_clocks) : s.active_clocks;
-        if (Array.isArray(parsed) && parsed.length > 0) activeClocks = parsed;
-      }
-      if (s.alarm_orientation) orientation = s.alarm_orientation;
+    const s = await getCachedSettings();
+    if (s.active_clocks) {
+      const parsed = typeof s.active_clocks === 'string' ? JSON.parse(s.active_clocks) : s.active_clocks;
+      if (Array.isArray(parsed) && parsed.length > 0) activeClocks = parsed;
     }
+    if (s.alarm_orientation) orientation = s.alarm_orientation;
   } catch (e) { console.error('Failed to load clock settings', e); }
 
   const overlay = document.createElement('div');
@@ -1295,27 +1292,24 @@ async function _loadLabelFilters() {
     // Collect tags from settings API
     let tagObjects = [];
     try {
-      const resp = await fetch('/api/settings/default_user');
-      if (resp.ok) {
-        const settings = await resp.json();
-        const tags = settings.tags ? (typeof settings.tags === 'string' ? JSON.parse(settings.tags) : settings.tags) : [];
-        tagObjects = tags.map(t => typeof t === 'string' ? { name: t, color: null, favorite: false } : t).filter(t => t.name);
-        _cachedTagObjects = tagObjects;
-        // Load chit display options
-        if (settings.chit_options) {
-          _chitOptions = { ..._chitOptions, ...settings.chit_options };
-        }
-        // Load week start day
-        if (settings.week_start_day !== undefined) {
-          _weekStartDay = parseInt(settings.week_start_day) || 0;
-        }
-        if (settings.work_start_hour !== undefined) _workStartHour = parseInt(settings.work_start_hour) || 8;
-        if (settings.work_end_hour !== undefined) _workEndHour = parseInt(settings.work_end_hour) || 17;
-        if (settings.work_days) _workDays = settings.work_days.split(',').map(Number);
-        if (settings.enabled_periods) _enabledPeriods = settings.enabled_periods.split(',');
-        if (settings.custom_days_count) _customDaysCount = parseInt(settings.custom_days_count) || 7;
-        _applyEnabledPeriods();
+      const settings = await getCachedSettings();
+      const tags = settings.tags ? (typeof settings.tags === 'string' ? JSON.parse(settings.tags) : settings.tags) : [];
+      tagObjects = tags.map(t => typeof t === 'string' ? { name: t, color: null, favorite: false } : t).filter(t => t.name);
+      _cachedTagObjects = tagObjects;
+      // Load chit display options
+      if (settings.chit_options) {
+        _chitOptions = { ..._chitOptions, ...settings.chit_options };
       }
+      // Load week start day
+      if (settings.week_start_day !== undefined) {
+        _weekStartDay = parseInt(settings.week_start_day) || 0;
+      }
+      if (settings.work_start_hour !== undefined) _workStartHour = parseInt(settings.work_start_hour) || 8;
+      if (settings.work_end_hour !== undefined) _workEndHour = parseInt(settings.work_end_hour) || 17;
+      if (settings.work_days) _workDays = settings.work_days.split(',').map(Number);
+      if (settings.enabled_periods) _enabledPeriods = settings.enabled_periods.split(',');
+      if (settings.custom_days_count) _customDaysCount = parseInt(settings.custom_days_count) || 7;
+      _applyEnabledPeriods();
     } catch (e) { /* ignore */ }
 
     // Also collect tags from loaded chits as fallback
@@ -1706,7 +1700,7 @@ function _startGlobalAlertSystem() {
 
   // Parse snooze length from settings
   window._snoozeLength = '5 minutes'; // default
-  fetch('/api/settings/default_user').then(r => r.ok ? r.json() : {}).then(s => {
+  getCachedSettings().then(s => {
     if (s.snooze_length) window._snoozeLength = s.snooze_length;
   }).catch(() => {});
 
@@ -1724,8 +1718,7 @@ function _startGlobalAlertSystem() {
   document.addEventListener("keydown", unlockAudio, { once: true });
 
   // Load time format
-  fetch("/api/settings/default_user")
-    .then((r) => r.json())
+  getCachedSettings()
     .then((s) => { _globalTimeFormat = s.time_format || "24hour"; })
     .catch(() => {});
 
@@ -2071,19 +2064,15 @@ function getYearStart(date) {
   return d;
 }
 
+// Dashboard-specific formatDate variant — includes day-of-week for calendar headers.
+// The shared formatDate() in shared.js uses YYYY-Mon-DD format; this one uses Mon-DD Day.
 function formatDate(date) {
   const monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   return `${monthNames[date.getMonth()]}-${String(date.getDate()).padStart(2,'0')} ${dayNames[date.getDay()]}`;
 }
 
-function formatTime(date) {
-  return date.toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
-}
+// formatTime() is in shared.js
 
 function formatWeekRange(start, end) {
   const startStr = formatDate(start);
@@ -2571,13 +2560,15 @@ function displayWeekView(chitsToDisplay, opts) {
   const hourColumn = document.createElement("div");
   hourColumn.className = "hour-column";
   hourColumn.style.cssText = `width:60px;flex-shrink:0;position:relative;height:${totalMinutes}px;`;
+  const weekHourFrag = document.createDocumentFragment();
   for (let hour = hourStart; hour < hourEnd; hour++) {
     const hb = document.createElement("div");
     hb.className = "hour-block";
     hb.style.top = `${(hour - hourStart) * 60}px`;
     hb.textContent = `${hour}:00`;
-    hourColumn.appendChild(hb);
+    weekHourFrag.appendChild(hb);
   }
+  hourColumn.appendChild(weekHourFrag);
   scrollGrid.appendChild(hourColumn);
 
   // Day columns with timed events only
@@ -2695,16 +2686,21 @@ function displayMonthView(chitsToDisplay) {
   const allDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const daysOfWeek = [];
   for (let i = 0; i < 7; i++) daysOfWeek.push(allDays[(_weekStartDay + i) % 7]);
+  const dayHeaderFrag = document.createDocumentFragment();
   daysOfWeek.forEach((day) => {
     const dayHeader = document.createElement("div");
     dayHeader.className = "day-header";
     dayHeader.textContent = day;
-    dayHeaders.appendChild(dayHeader);
+    dayHeaderFrag.appendChild(dayHeader);
   });
+  dayHeaders.appendChild(dayHeaderFrag);
   monthView.appendChild(dayHeaders);
 
   const monthGrid = document.createElement("div");
   monthGrid.className = "month-grid";
+
+  // Batch all month-day cells into a fragment before appending to monthGrid
+  const monthGridFrag = document.createDocumentFragment();
 
   // Previous month's trailing days (faded)
   const prevMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 0); // last day of prev month
@@ -2731,7 +2727,7 @@ function displayMonthView(chitsToDisplay) {
       });
       monthDay.appendChild(eventsContainer);
     }
-    monthGrid.appendChild(monthDay);
+    monthGridFrag.appendChild(monthDay);
   }
 
   // Current month days
@@ -2769,7 +2765,7 @@ function displayMonthView(chitsToDisplay) {
       monthDay.appendChild(eventsContainer);
     }
 
-    monthGrid.appendChild(monthDay);
+    monthGridFrag.appendChild(monthDay);
   }
 
   // Next month's leading days (whitewashed) — fill to complete the grid row
@@ -2798,9 +2794,10 @@ function displayMonthView(chitsToDisplay) {
       });
       monthDay.appendChild(eventsContainer);
     }
-    monthGrid.appendChild(monthDay);
+    monthGridFrag.appendChild(monthDay);
   }
 
+  monthGrid.appendChild(monthGridFrag);
   monthView.appendChild(monthGrid);
   chitList.appendChild(monthView);
 
@@ -2944,13 +2941,15 @@ function displayDayView(chitsToDisplay) {
   const hourColumn = document.createElement("div");
   hourColumn.className = "hour-column";
   hourColumn.style.cssText = "width:80px;flex-shrink:0;position:relative;height:1440px;background:#fff5e6;";
+  const dayHourFrag = document.createDocumentFragment();
   for (let hour = 0; hour < 24; hour++) {
     const hb = document.createElement("div");
     hb.className = "hour-block";
     hb.style.top = `${hour * 60}px`;
     hb.textContent = `${hour}:00`;
-    hourColumn.appendChild(hb);
+    dayHourFrag.appendChild(hb);
   }
+  hourColumn.appendChild(dayHourFrag);
   dayView.appendChild(hourColumn);
 
   const eventsContainer = document.createElement("div");
@@ -3062,10 +3061,11 @@ function displayYearView(chitsToDisplay) {
     monthGrid.style.gridTemplateColumns = "repeat(7, 1fr)";
     monthGrid.style.gap = "2px";
 
+    const yearGridFrag = document.createDocumentFragment();
     for (let i = 0; i < firstDay; i++) {
       const emptyDay = document.createElement("div");
       emptyDay.className = "day empty";
-      monthGrid.appendChild(emptyDay);
+      yearGridFrag.appendChild(emptyDay);
     }
 
     for (let day = 1; day <= daysInMonth; day++) {
@@ -3101,9 +3101,10 @@ function displayYearView(chitsToDisplay) {
         updateDateRange();
         displayChits();
       });
-      monthGrid.appendChild(dayElement);
+      yearGridFrag.appendChild(dayElement);
     }
 
+    monthGrid.appendChild(yearGridFrag);
     monthBlock.appendChild(monthGrid);
     yearView.appendChild(monthBlock);
   });
@@ -3674,13 +3675,15 @@ function displaySevenDayView(chitsToDisplay) {
   const hourColumn = document.createElement("div");
   hourColumn.className = "hour-column";
   hourColumn.style.cssText = "width:60px;flex-shrink:0;position:relative;height:1440px;";
+  const sdHourFrag = document.createDocumentFragment();
   for (let hour = 0; hour < 24; hour++) {
     const hb = document.createElement("div");
     hb.className = "hour-block";
     hb.style.top = `${hour * 60}px`;
     hb.textContent = `${hour}:00`;
-    hourColumn.appendChild(hb);
+    sdHourFrag.appendChild(hb);
   }
+  hourColumn.appendChild(sdHourFrag);
   scrollGrid.appendChild(hourColumn);
 
   const sdDayColumns = [];
@@ -3765,7 +3768,6 @@ function displayProjectsView(chitsToDisplay) {
     return;
   }
 
-  // Build a lookup map of all chits by ID
   const chitMap = {};
   chits.forEach((c) => { chitMap[c.id] = c; });
 
@@ -4031,22 +4033,22 @@ function setColor(color, name) {
   document.getElementById("selected-color").textContent = name;
 }
 
-function utcToLocalDate(isoString) {
+function _utcToLocalDate(isoString) {
   if (!isoString) return null;
   const date = new Date(isoString);
   return date;
 }
 
-function parseISOTime(isoString) {
+function _parseISOTime(isoString) {
   if (!isoString) return "";
-  const date = utcToLocalDate(isoString);
+  const date = _utcToLocalDate(isoString);
   if (isNaN(date.getTime())) return "";
   return formatTime(date);
 }
 
-function convertDBDateToDisplayDate(dateString) {
+function _convertDBDateToDisplayDate(dateString) {
   if (!dateString) return "";
-  const date = utcToLocalDate(dateString);
+  const date = _utcToLocalDate(dateString);
   if (isNaN(date.getTime())) return "";
   return formatDate(date);
 }
@@ -4067,24 +4069,24 @@ if (chitId) {
 
       if (chit.start_datetime) {
         document.getElementById("start_datetime").value =
-          convertDBDateToDisplayDate(chit.start_datetime);
+          _convertDBDateToDisplayDate(chit.start_datetime);
         if (!chit.all_day)
-          document.getElementById("start_time").value = parseISOTime(
+          document.getElementById("start_time").value = _parseISOTime(
             chit.start_datetime,
           );
       }
       if (chit.end_datetime) {
         document.getElementById("end_datetime").value =
-          convertDBDateToDisplayDate(chit.end_datetime);
+          _convertDBDateToDisplayDate(chit.end_datetime);
         if (!chit.all_day)
-          document.getElementById("end_time").value = parseISOTime(
+          document.getElementById("end_time").value = _parseISOTime(
             chit.end_datetime,
           );
       }
       if (chit.due_datetime) {
         document.getElementById("due_datetime").value =
-          convertDBDateToDisplayDate(chit.due_datetime);
-        document.getElementById("due_time").value = parseISOTime(
+          _convertDBDateToDisplayDate(chit.due_datetime);
+        document.getElementById("due_time").value = _parseISOTime(
           chit.due_datetime,
         );
       }
@@ -4216,7 +4218,7 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   // Pre-load week start day setting before rendering calendar
-  fetch('/api/settings/default_user').then(r => r.ok ? r.json() : {}).then(s => {
+  getCachedSettings().then(s => {
     if (s.week_start_day !== undefined) _weekStartDay = parseInt(s.week_start_day) || 0;
     if (s.work_start_hour !== undefined) _workStartHour = parseInt(s.work_start_hour) || 8;
     if (s.work_end_hour !== undefined) _workEndHour = parseInt(s.work_end_hour) || 17;

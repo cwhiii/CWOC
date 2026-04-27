@@ -4,6 +4,63 @@
  * drag-to-reorder, and any other reused utilities.
  */
 
+// ── Settings Cache ───────────────────────────────────────────────────────────
+// Promise-based cache so concurrent callers share a single in-flight request.
+// Call _invalidateSettingsCache() after saving settings to force a fresh fetch.
+
+let _cwocSettingsPromise = null;
+
+function getCachedSettings() {
+  if (!_cwocSettingsPromise) {
+    _cwocSettingsPromise = fetch('/api/settings/default_user')
+      .then(function (r) {
+        if (!r.ok) throw new Error('Settings fetch failed: ' + r.status);
+        return r.json();
+      })
+      .then(function (data) {
+        window._cwocSettings = data;
+        return data;
+      })
+      .catch(function (err) {
+        console.error('getCachedSettings error:', err);
+        _cwocSettingsPromise = null;   // allow retry on next call
+        return {};                     // graceful fallback
+      });
+  }
+  return _cwocSettingsPromise;
+}
+
+function _invalidateSettingsCache() {
+  _cwocSettingsPromise = null;
+  window._cwocSettings = undefined;
+}
+
+// ── Shared Utility Functions ─────────────────────────────────────────────────
+
+function generateUniqueId() {
+  return Date.now().toString(36) + Math.random().toString(36).substr(2);
+}
+
+function formatDate(date) {
+  const monthNames = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+  ];
+  return `${date.getFullYear()}-${monthNames[date.getMonth()]}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function formatTime(date) {
+  return date.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
+function setSaveButtonUnsaved() {
+  if (window._cwocSave) window._cwocSave.markUnsaved();
+}
+
 // ── Inline Checklist Toggle & Reorder (for dashboard views) ──────────────────
 
 /**
@@ -607,9 +664,7 @@ let _calSnapGrid = null; // the snap grid overlay element
 
 async function _loadCalSnapSetting() {
   try {
-    const resp = await fetch('/api/settings/default_user');
-    if (!resp.ok) return;
-    const s = await resp.json();
+    const s = await getCachedSettings();
     if (s.calendar_snap && parseInt(s.calendar_snap) > 0) {
       _calSnapMinutes = parseInt(s.calendar_snap);
     } else if (s.calendar_snap === '0') {
@@ -3384,7 +3439,6 @@ function initMobileViewsButton() {
   var header = document.querySelector('.header');
   if (!header) return;
 
-  // Create the Views button
   var btn = document.createElement('button');
   btn.className = 'mobile-views-btn';
   btn.textContent = '☰ Views';
@@ -3396,7 +3450,6 @@ function initMobileViewsButton() {
     header.appendChild(btn);
   }
 
-  // Create the dropdown overlay
   var dropdown = document.createElement('div');
   dropdown.className = 'mobile-views-dropdown';
   var content = document.createElement('div');
@@ -3485,13 +3538,7 @@ function initMobileReferenceClose() {
 async function loadSavedLocations() {
   if (window._savedLocations) return window._savedLocations;
   try {
-    const resp = await fetch('/api/settings/default_user');
-    if (!resp.ok) {
-      console.error('Failed to load settings for saved locations:', resp.status);
-      window._savedLocations = [];
-      return [];
-    }
-    const settings = await resp.json();
+    const settings = await getCachedSettings();
     window._savedLocations = Array.isArray(settings.saved_locations) ? settings.saved_locations : [];
     return window._savedLocations;
   } catch (e) {

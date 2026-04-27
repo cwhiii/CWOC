@@ -5,9 +5,16 @@
    Provides: header row, zone containers, zones grid, form fields, buttons.
    
    Load this BEFORE any page-specific editor CSS (e.g. editor.css).
+   
+   The chit editor (editor.html) loads this file WITHOUT shared-page.css,
+   so this :root must be self-contained with every variable the editor needs.
+   
+   Canonical source of truth for the common variable set is
+   frontend/shared-page.css.  Keep shared values in sync with that file.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 /* ── CSS Variables (editor color palette) ──────────────────────────────── */
+/* Shared variables — must match shared-page.css exactly */
 :root {
     --parchment-light: #fdf5e6;
     --parchment-medium: #faebd7;
@@ -16,18 +23,18 @@
     --aged-brown-medium: #8b4513;
     --aged-brown-light: #a0522d;
     --accent-gold: #d4af37;
-    --accent-teal: #008080;
     --button-bg: #d2b48c;
     --button-hover: #c4a484;
     --danger-red: #b22222;
-    --success-green: #228b22;
     --info-blue: #4682b4;
-    --warning-orange: #daa520;
-    --light-grey: #e0e0e0;
-    --dark-grey: #6c757d;
     --border-color: var(--aged-brown-medium);
     --text-color: var(--aged-brown-dark);
     --header-bg: var(--button-bg);
+
+    /* Editor-specific variables */
+    --accent-teal: #008080;
+    --warning-orange: #daa520;
+    --dark-grey: #6c757d;
     --zone-header-bg: var(--button-bg);
     --zone-body-bg: var(--parchment-dark);
     --input-bg: var(--parchment-light);
@@ -68,7 +75,7 @@ body {
     color: var(--aged-brown-dark);
 }
 
-.headerImage {
+.header-image {
     height: 2em;
 }
 
@@ -470,7 +477,7 @@ input:checked + .slider:before {
         font-size: 1.1em;
         margin-bottom: 0;
     }
-    .headerImage {
+    .header-image {
         height: 1.5em;
     }
 

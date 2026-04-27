@@ -27,7 +27,7 @@
                     color: #4a2c2a;
                     white-space: nowrap;
                 }
-                .headerImage {
+                .header-image {
                     height: 2em;
                 }
                 .buttons {
@@ -277,7 +277,15 @@
                 #duplicate-tag-modal .modal-content { animation: fadeOut 2s forwards; }
                 @keyframes fadeOut { 0% { opacity: 1; } 80% { opacity: 1; } 100% { opacity: 0; display: none; } }
 
+                /* Spacer for setting labels/items that need vertical separation */
+                .settings-spacer-top {
+                    margin-top: 15px;
+                }
+
                 /* ── Saved Locations ── */
+                .cwoc-checkbox-label {
+                    font-size: 0.9em;
+                }
                 .location-row {
                     display: flex;
                     align-items: center;
@@ -334,7 +342,7 @@
         <body>
             <div class="settings-panel">
                 <div class="header-row">
-                    <img src="/static/settings.png" alt="Logo" class="headerImage" />
+                    <img src="/static/settings.png" alt="Logo" class="header-image" />
                     <h1>Settings</h1>
                     <div class="buttons">
                         <div class="left-buttons">
@@ -383,10 +391,10 @@
                         </select>
 
                         <div
+                            class="settings-spacer-top"
                             style="
                                 display: flex;
                                 align-items: center;
-                                margin-top: 15px;
                             "
                         >
                             <label style="margin-right: 10px">Sex</label>
@@ -445,7 +453,7 @@
                             >
                         </div>
 
-                        <label for="snooze-length" style="margin-top: 15px"
+                        <label for="snooze-length" class="settings-spacer-top"
                             >⏱️ Snooze Length</label
                         >
                         <select id="snooze-length" name="snooze-length">
@@ -455,7 +463,7 @@
                             <option value="10 minutes">10 minutes</option>
                         </select>
 
-                        <label for="calendar-snap" style="margin-top: 15px"
+                        <label for="calendar-snap" class="settings-spacer-top"
                             >📐 Calendar Snapping</label
                         >
                         <select id="calendar-snap" name="calendar-snap">
@@ -474,13 +482,13 @@
 
                         <label>Enabled Periods</label>
                         <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;">
-                            <label style="font-size:0.9em;"><input type="checkbox" class="period-cb" value="Itinerary" checked /> Itinerary</label>
-                            <label style="font-size:0.9em;"><input type="checkbox" class="period-cb" value="Day" checked /> Day</label>
-                            <label style="font-size:0.9em;"><input type="checkbox" class="period-cb" value="Week" checked /> Week</label>
-                            <label style="font-size:0.9em;"><input type="checkbox" class="period-cb" value="Work" checked /> Work Hours</label>
-                            <label style="font-size:0.9em;"><input type="checkbox" class="period-cb" value="SevenDay" checked /> X Days</label>
-                            <label style="font-size:0.9em;"><input type="checkbox" class="period-cb" value="Month" checked /> Month</label>
-                            <label style="font-size:0.9em;"><input type="checkbox" class="period-cb" value="Year" checked /> Year</label>
+                            <label class="cwoc-checkbox-label"><input type="checkbox" class="period-cb" value="Itinerary" checked /> Itinerary</label>
+                            <label class="cwoc-checkbox-label"><input type="checkbox" class="period-cb" value="Day" checked /> Day</label>
+                            <label class="cwoc-checkbox-label"><input type="checkbox" class="period-cb" value="Week" checked /> Week</label>
+                            <label class="cwoc-checkbox-label"><input type="checkbox" class="period-cb" value="Work" checked /> Work Hours</label>
+                            <label class="cwoc-checkbox-label"><input type="checkbox" class="period-cb" value="SevenDay" checked /> X Days</label>
+                            <label class="cwoc-checkbox-label"><input type="checkbox" class="period-cb" value="Month" checked /> Month</label>
+                            <label class="cwoc-checkbox-label"><input type="checkbox" class="period-cb" value="Year" checked /> Year</label>
                         </div>
 
                         <label style="margin-top:8px;">X Days Count</label>
@@ -497,7 +505,7 @@
                             <option value="6">Saturday</option>
                         </select>
 
-                        <label style="margin-top: 15px">🏢 Working Hours</label>
+                        <label class="settings-spacer-top">🏢 Working Hours</label>
                         <div style="display:flex;gap:8px;align-items:center;">
                             <select id="work-start-hour" style="flex:1;">
                                 <option value="5">5:00</option>
@@ -518,15 +526,15 @@
                             </select>
                         </div>
 
-                        <label style="margin-top: 15px">📆 Working Days</label>
+                        <label class="settings-spacer-top">📆 Working Days</label>
                         <div style="display:flex;flex-wrap:wrap;gap:6px;">
-                            <label style="font-size:0.9em;"><input type="checkbox" class="work-day-cb" value="0" /> Sun</label>
-                            <label style="font-size:0.9em;"><input type="checkbox" class="work-day-cb" value="1" checked /> Mon</label>
-                            <label style="font-size:0.9em;"><input type="checkbox" class="work-day-cb" value="2" checked /> Tue</label>
-                            <label style="font-size:0.9em;"><input type="checkbox" class="work-day-cb" value="3" checked /> Wed</label>
-                            <label style="font-size:0.9em;"><input type="checkbox" class="work-day-cb" value="4" checked /> Thu</label>
-                            <label style="font-size:0.9em;"><input type="checkbox" class="work-day-cb" value="5" checked /> Fri</label>
-                            <label style="font-size:0.9em;"><input type="checkbox" class="work-day-cb" value="6" /> Sat</label>
+                            <label class="cwoc-checkbox-label"><input type="checkbox" class="work-day-cb" value="0" /> Sun</label>
+                            <label class="cwoc-checkbox-label"><input type="checkbox" class="work-day-cb" value="1" checked /> Mon</label>
+                            <label class="cwoc-checkbox-label"><input type="checkbox" class="work-day-cb" value="2" checked /> Tue</label>
+                            <label class="cwoc-checkbox-label"><input type="checkbox" class="work-day-cb" value="3" checked /> Wed</label>
+                            <label class="cwoc-checkbox-label"><input type="checkbox" class="work-day-cb" value="4" checked /> Thu</label>
+                            <label class="cwoc-checkbox-label"><input type="checkbox" class="work-day-cb" value="5" checked /> Fri</label>
+                            <label class="cwoc-checkbox-label"><input type="checkbox" class="work-day-cb" value="6" /> Sat</label>
                         </div>
                     </div>
                     <div class="setting-group">
@@ -674,7 +682,7 @@
                                     <option value="space">When There's Space</option>
                                 </select>
                             </div>
-                            <div class="indicator-item" style="margin-top: 15px">
+                            <div class="indicator-item settings-spacer-top">
                                 <span>❤️ Indicators</span>
                                 <select
                                     id="health-indicator"

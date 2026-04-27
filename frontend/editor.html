@@ -19,7 +19,7 @@
     </head>
     <body>
         <div class="header-row">
-            <img src="/static/create_new.png" alt="Logo" class="headerImage" />
+            <img src="/static/create_new.png" alt="Logo" class="header-image" />
             <h1>Chit Editor</h1>
             <div class="buttons">
                 <div class="left-buttons">
@@ -105,7 +105,7 @@
                         >
                             <h2 class="zone-title">📅 Dates & Times</h2>
                             <div class="zone-actions" onclick="event.stopPropagation()">
-                                <label style="display:inline-flex;align-items:center;gap:4px;font-size:0.85em;cursor:pointer;"><input type="checkbox" id="allDay" onchange="toggleAllDay()" /> All Day</label>
+                                <label class="cwoc-inline-check cwoc-inline-label-sm"><input type="checkbox" id="allDay" onchange="toggleAllDay()" /> All Day</label>
                             </div>
                             <span class="zone-toggle-icon">🔼</span>
                         </div>
@@ -174,13 +174,13 @@
                                                     </select>
                                                 </div>
                                                 <div id="recurrenceByDay" style="display:none;margin-top:4px;gap:4px;flex-wrap:wrap;">
-                                                    <label style="font-size:0.85em;"><input type="checkbox" value="SU" /> Su</label>
-                                                    <label style="font-size:0.85em;"><input type="checkbox" value="MO" /> Mo</label>
-                                                    <label style="font-size:0.85em;"><input type="checkbox" value="TU" /> Tu</label>
-                                                    <label style="font-size:0.85em;"><input type="checkbox" value="WE" /> We</label>
-                                                    <label style="font-size:0.85em;"><input type="checkbox" value="TH" /> Th</label>
-                                                    <label style="font-size:0.85em;"><input type="checkbox" value="FR" /> Fr</label>
-                                                    <label style="font-size:0.85em;"><input type="checkbox" value="SA" /> Sa</label>
+                                                    <label class="cwoc-inline-label-sm"><input type="checkbox" value="SU" /> Su</label>
+                                                    <label class="cwoc-inline-label-sm"><input type="checkbox" value="MO" /> Mo</label>
+                                                    <label class="cwoc-inline-label-sm"><input type="checkbox" value="TU" /> Tu</label>
+                                                    <label class="cwoc-inline-label-sm"><input type="checkbox" value="WE" /> We</label>
+                                                    <label class="cwoc-inline-label-sm"><input type="checkbox" value="TH" /> Th</label>
+                                                    <label class="cwoc-inline-label-sm"><input type="checkbox" value="FR" /> Fr</label>
+                                                    <label class="cwoc-inline-label-sm"><input type="checkbox" value="SA" /> Sa</label>
                                                 </div>
                                             </div>
                                         </div>
@@ -189,7 +189,7 @@
                                     <div class="date-mode-row">
                                         <label class="date-mode-label">&nbsp;</label>
                                         <div class="date-mode-fields">
-                                            <label style="font-size:0.85em;display:inline-flex;align-items:center;gap:4px;cursor:pointer;">
+                                            <label class="cwoc-inline-check cwoc-inline-label-sm">
                                                 <input type="checkbox" id="recurrenceEndsNever" checked onchange="onRecurrenceEndsToggle()" /> Ends never
                                             </label>
                                             <span id="recurrenceEndsDateWrap" style="display:none;">
@@ -617,10 +617,10 @@
                         </div>
                         <div id="alertsContent" class="zone-body">
                             <div style="display:flex;gap:1em;margin-bottom:0.5em;font-size:0.9em;">
-                                <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;" title="Show a notification when this chit's start time arrives">
+                                <label class="cwoc-inline-check" title="Show a notification when this chit's start time arrives">
                                     <input type="checkbox" id="notifyAtStart" checked /> 🔔 Notify at start
                                 </label>
-                                <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;" title="Show a notification when this chit's due time arrives">
+                                <label class="cwoc-inline-check" title="Show a notification when this chit's due time arrives">
                                     <input type="checkbox" id="notifyAtDue" checked /> ⏰ Notify at due
                                 </label>
                             </div>
@@ -811,14 +811,6 @@
                         >
                             <h2 class="zone-title">📊 Projects</h2>
                             <div class="zone-actions">
-                                <button
-                                    type="button"
-                                    id="statusFilterButton"
-                                    class="zone-button"
-                                    onclick="toggleStatusFilterDropdown(event)"
-                                >
-                                    <i class="fas fa-filter"></i> Filter
-                                </button>
                                 <button
                                     type="button"
                                     id="addNewChitButton"

@@ -373,7 +373,6 @@
         }
     });
 
-    console.log('live test: 1202');
     // Close import modal on ESC, or exit page
     window.addEventListener('keydown', (e) => {
         if (e.key !== 'Escape') return;
