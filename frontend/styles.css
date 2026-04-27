@@ -307,12 +307,11 @@ h1 {
     font-weight: bold;
     border-radius: 3px;
     font-size: larger;
-    flex-shrink: 1;
-    min-width: 0;
+    flex-shrink: 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    overflow: hidden;
+    white-space: nowrap;
 }
 
 .tab > img {
@@ -321,8 +320,6 @@ h1 {
 }
 
 .tab-label {
-    overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
 }
 

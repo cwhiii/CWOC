@@ -3047,6 +3047,8 @@ async function loadChitData(chitId) {
 
     // If project master, initialize the Projects Zone after all fields are populated
     if (chit.is_project_master) {
+      const pmInput = document.getElementById("isProjectMaster");
+      if (pmInput) pmInput.value = "true";
       if (typeof initializeProjectZone === "function") {
         await initializeProjectZone(chit.id);
       }

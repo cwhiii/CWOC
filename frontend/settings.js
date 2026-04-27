@@ -353,6 +353,16 @@ function handleDropOnInactive(e) {
   setSaveButtonUnsaved();
 }
 
+/** Toggle visibility of combined vs individual alert rows based on Combine Alerts checkbox */
+function _toggleCombineAlerts() {
+  var cb = document.getElementById('combine-alerts-toggle');
+  var individual = document.getElementById('individual-alert-rows');
+  var combined = document.getElementById('combined-alert-row');
+  if (individual) individual.style.display = (cb && cb.checked) ? 'none' : '';
+  if (combined) combined.style.display = (cb && cb.checked) ? '' : 'none';
+  setSaveButtonUnsaved();
+}
+
 /** Toggle visibility of Work Week config based on Work Hours period checkbox */
 function _toggleWorkConfig() {
   var workCb = document.querySelector('.period-cb[value="Work"]');
@@ -1365,6 +1375,27 @@ class SettingsManager {
     renderLocationsSection(savedLocations);
 
     renderColors(this.settings.custom_colors);
+
+    // Visual indicators — load saved values into dropdowns
+    const vi = this.settings.visual_indicators || {};
+    document.querySelector("select[name='alarm_indicator']").value = vi.alarm || "always";
+    document.querySelector("select[name='notification_indicator']").value = vi.notification || "always";
+    document.querySelector("select[name='weather_indicator']").value = vi.weather || "always";
+    document.querySelector("select[name='people_indicator']").value = vi.people || "always";
+    document.querySelector("select[name='indicators_indicator']").value = vi.indicators || "always";
+    document.querySelector("select[name='timer_indicator']").value = vi.timer || "always";
+    document.querySelector("select[name='stopwatch_indicator']").value = vi.stopwatch || "always";
+    document.querySelector("select[name='combined_alert_indicator']").value = vi.combined_alert || "always";
+
+    // Combine Alerts toggle
+    var combineAlertsCb = document.getElementById('combine-alerts-toggle');
+    if (combineAlertsCb) {
+      combineAlertsCb.checked = !!vi.combine_alerts;
+      var individualRows = document.getElementById('individual-alert-rows');
+      var combinedRow = document.getElementById('combined-alert-row');
+      if (individualRows) individualRows.style.display = vi.combine_alerts ? 'none' : '';
+      if (combinedRow) combinedRow.style.display = vi.combine_alerts ? '' : 'none';
+    }
   }
 
   gatherSettings() {
@@ -1418,12 +1449,16 @@ class SettingsManager {
         notification: document.querySelector(
           "select[name='notification_indicator']",
         ).value,
+        timer: document.querySelector("select[name='timer_indicator']").value,
+        stopwatch: document.querySelector("select[name='stopwatch_indicator']").value,
         weather: document.querySelector("select[name='weather_indicator']")
           .value,
         people: document.querySelector("select[name='people_indicator']").value,
         indicators: document.querySelector(
           "select[name='indicators_indicator']",
         ).value,
+        combine_alerts: document.getElementById("combine-alerts-toggle").checked,
+        combined_alert: document.querySelector("select[name='combined_alert_indicator']").value,
       },
       chit_options: {
         fade_past_chits: document.getElementById("fade-past").checked,

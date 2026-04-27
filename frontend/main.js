@@ -311,8 +311,8 @@ function _applySort(chitList) {
 // ── Sidebar dimming → Full-screen overlay + floating panels ──────────────────
 
 // Helper: build a chit card header row with icons, title, and orderable meta
-// Returns a div with: [pinned icon][archived icon] Title ... meta values
-function _buildChitHeader(chit, titleHtml) {
+// Returns a div with: [pinned icon][archived icon][alert indicators] Title ... meta values
+function _buildChitHeader(chit, titleHtml, settings) {
   const row = document.createElement('div');
   row.className = 'chit-header-row';
 
@@ -331,6 +331,17 @@ function _buildChitHeader(chit, titleHtml) {
     icon.textContent = '📦';
     icon.title = 'Archived';
     left.appendChild(icon);
+  }
+
+  // Visual indicators (alerts, weather, people, recurrence)
+  if (settings && typeof _getAllIndicators === 'function') {
+    const indicators = _getAllIndicators(chit, settings, 'card');
+    if (indicators) {
+      const alertSpan = document.createElement('span');
+      alertSpan.className = 'alert-indicators';
+      alertSpan.textContent = indicators;
+      left.appendChild(alertSpan);
+    }
   }
 
   const title = document.createElement('span');
@@ -2510,6 +2521,8 @@ function displayWeekView(chitsToDisplay, opts) {
   const chitList = document.getElementById("chit-list");
   chitList.innerHTML = "";
 
+  const _viSettings = (window._cwocSettings || {}).visual_indicators || {};
+
   // Options for Work Hours variant
   const hourStart = opts?.hourStart ?? 0;
   const hourEnd = opts?.hourEnd ?? 24;
@@ -2636,7 +2649,7 @@ function displayWeekView(chitsToDisplay, opts) {
     rowSpacer.style.cssText = "width:60px;flex-shrink:0;";
     allDayEventsRow.appendChild(rowSpacer);
 
-    renderAllDayEventsInCells(dayData, allDayEventsRow);
+    renderAllDayEventsInCells(dayData, allDayEventsRow, _viSettings, 'calendar-slot');
 
 
 
@@ -2730,7 +2743,7 @@ function displayWeekView(chitsToDisplay, opts) {
       ev.style.boxSizing = "border-box";
       ev.title = calendarEventTooltip(chit, info);
       const timeLabel = info.isDueOnly ? `Due: ${formatTime(info.start)}` : `${formatTime(info.start)} - ${formatTime(info.end)}`;
-      ev.innerHTML = `${calendarEventTitle(chit, info.isDueOnly, info)}<br>${timeLabel}`;
+      ev.innerHTML = `${calendarEventTitle(chit, info.isDueOnly, info, _viSettings, 'calendar-slot')}<br>${timeLabel}`;
       attachCalendarChitEvents(ev, chit);
       col.appendChild(ev);
       weekChitsMap.push({ el: ev, chit, info });
@@ -2778,6 +2791,9 @@ function displayWorkView(chitsToDisplay) {
 function displayMonthView(chitsToDisplay) {
   const chitList = document.getElementById("chit-list");
   chitList.innerHTML = "";
+
+  const _viSettings = (window._cwocSettings || {}).visual_indicators || {};
+
   const monthView = document.createElement("div");
   monthView.className = "month-view";
 
@@ -2833,7 +2849,7 @@ function displayMonthView(chitsToDisplay) {
         chitElement.dataset.chitId = chit.id;
         applyChitColors(chitElement, chitColor(chit));
         chitElement.title = calendarEventTooltip(chit, info);
-        chitElement.innerHTML = calendarEventTitle(chit, info.isDueOnly, info);
+        chitElement.innerHTML = calendarEventTitle(chit, info.isDueOnly, info, _viSettings, 'calendar-month');
         attachCalendarChitEvents(chitElement, chit);
         eventsContainer.appendChild(chitElement);
       });
@@ -2870,7 +2886,7 @@ function displayMonthView(chitsToDisplay) {
         chitElement.style.cursor = "pointer";
         if (chit.status === "Complete") chitElement.classList.add("completed-task");
         chitElement.title = calendarEventTooltip(chit, info);
-        chitElement.innerHTML = calendarEventTitle(chit, info.isDueOnly, info);
+        chitElement.innerHTML = calendarEventTitle(chit, info.isDueOnly, info, _viSettings, 'calendar-month');
         attachCalendarChitEvents(chitElement, chit);
         eventsContainer.appendChild(chitElement);
       });
@@ -2900,7 +2916,7 @@ function displayMonthView(chitsToDisplay) {
         chitElement.dataset.chitId = chit.id;
         applyChitColors(chitElement, chitColor(chit));
         chitElement.title = calendarEventTooltip(chit, info);
-        chitElement.innerHTML = calendarEventTitle(chit, info.isDueOnly, info);
+        chitElement.innerHTML = calendarEventTitle(chit, info.isDueOnly, info, _viSettings, 'calendar-month');
         attachCalendarChitEvents(chitElement, chit);
         eventsContainer.appendChild(chitElement);
       });
@@ -3026,6 +3042,8 @@ function displayDayView(chitsToDisplay, opts) {
   const chitList = document.getElementById("chit-list");
   chitList.innerHTML = "";
 
+  const _viSettings = (window._cwocSettings || {}).visual_indicators || {};
+
   const hourStart = opts?.hourStart ?? 0;
   const hourEnd = opts?.hourEnd ?? 24;
   const totalMinutes = (hourEnd - hourStart) * 60;
@@ -3062,7 +3080,7 @@ function displayDayView(chitsToDisplay, opts) {
       applyChitColors(ev, chitColor(chit));
       if (chit.status === "Complete") ev.classList.add("completed-task");
       ev.title = calendarEventTooltip(chit, info);
-      ev.innerHTML = calendarEventTitle(chit, info.isDueOnly, info);
+      ev.innerHTML = calendarEventTitle(chit, info.isDueOnly, info, _viSettings, 'calendar-slot');
       attachCalendarChitEvents(ev, chit);
       allDayRow.appendChild(ev);
     });
@@ -3135,7 +3153,7 @@ function displayDayView(chitsToDisplay, opts) {
     el.title = calendarEventTooltip(chit, info);
     if (chit.status === "Complete") el.classList.add("completed-task");
     const timeLabel = info.isDueOnly ? `Due: ${formatTime(info.start)}` : `${formatTime(info.start)} - ${formatTime(info.end)}`;
-    el.innerHTML = `${calendarEventTitle(chit, info.isDueOnly, info)}<br>${timeLabel}`;
+    el.innerHTML = `${calendarEventTitle(chit, info.isDueOnly, info, _viSettings, 'calendar-slot')}<br>${timeLabel}`;
     attachCalendarChitEvents(el, chit);
     eventsContainer.appendChild(el);
     dayChitsMap.push({ el, chit, info });
@@ -3261,6 +3279,7 @@ function displayChecklistView(chitsToDisplay) {
   chitList.innerHTML = "";
   const checklistView = document.createElement("div");
   checklistView.className = "checklist-view";
+  const _viSettings = (window._cwocSettings || {}).visual_indicators || {};
 
   // Only show chits that have checklist items
   const checklistChits = chitsToDisplay.filter(c =>
@@ -3290,7 +3309,7 @@ function displayChecklistView(chitsToDisplay) {
       if (chit.status === "Complete") chitElement.classList.add("completed-task");
       if (chit.archived) chitElement.classList.add("archived-chit");
 
-      chitElement.appendChild(_buildChitHeader(chit, `<a href="/editor?id=${chit.id}">${chit.title || '(Untitled)'}</a>`));
+      chitElement.appendChild(_buildChitHeader(chit, `<a href="/editor?id=${chit.id}">${chit.title || '(Untitled)'}</a>`, _viSettings));
 
       // Checklist progress count
       const items = chit.checklist || [];
@@ -3323,6 +3342,7 @@ function displayChecklistView(chitsToDisplay) {
 function displayTasksView(chitsToDisplay) {
   const chitList = document.getElementById("chit-list");
   chitList.innerHTML = "";
+  const _viSettings = (window._cwocSettings || {}).visual_indicators || {};
 
   let taskChits = chitsToDisplay.filter(
     (chit) => chit.status || chit.due_datetime,
@@ -3351,7 +3371,7 @@ function displayTasksView(chitsToDisplay) {
     applyChitColors(chitElement, typeof chitColor === 'function' ? chitColor(chit) : '#fdf6e3');
     if (chit.status === "Complete") chitElement.classList.add("completed-task");
 
-    chitElement.appendChild(_buildChitHeader(chit, `<a href="/editor?id=${chit.id}">${chit.title || '(Untitled)'}</a>`));
+    chitElement.appendChild(_buildChitHeader(chit, `<a href="/editor?id=${chit.id}">${chit.title || '(Untitled)'}</a>`, _viSettings));
 
     // Status + note preview in a row
     const controls = document.createElement("div");
@@ -3418,6 +3438,7 @@ function displayNotesView(chitsToDisplay) {
   chitList.innerHTML = "";
   const notesView = document.createElement("div");
   notesView.className = "notes-view";
+  const _viSettings = (window._cwocSettings || {}).visual_indicators || {};
 
   const filteredNotes = [...chitsToDisplay].filter((chit) => chit.note && chit.note.trim() !== "");
   const sortedChits = currentSortField ? filteredNotes : filteredNotes.sort((a, b) => {
@@ -3445,6 +3466,11 @@ function displayNotesView(chitsToDisplay) {
       titleRow.style.cssText = "display:flex;align-items:center;gap:0.3em;font-weight:bold;margin-bottom:0.2em;";
       if (chit.pinned) { const i = document.createElement('i'); i.className = 'fas fa-bookmark'; i.title = 'Pinned'; i.style.fontSize = '0.85em'; titleRow.appendChild(i); }
       if (chit.archived) { const i = document.createElement('span'); i.textContent = '📦'; i.title = 'Archived'; titleRow.appendChild(i); }
+      // Alert indicators
+      if (typeof _getAllIndicators === 'function') {
+        const indicators = _getAllIndicators(chit, _viSettings, 'card');
+        if (indicators) { const s = document.createElement('span'); s.className = 'alert-indicators'; s.textContent = indicators; titleRow.appendChild(s); }
+      }
       const titleSpan = document.createElement('span');
       titleSpan.textContent = chit.title || '(Untitled)';
       titleRow.appendChild(titleSpan);
@@ -3688,6 +3714,8 @@ function displaySevenDayView(chitsToDisplay, opts) {
   const chitList = document.getElementById("chit-list");
   chitList.innerHTML = "";
 
+  const _viSettings = (window._cwocSettings || {}).visual_indicators || {};
+
   const hourStart = opts?.hourStart ?? 0;
   const hourEnd = opts?.hourEnd ?? 24;
   const totalMinutes = (hourEnd - hourStart) * 60;
@@ -3803,7 +3831,7 @@ function displaySevenDayView(chitsToDisplay, opts) {
     rowSpacer.style.cssText = "width:60px;flex-shrink:0;";
     allDayEventsRow.appendChild(rowSpacer);
 
-    renderAllDayEventsInCells(dayData, allDayEventsRow);
+    renderAllDayEventsInCells(dayData, allDayEventsRow, _viSettings, 'calendar-slot');
 
 
 
@@ -3895,7 +3923,7 @@ function displaySevenDayView(chitsToDisplay, opts) {
       ev.style.boxSizing = "border-box";
       ev.title = calendarEventTooltip(chit, info);
       const timeLabel = info.isDueOnly ? `Due: ${formatTime(info.start)}` : `${formatTime(info.start)} - ${formatTime(info.end)}`;
-      ev.innerHTML = `${calendarEventTitle(chit, info.isDueOnly, info)}<br>${timeLabel}`;
+      ev.innerHTML = `${calendarEventTitle(chit, info.isDueOnly, info, _viSettings, 'calendar-slot')}<br>${timeLabel}`;
       attachCalendarChitEvents(ev, chit);
       col.appendChild(ev);
       sdChitsMap.push({ el: ev, chit, info });
@@ -3943,6 +3971,7 @@ function displayProjectsView(chitsToDisplay) {
 
   const chitList = document.getElementById("chit-list");
   chitList.innerHTML = "";
+  const _viSettings = (window._cwocSettings || {}).visual_indicators || {};
 
   // Use all chits (not filtered) to find project masters — filters shouldn't hide projects
   // Deduplicate by ID to prevent showing the same project twice
@@ -3977,7 +4006,7 @@ function displayProjectsView(chitsToDisplay) {
     // Project header row — use standard header builder
     const header = document.createElement("div");
     header.style.cssText = `padding:0.5em 0.7em;background:${projectColor};color:${projectFontColor};cursor:pointer;`;
-    header.appendChild(_buildChitHeader(project, project.title || "(Untitled Project)"));
+    header.appendChild(_buildChitHeader(project, project.title || "(Untitled Project)", _viSettings));
 
     if (project.note) {
       const note = document.createElement("div");
@@ -4015,6 +4044,18 @@ function displayProjectsView(chitsToDisplay) {
         childTitle.style.cssText = "font-weight:bold;";
         childTitle.textContent = child ? (child.title || "(Untitled)") : `[${childId.slice(0,8)}…]`;
         titleRow.appendChild(childTitle);
+
+        // Visual indicators on child items
+        if (child && typeof _getAllIndicators === 'function') {
+          const ind = _getAllIndicators(child, _viSettings, 'card');
+          if (ind) {
+            const indSpan = document.createElement('span');
+            indSpan.className = 'alert-indicators';
+            indSpan.textContent = ind;
+            titleRow.appendChild(indSpan);
+          }
+        }
+
         li.appendChild(titleRow);
 
         if (child) {
@@ -4070,6 +4111,7 @@ function displayProjectsView(chitsToDisplay) {
 function _displayProjectsKanban(chitsToDisplay) {
   const chitList = document.getElementById("chit-list");
   chitList.innerHTML = "";
+  const _viSettings = (window._cwocSettings || {}).visual_indicators || {};
 
   const seenIds = new Set();
   const projects = chits.filter(c => {
@@ -4128,13 +4170,13 @@ function _displayProjectsKanban(chitsToDisplay) {
 
     statuses.forEach(status => {
       const col = document.createElement("div");
-      col.style.cssText = "flex:1;min-width:0;border-right:1px solid rgba(139,90,43,0.15);padding:0.4em;display:flex;flex-direction:column;gap:0.3em;";
+      col.style.cssText = "flex:1;min-width:0;border-right:2px solid rgba(139,90,43,0.35);padding:0.5em;display:flex;flex-direction:column;gap:0.3em;background:rgba(255,255,255,0.15);";
       col.dataset.status = status;
       col.dataset.projectId = project.id;
 
       // Column header
       const colHeader = document.createElement("div");
-      colHeader.style.cssText = "font-size:0.9em;font-weight:bold;opacity:0.8;text-align:center;padding:4px 0 6px;border-bottom:1px solid rgba(139,90,43,0.15);margin-bottom:6px;white-space:nowrap;";
+      colHeader.style.cssText = "font-weight:bold;opacity:0.85;text-align:center;padding:5px 0 8px;border-bottom:2px solid rgba(139,90,43,0.3);margin-bottom:8px;white-space:nowrap;";
       colHeader.textContent = status;
       col.appendChild(colHeader);
 
@@ -4153,6 +4195,11 @@ function _displayProjectsKanban(chitsToDisplay) {
         const titleEl = document.createElement("div");
         titleEl.style.cssText = "font-weight:bold;margin-bottom:3px;";
         titleEl.textContent = child.title || "(Untitled)";
+        // Visual indicators inline with title
+        if (typeof _getAllIndicators === 'function') {
+          const ind = _getAllIndicators(child, _viSettings, 'card');
+          if (ind) titleEl.textContent += ' ' + ind;
+        }
         card.appendChild(titleEl);
 
         // Status / Priority / Severity meta row
@@ -4332,6 +4379,7 @@ function _displayProjectsKanban(chitsToDisplay) {
 function displayAlarmsView(chitsToDisplay) {
   const chitList = document.getElementById("chit-list");
   chitList.innerHTML = "";
+  const _viSettings = (window._cwocSettings || {}).visual_indicators || {};
 
   // Include chits with any alert type: alarm flag, notification flag, or alerts array entries
   // But don't count notify-at-start/due flags as alerts for this view
@@ -4360,7 +4408,7 @@ function displayAlarmsView(chitsToDisplay) {
     if (chit.archived) card.classList.add("archived-chit");
     applyChitColors(card, chitColor(chit));
 
-    card.appendChild(_buildChitHeader(chit, `<a href="/editor?id=${chit.id}">${chit.title || '(Untitled)'}</a>`));
+    card.appendChild(_buildChitHeader(chit, `<a href="/editor?id=${chit.id}">${chit.title || '(Untitled)'}</a>`, _viSettings));
 
     // Alert summary
     const alerts = Array.isArray(chit.alerts) ? chit.alerts : [];

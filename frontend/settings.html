@@ -598,8 +598,18 @@
                     <div class="setting-group">
                         <h3>Visual Indicators</h3>
                         <div class="indicator-list">
-                            <div class="indicator-item"><span>🔔 Alarm</span><select name="alarm_indicator"><option value="always">Always</option><option value="never">Never</option><option value="space">If Space</option></select></div>
-                            <div class="indicator-item"><span>📢 Notification</span><select name="notification_indicator"><option value="always">Always</option><option value="never">Never</option><option value="space">If Space</option></select></div>
+                            <label class="cwoc-checkbox-label" style="margin-bottom:8px;">
+                                <input type="checkbox" id="combine-alerts-toggle" onchange="_toggleCombineAlerts()" /> Combine Alerts
+                            </label>
+                            <div id="individual-alert-rows">
+                                <div class="indicator-item"><span>🔔 Alarm</span><select name="alarm_indicator"><option value="always">Always</option><option value="never">Never</option><option value="space">If Space</option></select></div>
+                                <div class="indicator-item"><span>📢 Notification</span><select name="notification_indicator"><option value="always">Always</option><option value="never">Never</option><option value="space">If Space</option></select></div>
+                                <div class="indicator-item"><span>⏱️ Timer</span><select name="timer_indicator"><option value="always">Always</option><option value="never">Never</option><option value="space">If Space</option></select></div>
+                                <div class="indicator-item"><span>⏲️ Stopwatch</span><select name="stopwatch_indicator"><option value="always">Always</option><option value="never">Never</option><option value="space">If Space</option></select></div>
+                            </div>
+                            <div id="combined-alert-row" style="display:none;">
+                                <div class="indicator-item"><span>🛎️ Combined Alerts</span><select name="combined_alert_indicator"><option value="always">Always</option><option value="never">Never</option><option value="space">If Space</option></select></div>
+                            </div>
                             <div class="indicator-item"><span>🌤️ Weather</span><select name="weather_indicator"><option value="always">Always</option><option value="never">Never</option><option value="space">If Space</option></select></div>
                             <div class="indicator-item"><span>👥 People</span><select name="people_indicator"><option value="always">Always</option><option value="never">Never</option><option value="space">If Space</option></select></div>
                             <div class="indicator-item"><span>❤️ Health</span><select id="health-indicator" name="indicators_indicator"><option value="always">Always</option><option value="never">Never</option><option value="space">If Space</option></select></div>

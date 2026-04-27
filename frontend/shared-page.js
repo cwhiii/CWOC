@@ -76,8 +76,10 @@ class CwocSaveSystem {
         <div class="modal-content">
           <h3>Unsaved Changes</h3>
           <p>You have unsaved changes. Are you sure you want to leave?</p>
-          <button class="standard-button" id="cwoc-confirm-exit">Exit Without Saving</button>
-          <button class="standard-button" id="cwoc-stay-here">Stay Here</button>
+          <div style="display:flex;gap:8px;justify-content:flex-end;">
+            <button class="standard-button" id="cwoc-stay-here">Stay Here</button>
+            <button class="standard-button" id="cwoc-confirm-exit">Exit Without Saving</button>
+          </div>
         </div>`;
       document.body.appendChild(modal);
       document.getElementById('cwoc-confirm-exit').onclick = () => { window.location.href = url; };

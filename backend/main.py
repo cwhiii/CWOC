@@ -57,8 +57,8 @@ class Settings(BaseModel):
     active_clocks: Optional[str] = None  # JSON array of active clock format values, e.g. '["24hour","12hour"]'
     saved_locations: Optional[str] = None  # JSON array of saved location objects, e.g. '[{"label":"Home","address":"4 Rolling Mill Way, Canton, MA 02021","is_default":true}]'
     tags: Optional[List[Tag]] = None
-    custom_colors: Optional[List[str]] = None
-    visual_indicators: Optional[Dict[str, str]] = None
+    custom_colors: Optional[List[Any]] = None
+    visual_indicators: Optional[Dict[str, Any]] = None
     chit_options: Optional[Dict[str, bool]] = None
     calendar_snap: Optional[str] = "15"
     week_start_day: Optional[str] = "0"  # 0=Sunday, 1=Monday, etc.

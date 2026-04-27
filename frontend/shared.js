@@ -617,6 +617,166 @@ function enableDragToReorder(container, tab, onReorder) {
 }
 
 
+// ── Alert Indicator Helpers ───────────────────────────────────────────────────
+
+/** Valid alert _type values (excludes _notify_flags) */
+var _ALERT_TYPES = ['alarm', 'timer', 'stopwatch', 'notification'];
+
+/**
+ * Returns true if a chit has any real alerts.
+ * Checks the alerts array for entries with _type in {alarm, timer, stopwatch, notification},
+ * excluding _notify_flags entries. Falls back to legacy boolean alarm/notification flags
+ * when alerts is null, undefined, or not an array.
+ * @param {object} chit
+ * @returns {boolean}
+ */
+function _chitHasAlerts(chit) {
+  if (!chit) return false;
+  var alerts = chit.alerts;
+  if (Array.isArray(alerts)) {
+    for (var i = 0; i < alerts.length; i++) {
+      if (alerts[i] && _ALERT_TYPES.indexOf(alerts[i]._type) !== -1) return true;
+    }
+  }
+  // Legacy boolean flags fallback
+  if (chit.alarm === true || chit.notification === true) return true;
+  return false;
+}
+
+/** Icon map for individual alert types */
+var _ALERT_ICON_MAP = {
+  alarm:        '🔔 ',
+  notification: '📢 ',
+  timer:        '⏱️ ',
+  stopwatch:    '⏲️ '
+};
+
+/**
+ * Returns a string of alert indicator icon(s) for a chit,
+ * based on visual_indicators settings and rendering context.
+ *
+ * @param {object} chit - The chit object
+ * @param {object} settings - The visual_indicators settings object
+ * @param {string} context - 'calendar-month' | 'calendar-slot' | 'card'
+ * @returns {string} Icon string (may be empty)
+ */
+function _getAlertIndicators(chit, settings, context) {
+  if (!_chitHasAlerts(chit)) return '';
+
+  // Normalise settings — treat null/undefined as empty object
+  var s = settings || {};
+
+  // Default missing keys
+  var combineAlerts = (s.combine_alerts === true);
+  var combinedMode  = s.combined_alert || 'always';
+
+  // Determine whether to use combined (single icon) path
+  var useCombined = combineAlerts || context === 'calendar-month' || context === 'calendar-slot';
+
+  if (useCombined) {
+    if (_shouldShow(combinedMode, context)) return '🛎️ ';
+    return '';
+  }
+
+  // Individual mode — only applies in 'card' context
+  if (context !== 'card') return '';
+
+  // Collect which alert types are present on this chit
+  var present = _chitAlertTypesPresent(chit);
+  var result = '';
+  for (var i = 0; i < _ALERT_TYPES.length; i++) {
+    var aType = _ALERT_TYPES[i];
+    if (!present[aType]) continue;
+    // Read per-type display mode; default timer/stopwatch to "always"
+    var mode = s[aType];
+    if (mode === undefined || mode === null) {
+      mode = 'always'; // default for any missing key
+    }
+    if (_shouldShow(mode, context)) {
+      result += _ALERT_ICON_MAP[aType];
+    }
+  }
+  return result;
+}
+
+/**
+ * Returns a string of ALL visual indicator icons for a chit:
+ * alert icons + weather + people + recurrence.
+ * Respects visual_indicators settings.
+ *
+ * @param {object} chit - The chit object
+ * @param {object} settings - The visual_indicators settings object
+ * @param {string} context - 'calendar-month' | 'calendar-slot' | 'card'
+ * @returns {string} Icon string (may be empty)
+ */
+function _getAllIndicators(chit, settings, context) {
+  var s = settings || {};
+  var result = '';
+
+  // Alert indicators
+  result += _getAlertIndicators(chit, s, context);
+
+  // Weather indicator — show when chit has a location
+  if (chit.location && chit.location.trim()) {
+    var weatherMode = s.weather || 'always';
+    if (_shouldShow(weatherMode, context)) result += '🌤️ ';
+  }
+
+  // People indicator — show when chit has people assigned
+  if (Array.isArray(chit.people) && chit.people.length > 0) {
+    var peopleMode = s.people || 'always';
+    if (_shouldShow(peopleMode, context)) result += '👥 ';
+  }
+
+  // Recurrence indicator
+  if (chit.recurrence_rule && chit.recurrence_rule.freq) {
+    result += '🔁 ';
+  }
+
+  return result;
+}
+
+/**
+ * Returns true if the given display mode permits showing in the given context.
+ * Invalid/unknown mode values are treated as "always" (fail-open).
+ * "space" resolves to show for 'card' and 'calendar-slot'; hide for 'calendar-month'.
+ * @param {string} mode - "always" | "never" | "space"
+ * @param {string} context - 'calendar-month' | 'calendar-slot' | 'card'
+ * @returns {boolean}
+ */
+function _shouldShow(mode, context) {
+  if (mode === 'never') return false;
+  if (mode === 'space') {
+    // "If Space": hide only in month cells to save space
+    return context !== 'calendar-month';
+  }
+  // "always" or any invalid/unknown value → fail-open → show
+  return true;
+}
+
+/**
+ * Returns an object mapping each alert type to true/false indicating
+ * whether the chit has that type of alert present.
+ * @param {object} chit
+ * @returns {object}
+ */
+function _chitAlertTypesPresent(chit) {
+  var present = {};
+  var alerts = chit.alerts;
+  if (Array.isArray(alerts)) {
+    for (var i = 0; i < alerts.length; i++) {
+      if (alerts[i] && _ALERT_TYPES.indexOf(alerts[i]._type) !== -1) {
+        present[alerts[i]._type] = true;
+      }
+    }
+  }
+  // Legacy boolean flags
+  if (chit.alarm === true) present.alarm = true;
+  if (chit.notification === true) present.notification = true;
+  return present;
+}
+
+
 // ── Calendar display helpers ─────────────────────────────────────────────────
 
 /**
@@ -679,17 +839,22 @@ function chitMatchesDay(chit, day) {
 /**
  * Build the title HTML for a calendar event.
  * Adds ⌚ icon for due-date-only chits.
+ * Prepends alert indicator icon(s) when settings/context are provided.
  * Includes a title attribute (tooltip) with the chit title and date/time.
  * @param {object} chit
  * @param {boolean} isDueOnly
  * @param {object} [info] - from getCalendarDateInfo
+ * @param {object} [settings] - visual_indicators settings object (optional for backward compat)
+ * @param {string} [context] - 'calendar-month' | 'calendar-slot' | 'card' (optional)
  * @returns {string}
  */
-function calendarEventTitle(chit, isDueOnly, info) {
+function calendarEventTitle(chit, isDueOnly, info, settings, context) {
+  const allIcons = settings ? _getAllIndicators(chit, settings, context || 'calendar-slot') : '';
   const pinnedIcon = chit.pinned ? '<i class="fas fa-bookmark" style="font-size:0.8em;margin-right:2px;"></i>' : '';
   const dueIcon = isDueOnly ? '⌚ ' : '';
-  const recurIcon = (chit.recurrence_rule && chit.recurrence_rule.freq) || chit._isVirtual ? '🔁 ' : '';
-  return `<span style="font-weight:bold;font-size:1.1em;">${pinnedIcon}${recurIcon}${dueIcon}${chit.title || '(Untitled)'}</span>`;
+  // Recurrence icon is already included in _getAllIndicators, so skip if allIcons has it
+  const recurIcon = (!allIcons.includes('🔁') && ((chit.recurrence_rule && chit.recurrence_rule.freq) || chit._isVirtual)) ? '🔁 ' : '';
+  return `<span style="font-weight:bold;font-size:1.1em;">${allIcons}${pinnedIcon}${recurIcon}${dueIcon}${chit.title || '(Untitled)'}</span>`;
 }
 
 /**
@@ -1519,7 +1684,7 @@ function resolveChitLinks(html, allChits) {
  * Multi-day events span across multiple day columns as a single div.
  * Uses CSS Grid with columns matching the day count.
  */
-function renderAllDayEventsInCells(dayData, allDayEventsRow) {
+function renderAllDayEventsInCells(dayData, allDayEventsRow, settings, context) {
   const numDays = dayData.length;
 
   // Create a grid container for spanning events
@@ -1577,7 +1742,7 @@ function renderAllDayEventsInCells(dayData, allDayEventsRow) {
     ev.style.margin = '1px 2px';
     if (chit.status === "Complete") ev.classList.add("completed-task");
     ev.title = calendarEventTooltip(chit, info);
-    ev.innerHTML = calendarEventTitle(chit, info.isDueOnly, info);
+    ev.innerHTML = calendarEventTitle(chit, info.isDueOnly, info, settings, context);
     if (typeof attachCalendarChitEvents === 'function') attachCalendarChitEvents(ev, chit);
     grid.appendChild(ev);
   });
