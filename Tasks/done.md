@@ -941,3 +941,18 @@ Fully implemented. Ported from `Prototypes/CWOC UI/UI.html`:
 - Health ❤️ indicator added to `_getAllIndicators()` (shows when chit has health_indicators data)
 - Itinerary view updated to show visual indicators on event cards
 - Help page updated: renamed "Alert Indicators" to "Visual Indicators", documented all indicator types and visibility modes
+
+
+## Confirmed Done — Task Cleanup (2026-04-27)
+
+### Editing chits in-place in views (dates, times, notes) ✅
+- Quick Edit Modal (Shift+click) works for ALL chits with editable dropdowns for Priority/Severity/Status
+- Quick In-Place Edits in Notes View (double-click to edit, saves on blur)
+- Calendar drag to move/resize events in Day/Week/7-Day views
+
+### Status as multi-select field with "-" (null) option ✅
+- Already existed — status dropdown has a "-" (blank) option as first choice
+
+### "Show weather" toggle on sidebar ✅
+- Handled via Visual Indicators settings (Always/Never/If Space) for Weather indicator
+- Weather visibility controlled per-context (card, calendar, month) through settings
