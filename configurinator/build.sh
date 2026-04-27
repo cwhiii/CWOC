@@ -180,6 +180,13 @@ EOF
 # ---------------------------------------------------------------------------
 
 start_and_verify() {
+    # Skip service start if application code hasn't been deployed yet
+    if [[ ! -f /app/backend/main.py ]]; then
+        log_step "Application code not yet deployed (backend/main.py missing)."
+        log_ok "Skipping service start. Run cwoc-push.sh to deploy code, then: systemctl start cwoc"
+        return
+    fi
+
     log_step "Starting CWOC service..."
 
     systemctl start cwoc \

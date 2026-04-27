@@ -672,3 +672,83 @@ Fully implemented. Ported from `Prototypes/CWOC UI/UI.html`:
 - Label/tag-based view filtering (Google Calendar style) — existing tag filter is sufficient
 - Additional/custom statuses — not needed
 - Hotkey create submenu (K→X) — not needed
+
+
+---
+
+## Completed — Codebase Refactor (2026-04-26)
+
+### Phase 1: CSS Variable Consolidation ✅
+- Documented `shared-page.css` as canonical source of truth for CSS variables
+- Added canonical source comments to `styles.css` and `shared-editor.css`
+- Synced all shared variable values across the three `:root` blocks
+- Removed unused CSS variables
+- Extracted repeated inline styles from `editor.html`, `settings.html`, `index.html` into CSS classes
+
+### Phase 2: JS Utility Consolidation ✅
+- Moved `generateUniqueId()` to `shared.js`, removed from `editor.js` and `editor_projects.js`
+- Moved `formatTime()` to `shared.js`, removed from `editor.js` and `main.js`
+- Moved `setSaveButtonUnsaved()` to `shared.js`, removed from `editor.js` and `settings.js`
+- Clarified `formatDate` variants (shared.js canonical, main.js dashboard-specific)
+
+### Phase 3: Backend Reorganization ✅
+- Added 12 `═══` section headers to `backend/main.py` (Imports, Constants, Models, DB Helpers, vCard/CSV, DB Init, Page Routes, Chit Routes, Trash Routes, Settings Routes, Contact Routes, Health)
+- Moved inline `import csv` and `import io` to top imports section
+- Grouped all route handlers by resource type
+- Standardized `conn = None; try/finally` connection pattern across all handlers
+
+### Phase 4: Code Quality Pass ✅
+- Removed dead checklist stubs from `editor.js`
+- Removed triple-duplicated comment blocks from `editor_projects.js`
+- Removed debug `console.log('live test')` from `contact-editor.js` and `people.js`
+- Cleaned up redundant "what" comments across all files
+- Extracted repeated inline styles into CSS classes
+
+### Phase 5: Performance Audit ✅
+- Added `DocumentFragment` batching in 6+ calendar rendering spots in `main.js`
+- Added `getCachedSettings()` / `_invalidateSettingsCache()` to `shared.js` for deduplicating settings API calls
+- Audited and fixed event listener duplication in editor and dashboard
+- Standardized database connection patterns in backend
+
+### Previously Completed Items Moved from Tasks.md
+- Week view starts on Monday, not Sunday — make configurable ✅
+- Missing favicon on editor page ✅
+- Weather bar transparent background persists when color removed ✅
+- Alarm looping pings continuously instead of once per cycle ✅
+- Tasks list: sort-by dropdown overflows sidebar ✅
+- Settings: display tags as expandable tree ✅
+- Settings: toggle favorite (star icon) per tag ✅
+- Settings: child tag auto-prefixes with parent path ✅
+- Settings: color inheritance (child inherits parent unless overridden) ✅
+- Calendar: X Days view ✅
+- Notify at start time / due time ✅
+- Snoozable notifications ✅
+- Scroll to 30 min before current time on calendar load ✅
+- Primary tag auto-colors the chit ✅
+- Hotkeys to jump to and expand each zone ✅
+- Middle-click Create Chit to open in new tab ✅
+- Tags: starred/favorite always at top ✅
+- Hide/show tags toggle on all views ✅
+- Search all visible fields ✅
+- Sidebar: save a search as a one-click button ✅
+- Label/tag-based view filtering ✅
+- Additional/custom statuses ✅
+- Quick in-place edits in Notes view ✅
+- Notes with links to other chits ✅
+- Soft delete → trash view with purge and restore ✅
+- Export: Markdown, iCal, CSV ✅
+- Import from CSV ✅
+- Auto-generated QR codes per chit ✅
+- Chit URL (direct link by ID) ✅
+- Universally unique installation instance ID ✅
+- Help, About, & "Buy me a coffee" menu ✅
+- Random/shuffle sort order ✅
+- Upcoming tasks view ✅
+- Working days/hours configuration ✅
+- Hotkey: create chit with submenu ✅
+- Find a place for a clock in views ✅
+- "Only if undone" checkbox ✅
+- Notification message = chit title + optional appended text ✅
+- Projects: "Move to Project" dropdown — populated from data ✅
+- Chit Options: "Delete Past Alarm Chits" — wired up ✅
+- Recurrence / Repeating Chits — all 3 phases ✅
