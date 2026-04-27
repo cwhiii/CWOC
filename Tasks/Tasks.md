@@ -46,6 +46,33 @@
 
 ---
 
+## Upcoming Features
+
+### Data Management (Settings Page)
+- `[ ]` New "Data Management" settings box with download/upload controls
+- `[ ]` Separate controls for **Chit data** and **User data** (settings, tags, colors, locations, contacts)
+- `[ ]` **Export**: download as JSON file that can be re-imported into another CWOC instance
+- `[ ]` **Import**: option to **Add to** existing data or **Replace** existing data
+- `[ ]` **Replace** mode: confirmation dialog ("This will override and replace all [chit/user] data. Are you sure?")
+- `[ ]` Exported format must be self-contained and portable between instances
+
+### HST Time Format (Global)
+- `[ ]` When "HST" is selected as time format in settings, ALL times throughout the tool should display in HST
+- `[ ]` Calendar hour columns, event times, tooltips, quick edit modal, editor time fields — all use HST
+- `[ ]` HST displays as a plain number (e.g. "42.5 sd") — no progress bar except in the Clock modal
+- `[ ]` Clock modal keeps the bar-style HST display as-is
+
+### Visual Indicators — Honor Settings in Views
+- `[ ]` Clean up the Visual Indicators settings UI (currently saved but never applied)
+- `[ ]` Read `visual_indicators` from settings on dashboard load
+- `[ ]` Apply indicator visibility rules to chit cards in all views:
+  - `always` — always show the indicator icon
+  - `never` — never show it
+  - `space` ("If Space") — show only when the card has room (hide on narrow/mobile)
+- `[ ]` Indicators affected: Alarm 🔔, Notification 📢, Weather 🌤️, People 👥, Health ❤️
+
+---
+
 ## Decisions Needed
 
 - `[ ]` Demo/hosting environment — Digital Ocean or other?

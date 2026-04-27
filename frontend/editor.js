@@ -7,7 +7,7 @@ function _onChecklistChange() {
 let dragIndicator = null;
 let chitId = null;
 let healthIndicatorWarningsShown = new Set();
-let notificationCheckCount = 0;
+// notificationCheckCount removed — was only used by the no-op _checkNotifications
 
 let currentWeatherLat = null;
 let currentWeatherLon = null;
@@ -872,18 +872,7 @@ function _attachColorSwatchListeners() {
   });
 }
 
-function _utcToLocalDate(isoString) {
-  if (!isoString) return null;
-  const date = new Date(isoString);
-  return date;
-}
-
-function _parseISOTime(isoString) {
-  if (!isoString) return "";
-  const date = _utcToLocalDate(isoString);
-  if (isNaN(date.getTime())) return "";
-  return formatTime(date);
-}
+// _utcToLocalDate, _parseISOTime moved to shared.js
 
 function _convertDBDateToDisplayDate(dateString) {
   if (!dateString) return "";
@@ -892,26 +881,9 @@ function _convertDBDateToDisplayDate(dateString) {
   return formatDate(date);
 }
 
-function _checkNotifications() {
-  notificationCheckCount++;
-  const notificationElement = document.getElementById("notification");
-  if (
-    notificationElement &&
-    notificationElement.value !== undefined &&
-    notificationElement.value !== null
-  ) {
-  }
-}
+// _checkNotifications removed — was a no-op (empty body)
 
-function getPastelColor(str) {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++)
-    hash = str.charCodeAt(i) + ((hash << 5) - hash);
-  const r = ((hash & 0xff) % 128) + 127;
-  const g = (((hash >> 8) & 0xff) % 128) + 127;
-  const b = (((hash >> 16) & 0xff) % 128) + 127;
-  return `rgb(${r}, ${g}, ${b})`;
-}
+// getPastelColor moved to shared.js
 
 async function _loadTags() {
   try {
@@ -1508,10 +1480,17 @@ async function _saveInstanceException(dateStr) {
   }
 }
 
+let _isSaving = false;
+
 async function saveChitData() {
+  // Prevent double-save from rapid clicks
+  if (_isSaving) return;
+  _isSaving = true;
+
   // If editing a single recurrence instance, save as exception instead
   if (window._editingInstance) {
-    return _saveInstanceException(window._editingInstance);
+    try { return await _saveInstanceException(window._editingInstance); }
+    finally { _isSaving = false; }
   }
 
   try {
@@ -1549,6 +1528,8 @@ async function saveChitData() {
   } catch (error) {
     console.error("[saveChitData] Error saving chit:", error);
     alert("Failed to save chit. Check console for details.");
+  } finally {
+    _isSaving = false;
   }
 }
 
@@ -3585,7 +3566,7 @@ document.addEventListener("DOMContentLoaded", function () {
     setTimeout(() => { window._cwocEditorLoading = false; }, 300);
   }
 
-  setInterval(_checkNotifications, 60000);
+  // _checkNotifications interval removed — was a no-op
 
   const allDayBtn = document.getElementById("allDayToggleButton");
   if (allDayBtn) allDayBtn.onclick = toggleAllDay;
@@ -4177,14 +4158,8 @@ function _updateActivePeopleCount() {
   if (el) el.textContent = _peopleChipData.length;
 }
 
-function _isLightColor(hex) {
-  if (!hex) return true;
-  hex = hex.replace('#', '');
-  var r = parseInt(hex.substr(0, 2), 16);
-  var g = parseInt(hex.substr(2, 2), 16);
-  var b = parseInt(hex.substr(4, 2), 16);
-  return (r * 299 + g * 587 + b * 114) / 1000 > 140;
-}
+// _isLightColor moved to shared.js as isLightColor()
+function _isLightColor(hex) { return isLightColor(hex); }
 
 // Populate chips from a chit's people array (called from loadChitData)
 function _setPeopleFromArray(peopleArray) {

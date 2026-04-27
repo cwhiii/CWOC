@@ -162,9 +162,18 @@ h2 img {
     border-radius: 5px;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     box-sizing: border-box;
-    overflow: visible;
+    overflow: hidden;
     min-width: 0;
     word-wrap: break-word;
+}
+.setting-group select {
+    max-width: 100%;
+    box-sizing: border-box;
+}
+.setting-group input[type="text"],
+.setting-group input[type="number"] {
+    max-width: 100%;
+    box-sizing: border-box;
 }
 .setting-group label {
     display: block;

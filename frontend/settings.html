@@ -361,9 +361,9 @@
                         <h3>General Settings</h3>
                         <label for="time-format">🕰️ Time Format</label>
                         <select id="time-format" name="time-format">
-                            <option value="24hour">🕛 24 Hour</option>
-                            <option style="" value="12hour">⏰ 12 Hour</option>
-                            <option value="metric">🔢 HST (Holeman Simplified Time)</option>
+                            <option value="24hour">24 Hour</option>
+                            <option value="12hour">12 Hour</option>
+                            <option value="metric">HST</option>
                         </select>
 
                         <div
@@ -433,24 +433,24 @@
                             >⏱️ Snooze Length</label
                         >
                         <select id="snooze-length" name="snooze-length">
-                            <option value="1 minute">1 minute</option>
-                            <option value="3 minutes">3 minutes</option>
-                            <option value="5 minutes" selected>5 minutes</option>
-                            <option value="10 minutes">10 minutes</option>
+                            <option value="1 minute">1 min</option>
+                            <option value="3 minutes">3 min</option>
+                            <option value="5 minutes" selected>5 min</option>
+                            <option value="10 minutes">10 min</option>
                         </select>
 
                         <label for="calendar-snap" class="settings-spacer-top"
                             >📐 Calendar Snapping</label
                         >
                         <select id="calendar-snap" name="calendar-snap">
-                            <option value="0">No Snapping</option>
-                            <option value="5">5 minutes</option>
-                            <option value="10">10 minutes</option>
-                            <option value="15" selected>15 minutes</option>
-                            <option value="20">20 minutes</option>
-                            <option value="25">25 minutes</option>
-                            <option value="30">30 minutes</option>
-                            <option value="60">60 minutes</option>
+                            <option value="0">None</option>
+                            <option value="5">5 min</option>
+                            <option value="10">10 min</option>
+                            <option value="15" selected>15 min</option>
+                            <option value="20">20 min</option>
+                            <option value="25">25 min</option>
+                            <option value="30">30 min</option>
+                            <option value="60">60 min</option>
                         </select>
                     </div>
                     <div class="setting-group">
@@ -461,145 +461,83 @@
                             <label class="cwoc-checkbox-label"><input type="checkbox" class="period-cb" value="Itinerary" checked /> Itinerary</label>
                             <label class="cwoc-checkbox-label"><input type="checkbox" class="period-cb" value="Day" checked /> Day</label>
                             <label class="cwoc-checkbox-label"><input type="checkbox" class="period-cb" value="Week" checked /> Week</label>
-                            <label class="cwoc-checkbox-label"><input type="checkbox" class="period-cb" value="Work" checked /> Work Hours</label>
-                            <label class="cwoc-checkbox-label"><input type="checkbox" class="period-cb" value="SevenDay" checked /> X Days</label>
+                            <label class="cwoc-checkbox-label"><input type="checkbox" class="period-cb" value="Work" checked onchange="_toggleWorkConfig()" /> Work Hours</label>
+                            <label class="cwoc-checkbox-label"><input type="checkbox" class="period-cb" value="SevenDay" checked onchange="_toggleXDaysConfig()" /> X Days</label>
                             <label class="cwoc-checkbox-label"><input type="checkbox" class="period-cb" value="Month" checked /> Month</label>
                             <label class="cwoc-checkbox-label"><input type="checkbox" class="period-cb" value="Year" checked /> Year</label>
                         </div>
 
-                        <label style="margin-top:8px;">X Days Count</label>
-                        <input type="number" id="custom-days-count" min="2" max="30" value="7" style="width:60px;padding:4px;border:1px solid #8b5a2b;border-radius:4px;font-family:inherit;" />
+                        <!-- X Days config (hidden when X Days is disabled) -->
+                        <div id="xdays-config">
+                            <label style="margin-top:8px;">X Days Count</label>
+                            <input type="number" id="custom-days-count" min="2" max="30" value="7" style="width:60px;padding:4px;border:1px solid #8b5a2b;border-radius:4px;font-family:inherit;" />
+                        </div>
 
                         <label for="week-start-day">Week Starts On</label>
                         <select id="week-start-day" name="week-start-day">
-                            <option value="0" selected>Sunday</option>
-                            <option value="1">Monday</option>
-                            <option value="2">Tuesday</option>
-                            <option value="3">Wednesday</option>
-                            <option value="4">Thursday</option>
-                            <option value="5">Friday</option>
-                            <option value="6">Saturday</option>
+                            <option value="0" selected>Sun</option>
+                            <option value="1">Mon</option>
+                            <option value="2">Tue</option>
+                            <option value="3">Wed</option>
+                            <option value="4">Thu</option>
+                            <option value="5">Fri</option>
+                            <option value="6">Sat</option>
                         </select>
 
-                        <label class="settings-spacer-top">🏢 Working Hours</label>
+                        <label class="settings-spacer-top">🕐 View Hours</label>
+                        <p style="font-size:0.8em;opacity:0.6;margin:0 0 6px;">For Day, Week, X Days views.</p>
                         <div style="display:flex;gap:8px;align-items:center;">
-                            <select id="work-start-hour" style="flex:1;">
-                                <option value="5">5:00</option>
-                                <option value="6">6:00</option>
-                                <option value="7">7:00</option>
-                                <option value="8" selected>8:00</option>
-                                <option value="9">9:00</option>
-                                <option value="10">10:00</option>
+                            <select id="all-view-start-hour" style="flex:1;" onchange="_syncHourDropdowns('all-view-start-hour','all-view-end-hour')">
                             </select>
                             <span>to</span>
-                            <select id="work-end-hour" style="flex:1;">
-                                <option value="15">15:00</option>
-                                <option value="16">16:00</option>
-                                <option value="17" selected>17:00</option>
-                                <option value="18">18:00</option>
-                                <option value="19">19:00</option>
-                                <option value="20">20:00</option>
+                            <select id="all-view-end-hour" style="flex:1;" onchange="_syncHourDropdowns('all-view-start-hour','all-view-end-hour')">
                             </select>
                         </div>
 
-                        <label class="settings-spacer-top">📆 Working Days</label>
-                        <div style="display:flex;flex-wrap:wrap;gap:6px;">
-                            <label class="cwoc-checkbox-label"><input type="checkbox" class="work-day-cb" value="0" /> Sun</label>
-                            <label class="cwoc-checkbox-label"><input type="checkbox" class="work-day-cb" value="1" checked /> Mon</label>
-                            <label class="cwoc-checkbox-label"><input type="checkbox" class="work-day-cb" value="2" checked /> Tue</label>
-                            <label class="cwoc-checkbox-label"><input type="checkbox" class="work-day-cb" value="3" checked /> Wed</label>
-                            <label class="cwoc-checkbox-label"><input type="checkbox" class="work-day-cb" value="4" checked /> Thu</label>
-                            <label class="cwoc-checkbox-label"><input type="checkbox" class="work-day-cb" value="5" checked /> Fri</label>
-                            <label class="cwoc-checkbox-label"><input type="checkbox" class="work-day-cb" value="6" /> Sat</label>
-                        </div>
-                    </div>
-                    <div class="setting-group">
-                        <h3>Default Filters (Word Search)</h3>
-                        <div class="filter-inputs">
-                            <div class="filter-item">
-                                <span>📅 Calendar</span>
-                                <input
-                                    type="text"
-                                    id="filter-calendar"
-                                    placeholder="Enter filter text"
-                                    class="filter-input"
-                                />
+                        <label class="settings-spacer-top">📍 Scroll to</label>
+                        <select id="day-scroll-to-hour" style="width:auto;">
+                            <option value="0">00:00</option>
+                            <option value="1">01:00</option>
+                            <option value="2">02:00</option>
+                            <option value="3">03:00</option>
+                            <option value="4">04:00</option>
+                            <option value="5" selected>05:00</option>
+                            <option value="6">06:00</option>
+                            <option value="7">07:00</option>
+                            <option value="8">08:00</option>
+                            <option value="9">09:00</option>
+                            <option value="10">10:00</option>
+                            <option value="11">11:00</option>
+                            <option value="12">12:00</option>
+                        </select>
+
+                        <hr style="border:none;border-top:1px solid var(--aged-brown-medium,#8b4513);margin:16px 0;" />
+
+                        <!-- Work Week config (hidden when Work Hours is disabled) -->
+                        <div id="work-config">
+                            <label>🏢 Work Hours</label>
+                            <div style="display:flex;gap:8px;align-items:center;">
+                                <select id="work-start-hour" style="flex:1;" onchange="_syncHourDropdowns('work-start-hour','work-end-hour')">
+                                </select>
+                                <span>to</span>
+                                <select id="work-end-hour" style="flex:1;" onchange="_syncHourDropdowns('work-start-hour','work-end-hour')">
+                                </select>
                             </div>
-                            <div class="filter-item">
-                                <span>✓ Checklists</span>
-                                <input
-                                    type="text"
-                                    id="filter-checklists"
-                                    placeholder="Enter filter text"
-                                    class="filter-input"
-                                />
-                            </div>
-                            <div class="filter-item">
-                                <span>⏰ Alarms</span>
-                                <input
-                                    type="text"
-                                    id="filter-alarms"
-                                    placeholder="Enter filter text"
-                                    class="filter-input"
-                                />
-                            </div>
-                            <div class="filter-item">
-                                <span>📊 Projects</span>
-                                <input
-                                    type="text"
-                                    id="filter-projects"
-                                    placeholder="Enter filter text"
-                                    class="filter-input"
-                                />
-                            </div>
-                            <div class="filter-item">
-                                <span>📋 Tasks</span>
-                                <input
-                                    type="text"
-                                    id="filter-tasks"
-                                    placeholder="Enter filter text"
-                                    class="filter-input"
-                                />
-                            </div>
-                            <div class="filter-item">
-                                <span>⚕️ Indicators</span>
-                                <input
-                                    type="text"
-                                    id="filter-indicators"
-                                    placeholder="Enter filter text"
-                                    class="filter-input"
-                                />
-                            </div>
-                            <div class="filter-item">
-                                <span>📝 Notes</span>
-                                <input
-                                    type="text"
-                                    id="filter-notes"
-                                    placeholder="Enter filter text"
-                                    class="filter-input"
-                                />
+
+                            <label class="settings-spacer-top">📆 Working Days</label>
+                            <div style="display:flex;flex-wrap:wrap;gap:6px;">
+                                <label class="cwoc-checkbox-label"><input type="checkbox" class="work-day-cb" value="0" /> Sun</label>
+                                <label class="cwoc-checkbox-label"><input type="checkbox" class="work-day-cb" value="1" checked /> Mon</label>
+                                <label class="cwoc-checkbox-label"><input type="checkbox" class="work-day-cb" value="2" checked /> Tue</label>
+                                <label class="cwoc-checkbox-label"><input type="checkbox" class="work-day-cb" value="3" checked /> Wed</label>
+                                <label class="cwoc-checkbox-label"><input type="checkbox" class="work-day-cb" value="4" checked /> Thu</label>
+                                <label class="cwoc-checkbox-label"><input type="checkbox" class="work-day-cb" value="5" checked /> Fri</label>
+                                <label class="cwoc-checkbox-label"><input type="checkbox" class="work-day-cb" value="6" /> Sat</label>
                             </div>
                         </div>
                     </div>
                     <div class="setting-group">
-                        <h3>Alarms</h3>
-                        <button
-                            onclick="toggleOrientation()"
-                            class="standard-button"
-                            style="margin-bottom: 10px"
-                        >
-                            🔄 Change Orientation
-                        </button>
-                        <div class="clocks-container" id="clocks-container">
-                            <div
-                                class="time-format-grid"
-                                id="time-format-grid"
-                            ></div>
-                            <div class="inactive-zone" id="inactive-zone"></div>
-                        </div>
-                    </div>
-                    <div class="setting-group">
-                        <h3>Tag Editor</h3>
+                        <h3>🏷️ Tag Editor</h3>
                         <div style="display:flex;gap:6px;align-items:center;margin-bottom:10px;">
                             <input type="text" id="new-tag" placeholder="New tag name" onkeypress="handleTagInput(event)" style="flex:1;min-width:0;" />
                             <button onclick="addTag()" class="standard-button" title="Add tag (Shift+Enter or Shift+Click for tag modal)">➕ Add</button>
@@ -607,125 +545,74 @@
                         <div id="settings-tag-tree" style="max-height:300px;overflow-y:auto;border:1px solid #8b5a2b;border-radius:4px;padding:8px;background:#fffaf0;box-sizing:border-box;"></div>
                         <div id="tag-editor-hidden" style="display:none;"></div>
                     </div>
-
-                    <div class="setting-group">
-
-                        <div class="custom-colors">
-                            <h2>Custom Colors</h2>
-                            <ul id="color-list"></ul>
-                            <button onclick="openColorPicker()">➕ Add Color</button>                            <input type="color" id="color-picker" style="display:none" />
-                        </div>
-                    </div>
                     <div class="setting-group">
                         <h3>📍 Saved Locations</h3>
-                        <div id="locations-list">
-                            <!-- Location rows rendered dynamically by settings.js -->
-                        </div>
+                        <div id="locations-list"></div>
                         <button type="button" id="add-location-btn" class="standard-button" style="margin-top:8px;" onclick="addLocationRow()">➕ Add Location</button>
-                    </div>
-                    <div class="setting-group">
-                        <h3>Visual Indicators for Chits</h3>
-                        <div class="indicator-list">
-                            <div class="indicator-item">
-                                <span>🔔 Alarm</span>
-                                <select name="alarm_indicator">
-                                    <option value="always">Always</option>
-                                    <option value="never">Never</option>
-                                    <option value="space">When There's Space</option>
-                                </select>
-                            </div>
-                            <div class="indicator-item">
-                                <span>📢 Notification</span>
-                                <select name="notification_indicator">
-                                    <option value="always">Always</option>
-                                    <option value="never">Never</option>
-                                    <option value="space">When There's Space</option>
-                                </select>
-                            </div>
-                            <div class="indicator-item">
-                                <span>🌤️ Weather</span>
-                                <select name="weather_indicator">
-                                    <option value="always">Always</option>
-                                    <option value="never">Never</option>
-                                    <option value="space">When There's Space</option>
-                                </select>
-                            </div>
-                            <div class="indicator-item">
-                                <span>👥 People</span>
-                                <select name="people_indicator">
-                                    <option value="always">Always</option>
-                                    <option value="never">Never</option>
-                                    <option value="space">When There's Space</option>
-                                </select>
-                            </div>
-                            <div class="indicator-item settings-spacer-top">
-                                <span>❤️ Indicators</span>
-                                <select
-                                    id="health-indicator"
-                                    name="indicators_indicator"
-                                >
-                                    <option value="always">Always</option>
-                                    <option value="never">Never</option>
-                                    <option value="space">When There's Space</option>
-                                </select>
-                            </div>
-                        </div>
                     </div>
                     <div class="setting-group">
                         <h3>Chit Options</h3>
                         <div class="checkbox-list">
-                            <label
-                                ><input
-                                    type="checkbox"
-                                    id="fade-past"
-                                    name="fade_past_chits"
-                                    checked
-                                />
-                                📜 Fade Past Chits</label
-                            >
-                            <label
-                                ><input
-                                    type="checkbox"
-                                    id="highlight-overdue"
-                                    name="highlight_overdue_chits"
-                                    checked
-                                />
-                                🚨 Highlight Overdue Chits</label
-                            >
-                            <label
-                                ><input
-                                    type="checkbox"
-                                    id="delete-past"
-                                    name="delete_past_alarm_chits"
-                                />
-                                🗑️ Delete Past Alarm Chits</label
-                            >
+                            <label><input type="checkbox" id="fade-past" name="fade_past_chits" checked /> 📜 Fade Past Chits</label>
+                            <label><input type="checkbox" id="highlight-overdue" name="highlight_overdue_chits" checked /> 🚨 Highlight Overdue</label>
+                            <label><input type="checkbox" id="delete-past" name="delete_past_alarm_chits" /> 🗑️ Delete Past Alarms</label>
                         </div>
                         <hr style="border:none;border-top:1px solid var(--aged-brown-medium,#8b4513);margin:12px 0 10px;" />
                         <h3 style="margin-top:0;">📤 Export / Import</h3>
                         <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                            <button onclick="exportCSV()" class="standard-button" style="flex:1;">📄 Export CSV</button>
-                            <button onclick="document.getElementById('csv-import-input').click()" class="standard-button" style="flex:1;">📥 Import CSV</button>
+                            <button onclick="exportCSV()" class="standard-button" style="flex:1;">📄 Export</button>
+                            <button onclick="document.getElementById('csv-import-input').click()" class="standard-button" style="flex:1;">📥 Import</button>
                             <input type="file" id="csv-import-input" accept=".csv" style="display:none;" onchange="importCSV(this)" />
                         </div>
                         <hr style="border:none;border-top:1px solid var(--aged-brown-medium,#8b4513);margin:12px 0 10px;" />
                         <h3 style="margin-top:0;">🗑️ Trash</h3>
-                        <button onclick="window.location.href='/frontend/trash.html'" class="standard-button" style="width:100%;">
-                            View Deleted Chits →
-                        </button>
+                        <button onclick="window.location.href='/frontend/trash.html'" class="standard-button" style="width:100%;">View Deleted Chits →</button>
+                    </div>
+                    <div class="setting-group">
+                        <h3>🎨 Custom Colors</h3>
+                        <ul id="color-list"></ul>
+                        <button onclick="openColorPicker()">➕ Add Color</button>
+                        <input type="color" id="color-picker" style="display:none" />
+                    </div>
+                    <div class="setting-group">
+                        <h3>🕐 Clocks</h3>
+                        <button onclick="toggleOrientation()" class="standard-button" style="margin-bottom:10px">🔄 Orientation</button>
+                        <div class="clocks-container" id="clocks-container">
+                            <div class="time-format-grid" id="time-format-grid"></div>
+                            <div class="inactive-zone" id="inactive-zone"></div>
+                        </div>
+                    </div>
+                    <div class="setting-group">
+                        <h3>Default Filters</h3>
+                        <div class="filter-inputs">
+                            <div class="filter-item"><span>📅 Calendar</span><input type="text" id="filter-calendar" placeholder="Filter text" class="filter-input" /></div>
+                            <div class="filter-item"><span>✓ Checklists</span><input type="text" id="filter-checklists" placeholder="Filter text" class="filter-input" /></div>
+                            <div class="filter-item"><span>⏰ Alarms</span><input type="text" id="filter-alarms" placeholder="Filter text" class="filter-input" /></div>
+                            <div class="filter-item"><span>📊 Projects</span><input type="text" id="filter-projects" placeholder="Filter text" class="filter-input" /></div>
+                            <div class="filter-item"><span>📋 Tasks</span><input type="text" id="filter-tasks" placeholder="Filter text" class="filter-input" /></div>
+                            <div class="filter-item"><span>⚕️ Indicators</span><input type="text" id="filter-indicators" placeholder="Filter text" class="filter-input" /></div>
+                            <div class="filter-item"><span>📝 Notes</span><input type="text" id="filter-notes" placeholder="Filter text" class="filter-input" /></div>
+                        </div>
+                    </div>
+                    <div class="setting-group">
+                        <h3>Visual Indicators</h3>
+                        <div class="indicator-list">
+                            <div class="indicator-item"><span>🔔 Alarm</span><select name="alarm_indicator"><option value="always">Always</option><option value="never">Never</option><option value="space">If Space</option></select></div>
+                            <div class="indicator-item"><span>📢 Notification</span><select name="notification_indicator"><option value="always">Always</option><option value="never">Never</option><option value="space">If Space</option></select></div>
+                            <div class="indicator-item"><span>🌤️ Weather</span><select name="weather_indicator"><option value="always">Always</option><option value="never">Never</option><option value="space">If Space</option></select></div>
+                            <div class="indicator-item"><span>👥 People</span><select name="people_indicator"><option value="always">Always</option><option value="never">Never</option><option value="space">If Space</option></select></div>
+                            <div class="indicator-item"><span>❤️ Health</span><select id="health-indicator" name="indicators_indicator"><option value="always">Always</option><option value="never">Never</option><option value="space">If Space</option></select></div>
+                        </div>
                     </div>
                     <div class="setting-group">
                         <h3>🔄 Version &amp; Updates</h3>
                         <div style="margin-bottom:12px;">
-                            <div style="margin-bottom:6px;">
-                                <strong>Version:</strong> <span id="version-display">Loading...</span>
-                            </div>
-                            <div>
-                                <strong>Last Updated:</strong> <span id="version-date">Loading...</span>
-                            </div>
+                            <div style="margin-bottom:6px;"><strong>Version:</strong> <span id="version-display">Loading...</span></div>
+                            <div><strong>Last Updated:</strong> <span id="version-date">Loading...</span></div>
                         </div>
-                        <button id="upgrade-btn" class="standard-button" style="width:100%;">⬆️ Upgrade Omni Chits</button>
-                        <button id="upgrade-reopen-btn" class="standard-button" style="width:100%;display:none;">🔄 Upgrade in progress — click to view</button>
+                        <button id="upgrade-btn" class="standard-button" style="width:100%;">⬆️ Upgrade</button>
+                        <button id="upgrade-reopen-btn" class="standard-button" style="width:100%;display:none;">🔄 Upgrade in progress</button>
+                        <button id="update-log-btn" class="standard-button" style="width:100%;margin-top:6px;" onclick="loadLastLog()">📄 Show Log</button>
                     </div>
                 </div>
                 <div class="loader" id="loader" style="display: none"></div>
@@ -780,16 +667,15 @@
             </div>
             <div class="modal" id="update-modal" style="display:none;">
                 <div class="modal-content" style="max-width:95vw;width:fit-content;min-width:600px;">
-                    <h3 style="text-align:center;">⬆️ Upgrading Omni Chits</h3>
+                    <h3 id="update-modal-title" style="text-align:center;">⬆️ Upgrading Omni Chits</h3>
                     <pre id="update-log"></pre>
                     <div style="display:flex;align-items:center;margin-top:10px;">
                         <div style="flex:1;text-align:left;">
                             <button id="update-start-btn" class="standard-button" onclick="runUpgrade()">▶️ Start</button>
-                            <button id="update-log-btn" class="standard-button" onclick="loadLastLog()">📄 Log</button>
                         </div>
-                        <button id="update-close-btn" class="standard-button" disabled>Close</button>
+                        <button id="update-close-btn" class="standard-button" onclick="_closeUpdateModal()">Close</button>
                         <div style="flex:1;text-align:right;">
-                            <button id="update-copy-btn" class="standard-button" onclick="copyUpdateLog()">📋 Copy Log</button>
+                            <button id="update-copy-btn" class="standard-button" onclick="copyUpdateLog()">📋 Copy</button>
                         </div>
                     </div>
                 </div>

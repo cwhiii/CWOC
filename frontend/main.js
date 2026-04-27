@@ -201,26 +201,16 @@ function _applyArchiveFilter(chitList) {
   });
 }
 
-function _getSelectedStatuses() {
-  const boxes = document.querySelectorAll('#status-multi input[data-filter="status"]:checked');
+function _getSelectedFilterValues(containerId, filterType) {
+  const boxes = document.querySelectorAll(`#${containerId} input[data-filter="${filterType}"]:checked`);
   const vals = [];
   boxes.forEach(b => { if (b.value) vals.push(b.value); });
   return vals; // empty = "Any" checked or nothing specific = show all
 }
 
-function _getSelectedLabels() {
-  const boxes = document.querySelectorAll('#label-multi input[data-filter="label"]:checked');
-  const vals = [];
-  boxes.forEach(b => { if (b.value) vals.push(b.value); });
-  return vals;
-}
-
-function _getSelectedPriorities() {
-  const boxes = document.querySelectorAll('#priority-multi input[data-filter="priority"]:checked');
-  const vals = [];
-  boxes.forEach(b => { if (b.value) vals.push(b.value); });
-  return vals;
-}
+function _getSelectedStatuses() { return _getSelectedFilterValues('status-multi', 'status'); }
+function _getSelectedLabels() { return _getSelectedFilterValues('label-multi', 'label'); }
+function _getSelectedPriorities() { return _getSelectedFilterValues('priority-multi', 'priority'); }
 
 function _applyMultiSelectFilters(chitList) {
   let result = chitList;
@@ -826,15 +816,8 @@ function _renderPeopleChipFilter(containerId, contacts, selection) {
   });
 }
 
-function _isPeopleColorLight(hex) {
-  if (!hex) return true;
-  hex = hex.replace('#', '');
-  if (hex.length !== 6) return true;
-  var r = parseInt(hex.substr(0, 2), 16);
-  var g = parseInt(hex.substr(2, 2), 16);
-  var b = parseInt(hex.substr(4, 2), 16);
-  return (r * 299 + g * 587 + b * 114) / 1000 > 140;
-}
+// _isPeopleColorLight moved to shared.js as isLightColor()
+function _isPeopleColorLight(hex) { return isLightColor(hex); }
 
 /** Clear the people filter selection. */
 function clearPeopleFilter() {
@@ -1365,6 +1348,9 @@ async function _loadLabelFilters() {
       if (settings.work_days) _workDays = settings.work_days.split(',').map(Number);
       if (settings.enabled_periods) _enabledPeriods = settings.enabled_periods.split(',');
       if (settings.custom_days_count) _customDaysCount = parseInt(settings.custom_days_count) || 7;
+      if (settings.all_view_start_hour !== undefined) _allViewStartHour = parseInt(settings.all_view_start_hour) || 0;
+      if (settings.all_view_end_hour !== undefined) _allViewEndHour = parseInt(settings.all_view_end_hour) || 24;
+      if (settings.day_scroll_to_hour !== undefined) _dayScrollToHour = parseInt(settings.day_scroll_to_hour) || 5;
       _applyEnabledPeriods();
     } catch (e) { /* ignore */ }
 
@@ -1413,7 +1399,7 @@ async function _loadLabelFilters() {
     // Also create hidden checkboxes so _getSelectedLabels still works
     _syncSidebarTagCheckboxes(container, tagObjects);
   } catch (e) {
-    console.log('Could not load label filters:', e);
+    console.warn('Could not load label filters:', e);
   }
 }
 
@@ -2140,21 +2126,7 @@ function formatWeekRange(start, end) {
   return `<span>${startStr}</span><span>${endStr}</span>`;
 }
 
-function getPastelColor(label) {
-  let hash = 0;
-  for (let i = 0; i < label.length; i++)
-    hash = label.charCodeAt(i) + ((hash << 5) - hash);
-  const r = ((hash & 0xff) % 128) + 127;
-  const g = (((hash >> 8) & 0xff) % 128) + 127;
-  const b = (((hash >> 16) & 0xff) % 128) + 127;
-  return `rgb(${r}, ${g}, ${b})`;
-}
-
-function getChitDisplayColor(chit) {
-  // Return pale cream for no color or transparent — never show transparent in views
-  if (!chit.color || chit.color === "transparent") return "#fdf6e3";
-  return chit.color;
-}
+// getPastelColor moved to shared.js
 
 /**
  * Returns the display color for a chit. Transparent/null → pale cream.
@@ -2197,7 +2169,7 @@ function nextPeriod() {
 }
 
 function fetchChits() {
-  console.log("Fetching chits...");
+  console.debug("Fetching chits...");
   fetch("/api/chits")
     .then((response) => {
       if (!response.ok)
@@ -2212,7 +2184,7 @@ function fetchChits() {
         if (chit.end_datetime)
           chit.end_datetime_obj = new Date(chit.end_datetime);
       });
-      console.log("Fetched chits:", chits);
+      console.debug("Fetched chits:", chits);
       if (!currentWeekStart) currentWeekStart = getWeekStart(new Date());
       updateDateRange();
       displayChits();
@@ -2340,13 +2312,13 @@ function displayChits() {
 
   switch (currentTab) {
     case "Calendar":
-      if (currentView === "Week") displayWeekView(filteredChits);
+      if (currentView === "Week") displayWeekView(filteredChits, { hourStart: _allViewStartHour, hourEnd: _allViewEndHour });
       else if (currentView === "Work") displayWorkView(filteredChits);
       else if (currentView === "Month") displayMonthView(filteredChits);
       else if (currentView === "Itinerary") displayItineraryView(filteredChits);
-      else if (currentView === "Day") displayDayView(filteredChits);
+      else if (currentView === "Day") displayDayView(filteredChits, { hourStart: _allViewStartHour, hourEnd: _allViewEndHour });
       else if (currentView === "Year") displayYearView(filteredChits);
-      else if (currentView === "SevenDay") displaySevenDayView(filteredChits);
+      else if (currentView === "SevenDay") displaySevenDayView(filteredChits, { hourStart: _allViewStartHour, hourEnd: _allViewEndHour });
       else
         listContainer.innerHTML = `<p>${currentView} view not implemented yet.</p>`;
       break;
@@ -2696,7 +2668,7 @@ function displayWeekView(chitsToDisplay, opts) {
   wrapper.appendChild(scrollGrid);
   chitList.appendChild(wrapper);
 
-  if (!opts) scrollToSixAM(); // Don't scroll for Work view — already starts at work hour
+  if (!opts?.isWorkView) scrollToSixAM(); // Work view starts at work hour, others scroll to day-start time
   renderTimeBar("Week");
 
   // Enable drag
@@ -2714,12 +2686,16 @@ let _workEndHour = 17;
 let _workDays = [1, 2, 3, 4, 5]; // 0=Sun, 1=Mon, ...
 let _enabledPeriods = ['Itinerary', 'Day', 'Week', 'Work', 'SevenDay', 'Month', 'Year'];
 let _customDaysCount = 7;
+let _allViewStartHour = 0;
+let _allViewEndHour = 24;
+let _dayScrollToHour = 5;
 
 function displayWorkView(chitsToDisplay) {
   displayWeekView(chitsToDisplay, {
     hourStart: _workStartHour,
     hourEnd: _workEndHour,
-    filterDays: _workDays
+    filterDays: _workDays,
+    isWorkView: true
   });
 }
 
@@ -2950,9 +2926,13 @@ function displayItineraryView(chitsToDisplay) {
   renderTimeBar("Itinerary");
 }
 
-function displayDayView(chitsToDisplay) {
+function displayDayView(chitsToDisplay, opts) {
   const chitList = document.getElementById("chit-list");
   chitList.innerHTML = "";
+
+  const hourStart = opts?.hourStart ?? 0;
+  const hourEnd = opts?.hourEnd ?? 24;
+  const totalMinutes = (hourEnd - hourStart) * 60;
 
   const wrapper = document.createElement("div");
   wrapper.style.cssText = "display:flex;flex-direction:column;height:100%;width:100%;";
@@ -3000,12 +2980,12 @@ function displayDayView(chitsToDisplay) {
 
   const hourColumn = document.createElement("div");
   hourColumn.className = "hour-column";
-  hourColumn.style.cssText = "width:80px;flex-shrink:0;position:relative;height:1440px;background:#fff5e6;";
+  hourColumn.style.cssText = `width:80px;flex-shrink:0;position:relative;height:${totalMinutes}px;background:#fff5e6;`;
   const dayHourFrag = document.createDocumentFragment();
-  for (let hour = 0; hour < 24; hour++) {
+  for (let hour = hourStart; hour < hourEnd; hour++) {
     const hb = document.createElement("div");
     hb.className = "hour-block";
-    hb.style.top = `${hour * 60}px`;
+    hb.style.top = `${(hour - hourStart) * 60}px`;
     hb.textContent = `${hour}:00`;
     dayHourFrag.appendChild(hb);
   }
@@ -3013,7 +2993,7 @@ function displayDayView(chitsToDisplay) {
   dayView.appendChild(hourColumn);
 
   const eventsContainer = document.createElement("div");
-  eventsContainer.style.cssText = "position:relative;flex:1;margin-left:15px;min-height:1440px;";
+  eventsContainer.style.cssText = `position:relative;flex:1;margin-left:15px;min-height:${totalMinutes}px;`;
 
   const dayChitsMap = [];
   const dayViewColumns = [eventsContainer]; // single column for day view
@@ -3026,9 +3006,17 @@ function displayDayView(chitsToDisplay) {
     const _dayEnd = new Date(_dayStart.getTime() + 86400000);
     const _cs = info.start < _dayStart ? _dayStart : info.start;
     const _ce = info.end > _dayEnd ? _dayEnd : info.end;
-    const startTime = _cs.getHours() * 60 + _cs.getMinutes();
-    let endTime = (_ce.getTime() === _dayEnd.getTime()) ? 1440 : _ce.getHours() * 60 + _ce.getMinutes();
-    if (endTime <= startTime) endTime = startTime + 30;
+    const _rangeStartMin = hourStart * 60;
+    const _rangeEndMin = hourEnd * 60;
+    let _absStart = _cs.getHours() * 60 + _cs.getMinutes();
+    let _absEnd = (_ce.getTime() === _dayEnd.getTime()) ? 1440 : _ce.getHours() * 60 + _ce.getMinutes();
+    if (_absEnd <= _absStart) _absEnd = _absStart + 30;
+    // Clamp to visible range
+    if (_absEnd <= _rangeStartMin || _absStart >= _rangeEndMin) return;
+    _absStart = Math.max(_absStart, _rangeStartMin);
+    _absEnd = Math.min(_absEnd, _rangeEndMin);
+    const startTime = _absStart - _rangeStartMin;
+    const endTime = _absEnd - _rangeStartMin;
 
     for (let t = startTime; t < endTime; t++) { if (!timeSlots[t]) timeSlots[t] = []; }
     let position = 0;
@@ -3481,8 +3469,8 @@ function displayNotesView(chitsToDisplay) {
 }
 
 /**
- * Scroll the time-based view so 6:00am is the first visible slot.
- * Uses setTimeout(0) to ensure the DOM is fully painted before scrolling.
+ * Scroll the time-based view to the configured "scroll to" hour (default 5am).
+ * If that hour is outside the visible range, scrolls to the top.
  */
 function scrollToSixAM() {
   setTimeout(() => {
@@ -3490,7 +3478,10 @@ function scrollToSixAM() {
       document.querySelector(".week-view") ||
       document.querySelector(".day-view");
     if (scrollable) {
-      scrollable.scrollTop = 360;
+      var targetMin = _dayScrollToHour * 60;
+      var viewStartMin = _allViewStartHour * 60;
+      var scrollPx = Math.max(0, targetMin - viewStartMin);
+      scrollable.scrollTop = scrollPx;
     }
   }, 50);
 }
@@ -3589,9 +3580,13 @@ function renderTimeBar(viewType) {
 /**
  * Seven-day view: same as week view but always starts from today.
  */
-function displaySevenDayView(chitsToDisplay) {
+function displaySevenDayView(chitsToDisplay, opts) {
   const chitList = document.getElementById("chit-list");
   chitList.innerHTML = "";
+
+  const hourStart = opts?.hourStart ?? 0;
+  const hourEnd = opts?.hourEnd ?? 24;
+  const totalMinutes = (hourEnd - hourStart) * 60;
 
   const wrapper = document.createElement("div");
   wrapper.style.cssText = "display:flex;flex-direction:column;height:100%;width:100%;";
@@ -3734,12 +3729,12 @@ function displaySevenDayView(chitsToDisplay) {
 
   const hourColumn = document.createElement("div");
   hourColumn.className = "hour-column";
-  hourColumn.style.cssText = "width:60px;flex-shrink:0;position:relative;height:1440px;";
+  hourColumn.style.cssText = `width:60px;flex-shrink:0;position:relative;height:${totalMinutes}px;`;
   const sdHourFrag = document.createDocumentFragment();
-  for (let hour = 0; hour < 24; hour++) {
+  for (let hour = hourStart; hour < hourEnd; hour++) {
     const hb = document.createElement("div");
     hb.className = "hour-block";
-    hb.style.top = `${hour * 60}px`;
+    hb.style.top = `${(hour - hourStart) * 60}px`;
     hb.textContent = `${hour}:00`;
     sdHourFrag.appendChild(hb);
   }
@@ -3752,18 +3747,26 @@ function displaySevenDayView(chitsToDisplay) {
     const col = document.createElement("div");
     col.className = "day-column";
     if (dd.day.toDateString() === new Date().toDateString()) col.classList.add("today");
-    col.style.cssText = "flex:1;min-width:0;position:relative;min-height:1440px;border-left:1px solid #d3d3d3;";
+    col.style.cssText = `flex:1;min-width:0;position:relative;min-height:${totalMinutes}px;border-left:1px solid #d3d3d3;`;
 
     // Calculate overlaps for 7-day view
     const _ts7 = {};
     const _ed7 = [];
+    const _rangeStartMin7 = hourStart * 60;
+    const _rangeEndMin7 = hourEnd * 60;
     dd.timed.forEach(({ chit, info }) => {
       const _dayStart = new Date(dd.day.getFullYear(), dd.day.getMonth(), dd.day.getDate());
       const _dayEnd = new Date(_dayStart.getTime() + 86400000);
       const _cs = info.start < _dayStart ? _dayStart : info.start;
       const _ce = info.end > _dayEnd ? _dayEnd : info.end;
-      const _top = _cs.getHours() * 60 + _cs.getMinutes();
-      let _height = (_ce.getTime() === _dayEnd.getTime()) ? 1440 - _top : (_ce.getHours() * 60 + _ce.getMinutes()) - _top;
+      let _absTop = _cs.getHours() * 60 + _cs.getMinutes();
+      let _absBottom = (_ce.getTime() === _dayEnd.getTime()) ? 1440 : (_ce.getHours() * 60 + _ce.getMinutes());
+      // Clamp to visible range
+      if (_absBottom <= _rangeStartMin7 || _absTop >= _rangeEndMin7) return;
+      _absTop = Math.max(_absTop, _rangeStartMin7);
+      _absBottom = Math.min(_absBottom, _rangeEndMin7);
+      const _top = _absTop - _rangeStartMin7;
+      let _height = _absBottom - _absTop;
       if (_height < 30) _height = 30;
       const _s = _top, _e = _top + _height;
       for (let t = _s; t < _e; t++) { if (!_ts7[t]) _ts7[t] = []; }
@@ -4373,18 +4376,7 @@ function setColor(color, name) {
   document.getElementById("selected-color").textContent = name;
 }
 
-function _utcToLocalDate(isoString) {
-  if (!isoString) return null;
-  const date = new Date(isoString);
-  return date;
-}
-
-function _parseISOTime(isoString) {
-  if (!isoString) return "";
-  const date = _utcToLocalDate(isoString);
-  if (isNaN(date.getTime())) return "";
-  return formatTime(date);
-}
+// _utcToLocalDate, _parseISOTime moved to shared.js
 
 function _convertDBDateToDisplayDate(dateString) {
   if (!dateString) return "";
@@ -4394,7 +4386,7 @@ function _convertDBDateToDisplayDate(dateString) {
 }
 
 const userTimezoneOffset = new Date().getTimezoneOffset();
-console.log(`User timezone offset: ${userTimezoneOffset} minutes`);
+console.debug(`User timezone offset: ${userTimezoneOffset} minutes`);
 
 const chitId = new URLSearchParams(window.location.search).get("id");
 if (chitId) {
@@ -4514,7 +4506,7 @@ function cancelEdit() {
 }
 
 document.addEventListener("DOMContentLoaded", function () {
-  console.log("DOM fully loaded, initializing...");
+  console.debug("DOM fully loaded, initializing...");
 
   // Initialize mobile sidebar overlay behavior (backdrop, resize handling)
   initMobileSidebar();
@@ -4575,6 +4567,9 @@ document.addEventListener("DOMContentLoaded", function () {
     if (s.work_days) _workDays = s.work_days.split(',').map(Number);
     if (s.enabled_periods) _enabledPeriods = s.enabled_periods.split(',');
     if (s.custom_days_count) _customDaysCount = parseInt(s.custom_days_count) || 7;
+    if (s.all_view_start_hour !== undefined) _allViewStartHour = parseInt(s.all_view_start_hour) || 0;
+    if (s.all_view_end_hour !== undefined) _allViewEndHour = parseInt(s.all_view_end_hour) || 24;
+    if (s.day_scroll_to_hour !== undefined) _dayScrollToHour = parseInt(s.day_scroll_to_hour) || 5;
     if (s.chit_options) _chitOptions = { ..._chitOptions, ...s.chit_options };
     // Load default filters per tab
     const df = s.default_filters;

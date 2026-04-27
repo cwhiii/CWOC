@@ -353,6 +353,86 @@ function handleDropOnInactive(e) {
   setSaveButtonUnsaved();
 }
 
+/** Toggle visibility of Work Week config based on Work Hours period checkbox */
+function _toggleWorkConfig() {
+  var workCb = document.querySelector('.period-cb[value="Work"]');
+  var config = document.getElementById('work-config');
+  if (config) config.style.display = (workCb && workCb.checked) ? '' : 'none';
+}
+
+/** Toggle visibility of X Days config based on SevenDay period checkbox */
+function _toggleXDaysConfig() {
+  var xdCb = document.querySelector('.period-cb[value="SevenDay"]');
+  var config = document.getElementById('xdays-config');
+  if (config) config.style.display = (xdCb && xdCb.checked) ? '' : 'none';
+}
+
+/**
+ * Populate a pair of hour dropdowns (start/end) with all hours 0–24,
+ * then constrain each based on the other's selection.
+ * Start shows hours 0–23, End shows hours 1–24.
+ * When start is picked, end only shows hours > start.
+ * When end is picked, start only shows hours < end.
+ */
+function _initHourDropdownPair(startId, endId, defaultStart, defaultEnd) {
+  var startSel = document.getElementById(startId);
+  var endSel = document.getElementById(endId);
+  if (!startSel || !endSel) return;
+
+  function _pad(n) { return String(n).padStart(2, '0'); }
+
+  // Populate start with 0–23
+  startSel.innerHTML = '';
+  for (var h = 0; h <= 23; h++) {
+    var opt = document.createElement('option');
+    opt.value = h;
+    opt.textContent = _pad(h) + ':00';
+    if (h === defaultStart) opt.selected = true;
+    startSel.appendChild(opt);
+  }
+
+  // Populate end with 1–24
+  endSel.innerHTML = '';
+  for (var h = 1; h <= 24; h++) {
+    var opt = document.createElement('option');
+    opt.value = h;
+    opt.textContent = _pad(h === 24 ? 0 : h) + ':00' + (h === 24 ? ' (end)' : '');
+    if (h === defaultEnd) opt.selected = true;
+    endSel.appendChild(opt);
+  }
+
+  _syncHourDropdowns(startId, endId);
+}
+
+/**
+ * After one dropdown changes, disable/hide options in the other that would
+ * create an invalid range (end <= start).
+ */
+function _syncHourDropdowns(startId, endId) {
+  var startSel = document.getElementById(startId);
+  var endSel = document.getElementById(endId);
+  if (!startSel || !endSel) return;
+
+  var startVal = parseInt(startSel.value);
+  var endVal = parseInt(endSel.value);
+
+  // Hide end options <= start
+  Array.from(endSel.options).forEach(function (opt) {
+    var v = parseInt(opt.value);
+    opt.disabled = v <= startVal;
+    opt.style.display = v <= startVal ? 'none' : '';
+  });
+
+  // Hide start options >= end
+  Array.from(startSel.options).forEach(function (opt) {
+    var v = parseInt(opt.value);
+    opt.disabled = v >= endVal;
+    opt.style.display = v >= endVal ? 'none' : '';
+  });
+
+  setSaveButtonUnsaved();
+}
+
 function addFirstClock() {
   const firstInactive = inactiveZone.querySelector(".inactive-item");
   if (firstInactive) {
@@ -951,31 +1031,55 @@ function cancelSettings() {
 
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
-    // Close any open modal first, then fall through to exit
+    // Layered ESC: close innermost modal first, never exit while a modal is open
+
+    // 1. Update/upgrade modal
+    var updateModal = document.getElementById("update-modal");
+    if (updateModal && updateModal.style.display === "flex") {
+      event.preventDefault();
+      event.stopPropagation();
+      if (typeof _closeUpdateModal === 'function') _closeUpdateModal();
+      return;
+    }
+
+    // 2. QR overlay (shared)
+    var qrOverlay = document.getElementById("cwoc-qr-overlay");
+    if (qrOverlay) { qrOverlay.remove(); return; }
+
+    // 3. Tag modal
     if (document.getElementById("tag-modal").style.display === "flex") {
       closeTagModal();
-    } else if (
-      document.getElementById("delete-modal").style.display === "flex"
-    ) {
-      closeDeleteModal();
-    } else if (
-      document.getElementById("duplicate-tag-modal").style.display === "flex"
-    ) {
-      closeDuplicateTagModal();
-    } else {
-      const unsavedModal = document.getElementById("cwoc-unsaved-modal");
-      if (unsavedModal) {
-        unsavedModal.remove();
-      } else {
-        // Blur any focused input first, then exit on next ESC
-        if (document.activeElement && document.activeElement.tagName &&
-            ['INPUT','SELECT','TEXTAREA'].includes(document.activeElement.tagName)) {
-          document.activeElement.blur();
-        } else {
-          cancelSettings();
-        }
-      }
+      return;
     }
+
+    // 4. Delete confirm modal
+    if (document.getElementById("delete-modal").style.display === "flex") {
+      closeDeleteModal();
+      return;
+    }
+
+    // 5. Duplicate tag modal
+    if (document.getElementById("duplicate-tag-modal").style.display === "flex") {
+      closeDuplicateTagModal();
+      return;
+    }
+
+    // 6. Unsaved changes modal
+    var unsavedModal = document.getElementById("cwoc-unsaved-modal");
+    if (unsavedModal) {
+      unsavedModal.remove();
+      return;
+    }
+
+    // 7. Blur focused input first
+    if (document.activeElement && document.activeElement.tagName &&
+        ['INPUT','SELECT','TEXTAREA'].includes(document.activeElement.tagName)) {
+      document.activeElement.blur();
+      return;
+    }
+
+    // 8. Exit page (with save check)
+    cancelSettings();
   } else if (event.key === "Enter") {
     if (document.getElementById("tag-modal").style.display === "flex") {
       saveTag();
@@ -1106,10 +1210,7 @@ class SettingsManager {
     const weekStartSel = document.getElementById("week-start-day");
     if (weekStartSel) weekStartSel.value = this.settings.week_start_day || "0";
 
-    const workStartSel = document.getElementById("work-start-hour");
-    if (workStartSel) workStartSel.value = this.settings.work_start_hour || "8";
-    const workEndSel = document.getElementById("work-end-hour");
-    if (workEndSel) workEndSel.value = this.settings.work_end_hour || "17";
+    // Work hours are now initialized by _initHourDropdownPair in the block below
 
     // Working days checkboxes
     const workDays = (this.settings.work_days || "1,2,3,4,5").split(',');
@@ -1126,6 +1227,24 @@ class SettingsManager {
     // Custom days count
     const customDaysInput = document.getElementById("custom-days-count");
     if (customDaysInput) customDaysInput.value = this.settings.custom_days_count || "7";
+
+    // All-view hours
+    var avStart = parseInt(this.settings.all_view_start_hour) || 0;
+    var avEnd = parseInt(this.settings.all_view_end_hour) || 24;
+    _initHourDropdownPair('all-view-start-hour', 'all-view-end-hour', avStart, avEnd);
+
+    // Day scroll-to hour
+    var scrollToSel = document.getElementById("day-scroll-to-hour");
+    if (scrollToSel) scrollToSel.value = this.settings.day_scroll_to_hour || "5";
+
+    // Work hours
+    var wStart = parseInt(this.settings.work_start_hour) || 8;
+    var wEnd = parseInt(this.settings.work_end_hour) || 17;
+    _initHourDropdownPair('work-start-hour', 'work-end-hour', wStart, wEnd);
+
+    // Toggle conditional config sections
+    _toggleWorkConfig();
+    _toggleXDaysConfig();
 
     const filterInputs = [
       "calendar",
@@ -1254,6 +1373,9 @@ class SettingsManager {
       work_days: Array.from(document.querySelectorAll('.work-day-cb:checked')).map(cb => cb.value).join(',') || "1,2,3,4,5",
       enabled_periods: Array.from(document.querySelectorAll('.period-cb:checked')).map(cb => cb.value).join(',') || "Itinerary,Day,Week,Work,SevenDay,Month,Year",
       custom_days_count: document.getElementById("custom-days-count")?.value || "7",
+      all_view_start_hour: document.getElementById("all-view-start-hour")?.value || "0",
+      all_view_end_hour: document.getElementById("all-view-end-hour")?.value || "24",
+      day_scroll_to_hour: document.getElementById("day-scroll-to-hour")?.value || "5",
       default_filters: (() => {
         const filters = {};
         document.querySelectorAll(".filter-input").forEach(input => {
@@ -1397,18 +1519,6 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById('upgrade-reopen-btn').style.display = 'none';
     document.getElementById('upgrade-btn').style.display = '';
   });
-  document.getElementById('update-close-btn').addEventListener('click', function() {
-    _closeUpdateModal();
-  });
-
-  // Escape key closes the update modal (without stopping the upgrade)
-  document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape' && document.getElementById('update-modal').style.display === 'flex') {
-      e.preventDefault();
-      e.stopPropagation();
-      _closeUpdateModal();
-    }
-  });
 });
 
 
@@ -1551,6 +1661,11 @@ function startUpgrade() {
   var log = document.getElementById('update-log');
   var closeBtn = document.getElementById('update-close-btn');
   var startBtn = document.getElementById('update-start-btn');
+  var title = document.getElementById('update-modal-title');
+
+  // Upgrade mode: show Start, disable Close until done, set title
+  if (startBtn) startBtn.style.display = '';
+  if (title) title.textContent = '⬆️ Upgrading Omni Chits';
 
   log.innerHTML = '';
   closeBtn.disabled = true;
@@ -1685,6 +1800,13 @@ async function loadLastLog() {
   var log = document.getElementById('update-log');
   var modal = document.getElementById('update-modal');
   var closeBtn = document.getElementById('update-close-btn');
+  var startBtn = document.getElementById('update-start-btn');
+  var title = document.getElementById('update-modal-title');
+
+  // Log-only mode: hide Start, show Close, change title
+  if (startBtn) startBtn.style.display = 'none';
+  if (title) title.textContent = '📄 Upgrade Log';
+
   try {
     var res = await fetch('/api/update/log');
     var data = await res.json();

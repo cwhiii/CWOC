@@ -86,6 +86,53 @@ function applyChitColors(el, bgColor) {
   el.style.color = contrastColorForBg(bgColor);
 }
 
+/**
+ * Returns true if the given hex color is light (luminance > 140).
+ * Used for deciding text color on colored backgrounds.
+ */
+function isLightColor(hex) {
+  if (!hex) return true;
+  hex = hex.replace('#', '');
+  if (hex.length !== 6) return true;
+  var r = parseInt(hex.substr(0, 2), 16);
+  var g = parseInt(hex.substr(2, 2), 16);
+  var b = parseInt(hex.substr(4, 2), 16);
+  return (r * 299 + g * 587 + b * 114) / 1000 > 140;
+}
+
+/**
+ * Parse an ISO datetime string into a local Date object.
+ * Returns null if the input is falsy.
+ */
+function _utcToLocalDate(isoString) {
+  if (!isoString) return null;
+  return new Date(isoString);
+}
+
+/**
+ * Parse an ISO datetime string and return a formatted time string (HH:MM).
+ * Returns "" if the input is falsy or invalid.
+ */
+function _parseISOTime(isoString) {
+  if (!isoString) return "";
+  const date = _utcToLocalDate(isoString);
+  if (isNaN(date.getTime())) return "";
+  return formatTime(date);
+}
+
+/**
+ * Generate a deterministic pastel RGB color from a string label.
+ */
+function getPastelColor(label) {
+  let hash = 0;
+  for (let i = 0; i < label.length; i++)
+    hash = label.charCodeAt(i) + ((hash << 5) - hash);
+  const r = ((hash & 0xff) % 128) + 127;
+  const g = (((hash >> 8) & 0xff) % 128) + 127;
+  const b = (((hash >> 16) & 0xff) % 128) + 127;
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
 // ── Inline Checklist Toggle & Reorder (for dashboard views) ──────────────────
 
 /**
@@ -3203,7 +3250,9 @@ function initMobileSidebar() {
     if (Math.abs(dx) < SWIPE_THRESHOLD || dy > Math.abs(dx)) return;
 
     if (dx > 0 && !sidebar.classList.contains('active') && _swipeStartX < EDGE_ZONE) {
-      // Swipe right from left edge → open sidebar
+      // Swipe right from left edge → open sidebar (only if views panel is NOT open)
+      var viewsPanel = document.querySelector('.mobile-views-panel');
+      if (viewsPanel && viewsPanel.classList.contains('active')) return;
       sidebar.classList.add('active');
       localStorage.setItem('sidebarState', 'open');
       _showSidebarBackdrop();
@@ -3664,7 +3713,9 @@ function initMobileViewsButton() {
     if (Math.abs(dx) < SWIPE_THRESHOLD || dy > Math.abs(dx)) return;
 
     if (dx < 0 && !panel.classList.contains('active') && (window.innerWidth - _vsStartX) < EDGE_ZONE) {
-      // Swipe left from right edge → open
+      // Swipe left from right edge → open (only if sidebar is NOT open)
+      var sidebar = document.getElementById('sidebar');
+      if (sidebar && sidebar.classList.contains('active')) return;
       _openViewsPanel();
     } else if (dx > 0 && panel.classList.contains('active')) {
       // Swipe right → close

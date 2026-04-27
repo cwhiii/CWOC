@@ -50,6 +50,12 @@ inclusion: always
 - Pydantic v1 models for request validation. All fields use `Optional` with defaults.
 - Soft delete throughout — chits are never hard-deleted. Use the `deleted` flag and `deleted_datetime` column.
 
+## Escape Key Behavior
+- ESC should NEVER navigate away from a page while any modal or overlay is open. It must close the topmost modal first.
+- Only when no modals are open should ESC trigger page exit — and it must always check for unsaved changes before navigating.
+- ESC priority chain: close QR modal → close upgrade/update modal → close tag modal → close delete confirm → close unsaved-changes modal → blur focused input → exit page (with save check).
+- Every page that has modals must implement this layered ESC pattern. Don't rely on separate ESC listeners per modal — use a single handler that checks from innermost to outermost.
+
 when adding code, ensure youre doing so in an organized manner. Use the applicable section if there is one, and if not, make a new section. 
 
 Ensure there's no tasks that require installing software (no hypothisys!), or running the server here.

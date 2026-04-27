@@ -67,6 +67,9 @@ class Settings(BaseModel):
     work_days: Optional[str] = "1,2,3,4,5"  # CSV of day numbers (0=Sun, 1=Mon, ...)
     enabled_periods: Optional[str] = "Itinerary,Day,Week,Work,SevenDay,Month,Year"
     custom_days_count: Optional[str] = "7"  # for X Days view
+    all_view_start_hour: Optional[str] = "0"  # hour range for non-work views
+    all_view_end_hour: Optional[str] = "24"
+    day_scroll_to_hour: Optional[str] = "5"  # initial scroll position on calendar load
 
 class Chit(BaseModel):
     id: Optional[str] = None
@@ -171,6 +174,24 @@ def deserialize_json_field(data: Optional[str]) -> Any:
     except json.JSONDecodeError as e:
         logger.error(f"Deserialization error: {str(e)}")
         return None
+
+
+def compute_system_tags(chit) -> List[str]:
+    """Compute system tags based on chit properties. Returns merged list of user + system tags."""
+    system_tags = []
+    if chit.due_datetime or chit.start_datetime:
+        system_tags.append("Calendar")
+    if chit.checklist:
+        system_tags.append("Checklists")
+    if chit.alarm:
+        system_tags.append("Alarms")
+    if "Project" in (chit.tags or []):
+        system_tags.append("Projects")
+    if chit.status in ["ToDo", "In Progress", "Blocked", "Complete"]:
+        system_tags.append("Tasks")
+    if not (chit.due_datetime or chit.start_datetime or chit.end_datetime):
+        system_tags.append("Notes")
+    return list(set((chit.tags or []) + system_tags))
 
 # Database initialization
 def init_db():
@@ -467,6 +488,12 @@ def migrate_add_work_hours():
             cursor.execute("ALTER TABLE settings ADD COLUMN custom_days_count TEXT DEFAULT '7'")
         if "active_clocks" not in columns:
             cursor.execute("ALTER TABLE settings ADD COLUMN active_clocks TEXT")
+        if "all_view_start_hour" not in columns:
+            cursor.execute("ALTER TABLE settings ADD COLUMN all_view_start_hour TEXT DEFAULT '0'")
+        if "all_view_end_hour" not in columns:
+            cursor.execute("ALTER TABLE settings ADD COLUMN all_view_end_hour TEXT DEFAULT '24'")
+        if "day_scroll_to_hour" not in columns:
+            cursor.execute("ALTER TABLE settings ADD COLUMN day_scroll_to_hour TEXT DEFAULT '5'")
         conn.commit()
     except Exception as e:
         logger.error(f"Error adding work hours columns: {str(e)}")
@@ -1109,20 +1136,7 @@ def create_chit(chit: Chit):
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         current_time = datetime.utcnow().isoformat()
-        system_tags = []
-        if chit.due_datetime or chit.start_datetime:
-            system_tags.append("Calendar")
-        if chit.checklist:
-            system_tags.append("Checklists")
-        if chit.alarm:
-            system_tags.append("Alarms")
-        if "Project" in (chit.tags or []):
-            system_tags.append("Projects")
-        if chit.status in ["ToDo", "In Progress", "Blocked", "Complete"]:
-            system_tags.append("Tasks")
-        if not (chit.due_datetime or chit.start_datetime or chit.end_datetime):
-            system_tags.append("Notes")
-        chit_tags = list(set((chit.tags or []) + system_tags))
+        chit_tags = compute_system_tags(chit)
         cursor.execute(
             """
             INSERT INTO chits (
@@ -1219,20 +1233,7 @@ def update_chit(chit_id: str, chit: Chit):
         cursor.execute("SELECT * FROM chits WHERE id = ?", (chit_id,))
         existing = cursor.fetchone()
         current_time = datetime.utcnow().isoformat()
-        system_tags = []
-        if chit.due_datetime or chit.start_datetime:
-            system_tags.append("Calendar")
-        if chit.checklist:
-            system_tags.append("Checklists")
-        if chit.alarm:
-            system_tags.append("Alarms")
-        if "Project" in (chit.tags or []):
-            system_tags.append("Projects")
-        if chit.status in ["ToDo", "In Progress", "Blocked", "Complete"]:
-            system_tags.append("Tasks")
-        if not (chit.due_datetime or chit.start_datetime or chit.end_datetime):
-            system_tags.append("Notes")
-        chit_tags = list(set((chit.tags or []) + system_tags))
+        chit_tags = compute_system_tags(chit)
         if existing:
             # Update existing chit
             cursor.execute(
@@ -1501,8 +1502,9 @@ def save_settings(settings: Settings):
             INSERT OR REPLACE INTO settings (
                 user_id, time_format, sex, snooze_length, default_filters,
                 alarm_orientation, active_clocks, saved_locations, tags, custom_colors, visual_indicators, chit_options,
-                calendar_snap, week_start_day, work_start_hour, work_end_hour, work_days, enabled_periods, custom_days_count
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                calendar_snap, week_start_day, work_start_hour, work_end_hour, work_days, enabled_periods, custom_days_count,
+                all_view_start_hour, all_view_end_hour, day_scroll_to_hour
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 settings.user_id,
@@ -1524,7 +1526,10 @@ def save_settings(settings: Settings):
                 settings.work_end_hour or "17",
                 settings.work_days or "1,2,3,4,5",
                 settings.enabled_periods or "Itinerary,Day,Week,Work,SevenDay,Month,Year",
-                settings.custom_days_count or "7"
+                settings.custom_days_count or "7",
+                settings.all_view_start_hour or "0",
+                settings.all_view_end_hour or "24",
+                settings.day_scroll_to_hour or "5"
             )
         )
         conn.commit()
@@ -2183,6 +2188,14 @@ async def run_update():
                 except (OSError, PermissionError) as e:
                     yield f'data: {json.dumps({"type":"error","message":str(e)})}\n\n'
                     return
+
+                # Emit timestamp as the first log line, right after the banner
+                import time as _time
+                _tz_name = _time.strftime("%Z") or "UTC"
+                _now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S") + " " + _tz_name
+                _ts_line = f"  Started: {_now_str}"
+                log_lines.append(_ts_line)
+                yield f'data: {json.dumps({"type":"log","line":_ts_line})}\n\n'
 
                 # Stream each line from the subprocess
                 while True:
