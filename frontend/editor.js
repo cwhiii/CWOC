@@ -92,6 +92,27 @@ async function _getWeather(lat, lon) {
 
 async function _fetchWeatherData(address) {
   const compactWeatherSection = document.getElementById("compactWeatherSection");
+  const cacheKey = 'cwoc_weather_editor_' + address.toLowerCase().trim();
+
+  // Show cached weather immediately with stale indicator while we refresh
+  try {
+    const cached = JSON.parse(localStorage.getItem(cacheKey));
+    if (cached && cached.weather && compactWeatherSection) {
+      _displayWeatherInCompactSection(cached.weather, address);
+      // Add stale indicator overlay
+      const existing = compactWeatherSection.querySelector('.weather-stale-badge');
+      if (!existing) {
+        const badge = document.createElement('span');
+        badge.className = 'weather-stale-badge';
+        badge.style.cssText = 'position:absolute;top:2px;right:6px;font-size:0.75em;opacity:0.5;';
+        badge.textContent = '⏳';
+        badge.title = 'Refreshing weather…';
+        compactWeatherSection.style.position = 'relative';
+        compactWeatherSection.appendChild(badge);
+      }
+    }
+  } catch (e) { /* no cache, that's fine */ }
+
   try {
     const coords = await _getCoordinates(address);
     const weather = await _getWeather(coords.lat, coords.lon);
@@ -102,10 +123,26 @@ async function _fetchWeatherData(address) {
 
     _displayWeatherInCompactSection(weather, address);
 
+    // Cache the result
+    try { localStorage.setItem(cacheKey, JSON.stringify({ weather, ts: Date.now() })); } catch (e) { /* ignore */ }
+
+    // Remove stale badge
+    if (compactWeatherSection) {
+      const badge = compactWeatherSection.querySelector('.weather-stale-badge');
+      if (badge) badge.remove();
+    }
+
     return weather;
   } catch (error) {
     console.error("Error fetching weather data:", error);
+    // Remove stale badge on error too
     if (compactWeatherSection) {
+      const badge = compactWeatherSection.querySelector('.weather-stale-badge');
+      if (badge) badge.remove();
+    }
+    // Only show error if we didn't already show cached data
+    const hadCache = compactWeatherSection && compactWeatherSection.querySelector('.compact-day-header');
+    if (!hadCache && compactWeatherSection) {
       compactWeatherSection.classList.add('weather-placeholder');
       const msg = error.message === "Location not found."
         ? `Location not found: ${address}`
@@ -1125,11 +1162,8 @@ function _collapseAllZonesForNewChit() {
   // Determine which view the user came from
   let sourceTab = 'Calendar';
   try {
-    const raw = localStorage.getItem('cwoc_ui_state');
-    if (raw) {
-      const state = JSON.parse(raw);
-      if (state.tab) sourceTab = state.tab;
-    }
+    const saved = localStorage.getItem('cwoc_source_tab');
+    if (saved) sourceTab = saved;
   } catch (e) { /* ignore */ }
 
   // Map source tab to zones that should be expanded
@@ -3587,17 +3621,65 @@ document.addEventListener("DOMContentLoaded", function () {
     input.addEventListener("input", () => setSaveButtonUnsaved());
   });
 
-  // ESC key — same logic as clicking Exit/Cancel
+  // ESC key — layered escape chain:
+  //   1. Close fullscreen notes modal (if open)
+  //   2. Exit inline note edit mode → switch to rendered
+  //   3. Exit the chit editor
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
-      // Close QR modal first if open
+      // Layer 0: Close QR modal first if open
       const qrModal = document.getElementById('qr-modal-overlay');
       if (qrModal) { qrModal.remove(); return; }
-      // Don't intercept if a modal is open
-      const openModal = document.querySelector(
-        '.modal-overlay[style*="block"], .modal[style*="block"], .flatpickr-calendar.open'
-      );
-      if (openModal) return;
+
+      // Layer 0b: Close delete modal if open
+      const deleteModal = document.getElementById('deleteChitModal');
+      if (deleteModal && deleteModal.style.display === 'block') {
+        deleteModal.style.display = 'none';
+        return;
+      }
+
+      // Layer 0c: Close alarm/timer/stopwatch/notification modals if open
+      const alertModals = ['alarmModal', 'timerModal', 'stopwatchModal', 'notificationModal', 'alertModal'];
+      for (const mid of alertModals) {
+        const m = document.getElementById(mid);
+        if (m && (m.style.display === 'flex' || m.style.display === 'block')) {
+          m.style.display = 'none';
+          return;
+        }
+      }
+
+      // Layer 0d: Close flatpickr calendar if open
+      const fpOpen = document.querySelector('.flatpickr-calendar.open');
+      if (fpOpen) { fpOpen._flatpickr?.close(); return; }
+
+      // Layer 1: Close fullscreen notes modal if open
+      const notesModal = document.getElementById('notesModal');
+      if (notesModal && notesModal.style.display === 'flex') {
+        e.preventDefault();
+        closeNotesModal(true); // save & close
+        return;
+      }
+
+      // Layer 2: If inline note is in edit mode (textarea visible), switch to rendered
+      const noteTextarea = document.getElementById('note');
+      const noteRendered = document.getElementById('notes-rendered-output');
+      if (noteTextarea && noteRendered &&
+          noteTextarea.style.display !== 'none' &&
+          noteRendered.style.display === 'none' &&
+          noteTextarea.value.trim()) {
+        e.preventDefault();
+        toggleNotesViewMode();
+        return;
+      }
+
+      // Layer 3: Blur any focused input first, then exit on next ESC
+      const active = document.activeElement;
+      if (active && active.tagName && ['INPUT', 'SELECT', 'TEXTAREA'].includes(active.tagName)) {
+        active.blur();
+        return;
+      }
+
+      // Layer 4: Exit the chit editor
       e.preventDefault();
       cancelOrExit();
     }

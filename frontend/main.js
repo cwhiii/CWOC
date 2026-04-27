@@ -1787,6 +1787,8 @@ function _startGlobalAlertSystem() {
 
 function storePreviousState() {
   previousState = { tab: currentTab, view: currentView };
+  // Save the current tab separately so the editor knows which view we came from
+  localStorage.setItem('cwoc_source_tab', currentTab);
   // Save full UI state to localStorage for restoration after editor
   const state = {
     tab: currentTab,
@@ -1940,6 +1942,8 @@ function _restoreUIState() {
     if (periodSection) periodSection.style.display = (currentTab === 'Calendar') ? '' : 'none';
     if (yearWeekContainer) yearWeekContainer.style.display = (currentTab === 'Calendar') ? '' : 'none';
     if (orderSection) orderSection.style.display = (currentTab === 'Calendar') ? 'none' : '';
+    const kanbanSectionRestore = document.getElementById('section-kanban');
+    if (kanbanSectionRestore) kanbanSectionRestore.style.display = (currentTab === 'Projects') ? '' : 'none';
 
     // Restore label filters after they load
     if (state.labelFilters && state.labelFilters.length > 0) {
@@ -3802,10 +3806,27 @@ function displaySevenDayView(chitsToDisplay) {
   enableCalendarPinchZoom(scrollGrid);
 }
 
+// ── Projects View Mode (List vs Kanban) ──────────────────────────────────────
+let _projectsViewMode = 'list'; // 'list' | 'kanban'
+
+function _setProjectsMode(mode) {
+  _projectsViewMode = mode;
+  // Update button styles
+  const listBtn = document.getElementById('projects-mode-list');
+  const kanbanBtn = document.getElementById('projects-mode-kanban');
+  if (listBtn) listBtn.style.background = mode === 'list' ? 'ivory' : '';
+  if (kanbanBtn) kanbanBtn.style.background = mode === 'kanban' ? 'ivory' : '';
+  displayChits();
+}
+
 /**
  * Projects tab: tree view — each project master with its child chits nested.
  */
 function displayProjectsView(chitsToDisplay) {
+  if (_projectsViewMode === 'kanban') {
+    return _displayProjectsKanban(chitsToDisplay);
+  }
+
   const chitList = document.getElementById("chit-list");
   chitList.innerHTML = "";
 
@@ -3907,6 +3928,245 @@ function displayProjectsView(chitsToDisplay) {
 }
 
 /**
+ * Projects Kanban view: each project master is a row of status columns.
+ * Child chits of each project are cards in the appropriate column.
+ * Grandchildren (children of children) appear as sub-items within cards.
+ * Supports drag & drop between columns and between projects.
+ */
+function _displayProjectsKanban(chitsToDisplay) {
+  const chitList = document.getElementById("chit-list");
+  chitList.innerHTML = "";
+
+  const seenIds = new Set();
+  const projects = chits.filter(c => {
+    if (!c.is_project_master || c.deleted || c.archived) return false;
+    if (seenIds.has(c.id)) return false;
+    seenIds.add(c.id);
+    return true;
+  });
+
+  if (projects.length === 0) {
+    chitList.innerHTML = "<p>No projects found.</p>";
+    return;
+  }
+
+  const chitMap = {};
+  chits.forEach(c => { chitMap[c.id] = c; });
+
+  const statuses = ["ToDo", "In Progress", "Blocked", "Complete"];
+
+  const wrapper = document.createElement("div");
+  wrapper.className = "projects-view";
+  wrapper.style.cssText = "overflow-y:auto;flex:1 1 auto;min-height:0;padding:0.5em;";
+
+  projects.forEach(project => {
+    const childIds = Array.isArray(project.child_chits) ? project.child_chits : [];
+    const projectColor = chitColor(project);
+
+    // Project header
+    const projectBox = document.createElement("div");
+    projectBox.style.cssText = `margin-bottom:1.5em;border:2px solid #8b5a2b;border-radius:6px;overflow:hidden;background:${projectColor};`;
+
+    const header = document.createElement("div");
+    header.style.cssText = `padding:0.5em 0.7em;background:${projectColor};cursor:pointer;font-weight:bold;font-size:1.05em;border-bottom:1px solid rgba(139,90,43,0.2);`;
+    header.textContent = project.title || "(Untitled Project)";
+    header.addEventListener("dblclick", () => {
+      storePreviousState();
+      window.location.href = `/editor?id=${project.id}`;
+    });
+    projectBox.appendChild(header);
+
+    // Kanban columns row
+    const columnsRow = document.createElement("div");
+    columnsRow.style.cssText = "display:flex;gap:0;min-height:120px;";
+
+    // Group children by status
+    const grouped = {};
+    statuses.forEach(s => { grouped[s] = []; });
+    childIds.forEach(cid => {
+      const child = chitMap[cid];
+      if (!child || child.deleted) return;
+      const st = child.status || "ToDo";
+      if (!grouped[st]) grouped[st] = [];
+      grouped[st].push(child);
+    });
+
+    statuses.forEach(status => {
+      const col = document.createElement("div");
+      col.style.cssText = "flex:1;min-width:0;border-right:1px solid rgba(139,90,43,0.15);padding:0.4em;display:flex;flex-direction:column;gap:0.3em;";
+      col.dataset.status = status;
+      col.dataset.projectId = project.id;
+
+      // Column header
+      const colHeader = document.createElement("div");
+      colHeader.style.cssText = "font-size:0.75em;font-weight:bold;opacity:0.6;text-align:center;padding:2px 0 4px;border-bottom:1px solid rgba(139,90,43,0.1);margin-bottom:4px;white-space:nowrap;";
+      colHeader.textContent = status;
+      col.appendChild(colHeader);
+
+      // Cards
+      grouped[status].forEach(child => {
+        const card = document.createElement("div");
+        card.className = "chit-card";
+        card.draggable = true;
+        card.dataset.chitId = child.id;
+        card.dataset.projectId = project.id;
+        card.style.cssText = `padding:0.4em 0.5em;font-size:0.85em;background:${chitColor(child)};cursor:grab;margin-bottom:0.25em;border-width:1px;`;
+        if (child.status === "Complete") card.classList.add("completed-task");
+
+        const titleEl = document.createElement("div");
+        titleEl.style.cssText = "font-weight:bold;font-size:0.95em;margin-bottom:2px;";
+        titleEl.textContent = child.title || "(Untitled)";
+        card.appendChild(titleEl);
+
+        // Show due date if present
+        if (child.due_datetime) {
+          const due = document.createElement("div");
+          due.style.cssText = "font-size:0.75em;opacity:0.6;";
+          due.textContent = "Due: " + formatDate(new Date(child.due_datetime));
+          card.appendChild(due);
+        }
+
+        // Grandchildren (children of this child) as sub-items
+        const grandchildIds = Array.isArray(child.child_chits) ? child.child_chits : [];
+        if (grandchildIds.length > 0) {
+          const subList = document.createElement("ul");
+          subList.style.cssText = "margin:4px 0 0 0;padding:0 0 0 12px;list-style:none;font-size:0.85em;";
+          grandchildIds.forEach(gcId => {
+            const gc = chitMap[gcId];
+            if (!gc || gc.deleted) return;
+            const li = document.createElement("li");
+            li.draggable = true;
+            li.dataset.chitId = gc.id;
+            li.dataset.parentChitId = child.id;
+            li.style.cssText = `padding:2px 4px;margin:1px 0;border-radius:3px;cursor:grab;background:rgba(255,255,255,0.4);border:1px solid rgba(139,90,43,0.1);display:flex;align-items:center;gap:4px;`;
+            if (gc.status === "Complete") li.style.opacity = "0.5";
+
+            const bullet = document.createElement("span");
+            bullet.style.cssText = "opacity:0.4;font-size:0.8em;flex-shrink:0;";
+            bullet.textContent = gc.status === "Complete" ? "✓" : "▸";
+            li.appendChild(bullet);
+
+            const gcTitle = document.createElement("span");
+            gcTitle.style.flex = "1";
+            gcTitle.textContent = gc.title || "(Untitled)";
+            li.appendChild(gcTitle);
+
+            // Grandchild drag
+            li.addEventListener("dragstart", e => {
+              e.stopPropagation();
+              e.dataTransfer.setData("application/x-kanban-grandchild", JSON.stringify({ chitId: gc.id, parentChitId: child.id, projectId: project.id }));
+              e.dataTransfer.effectAllowed = "move";
+              li.style.opacity = "0.4";
+            });
+            li.addEventListener("dragend", () => { li.style.opacity = gc.status === "Complete" ? "0.5" : "1"; });
+
+            li.addEventListener("dblclick", e => {
+              e.stopPropagation();
+              storePreviousState();
+              window.location.href = `/editor?id=${gc.id}`;
+            });
+
+            subList.appendChild(li);
+          });
+          card.appendChild(subList);
+        }
+
+        // Card drag (child chit between status columns)
+        card.addEventListener("dragstart", e => {
+          e.dataTransfer.setData("application/x-kanban-card", JSON.stringify({ chitId: child.id, projectId: project.id, fromStatus: status }));
+          e.dataTransfer.effectAllowed = "move";
+          card.style.opacity = "0.4";
+        });
+        card.addEventListener("dragend", () => { card.style.opacity = ""; });
+
+        card.addEventListener("dblclick", () => {
+          storePreviousState();
+          window.location.href = `/editor?id=${child.id}`;
+        });
+
+        col.appendChild(card);
+      });
+
+      // Drop zone for cards
+      col.addEventListener("dragover", e => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        col.style.background = "rgba(139,90,43,0.08)";
+      });
+      col.addEventListener("dragleave", () => {
+        col.style.background = "";
+      });
+      col.addEventListener("drop", async e => {
+        e.preventDefault();
+        col.style.background = "";
+
+        // Handle card drops (child chit status change)
+        const cardData = e.dataTransfer.getData("application/x-kanban-card");
+        if (cardData) {
+          try {
+            const data = JSON.parse(cardData);
+            const newStatus = col.dataset.status;
+            if (data.fromStatus === newStatus) return;
+            // Update the chit's status via API
+            const resp = await fetch(`/api/chit/${data.chitId}`);
+            if (!resp.ok) return;
+            const fullChit = await resp.json();
+            fullChit.status = newStatus;
+            if (newStatus === "Complete" && !fullChit.completed_datetime) {
+              fullChit.completed_datetime = new Date().toISOString();
+            }
+            await fetch(`/api/chits/${data.chitId}`, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(fullChit),
+            });
+            fetchChits();
+          } catch (err) { console.error("Kanban card drop error:", err); }
+          return;
+        }
+
+        // Handle grandchild drops (move between parent cards)
+        const gcData = e.dataTransfer.getData("application/x-kanban-grandchild");
+        if (gcData) {
+          try {
+            const data = JSON.parse(gcData);
+            // Find the target card (closest .chit-card under the drop point)
+            const targetCard = e.target.closest(".chit-card");
+            if (!targetCard || !targetCard.dataset.chitId) return;
+            const targetParentId = targetCard.dataset.chitId;
+            if (targetParentId === data.parentChitId) return; // same parent, no-op
+
+            // Remove from old parent's child_chits
+            const oldParentResp = await fetch(`/api/chit/${data.parentChitId}`);
+            if (!oldParentResp.ok) return;
+            const oldParent = await oldParentResp.json();
+            oldParent.child_chits = (oldParent.child_chits || []).filter(id => id !== data.chitId);
+            await fetch(`/api/chits/${data.parentChitId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(oldParent) });
+
+            // Add to new parent's child_chits
+            const newParentResp = await fetch(`/api/chit/${targetParentId}`);
+            if (!newParentResp.ok) return;
+            const newParent = await newParentResp.json();
+            if (!Array.isArray(newParent.child_chits)) newParent.child_chits = [];
+            if (!newParent.child_chits.includes(data.chitId)) newParent.child_chits.push(data.chitId);
+            await fetch(`/api/chits/${targetParentId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(newParent) });
+
+            fetchChits();
+          } catch (err) { console.error("Kanban grandchild drop error:", err); }
+        }
+      });
+
+      columnsRow.appendChild(col);
+    });
+
+    projectBox.appendChild(columnsRow);
+    wrapper.appendChild(projectBox);
+  });
+
+  chitList.appendChild(wrapper);
+}
+
+/**
  * Alarms tab: list all chits that have any alert (alarm, notification, timer, stopwatch).
  */
 function displayAlarmsView(chitsToDisplay) {
@@ -3992,6 +4252,12 @@ function filterChits(tab) {
   }
   if (orderSection) {
     orderSection.style.display = (tab === 'Calendar') ? 'none' : '';
+  }
+
+  // Show/hide Kanban toggle for Projects tab
+  const kanbanSection = document.getElementById('section-kanban');
+  if (kanbanSection) {
+    kanbanSection.style.display = (tab === 'Projects') ? '' : 'none';
   }
 
   _loadLabelFilters();
@@ -4263,6 +4529,8 @@ document.addEventListener("DOMContentLoaded", function () {
   if (periodSection) periodSection.style.display = (currentTab === 'Calendar') ? '' : 'none';
   const yearWeekContainer = document.getElementById('year-week-container');
   if (yearWeekContainer) yearWeekContainer.style.display = (currentTab === 'Calendar') ? '' : 'none';
+  const kanbanSection = document.getElementById('section-kanban');
+  if (kanbanSection) kanbanSection.style.display = (currentTab === 'Projects') ? '' : 'none';
 
   _loadLabelFilters();
   _buildPeopleFilterPanel();
@@ -4631,6 +4899,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
     if (keyLower === 'k') {
       e.preventDefault();
+      storePreviousState();
       window.location.href = '/frontend/editor.html';
       return;
     }

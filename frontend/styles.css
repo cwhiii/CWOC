@@ -1526,6 +1526,16 @@ button.delete:hover {
     display: none;
 }
 
+/* ── Logo wrap + hamburger icon ───────────────────────────────────────── */
+.logo-wrap {
+    position: relative;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+.logo-hamburger {
+    display: none;
+}
+
 /* ── Mobile Views button: hidden at desktop ───────────────────────────── */
 .mobile-views-btn {
     display: none;
@@ -1938,6 +1948,23 @@ button.delete:hover {
         margin-right: 4px;
     }
 
+    /* ── Logo hamburger: visible on mobile ────────────────────────────────── */
+    .logo-hamburger {
+        display: flex;
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 32px;
+        height: 32px;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.2em;
+        color: #fff8e1;
+        background: rgba(74, 44, 42, 0.7);
+        border-radius: 50%;
+        pointer-events: none;
+    }
+
     /* ── Title: compact, inline ───────────────────────────────────────────── */
     h1 {
         font-size: 1em;
@@ -2042,17 +2069,19 @@ button.delete:hover {
     /* ── Reference content: full-screen scrollable modal ─────────────────── */
     .reference-overlay {
         align-items: flex-start;
-        padding: 8px;
+        padding: 4px;
         overflow-y: auto;
+        overflow-x: hidden;
     }
     .reference-content {
         width: 100%;
-        max-width: none;
+        max-width: 100vw;
         padding: 12px;
         box-sizing: border-box;
         border-radius: 8px;
         max-height: none;
         overflow-y: auto;
+        overflow-x: hidden;
         font-size: 0.85em;
     }
     .reference-content h3 {
@@ -2354,5 +2383,10 @@ button.delete:hover {
     .all-day-event .label img {
         width: 1.8em !important;
         height: 1.8em !important;
+    }
+
+    /* ── Kanban columns: stack vertically on mobile ───────────────────────── */
+    .projects-view [style*="display:flex"][style*="min-height:120px"] {
+        flex-direction: column !important;
     }
 }

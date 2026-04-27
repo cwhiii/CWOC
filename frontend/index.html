@@ -34,7 +34,7 @@
 
             <!-- 1. Create -->
             <div class="sidebar-section" id="section-create">
-                <button class="create-chit action-button" onclick="window.location.href='/frontend/editor.html'" onauxclick="window.open('/frontend/editor.html','_blank')">
+                <button class="create-chit action-button" onclick="storePreviousState(); window.location.href='/frontend/editor.html'" onauxclick="window.open('/frontend/editor.html','_blank')">
                     <img src="/static/create_new.png" alt="" />
                     Create Chit <span class="hotkey-hint">K</span>
                 </button>
@@ -72,6 +72,15 @@
                     <option value="Month">Month</option>
                     <option value="Year">Year</option>
                 </select>
+            </div>
+
+            <!-- 3b. Kanban toggle (only visible on Projects tab) -->
+            <div class="sidebar-section" id="section-kanban" style="display:none;">
+                <label class="sidebar-section-label">View Mode</label>
+                <div style="display:flex;gap:4px;">
+                    <button class="action-button" id="projects-mode-list" onclick="_setProjectsMode('list')" style="flex:1;margin-bottom:0;font-size:0.8em;padding:6px;background:ivory;">📋 List</button>
+                    <button class="action-button" id="projects-mode-kanban" onclick="_setProjectsMode('kanban')" style="flex:1;margin-bottom:0;font-size:0.8em;padding:6px;">📊 Kanban</button>
+                </div>
             </div>
 
             <!-- 4. Filters — each sub-section individually collapsible -->
@@ -333,13 +342,15 @@
         </div>
         <div class="main-content">
             <div class="header">
-                <img
-                    src="/static/cwod_logo.png"
-                    alt="C.W.'s Omni Chits Logo -- CLICK TO TOGGLE SIDEBAR."
-                    title="C.W.'s Omni Chits -- CLICK TO TOGGLE SIDEBAR."
-                    class="logo"
-                    onclick="toggleSidebar()"
-                />
+                <div class="logo-wrap" onclick="toggleSidebar()">
+                    <img
+                        src="/static/cwod_logo.png"
+                        alt="C.W.'s Omni Chits Logo -- CLICK TO TOGGLE SIDEBAR."
+                        title="C.W.'s Omni Chits -- CLICK TO TOGGLE SIDEBAR."
+                        class="logo"
+                    />
+                    <span class="logo-hamburger">☰</span>
+                </div>
                 <h1 title="C.W.'s Omni Chits">Omni Chits</h1>
 
                 <div class="tabs">

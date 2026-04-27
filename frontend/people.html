@@ -170,6 +170,22 @@
             font-family: "Courier New", Courier, monospace;
             font-size: 14px;
         }
+        @media (max-width: 500px) {
+            .qr-modal-content {
+                width: calc(100% - 24px) !important;
+                max-width: none !important;
+                padding: 16px !important;
+                box-sizing: border-box;
+            }
+            .qr-modal-content .qr-canvas img {
+                max-width: 100% !important;
+                height: auto !important;
+            }
+            .qr-modal-content .close-btn {
+                width: 100%;
+                min-height: 44px;
+            }
+        }
 
         /* ══ Import Result Modal ══ */
         .import-modal {

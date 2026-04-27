@@ -267,6 +267,20 @@
                 .main-zones-grid { grid-template-columns: 1fr !important; }
                 .grid-span-3, .profile-image-area { grid-column: span 1; }
                 .profile-image-area { flex-direction: column; text-align: center; }
+                .qr-modal-content {
+                    width: calc(100% - 24px) !important;
+                    max-width: none !important;
+                    padding: 16px !important;
+                    box-sizing: border-box;
+                }
+                .qr-modal-content .qr-canvas img {
+                    max-width: 100% !important;
+                    height: auto !important;
+                }
+                .qr-modal-content .close-btn {
+                    width: 100%;
+                    min-height: 44px;
+                }
             }
         </style>
     </head>
