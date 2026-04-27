@@ -129,7 +129,7 @@
                 <li><strong>24 Hour</strong> — Standard 24-hour digital display (HH:MM:SS)</li>
                 <li><strong>12 Hour</strong> — 12-hour digital display with AM/PM</li>
                 <li><strong>12 Hour Analog</strong> — Traditional analog clock face with hour, minute, and second hands</li>
-                <li><strong><a href="https://www.cwholemaniii.com/pages/hss/hst.shtml" target="_blank">HST</a></strong> — Holeman Simplified Time. Represents the day as 0–100 sub-days (sd) shown on a progress bar. Midnight = 0.000 sd, noon = 50.000 sd, end of day = 100.000 sd</li>
+                <li><strong><a href="https://www.cwholemaniii.com/pages/hss/hst.shtml" target="_blank">HST</a></strong> — Holeman Simplified Time. Represents the day as 0–100 sentidays (sd) shown on a progress bar. Midnight = 0.000 sd, noon = 50.000 sd, end of day = 100.000 sd. "Sentiday" is the Holeman Simplified English spelling of centiday.</li>
             </ul>
             <p>Drag clocks between Active and Inactive zones in Settings to choose which appear. Use "Change Orientation" to switch between horizontal and vertical layout.</p>
             <h3 id="weather">Weather</h3>
@@ -150,6 +150,7 @@
             <p>When creating a new chit, only the zone relevant to the current view is expanded (e.g., Notes zone when coming from the Notes tab). All other zones start collapsed. The title field is auto-focused. If you have a default saved location, it's auto-applied to new chits.</p>
             <h4>Alerts Zone</h4>
             <p>Add alarms, timers, stopwatches, and notifications. Each alarm has a time, days, and optional "Delete chit after dismissal" checkbox — when checked, dismissing the alarm soft-deletes the chit. The 🔄 button on the weather bar refreshes the forecast.</p>
+            <p>Alarms trigger system notifications with sound on all platforms (macOS, Linux, Android) via the browser Notification API. On Android and Linux Firefox, the device will also vibrate. If sound cannot autoplay due to browser restrictions, a tap or keypress will unlock audio playback. Grant notification permission when prompted for full functionality.</p>
             <h4>Task Zone</h4>
             <p>Status (ToDo, In Progress, Blocked, Complete), Priority (High, Medium, Low), and Severity (Critical, Major, Normal, Minor).</p>
             <h4>Location Zone</h4>
@@ -158,6 +159,7 @@
                 <li><strong>Saved Locations dropdown</strong> — Select any saved location by label to populate the address</li>
                 <li><strong>✕ Clear</strong> — Clears the address, map, and weather display</li>
                 <li><strong>📍 compact dropdown</strong> — Quick-access dropdown in the title/weather area for selecting a saved location without scrolling to the Location zone</li>
+                <li><strong>Google Maps button</strong> — The small "G" button next to the address opens the location in Google Maps. Greyed out when no address is entered. Google is only ever contacted when you explicitly click this button — no data is sent to Google otherwise. Can be hidden via Settings → Chit Options → Disable Google Mapping.</li>
             </ul>
             <p>A chit can have at most one location. Weather and map load automatically when a location and date are both present.</p>
             <h3 id="quick-edit">Quick Edit Modal</h3>
@@ -171,7 +173,7 @@
                 <li><strong>Tag Editor</strong> — Tree view, create/edit/delete/favorite, "+" for child tags</li>
                 <li><strong>Saved Locations</strong> — Add, label, and set a default location for use across the editor and dashboard weather</li>
                 <li><strong>Custom Colors</strong> — Color picker for chit colors</li>
-                <li><strong>Chit Options</strong> — Fade past, highlight overdue, delete past alarms</li>
+                <li><strong>Chit Options</strong> — Fade past, highlight overdue, delete past alarms, disable Google Mapping</li>
                 <li><strong>Export / Import</strong> — CSV export and import</li>
                 <li><strong>Trash</strong> — View, restore, or permanently delete chits</li>
             </ul>

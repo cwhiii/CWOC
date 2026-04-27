@@ -1208,6 +1208,7 @@ class SettingsManager {
     document.getElementById("highlight-overdue").checked = co.highlight_overdue_chits !== false;
     document.getElementById("delete-past").checked = !!co.delete_past_alarm_chits;
     document.getElementById("show-tab-counts").checked = !!co.show_tab_counts;
+    document.getElementById("disable-google-mapping").checked = !!co.disable_google_mapping;
 
     const genderToggle = document.getElementById("gender-toggle");
     const genderLabel = document.getElementById("gender-label");
@@ -1466,6 +1467,7 @@ class SettingsManager {
           document.getElementById("highlight-overdue").checked,
         delete_past_alarm_chits: document.getElementById("delete-past").checked,
         show_tab_counts: document.getElementById("show-tab-counts").checked,
+        disable_google_mapping: document.getElementById("disable-google-mapping").checked,
       },
       saved_locations: JSON.stringify(collectLocationsData()),
     };

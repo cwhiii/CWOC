@@ -491,6 +491,32 @@
             _setupUrlToggle(valueInput, link);
         }
 
+        // Google Maps button for address fields
+        var gmapsBtn = null;
+        if (fieldName === 'addresses') {
+            gmapsBtn = document.createElement('button');
+            gmapsBtn.type = 'button';
+            gmapsBtn.className = 'google-maps-btn';
+            gmapsBtn.title = 'Open in Google Maps';
+            gmapsBtn.innerHTML = '<img src="https://www.google.com/favicon.ico" alt="G" style="width:14px;height:14px;vertical-align:middle;" />';
+            gmapsBtn.disabled = !defaultValue;
+            gmapsBtn.addEventListener('click', function() {
+                var settings = window._cwocSettings || {};
+                var co = settings.chit_options || {};
+                if (co.disable_google_mapping) return;
+                var addr = valueInput.value.trim();
+                if (addr) window.open('https://www.google.com/maps/search/' + encodeURIComponent(addr), '_blank');
+            });
+            valueInput.addEventListener('input', function() {
+                gmapsBtn.disabled = !valueInput.value.trim();
+            });
+            // Hide if setting is disabled
+            var _gSettings = window._cwocSettings || {};
+            if ((_gSettings.chit_options || {}).disable_google_mapping) {
+                gmapsBtn.style.display = 'none';
+            }
+        }
+
         var removeBtn = document.createElement('button');
         removeBtn.type = 'button';
         removeBtn.className = 'remove-entry-btn';
@@ -507,6 +533,7 @@
         row.appendChild(labelInput);
         row.appendChild(valueInput);
         row.appendChild(link);
+        if (gmapsBtn) row.appendChild(gmapsBtn);
         row.appendChild(removeBtn);
         container.appendChild(row);
 

@@ -282,6 +282,28 @@
                     min-height: 44px;
                 }
             }
+            /* Google Maps button for address rows */
+            .google-maps-btn {
+                width: 28px;
+                height: 28px;
+                padding: 4px;
+                border: 1px solid #c4a882;
+                border-radius: 4px;
+                background: #fdf6e3;
+                cursor: pointer;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                flex-shrink: 0;
+            }
+            .google-maps-btn:hover:not(:disabled) {
+                background: #f0e6d0;
+                border-color: #8b5a2b;
+            }
+            .google-maps-btn:disabled {
+                opacity: 0.35;
+                cursor: default;
+            }
         </style>
     </head>
     <body>

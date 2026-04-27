@@ -1338,7 +1338,6 @@ async function _openWeatherModal() {
 }
 
 async function _fetchWeatherForModal(address, label) {
-  console.log('[block removal] _fetchWeatherForModal called with:', address, label);
   var overlay = document.getElementById('weather-modal-overlay');
   if (!overlay) return;
 
@@ -1598,6 +1597,10 @@ function _globalFmtTime(time24) {
 }
 
 function _globalPlayAlarm() {
+  // Vibrate on mobile/Android as a fallback for sound
+  if ('vibrate' in navigator) {
+    try { navigator.vibrate([200, 100, 200, 100, 300, 200, 500]); } catch (e) {}
+  }
   if (!_globalAlarmAudio) {
     _globalAlarmAudio = new Audio("/static/alarm.mp3");
     _globalAlarmAudio.loop = true;
@@ -1625,6 +1628,7 @@ let _globalAlarmTimeout = null;
 function _globalStopAlarm() {
   if (_globalAlarmAudio) { _globalAlarmAudio.pause(); _globalAlarmAudio.currentTime = 0; }
   if (_globalAlarmTimeout) { clearTimeout(_globalAlarmTimeout); _globalAlarmTimeout = null; }
+  if ('vibrate' in navigator) { try { navigator.vibrate(0); } catch (e) {} }
 }
 
 function _globalPlayTimer() {
@@ -1713,13 +1717,34 @@ function _showGlobalToast(emoji, label, chitTitle, chitId, onDismiss) {
   return toast;
 }
 
-function _sendBrowserNotification(title, body, chitId) {
+function _sendBrowserNotification(title, body, chitId, playSound) {
   if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
-  const n = new Notification(title, { body, icon: "/static/cwod_logo-favicon.png" });
-  n.onclick = () => {
-    window.focus();
-    window.location.href = `/editor?id=${chitId}`;
+  var opts = {
+    body: body,
+    icon: "/static/cwod_logo-favicon.png",
+    tag: 'cwoc-alert-' + chitId,
+    renotify: true,
+    requireInteraction: true,
+    silent: false
   };
+  // Vibrate pattern for Android/mobile (200ms on, 100ms off, 200ms on)
+  if ('vibrate' in navigator) {
+    opts.vibrate = [200, 100, 200, 100, 300];
+  }
+  try {
+    var n = new Notification(title, opts);
+    n.onclick = function() {
+      window.focus();
+      window.location.href = '/editor?id=' + chitId;
+    };
+  } catch (e) {
+    // Fallback for environments where Notification constructor fails (some Android browsers)
+    if ('serviceWorker' in navigator && navigator.serviceWorker.ready) {
+      navigator.serviceWorker.ready.then(function(reg) {
+        reg.showNotification(title, opts).catch(function() {});
+      });
+    }
+  }
 }
 
 function _globalCheckAlarms() {

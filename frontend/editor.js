@@ -2945,7 +2945,9 @@ async function loadChitData(chitId) {
     const locationInput = document.getElementById("location");
     if (locationInput) {
       locationInput.value = chit.location || "";
+      locationInput.addEventListener('input', _updateGoogleMapsBtn);
     }
+    _updateGoogleMapsBtn();
 
     // Restore people (stored as array, display as chips)
     const peopleArray = Array.isArray(chit.people)
@@ -3182,10 +3184,12 @@ function onSavedLocationSelect() {
   if (!address) {
     // Null option selected — clear the field
     locationInput.value = '';
+    _updateGoogleMapsBtn();
     return;
   }
 
   locationInput.value = address;
+  _updateGoogleMapsBtn();
   setSaveButtonUnsaved();
   searchLocationMap();
 }
@@ -3203,6 +3207,7 @@ function onAddDefaultLocation(event) {
   var locationInput = document.getElementById('location');
   if (locationInput) {
     locationInput.value = defaultLoc.address || '';
+    _updateGoogleMapsBtn();
     setSaveButtonUnsaved();
     searchLocationMap();
   }
@@ -3215,6 +3220,7 @@ function onClearLocation(event) {
   if (event) event.stopPropagation();
   var locationInput = document.getElementById('location');
   if (locationInput) locationInput.value = '';
+  _updateGoogleMapsBtn();
 
   var mapDisplay = document.getElementById('location-map');
   if (mapDisplay) mapDisplay.innerHTML = '';
@@ -3352,6 +3358,31 @@ function openLocationInNewTab(event) {
       "_blank",
     );
   }
+}
+
+function openInGoogleMaps(event) {
+  if (event) event.stopPropagation();
+  // Only opens Google Maps when explicitly clicked — no prefetching or tracking
+  var settings = window._cwocSettings || {};
+  var co = settings.chit_options || {};
+  if (co.disable_google_mapping) return;
+  var loc = document.getElementById("location");
+  if (!loc || !loc.value.trim()) return;
+  window.open("https://www.google.com/maps/search/" + encodeURIComponent(loc.value.trim()), "_blank");
+}
+
+function _updateGoogleMapsBtn() {
+  var btn = document.getElementById("googleMapsBtn");
+  if (!btn) return;
+  var settings = window._cwocSettings || {};
+  var co = settings.chit_options || {};
+  if (co.disable_google_mapping) {
+    btn.style.display = "none";
+    return;
+  }
+  btn.style.display = "";
+  var loc = document.getElementById("location");
+  btn.disabled = !loc || !loc.value.trim();
 }
 
 function openLocationDirections(event) {

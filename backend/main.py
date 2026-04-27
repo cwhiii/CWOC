@@ -1090,6 +1090,13 @@ os.makedirs(CONTACT_IMAGES_DIR, exist_ok=True)
 # ── Geocode Proxy (avoids CORS and rate-limit issues with Nominatim) ──────
 _geocode_cache = {}       # key (lowercase query) → {"lat": float, "lon": float, "ts": float}
 _geocode_last_req = 0.0   # timestamp of last Nominatim request (rate-limit to 1/sec)
+_geocode_lock = asyncio.Lock()
+
+def _sync_geocode_fetch(url):
+    """Blocking fetch — runs in thread pool to avoid blocking the event loop."""
+    req = urllib.request.Request(url, headers={"User-Agent": "CWOC-Weather/1.0"})
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        return json.loads(resp.read().decode())
 
 @app.get("/api/geocode")
 async def geocode_proxy(q: str = Query(..., min_length=1)):
@@ -1099,26 +1106,30 @@ async def geocode_proxy(q: str = Query(..., min_length=1)):
         return {"results": [{"lat": _geocode_cache[key]["lat"], "lon": _geocode_cache[key]["lon"]}]}
 
     global _geocode_last_req
-    # Rate-limit: wait if less than 1.1 seconds since last request
-    elapsed = time.time() - _geocode_last_req
-    if elapsed < 1.1:
-        await asyncio.sleep(1.1 - elapsed)
+    async with _geocode_lock:
+        # Re-check cache (another request may have populated it while we waited)
+        if key in _geocode_cache and (time.time() - _geocode_cache[key]["ts"]) < 86400:
+            return {"results": [{"lat": _geocode_cache[key]["lat"], "lon": _geocode_cache[key]["lon"]}]}
 
-    url = "https://nominatim.openstreetmap.org/search?format=json&limit=3&q=" + urllib.parse.quote(q)
-    req = urllib.request.Request(url, headers={"User-Agent": "CWOC-Weather/1.0"})
-    try:
-        _geocode_last_req = time.time()
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            data = json.loads(resp.read().decode())
-        if data and len(data) > 0:
-            lat = float(data[0]["lat"])
-            lon = float(data[0]["lon"])
-            _geocode_cache[key] = {"lat": lat, "lon": lon, "ts": time.time()}
-            return {"results": [{"lat": lat, "lon": lon}]}
-        return {"results": []}
-    except Exception as e:
-        logger.error(f"Geocode proxy error: {e}")
-        raise HTTPException(status_code=502, detail="Geocoding service unavailable")
+        # Rate-limit: wait if less than 1.1 seconds since last request
+        elapsed = time.time() - _geocode_last_req
+        if elapsed < 1.1:
+            await asyncio.sleep(1.1 - elapsed)
+
+        url = "https://nominatim.openstreetmap.org/search?format=json&limit=3&q=" + urllib.parse.quote(q)
+        try:
+            _geocode_last_req = time.time()
+            loop = asyncio.get_event_loop()
+            data = await loop.run_in_executor(None, _sync_geocode_fetch, url)
+            if data and len(data) > 0:
+                lat = float(data[0]["lat"])
+                lon = float(data[0]["lon"])
+                _geocode_cache[key] = {"lat": lat, "lon": lon, "ts": time.time()}
+                return {"results": [{"lat": lat, "lon": lon}]}
+            return {"results": []}
+        except Exception as e:
+            logger.error(f"Geocode proxy error: {e}")
+            raise HTTPException(status_code=502, detail="Geocoding service unavailable")
 
 
 # Serve all files from /frontend/ (e.g., index.html, settings.html, editor.html)

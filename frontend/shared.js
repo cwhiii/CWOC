@@ -141,7 +141,6 @@ function getPastelColor(label) {
  * Returns {lat, lon} or throws Error("Location not found.") / Error("No address provided.").
  */
 async function _geocodeAddress(address) {
-  console.log('[block removal] _geocodeAddress called with:', address);
   if (!address) throw new Error("No address provided.");
   var queries = [address];
 
@@ -176,28 +175,21 @@ async function _geocodeAddress(address) {
     unique.push(queries[u]);
   }
 
-  console.log('[block removal] geocode queries:', unique);
-
   for (var i = 0; i < unique.length; i++) {
     var q = unique[i];
     try {
-      console.log('[block removal] trying query', i + 1, ':', q);
       // Use backend proxy to avoid CORS and rate-limit issues
       var url = '/api/geocode?q=' + encodeURIComponent(q);
       var resp = await fetch(url);
-      if (!resp.ok) { console.log('[block removal] query', i + 1, 'HTTP error:', resp.status); continue; }
+      if (!resp.ok) continue;
       var data = await resp.json();
       if (data && data.results && data.results.length > 0) {
-        console.log('[block removal] SUCCESS on query', i + 1, ':', q, '→', data.results[0].lat, data.results[0].lon);
         return { lat: data.results[0].lat, lon: data.results[0].lon };
-      } else {
-        console.log('[block removal] query', i + 1, 'returned empty results');
       }
     } catch (e) {
-      console.warn('[block removal] Geocoding attempt', i + 1, 'failed:', e);
+      console.warn('Geocoding attempt', i + 1, 'failed:', e);
     }
   }
-  console.error('[block removal] ALL geocode queries failed for:', address);
   throw new Error("Location not found.");
 }
 

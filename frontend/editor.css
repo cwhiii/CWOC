@@ -225,6 +225,20 @@
     background: #3a70a0;
 }
 
+/* Google Maps button (zone header) */
+.google-maps-btn {
+    padding: 4px 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+.google-maps-btn:disabled {
+    opacity: 0.35;
+    cursor: default;
+    pointer-events: none;
+}
+
 #location-map {
     height: 300px;
     border: 1px solid var(--border-color);
@@ -3067,6 +3081,12 @@ button.archive-btn.archived-active {
     border: 1px outset var(--aged-brown-medium);
     border-radius: 4px;
     cursor: pointer;
+}
+
+/* Location input: match dropdown width */
+input.location {
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .clear-location-btn:hover {
