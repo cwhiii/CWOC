@@ -11,9 +11,6 @@
 
 ### Editor
 - `[ ]` Can't save health indicators
-- `[ ]` Enable button greyed out on disabled alarms row
-- `[ ]` Tags in active zone expand to fill space — should wrap to minimum
-- `[ ]` Active Tags area overflows the Tags zone
 
 ### Views
 - `[ ]` Indicators tab: tabbing bugs, symptom tracker multi-select, cycle show/hide
@@ -24,25 +21,8 @@
 
 *Quick wins that would improve the experience with minimal effort.*
 
-- `[ ]` **Chit card: show checklist progress** — "3/7 ✓" count on checklist view cards
-- `[ ]` **Double-click chit title in editor** to select all text (for quick rename)
-- `[ ]` **Confirm before purging all trash** — bulk delete has no "are you sure?"
-- `[ ]` **Empty state messages** — "No tasks found" / "No notes" etc. with a Create Chit button
-- `[ ]` **Color picker in editor** — show existing tag colors as quick-pick swatches (like settings tag modal)
-- `[ ]` **Keyboard shortcut: Ctrl+S** to save chit in editor
-- `[ ]` **Auto-focus title field** when creating a new chit
-- `[ ]` **Show chit count per tab** — "Tasks (12)" in tab/view labels
-- `[ ]` **Sidebar: show current view name** — "Calendar · Week" label when sidebar is collapsed
-- `[ ]` **Settings: reset to defaults button** per section
-- `[ ]` **Contact editor: auto-focus given name** on new contact
-- `[ ]` **Dashboard: loading spinner** while fetching chits (instead of blank screen)
-- `[ ]` **Itinerary view: show due-date chits** (currently only shows start_datetime chits)
-- `[ ]` **Month view: limit events per cell** with "+N more" expand (like all-day row)
-- `[ ]` **Checklist: percentage complete bar** on chit cards
-- `[ ]` **Notes view: card resize handle** (drag bottom edge to set preferred height)
-- `[ ]` **Quick edit modal: add/remove tags** inline
 - `[ ]` **Calendar: color-code by tag** option (vs chit color)
-- `[ ]` **Sidebar filter: color dots** next to tag names in the filter panel
+
 
 ---
 
@@ -97,7 +77,6 @@
 - `[ ]` Show alarms/notifications/timers on calendar view
 - `[ ]` Jitter for reminders (±X minutes, configurable globally and per-chit)
 - `[ ]` Alarm: chained variable-length intervals (5 min, then 4, then 4...)
-- `[ ]` Alarm: "Delete After Dismissal" checkbox
 - `[ ]` Busy/Free/Unspecified status for calendar events
 - `[ ]` Declined events view
 - `[ ]` Time zones support on chits with dates
@@ -109,7 +88,6 @@
 ## Features — Alerts & Notifications
 
 - `[ ]` Persistent/nag/alarm mode (force acknowledgement)
-- `[ ]` Customizable alarm sounds
 - `[ ]` Create alerts based on: arbitrary time, X units before/after start, X units before/after due
 - `[ ]` Setting: default sound/snooze length per priority
 - `[ ]` Android, Linux, Windows, iOS system notifications
@@ -141,12 +119,10 @@
 
 ## Features — Weather
 
-- `[ ]` Setting: auto-apply default location to new chits
 - `[ ]` Save expected weather per chit (forecast fields: focus, updated time, high, low, precipitation, weather code)
 - `[ ]` Display weather on calendar views
 - `[ ]` Hourly weather update for chits in next 7 days
 - `[ ]` Daily weather update for chits in next 16 days
-- `[ ]` Refresh button/icon with weather modal
 - `[ ]` "Show weather" toggle on sidebar
 - `[ ]` Weather as full view (like week mode)
 
@@ -189,12 +165,6 @@
 ---
 
 ## Non-Functional UI Elements (buttons/settings present but not wired up)
-
-### Editor — Broken/Missing Functions
-- `[ ]` **Health Indicators zone** — `renderHealthIndicator()` is defined twice and both are empty stubs
-- `[ ]` **Health: Unit toggle** (Imperial/Metric) — checkbox present, not wired
-- `[ ]` **Health: Sex toggle** (Female/Male) — checkbox present, not wired
-- `[ ]` **Alerts: Alarm sound select** — dropdown present but sounds aren't loaded/played
 
 ### Settings — Not Applied Anywhere
 - `[ ]` **Visual Indicators** — saved to DB but never read or applied in any view

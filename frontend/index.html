@@ -78,8 +78,8 @@
             <div class="sidebar-section" id="section-kanban" style="display:none;">
                 <label class="sidebar-section-label">View Mode</label>
                 <div style="display:flex;gap:4px;">
-                    <button class="action-button" id="projects-mode-list" onclick="_setProjectsMode('list')" style="flex:1;margin-bottom:0;font-size:0.8em;padding:6px;background:ivory;">📋 List</button>
-                    <button class="action-button" id="projects-mode-kanban" onclick="_setProjectsMode('kanban')" style="flex:1;margin-bottom:0;font-size:0.8em;padding:6px;">📊 Kanban</button>
+                    <button class="action-button" id="projects-mode-list" onclick="_setProjectsMode('list')" style="flex:1;margin-bottom:0;font-size:0.8em;padding:6px;">📋 List</button>
+                    <button class="action-button" id="projects-mode-kanban" onclick="_setProjectsMode('kanban')" style="flex:1;margin-bottom:0;font-size:0.8em;padding:6px;background:ivory;">📊 Kanban</button>
                 </div>
             </div>
 
@@ -352,24 +352,24 @@
                 />
                 <h1 title="C.W.'s Omni Chits">Omni Chits</h1>
 
-                <div class="tabs">
-                    <div class="tab" onclick="filterChits('Calendar')">
-                        <img src="/static/calendar.png" /> Calendar
+                <div class="tabs" id="cwoc-tabs">
+                    <div class="tab" onclick="filterChits('Calendar')" title="Calendar">
+                        <img src="/static/calendar.png" /><span class="tab-label"> <u>C</u>alendar</span>
                     </div>
-                    <div class="tab" onclick="filterChits('Checklists')">
-                        <img src="/static/checklists.png" /> Checklists
+                    <div class="tab" onclick="filterChits('Checklists')" title="Checklists">
+                        <img src="/static/checklists.png" /><span class="tab-label"> <u>C</u>hecklists</span>
                     </div>
-                    <div class="tab" onclick="filterChits('Alarms')">
-                        <img src="/static/alerts.png" /> Alerts
+                    <div class="tab" onclick="filterChits('Alarms')" title="Alerts">
+                        <img src="/static/alerts.png" /><span class="tab-label"> <u>A</u>lerts</span>
                     </div>
-                    <div class="tab" onclick="filterChits('Projects')">
-                        <img src="/static/projects.png" /> Projects
+                    <div class="tab" onclick="filterChits('Projects')" title="Projects">
+                        <img src="/static/projects.png" /><span class="tab-label"> <u>P</u>rojects</span>
                     </div>
-                    <div class="tab" onclick="filterChits('Tasks')">
-                        <img src="/static/tasks.png" /> Tasks
+                    <div class="tab" onclick="filterChits('Tasks')" title="Tasks">
+                        <img src="/static/tasks.png" /><span class="tab-label"> <u>T</u>asks</span>
                     </div>
-                    <div class="tab" onclick="filterChits('Notes')">
-                        <img src="/static/notes.png" /> Notes
+                    <div class="tab" onclick="filterChits('Notes')" title="Notes">
+                        <img src="/static/notes.png" /><span class="tab-label"> <u>N</u>otes</span>
                     </div>
                 </div>
                 <div class="top-bar-spacer"></div>

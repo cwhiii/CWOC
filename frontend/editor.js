@@ -219,6 +219,23 @@ function _displayWeatherInCompactSection(weatherData, address) {
     </div>
     </div>
     `;
+
+    // Add refresh button
+    const refreshBtn = document.createElement("button");
+    refreshBtn.type = "button";
+    refreshBtn.textContent = "🔄";
+    refreshBtn.title = "Refresh weather";
+    refreshBtn.style.cssText = "position:absolute;top:4px;right:4px;background:none;border:none;cursor:pointer;font-size:1em;opacity:0.5;padding:2px;";
+    refreshBtn.onmouseenter = () => { refreshBtn.style.opacity = '1'; };
+    refreshBtn.onmouseleave = () => { refreshBtn.style.opacity = '0.5'; };
+    refreshBtn.onclick = () => {
+      // Clear cache and re-fetch
+      const cacheKey = 'cwoc_weather_editor_' + address.toLowerCase().trim();
+      localStorage.removeItem(cacheKey);
+      _fetchWeatherData(address);
+    };
+    compactWeatherSection.style.position = 'relative';
+    compactWeatherSection.appendChild(refreshBtn);
   } else {
     compactWeatherSection.innerHTML = `
     <div style="padding: 10px; font-family: 'Courier New', Courier, monospace; color: #3e2b2b;">
@@ -1035,8 +1052,6 @@ function resetEditorForNewChit() {
   ];
 
   const checkboxesToReset = [
-    { id: "alarm", defaultValue: false },
-    { id: "notification", defaultValue: false },
     { id: "pinned", defaultValue: false },
     { id: "archived", defaultValue: false },
   ];
@@ -1109,6 +1124,19 @@ function resetEditorForNewChit() {
   // Show weather placeholder for new chits (no location/date yet)
   const cws = document.getElementById("compactWeatherSection");
   if (cws) { cws.classList.add('weather-placeholder'); cws.innerHTML = `<div style="padding:8px;font-family:'Courier New',monospace;color:#8b5a2b;font-size:0.85em;opacity:0.7;">📍 Date &amp; location needed for weather</div>`; }
+
+  // Auto-apply default saved location to new chits
+  loadSavedLocations().then(function () {
+    var defLoc = getDefaultLocation();
+    if (defLoc && defLoc.address) {
+      var locInput = document.getElementById("location");
+      if (locInput && !locInput.value) {
+        locInput.value = defLoc.address;
+        // Trigger weather fetch for the default location
+        if (typeof _fetchWeatherData === 'function') _fetchWeatherData(defLoc.address);
+      }
+    }
+  });
 
   // Collapse all zones for new chits, then expand the relevant one based on source view
   _collapseAllZonesForNewChit();
@@ -1292,11 +1320,7 @@ async function buildChitObject() {
   const colorInput = document.getElementById("color");
   chit.color = colorInput ? colorInput.value || null : null;
 
-  const alarmCheckbox = document.getElementById("alarm");
-  chit.alarm = alarmCheckbox ? alarmCheckbox.checked : false;
-
-  const notificationCheckbox = document.getElementById("notification");
-  chit.notification = notificationCheckbox ? notificationCheckbox.checked : false;
+  // alarm/notification flags are auto-derived from _alertsData on save (see below)
 
   const pinnedCheckbox = document.getElementById("pinned");
   chit.pinned = pinnedCheckbox ? pinnedCheckbox.value === "true" : false;
@@ -1721,6 +1745,12 @@ function _showAlarmAlert(alarm, onDismiss) {
   overlay.querySelector("#_alarm-dismiss-btn").onclick = () => {
     overlay.remove();
     if (onDismiss) onDismiss();
+    // Delete chit after dismissal if flag is set
+    if (alarm.delete_after_dismiss && chitId) {
+      fetch(`/api/chits/${chitId}`, { method: 'DELETE' })
+        .then(() => { window.location.href = '/'; })
+        .catch(err => console.error('Delete after dismiss failed:', err));
+    }
   };
   overlay.querySelector("#_alarm-snooze-btn").onclick = () => {
     overlay.remove();
@@ -1853,7 +1883,7 @@ function renderAlarmsContainer() {
 
   window._alertsData.alarms.forEach((alarm, idx) => {
     const wrap = document.createElement("div");
-    wrap.style.cssText = `border:1px solid #e0d4b5;border-radius:4px;padding:0.4em 0.6em;margin-bottom:0.4em;${!alarm.enabled ? "opacity:0.5;" : ""}`;
+    wrap.style.cssText = `border:1px solid #e0d4b5;border-radius:4px;padding:0.4em 0.6em;margin-bottom:0.4em;${!alarm.enabled ? "background:rgba(0,0,0,0.04);" : ""}`;
 
     const row1 = document.createElement("div");
     row1.style.cssText = "display:flex;align-items:center;gap:0.4em;margin-bottom:0.3em;";
@@ -1862,13 +1892,13 @@ function renderAlarmsContainer() {
     nameInput.type = "text";
     nameInput.value = alarm.name || "";
     nameInput.placeholder = "Alarm name";
-    nameInput.style.cssText = "flex:1;font-size:0.9em;padding:2px 4px;";
+    nameInput.style.cssText = `flex:1;font-size:0.9em;padding:2px 4px;${!alarm.enabled ? "opacity:0.45;" : ""}`;
     nameInput.addEventListener("input", () => { window._alertsData.alarms[idx].name = nameInput.value; setSaveButtonUnsaved(); });
 
     const timeInput = document.createElement("input");
     timeInput.type = "time";
     timeInput.value = alarm.time || "";
-    timeInput.style.cssText = "font-size:1.1em;padding:3px 6px;font-weight:bold;";
+    timeInput.style.cssText = `font-size:1.1em;padding:3px 6px;font-weight:bold;${!alarm.enabled ? "opacity:0.45;" : ""}`;
     timeInput.addEventListener("change", () => {
       window._alertsData.alarms[idx].time = timeInput.value;
       // If no days set, default to today
@@ -1897,7 +1927,7 @@ function renderAlarmsContainer() {
 
     // Days row
     const daysRow = document.createElement("div");
-    daysRow.style.cssText = "display:flex;gap:0.3em;flex-wrap:wrap;font-size:0.8em;";
+    daysRow.style.cssText = `display:flex;gap:0.3em;flex-wrap:wrap;font-size:0.8em;${!alarm.enabled ? "opacity:0.45;" : ""}`;
     ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].forEach((day) => {
       const lbl = document.createElement("label");
       lbl.style.cssText = "display:flex;align-items:center;gap:2px;cursor:pointer;";
@@ -1916,6 +1946,24 @@ function renderAlarmsContainer() {
       daysRow.appendChild(lbl);
     });
     wrap.appendChild(daysRow);
+
+    // Delete after dismissal checkbox
+    const dadRow = document.createElement("div");
+    dadRow.style.cssText = `display:flex;align-items:center;gap:4px;font-size:0.8em;margin-top:0.2em;${!alarm.enabled ? "opacity:0.45;" : ""}`;
+    const dadLbl = document.createElement("label");
+    dadLbl.style.cssText = "display:flex;align-items:center;gap:3px;cursor:pointer;";
+    const dadCb = document.createElement("input");
+    dadCb.type = "checkbox";
+    dadCb.checked = !!alarm.delete_after_dismiss;
+    dadCb.addEventListener("change", () => {
+      window._alertsData.alarms[idx].delete_after_dismiss = dadCb.checked;
+      setSaveButtonUnsaved();
+    });
+    dadLbl.appendChild(dadCb);
+    dadLbl.appendChild(document.createTextNode("Delete chit after dismissal"));
+    dadRow.appendChild(dadLbl);
+    wrap.appendChild(dadRow);
+
     c.appendChild(wrap);
   });
 }
@@ -1982,8 +2030,6 @@ function openAlarmModal(event) {
   now.setMinutes(now.getMinutes() + 1);
   const defaultTime = `${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`;
   window._alertsData.alarms.push({ _type: "alarm", name: "", time: defaultTime, recurrence: "none", days: [_dayAbbr(new Date())], enabled: true });
-  const cb = document.getElementById("alarm");
-  if (cb) cb.checked = true;
   _startAlarmChecker();
   renderAlarmsContainer();
   setSaveButtonUnsaved();
@@ -2017,9 +2063,6 @@ function addAlarm() {
   } else {
     window._alertsData.alarms.push(alarm);
   }
-  // Set alarm checkbox
-  const cb = document.getElementById("alarm");
-  if (cb) cb.checked = true;
   closeAlarmModal(true);
   renderAlarmsContainer();
   setSaveButtonUnsaved();
@@ -2033,10 +2076,6 @@ function toggleAlarmEnabled(idx) {
 
 function deleteAlarmItem(idx) {
   window._alertsData.alarms.splice(idx, 1);
-  if (window._alertsData.alarms.length === 0) {
-    const cb = document.getElementById("alarm");
-    if (cb) cb.checked = false;
-  }
   renderAlarmsContainer();
   setSaveButtonUnsaved();
 }
@@ -2445,8 +2484,6 @@ function openNotificationModal(event) {
   if (event) event.stopPropagation();
   // Add a new notification inline
   window._alertsData.notifications.push({ _type: "notification", value: 15, unit: "minutes", relativeTo: false });
-  const cb = document.getElementById("notification");
-  if (cb) cb.checked = true;
   _startNotificationChecker();
   renderNotificationsContainer();
   setSaveButtonUnsaved();
@@ -2467,10 +2504,6 @@ function addNotification() {
 
 function deleteNotificationItem(idx) {
   window._alertsData.notifications.splice(idx, 1);
-  if (window._alertsData.notifications.length === 0) {
-    const cb = document.getElementById("notification");
-    if (cb) cb.checked = false;
-  }
   renderNotificationsContainer();
   setSaveButtonUnsaved();
 }
@@ -3564,6 +3597,10 @@ document.addEventListener("DOMContentLoaded", function () {
     }
     // Clear loading guard for new chits
     setTimeout(() => { window._cwocEditorLoading = false; }, 300);
+
+    // Auto-focus title field for new chits
+    const titleInput = document.getElementById('title');
+    if (titleInput) setTimeout(() => titleInput.focus(), 350);
   }
 
   // _checkNotifications interval removed — was a no-op
@@ -3692,6 +3729,12 @@ document.addEventListener("DOMContentLoaded", function () {
       // Layer 4: Exit the chit editor
       e.preventDefault();
       cancelOrExit();
+    }
+
+    // Ctrl+Shift+S: Save & Stay
+    if (e.key === 's' && e.ctrlKey && e.shiftKey) {
+      e.preventDefault();
+      saveChitAndStay();
     }
 
     // Alt+number hotkeys delegated to shared editor framework

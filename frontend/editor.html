@@ -621,18 +621,9 @@
                                     <input type="checkbox" id="notifyAtDue" checked /> ⏰ Notify at due
                                 </label>
                             </div>
-                            <div class="field">
-                                <div class="checkbox-group">
-                                    <input type="checkbox" id="alarm" />
-                                    Alarm
-                                </div>
-                            </div>
-                            <div class="field">
-                                <div class="checkbox-group">
-                                    <input type="checkbox" id="notification" />
-                                    Notification
-                                </div>
-                            </div>
+                            <!-- alarm/notification flags are auto-derived from alerts data on save -->
+                            <input type="hidden" id="alarm" />
+                            <input type="hidden" id="notification" />
                             <div
                                 class="alert-type-container"
                                 id="alarms-container"
@@ -985,15 +976,7 @@
                             >
                         </div>
                     </div>
-                    <div class="field">
-                        <label for="alarmSoundSelect">Sound</label>
-                        <select id="alarmSoundSelect">
-                            <option value="chime">Chime</option>
-                            <option value="bell">Bell</option>
-                            <option value="alarm">Alarm</option>
-                        </select>
-                        <audio id="alarmSound" src="" preload="auto"></audio>
-                    </div>
+                    <!-- Sound selection parked for future implementation -->
                 </div>
                 <div class="modal-buttons">
                     <button
@@ -1062,15 +1045,7 @@
                         <label for="timerLoopModal">Loop Timer</label>
                         <input type="checkbox" id="timerLoopModal" />
                     </div>
-                    <div class="field">
-                        <label for="timerSoundSelect">Sound</label>
-                        <select id="timerSoundSelect">
-                            <option value="chime">Chime</option>
-                            <option value="bell">Bell</option>
-                            <option value="alarm">Alarm</option>
-                            <option value="timer">Timer (default)</option>
-                        </select>
-                    </div>
+                    <!-- Sound selection parked for future implementation -->
                 </div>
                 <div class="modal-buttons">
                     <button

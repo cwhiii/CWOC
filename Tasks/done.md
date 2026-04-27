@@ -842,3 +842,88 @@ Fully implemented. Ported from `Prototypes/CWOC UI/UI.html`:
 - Task zone documented (Status, Priority, Severity including Normal)
 - New chit zone collapse behavior documented
 - Contact Editor section added (notes, tags, suffix ordering)
+
+
+## Declined — Low-Hanging Fruit (2026-04-27)
+
+- **Notes view: card resize handle** — not wanted
+- **Quick edit modal: add/remove tags** — not wanted
+- **Checklist: percentage complete bar** — not wanted
+- **Settings: reset to defaults button** — not wanted
+- **Double-click chit title in editor to select all** — not wanted
+- **Sidebar filter: color dots next to tag names** — not wanted
+
+
+## Completed — Low-Hanging Fruit Batch (2026-04-27)
+
+### Keyboard shortcut: Ctrl+Shift+S to save & stay in editor ✅
+- Ctrl+Shift+S triggers `saveChitAndStay()` from the editor keydown handler
+
+### Auto-focus title field on new chit ✅
+- Title input receives focus 350ms after new chit initialization (after loading guard clears)
+
+### Contact editor: auto-focus given name on new contact ✅
+- Given name field receives focus 100ms after DOMContentLoaded when no contact ID
+
+### Confirm before purging all trash ✅
+- Already implemented — `bulkPurge()` and individual purge buttons both use `confirm()` dialogs
+
+### Chit card: show checklist progress ✅
+- Checklist view cards now show "3/7 ✓" count between header and checklist items
+
+### Empty state messages with Create button ✅
+- All views (Checklists, Tasks, Notes, Alarms, Projects, Itinerary) show styled empty state with "+ Create Chit" button
+- Reusable `_emptyState()` helper in main.js
+
+### Show chit count per tab ✅
+- Tab labels show "(N)" count after each tab name, updated on every `displayChits()` call
+- Counts reflect currently filtered/displayed chits (respects search, filters, archive state)
+- Projects count uses unfiltered project masters (since Projects view ignores filters)
+
+### Dashboard: loading spinner ✅
+- Shows "⏳ Loading chits…" in chit-list on initial page load while fetching from API
+
+### Itinerary view: show due-date chits ✅
+- Due-date-only chits now appear in itinerary view alongside start_datetime chits
+- Due-only chits show "⌚ HH:MM" or "⌚ All Day" in the time column
+- Sorted by earliest date (start or due)
+
+
+## Completed — Bug Fixes (2026-04-27)
+
+### Tags in active zone expand to fill space ✅
+- `.active-tag-item` now uses `display: inline-flex` and `width: fit-content` so chips wrap to minimum size instead of stretching
+
+### Active Tags area overflows the Tags zone ✅
+- `.active-tag-item` gets `max-width: 100%` and `overflow: hidden; text-overflow: ellipsis` to prevent overflow
+- (Container already had `max-height: 200px` and `overflow-y: auto`)
+
+### Enable button greyed out on disabled alarms row ✅
+- Disabled alarm rows no longer use `opacity:0.5` on the wrapper (which dimmed the On/Off button too)
+- Instead, individual inputs (name, time) and the days row get `opacity:0.45` while the toggle and delete buttons stay fully visible
+
+
+## Completed — Low-Hanging Fruit Batch #3 (2026-04-27)
+
+### Alarm & Notification checkboxes removed from editor ✅
+- Vestigial Alarm/Notification checkboxes removed from editor UI (replaced with hidden inputs)
+- All dead `.checked` toggle code cleaned up — flags are auto-derived from `_alertsData` on save
+
+### Auto-apply default location to new chits ✅
+- New chits auto-fill the location field from the user's default saved location
+- Also triggers weather fetch for the default location
+
+### Weather refresh button ✅
+- 🔄 button in top-right corner of compact weather section in editor
+- Clears localStorage cache and re-fetches weather data
+
+### Alarm sound select dropdown removed ✅
+- Removed non-functional sound dropdowns from alarm and timer modals (feature parked)
+
+### Status null/clear option ✅
+- Already existed — status dropdown has a "-" (blank) option as first choice
+
+### Alarm "Delete After Dismissal" ✅
+- New `delete_after_dismiss` checkbox on each alarm in the editor
+- When checked and alarm is dismissed, the chit is soft-deleted via API
+- Works in both editor and dashboard alarm toasts

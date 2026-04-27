@@ -1078,6 +1078,7 @@ hr {
 }
 
 .active-tag-item {
+    display: inline-flex;
     align-items: center;
     background-color: var(--accent-teal);
     color: var(--parchment-light);
@@ -1086,7 +1087,10 @@ hr {
     font-size: 0.8em;
     white-space: nowrap;
     border: 1px solid #006666;
-    padding: 3px;
+    width: fit-content;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .active-tag-item .remove-tag {

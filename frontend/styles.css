@@ -104,11 +104,17 @@
     color: var(--btn-hover-text);
 }
 
-.action-button > img,
-.tab > img {
+.action-button > img {
     height: 2em;
     margin-right: 1em;
     vertical-align: middle;
+}
+
+.tab > img {
+    height: 2em;
+    margin-right: 0.4em;
+    vertical-align: middle;
+    flex-shrink: 0;
 }
 
 /* Sidebar search bar */
@@ -287,18 +293,49 @@ h1 {
     margin-bottom: 0;
     white-space: nowrap;
     padding: 3px;
+    flex-wrap: nowrap;
+    overflow: hidden;
 }
 
 .tab {
     padding: 10px 20px;
     background-color: var(--btn-bg);
-    border: 1px solid #5a3f2a; /* Match action-button border */
+    border: 1px solid #5a3f2a;
     cursor: pointer;
     margin-right: 5px;
     font-family: "Courier New", Courier, monospace;
     font-weight: bold;
     border-radius: 3px;
     font-size: larger;
+    flex-shrink: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.tab > img {
+    height: 2em;
+    flex-shrink: 0;
+}
+
+.tab-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* When tabs are in icon-only mode */
+.tabs.icon-only .tab-label,
+.tabs.icon-only .tab-count {
+    display: none;
+}
+.tabs.icon-only .tab {
+    padding: 10px 12px;
+}
+.tabs.icon-only .tab > img {
+    margin-right: 0;
 }
 
 .tab.active {
@@ -1814,6 +1851,7 @@ button.delete:hover {
         -webkit-overflow-scrolling: touch;
         white-space: nowrap;
         width: 100%;
+        overflow: hidden;
     }
 
     /* ── Tab: 44px min-height for touch targets ───────────────────────────── */
@@ -1825,7 +1863,7 @@ button.delete:hover {
     }
     .tab > img {
         height: 1.5em;
-        margin-right: 0.4em;
+        margin-right: 0.3em;
     }
 
     /* ── Sidebar: full-width overlay (hidden off-screen when closed) ──────── */

@@ -1192,6 +1192,13 @@ class SettingsManager {
     const timeFormat = document.getElementById("time-format");
     timeFormat.value = this.settings.time_format || "24hour";
 
+    // Chit options checkboxes
+    const co = this.settings.chit_options || {};
+    document.getElementById("fade-past").checked = co.fade_past_chits !== false;
+    document.getElementById("highlight-overdue").checked = co.highlight_overdue_chits !== false;
+    document.getElementById("delete-past").checked = !!co.delete_past_alarm_chits;
+    document.getElementById("show-tab-counts").checked = !!co.show_tab_counts;
+
     const genderToggle = document.getElementById("gender-toggle");
     const genderLabel = document.getElementById("gender-label");
     genderToggle.checked = this.settings.sex === "Woman";
@@ -1423,6 +1430,7 @@ class SettingsManager {
         highlight_overdue_chits:
           document.getElementById("highlight-overdue").checked,
         delete_past_alarm_chits: document.getElementById("delete-past").checked,
+        show_tab_counts: document.getElementById("show-tab-counts").checked,
       },
       saved_locations: JSON.stringify(collectLocationsData()),
     };

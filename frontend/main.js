@@ -19,13 +19,21 @@ let _hotkeyMode = null;  // null | 'PERIOD' | 'FILTER' | 'ORDER' | 'FILTER_STATU
 let _cachedTagObjects = [];
 
 // Chit display options (loaded from settings)
-let _chitOptions = { fade_past_chits: true, highlight_overdue_chits: true, delete_past_alarm_chits: false };
+let _chitOptions = { fade_past_chits: true, highlight_overdue_chits: true, delete_past_alarm_chits: false, show_tab_counts: false };
 
 // Snooze registry: { chitId-alertIdx: expiresAtMs }
 let _snoozeRegistry = {};
 
 // Default search filters per tab (loaded from settings)
 let _defaultFilters = {};
+
+/** Build a styled empty-state message with an optional Create Chit button. */
+function _emptyState(message) {
+  return `<div class="cwoc-empty" style="text-align:center;padding:2em 1em;opacity:0.7;">
+    <p style="font-size:1.1em;margin-bottom:0.8em;">${message}</p>
+    <button class="standard-button" onclick="storePreviousState(); window.location.href='/editor';" style="font-family:inherit;">+ Create Chit</button>
+  </div>`;
+}
 
 /** Get tag color from cached settings tags, fallback to pastel */
 function _getTagColor(tagName) {
@@ -1613,6 +1621,20 @@ function _globalCheckAlarms() {
       _globalPlayAlarm();
       const toast = _showGlobalToast("🔔", label, chit.title, chit.id, _globalStopAlarm);
 
+      // Delete after dismissal: override dismiss button if flag is set
+      if (alert.delete_after_dismiss) {
+        const dismissBtn = toast.querySelectorAll("button")[1]; // Open, Dismiss, Snooze
+        if (dismissBtn) {
+          const origClick = dismissBtn.onclick;
+          dismissBtn.onclick = () => {
+            if (origClick) origClick();
+            fetch(`/api/chits/${chit.id}`, { method: 'DELETE' })
+              .then(() => fetchChits())
+              .catch(err => console.error('Delete after dismiss failed:', err));
+          };
+        }
+      }
+
       // Snooze: add to registry for snooze_length from settings
       const snoozeBtn = toast.querySelector("button:last-child");
       if (snoozeBtn) {
@@ -2071,6 +2093,7 @@ function _getBreakpointCategory() {
 function _onDebouncedResize() {
   clearTimeout(_resizeDebounceTimer);
   _resizeDebounceTimer = setTimeout(function () {
+    _checkTabOverflow();
     var category = _getBreakpointCategory();
     if (category !== _lastBreakpointCategory) {
       _lastBreakpointCategory = category;
@@ -2170,6 +2193,11 @@ function nextPeriod() {
 
 function fetchChits() {
   console.debug("Fetching chits...");
+  // Show loading spinner on first load (when chit-list is empty)
+  const listEl = document.getElementById("chit-list");
+  if (listEl && chits.length === 0) {
+    listEl.innerHTML = '<div style="text-align:center;padding:3em;opacity:0.5;font-size:1.2em;">⏳ Loading chits…</div>';
+  }
   fetch("/api/chits")
     .then((response) => {
       if (!response.ok)
@@ -2343,6 +2371,54 @@ function displayChits() {
 
   // Post-render: apply chit display options (fade past, highlight overdue)
   _applyChitDisplayOptions();
+
+  // Update tab counts based on currently filtered chits (after search, filters, archive)
+  _updateTabCounts(filteredChits);
+}
+
+/** Update tab labels with counts of displayed chits per tab. */
+function _updateTabCounts(filteredChits) {
+  // Remove existing counts if setting is off
+  if (!_chitOptions.show_tab_counts) {
+    document.querySelectorAll('.tab-count').forEach(el => el.remove());
+    return;
+  }
+
+  // Deduplicate: only count original chits (skip virtual recurrence instances)
+  const unique = filteredChits.filter(c => !c._virtual);
+
+  const counts = {
+    Checklists: unique.filter(c => Array.isArray(c.checklist) && c.checklist.length > 0).length,
+    Alarms: unique.filter(c => {
+      if (!Array.isArray(c.alerts) || c.alerts.length === 0) return c.alarm || c.notification;
+      return c.alerts.filter(a => a._type !== '_notify_flags').length > 0;
+    }).length,
+    Projects: chits.filter(c => c.is_project_master && !c.deleted && !c.archived).length,
+    Tasks: unique.filter(c => c.status || c.due_datetime).length,
+    Notes: unique.filter(c => c.note && c.note.trim() !== '').length,
+  };
+  document.querySelectorAll('.tab').forEach(tab => {
+    const onclick = tab.getAttribute('onclick') || '';
+    const match = onclick.match(/filterChits\('(\w+)'\)/);
+    if (!match) return;
+    const name = match[1];
+    // Never show count for Calendar
+    if (name === 'Calendar') {
+      const existing = tab.querySelector('.tab-count');
+      if (existing) existing.remove();
+      return;
+    }
+    const count = counts[name];
+    if (count === undefined) return;
+    let countSpan = tab.querySelector('.tab-count');
+    if (!countSpan) {
+      countSpan = document.createElement('span');
+      countSpan.className = 'tab-count';
+      countSpan.style.cssText = 'font-size:0.75em;opacity:0.6;margin-left:0.2em;';
+      tab.appendChild(countSpan);
+    }
+    countSpan.textContent = `(${count})`;
+  });
 }
 
 function _applyChitDisplayOptions() {
@@ -2862,16 +2938,29 @@ function displayItineraryView(chitsToDisplay) {
 
   const futureChits = chitsToDisplay
     .filter(
-      (chit) => chit.start_datetime_obj && chit.start_datetime_obj >= today,
+      (chit) => {
+        // Include chits with start_datetime or due_datetime in the future
+        if (chit.start_datetime_obj && chit.start_datetime_obj >= today) return true;
+        if (chit.due_datetime) {
+          const due = new Date(chit.due_datetime);
+          if (due >= today) return true;
+        }
+        return false;
+      },
     )
-    .sort((a, b) => a.start_datetime_obj - b.start_datetime_obj);
+    .sort((a, b) => {
+      const aDate = a.start_datetime_obj || new Date(a.due_datetime);
+      const bDate = b.start_datetime_obj || new Date(b.due_datetime);
+      return aDate - bDate;
+    });
 
   if (futureChits.length === 0) {
-    itineraryView.innerHTML = "<p>No upcoming events found.</p>";
+    itineraryView.innerHTML = _emptyState("No upcoming events found.");
   } else {
     let currentDay = null;
     futureChits.forEach((chit) => {
-      const chitDate = new Date(chit.start_datetime_obj);
+      const chitDateRaw = chit.start_datetime_obj || new Date(chit.due_datetime);
+      const chitDate = new Date(chitDateRaw);
       chitDate.setHours(0, 0, 0, 0);
 
       if (!currentDay || chitDate.getTime() !== currentDay.getTime()) {
@@ -2902,10 +2991,17 @@ function displayItineraryView(chitsToDisplay) {
       timeColumn.className = "time-column";
       timeColumn.style.width = "100px";
       timeColumn.style.marginRight = "15px";
-      const chitStart = chit.start_datetime_obj;
-      const chitEnd =
-        chit.end_datetime_obj || new Date(chitStart.getTime() + 60 * 60 * 1000);
-      timeColumn.innerHTML = `${formatTime(chitStart)} - ${formatTime(chitEnd)}`;
+
+      if (chit.start_datetime_obj) {
+        const chitStart = chit.start_datetime_obj;
+        const chitEnd =
+          chit.end_datetime_obj || new Date(chitStart.getTime() + 60 * 60 * 1000);
+        timeColumn.innerHTML = `${formatTime(chitStart)} - ${formatTime(chitEnd)}`;
+      } else {
+        // Due-date-only chit
+        const dueDate = new Date(chit.due_datetime);
+        timeColumn.innerHTML = chit.all_day ? '⌚ All Day' : `⌚ ${formatTime(dueDate)}`;
+      }
 
       const detailsColumn = document.createElement("div");
       detailsColumn.className = "details-column";
@@ -3183,7 +3279,7 @@ function displayChecklistView(chitsToDisplay) {
   });
 
   if (sortedChits.length === 0)
-    checklistView.innerHTML = "<p>No chits found.</p>";
+    checklistView.innerHTML = _emptyState("No checklists found.");
   else {
     sortedChits.forEach((chit) => {
       const chitElement = document.createElement("div");
@@ -3195,6 +3291,14 @@ function displayChecklistView(chitsToDisplay) {
       if (chit.archived) chitElement.classList.add("archived-chit");
 
       chitElement.appendChild(_buildChitHeader(chit, `<a href="/editor?id=${chit.id}">${chit.title || '(Untitled)'}</a>`));
+
+      // Checklist progress count
+      const items = chit.checklist || [];
+      const checked = items.filter(i => i.checked || i.done).length;
+      const progressEl = document.createElement("div");
+      progressEl.style.cssText = "font-size:0.8em;opacity:0.7;margin-bottom:0.3em;";
+      progressEl.textContent = `${checked}/${items.length} ✓`;
+      chitElement.appendChild(progressEl);
 
       // Interactive checklist from shared.js
       renderInlineChecklist(chitElement, chit, () => fetchChits());
@@ -3231,7 +3335,7 @@ function displayTasksView(chitsToDisplay) {
   }
 
   if (taskChits.length === 0) {
-    chitList.innerHTML = "<p>No tasks found.</p>";
+    chitList.innerHTML = _emptyState("No tasks found.");
     return;
   }
 
@@ -3327,7 +3431,7 @@ function displayNotesView(chitsToDisplay) {
     });
 
   if (sortedChits.length === 0) {
-    notesView.innerHTML = "<p>No notes found.</p>";
+    notesView.innerHTML = _emptyState("No notes found.");
   } else {
     sortedChits.forEach((chit) => {
       const chitElement = document.createElement("div");
@@ -3817,7 +3921,7 @@ function displaySevenDayView(chitsToDisplay, opts) {
 }
 
 // ── Projects View Mode (List vs Kanban) ──────────────────────────────────────
-let _projectsViewMode = 'list'; // 'list' | 'kanban'
+let _projectsViewMode = 'kanban'; // 'list' | 'kanban'
 
 function _setProjectsMode(mode) {
   _projectsViewMode = mode;
@@ -3851,7 +3955,7 @@ function displayProjectsView(chitsToDisplay) {
   });
 
   if (projects.length === 0) {
-    chitList.innerHTML = "<p>No projects found. Create a chit and enable Project Master in the Projects zone.</p>";
+    chitList.innerHTML = _emptyState("No projects found. Create a chit and enable Project Master in the Projects zone.");
     return;
   }
 
@@ -3897,31 +4001,48 @@ function displayProjectsView(chitsToDisplay) {
         const childBg = child ? chitColor(child) : "#fdf6e3";
         const childFont = contrastColorForBg(childBg);
         const li = document.createElement("li");
-        li.style.cssText = `display:flex;align-items:center;gap:0.5em;padding:0.5em 0.8em 0.5em 1.5em;border-bottom:1px solid rgba(139,90,43,0.1);background:${childBg};color:${childFont};cursor:pointer;min-height:2.2em;font-size:1em;`;
+        li.style.cssText = `display:flex;flex-direction:column;gap:0.2em;padding:0.5em 0.8em 0.5em 1.5em;border-bottom:1px solid rgba(139,90,43,0.1);background:${childBg};color:${childFont};cursor:pointer;min-height:2.2em;`;
+
+        const titleRow = document.createElement("div");
+        titleRow.style.cssText = "display:flex;align-items:center;gap:0.5em;";
 
         const bullet = document.createElement("span");
-        bullet.style.cssText = "opacity:0.4;font-size:0.8em;flex-shrink:0;";
+        bullet.style.cssText = "opacity:0.4;flex-shrink:0;";
         bullet.textContent = "▸";
-        li.appendChild(bullet);
+        titleRow.appendChild(bullet);
 
         const childTitle = document.createElement("span");
-        childTitle.style.cssText = "flex:1;font-size:0.95em;";
+        childTitle.style.cssText = "font-weight:bold;";
         childTitle.textContent = child ? (child.title || "(Untitled)") : `[${childId.slice(0,8)}…]`;
-        li.appendChild(childTitle);
+        titleRow.appendChild(childTitle);
+        li.appendChild(titleRow);
 
         if (child) {
-          if (child.status) {
-            const status = document.createElement("span");
-            status.style.cssText = "font-size:0.75em;opacity:0.8;white-space:nowrap;";
-            status.textContent = child.status;
-            li.appendChild(status);
+          // Meta: Status · Priority · Severity · Due
+          const metaParts = [];
+          if (child.status) metaParts.push(child.status);
+          if (child.priority) metaParts.push(child.priority);
+          if (child.severity) metaParts.push(child.severity);
+          if (child.due_datetime) metaParts.push("Due: " + formatDate(new Date(child.due_datetime)));
+          if (metaParts.length > 0) {
+            const meta = document.createElement("div");
+            meta.style.cssText = "font-size:0.9em;opacity:0.75;margin-top:2px;";
+            meta.textContent = metaParts.join(" · ");
+            li.appendChild(meta);
           }
-          if (child.due_datetime) {
-            const due = document.createElement("span");
-            due.style.cssText = "font-size:0.75em;opacity:0.8;white-space:nowrap;";
-            due.textContent = formatDate(new Date(child.due_datetime));
-            li.appendChild(due);
+
+          // Note preview (rendered markdown, same as Tasks view)
+          if (child.note && child.note.trim()) {
+            const notePreview = document.createElement("div");
+            notePreview.style.cssText = "opacity:0.75;overflow:hidden;max-height:4.5em;line-height:1.4em;margin-top:3px;";
+            if (typeof marked !== 'undefined') {
+              notePreview.innerHTML = resolveChitLinks(marked.parse(child.note.slice(0, 500)), chits);
+            } else {
+              notePreview.textContent = child.note.slice(0, 300) + (child.note.length > 300 ? '…' : '');
+            }
+            li.appendChild(notePreview);
           }
+
           li.addEventListener("dblclick", () => {
             storePreviousState();
             window.location.href = `/editor?id=${child.id}`;
@@ -4030,16 +4151,39 @@ function _displayProjectsKanban(chitsToDisplay) {
         if (child.status === "Complete") card.classList.add("completed-task");
 
         const titleEl = document.createElement("div");
-        titleEl.style.cssText = "font-weight:bold;font-size:0.95em;margin-bottom:2px;";
+        titleEl.style.cssText = "font-weight:bold;margin-bottom:3px;";
         titleEl.textContent = child.title || "(Untitled)";
         card.appendChild(titleEl);
+
+        // Status / Priority / Severity meta row
+        const metaParts = [];
+        if (child.priority) metaParts.push(child.priority);
+        if (child.severity) metaParts.push(child.severity);
+        if (metaParts.length > 0) {
+          const metaEl = document.createElement("div");
+          metaEl.style.cssText = "font-size:0.9em;opacity:0.75;margin-bottom:3px;";
+          metaEl.textContent = metaParts.join(" · ");
+          card.appendChild(metaEl);
+        }
 
         // Show due date if present
         if (child.due_datetime) {
           const due = document.createElement("div");
-          due.style.cssText = "font-size:0.75em;opacity:0.8;";
+          due.style.cssText = "font-size:0.9em;opacity:0.75;margin-bottom:3px;";
           due.textContent = "Due: " + formatDate(new Date(child.due_datetime));
           card.appendChild(due);
+        }
+
+        // Note preview (rendered markdown, same as Tasks view)
+        if (child.note && child.note.trim()) {
+          const notePreview = document.createElement("div");
+          notePreview.style.cssText = "font-size:0.9em;opacity:0.75;overflow:hidden;max-height:4.5em;line-height:1.4em;margin-top:2px;";
+          if (typeof marked !== 'undefined') {
+            notePreview.innerHTML = resolveChitLinks(marked.parse(child.note.slice(0, 500)), chits);
+          } else {
+            notePreview.textContent = child.note.slice(0, 300) + (child.note.length > 300 ? '…' : '');
+          }
+          card.appendChild(notePreview);
         }
 
         // Grandchildren (children of this child) as sub-items
@@ -4201,7 +4345,7 @@ function displayAlarmsView(chitsToDisplay) {
   });
 
   if (alertChits.length === 0) {
-    chitList.innerHTML = "<p>No chits with alerts found.</p>";
+    chitList.innerHTML = _emptyState("No chits with alerts found.");
     return;
   }
 
@@ -4505,8 +4649,24 @@ function cancelEdit() {
   fetchChits();
 }
 
+// ── Tab overflow detection: switch to icon-only when labels don't fit ─────────
+function _checkTabOverflow() {
+  var tabs = document.getElementById('cwoc-tabs');
+  if (!tabs) return;
+  // Temporarily show labels to measure
+  tabs.classList.remove('icon-only');
+  // Check if tabs overflow their container
+  var overflow = tabs.scrollWidth > tabs.clientWidth + 2;
+  if (overflow) {
+    tabs.classList.add('icon-only');
+  }
+}
+
 document.addEventListener("DOMContentLoaded", function () {
   console.debug("DOM fully loaded, initializing...");
+
+  // Check tab overflow on load
+  _checkTabOverflow();
 
   // Initialize mobile sidebar overlay behavior (backdrop, resize handling)
   initMobileSidebar();

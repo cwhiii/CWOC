@@ -94,6 +94,10 @@
 
         if (_contactId) {
             _loadContact(_contactId);
+        } else {
+            // Auto-focus given name for new contacts
+            var gn = document.getElementById('givenName');
+            if (gn) setTimeout(function () { gn.focus(); }, 100);
         }
     });
 
