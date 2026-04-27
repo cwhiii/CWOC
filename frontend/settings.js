@@ -1392,8 +1392,22 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Wire upgrade button and close button for update modal
   document.getElementById('upgrade-btn').addEventListener('click', startUpgrade);
+  document.getElementById('upgrade-reopen-btn').addEventListener('click', function() {
+    document.getElementById('update-modal').style.display = 'flex';
+    document.getElementById('upgrade-reopen-btn').style.display = 'none';
+    document.getElementById('upgrade-btn').style.display = '';
+  });
   document.getElementById('update-close-btn').addEventListener('click', function() {
-    document.getElementById('update-modal').style.display = 'none';
+    _closeUpdateModal();
+  });
+
+  // Escape key closes the update modal (without stopping the upgrade)
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && document.getElementById('update-modal').style.display === 'flex') {
+      e.preventDefault();
+      e.stopPropagation();
+      _closeUpdateModal();
+    }
   });
 });
 
@@ -1523,22 +1537,41 @@ async function loadVersionInfo() {
   }
 }
 
+function _closeUpdateModal() {
+  document.getElementById('update-modal').style.display = 'none';
+  // If upgrade is still running, show the reopen button
+  if (_updateEventSource) {
+    document.getElementById('upgrade-btn').style.display = 'none';
+    document.getElementById('upgrade-reopen-btn').style.display = '';
+  }
+}
+
 function startUpgrade() {
-  const btn = document.getElementById('upgrade-btn');
-  const modal = document.getElementById('update-modal');
-  const log = document.getElementById('update-log');
-  const closeBtn = document.getElementById('update-close-btn');
+  var modal = document.getElementById('update-modal');
+  var log = document.getElementById('update-log');
+  var closeBtn = document.getElementById('update-close-btn');
+  var startBtn = document.getElementById('update-start-btn');
+
+  log.innerHTML = '';
+  closeBtn.disabled = true;
+  startBtn.disabled = false;
+  modal.style.display = 'flex';
+}
+
+function runUpgrade() {
+  var btn = document.getElementById('upgrade-btn');
+  var closeBtn = document.getElementById('update-close-btn');
+  var startBtn = document.getElementById('update-start-btn');
 
   btn.disabled = true;
+  startBtn.disabled = true;
   closeBtn.disabled = true;
-  log.innerHTML = '';
-  modal.style.display = 'flex';
 
   _updateEventSource = new EventSource('/api/update/run');
 
   _updateEventSource.onmessage = function(event) {
     try {
-      const data = JSON.parse(event.data);
+      var data = JSON.parse(event.data);
       if (data.type === 'log') {
         appendLogLine(data.line);
       } else if (data.type === 'done') {
@@ -1548,12 +1581,12 @@ function startUpgrade() {
       } else if (data.type === 'error') {
         appendLogLine('[ERROR] ' + data.message);
         closeBtn.disabled = false;
+        startBtn.disabled = false;
         btn.disabled = false;
         _updateEventSource.close();
         _updateEventSource = null;
       }
     } catch (e) {
-      // Malformed JSON — show raw text
       appendLogLine(event.data);
     }
   };
@@ -1561,6 +1594,7 @@ function startUpgrade() {
   _updateEventSource.onerror = function() {
     appendLogLine('[ERROR] Connection lost');
     closeBtn.disabled = false;
+    startBtn.disabled = false;
     btn.disabled = false;
     if (_updateEventSource) {
       _updateEventSource.close();
@@ -1569,10 +1603,17 @@ function startUpgrade() {
   };
 }
 
-function appendLogLine(line) {
+function appendLogLine(line, bold) {
   const log = document.getElementById('update-log');
   const span = document.createElement('span');
   span.style.display = 'block';
+
+  // Center header lines (=== banners and banner text that starts with a space)
+  if (line.indexOf('===') !== -1 || (line.startsWith(' ') && line.trim().length > 0 && !line.trim().startsWith('['))) {
+    span.style.textAlign = 'center';
+  } else {
+    span.style.textAlign = 'left';
+  }
 
   if (line.startsWith('[OK]')) {
     span.className = 'log-ok';
@@ -1582,24 +1623,84 @@ function appendLogLine(line) {
     span.className = 'log-error';
   } else if (line.startsWith('[STEP]')) {
     span.className = 'log-step';
+  } else if (line.startsWith('[HINT]')) {
+    span.className = 'log-hint';
   }
 
+  // Only auto-scroll if user is already near the bottom
+  const isNearBottom = (log.scrollHeight - log.scrollTop - log.clientHeight) < 40;
+
   span.textContent = line;
+  if (bold) span.style.fontWeight = 'bold';
   log.appendChild(span);
-  log.scrollTop = log.scrollHeight;
+
+  if (isNearBottom) {
+    log.scrollTop = log.scrollHeight;
+  }
 }
 
 function onUpgradeComplete(data) {
   const btn = document.getElementById('upgrade-btn');
   const closeBtn = document.getElementById('update-close-btn');
+  const startBtn = document.getElementById('update-start-btn');
 
   if (data.exit_code === 0) {
-    appendLogLine('[OK] Update complete! Version: ' + (data.version || 'unknown'));
+    appendLogLine('[OK] Update complete! Version: ' + (data.version || 'unknown'), true);
   } else {
-    appendLogLine('[ERROR] Update failed (exit code ' + data.exit_code + ')');
+    appendLogLine('[ERROR] Update failed (exit code ' + data.exit_code + ')', true);
   }
 
   closeBtn.disabled = false;
+  startBtn.disabled = false;
   btn.disabled = false;
+  document.getElementById('upgrade-reopen-btn').style.display = 'none';
+  btn.style.display = '';
   loadVersionInfo();
+}
+
+function copyUpdateLog() {
+  const log = document.getElementById('update-log');
+  const text = log.innerText;
+  navigator.clipboard.writeText(text).then(function() {
+    const btn = document.getElementById('update-copy-btn');
+    btn.textContent = '✅ Copied!';
+    setTimeout(function() { btn.textContent = '📋 Copy Log'; }, 2000);
+  }).catch(function() {
+    // Fallback for non-HTTPS contexts
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    const btn = document.getElementById('update-copy-btn');
+    btn.textContent = '✅ Copied!';
+    setTimeout(function() { btn.textContent = '📋 Copy Log'; }, 2000);
+  });
+}
+
+async function loadLastLog() {
+  var log = document.getElementById('update-log');
+  var modal = document.getElementById('update-modal');
+  var closeBtn = document.getElementById('update-close-btn');
+  try {
+    var res = await fetch('/api/update/log');
+    var data = await res.json();
+    if (!data.log) {
+      log.innerHTML = '';
+      appendLogLine('No previous upgrade log found.');
+    } else {
+      log.innerHTML = '';
+      data.log.split('\n').forEach(function(line) {
+        appendLogLine(line);
+      });
+    }
+  } catch (e) {
+    log.innerHTML = '';
+    appendLogLine('[ERROR] Failed to load log: ' + e.message);
+  }
+  closeBtn.disabled = false;
+  modal.style.display = 'flex';
 }

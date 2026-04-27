@@ -294,22 +294,25 @@
 
                 /* ── Update Modal Terminal ── */
                 #update-log {
-                    background: #1e1e1e;
-                    color: #d4d4d4;
+                    background: #fffff0;
+                    color: #1a1a1a;
                     font-family: 'Courier New', Courier, monospace;
                     font-size: 13px;
                     padding: 12px;
                     border-radius: 5px;
-                    max-height: 400px;
-                    overflow-y: auto;
-                    white-space: pre-wrap;
-                    word-wrap: break-word;
+                    border: 1px solid #8b5a2b;
+                    max-height: 70vh;
+                    overflow-y: scroll;
+                    overflow-x: auto;
+                    white-space: pre;
                     margin: 0;
+                    text-align: left;
                 }
-                .log-ok { color: #4ec9b0; }
-                .log-warn { color: #dcdcaa; }
-                .log-error { color: #f44747; }
-                .log-step { color: #569cd6; }
+                .log-ok { color: #1a7a4c; }
+                .log-warn { color: #8a6d00; }
+                .log-error { color: #b91c1c; }
+                .log-step { color: #1e5a99; }
+                .log-hint { color: #7b2d8b; }
             </style>
         </head>
         <body>
@@ -722,6 +725,7 @@
                             </div>
                         </div>
                         <button id="upgrade-btn" class="standard-button" style="width:100%;">⬆️ Upgrade Omni Chits</button>
+                        <button id="upgrade-reopen-btn" class="standard-button" style="width:100%;display:none;">🔄 Upgrade in progress — click to view</button>
                     </div>
                 </div>
                 <div class="loader" id="loader" style="display: none"></div>
@@ -775,11 +779,18 @@
                 </div>
             </div>
             <div class="modal" id="update-modal" style="display:none;">
-                <div class="modal-content" style="max-width:700px;width:90%;">
+                <div class="modal-content" style="max-width:95vw;width:fit-content;min-width:600px;">
                     <h3 style="text-align:center;">⬆️ Upgrading Omni Chits</h3>
                     <pre id="update-log"></pre>
-                    <div style="text-align:center;margin-top:10px;">
+                    <div style="display:flex;align-items:center;margin-top:10px;">
+                        <div style="flex:1;text-align:left;">
+                            <button id="update-start-btn" class="standard-button" onclick="runUpgrade()">▶️ Start</button>
+                            <button id="update-log-btn" class="standard-button" onclick="loadLastLog()">📄 Log</button>
+                        </div>
                         <button id="update-close-btn" class="standard-button" disabled>Close</button>
+                        <div style="flex:1;text-align:right;">
+                            <button id="update-copy-btn" class="standard-button" onclick="copyUpdateLog()">📋 Copy Log</button>
+                        </div>
                     </div>
                 </div>
             </div>

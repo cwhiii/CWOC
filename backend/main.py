@@ -2147,11 +2147,21 @@ async def import_contacts(file: UploadFile = File(...)):
 # ═══════════════════════════════════════════════════════════════════════════
 
 CONFIGURINATOR_PATH = "/app/install/configurinator.sh"
+UPDATE_LOG_PATH = "/app/data/update.log"
+
+@app.get("/api/update/log")
+def get_update_log():
+    try:
+        with open(UPDATE_LOG_PATH, "r") as f:
+            return {"log": f.read()}
+    except (FileNotFoundError, IOError):
+        return {"log": None}
 
 @app.get("/api/update/run")
 async def run_update():
     async def event_stream():
         process = None
+        log_lines = []
         try:
             # Check if an update is already running
             if _update_lock.locked():
@@ -2166,7 +2176,7 @@ async def run_update():
 
                 try:
                     process = await asyncio.create_subprocess_exec(
-                        "sudo", CONFIGURINATOR_PATH,
+                        "sudo", "bash", CONFIGURINATOR_PATH,
                         stdout=asyncio.subprocess.PIPE,
                         stderr=asyncio.subprocess.STDOUT,
                     )
@@ -2179,7 +2189,9 @@ async def run_update():
                     line = await process.stdout.readline()
                     if not line:
                         break
-                    yield f'data: {json.dumps({"type":"log","line":line.decode("utf-8", errors="replace").rstrip()})}\n\n'
+                    decoded = line.decode("utf-8", errors="replace").rstrip()
+                    log_lines.append(decoded)
+                    yield f'data: {json.dumps({"type":"log","line":decoded})}\n\n'
 
                 exit_code = await process.wait()
 
@@ -2195,9 +2207,33 @@ async def run_update():
                         pass
                     installed_datetime = datetime.utcnow().isoformat() + "Z"
                     update_version_info(version, installed_datetime)
+                    log_lines.append("[OK] Update complete! Version: " + version)
                     yield f'data: {json.dumps({"type":"done","exit_code":0,"version":version})}\n\n'
+
+                    # Schedule a service restart after a short delay so the
+                    # SSE response has time to reach the client
+                    async def _deferred_restart():
+                        await asyncio.sleep(3)
+                        try:
+                            proc = await asyncio.create_subprocess_exec(
+                                "sudo", "systemctl", "restart", "cwoc",
+                                stdout=asyncio.subprocess.DEVNULL,
+                                stderr=asyncio.subprocess.DEVNULL,
+                            )
+                            await proc.wait()
+                        except Exception:
+                            pass
+                    asyncio.create_task(_deferred_restart())
                 else:
+                    log_lines.append("[ERROR] Update failed (exit code " + str(exit_code) + ")")
                     yield f'data: {json.dumps({"type":"done","exit_code":exit_code})}\n\n'
+
+                # Save log to file
+                try:
+                    with open(UPDATE_LOG_PATH, "w") as f:
+                        f.write("\n".join(log_lines))
+                except Exception:
+                    pass
 
         except asyncio.CancelledError:
             # Client disconnected — terminate subprocess gracefully
