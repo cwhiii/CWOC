@@ -363,6 +363,9 @@
                                         <option value="">— None —</option>
                                         <option value="Jr.">Jr.</option>
                                         <option value="Sr.">Sr.</option>
+                                        <option value="Esq.">Esq.</option>
+                                        <option value="Ph.D.">Ph.D.</option>
+                                        <option value="M.D.">M.D.</option>
                                         <option value="I">I</option>
                                         <option value="II">II</option>
                                         <option value="III">III</option>
@@ -373,9 +376,6 @@
                                         <option value="VIII">VIII</option>
                                         <option value="IX">IX</option>
                                         <option value="X">X</option>
-                                        <option value="Esq.">Esq.</option>
-                                        <option value="Ph.D.">Ph.D.</option>
-                                        <option value="M.D.">M.D.</option>
                                         <option value="__custom__">Custom...</option>
                                     </select>
                                     <input type="text" id="suffixCustom" class="custom-input" placeholder="Custom suffix" />
@@ -460,6 +460,33 @@
                                 <label for="socialContext">Social Context</label>
                                 <input type="text" id="socialContext" placeholder="How you know them" />
                             </div>
+                        </div>
+                    </div>
+
+                    <!-- Notes Zone (markdown) -->
+                    <div id="notesSection" class="zone-container">
+                        <div class="zone-header" onclick="cwocToggleZone(event, 'notesSection', 'notesContent')">
+                            <h2 class="zone-title">📝 Notes</h2>
+                            <span class="zone-toggle-icon">🔽</span>
+                        </div>
+                        <div id="notesContent" class="zone-body" style="display:none;">
+                            <div class="field full-width">
+                                <textarea id="contactNotes" placeholder="Notes about this contact (supports markdown)..." style="min-height:6em;resize:vertical;"></textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tags Zone -->
+                    <div id="tagsSection" class="zone-container">
+                        <div class="zone-header" onclick="cwocToggleZone(event, 'tagsSection', 'tagsContent')">
+                            <h2 class="zone-title">🏷️ Tags</h2>
+                            <span class="zone-toggle-icon">🔽</span>
+                        </div>
+                        <div id="tagsContent" class="zone-body" style="display:none;">
+                            <div class="field full-width">
+                                <input type="text" id="contactTagsInput" placeholder="Add tag and press Enter" />
+                            </div>
+                            <div id="contactTagsChips" style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;"></div>
                         </div>
                     </div>
                 </div>

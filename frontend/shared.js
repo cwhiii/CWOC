@@ -2019,7 +2019,7 @@ function showQuickEditModal(chit, onRefresh) {
   }
 
   if (chit.priority) addDropdown('🔺', 'Priority', 'priority', chit.priority, ['', 'High', 'Medium', 'Low'], (v) => { pendingChanges.priority = v || null; });
-  if (chit.severity) addDropdown('⚠️', 'Severity', 'severity', chit.severity, ['', 'Critical', 'Major', 'Minor'], (v) => { pendingChanges.severity = v || null; });
+  if (chit.severity) addDropdown('⚠️', 'Severity', 'severity', chit.severity, ['', 'Critical', 'Major', 'Normal', 'Minor'], (v) => { pendingChanges.severity = v || null; });
   if (chit.status) addDropdown('📋', 'Status', 'status', chit.status, ['', 'ToDo', 'In Progress', 'Blocked', 'Complete'], (v) => { pendingChanges.status = v || null; });
 
   if (hasTaskFields) {
@@ -2219,7 +2219,7 @@ function showQuickEditModal(chit, onRefresh) {
     qrOverlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:99999;display:flex;align-items:center;justify-content:center;';
     qrOverlay.addEventListener('click', (e2) => { if (e2.target === qrOverlay) qrOverlay.remove(); });
     const qrModal = document.createElement('div');
-    qrModal.style.cssText = 'background:#fff8e1;border:2px solid #8b4513;border-radius:10px;padding:24px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,0.4);min-width:280px;';
+    qrModal.style.cssText = 'background:#fff8e1;border:2px solid #8b4513;border-radius:10px;padding:24px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,0.4);min-width:280px;max-width:90vw;';
     const qrTitle = document.createElement('div');
     qrTitle.style.cssText = 'font-weight:bold;margin-bottom:12px;color:#4a2c2a;';
     const qrRender = document.createElement('div');
@@ -3185,6 +3185,45 @@ function initMobileSidebar() {
     _hideSidebarBackdrop();
   }
 
+  // ── Touch swipe to open/close sidebar ──────────────────────────────
+  var _swipeStartX = 0;
+  var _swipeStartY = 0;
+  var _swipeTracking = false;
+  var SWIPE_THRESHOLD = 50;
+  var EDGE_ZONE = 30; // px from left edge to start swipe-open
+
+  document.addEventListener('touchstart', function (e) {
+    if (!_isMobileOverlay()) return;
+    var touch = e.touches[0];
+    _swipeStartX = touch.clientX;
+    _swipeStartY = touch.clientY;
+    // Only track swipe-open if starting from left edge, or swipe-close if sidebar is open
+    _swipeTracking = (touch.clientX < EDGE_ZONE) || sidebar.classList.contains('active');
+  }, { passive: true });
+
+  document.addEventListener('touchend', function (e) {
+    if (!_swipeTracking || !_isMobileOverlay()) { _swipeTracking = false; return; }
+    var touch = e.changedTouches[0];
+    var dx = touch.clientX - _swipeStartX;
+    var dy = Math.abs(touch.clientY - _swipeStartY);
+    _swipeTracking = false;
+
+    // Only count horizontal swipes (dx > dy)
+    if (Math.abs(dx) < SWIPE_THRESHOLD || dy > Math.abs(dx)) return;
+
+    if (dx > 0 && !sidebar.classList.contains('active') && _swipeStartX < EDGE_ZONE) {
+      // Swipe right from left edge → open sidebar
+      sidebar.classList.add('active');
+      localStorage.setItem('sidebarState', 'open');
+      _showSidebarBackdrop();
+    } else if (dx < 0 && sidebar.classList.contains('active')) {
+      // Swipe left → close sidebar
+      sidebar.classList.remove('active');
+      localStorage.setItem('sidebarState', 'closed');
+      _hideSidebarBackdrop();
+    }
+  }, { passive: true });
+
   // Listen for resize to handle crossing the 768px boundary
   let _prevWasMobile = _isMobileOverlay();
   window.addEventListener('resize', function _onMobileSidebarResize() {
@@ -3258,14 +3297,14 @@ function _openMobileActionsModal() {
   var list = modal.querySelector('.mobile-actions-list');
   list.innerHTML = '';
 
-  // Grab all visible buttons from the header .buttons container
+  // Grab all buttons from the header .buttons container (including hidden save/stay/exit)
   var buttonsDiv = document.querySelector('.header-row .buttons');
   if (!buttonsDiv) return;
 
   var buttons = buttonsDiv.querySelectorAll('button');
   buttons.forEach(function (btn) {
-    // Skip hidden buttons (display:none)
-    if (btn.offsetParent === null && btn.style.display === 'none') return;
+    // Skip buttons that are truly irrelevant (not just hidden by save state)
+    if (btn.id === 'saveButton' && btn.disabled) return; // greyed-out "Saved" — skip
     var clone = document.createElement('button');
     clone.className = 'mobile-action-btn ' + (btn.className || '');
     clone.innerHTML = btn.innerHTML;

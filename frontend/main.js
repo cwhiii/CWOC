@@ -1202,9 +1202,18 @@ async function _fetchWeatherForModal(address, label) {
   var overlay = document.getElementById('weather-modal-overlay');
   if (!overlay) return;
 
-  // Show loading in body
+  // Show loading in body — but if we have cached data, show it with stale indicator
   var bodyEl = document.getElementById('weather-modal-body');
-  if (bodyEl) bodyEl.innerHTML = '<div style="opacity:0.6;">Loading weather…</div>';
+  var cacheKey = 'cwoc_weather_cache_' + address.toLowerCase().trim();
+  var cached = null;
+  try { cached = JSON.parse(localStorage.getItem(cacheKey)); } catch (e) { /* ignore */ }
+
+  if (cached && cached.html && bodyEl) {
+    // Show cached data with hourglass stale indicator
+    bodyEl.innerHTML = '<div style="text-align:right;font-size:0.75em;opacity:0.5;margin-bottom:4px;">⏳ Refreshing…</div>' + cached.html;
+  } else if (bodyEl) {
+    bodyEl.innerHTML = '<div style="opacity:0.6;">Loading weather…</div>';
+  }
 
   try {
     // Geocode with progressive fallback
@@ -1260,11 +1269,14 @@ async function _fetchWeatherForModal(address, label) {
     var highPct = Math.max(0, Math.min(100, ((maxF - barMin) / barRange) * 100));
 
     if (bodyEl) {
-      bodyEl.innerHTML =
+      var weatherHtml =
         '<div class="weather-modal-icon">' + icon + '</div>' +
         '<div class="weather-modal-temps"><span class="temp-high">' + maxF + '°F</span> / <span class="temp-low">' + minF + '°F</span></div>' +
         '<div class="weather-modal-precip">' + precipText + '</div>' +
         '<div class="weather-modal-temp-bar"><div class="temp-bar-marker" style="left:' + lowPct + '%" title="Low ' + minF + '°F"></div><div class="temp-bar-marker" style="left:' + highPct + '%" title="High ' + maxF + '°F"></div></div>';
+      bodyEl.innerHTML = weatherHtml;
+      // Cache the result
+      try { localStorage.setItem(cacheKey, JSON.stringify({ html: weatherHtml, ts: Date.now() })); } catch (e) { /* ignore */ }
     }
   } catch (err) {
     console.error('Weather modal error:', err);
@@ -1281,6 +1293,43 @@ async function _fetchWeatherForModal(address, label) {
 function _closeWeatherModal() {
   const overlay = document.getElementById('weather-modal-overlay');
   if (overlay) overlay.remove();
+}
+
+/** Pre-fetch weather for a location and store in localStorage cache (background, no UI). */
+async function _fetchWeatherForCache(address, cacheKey) {
+  try {
+    var geoQueries = [address];
+    var noZip = address.replace(/\s*\d{5}(-\d{4})?\s*$/, '').trim();
+    if (noZip && noZip !== address) geoQueries.push(noZip);
+    var lat, lon, found = false;
+    for (var gi = 0; gi < geoQueries.length; gi++) {
+      var q = geoQueries[gi];
+      if (!q) continue;
+      try {
+        var resp = await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q=' + encodeURIComponent(q), { headers: { 'User-Agent': 'CWOC-Weather/1.0' } });
+        var data = await resp.json();
+        if (data && data.length > 0) { lat = parseFloat(data[0].lat); lon = parseFloat(data[0].lon); found = true; break; }
+      } catch (e) { /* skip */ }
+    }
+    if (!found) return;
+    var wxResp = await fetch('https://api.open-meteo.com/v1/forecast?latitude=' + lat + '&longitude=' + lon + '&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_sum&timezone=auto&forecast_days=1');
+    if (!wxResp.ok) return;
+    var wxData = await wxResp.json();
+    if (!wxData || !wxData.daily) return;
+    var today = wxData.daily;
+    var weatherCode = today.weathercode[0];
+    var minC = today.temperature_2m_min[0], maxC = today.temperature_2m_max[0], precipMm = today.precipitation_sum[0];
+    var minF = Math.round((minC * 9) / 5 + 32), maxF = Math.round((maxC * 9) / 5 + 32);
+    var precipInches = Math.ceil(precipMm * 0.0393701 * 10) / 10;
+    var icon = _getWeatherIcon(weatherCode);
+    var precipType = _getPrecipLabel(weatherCode);
+    var precipText = precipType ? precipInches + '" ' + precipType : 'No precipitation';
+    var barMin = -14, barMax = 104, barRange = barMax - barMin;
+    var lowPct = Math.max(0, Math.min(100, ((minF - barMin) / barRange) * 100));
+    var highPct = Math.max(0, Math.min(100, ((maxF - barMin) / barRange) * 100));
+    var html = '<div class="weather-modal-icon">' + icon + '</div><div class="weather-modal-temps"><span class="temp-high">' + maxF + '°F</span> / <span class="temp-low">' + minF + '°F</span></div><div class="weather-modal-precip">' + precipText + '</div><div class="weather-modal-temp-bar"><div class="temp-bar-marker" style="left:' + lowPct + '%" title="Low ' + minF + '°F"></div><div class="temp-bar-marker" style="left:' + highPct + '%" title="High ' + maxF + '°F"></div></div>';
+    try { localStorage.setItem(cacheKey, JSON.stringify({ html: html, ts: Date.now() })); } catch (e) { /* ignore */ }
+  } catch (e) { /* background fetch — silently fail */ }
 }
 
 // ── Load label/tag filters from settings ─────────────────────────────────────
@@ -3761,7 +3810,14 @@ function displayProjectsView(chitsToDisplay) {
   chitList.innerHTML = "";
 
   // Use all chits (not filtered) to find project masters — filters shouldn't hide projects
-  const projects = chits.filter((c) => c.is_project_master && !c.deleted && !c.archived);
+  // Deduplicate by ID to prevent showing the same project twice
+  const seenIds = new Set();
+  const projects = chits.filter((c) => {
+    if (!c.is_project_master || c.deleted || c.archived) return false;
+    if (seenIds.has(c.id)) return false;
+    seenIds.add(c.id);
+    return true;
+  });
 
   if (projects.length === 0) {
     chitList.innerHTML = "<p>No projects found. Create a chit and enable Project Master in the Projects zone.</p>";
@@ -3807,7 +3863,7 @@ function displayProjectsView(chitsToDisplay) {
       childIds.forEach((childId) => {
         const child = chitMap[childId];
         const li = document.createElement("li");
-        li.style.cssText = `display:flex;align-items:center;gap:0.5em;padding:0.35em 0.8em 0.35em 1.5em;border-bottom:1px solid rgba(139,90,43,0.1);background:${child ? chitColor(child) : "#fdf6e3"};cursor:pointer;`;
+        li.style.cssText = `display:flex;align-items:center;gap:0.5em;padding:0.5em 0.8em 0.5em 1.5em;border-bottom:1px solid rgba(139,90,43,0.1);background:${child ? chitColor(child) : "#fdf6e3"};cursor:pointer;min-height:2.2em;font-size:1em;`;
 
         const bullet = document.createElement("span");
         bullet.style.cssText = "opacity:0.4;font-size:0.8em;flex-shrink:0;";
@@ -3858,10 +3914,15 @@ function displayAlarmsView(chitsToDisplay) {
   chitList.innerHTML = "";
 
   // Include chits with any alert type: alarm flag, notification flag, or alerts array entries
-  const alertChits = chitsToDisplay.filter((c) =>
-    c.alarm || c.notification ||
-    (Array.isArray(c.alerts) && c.alerts.length > 0)
-  );
+  // But don't count notify-at-start/due flags as alerts for this view
+  const alertChits = chitsToDisplay.filter((c) => {
+    if (!Array.isArray(c.alerts) || c.alerts.length === 0) {
+      return c.alarm || c.notification;
+    }
+    // Filter out _notify_flags entries — they're not real alerts
+    const realAlerts = c.alerts.filter(a => a._type !== '_notify_flags');
+    return realAlerts.length > 0;
+  });
 
   if (alertChits.length === 0) {
     chitList.innerHTML = "<p>No chits with alerts found.</p>";
@@ -4207,7 +4268,15 @@ document.addEventListener("DOMContentLoaded", function () {
   _buildPeopleFilterPanel();
   _renderSavedSearches();
   _updateSortUI();
-  loadSavedLocations(); // Pre-cache saved locations for weather modal (W key)
+  loadSavedLocations().then(function () {
+    // Pre-load weather for default location into cache
+    var defaultLoc = getDefaultLocation();
+    if (defaultLoc && defaultLoc.address) {
+      var cacheKey = 'cwoc_weather_cache_' + defaultLoc.address.toLowerCase().trim();
+      // Fetch in background — don't block UI
+      _fetchWeatherForCache(defaultLoc.address, cacheKey);
+    }
+  });
 
   // ESC in sidebar tag search box blurs it and clears search
   const tagSearchInput = document.getElementById('tag-filter-search');

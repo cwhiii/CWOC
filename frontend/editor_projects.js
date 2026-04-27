@@ -104,6 +104,17 @@ function renderChildChitsByStatus() {
     header.textContent = status;
     section.appendChild(header);
 
+    // Only show "Add a Chit" button for project masters, and not in the Complete column
+    if (projectState.projectChit?.is_project_master === true && status !== "Complete") {
+      const addBtn = document.createElement("button");
+      addBtn.type = "button";
+      addBtn.className = "zone-button";
+      addBtn.innerHTML = '<i class="fas fa-plus"></i> Add Chit';
+      addBtn.style.cssText = "font-size:0.8em;padding:3px 8px;margin-left:8px;";
+      addBtn.addEventListener("click", () => addProjectItem());
+      header.appendChild(addBtn);
+    }
+
     // Drag and drop on entire section
     section.addEventListener("dragover", (e) => {
       e.preventDefault();

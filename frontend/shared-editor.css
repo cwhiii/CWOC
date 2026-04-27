@@ -502,8 +502,16 @@ input:checked + .slider:before {
         white-space: nowrap;
     }
 
-    /* Actions trigger: NOT used — keep hidden */
+    /* Actions trigger: visible on mobile — opens actions modal */
     .mobile-actions-trigger {
+        display: inline-flex !important;
+        padding: 6px 12px;
+        min-height: 36px;
+        font-size: 0.9em;
+        font-weight: bold;
+    }
+    /* Hide the regular buttons container on mobile — use actions modal instead */
+    .header-row .buttons {
         display: none !important;
     }
 

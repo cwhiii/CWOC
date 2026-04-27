@@ -50,7 +50,7 @@ class Settings(BaseModel):
     default_filters: Optional[Any] = None  # Object {tab: "filter text"} or legacy List[str]
     alarm_orientation: Optional[str] = None
     active_clocks: Optional[str] = None  # JSON array of active clock format values, e.g. '["24hour","12hour"]'
-    saved_locations: Optional[str] = None  # JSON array of saved location objects, e.g. '[{"label":"Home","address":"123 Main St","is_default":true}]'
+    saved_locations: Optional[str] = None  # JSON array of saved location objects, e.g. '[{"label":"Home","address":"4 Rolling Mill Way, Canton, MA 02021","is_default":true}]'
     tags: Optional[List[Tag]] = None
     custom_colors: Optional[List[str]] = None
     visual_indicators: Optional[Dict[str, str]] = None
@@ -122,6 +122,8 @@ class Contact(BaseModel):
     organization: Optional[str] = None
     social_context: Optional[str] = None
     image_url: Optional[str] = None
+    notes: Optional[str] = None
+    tags: Optional[List[str]] = None
     created_datetime: Optional[str] = None
     modified_datetime: Optional[str] = None
 
@@ -445,7 +447,7 @@ def init_contacts_table():
             conn.close()
 
 def migrate_contacts_add_new_fields():
-    """Add nickname, signal_username, color, organization, social_context, image_url columns."""
+    """Add nickname, signal_username, color, organization, social_context, image_url, notes, tags columns."""
     conn = None
     try:
         conn = sqlite3.connect(DB_PATH)
@@ -459,6 +461,8 @@ def migrate_contacts_add_new_fields():
             ("organization", "TEXT"),
             ("social_context", "TEXT"),
             ("image_url", "TEXT"),
+            ("notes", "TEXT"),
+            ("tags", "TEXT"),
         ]
         for col_name, col_type in new_cols:
             if col_name not in existing:
@@ -517,6 +521,8 @@ def _serialize_contact_for_db(contact) -> dict:
         "organization": _get("organization"),
         "social_context": _get("social_context"),
         "image_url": _get("image_url"),
+        "notes": _get("notes"),
+        "tags": serialize_json_field(_get("tags")),
     }
 
 
@@ -537,6 +543,8 @@ def _row_to_contact(row: dict) -> dict:
     row.setdefault("organization", None)
     row.setdefault("social_context", None)
     row.setdefault("image_url", None)
+    row.setdefault("notes", None)
+    row["tags"] = deserialize_json_field(row.get("tags"))
     return row
 
 
@@ -1472,9 +1480,9 @@ def create_contact(contact: Contact):
                 id, given_name, surname, middle_names, prefix, suffix,
                 nickname, display_name, phones, emails, addresses, call_signs,
                 x_handles, websites, has_signal, signal_username, pgp_key, favorite,
-                color, organization, social_context, image_url,
+                color, organization, social_context, image_url, notes, tags,
                 created_datetime, modified_datetime
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 contact_id,
@@ -1499,6 +1507,8 @@ def create_contact(contact: Contact):
                 db_fields["organization"],
                 db_fields["social_context"],
                 db_fields["image_url"],
+                db_fields["notes"],
+                db_fields["tags"],
                 current_time,
                 current_time,
             ),
@@ -1690,6 +1700,7 @@ def update_contact(contact_id: str, contact: Contact):
                 call_signs = ?, x_handles = ?, websites = ?,
                 has_signal = ?, signal_username = ?, pgp_key = ?, favorite = ?,
                 color = ?, organization = ?, social_context = ?, image_url = ?,
+                notes = ?, tags = ?,
                 modified_datetime = ?
             WHERE id = ?
             """,
@@ -1715,6 +1726,8 @@ def update_contact(contact_id: str, contact: Contact):
                 db_fields["organization"],
                 db_fields["social_context"],
                 db_fields["image_url"],
+                db_fields["notes"],
+                db_fields["tags"],
                 current_time,
                 contact_id,
             ),

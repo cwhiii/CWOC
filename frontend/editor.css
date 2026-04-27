@@ -185,7 +185,7 @@
     border: 1px solid var(--border-color);
     border-radius: 3px;
     background-color: var(--input-bg);
-    color: red;
+    color: var(--text-color);
 }
 
 .location-input-wrapper {

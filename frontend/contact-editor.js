@@ -15,6 +15,54 @@
     var _saveSystem = null;
     var _currentImageUrl = null;
 
+    // ── Contact Tags State ──────────────────────────────────────────────
+    var _contactTags = [];
+
+    function _renderContactTags() {
+        var container = document.getElementById('contactTagsChips');
+        if (!container) return;
+        container.innerHTML = '';
+        _contactTags.forEach(function (tag, idx) {
+            var chip = document.createElement('span');
+            chip.style.cssText = 'display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:4px;font-size:0.85em;background:rgba(139,90,43,0.15);color:#4a2c2a;';
+            chip.textContent = tag;
+            var removeBtn = document.createElement('span');
+            removeBtn.textContent = '✕';
+            removeBtn.style.cssText = 'cursor:pointer;opacity:0.6;font-size:0.8em;margin-left:2px;';
+            removeBtn.addEventListener('click', function () {
+                _contactTags.splice(idx, 1);
+                _renderContactTags();
+                if (_saveSystem) _saveSystem.markUnsaved();
+            });
+            chip.appendChild(removeBtn);
+            container.appendChild(chip);
+        });
+    }
+
+    function _initContactTags() {
+        var input = document.getElementById('contactTagsInput');
+        if (!input) return;
+        // Pre-fill with "Contact/" prefix hint
+        input.placeholder = 'Add tag (e.g. Contact/Family) and press Enter';
+        input.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                var val = input.value.trim();
+                if (!val) return;
+                // Auto-prepend "Contact/" if not already prefixed
+                if (!val.startsWith('Contact/') && !val.startsWith('contact/')) {
+                    val = 'Contact/' + val;
+                }
+                if (!_contactTags.includes(val)) {
+                    _contactTags.push(val);
+                    _renderContactTags();
+                    if (_saveSystem) _saveSystem.markUnsaved();
+                }
+                input.value = '';
+            }
+        });
+    }
+
     var params = new URLSearchParams(window.location.search);
     _contactId = params.get('id') || null;
 
@@ -34,6 +82,7 @@
         _initImageUpload();
         _initSignalToggle();
         _initDisplayNameUpdater();
+        _initContactTags();
 
         if (!_contactId) {
             document.getElementById('deleteButton').style.display = 'none';
@@ -135,7 +184,9 @@
             '3': ['socialSection', 'socialContent'],
             '4': ['securitySection', 'securityContent'],
             '5': ['contextSection', 'contextContent'],
-            '6': ['colorSection', 'colorContent']
+            '6': ['colorSection', 'colorContent'],
+            '7': ['notesSection', 'notesContent'],
+            '8': ['tagsSection', 'tagsContent']
         });
     }
 
@@ -392,7 +443,7 @@
     var _valuePlaceholders = {
         phones:    '+1-555-0100',
         emails:    'user@example.com',
-        addresses: '123 Main St, Anytown, NY 10001',
+        addresses: '4 Rolling Mill Way, Canton, MA 02021',
         callSigns: 'KD2ABC',
         xHandles:  '@username',
         websites:  'https://example.com'
@@ -560,7 +611,9 @@
             color:           document.getElementById('colorHex').value.trim() || null,
             organization:    document.getElementById('organization').value.trim() || null,
             social_context:  document.getElementById('socialContext').value.trim() || null,
-            image_url:       _currentImageUrl
+            image_url:       _currentImageUrl,
+            notes:           document.getElementById('contactNotes').value.trim() || null,
+            tags:            _contactTags.length > 0 ? _contactTags.slice() : null,
         };
     };
 
@@ -599,6 +652,17 @@
         // Context
         document.getElementById('organization').value = contact.organization || '';
         document.getElementById('socialContext').value = contact.social_context || '';
+
+        // Notes
+        document.getElementById('contactNotes').value = contact.notes || '';
+
+        // Tags — prepopulate with "Contact/" prefix
+        _contactTags = Array.isArray(contact.tags) ? contact.tags.slice() : [];
+        if (_contactTags.length === 0 && !_contactId) {
+            // New contact: default to having "Contact/" prefix tag
+            // (don't add automatically — just pre-fill the input)
+        }
+        _renderContactTags();
 
         // Image
         _setProfileImage(contact.image_url || null);

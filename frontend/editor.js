@@ -308,7 +308,7 @@ function _showQRCode(e) {
   overlay.addEventListener('click', (ev) => { if (ev.target === overlay) overlay.remove(); });
 
   const modal = document.createElement('div');
-  modal.style.cssText = 'background:#fff8e1;border:2px solid #8b4513;border-radius:10px;padding:24px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,0.4);min-width:300px;';
+  modal.style.cssText = 'background:#fff8e1;border:2px solid #8b4513;border-radius:10px;padding:24px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,0.4);min-width:280px;max-width:90vw;';
 
   const titleEl = document.createElement('div');
   titleEl.style.cssText = 'font-weight:bold;margin-bottom:12px;color:#4a2c2a;';
@@ -1085,7 +1085,82 @@ function resetEditorForNewChit() {
 
   // Show weather placeholder for new chits (no location/date yet)
   const cws = document.getElementById("compactWeatherSection");
-  if (cws) cws.classList.add('weather-placeholder'); cws.innerHTML = `<div style="padding:8px;font-family:'Courier New',monospace;color:#8b5a2b;font-size:0.85em;opacity:0.7;">📍 Date &amp; location needed for weather</div>`;
+  if (cws) { cws.classList.add('weather-placeholder'); cws.innerHTML = `<div style="padding:8px;font-family:'Courier New',monospace;color:#8b5a2b;font-size:0.85em;opacity:0.7;">📍 Date &amp; location needed for weather</div>`; }
+
+  // Collapse all zones for new chits, then expand the relevant one based on source view
+  _collapseAllZonesForNewChit();
+}
+
+/**
+ * For new chits: collapse all zones, then expand only the zone relevant
+ * to the view the user came from (stored in cwoc_ui_state).
+ */
+function _collapseAllZonesForNewChit() {
+  const allZones = [
+    ['datesSection', 'datesContent'],
+    ['taskSection', 'taskContent'],
+    ['locationSection', 'locationContent'],
+    ['tagsSection', 'tagsContent'],
+    ['peopleSection', 'peopleContent'],
+    ['notesSection', 'notesContent'],
+    ['checklistSection', 'checklistContent'],
+    ['alertsSection', 'alertsContent'],
+    ['healthIndicatorsSection', 'healthIndicatorsContent'],
+    ['colorSection', 'colorContent'],
+    ['projectsSection', 'projectsContent'],
+  ];
+
+  // Collapse everything
+  allZones.forEach(([sectionId, contentId]) => {
+    const section = document.getElementById(sectionId);
+    const content = document.getElementById(contentId);
+    if (!section || !content) return;
+    content.style.display = 'none';
+    section.classList.add('collapsed');
+    const icon = section.querySelector('.zone-toggle-icon');
+    if (icon) icon.textContent = '🔽';
+    section.querySelectorAll('.zone-button').forEach(btn => { btn.style.display = 'none'; });
+  });
+
+  // Determine which view the user came from
+  let sourceTab = 'Calendar';
+  try {
+    const raw = localStorage.getItem('cwoc_ui_state');
+    if (raw) {
+      const state = JSON.parse(raw);
+      if (state.tab) sourceTab = state.tab;
+    }
+  } catch (e) { /* ignore */ }
+
+  // Map source tab to zones that should be expanded
+  const tabZoneMap = {
+    'Calendar':   [['datesSection', 'datesContent']],
+    'Checklists': [['checklistSection', 'checklistContent']],
+    'Alarms':     [['alertsSection', 'alertsContent']],
+    'Projects':   [['projectsSection', 'projectsContent']],
+    'Tasks':      [['taskSection', 'taskContent']],
+    'Notes':      [['notesSection', 'notesContent']],
+  };
+
+  // Also check URL params — if start/end are set, expand dates
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('start') || params.get('end')) {
+    sourceTab = 'Calendar';
+  }
+
+  const zonesToExpand = tabZoneMap[sourceTab] || [['datesSection', 'datesContent']];
+  // Always expand title (it's not a collapsible zone)
+  // Expand the relevant zones
+  zonesToExpand.forEach(([sectionId, contentId]) => {
+    const section = document.getElementById(sectionId);
+    const content = document.getElementById(contentId);
+    if (!section || !content) return;
+    content.style.display = '';
+    section.classList.remove('collapsed');
+    const icon = section.querySelector('.zone-toggle-icon');
+    if (icon) icon.textContent = '🔼';
+    section.querySelectorAll('.zone-button').forEach(btn => { btn.style.display = ''; });
+  });
 }
 
 function createISODateTimeString(dateStr, timeStr, isAllDay, isEnd = false) {
@@ -2987,16 +3062,20 @@ function applyZoneStates(chit) {
     const shouldExpand = hasData();
 
     if (shouldExpand) {
-      // Expand: remove collapsed classes, show buttons
-      content.classList.remove("collapsed");
+      // Expand: show content, remove collapsed class, show buttons
+      content.style.display = '';
       section.classList.remove("collapsed");
+      const icon = section.querySelector('.zone-toggle-icon');
+      if (icon) icon.textContent = '🔼';
       section.querySelectorAll(".zone-button").forEach((btn) => {
         btn.style.display = "";
       });
     } else {
-      // Collapse: add collapsed classes, hide buttons
-      content.classList.add("collapsed");
+      // Collapse: hide content, add collapsed class, hide buttons
+      content.style.display = 'none';
       section.classList.add("collapsed");
+      const icon = section.querySelector('.zone-toggle-icon');
+      if (icon) icon.textContent = '🔽';
       section.querySelectorAll(".zone-button").forEach((btn) => {
         btn.style.display = "none";
       });
@@ -3458,7 +3537,10 @@ document.addEventListener("DOMContentLoaded", function () {
   // Auto-switch note to render mode on blur
   const noteTextarea = document.getElementById("note");
   if (noteTextarea) {
-    noteTextarea.addEventListener("blur", () => {
+    noteTextarea.addEventListener("blur", (e) => {
+      // Don't auto-render if the user clicked the Render button (it handles its own toggle)
+      const renderBtn = document.getElementById("notes-render-toggle-btn");
+      if (e.relatedTarget && e.relatedTarget === renderBtn) return;
       const rendered = document.getElementById("notes-rendered-output");
       if (rendered && rendered.style.display === "none" && noteTextarea.value.trim()) {
         toggleNotesViewMode();

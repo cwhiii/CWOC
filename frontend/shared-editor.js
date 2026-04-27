@@ -36,9 +36,18 @@ function cwocToggleZone(event, sectionId, contentId) {
   const content = document.getElementById(contentId);
   if (!section || !content) return;
 
-  const isCollapsing = !content.classList.contains('collapsed');
-  content.classList.toggle('collapsed');
-  section.classList.toggle('collapsed');
+  const isCollapsing = !section.classList.contains('collapsed');
+  section.classList.toggle('collapsed', isCollapsing);
+
+  if (isCollapsing) {
+    content.style.display = 'none';
+  } else {
+    content.style.display = '';
+  }
+
+  // Update toggle icon
+  const icon = section.querySelector('.zone-toggle-icon');
+  if (icon) icon.textContent = isCollapsing ? '🔽' : '🔼';
 
   const zoneButtons = section.querySelectorAll('.zone-button');
   zoneButtons.forEach(function (button) {
