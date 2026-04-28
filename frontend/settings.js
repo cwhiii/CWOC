@@ -1570,6 +1570,255 @@ function monitorChanges() {
   });
 }
 
+// ── Data Management Export/Import ─────────────────────────────────────────────
+
+/**
+ * Create a Blob from a data string and trigger a browser download.
+ * @param {string} data - The JSON string to download
+ * @param {string} filename - The filename for the download
+ */
+function _triggerJsonDownload(data, filename) {
+  var blob = new Blob([data], { type: 'application/json' });
+  var a = document.createElement('a');
+  var url = URL.createObjectURL(blob);
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * Export all chit data as a JSON file download.
+ */
+async function exportChitData() {
+  try {
+    var response = await fetch('/api/export/chits');
+    if (!response.ok) {
+      var err = await response.json();
+      throw new Error(err.detail || response.statusText);
+    }
+    var text = await response.text();
+    var date = new Date().toISOString().slice(0, 10);
+    _triggerJsonDownload(text, 'cwoc-chits-' + date + '.json');
+  } catch (error) {
+    console.error('Export chit data failed:', error);
+    alert('Export failed: ' + error.message);
+  }
+}
+
+/**
+ * Export all user data (settings + contacts) as a JSON file download.
+ */
+async function exportUserData() {
+  try {
+    var response = await fetch('/api/export/userdata');
+    if (!response.ok) {
+      var err = await response.json();
+      throw new Error(err.detail || response.statusText);
+    }
+    var text = await response.text();
+    var date = new Date().toISOString().slice(0, 10);
+    _triggerJsonDownload(text, 'cwoc-userdata-' + date + '.json');
+  } catch (error) {
+    console.error('Export user data failed:', error);
+    alert('Export failed: ' + error.message);
+  }
+}
+
+/**
+ * Show the import mode dialog (Add / Replace choice).
+ * @param {string} type - "chits" or "userdata"
+ * @param {object} fileData - The parsed JSON envelope from the file
+ */
+function _showImportModeDialog(type, fileData) {
+  var modal = document.getElementById('import-mode-modal');
+  var addBtn = document.getElementById('import-mode-add-btn');
+  var replaceBtn = document.getElementById('import-mode-replace-btn');
+  var cancelBtn = document.getElementById('import-mode-cancel-btn');
+
+  function cleanup() {
+    modal.style.display = 'none';
+    addBtn.removeEventListener('click', onAdd);
+    replaceBtn.removeEventListener('click', onReplace);
+    cancelBtn.removeEventListener('click', onCancel);
+  }
+
+  function onAdd() {
+    cleanup();
+    _doImport(type, 'add', fileData);
+  }
+
+  function onReplace() {
+    cleanup();
+    _showReplaceConfirmDialog(type, function() {
+      _doImport(type, 'replace', fileData);
+    });
+  }
+
+  function onCancel() {
+    cleanup();
+  }
+
+  addBtn.addEventListener('click', onAdd);
+  replaceBtn.addEventListener('click', onReplace);
+  cancelBtn.addEventListener('click', onCancel);
+  modal.style.display = 'flex';
+}
+
+/**
+ * Show the replace confirmation dialog with type-specific warning text.
+ * @param {string} type - "chits" or "userdata"
+ * @param {function} onConfirm - Callback to execute if user confirms
+ */
+function _showReplaceConfirmDialog(type, onConfirm) {
+  var modal = document.getElementById('replace-confirm-modal');
+  var textEl = document.getElementById('replace-confirm-text');
+  var confirmBtn = document.getElementById('replace-confirm-btn');
+  var cancelBtn = document.getElementById('replace-cancel-btn');
+
+  if (type === 'chits') {
+    textEl.textContent = 'This will override and replace all chit data. Are you sure?';
+  } else {
+    textEl.textContent = 'This will override and replace all user data. Are you sure?';
+  }
+
+  function cleanup() {
+    modal.style.display = 'none';
+    confirmBtn.removeEventListener('click', onConfirmClick);
+    cancelBtn.removeEventListener('click', onCancelClick);
+  }
+
+  function onConfirmClick() {
+    cleanup();
+    onConfirm();
+  }
+
+  function onCancelClick() {
+    cleanup();
+  }
+
+  confirmBtn.addEventListener('click', onConfirmClick);
+  cancelBtn.addEventListener('click', onCancelClick);
+  modal.style.display = 'flex';
+}
+
+/**
+ * Perform the actual import POST request.
+ * @param {string} type - "chits" or "userdata"
+ * @param {string} mode - "add" or "replace"
+ * @param {object} fileData - The parsed JSON envelope
+ */
+async function _doImport(type, mode, fileData) {
+  var endpoint = '/api/import/' + (type === 'chits' ? 'chits' : 'userdata');
+  try {
+    var response = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode: mode, data: fileData })
+    });
+    if (!response.ok) {
+      var err = await response.json();
+      throw new Error(err.detail || response.statusText);
+    }
+    var result = await response.json();
+    var summary = result.summary || {};
+
+    // Build a user-friendly summary message
+    var msg;
+    if (type === 'chits') {
+      msg = 'Imported ' + (summary.imported || 0) + ' chits';
+    } else {
+      if (mode === 'add') {
+        msg = 'Added ' + (summary.contacts_added || 0) + ' contacts, merged ' + (summary.settings_merged || 0) + ' settings';
+      } else {
+        msg = 'Replaced ' + (summary.settings_replaced || 0) + ' settings, ' + (summary.contacts_replaced || 0) + ' contacts';
+      }
+    }
+    alert(msg);
+
+    // Reload settings after replace import of user data
+    if (type === 'userdata' && mode === 'replace') {
+      _invalidateSettingsCache();
+      if (window.settingsManager) {
+        window.settingsManager.initialize();
+      }
+    }
+  } catch (error) {
+    console.error('Import failed:', error);
+    alert('Import failed: ' + error.message);
+  }
+}
+
+/**
+ * Import chit data: open file picker, read JSON, validate, show mode dialog.
+ */
+function importChitData() {
+  var fileInput = document.getElementById('importChitFile');
+  fileInput.value = '';
+
+  function onChange() {
+    fileInput.removeEventListener('change', onChange);
+    var file = fileInput.files[0];
+    if (!file) return;
+
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      var parsed;
+      try {
+        parsed = JSON.parse(e.target.result);
+      } catch (err) {
+        alert('Invalid file: could not parse JSON');
+        return;
+      }
+      if (!parsed || parsed.type !== 'chits') {
+        alert('Invalid file: expected a CWOC chit data export');
+        return;
+      }
+      _showImportModeDialog('chits', parsed);
+    };
+    reader.readAsText(file);
+    fileInput.value = '';
+  }
+
+  fileInput.addEventListener('change', onChange);
+  fileInput.click();
+}
+
+/**
+ * Import user data: open file picker, read JSON, validate, show mode dialog.
+ */
+function importUserData() {
+  var fileInput = document.getElementById('importUserFile');
+  fileInput.value = '';
+
+  function onChange() {
+    fileInput.removeEventListener('change', onChange);
+    var file = fileInput.files[0];
+    if (!file) return;
+
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      var parsed;
+      try {
+        parsed = JSON.parse(e.target.result);
+      } catch (err) {
+        alert('Invalid file: could not parse JSON');
+        return;
+      }
+      if (!parsed || parsed.type !== 'userdata') {
+        alert('Invalid file: expected a CWOC user data export');
+        return;
+      }
+      _showImportModeDialog('userdata', parsed);
+    };
+    reader.readAsText(file);
+    fileInput.value = '';
+  }
+
+  fileInput.addEventListener('change', onChange);
+  fileInput.click();
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   // Initialize mobile actions modal (shared header button pattern)
   if (typeof initMobileActionsModal === 'function') initMobileActionsModal();
@@ -1600,95 +1849,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 // Trash view moved to /frontend/trash.html
 
-// ── CSV Export / Import ──────────────────────────────────────────────────────
 
-async function exportCSV() {
-  try {
-    const resp = await fetch('/api/chits');
-    if (!resp.ok) throw new Error('Failed to fetch chits');
-    const chits = await resp.json();
-    const cols = ['id','title','status','priority','severity','start_datetime','end_datetime','due_datetime','all_day','tags','note','location','color','pinned','archived','recurrence','created_datetime','modified_datetime'];
-    const escape = (v) => {
-      if (v == null) return '';
-      const s = String(v);
-      if (s.includes(',') || s.includes('"') || s.includes('\n')) return '"' + s.replace(/"/g, '""') + '"';
-      return s;
-    };
-    let csv = cols.join(',') + '\n';
-    chits.forEach(c => {
-      csv += cols.map(col => {
-        let val = c[col];
-        if (col === 'tags' && Array.isArray(val)) val = val.join('; ');
-        if (typeof val === 'boolean') val = val ? 'true' : 'false';
-        return escape(val);
-      }).join(',') + '\n';
-    });
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `cwoc-export-${new Date().toISOString().slice(0,10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  } catch (e) {
-    alert('Export failed: ' + e.message);
-  }
-}
-
-async function importCSV(input) {
-  const file = input.files[0];
-  if (!file) return;
-  try {
-    const text = await file.text();
-    const lines = text.split('\n').filter(l => l.trim());
-    if (lines.length < 2) { alert('CSV file is empty or has no data rows.'); return; }
-    // Parse header
-    const headers = _parseCSVLine(lines[0]);
-    const titleIdx = headers.indexOf('title');
-    if (titleIdx === -1) { alert('CSV must have a "title" column.'); return; }
-    let imported = 0;
-    for (let i = 1; i < lines.length; i++) {
-      const vals = _parseCSVLine(lines[i]);
-      if (!vals[titleIdx]?.trim()) continue;
-      const chit = {};
-      headers.forEach((h, idx) => {
-        let v = vals[idx] || '';
-        if (h === 'tags') { chit.tags = v ? v.split(';').map(t => t.trim()).filter(Boolean) : []; }
-        else if (h === 'pinned' || h === 'archived' || h === 'all_day') { chit[h] = v === 'true'; }
-        else if (v) { chit[h] = v; }
-      });
-      // Don't import the id — let backend generate a new one
-      delete chit.id;
-      await fetch('/api/chits', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(chit) });
-      imported++;
-    }
-    alert(`Imported ${imported} chit(s) successfully.`);
-    input.value = '';
-  } catch (e) {
-    alert('Import failed: ' + e.message);
-    input.value = '';
-  }
-}
-
-function _parseCSVLine(line) {
-  const result = [];
-  let current = '';
-  let inQuotes = false;
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i];
-    if (inQuotes) {
-      if (ch === '"' && line[i + 1] === '"') { current += '"'; i++; }
-      else if (ch === '"') { inQuotes = false; }
-      else { current += ch; }
-    } else {
-      if (ch === '"') { inQuotes = true; }
-      else if (ch === ',') { result.push(current); current = ''; }
-      else { current += ch; }
-    }
-  }
-  result.push(current);
-  return result;
-}
 
 // ── Version Info ─────────────────────────────────────────────────────────────
 

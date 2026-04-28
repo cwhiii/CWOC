@@ -168,7 +168,9 @@
                     display: flex;
                     flex-wrap: wrap;
                     gap: 10px;
-                    margin-top: 10px;
+                    margin: 0 0 10px;
+                    padding: 0;
+                    list-style: none;
                 }
                 .color-item {
                     width: 30px;
@@ -207,9 +209,8 @@
                     justify-content: center;
                     padding: 0;
                 }
-                .indicator-item { display: flex; justify-content: space-between; align-items: center; padding: 8px; margin: 5px 0; }
+                .indicator-item { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; margin: 0; }
                 .indicator-item span { white-space: nowrap; margin-right: 10px; }
-                .indicator-item select { flex: 1; min-width: 0; }
                 .tag-editor { display: flex; flex-direction: column; gap: 8px; }
                 .tag-in-input { background: #8b5a2b; color: #fff8e1; padding: 2px 5px; border-radius: 12px; margin: 0 2px; font-size: 14px; height: 20px; }
                 .tag { align-items: center; background-color: #e0e0e0; padding: 2px 8px; border-radius: 12px; font-size: 0.9em; margin: 0 2px; vertical-align: middle; height: 20px; line-height: 20px; }
@@ -228,6 +229,85 @@
                 /* Spacer for setting labels/items that need vertical separation */
                 .settings-spacer-top {
                     margin-top: 15px;
+                }
+
+                /* ── Sub-section header within a setting group ── */
+                .setting-subheader {
+                    display: block;
+                    font-weight: bold;
+                    font-size: 0.95em;
+                    color: #4a2c2a;
+                    margin: 12px 0 6px;
+                    padding-bottom: 3px;
+                    border-bottom: 1px solid rgba(139, 90, 43, 0.25);
+                }
+                .setting-subheader:first-child {
+                    margin-top: 0;
+                }
+
+                /* ── Hint text below a label ── */
+                .setting-hint {
+                    font-size: 0.8em;
+                    opacity: 0.6;
+                    margin: 0 0 6px;
+                }
+
+                /* ── Inline label + control row ── */
+                .setting-inline {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    margin-bottom: 6px;
+                }
+                .setting-inline > label {
+                    white-space: nowrap;
+                    margin-bottom: 0;
+                    flex-shrink: 0;
+                }
+                .setting-inline > select,
+                .setting-inline > input[type="number"] {
+                    margin-left: auto;
+                }
+
+                /* ── Force ALL selects in settings to the same width ── */
+                .setting-group select {
+                    width: 140px !important;
+                    min-width: 140px !important;
+                    max-width: 140px !important;
+                    flex: 0 0 140px !important;
+                    box-sizing: border-box;
+                }
+
+                /* ── Hour range pairs: two selects side by side ── */
+                .hour-range-row {
+                    display: flex;
+                    gap: 8px;
+                    align-items: center;
+                }
+                .hour-range-row select {
+                    width: 0 !important;
+                    min-width: 0 !important;
+                    max-width: none !important;
+                    flex: 1 1 0 !important;
+                }
+
+                @media (max-width: 400px) {
+                    .setting-inline {
+                        flex-wrap: wrap;
+                    }
+                    .setting-inline > select,
+                    .setting-inline > input[type="number"] {
+                        margin-left: 0;
+                    }
+                    .setting-group select {
+                        width: 100% !important;
+                        min-width: 0 !important;
+                        max-width: 100% !important;
+                        flex: 1 1 100% !important;
+                    }
+                    .hour-range-row select {
+                        flex: 1 1 0 !important;
+                    }
                 }
 
                 /* ── Saved Locations ── */
@@ -324,12 +404,15 @@
                         <h3>General Settings</h3>
                         <label for="username-input">👤 Username</label>
                         <input type="text" id="username-input" placeholder="Your name" style="width:100%;box-sizing:border-box;margin-bottom:10px;" />
-                        <label for="time-format">🕰️ Time Format</label>
-                        <select id="time-format" name="time-format">
-                            <option value="24hour">24 Hour</option>
-                            <option value="12hour">12 Hour</option>
-                            <option value="metric">HST</option>
-                        </select>
+
+                        <div class="setting-inline">
+                            <label for="time-format">🕰️ Time Format</label>
+                            <select id="time-format" name="time-format">
+                                <option value="24hour">24 Hour</option>
+                                <option value="12hour">12 Hour</option>
+                                <option value="metric">HST</option>
+                            </select>
+                        </div>
 
                         <div
                             class="settings-spacer-top"
@@ -371,7 +454,7 @@
                                     <span
                                         style="
                                             position: absolute;
-                                            content: "";
+                                            content: '';
                                             height: 22px;
                                             width: 22px;
                                             left: 4px;
@@ -394,110 +477,120 @@
                             >
                         </div>
 
-                        <label for="snooze-length" class="settings-spacer-top"
-                            >⏱️ Snooze Length</label
-                        >
-                        <select id="snooze-length" name="snooze-length">
-                            <option value="1 minute">1 min</option>
-                            <option value="3 minutes">3 min</option>
-                            <option value="5 minutes" selected>5 min</option>
-                            <option value="10 minutes">10 min</option>
-                        </select>
+                        <div class="setting-inline settings-spacer-top">
+                            <label for="snooze-length">⏱️ Snooze Length</label>
+                            <select id="snooze-length" name="snooze-length">
+                                <option value="1 minute">1 min</option>
+                                <option value="3 minutes">3 min</option>
+                                <option value="5 minutes" selected>5 min</option>
+                                <option value="10 minutes">10 min</option>
+                            </select>
+                        </div>
 
-                        <label for="calendar-snap" class="settings-spacer-top"
-                            >📐 Calendar Snapping</label
-                        >
-                        <select id="calendar-snap" name="calendar-snap">
-                            <option value="0">None</option>
-                            <option value="5">5 min</option>
-                            <option value="10">10 min</option>
-                            <option value="15" selected>15 min</option>
-                            <option value="20">20 min</option>
-                            <option value="25">25 min</option>
-                            <option value="30">30 min</option>
-                            <option value="60">60 min</option>
-                        </select>
+                        <div class="setting-inline">
+                            <label for="calendar-snap">📐 Calendar Snap</label>
+                            <select id="calendar-snap" name="calendar-snap">
+                                <option value="0">None</option>
+                                <option value="5">5 min</option>
+                                <option value="10">10 min</option>
+                                <option value="15" selected>15 min</option>
+                                <option value="20">20 min</option>
+                                <option value="25">25 min</option>
+                                <option value="30">30 min</option>
+                                <option value="60">60 min</option>
+                            </select>
+                        </div>
                     </div>
                     <div class="setting-group">
                         <h3>📅 Period Options</h3>
 
-                        <label>Enabled Periods</label>
-                        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;">
+                        <div class="setting-inline">
+                            <label for="week-start-day">Week Starts On</label>
+                            <select id="week-start-day" name="week-start-day">
+                                <option value="0" selected>Sun</option>
+                                <option value="1">Mon</option>
+                                <option value="2">Tue</option>
+                                <option value="3">Wed</option>
+                                <option value="4">Thu</option>
+                                <option value="5">Fri</option>
+                                <option value="6">Sat</option>
+                            </select>
+                        </div>
+
+                        <label class="setting-subheader">🕐 View Hours</label>
+                        <p class="setting-hint">For Day, Week, X Days views.</p>
+                        <div class="hour-range-row">
+                            <select id="all-view-start-hour" onchange="_syncHourDropdowns('all-view-start-hour','all-view-end-hour')">
+                            </select>
+                            <span>to</span>
+                            <select id="all-view-end-hour" onchange="_syncHourDropdowns('all-view-start-hour','all-view-end-hour')">
+                            </select>
+                        </div>
+
+                        <div class="setting-inline settings-spacer-top">
+                            <label>📍 Scroll to</label>
+                            <select id="day-scroll-to-hour">
+                                <option value="0">00:00</option>
+                                <option value="1">01:00</option>
+                                <option value="2">02:00</option>
+                                <option value="3">03:00</option>
+                                <option value="4">04:00</option>
+                                <option value="5" selected>05:00</option>
+                                <option value="6">06:00</option>
+                                <option value="7">07:00</option>
+                                <option value="8">08:00</option>
+                                <option value="9">09:00</option>
+                                <option value="10">10:00</option>
+                                <option value="11">11:00</option>
+                                <option value="12">12:00</option>
+                            </select>
+                        </div>
+
+                        <hr style="border:none;border-top:1px solid rgba(139, 90, 43, 0.3);margin:16px 0;" />
+
+                        <label class="setting-subheader">Enabled Periods</label>
+                        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:4px;">
                             <label class="cwoc-checkbox-label"><input type="checkbox" class="period-cb" value="Itinerary" checked /> Itinerary</label>
                             <label class="cwoc-checkbox-label"><input type="checkbox" class="period-cb" value="Day" checked /> Day</label>
                             <label class="cwoc-checkbox-label"><input type="checkbox" class="period-cb" value="Week" checked /> Week</label>
-                            <label class="cwoc-checkbox-label"><input type="checkbox" class="period-cb" value="Work" checked onchange="_toggleWorkConfig()" /> Work Hours</label>
-                            <label class="cwoc-checkbox-label"><input type="checkbox" class="period-cb" value="SevenDay" checked onchange="_toggleXDaysConfig()" /> X Days</label>
                             <label class="cwoc-checkbox-label"><input type="checkbox" class="period-cb" value="Month" checked /> Month</label>
                             <label class="cwoc-checkbox-label"><input type="checkbox" class="period-cb" value="Year" checked /> Year</label>
                         </div>
 
-                        <!-- X Days config (hidden when X Days is disabled) -->
-                        <div id="xdays-config">
-                            <label style="margin-top:8px;">X Days Count</label>
-                            <input type="number" id="custom-days-count" min="2" max="30" value="7" style="width:60px;padding:4px;border:1px solid #8b5a2b;border-radius:4px;font-family:inherit;" />
-                        </div>
-
-                        <label for="week-start-day">Week Starts On</label>
-                        <select id="week-start-day" name="week-start-day">
-                            <option value="0" selected>Sun</option>
-                            <option value="1">Mon</option>
-                            <option value="2">Tue</option>
-                            <option value="3">Wed</option>
-                            <option value="4">Thu</option>
-                            <option value="5">Fri</option>
-                            <option value="6">Sat</option>
-                        </select>
-
-                        <label class="settings-spacer-top">🕐 View Hours</label>
-                        <p style="font-size:0.8em;opacity:0.6;margin:0 0 6px;">For Day, Week, X Days views.</p>
-                        <div style="display:flex;gap:8px;align-items:center;">
-                            <select id="all-view-start-hour" style="flex:1;" onchange="_syncHourDropdowns('all-view-start-hour','all-view-end-hour')">
-                            </select>
-                            <span>to</span>
-                            <select id="all-view-end-hour" style="flex:1;" onchange="_syncHourDropdowns('all-view-start-hour','all-view-end-hour')">
-                            </select>
-                        </div>
-
-                        <label class="settings-spacer-top">📍 Scroll to</label>
-                        <select id="day-scroll-to-hour" style="width:auto;">
-                            <option value="0">00:00</option>
-                            <option value="1">01:00</option>
-                            <option value="2">02:00</option>
-                            <option value="3">03:00</option>
-                            <option value="4">04:00</option>
-                            <option value="5" selected>05:00</option>
-                            <option value="6">06:00</option>
-                            <option value="7">07:00</option>
-                            <option value="8">08:00</option>
-                            <option value="9">09:00</option>
-                            <option value="10">10:00</option>
-                            <option value="11">11:00</option>
-                            <option value="12">12:00</option>
-                        </select>
-
-                        <hr style="border:none;border-top:1px solid var(--aged-brown-medium,#8b4513);margin:16px 0;" />
-
-                        <!-- Work Week config (hidden when Work Hours is disabled) -->
-                        <div id="work-config">
-                            <label>🏢 Work Hours</label>
-                            <div style="display:flex;gap:8px;align-items:center;">
-                                <select id="work-start-hour" style="flex:1;" onchange="_syncHourDropdowns('work-start-hour','work-end-hour')">
-                                </select>
-                                <span>to</span>
-                                <select id="work-end-hour" style="flex:1;" onchange="_syncHourDropdowns('work-start-hour','work-end-hour')">
-                                </select>
+                        <!-- X Days — checkbox + config directly below -->
+                        <div style="margin-bottom:4px;">
+                            <label class="cwoc-checkbox-label"><input type="checkbox" class="period-cb" value="SevenDay" checked onchange="_toggleXDaysConfig()" /> X Days</label>
+                            <div id="xdays-config" style="margin-left:22px;margin-top:4px;">
+                                <div class="setting-inline">
+                                    <label style="font-weight:normal;font-size:0.9em;">X Days Count</label>
+                                    <input type="number" id="custom-days-count" min="2" max="30" value="7" style="width:60px;padding:4px;border:1px solid #8b5a2b;border-radius:4px;font-family:inherit;" />
+                                </div>
                             </div>
+                        </div>
 
-                            <label class="settings-spacer-top">📆 Working Days</label>
-                            <div style="display:flex;flex-wrap:wrap;gap:6px;">
-                                <label class="cwoc-checkbox-label"><input type="checkbox" class="work-day-cb" value="0" /> Sun</label>
-                                <label class="cwoc-checkbox-label"><input type="checkbox" class="work-day-cb" value="1" checked /> Mon</label>
-                                <label class="cwoc-checkbox-label"><input type="checkbox" class="work-day-cb" value="2" checked /> Tue</label>
-                                <label class="cwoc-checkbox-label"><input type="checkbox" class="work-day-cb" value="3" checked /> Wed</label>
-                                <label class="cwoc-checkbox-label"><input type="checkbox" class="work-day-cb" value="4" checked /> Thu</label>
-                                <label class="cwoc-checkbox-label"><input type="checkbox" class="work-day-cb" value="5" checked /> Fri</label>
-                                <label class="cwoc-checkbox-label"><input type="checkbox" class="work-day-cb" value="6" /> Sat</label>
+                        <!-- Work Hours — checkbox + config directly below -->
+                        <div>
+                            <label class="cwoc-checkbox-label"><input type="checkbox" class="period-cb" value="Work" checked onchange="_toggleWorkConfig()" /> Work Hours</label>
+                            <div id="work-config" style="margin-left:22px;margin-top:4px;">
+                                <label class="setting-subheader" style="font-size:0.9em;">📆 Work Days</label>
+                                <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;">
+                                    <label class="cwoc-checkbox-label"><input type="checkbox" class="work-day-cb" value="0" /> Sun</label>
+                                    <label class="cwoc-checkbox-label"><input type="checkbox" class="work-day-cb" value="1" checked /> Mon</label>
+                                    <label class="cwoc-checkbox-label"><input type="checkbox" class="work-day-cb" value="2" checked /> Tue</label>
+                                    <label class="cwoc-checkbox-label"><input type="checkbox" class="work-day-cb" value="3" checked /> Wed</label>
+                                    <label class="cwoc-checkbox-label"><input type="checkbox" class="work-day-cb" value="4" checked /> Thu</label>
+                                    <label class="cwoc-checkbox-label"><input type="checkbox" class="work-day-cb" value="5" checked /> Fri</label>
+                                    <label class="cwoc-checkbox-label"><input type="checkbox" class="work-day-cb" value="6" /> Sat</label>
+                                </div>
+
+                                <label class="setting-subheader" style="font-size:0.9em;">🏢 Work Hours</label>
+                                <div class="hour-range-row">
+                                    <select id="work-start-hour" onchange="_syncHourDropdowns('work-start-hour','work-end-hour')">
+                                    </select>
+                                    <span>to</span>
+                                    <select id="work-end-hour" onchange="_syncHourDropdowns('work-start-hour','work-end-hour')">
+                                    </select>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -573,9 +666,9 @@
                     </div>
                     <div class="setting-group">
                         <h3>🔄 Version &amp; Updates</h3>
-                        <div style="margin-bottom:12px;">
-                            <div style="margin-bottom:6px;"><strong>Version:</strong> <span id="version-display">Loading...</span></div>
-                            <div><strong>Last Updated:</strong> <span id="version-date">Loading...</span></div>
+                        <div style="margin-bottom:12px;font-size:0.9em;">
+                            <div style="margin-bottom:4px;">Version: <span id="version-display">Loading...</span></div>
+                            <div>Updated: <span id="version-date">Loading...</span></div>
                         </div>
                         <button id="upgrade-btn" class="standard-button" style="width:100%;">⬆️ Upgrade</button>
                         <button id="upgrade-reopen-btn" class="standard-button" style="width:100%;display:none;">🔄 Upgrade in progress</button>
@@ -584,24 +677,38 @@
                     <div class="setting-group">
                         <h3>🗄️ Data</h3>
                         <button onclick="window.location.href='/frontend/audit-log.html'" class="standard-button" style="width:100%;">📋 Audit Log →</button>
-                        <hr style="border:none;border-top:1px solid var(--aged-brown-medium,#8b4513);margin:12px 0 10px;" />
-                        <h3 style="margin-top:0;">📤 Export / Import</h3>
-                        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                            <button onclick="exportCSV()" class="standard-button" style="flex:1;">📄 Export</button>
-                            <button onclick="document.getElementById('csv-import-input').click()" class="standard-button" style="flex:1;">📥 Import</button>
-                            <input type="file" id="csv-import-input" accept=".csv" style="display:none;" onchange="importCSV(this)" />
-                        </div>
-                        <hr style="border:none;border-top:1px solid var(--aged-brown-medium,#8b4513);margin:12px 0 10px;" />
-                        <h3 style="margin-top:0;">🗑️ Trash</h3>
+
+                        <label class="setting-subheader" style="margin-top:14px;">🗑️ Trash</label>
                         <button onclick="window.location.href='/frontend/trash.html'" class="standard-button" style="width:100%;">View Deleted Chits →</button>
-                        <hr style="border:none;border-top:1px solid var(--aged-brown-medium,#8b4513);margin:12px 0 10px;" />
-                        <h3 style="margin-top:0;">📜 Audit Log Limits</h3>
+
+                        <label class="setting-subheader" style="margin-top:14px;">📜 Audit Log Limits</label>
                         <label><input type="checkbox" id="audit-prune-enabled" checked onchange="toggleAuditPruneInputs(); setSaveButtonUnsaved();" /> Enable Pruning</label>
-                        <label for="audit-max-days" style="margin-top:8px;">Max Age (days)</label>
-                        <input type="number" id="audit-max-days" min="1" step="1" placeholder="1096" style="width:100%;" />
-                        <label for="audit-max-mb" style="margin-top:8px;">Max Size (MB)</label>
-                        <input type="number" id="audit-max-mb" min="1" step="1" placeholder="1" style="width:100%;" />
-                        <p style="font-size:0.8em;opacity:0.7;margin-top:4px;">Uncheck to disable pruning. When either limit is reached, oldest entries are pruned first.</p>
+                        <div class="setting-inline" style="margin-top:8px;">
+                            <label for="audit-max-days">Max Age (days)</label>
+                            <input type="number" id="audit-max-days" min="1" step="1" placeholder="1096" style="width:80px;" />
+                        </div>
+                        <div class="setting-inline">
+                            <label for="audit-max-mb">Max Size (MB)</label>
+                            <input type="number" id="audit-max-mb" min="1" step="1" placeholder="1" style="width:80px;" />
+                        </div>
+                        <p class="setting-hint">Uncheck to disable pruning. When either limit is reached, oldest entries are pruned first.</p>
+                    </div>
+                    <div class="setting-group">
+                        <h3>📦 Data Management</h3>
+                        <label class="setting-subheader">Chit Data</label>
+                        <p class="setting-hint">All chits including deleted chits.</p>
+                        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+                            <button onclick="exportChitData()" class="standard-button" style="flex:1;">📄 Export</button>
+                            <button onclick="importChitData()" class="standard-button" style="flex:1;">📥 Import</button>
+                            <input type="file" id="importChitFile" accept=".json" style="display:none" />
+                        </div>
+                        <label class="setting-subheader">User Data</label>
+                        <p class="setting-hint">Settings, tags, colors, locations, contacts.</p>
+                        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                            <button onclick="exportUserData()" class="standard-button" style="flex:1;">📄 Export</button>
+                            <button onclick="importUserData()" class="standard-button" style="flex:1;">📥 Import</button>
+                            <input type="file" id="importUserFile" accept=".json" style="display:none" />
+                        </div>
                     </div>
                 </div>
                 <div class="loader" id="loader" style="display: none"></div>
@@ -667,6 +774,25 @@
                             <button id="update-copy-btn" class="standard-button" onclick="copyUpdateLog()">📋 Copy</button>
                         </div>
                     </div>
+                </div>
+            </div>
+            <!-- Import Mode Dialog (Add / Replace choice) -->
+            <div class="modal" id="import-mode-modal">
+                <div class="modal-content">
+                    <h3>Import Mode</h3>
+                    <p id="import-mode-text">How would you like to import this data?</p>
+                    <button id="import-mode-add-btn" class="standard-button">➕ Add to existing data</button>
+                    <button id="import-mode-replace-btn" class="standard-button">🔄 Replace all data</button>
+                    <button id="import-mode-cancel-btn" class="standard-button" style="margin-top:6px;">Cancel</button>
+                </div>
+            </div>
+            <!-- Replace Confirmation Dialog -->
+            <div class="modal" id="replace-confirm-modal">
+                <div class="modal-content">
+                    <h3>⚠️ Confirm Replace</h3>
+                    <p id="replace-confirm-text">This will override and replace all data. Are you sure?</p>
+                    <button id="replace-confirm-btn" class="standard-button" style="background:#a0522d;color:#fdf5e6;">🔄 Replace</button>
+                    <button id="replace-cancel-btn" class="standard-button">Cancel</button>
                 </div>
             </div>
             <div class="author-info">by <a href="https://www.cwholemaniii.com/pages/home.shtml" target="_blank">C.W. Holeman III</a></div>

@@ -13,5 +13,6 @@
 - **Duration field** on chits
 - **Progress % field** on chits (auto-calculate from checklist/children, or manual — needs design decision)
 - **Time estimate field** on chits
+- **Save Search button** — sidebar button for saving current search as a quick-access chip (removed from sidebar, to be redesigned)
 - `[ ]` **Progress % field** on chits
 - `[ ]` **Time estimate field** on chits

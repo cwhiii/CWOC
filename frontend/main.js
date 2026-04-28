@@ -938,6 +938,7 @@ function _toggleFilterPinned() {
 
 function _filterFocusSearch() {
   _exitHotkeyMode();
+  _expandFiltersSection();
   const searchInput = document.getElementById('search');
   if (searchInput) searchInput.focus();
 }
@@ -2534,12 +2535,18 @@ function _restoreUIState() {
           if (rs.tab) currentTab = rs.tab;
           if (rs.view) currentView = rs.view;
           if (rs.weekStart) currentWeekStart = new Date(rs.weekStart);
+          if (rs.sortField !== undefined) currentSortField = rs.sortField || null;
+          if (rs.sortDir) currentSortDir = rs.sortDir;
           // Update tab highlight
           document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
           var calTab = document.querySelector(".tab[onclick=\"filterChits('" + currentTab + "')\"]");
           if (calTab) calTab.classList.add('active');
           var periodSel = document.getElementById('period-select');
           if (periodSel) periodSel.value = currentView;
+          // Restore sort UI
+          var rsSortSel = document.getElementById('sort-select');
+          if (rsSortSel && rs.sortField) rsSortSel.value = rs.sortField;
+          _updateSortUI();
           return true;
         }
       } catch (e) { /* ignore */ }
@@ -2675,6 +2682,24 @@ function expandSidebarSection(sectionId) {
   const toggle = section.querySelector('.section-toggle');
   if (body) body.style.display = '';
   if (toggle) toggle.textContent = '▼';
+}
+
+/** Toggle the entire Filters section open/closed */
+function _toggleFiltersSection() {
+  var body = document.getElementById('filters-body');
+  var btn = document.getElementById('filters-toggle-btn');
+  if (!body) return;
+  var isHidden = body.style.display === 'none';
+  body.style.display = isHidden ? '' : 'none';
+  if (btn) btn.classList.toggle('expanded', isHidden);
+}
+
+/** Ensure filters section is expanded (used by hotkeys) */
+function _expandFiltersSection() {
+  var body = document.getElementById('filters-body');
+  var btn = document.getElementById('filters-toggle-btn');
+  if (body) body.style.display = '';
+  if (btn) btn.classList.add('expanded');
 }
 
 /** Toggle a filter sub-group's body */
@@ -2909,7 +2934,7 @@ function updateDateRange() {
   } else if (currentView === "SevenDay") {
     const start = new Date(currentWeekStart);
     const end = new Date(start);
-    end.setDate(start.getDate() + 6);
+    end.setDate(start.getDate() + (_customDaysCount - 1));
     yearElement.textContent = `${start.getFullYear()} · ${monthNames[start.getMonth()]}`;
     rangeElement.innerHTML = formatWeekRange(start, end);
   } else if (currentView === "Month") {
@@ -2939,6 +2964,8 @@ function displayChits() {
       tab: currentTab,
       view: currentView,
       weekStart: currentWeekStart ? currentWeekStart.toISOString() : null,
+      sortField: currentSortField,
+      sortDir: currentSortDir,
     }));
   } catch (e) { /* ignore */ }
 
@@ -6849,6 +6876,7 @@ document.addEventListener("DOMContentLoaded", function () {
     if (keyLower === 'f') {
       e.preventDefault();
       _hotkeyMode = 'FILTER';
+      _expandFiltersSection();
       expandSidebarSection('section-filters');
       _showPanel('panel-filter');
       return;

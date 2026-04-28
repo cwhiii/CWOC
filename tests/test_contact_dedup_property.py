@@ -62,20 +62,24 @@ def _rand_multi_value_entries():
     ]
 
 
-def _generate_contact_dict(display_name=None, given_name=None):
+_SENTINEL = object()  # distinguishes "not provided" from explicit None
+
+
+def _generate_contact_dict(display_name=_SENTINEL, given_name=_SENTINEL):
     """Generate a random contact dict (as it would appear in an export envelope).
 
-    If display_name or given_name are provided, those values are used instead of random ones.
+    If display_name or given_name are provided (including None), those exact
+    values are used.  Only when the caller omits them are random values generated.
     """
     return {
         "id": str(uuid4()),
-        "given_name": given_name if given_name is not None else _rand_str(2, 15),
+        "given_name": given_name if given_name is not _SENTINEL else _rand_str(2, 15),
         "surname": _maybe(lambda: _rand_str(2, 15), 0.6),
         "middle_names": _maybe(lambda: _rand_str(2, 15), 0.3),
         "prefix": _maybe(lambda: random.choice(["Mr", "Mrs", "Dr", "Ms"]), 0.2),
         "suffix": _maybe(lambda: random.choice(["Jr", "Sr", "III"]), 0.1),
         "nickname": _maybe(lambda: _rand_str(2, 10), 0.3),
-        "display_name": display_name if display_name is not None else _maybe(lambda: _rand_str(5, 25), 0.7),
+        "display_name": display_name if display_name is not _SENTINEL else _maybe(lambda: _rand_str(5, 25), 0.7),
         "phones": _maybe(_rand_multi_value_entries, 0.5),
         "emails": _maybe(_rand_multi_value_entries, 0.5),
         "addresses": _maybe(_rand_multi_value_entries, 0.4),

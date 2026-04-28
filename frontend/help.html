@@ -30,8 +30,9 @@
                     <li><a href="#editor">Chit Editor</a></li>
                     <li><a href="#quick-edit">Quick Edit Modal</a></li>
                     <li><a href="#settings">Settings</a></li>
+                    <li><a href="#data-management">Data Management</a></li>
                     <li><a href="#alert-indicators">Visual Indicators</a></li>
-                    <li><a href="#version-management">Version Management</a></li>
+                    <li><a href="#version-management">Version & Updates</a></li>
                     <li><a href="#audit-log">Audit Log</a></li>
                     <li><a href="#contacts">Contact Editor</a></li>
                 </ul>
@@ -50,7 +51,18 @@
             </ul>
             <p>A single chit can appear in multiple views if it has the relevant fields.</p>
             <h3 id="views">Views & Tabs</h3>
-            <p>The top tab bar switches between six views: Calendar, Checklists, Alerts, Projects, Tasks, Notes. The <strong>sidebar</strong> (toggle by clicking the logo) provides sorting, period selection, and filters.</p>
+            <p>The top tab bar switches between six views: Calendar, Checklists, Alerts, Projects, Tasks, Notes, plus a Global Search tab (magnifying glass icon). The <strong>sidebar</strong> (toggle by clicking the logo or the ☰ hamburger on mobile) provides date navigation, sorting, period selection, and filters.</p>
+            <h4>Sidebar Layout</h4>
+            <p>The sidebar is organized top-to-bottom:</p>
+            <ul>
+                <li><strong>Date Navigation</strong> — Year/month display, ◄/► arrows to move between periods, and a compact 📍 Today button to jump back to the current date</li>
+                <li><strong>Create Chit</strong> — Directly below the date arrows. Click to create, middle-click to open in a new tab</li>
+                <li><strong>Order</strong> — Sort by title, dates, status, manual drag, random, or upcoming</li>
+                <li><strong>Period</strong> — Switch calendar period (Itinerary, Day, Week, Work Hours, X Days, Month, Year)</li>
+                <li><strong>Filters</strong> — Collapsible filter groups for text, status, priority, tags, people, and show/hide options</li>
+                <li><strong>People &amp; Settings</strong> — Navigation to People and Settings pages</li>
+                <li><strong>Clock, Weather, Reference, Help</strong> — Four compact buttons at the bottom. Clock and Weather open modals (Shift+click Weather for the full page). Reference and Help open their respective overlays/pages</li>
+            </ul>
             <p>The Alerts and Projects tabs have a <strong>View Mode</strong> toggle in the sidebar. Projects switches between List and Kanban; Alerts switches between Chits (showing chits that have alerts) and Independent (a 3-column board for quick alarms, timers, and stopwatches not tied to any chit).</p>
             <h3 id="calendar">Calendar View</h3>
             <p>Periods: Itinerary, Day, Week, Work Hours, X Days, Month, Year. Switch with the Period dropdown or <kbd>.</kbd> hotkey.</p>
@@ -82,17 +94,25 @@
                 <li><strong>📱 QR</strong> — Data QR (Shift+click for link QR)</li>
             </ul>
             <h3 id="hotkeys">Keyboard Shortcuts</h3>
-            <p>Press <kbd>R</kbd> for the full reference overlay.</p>
+            <p>Press <kbd>R</kbd> for the full reference overlay. Press <kbd>Shift+R</kbd> to open this Help page.</p>
+            <h4>Tab Switching</h4>
             <ul>
-                <li><kbd>C</kbd> <kbd>H</kbd> <kbd>A</kbd> <kbd>P</kbd> <kbd>T</kbd> <kbd>N</kbd> — Switch tabs</li>
-                <li><kbd>K</kbd> — Create chit (middle-click → new tab)</li>
-                <li><kbd>.</kbd> — Period: <kbd>I</kbd> <kbd>D</kbd> <kbd>W</kbd>eek <kbd>K</kbd> Work <kbd>S</kbd> X-Day <kbd>M</kbd>onth <kbd>Y</kbd>ear</li>
-                <li><kbd>F</kbd> — Filter: <kbd>S</kbd>tatus <kbd>T</kbd>ags <kbd>P</kbd>riority <kbd>D</kbd> Filter Text</li>
-                <li><kbd>O</kbd> — Order: <kbd>T</kbd>itle <kbd>S</kbd>tart <kbd>D</kbd>ue <kbd>U</kbd>pdated <kbd>C</kbd>reated <kbd>X</kbd> Status <kbd>M</kbd>anual <kbd>R</kbd>andom <kbd>G</kbd> Upcoming</li>
+                <li><kbd>C</kbd> Calendar · <kbd>H</kbd> Checklists · <kbd>A</kbd> Alerts · <kbd>P</kbd> Projects · <kbd>T</kbd> Tasks · <kbd>N</kbd> Notes</li>
                 <li><kbd>G</kbd> — Global Search</li>
-                <li><kbd>W</kbd> — Weather (default location forecast) · <kbd>Shift+W</kbd> — Weather Page (full forecast)</li>
-                <li><kbd>L</kbd> — Clock · <kbd>R</kbd> — Reference · <kbd>Shift+R</kbd> — Help · <kbd>S</kbd> — Settings</li>
-                <li><kbd>ESC</kbd> — Close/exit · <kbd>Backspace</kbd> — Clear filters</li>
+            </ul>
+            <h4>Actions</h4>
+            <ul>
+                <li><kbd>K</kbd> — Create chit (middle-click → new tab)</li>
+                <li><kbd>W</kbd> — Weather modal (default location forecast) · <kbd>Shift+W</kbd> — Weather page (full forecast)</li>
+                <li><kbd>L</kbd> — Clock modal · <kbd>S</kbd> — Settings · <kbd>V</kbd> — Navigate menu</li>
+                <li><kbd>R</kbd> — Reference overlay · <kbd>Shift+R</kbd> — Help page</li>
+                <li><kbd>ESC</kbd> — Close modal / exit · <kbd>Backspace</kbd> — Clear filters</li>
+            </ul>
+            <h4>Submenu Hotkeys</h4>
+            <ul>
+                <li><kbd>.</kbd> — Period: <kbd>I</kbd>tinerary <kbd>D</kbd>ay <kbd>W</kbd>eek <kbd>K</kbd> Work <kbd>S</kbd> X-Day <kbd>M</kbd>onth <kbd>Y</kbd>ear</li>
+                <li><kbd>F</kbd> — Filter: <kbd>S</kbd>tatus <kbd>T</kbd>ags <kbd>P</kbd>riority <kbd>E</kbd> People <kbd>A</kbd> Archived <kbd>I</kbd> Pinned <kbd>D</kbd> Filter Text</li>
+                <li><kbd>O</kbd> — Order: <kbd>T</kbd>itle <kbd>S</kbd>tart <kbd>D</kbd>ue <kbd>U</kbd>pdated <kbd>C</kbd>reated <kbd>X</kbd> Status <kbd>M</kbd>anual <kbd>R</kbd>andom <kbd>G</kbd> Upcoming · <kbd>↑↓</kbd> Asc/Desc</li>
             </ul>
             <h4>Editor Hotkeys</h4>
             <ul>
@@ -115,12 +135,23 @@
                 <li><strong>Sidebar Filters</strong> — Sidebar filters (Status, Priority, Tags, etc.) remain active during Global Search, narrowing results further.</li>
             </ul>
             <h3 id="filters">Filtering & Sorting</h3>
-            <p>Sidebar: Filter Text, Status, Priority, Tags, Show (Pinned/Archived/Unmarked/Hide Past-Due). 💾 Save Search saves text as a quick-access chip.</p>
+            <p>The sidebar provides multiple filter groups, each collapsible by clicking its label:</p>
+            <ul>
+                <li><strong>Filter Text</strong> — Free-text search across title, notes, tags, status, people, location, and priority</li>
+                <li><strong>Status</strong> — Multi-select: Any, ToDo, In Progress, Blocked, Complete</li>
+                <li><strong>Priority</strong> — Multi-select: Any, Low, Medium, High</li>
+                <li><strong>Tags</strong> — Multi-select with search. Favorites appear first</li>
+                <li><strong>People</strong> — Multi-select from contacts assigned to chits</li>
+                <li><strong>Show</strong> — Toggle visibility of Pinned, Archived, Unmarked chits, and Hide Past-Due</li>
+            </ul>
+            <p>When any filter is active, a "✕ Clear All" button appears. If the current tab has a default filter (configured in Settings → Default Filters), a "🔄 Defaults" button resets to that filter.</p>
+            <h4>Sorting</h4>
+            <p>The Order section in the sidebar provides sort options: Title, Start Date, Due Date, Updated, Created, Status, Manual (drag-to-reorder), Random/Shuffle, and Upcoming (due soon first, completed at bottom). Click the ▲/▼ button to toggle ascending/descending.</p>
             <h3 id="notes-view">Notes View</h3>
             <p>Multi-column masonry layout with full rendered markdown. <code>[[chit title]]</code> auto-links to other chits.</p>
             <p><strong>Shift+click</strong> (or long-press on mobile) a note card to edit it in place. While editing, drag-and-drop reordering is disabled so you can click to position the cursor. Press <kbd>ESC</kbd> or click outside to save and exit edit mode.</p>
             <h3 id="clocks">Clocks</h3>
-            <p>Press <kbd>L</kbd> on the dashboard to open the clocks modal. Configure which clocks are displayed and their layout in Settings → Alarms.</p>
+            <p>Press <kbd>L</kbd> on the dashboard or click the 🕐 Clock button in the sidebar to open the clocks modal. Configure which clocks are displayed and their layout in Settings → Clocks.</p>
             <ul>
                 <li><strong>24 Hour</strong> — Standard 24-hour digital display (HH:MM:SS)</li>
                 <li><strong>12 Hour</strong> — 12-hour digital display with AM/PM</li>
@@ -149,13 +180,13 @@
                 <li><strong>Precipitation</strong> — Shown on Day, Week, Work Hours, and X Days views</li>
                 <li><strong>⏳ Stale indicator</strong> — Appears when the forecast data is more than 24 hours old</li>
             </ul>
-            <p>If a chit has a location but no stored weather data yet, it falls back to fetching weather in the background. The 🌤️ Weather button in the calendar view header navigates to the full Weather page.</p>
+            <p>If a chit has a location but no stored weather data yet, it falls back to fetching weather in the background. The 🌤️ Weather button in the sidebar opens the weather modal (click) or navigates to the full Weather page (Shift+click).</p>
             <h4>Weather Page</h4>
             <p>The Weather page shows a comprehensive forecast table for all your saved locations. Access it via:</p>
             <ul>
                 <li><kbd>Shift+W</kbd> from the dashboard</li>
                 <li>The <strong>📊 Full Forecast</strong> button in the weather modal</li>
-                <li>The <strong>🌤️</strong> button in the calendar view header</li>
+                <li>Shift+click the <strong>🌤️ Weather</strong> button in the sidebar</li>
             </ul>
             <p>The page displays one row per saved location, with up to 16 days of forecast data. Each day block shows the weather icon, high/low temperatures in °F, and precipitation. Drag rows by the ☰ handle to reorder locations — your arrangement is saved automatically. Days where you have a chit at that location are highlighted with a darker background. Click any day block to jump to that day in the Calendar Day view — any chits at that location will flash briefly to draw your eye. If no saved locations are configured, a message directs you to add them in Settings. Press <kbd>ESC</kbd> to navigate back.</p>
             <h4>Weather Update Schedule</h4>
@@ -198,18 +229,35 @@
             <h3 id="quick-edit">Quick Edit Modal</h3>
             <p>Shift+click any chit. Edit title (double-click), change Priority/Severity/Status, Pin/Archive/Delete/QR. Recurring chits get per-field "All" checkboxes and series edit options.</p>
             <h3 id="settings">Settings</h3>
+            <p>Settings are organized into groups. Labels and controls are placed inline where space allows. Sub-sections within a group use small headers with a subtle bottom border.</p>
             <ul>
-                <li><strong>General</strong> — Username, time format (24h, 12h, <a href="https://www.cwholemaniii.com/pages/hss/hst.shtml" target="_blank">HST</a>), snooze length, calendar snapping</li>
-                <li><strong>Period Options</strong> — Enable/disable periods, week start, working hours & days, X Days count</li>
-                <li><strong>Default Filters</strong> — Per-tab default search text</li>
-                <li><strong>Clocks</strong> — Choose active clocks, drag to reorder, set orientation (horizontal/vertical)</li>
+                <li><strong>General</strong> — Username, time format (24h, 12h, <a href="https://www.cwholemaniii.com/pages/hss/hst.shtml" target="_blank">HST</a>), sex toggle, snooze length, calendar snapping</li>
+                <li><strong>Period Options</strong> — Week start day, view hours range, scroll-to hour, then enabled periods with per-period options (X Days count, Work Days and Work Hours) nested directly below their checkboxes</li>
                 <li><strong>Tag Editor</strong> — Tree view, create/edit/delete/favorite, "+" for child tags</li>
                 <li><strong>Saved Locations</strong> — Add, label, and set a default location for use across the editor and dashboard weather</li>
+                <li><strong>Chit Options</strong> — Fade past, highlight overdue, delete past alarms, show tab counts, prefer Google for Maps</li>
                 <li><strong>Custom Colors</strong> — Color picker for chit colors</li>
-                <li><strong>Chit Options</strong> — Fade past, highlight overdue, delete past alarms, prefer Google for Maps</li>
-                <li><strong>Export / Import</strong> — CSV export and import</li>
-                <li><strong>Trash</strong> — View, restore, or permanently delete chits</li>
+                <li><strong>Clocks</strong> — Choose active clocks, drag to reorder, set orientation (horizontal/vertical)</li>
+                <li><strong>Default Filters</strong> — Per-tab default search text</li>
+                <li><strong>Visual Indicators</strong> — Per-indicator visibility (Always / Never / If Space), combine alerts toggle</li>
+                <li><strong>Version &amp; Updates</strong> — Current version, upgrade button, update log</li>
+                <li><strong>Data</strong> — Audit log link, trash link, audit log pruning limits</li>
+                <li><strong>Data Management</strong> — JSON export/import for chit data and user data (add or replace modes)</li>
             </ul>
+            <h3 id="data-management">Data Management</h3>
+            <p>The Settings page includes a <strong>📦 Data Management</strong> box for exporting and importing your data as JSON files. There are two data categories, each with its own Export and Import buttons:</p>
+            <h4>Chit Data</h4>
+            <p>Exports all chits (including deleted chits) as a JSON file. This captures every field on every chit — titles, notes, dates, tags, checklists, alerts, recurrence rules, and more.</p>
+            <h4>User Data</h4>
+            <p>Exports your settings, tags, custom colors, saved locations, and contacts as a JSON file. Use this to back up your configuration or replicate it on another CWOC instance.</p>
+            <h4>Import Modes</h4>
+            <p>When importing a file, you choose one of two modes:</p>
+            <ul>
+                <li><strong>➕ Add</strong> — Merges the imported data with your existing data. Nothing is removed. For chits, each imported chit is added as a new record. For user data, array fields (tags, colors, locations) are merged and deduplicated, and contacts are added unless an exact name match already exists.</li>
+                <li><strong>🔄 Replace</strong> — Deletes all existing data of that type and replaces it with the imported data. A confirmation dialog appears before any data is removed.</li>
+            </ul>
+            <h4>File Format</h4>
+            <p>Exported files are self-contained JSON with metadata including the CWOC version, export timestamp, and instance ID. Files can be imported into any CWOC instance.</p>
             <h3 id="alert-indicators">Visual Indicators</h3>
             <p>Visual indicators are small icons displayed alongside chit titles in all views to signal key properties. Configure their visibility in Settings → Visual Indicators. Each indicator has three visibility modes:</p>
             <ul>

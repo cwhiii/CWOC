@@ -40,7 +40,7 @@ allow edxporting any pice of segragated data, or evertyhign (all chits, all cont
     - Use stdlib only, minimum 100 iterations
     - **Validates: Requirements 3.2, 3.4, 3.5, 3.6, 9.4**
 
-- [ ] 2. Add backend import endpoints
+- [x] 2. Add backend import endpoints
   - [x] 2.1 Implement `POST /api/import/chits` endpoint
     - Validate `mode` is "add" or "replace" → HTTP 400 if not
     - Validate `data.type` is "chits" → HTTP 400 if not
@@ -78,17 +78,17 @@ allow edxporting any pice of segragated data, or evertyhign (all chits, all cont
     - Use stdlib only, minimum 100 iterations
     - **Validates: Requirements 6.4**
 
-  - [-] 2.6 Write property test: Add mode contact import skips duplicates
+  - [x] 2.6 Write property test: Add mode contact import skips duplicates
     - **Property 6: Add mode contact import skips duplicates**
     - Generate random existing and imported contacts with some matching display_name+given_name pairs, import in add mode, verify duplicates skipped and non-matching inserted with new UUIDs
     - Use stdlib only, minimum 100 iterations
     - **Validates: Requirements 6.5**
 
-- [ ] 3. Checkpoint — Backend endpoints complete
+- [x] 3. Checkpoint — Backend endpoints complete
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 4. Add frontend Data Management box and export/import logic
-  - [~] 4.1 Add the "📦 Data Management" setting-group box in `frontend/settings.html`
+- [x] 4. Add frontend Data Management box and export/import logic
+  - [x] 4.1 Add the "📦 Data Management" setting-group box in `frontend/settings.html`
     - Add a new `.setting-group` box in the `.settings-grid` with heading "📦 Data Management"
     - Create two subsections: "Chit Data" with Export and Import buttons, "User Data" with Export and Import buttons
     - Add hidden file input elements for JSON import (accept `.json`)
@@ -97,19 +97,19 @@ allow edxporting any pice of segragated data, or evertyhign (all chits, all cont
     - Follow existing parchment/1940s theme using `shared-page.css` styles
     - _Requirements: 1.1, 1.2, 1.4, 4.1, 4.2, 6.1, 6.2_
 
-  - [~] 4.2 Remove legacy CSV export/import from Chit Options
+  - [x] 4.2 Remove legacy CSV export/import from Chit Options
     - Remove the "📤 Export / Import" subsection (`<h3>`, buttons, file input) from the "Chit Options" `.setting-group` in `settings.html`
     - Remove `exportCSV`, `importCSV`, and `_parseCSVLine` functions from `settings.js`
     - _Requirements: 11.1, 11.2, 11.3_
 
-  - [~] 4.3 Implement export JS functions in `frontend/settings.js`
+  - [x] 4.3 Implement export JS functions in `frontend/settings.js`
     - Add `_triggerJsonDownload(data, filename)` helper — create Blob, trigger `<a>` download
     - Add `exportChitData()` — fetch from `/api/export/chits`, trigger download as `cwoc-chits-YYYY-MM-DD.json`
     - Add `exportUserData()` — fetch from `/api/export/userdata`, trigger download as `cwoc-userdata-YYYY-MM-DD.json`
     - Handle network errors with alert messages
     - _Requirements: 2.1, 2.3, 3.1, 3.3_
 
-  - [~] 4.4 Implement import JS functions in `frontend/settings.js`
+  - [x] 4.4 Implement import JS functions in `frontend/settings.js`
     - Add `_showImportModeDialog(type, fileData)` — show modal with Add/Replace buttons
     - Add `_showReplaceConfirmDialog(type, onConfirm)` — show confirmation modal with appropriate warning text
     - Add `importChitData()` — open file picker, read JSON, validate envelope type is "chits", show mode dialog, POST to `/api/import/chits`, display summary
@@ -118,11 +118,11 @@ allow edxporting any pice of segragated data, or evertyhign (all chits, all cont
     - Handle file parse errors, wrong envelope type errors, and network errors with appropriate alert messages
     - _Requirements: 4.2, 4.3, 4.5, 4.6, 5.1, 5.2, 5.4, 5.5, 6.2, 6.3, 6.6, 6.7, 7.1, 7.2, 7.4, 7.5, 7.6_
 
-- [ ] 5. Checkpoint — Frontend complete
+- [x] 5. Checkpoint — Frontend complete
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 6. Update help documentation and version
-  - [~] 6.1 Update `frontend/help.html` with Data Management section
+- [x] 6. Update help documentation and version
+  - [x] 6.1 Update `frontend/help.html` with Data Management section
     - Add "Data Management" entry to the table of contents
     - Add a new `<h3 id="data-management">Data Management</h3>` section describing export/import functionality
     - Document the two data categories (Chit Data and User Data) and what each contains
@@ -130,18 +130,18 @@ allow edxporting any pice of segragated data, or evertyhign (all chits, all cont
     - Update the Settings section list item to reference "Data Management" instead of "Export / Import — CSV export and import"
     - _Requirements: 12.1, 12.2, 12.3, 12.4_
 
-  - [~] 6.2 Update VERSION file
+  - [x] 6.2 Update VERSION file
     - Run `date "+%Y%m%d.%H%M"` and update the VERSION file with the current timestamp
     - _Requirements: (workspace versioning rule)_
 
-- [ ] 7. Write round-trip property test
-  - [~] 7.1 Write property test: Export-import round trip
+- [x] 7. Write round-trip property test
+  - [x] 7.1 Write property test: Export-import round trip
     - **Property 7: Export-import round trip**
     - Generate random datasets (chits, settings+contacts), export, import in replace mode, export again, verify datasets are equivalent (same field values, ignoring generated IDs and export metadata)
     - Use stdlib only, minimum 100 iterations
     - **Validates: Requirements 8.5, 5.3, 7.3**
 
-- [ ] 8. Final checkpoint — Ensure all tests pass
+- [x] 8. Final checkpoint — Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
 ## Notes

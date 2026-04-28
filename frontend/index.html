@@ -23,27 +23,28 @@
         <div class="sidebar" id="sidebar">
             <!-- Date nav (stays at top) -->
             <div id="year-week-container">
-                <div id="year-display"></div>
+                <button class="action-button today-btn" onclick="goToToday()">📅 Today</button>
                 <div class="week-nav" id="week-nav">
                     <button class="action-button" onclick="previousPeriod()">◄</button>
-                    <span class="week-range" id="week-range"></span>
+                    <div class="week-nav-center">
+                        <div id="year-display"></div>
+                        <span class="week-range" id="week-range"></span>
+                    </div>
                     <button class="action-button" onclick="nextPeriod()">►</button>
                 </div>
-                <button class="action-button today-btn" onclick="goToToday()">Today</button>
-                <button class="action-button today-btn" id="cal-weather-btn" onclick="storePreviousState(); window.location.href='/frontend/weather.html'" title="Full Weather Forecast (Shift+W)">🌤️ Weather</button>
             </div>
 
-            <!-- 1. Create -->
-            <div class="sidebar-section" id="section-create">
+            <!-- 1. Create (directly under date nav) -->
+            <div class="sidebar-section" id="section-create" style="margin-top:0;">
                 <button class="create-chit action-button" onclick="storePreviousState(); window.location.href='/frontend/editor.html'" onauxclick="window.open('/frontend/editor.html','_blank')">
                     <img src="/static/create_new.png" alt="" />
-                    Create Chit <span class="hotkey-hint">K</span>
+                    Create Chit
                 </button>
             </div>
 
             <!-- 2. Order (always visible) -->
             <div class="sidebar-section" id="section-order">
-                <label class="sidebar-section-label">Order <span class="hotkey-hint">O</span></label>
+                <label class="sidebar-section-label">Order</label>
                 <div id="order-controls">
                     <select id="sort-select" onchange="onSortSelectChange()">
                         <option value="">— None —</option>
@@ -63,7 +64,7 @@
 
             <!-- 3. Period (always visible) -->
             <div class="sidebar-section" id="section-period">
-                <label class="sidebar-section-label">Period <span class="hotkey-hint">.</span></label>
+                <label class="sidebar-section-label">Period</label>
                 <select id="period-select" onchange="changePeriod()">
                     <option value="Itinerary">Itinerary</option>
                     <option value="Day">Day</option>
@@ -93,13 +94,16 @@
                 </div>
             </div>
 
-            <!-- 4. Filters — each sub-section individually collapsible -->
+            <!-- 4. Filters — collapsible section -->
             <div class="sidebar-section" id="section-filters">
-                <label class="sidebar-section-label">Filters <span class="hotkey-hint">F</span></label>
+                <button class="action-button filters-toggle-btn" id="filters-toggle-btn" onclick="_toggleFiltersSection()" title="Toggle filters">
+                    <i class="fas fa-filter"></i> Filters
+                </button>
+                <div id="filters-body" style="display:none;">
 
-                <!-- Words (always visible) -->
+                <!-- Words -->
                 <div class="filter-group" id="filter-words">
-                    <label class="filter-label">Filter Text <span class="hotkey-hint">D</span></label>
+                    <label class="filter-label">Filter Text</label>
                     <input type="text" id="search" placeholder="Filter Chits..." onkeyup="searchChits()" />
                     <div id="saved-searches" style="display:flex;flex-wrap:wrap;gap:3px;margin-top:3px;"></div>
                 </div>
@@ -107,7 +111,7 @@
                 <!-- Status -->
                 <div class="filter-group" id="filter-status">
                     <label class="filter-label" onclick="toggleFilterGroup('filter-status')">
-                        <span class="section-toggle">▶</span> Status <span class="hotkey-hint">S</span>
+                        <span class="section-toggle">▶</span> Status
                     </label>
                     <div class="filter-group-body" style="display:none;">
                         <div class="multi-select" id="status-multi">
@@ -124,7 +128,7 @@
                 <!-- Priority -->
                 <div class="filter-group" id="filter-priority">
                     <label class="filter-label" onclick="toggleFilterGroup('filter-priority')">
-                        <span class="section-toggle">▶</span> Priority <span class="hotkey-hint">P</span>
+                        <span class="section-toggle">▶</span> Priority
                     </label>
                     <div class="filter-group-body" style="display:none;">
                         <div class="multi-select" id="priority-multi">
@@ -140,7 +144,7 @@
                 <!-- Tags -->
                 <div class="filter-group" id="filter-label">
                     <label class="filter-label" onclick="toggleFilterGroup('filter-label')">
-                        <span class="section-toggle">▶</span> Tags <span class="hotkey-hint">T</span>
+                        <span class="section-toggle">▶</span> Tags
                     </label>
                     <div class="filter-group-body" style="display:none;">
                         <input type="text" id="tag-filter-search" placeholder="Search tags..." oninput="_filterTagCheckboxes()" style="width:100%;padding:3px 6px;font-size:0.8em;margin-bottom:3px;box-sizing:border-box;border:1px solid #6b4e31;border-radius:3px;font-family:inherit;" />
@@ -152,7 +156,7 @@
                 <!-- People -->
                 <div class="filter-group" id="filter-people">
                     <label class="filter-label" onclick="toggleFilterGroup('filter-people')">
-                        <span class="section-toggle">▶</span> People <span class="hotkey-hint">E</span>
+                        <span class="section-toggle">▶</span> People
                     </label>
                     <div class="filter-group-body" style="display:none;">
                         <div id="people-multi"></div>
@@ -163,7 +167,7 @@
                 <!-- Show (Archive/Pinned) -->
                 <div class="filter-group" id="filter-archive">
                     <label class="filter-label" onclick="toggleFilterGroup('filter-archive')">
-                        <span class="section-toggle">▶</span> Show <span class="hotkey-hint">A/I</span>
+                        <span class="section-toggle">▶</span> Show
                     </label>
                     <div class="filter-group-body" style="display:none;">
                         <div class="multi-select">
@@ -174,6 +178,7 @@
                         </div>
                     </div>
                 </div>
+                </div><!-- /filters-body -->
             </div>
 
             <!-- Clear Filters -->
@@ -188,32 +193,36 @@
                 </div>
             </div>
 
-            <!-- People + Settings -->
+            <!-- People, Clock, Weather -->
             <div class="sidebar-section" id="section-settings">
                 <button class="action-button" onclick="window.location.href='/frontend/people.html'" style="margin-bottom:6px;">
                     <i class="fas fa-address-book" style="font-size:1.1em;vertical-align:middle;margin-right:4px;"></i>
                     People
                 </button>
-                <button class="action-button" onclick="storePreviousState(); localStorage.setItem('cwoc_settings_return', '/'); window.location.href='/frontend/settings.html'">
-                    <img src="/static/settings.png" alt="Settings" />
-                    Settings <span class="hotkey-hint">S</span>
-                </button>
+                <div style="display:flex;gap:6px;">
+                    <button class="action-button sidebar-compact-btn" onclick="_openClockModal()" title="Live clocks (L)">
+                        🕐 Clock
+                    </button>
+                    <button class="action-button sidebar-compact-btn" id="cal-weather-btn" onclick="if(event.shiftKey){storePreviousState();window.location.href='/frontend/weather.html';}else{_openWeatherModal();}" title="Weather (click: modal, Shift+click: full page)">
+                        🌤️ Weather
+                    </button>
+                </div>
             </div>
 
-            <!-- Reference, Help, Clock, Save Search -->
-            <div class="sidebar-section" id="section-help" style="display:flex;flex-wrap:wrap;gap:6px;">
-                <button class="action-button sidebar-compact-btn" onclick="_openClockModal()" title="Live clocks (L)">
-                    🕐 Clock
+            <!-- Bottom: Settings, Reference, Help -->
+            <div class="sidebar-bottom">
+                <button class="action-button" onclick="storePreviousState(); localStorage.setItem('cwoc_settings_return', '/'); window.location.href='/frontend/settings.html'" style="margin-bottom:6px;">
+                    <img src="/static/settings.png" alt="Settings" />
+                    Settings
                 </button>
-                <button class="action-button sidebar-compact-btn" onclick="_saveSearch()" title="Save current search as quick button">
-                    💾 Save Search
-                </button>
-                <button class="action-button sidebar-compact-btn" onclick="_toggleReference()" title="Keyboard shortcuts reference">
-                    📖 Reference
-                </button>
-                <button class="action-button sidebar-compact-btn" onclick="openHelpPage()" title="Feature guide & documentation">
-                    📘 Help
-                </button>
+                <div style="display:flex;gap:6px;">
+                    <button class="action-button sidebar-compact-btn" onclick="_toggleReference()" title="Keyboard shortcuts reference (R)">
+                        📖 Reference
+                    </button>
+                    <button class="action-button sidebar-compact-btn" onclick="openHelpPage()" title="Feature guide & documentation (Shift+R)">
+                        📘 Help
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -314,9 +323,13 @@
                         <div><span class="ref-key">S</span> Settings</div>
                         <div><span class="ref-key">W</span> Weather Modal</div>
                         <div><span class="ref-key">⇧W</span> Weather Page</div>
-                        <div><span class="ref-key">L</span> Clock</div>
-                        <div><span class="ref-key">R</span> This Reference</div>
+                        <div><span class="ref-key">L</span> Clock Modal</div>
+                        <div><span class="ref-key">R</span> Reference</div>
+                        <div><span class="ref-key">⇧R</span> Help Guide</div>
+                        <div><span class="ref-key">V</span> Navigate</div>
+                        <div><span class="ref-key">G</span> Global Search</div>
                         <div><span class="ref-key">ESC</span> Close / Exit</div>
+                        <div><span class="ref-key">⌫</span> Clear filters</div>
                     </div>
                     <div class="ref-col">
                         <h4>Period <span class="ref-key">.</span></h4>

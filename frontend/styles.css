@@ -54,12 +54,25 @@
     background-color: var(--sidebar-bg);
     border-right: 1px solid var(--sidebar-border);
     padding: 20px;
-    padding-top: 2.5em;
+    padding-top: 25px;
     padding-bottom: 3em;
     transition: left 0.3s ease;
     z-index: 999;
     overflow-y: auto;
     overflow-x: hidden;
+}
+
+/* Bottom pinned section: Settings + Help/Ref buttons */
+.sidebar-bottom {
+    margin-top: 20px;
+    padding: 12px 0 0;
+    border-top: 1px solid rgba(107, 78, 49, 0.3);
+}
+.sidebar-bottom .action-button {
+    margin-bottom: 6px;
+}
+.sidebar-bottom .sidebar-compact-btn {
+    margin-bottom: 0;
 }
 .sidebar::-webkit-scrollbar {
     width: 6px;
@@ -164,26 +177,35 @@
 /* Week navigation buttons (parent container) */
 #year-week-container {
     width: 100%;
-    max-width: 160px; /* sidebar content width */
     margin: 0 auto 10px auto;
     text-align: center;
 }
 
 .week-nav {
     display: flex;
-    justify-content: space-between; /* arrow buttons at edges */
-    align-items: center;
-    width: 100%; /* full width of container */
-    margin: 0 auto 15px auto;
-    gap: 10px;
+    align-items: stretch;
+    width: 100%;
+    margin: 0 auto 6px auto;
+    gap: 4px;
 }
 
 .week-nav .action-button {
-    width: 40px; /* fixed width for arrow buttons */
-    margin: 0; /* no margin to keep flush with edges */
-    padding: 5px;
-    font-size: 1.2em;
+    width: 44px;
+    flex: 0 0 44px;
+    margin: 0;
+    padding: 0;
+    font-size: 1.3em;
     box-sizing: border-box;
+}
+
+.week-nav-center {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    line-height: 1.2;
 }
 
 body {
@@ -254,7 +276,8 @@ h1 {
     flex-direction: column;
     align-items: center;
     width: 100%;
-    font-size: 1rem; /* base size */
+    font-size: 0.9em;
+    font-weight: bold;
 }
 
 #week-range span {
@@ -263,7 +286,7 @@ h1 {
     text-overflow: ellipsis;
     max-width: 100%;
     display: inline-block;
-    font-size: clamp(0.7rem, 1vw, 1rem); /* shrink text responsively */
+    font-size: clamp(0.75rem, 2.5vw, 1rem);
 }
 
 .search-bar {
@@ -895,9 +918,10 @@ button.delete:hover {
 
 #year-display {
     font-weight: bold;
-    font-size: 1.2rem;
+    font-size: 1em;
     text-align: center;
-    margin-bottom: 4px;
+    margin: 0;
+    white-space: nowrap;
 }
 
 #week-range {
@@ -905,7 +929,8 @@ button.delete:hover {
     flex-direction: column;
     align-items: center;
     width: 100%;
-    font-size: 1rem;
+    font-size: 0.9em;
+    font-weight: bold;
 }
 
 #week-range span {
@@ -914,7 +939,6 @@ button.delete:hover {
     text-overflow: ellipsis;
     max-width: 100%;
     display: inline-block;
-    font-size: clamp(0.7rem, 1vw, 1rem);
 }
 
 /* ── Sidebar sections ─────────────────────────────────────────────────────── */
@@ -949,10 +973,12 @@ button.delete:hover {
 
 .sidebar-section select {
     width: 100%;
-    padding: 5px;
+    padding: 6px 8px;
     font-family: "Courier New", Courier, monospace;
+    font-size: 0.9em;
     border: 1px solid #6b4e31;
-    background-color: #ffff0;
+    background: #f5e6cc;
+    color: #1a1208;
     border-radius: 3px;
     box-sizing: border-box;
 }
@@ -1003,8 +1029,27 @@ button.delete:hover {
 
 .filter-group input[type="text"] {
     width: 100%;
-    padding: 6px;
+    padding: 6px 8px;
     font-family: "Courier New", Courier, monospace;
+    border: 1px solid #6b4e31;
+    border-radius: 3px;
+    background: #f5e6cc;
+    color: #1a1208;
+    font-size: 0.9em;
+    box-sizing: border-box;
+}
+.filter-group input[type="text"]::placeholder {
+    color: #8b5a2b;
+    opacity: 0.6;
+}
+
+/* ── Filters section toggle button ────────────────────────────────────────── */
+.filters-toggle-btn {
+    margin-bottom: 8px !important;
+}
+.filters-toggle-btn.expanded {
+    background-color: #c4a484 !important;
+    color: #2b1e0f !important;
 }
 
 .filter-clear-btn {
@@ -1384,9 +1429,9 @@ button.delete:hover {
 
 /* ── Today button ─────────────────────────────────────────────────────────── */
 .today-btn {
-    height: 28px !important;
-    font-size: 0.85em !important;
-    margin-bottom: 5px !important;
+    height: 40px !important;
+    font-size: 1em !important;
+    margin-bottom: 6px !important;
 }
 
 /* ── Drag-to-reorder feedback ─────────────────────────────────────────────── */
