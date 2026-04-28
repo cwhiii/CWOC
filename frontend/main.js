@@ -4368,10 +4368,11 @@ function displaySevenDayView(chitsToDisplay, opts) {
 }
 
 // ── Projects View Mode (List vs Kanban) ──────────────────────────────────────
-let _projectsViewMode = 'kanban'; // 'list' | 'kanban'
+let _projectsViewMode = localStorage.getItem('cwoc_projectsViewMode') || 'kanban'; // 'list' | 'kanban'
 
 function _setProjectsMode(mode) {
   _projectsViewMode = mode;
+  localStorage.setItem('cwoc_projectsViewMode', mode);
   // Update button styles
   const listBtn = document.getElementById('projects-mode-list');
   const kanbanBtn = document.getElementById('projects-mode-kanban');
@@ -4380,71 +4381,87 @@ function _setProjectsMode(mode) {
   displayChits();
 }
 
-// ── Alarms View Mode (Chits list vs Standalone board) ────────────────────────
-let _alarmsViewMode = 'list'; // 'list' | 'standalone'
-let _standaloneAlerts = []; // cached standalone alerts from API
-let _saTimerRuntime = {}; // standalone timer runtime state
-let _saSwRuntime = {}; // standalone stopwatch runtime state
+// ── Alarms View Mode (Chits list vs Independent board) ───────────────────────
+let _alarmsViewMode = localStorage.getItem('cwoc_alarmsViewMode') || 'list'; // 'list' | 'independent'
+
+function _restoreViewModeButtons() {
+  // Projects
+  const pListBtn = document.getElementById('projects-mode-list');
+  const pKanbanBtn = document.getElementById('projects-mode-kanban');
+  if (pListBtn) pListBtn.style.background = _projectsViewMode === 'list' ? 'ivory' : '';
+  if (pKanbanBtn) pKanbanBtn.style.background = _projectsViewMode === 'kanban' ? 'ivory' : '';
+  // Alarms
+  const aListBtn = document.getElementById('alarms-mode-list');
+  const aIndBtn = document.getElementById('alarms-mode-independent');
+  if (aListBtn) aListBtn.style.background = _alarmsViewMode === 'list' ? 'ivory' : '';
+  if (aIndBtn) aIndBtn.style.background = _alarmsViewMode === 'independent' ? 'ivory' : '';
+}
+let _independentAlerts = []; // cached independent alerts from API
+let _saTimerRuntime = {}; // independent timer runtime state
+let _saSwRuntime = {}; // independent stopwatch runtime state
 
 function _setAlarmsMode(mode) {
   _alarmsViewMode = mode;
+  localStorage.setItem('cwoc_alarmsViewMode', mode);
   const listBtn = document.getElementById('alarms-mode-list');
-  const standaloneBtn = document.getElementById('alarms-mode-standalone');
+  const indBtn = document.getElementById('alarms-mode-independent');
   if (listBtn) listBtn.style.background = mode === 'list' ? 'ivory' : '';
-  if (standaloneBtn) standaloneBtn.style.background = mode === 'standalone' ? 'ivory' : '';
-  if (mode === 'standalone') {
-    _fetchStandaloneAlerts().then(() => displayChits());
+  if (indBtn) indBtn.style.background = mode === 'independent' ? 'ivory' : '';
+  if (mode === 'independent') {
+    _fetchIndependentAlerts().then(() => displayChits());
   } else {
     displayChits();
   }
 }
 
-async function _fetchStandaloneAlerts() {
+async function _fetchIndependentAlerts() {
   try {
     const resp = await fetch('/api/standalone-alerts');
-    if (!resp.ok) throw new Error('Failed to fetch standalone alerts');
-    _standaloneAlerts = await resp.json();
+    if (!resp.ok) throw new Error('Failed to fetch independent alerts');
+    _independentAlerts = await resp.json();
   } catch (e) {
-    console.error('Error fetching standalone alerts:', e);
-    _standaloneAlerts = [];
+    console.error('Error fetching independent alerts:', e);
+    _independentAlerts = [];
   }
 }
 
-async function _createStandaloneAlert(alertData) {
+async function _createIndependentAlert(alertData) {
   try {
     const resp = await fetch('/api/standalone-alerts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(alertData),
     });
-    if (!resp.ok) throw new Error('Failed to create standalone alert');
-    await _fetchStandaloneAlerts();
+    if (!resp.ok) throw new Error('Failed to create independent alert');
+    const created = await resp.json();
+    await _fetchIndependentAlerts();
     displayChits();
+    return created;
   } catch (e) {
-    console.error('Error creating standalone alert:', e);
+    console.error('Error creating independent alert:', e);
   }
 }
 
-async function _updateStandaloneAlert(id, alertData) {
+async function _updateIndependentAlert(id, alertData) {
   try {
     const resp = await fetch(`/api/standalone-alerts/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(alertData),
     });
-    if (!resp.ok) throw new Error('Failed to update standalone alert');
-    await _fetchStandaloneAlerts();
+    if (!resp.ok) throw new Error('Failed to update independent alert');
+    await _fetchIndependentAlerts();
     displayChits();
   } catch (e) {
-    console.error('Error updating standalone alert:', e);
+    console.error('Error updating independent alert:', e);
   }
 }
 
-async function _deleteStandaloneAlert(id) {
+async function _deleteIndependentAlert(id) {
   // Clean up runtime state
-  const idx = _standaloneAlerts.findIndex(a => a.id === id);
+  const idx = _independentAlerts.findIndex(a => a.id === id);
   if (idx !== -1) {
-    const a = _standaloneAlerts[idx];
+    const a = _independentAlerts[idx];
     if (a._type === 'timer' && _saTimerRuntime[id]) {
       clearInterval(_saTimerRuntime[id].intervalId);
       delete _saTimerRuntime[id];
@@ -4456,11 +4473,11 @@ async function _deleteStandaloneAlert(id) {
   }
   try {
     const resp = await fetch(`/api/standalone-alerts/${id}`, { method: 'DELETE' });
-    if (!resp.ok) throw new Error('Failed to delete standalone alert');
-    await _fetchStandaloneAlerts();
+    if (!resp.ok) throw new Error('Failed to delete independent alert');
+    await _fetchIndependentAlerts();
     displayChits();
   } catch (e) {
-    console.error('Error deleting standalone alert:', e);
+    console.error('Error deleting independent alert:', e);
   }
 }
 
@@ -4880,8 +4897,8 @@ function _displayProjectsKanban(chitsToDisplay) {
  * Alarms tab: list all chits that have any alert (alarm, notification, timer, stopwatch).
  */
 function displayAlarmsView(chitsToDisplay) {
-  if (_alarmsViewMode === 'standalone') {
-    return _displayStandaloneAlertsBoard();
+  if (_alarmsViewMode === 'independent') {
+    return _displayIndependentAlertsBoard();
   }
 
   const chitList = document.getElementById("chit-list");
@@ -4942,9 +4959,9 @@ function displayAlarmsView(chitsToDisplay) {
   enableDragToReorder(view, 'Alarms', () => displayChits());
 }
 
-// ── Standalone Alerts Board ──────────────────────────────────────────────────
+// ── Independent Alerts Board ─────────────────────────────────────────────────
 
-function _displayStandaloneAlertsBoard() {
+function _displayIndependentAlertsBoard() {
   const chitList = document.getElementById("chit-list");
   chitList.innerHTML = "";
 
@@ -4955,7 +4972,7 @@ function _displayStandaloneAlertsBoard() {
   ];
 
   const wrapper = document.createElement("div");
-  wrapper.className = "standalone-alerts-board";
+  wrapper.className = "independent-alerts-board";
 
   types.forEach(typeInfo => {
     const col = document.createElement("div");
@@ -4969,21 +4986,21 @@ function _displayStandaloneAlertsBoard() {
     addBtn.className = "sa-add-btn";
     addBtn.textContent = "+";
     addBtn.title = `Add ${typeInfo.label.slice(0, -1)}`;
-    addBtn.onclick = () => _addStandaloneAlert(typeInfo.key);
+    addBtn.onclick = () => _addIndependentAlert(typeInfo.key);
     colHeader.appendChild(addBtn);
     col.appendChild(colHeader);
 
     // Cards for this type
-    const items = _standaloneAlerts.filter(a => a._type === typeInfo.key);
+    const items = _independentAlerts.filter(a => a._type === typeInfo.key);
     if (items.length === 0) {
       const empty = document.createElement("div");
       empty.className = "sa-empty";
-      empty.textContent = `No standalone ${typeInfo.label.toLowerCase()} yet.`;
+      empty.textContent = `No independent ${typeInfo.label.toLowerCase()} yet.`;
       col.appendChild(empty);
     } else {
       items.forEach(alert => {
         const data = alert.data || alert;
-        col.appendChild(_buildStandaloneCard(alert.id, typeInfo.key, data));
+        col.appendChild(_buildIndependentCard(alert.id, typeInfo.key, data));
       });
     }
 
@@ -4993,21 +5010,39 @@ function _displayStandaloneAlertsBoard() {
   chitList.appendChild(wrapper);
 }
 
-function _addStandaloneAlert(type) {
+function _addIndependentAlert(type) {
   if (type === 'alarm') {
     const now = new Date();
     now.setMinutes(now.getMinutes() + 1);
     const defaultTime = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
     const dayAbbrs = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-    _createStandaloneAlert({ _type: 'alarm', name: '', time: defaultTime, days: [dayAbbrs[now.getDay()]], enabled: true });
+    _createIndependentAlert({ _type: 'alarm', name: '', time: defaultTime, days: [dayAbbrs[now.getDay()]], enabled: true });
   } else if (type === 'timer') {
-    _createStandaloneAlert({ _type: 'timer', name: '', totalSeconds: 0, loop: false });
+    _createIndependentAlert({ _type: 'timer', name: '', totalSeconds: 0, loop: false });
   } else if (type === 'stopwatch') {
-    _createStandaloneAlert({ _type: 'stopwatch', name: '' });
+    _createIndependentAlert({ _type: 'stopwatch', name: '' }).then(created => {
+      // Auto-start the stopwatch immediately
+      if (created && created.id) {
+        const id = created.id;
+        if (!_saSwRuntime[id]) {
+          _saSwRuntime[id] = { running: false, elapsed: 0, intervalId: null, laps: [] };
+        }
+        const rt = _saSwRuntime[id];
+        const startMs = Date.now();
+        rt.intervalId = setInterval(() => {
+          rt.elapsed = Date.now() - startMs;
+          const d = document.getElementById(`sa-sw-display-${id}`);
+          if (d) d.textContent = _saSwFmt(rt.elapsed);
+        }, 50);
+        rt.running = true;
+        const btn = document.getElementById(`sa-sw-startstop-${id}`);
+        if (btn) btn.textContent = "⏸ Pause";
+      }
+    });
   }
 }
 
-function _buildStandaloneCard(id, type, data) {
+function _buildIndependentCard(id, type, data) {
   const card = document.createElement("div");
   card.className = "sa-card";
   card.dataset.alertId = id;
@@ -5019,7 +5054,7 @@ function _buildStandaloneCard(id, type, data) {
   return card;
 }
 
-// ── Standalone Alarm Card ────────────────────────────────────────────────────
+// ── Independent Alarm Card ───────────────────────────────────────────────────
 
 function _buildSaAlarmCard(card, id, data) {
   // Name row
@@ -5039,21 +5074,28 @@ function _buildSaAlarmCard(card, id, data) {
   timeInput.className = "sa-time-input";
   if (!data.enabled) timeInput.style.opacity = "0.45";
 
+  // Formatted time display that respects the 12/24h setting
+  const timeFmt = document.createElement("span");
+  timeFmt.className = "sa-time-fmt";
+  timeFmt.textContent = _globalFmtTime(data.time || "");
+  if (!data.enabled) timeFmt.style.opacity = "0.45";
+
   const toggleBtn = document.createElement("button");
   toggleBtn.className = "sa-btn";
   toggleBtn.textContent = data.enabled ? "On" : "Off";
   toggleBtn.onclick = () => {
     data.enabled = !data.enabled;
-    _updateStandaloneAlert(id, data);
+    _updateIndependentAlert(id, data);
   };
 
   const delBtn = document.createElement("button");
   delBtn.className = "sa-btn sa-del-btn";
   delBtn.textContent = "❌";
-  delBtn.onclick = () => _deleteStandaloneAlert(id);
+  delBtn.onclick = () => _deleteIndependentAlert(id);
 
   row1.appendChild(nameInput);
   row1.appendChild(timeInput);
+  row1.appendChild(timeFmt);
   row1.appendChild(toggleBtn);
   row1.appendChild(delBtn);
   card.appendChild(row1);
@@ -5076,7 +5118,7 @@ function _buildSaAlarmCard(card, id, data) {
       if (cb.checked) { if (!days.includes(day)) days.push(day); }
       else { const i = days.indexOf(day); if (i !== -1) days.splice(i, 1); }
       data.days = days;
-      _updateStandaloneAlert(id, data);
+      _updateIndependentAlert(id, data);
     });
     lbl.appendChild(cb);
     lbl.appendChild(document.createTextNode(day));
@@ -5085,17 +5127,18 @@ function _buildSaAlarmCard(card, id, data) {
   card.appendChild(daysRow);
 
   // Save name/time on blur
-  nameInput.addEventListener("change", () => { data.name = nameInput.value; _updateStandaloneAlert(id, data); });
+  nameInput.addEventListener("change", () => { data.name = nameInput.value; _updateIndependentAlert(id, data); });
   timeInput.addEventListener("change", () => {
     data.time = timeInput.value;
+    timeFmt.textContent = _globalFmtTime(data.time);
     if (!data.days || data.days.length === 0) {
       data.days = [allDays[new Date().getDay()]];
     }
-    _updateStandaloneAlert(id, data);
+    _updateIndependentAlert(id, data);
   });
 }
 
-// ── Standalone Timer Card ────────────────────────────────────────────────────
+// ── Independent Timer Card ───────────────────────────────────────────────────
 
 function _saFmtTimer(s) {
   const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
@@ -5138,14 +5181,14 @@ function _buildSaTimerCard(card, id, data) {
   const loopCb = document.createElement("input");
   loopCb.type = "checkbox";
   loopCb.checked = !!data.loop;
-  loopCb.addEventListener("change", () => { data.loop = loopCb.checked; _updateStandaloneAlert(id, data); });
+  loopCb.addEventListener("change", () => { data.loop = loopCb.checked; _updateIndependentAlert(id, data); });
   loopLbl.appendChild(loopCb);
   loopLbl.appendChild(document.createTextNode("🔁"));
 
   const delBtn = document.createElement("button");
   delBtn.className = "sa-btn sa-del-btn";
   delBtn.textContent = "❌";
-  delBtn.onclick = () => _deleteStandaloneAlert(id);
+  delBtn.onclick = () => _deleteIndependentAlert(id);
 
   row1.appendChild(nameInput);
   row1.appendChild(hInput);
@@ -5162,9 +5205,9 @@ function _buildSaTimerCard(card, id, data) {
     const total = (parseInt(hInput.value) || 0) * 3600 + (parseInt(mInput.value) || 0) * 60 + (parseInt(sInput.value) || 0);
     data.totalSeconds = total;
     if (!rt.running) { rt.remaining = total; display.textContent = _saFmtTimer(rt.remaining); }
-    _updateStandaloneAlert(id, data);
+    _updateIndependentAlert(id, data);
   };
-  nameInput.addEventListener("change", () => { data.name = nameInput.value; _updateStandaloneAlert(id, data); });
+  nameInput.addEventListener("change", () => { data.name = nameInput.value; _updateIndependentAlert(id, data); });
   [hInput, mInput, sInput].forEach(inp => inp.addEventListener("change", updateDuration));
 
   // Countdown display
@@ -5215,7 +5258,7 @@ function _buildSaTimerCard(card, id, data) {
   card.appendChild(controls);
 }
 
-// ── Standalone Stopwatch Card ────────────────────────────────────────────────
+// ── Independent Stopwatch Card ───────────────────────────────────────────────
 
 function _saSwFmt(ms) {
   const totalSec = Math.floor(ms / 1000);
@@ -5239,12 +5282,12 @@ function _buildSaStopwatchCard(card, id, data) {
   nameInput.value = data.name || "";
   nameInput.placeholder = "Stopwatch name";
   nameInput.className = "sa-input sa-name-input";
-  nameInput.addEventListener("change", () => { data.name = nameInput.value; _updateStandaloneAlert(id, data); });
+  nameInput.addEventListener("change", () => { data.name = nameInput.value; _updateIndependentAlert(id, data); });
 
   const delBtn = document.createElement("button");
   delBtn.className = "sa-btn sa-del-btn";
   delBtn.textContent = "❌";
-  delBtn.onclick = () => _deleteStandaloneAlert(id);
+  delBtn.onclick = () => _deleteIndependentAlert(id);
 
   row1.appendChild(nameInput);
   row1.appendChild(delBtn);
@@ -5253,6 +5296,7 @@ function _buildSaStopwatchCard(card, id, data) {
   // Display
   const display = document.createElement("div");
   display.className = "sa-timer-display";
+  display.id = `sa-sw-display-${id}`;
   display.textContent = _saSwFmt(rt.elapsed);
   card.appendChild(display);
 
@@ -5262,6 +5306,7 @@ function _buildSaStopwatchCard(card, id, data) {
 
   const startStopBtn = document.createElement("button");
   startStopBtn.className = "sa-btn";
+  startStopBtn.id = `sa-sw-startstop-${id}`;
   startStopBtn.textContent = rt.running ? "⏸ Pause" : "▶ Start";
   startStopBtn.onclick = () => {
     if (rt.running) {
@@ -5359,9 +5404,9 @@ function filterChits(tab) {
     alarmsSection.style.display = (tab === 'Alarms') ? '' : 'none';
   }
 
-  // Pre-fetch standalone alerts when switching to Alarms tab in standalone mode
-  if (tab === 'Alarms' && _alarmsViewMode === 'standalone') {
-    _fetchStandaloneAlerts();
+  // Pre-fetch independent alerts when switching to Alarms tab in independent mode
+  if (tab === 'Alarms' && _alarmsViewMode === 'independent') {
+    _fetchIndependentAlerts();
   }
 
   _loadLabelFilters();
@@ -5861,6 +5906,14 @@ document.addEventListener("DOMContentLoaded", function () {
 
   // Add close button to reference overlay for mobile
   if (typeof initMobileReferenceClose === 'function') initMobileReferenceClose();
+
+  // Restore persisted view mode button highlights
+  _restoreViewModeButtons();
+
+  // Pre-fetch independent alerts if that's the saved mode
+  if (_alarmsViewMode === 'independent') {
+    _fetchIndependentAlerts();
+  }
 
   // Default: hide archived chits, show pinned
   const saInit = document.getElementById('show-archived');

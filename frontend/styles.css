@@ -2168,6 +2168,11 @@ button.delete:hover {
         display: inline-flex !important;
     }
 
+    /* ── Reference overlay: single-column within each section ─────────────── */
+    .ref-col {
+        columns: 1;
+    }
+
     /* ── Top bar: hidden on mobile (date range shown in sidebar) ──────────── */
     .top-bar {
         display: none;
@@ -2232,7 +2237,14 @@ button.delete:hover {
     /* ── Reference columns: stack vertically ──────────────────────────────── */
     .ref-columns {
         flex-direction: column;
-        gap: 12px;
+        gap: 8px;
+    }
+    .ref-col {
+        columns: 2;
+        column-gap: 12px;
+    }
+    .ref-col > h4 {
+        column-span: all;
     }
 
     /* ── Hotkey panel: full viewport width with 8px margin ────────────────── */
@@ -2248,18 +2260,22 @@ button.delete:hover {
     /* ── Reference content: full-screen scrollable modal ─────────────────── */
     .reference-overlay {
         align-items: flex-start;
-        padding: 4px;
+        padding: 0;
         overflow-y: auto;
         overflow-x: hidden;
+        -webkit-overflow-scrolling: touch;
     }
     .reference-content {
         width: 100%;
-        max-width: 100vw;
-        padding: 12px;
+        max-width: 100%;
+        padding: 12px 10px;
         box-sizing: border-box;
-        border-radius: 8px;
+        border-radius: 0;
+        border-left: none;
+        border-right: none;
         max-height: none;
-        overflow-y: auto;
+        min-height: 100vh;
+        overflow-y: visible;
         overflow-x: hidden;
         font-size: 0.85em;
     }
@@ -2278,6 +2294,7 @@ button.delete:hover {
     .ref-col > div {
         font-size: 0.85em;
         margin: 2px 0;
+        break-inside: avoid;
     }
 
     /* ── Sidebar controls: compact ────────────────────────────────────────── */
@@ -2607,9 +2624,9 @@ button.delete:hover {
     }
 }
 
-/* ── Standalone Alerts Board ──────────────────────────────────────────────── */
+/* ── Independent Alerts Board ─────────────────────────────────────────────── */
 
-.standalone-alerts-board {
+.independent-alerts-board {
     display: flex;
     gap: 0;
     min-height: 300px;
@@ -2702,6 +2719,13 @@ button.delete:hover {
     font-family: 'Courier New', monospace;
 }
 
+.sa-time-fmt {
+    font-weight: bold;
+    font-size: 1.05em;
+    color: #4a2c2a;
+    white-space: nowrap;
+}
+
 .sa-dur-input {
     width: 40px;
     font-size: 0.9em;
@@ -2778,10 +2802,10 @@ button.delete:hover {
     color: #4a2c2a;
 }
 
-/* ── Standalone Alerts Board: Mobile ──────────────────────────────────────── */
+/* ── Independent Alerts Board: Mobile ─────────────────────────────────────── */
 
 @media (max-width: 768px) {
-    .standalone-alerts-board {
+    .independent-alerts-board {
         flex-direction: column;
         gap: 0.5em;
     }

@@ -780,7 +780,7 @@ def migrate_add_audit_settings():
 
 
 def migrate_add_standalone_alerts():
-    """Create standalone_alerts table for alerts not connected to any chit."""
+    """Create standalone_alerts table for independent alerts not connected to any chit."""
     conn = None
     try:
         conn = sqlite3.connect(DB_PATH)
@@ -2650,7 +2650,7 @@ def save_settings(settings: Settings):
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# Section 10b: Standalone Alerts API Routes
+# Section 10b: Independent Alerts API Routes
 # ═══════════════════════════════════════════════════════════════════════════
 
 @app.get("/api/standalone-alerts")
@@ -2691,6 +2691,12 @@ def create_standalone_alert(body: dict):
             "INSERT INTO standalone_alerts (id, _type, name, data, created_datetime, modified_datetime) VALUES (?,?,?,?,?,?)",
             (alert_id, _type, name, serialize_json_field(data), now, now)
         )
+        # Audit logging
+        try:
+            actor = get_current_actor()
+            insert_audit_entry(conn, "independent_alert", alert_id, "created", actor, entity_summary=f"{_type}: {name}" if name else _type)
+        except Exception as e:
+            logger.error(f"Audit logging failed for independent alert creation: {str(e)}")
         conn.commit()
         data["id"] = alert_id
         data["created_datetime"] = now
@@ -2711,15 +2717,33 @@ def update_standalone_alert(alert_id: str, body: dict):
         now = datetime.utcnow().isoformat()
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
+        # Capture old state for audit diff
+        cursor.execute("SELECT * FROM standalone_alerts WHERE id=?", (alert_id,))
+        old_row = cursor.fetchone()
+        old_data_str = None
+        if old_row:
+            old_cols = [col[0] for col in cursor.description]
+            old_dict = dict(zip(old_cols, old_row))
+            old_data_str = old_dict.get("data")
+
         _type = body.get("_type", "alarm")
         name = body.get("name", "")
         data = {k: v for k, v in body.items() if k not in ("id", "created_datetime", "modified_datetime")}
+        new_data_str = serialize_json_field(data)
         cursor.execute(
             "UPDATE standalone_alerts SET _type=?, name=?, data=?, modified_datetime=? WHERE id=?",
-            (_type, name, serialize_json_field(data), now, alert_id)
+            (_type, name, new_data_str, now, alert_id)
         )
         if cursor.rowcount == 0:
             raise HTTPException(status_code=404, detail="Standalone alert not found")
+        # Audit logging
+        try:
+            if old_data_str != new_data_str:
+                changes = [{"field": "data", "old": old_data_str, "new": new_data_str}]
+                actor = get_current_actor()
+                insert_audit_entry(conn, "independent_alert", alert_id, "updated", actor, changes=changes, entity_summary=f"{_type}: {name}" if name else _type)
+        except Exception as e:
+            logger.error(f"Audit logging failed for independent alert update: {str(e)}")
         conn.commit()
         data["id"] = alert_id
         data["modified_datetime"] = now
@@ -2740,9 +2764,21 @@ def delete_standalone_alert(alert_id: str):
     try:
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
+        # Get name for audit summary before deleting
+        cursor.execute("SELECT _type, name FROM standalone_alerts WHERE id=?", (alert_id,))
+        row = cursor.fetchone()
+        summary = None
+        if row:
+            summary = f"{row[0]}: {row[1]}" if row[1] else row[0]
         cursor.execute("DELETE FROM standalone_alerts WHERE id=?", (alert_id,))
         if cursor.rowcount == 0:
             raise HTTPException(status_code=404, detail="Standalone alert not found")
+        # Audit logging
+        try:
+            actor = get_current_actor()
+            insert_audit_entry(conn, "independent_alert", alert_id, "deleted", actor, entity_summary=summary)
+        except Exception as e:
+            logger.error(f"Audit logging failed for independent alert deletion: {str(e)}")
         conn.commit()
         return {"message": "Standalone alert deleted"}
     except HTTPException:
