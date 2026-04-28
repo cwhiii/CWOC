@@ -5,7 +5,6 @@
 ---
 
 ## Known Bugs
-- `[ ]` X Days view doesn't show X days. only does show a few days.
 
 ### Editor
 - notifications have a checkbox: "before due/start" wihch seems redundant & confusing. change to a drop down of before/after start / due. 
@@ -21,19 +20,12 @@
 
 ## Easy Fixes / Low-Hanging Fruit
 
-- on settgins page, move week starts & views hours above the checkboxes for enabled periods. generally clean upo the order, and put options for each one below that one. so X days count should be direcly below rthe checkbox to enable X day checkbox, etc. 
-- `[ ]` Remove the Save Search button for now (park it in parking_lot.md)
-- `[ ]` Move the Clock button back to its original position; move Weather button to where Clock was (shift-click → full page, normal click → modal)
 - `[ ]` Better footer styling
 - `[ ]` Hide Completes (not past-due) sidebar toggle button — persist state across sessions
-- `[ ]` Box/group all sidebar filters with a tap/click to collapse each group — persist collapsed/expanded state across sessions
-- `[ ]` Style the Period dropdown in the sidebar
-- `[ ]` Task view: don't show created/updated dates or weather text — only show the weather icon
-- `[ ]` Update the weather flash colors to match the HST bar colors
+
 - `[ ]` Screenshot and video walkthrough of the app
 - `[ ]` **Custom Colors cleanup** — clean up the color name labels (make user-settable, or just don't display them). Use horizontal rows for the color swatches so the block is shorter.
 - `[ ]` **Settings blocks collapsible** — make each settings block collapsible like zones in the chit editor
-- `[ ]` **Settings layout reorganization** — collect blocks that grow/scroll into their own row. balance this with Arrange short blocks side-by-side with other short blocks, long blocks with long blocks (fixed layout, not dynamic reflow). Order by most-frequently-accessed near the top.
 - when double ckilking a chit in the views it starts showinfg all the span lines befoer the doubleclick compltes. 
 
 ---

@@ -21,6 +21,7 @@
     </head>
     <body>
         <div class="sidebar" id="sidebar">
+            <div class="sidebar-scroll">
             <!-- Date nav (stays at top) -->
             <div id="year-week-container">
                 <button class="action-button today-btn" onclick="goToToday()">📅 Today</button>
@@ -208,8 +209,9 @@
                     </button>
                 </div>
             </div>
+            </div><!-- /sidebar-scroll -->
 
-            <!-- Bottom: Settings, Reference, Help -->
+            <!-- Bottom pinned: Settings, Reference, Help -->
             <div class="sidebar-bottom">
                 <button class="action-button" onclick="storePreviousState(); localStorage.setItem('cwoc_settings_return', '/'); window.location.href='/frontend/settings.html'" style="margin-bottom:6px;">
                     <img src="/static/settings.png" alt="Settings" />

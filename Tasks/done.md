@@ -1026,3 +1026,65 @@ Fully implemented. Ported from `Prototypes/CWOC UI/UI.html`:
 - If >= 0.5cm: says amount + type (e.g. "3cm snow")
 - If no precipitation: says nothing (omitted from tooltip)
 - Applied consistently in: _buildChitHeader (all card views), live-fetch callback, cache-hit display, editor compact weather, weather page day blocks
+
+
+## Completed — Dashboard & Settings UI Overhaul (2026-04-28)
+
+### Settings Page Layout Cleanup ✅
+- Period Options reordered: Week Starts On and View Hours moved above Enabled Periods checkboxes
+- X Days count input nested directly below X Days checkbox; Work Days/Hours nested below Work Hours checkbox
+- Work Days moved above Work Hours for logical order; renamed consistently ("Work Days" / "Work Hours")
+- Inline label+control rows (`.setting-inline` class) for: Time Format, Snooze Length, Calendar Snap, Week Starts On, Scroll to, X Days Count, Max Age, Max Size
+- Sub-section headers (`.setting-subheader` class) for: Enabled Periods, View Hours, Work Days, Work Hours, Trash, Audit Log Limits, Chit Data, User Data
+- Removed double-border on Chit Options and Visual Indicators (`.checkbox-list`/`.indicator-list` no longer have own background/border)
+- Added `.setting-group h3` rule with bottom border for consistent group titles
+- Tightened label font-size from 18px to 15px
+- Fixed Custom Colors `<ul>` default bullet styling
+- Added `.setting-hint` class for hint text, replacing inline styles
+- All dropdowns forced to consistent 140px width via `.setting-group select` rule
+- Hour range pairs use `.hour-range-row` class for equal-width flex layout
+- Responsive: inline rows wrap on mobile (< 400px)
+- Data Management `<h4>` tags converted to `.setting-subheader`
+- Removed redundant `<hr>` separators (subheader borders provide visual breaks)
+
+### Dashboard Sidebar Restructuring ✅
+- Removed Save Search button (parked in parking_lot.md)
+- Clock button removed from date nav area; moved to sidebar body next to Weather (side by side below People)
+- Weather button: normal click → modal, Shift+click → full page (matching W/Shift+W hotkey pattern)
+- Today button uses 📅 calendar icon, moved above date nav
+- Year/month and date range displayed between ◄/► arrows (same row via `.week-nav-center`)
+- Arrows stretch to full height of center content (`height: auto` override)
+- Create Chit button directly under date nav
+- Filters section collapsible via button toggle (fa-filter icon, expanded state uses darker background)
+- Filter text input styled to match parchment theme
+- Period and Order dropdowns styled to match parchment theme (fixed `#ffff0` typo)
+- Removed all hotkey hint letters from sidebar buttons/labels
+- Settings, Reference, Help buttons pinned to bottom of sidebar (flex layout with scroll wrapper)
+- Sidebar uses `display: flex; flex-direction: column` with `.sidebar-scroll` wrapper for content scrolling
+
+### X Days Date Bug Fix ✅
+- `updateDateRange()` now uses `_customDaysCount - 1` instead of hardcoded `6` for SevenDay end date
+- Sidebar date numbers now correctly reflect the configured X Days count
+
+### Sort State Persistence Across Refresh ✅
+- `sortField` and `sortDir` now saved to `cwoc_refresh_state` in sessionStorage
+- Restored on page refresh along with tab, view, and weekStart
+- Sort dropdown UI restored on refresh
+- Manual order in Tasks view (and all views) now persists across refreshes
+
+### Help & Reference Deep Update ✅
+- New "Sidebar Layout" subsection documenting full sidebar organization
+- Hotkeys section reorganized into sub-sections (Tab Switching, Actions, Submenu Hotkeys)
+- Added V (Navigate), Shift+R (Help), G (Global Search) to hotkeys and reference overlay
+- Filtering & Sorting section expanded with all filter groups and sorting options
+- Settings section rewritten to match new layout
+- Weather/Clock button descriptions updated for new sidebar location
+- Version Management TOC entry renamed to "Version & Updates"
+
+
+### Task view: weather icon only, no dates/weather text ✅
+- Already implemented — Task view shows weather emoji icon only with details in tooltip; created/updated dates not shown in task cards
+
+### Weather flash colors updated to match HST bar ✅
+- Changed from yellowish-green `rgba(200,190,60,...)` to HST gold `rgba(212,175,55,...)` with tan outline `rgba(200,150,90,...)`
+- Brightness dimming softened from 0.7 to 0.85 for a warmer, less harsh flash
