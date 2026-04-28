@@ -165,6 +165,8 @@
             var contact = await resp.json();
             populateContactForm(contact);
             if (_saveSystem) _saveSystem.markSaved();
+            // Load per-contact audit history
+            _loadContactAuditHistory(id);
         } catch (err) {
             console.error('Error loading contact:', err);
             _showBriefMessage('Error loading contact', true);
@@ -905,5 +907,105 @@
             '&layer=mapnik&marker=' + lat + ',' + lon + '" style="border:0;border-radius:5px;"></iframe>';
     }
     window._showContactAddressMap = _showContactAddressMap;
+
+    // ── Audit History (per-contact change tracking) ─────────────────────
+
+    async function _loadContactAuditHistory(contactId) {
+        var container = document.getElementById('contactAuditHistoryContainer');
+        if (!container) return;
+        if (!contactId) {
+            container.innerHTML = '<p class="audit-history-empty">No audit history for this contact</p>';
+            return;
+        }
+        try {
+            var resp = await fetch('/api/audit-log?entity_type=contact&entity_id=' + encodeURIComponent(contactId) + '&limit=50&sort_order=desc');
+            if (!resp.ok) throw new Error('Failed to fetch audit history');
+            var data = await resp.json();
+            var entries = data.entries || [];
+            if (entries.length === 0) {
+                container.innerHTML = '<p class="audit-history-empty">No audit history for this contact</p>';
+                return;
+            }
+            var html = '';
+            entries.forEach(function (entry, idx) {
+                var ts = _fmtContactAuditTs(entry.timestamp);
+                var actor = entry.actor || '—';
+                var action = entry.action || '—';
+                var actionClass = 'audit-action-' + (entry.action || 'unknown');
+                html += '<div class="audit-history-entry">';
+                html += '  <div class="audit-history-row" onclick="_toggleContactAuditDetail(' + idx + ')">';
+                html += '    <span class="audit-history-toggle" id="cah-toggle-' + idx + '">▶</span>';
+                html += '    <span class="audit-history-ts">' + _escContactAuditHtml(ts) + '</span>';
+                html += '    <span class="audit-history-actor">' + _escContactAuditHtml(actor) + '</span>';
+                html += '    <span class="audit-history-action ' + actionClass + '">' + _escContactAuditHtml(action) + '</span>';
+                html += '  </div>';
+                html += '  <div class="audit-history-detail" id="cah-detail-' + idx + '" style="display:none;">';
+                html += _renderContactAuditChanges(entry.changes);
+                html += '  </div>';
+                html += '</div>';
+            });
+            container.innerHTML = html;
+        } catch (err) {
+            console.error('Error loading contact audit history:', err);
+            container.innerHTML = '<p class="audit-history-empty">Could not load audit history</p>';
+        }
+    }
+
+    function _fmtContactAuditTs(iso) {
+        if (!iso) return '—';
+        var d = new Date(iso);
+        if (isNaN(d.getTime())) return iso;
+        var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        var mon = months[d.getMonth()];
+        var day = String(d.getDate()).padStart(2, '0');
+        var yr = d.getFullYear();
+        var hr = String(d.getHours()).padStart(2, '0');
+        var min = String(d.getMinutes()).padStart(2, '0');
+        return yr + '-' + mon + '-' + day + ' ' + hr + ':' + min;
+    }
+
+    function _escContactAuditHtml(str) {
+        var div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    }
+
+    function _renderContactAuditChanges(changes) {
+        if (!changes || !Array.isArray(changes) || changes.length === 0) {
+            return '<em class="audit-history-no-changes">No field changes recorded.</em>';
+        }
+        var html = '<table class="audit-history-changes-table"><thead><tr><th>Field</th><th>Old</th><th>New</th></tr></thead><tbody>';
+        changes.forEach(function (c) {
+            var oldVal = _fmtContactAuditVal(c.old);
+            var newVal = _fmtContactAuditVal(c.new);
+            html += '<tr><td><strong>' + _escContactAuditHtml(c.field || '—') + '</strong></td>';
+            html += '<td class="audit-change-old">' + _escContactAuditHtml(oldVal) + '</td>';
+            html += '<td class="audit-change-new">' + _escContactAuditHtml(newVal) + '</td></tr>';
+        });
+        html += '</tbody></table>';
+        return html;
+    }
+
+    function _fmtContactAuditVal(val) {
+        if (val === null || val === undefined) return '(none)';
+        if (typeof val === 'object') return JSON.stringify(val);
+        return String(val);
+    }
+
+    function _toggleContactAuditDetail(idx) {
+        var detail = document.getElementById('cah-detail-' + idx);
+        var toggle = document.getElementById('cah-toggle-' + idx);
+        if (!detail) return;
+        if (detail.style.display === 'none') {
+            detail.style.display = '';
+            if (toggle) toggle.textContent = '▼';
+        } else {
+            detail.style.display = 'none';
+            if (toggle) toggle.textContent = '▶';
+        }
+    }
+
+    // Expose toggle globally for inline onclick
+    window._toggleContactAuditDetail = _toggleContactAuditDetail;
 
 })();

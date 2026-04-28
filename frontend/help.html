@@ -39,6 +39,8 @@
                     <li><a href="#settings">Settings</a></li>
                     <li><a href="#alert-indicators">Visual Indicators</a></li>
                     <li><a href="#version-management">Version Management</a></li>
+                    <li><a href="#audit-log">Audit Log</a></li>
+                    <li><a href="#contacts">Contact Editor</a></li>
                 </ul>
             </div>
             <h3 id="what-is-cwoc">What is CWOC?</h3>
@@ -246,6 +248,38 @@
                 <li><strong>Version Info</strong> — Displays the current version and "Last Updated" timestamp. If no version info is available, a fallback message is shown.</li>
                 <li><strong>Upgrade Omni Chits</strong> — Click this button to trigger an update. A modal opens showing real-time output from the update script.</li>
                 <li><strong>Update Modal</strong> — Streams the update log in a terminal-style display. Log lines are color-coded by prefix: <span style="color:green;">[OK]</span> green, <span style="color:goldenrod;">[WARN]</span> yellow, <span style="color:red;">[ERROR]</span> red, <span style="color:steelblue;">[STEP]</span> blue. The Close button is enabled once the update finishes.</li>
+            </ul>
+            <h3 id="audit-log">Audit Log</h3>
+            <p>CWOC tracks all changes to your data with a built-in audit log. Every create, update, and delete operation on chits, contacts, settings, and system upgrades is recorded automatically.</p>
+            <h4>What Is Tracked</h4>
+            <ul>
+                <li><strong>Chits</strong> — Created, updated, and deleted chits</li>
+                <li><strong>Contacts</strong> — Created, updated, and deleted contacts</li>
+                <li><strong>Settings</strong> — Any changes to your configuration</li>
+                <li><strong>System</strong> — Application upgrades (old and new version recorded)</li>
+            </ul>
+            <p>Each audit entry records the actor (who made the change), a timestamp, the action performed, and for updates, a field-level diff showing old and new values for each changed field.</p>
+            <h4>Actor</h4>
+            <p>The actor field reflects the username configured in Settings → General. If no username is set, the actor defaults to <strong>"Unknown Gremlin"</strong>. The username is stored as a snapshot at the time of the change — if you later change your username, older entries still show the name you had when the change was made.</p>
+            <h4>Accessing the Audit Log</h4>
+            <ul>
+                <li><strong>Global Audit Log page</strong> — Access via Settings → System → Audit Log, or the Audit Log link in the navigation header. Shows all audit entries across all entities.</li>
+                <li><strong>Per-chit audit panel</strong> — The chit editor includes a collapsible "Audit History" zone (collapsed by default) showing changes for that specific chit.</li>
+                <li><strong>Per-contact audit panel</strong> — The contact editor includes a collapsible "Audit History" zone showing changes for that specific contact.</li>
+            </ul>
+            <h4>Global Audit Log Page</h4>
+            <p>The dedicated audit log page provides a full-featured interface for browsing change history:</p>
+            <ul>
+                <li><strong>Filtering</strong> — Filter entries by entity type (All / Chits / Contacts / Settings / System), actor, and date range (since/until)</li>
+                <li><strong>Sorting</strong> — Click column headers (timestamp, actor, action, entity type, entity summary) to toggle ascending/descending sort</li>
+                <li><strong>Pagination</strong> — Configurable page size (25 / 50 / 100 / 500) with a "Load More" button</li>
+                <li><strong>Change details</strong> — Expand any entry to see which fields changed, with old → new values</li>
+            </ul>
+            <h4>Log Management</h4>
+            <ul>
+                <li><strong>Clear All</strong> — Removes all audit log entries (confirmation required)</li>
+                <li><strong>Trim</strong> — Removes entries older than a selected timeframe (Past Hour / Day / Week / Month / Year)</li>
+                <li><strong>CSV Export</strong> — Downloads the currently filtered entries as a CSV file</li>
             </ul>
             <h3 id="contacts">Contact Editor</h3>
             <p>Contacts have name fields (prefix, given, middle, surname, suffix), phone, email, address, social/web, security (Signal, PGP), and context (organization, social context).</p>

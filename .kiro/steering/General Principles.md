@@ -1,8 +1,13 @@
 ---
 inclusion: always
 ---
+# DO NOT TRY TO INSTALL ANY SOFTWARE AT ANY POINT! ONLY BUILD THE CODE!
+- DO NOT TRY TO INSTALL ANY SOFTWARE AT ANY POINT! ONLY BUILD THE CODE! 
+- update the task list to skip any installs!
+- Ensure that no step in a test requires installing software, such as with ".venv/bin/python."
 
-no installs, no pip, no npm.
+
+
 no installs, no pip, no npm.
 DO NOT INSTALL THINGS!
 

@@ -2862,6 +2862,9 @@ async function loadChitData(chitId) {
       }
     }
 
+    // Load per-chit audit history
+    loadAuditHistory(chitId);
+
     const allDayInput = document.getElementById("allDay");
     if (allDayInput) {
       const isAllDay = !!(chit.all_day || chit.allDay);
@@ -4297,3 +4300,100 @@ function _setPeopleFromArray(peopleArray) {
 }
 
 document.addEventListener('DOMContentLoaded', _initPeopleAutocomplete);
+
+// ── Audit History (per-chit change tracking) ───────────────────────────────
+
+async function loadAuditHistory(chitId) {
+  var container = document.getElementById('auditHistoryContainer');
+  if (!container) return;
+  if (!chitId) {
+    container.innerHTML = '<p class="audit-history-empty">No audit history for this chit</p>';
+    return;
+  }
+  try {
+    var resp = await fetch('/api/audit-log?entity_type=chit&entity_id=' + encodeURIComponent(chitId) + '&limit=50&sort_order=desc');
+    if (!resp.ok) throw new Error('Failed to fetch audit history');
+    var data = await resp.json();
+    var entries = data.entries || [];
+    if (entries.length === 0) {
+      container.innerHTML = '<p class="audit-history-empty">No audit history for this chit</p>';
+      return;
+    }
+    var html = '';
+    entries.forEach(function (entry, idx) {
+      var ts = _formatAuditTimestamp(entry.timestamp);
+      var actor = entry.actor || '—';
+      var action = entry.action || '—';
+      var actionClass = 'audit-action-' + (entry.action || 'unknown');
+      html += '<div class="audit-history-entry">';
+      html += '  <div class="audit-history-row" onclick="_toggleAuditDetail(' + idx + ')">';
+      html += '    <span class="audit-history-toggle" id="ah-toggle-' + idx + '">▶</span>';
+      html += '    <span class="audit-history-ts">' + _escAuditHtml(ts) + '</span>';
+      html += '    <span class="audit-history-actor">' + _escAuditHtml(actor) + '</span>';
+      html += '    <span class="audit-history-action ' + actionClass + '">' + _escAuditHtml(action) + '</span>';
+      html += '  </div>';
+      html += '  <div class="audit-history-detail" id="ah-detail-' + idx + '" style="display:none;">';
+      html += _renderAuditChanges(entry.changes);
+      html += '  </div>';
+      html += '</div>';
+    });
+    container.innerHTML = html;
+  } catch (err) {
+    console.error('Error loading audit history:', err);
+    container.innerHTML = '<p class="audit-history-empty">Could not load audit history</p>';
+  }
+}
+
+function _formatAuditTimestamp(iso) {
+  if (!iso) return '—';
+  var d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  var mon = months[d.getMonth()];
+  var day = String(d.getDate()).padStart(2, '0');
+  var yr = d.getFullYear();
+  var hr = String(d.getHours()).padStart(2, '0');
+  var min = String(d.getMinutes()).padStart(2, '0');
+  return yr + '-' + mon + '-' + day + ' ' + hr + ':' + min;
+}
+
+function _escAuditHtml(str) {
+  var div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+function _renderAuditChanges(changes) {
+  if (!changes || !Array.isArray(changes) || changes.length === 0) {
+    return '<em class="audit-history-no-changes">No field changes recorded.</em>';
+  }
+  var html = '<table class="audit-history-changes-table"><thead><tr><th>Field</th><th>Old</th><th>New</th></tr></thead><tbody>';
+  changes.forEach(function (c) {
+    var oldVal = _fmtAuditVal(c.old);
+    var newVal = _fmtAuditVal(c.new);
+    html += '<tr><td><strong>' + _escAuditHtml(c.field || '—') + '</strong></td>';
+    html += '<td class="audit-change-old">' + _escAuditHtml(oldVal) + '</td>';
+    html += '<td class="audit-change-new">' + _escAuditHtml(newVal) + '</td></tr>';
+  });
+  html += '</tbody></table>';
+  return html;
+}
+
+function _fmtAuditVal(val) {
+  if (val === null || val === undefined) return '(none)';
+  if (typeof val === 'object') return JSON.stringify(val);
+  return String(val);
+}
+
+function _toggleAuditDetail(idx) {
+  var detail = document.getElementById('ah-detail-' + idx);
+  var toggle = document.getElementById('ah-toggle-' + idx);
+  if (!detail) return;
+  if (detail.style.display === 'none') {
+    detail.style.display = '';
+    if (toggle) toggle.textContent = '▼';
+  } else {
+    detail.style.display = 'none';
+    if (toggle) toggle.textContent = '▶';
+  }
+}

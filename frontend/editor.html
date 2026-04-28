@@ -850,6 +850,17 @@
                             <div id="auditLogContainer"></div>
                         </div>
                     </div>
+
+                    <!-- Audit History (per-chit change tracking) -->
+                    <div id="auditHistorySection" class="zone-container">
+                        <div class="zone-header" onclick="toggleZone(event, 'auditHistorySection', 'auditHistoryContent')">
+                            <h2 class="zone-title">🕵️ Audit History</h2>
+                            <span class="zone-toggle-icon">🔽</span>
+                        </div>
+                        <div id="auditHistoryContent" class="zone-body" style="display:none;">
+                            <div id="auditHistoryContainer"></div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

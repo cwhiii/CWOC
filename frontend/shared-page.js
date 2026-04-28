@@ -137,6 +137,7 @@ window.CwocSaveSystem = CwocSaveSystem;
     { id: 'home', label: 'Chits', icon: 'fas fa-home', href: '/' },
     { id: 'settings', label: 'Settings', icon: 'fas fa-cog', href: '/frontend/settings.html' },
     { id: 'help', label: 'Help', icon: 'fas fa-question-circle', href: '/frontend/help.html' },
+    { id: 'audit-log', label: 'Audit Log', icon: 'fas fa-clipboard-list', href: '/frontend/audit-log.html' },
     { id: 'trash', label: 'Trash', icon: 'fas fa-trash', href: '/frontend/trash.html', hidden: true },
   ];
   const showNav = (body.dataset.showNav || '').split(',').map(s => s.trim());
