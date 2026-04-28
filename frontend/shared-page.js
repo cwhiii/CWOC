@@ -158,7 +158,7 @@ window.CwocSaveSystem = CwocSaveSystem;
 
   const footer = document.createElement('div');
   footer.className = 'cwoc-page-footer';
-  footer.innerHTML = "C.W.'s Omni Chits &mdash; Built with ☕ and 🎵";
+  footer.innerHTML = '<a href="https://www.cwholemaniii.com/pages/home.shtml" target="_blank" style="color:#5c4033;text-decoration:none;">C.W.</a>\'s Omni Chits';
   body.appendChild(footer);
 
   // ── ESC to go back (all secondary pages) ──────────────────────────────

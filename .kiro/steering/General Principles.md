@@ -48,6 +48,12 @@ DO NOT INSTALL THINGS!
 - `CwocSaveSystem` (in `shared-page.js`) provides the standard save/cancel button pattern — use it for any page with editable state.
 - External CDN libraries (Flatpickr, Font Awesome 6, marked.js) are loaded via `<link>` / `<script>` tags in HTML. Do not add npm dependencies.
 
+## Typography & Contrast
+- Text must be high-contrast and easily readable. Use dark colors (`#1a1208` or darker) on parchment backgrounds — never light brown on light brown.
+- Avoid `opacity` values below 0.7 on text elements. If text looks faded, increase the opacity or darken the color.
+- Base font size is 16px. Don't go below 14px for any user-facing text. Labels, table cells, and form elements should all be comfortably readable.
+- When in doubt, make text darker and larger rather than lighter and smaller.
+
 ## Backend Architecture
 - The entire backend is a single file: `backend/main.py`. Routes, Pydantic models, DB init, and migrations all live there.
 - SQLite3 via Python stdlib. Single database file. No ORM.

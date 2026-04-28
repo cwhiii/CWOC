@@ -37,23 +37,23 @@
         /* ── Date header row ── */
         .weather-date-row {
             display: flex;
-            padding-left: 160px;
             gap: 4px;
             margin-bottom: 4px;
         }
         .weather-date-header {
             min-width: 90px;
             max-width: 90px;
+            box-sizing: border-box;
             text-align: center;
-            font-size: 0.75em;
+            font-size: 14px;
             color: var(--aged-brown-dark, #4a2c2a);
             font-weight: bold;
             padding: 4px 2px;
         }
         .weather-date-header .date-dow {
             display: block;
-            font-size: 0.9em;
-            opacity: 0.7;
+            font-size: 13px;
+            opacity: 0.8;
         }
 
         /* ── Weather table (scrollable container) ── */
@@ -61,6 +61,7 @@
             overflow-x: auto;
             -webkit-overflow-scrolling: touch;
             padding-bottom: 8px;
+            position: relative;
         }
 
         /* ── Weather row (one per location) ── */
@@ -75,6 +76,7 @@
         .weather-row-header {
             min-width: 156px;
             max-width: 156px;
+            box-sizing: border-box;
             display: flex;
             flex-direction: column;
             justify-content: center;
@@ -86,16 +88,16 @@
         }
         .weather-row-header .loc-label {
             font-weight: bold;
-            font-size: 0.9em;
+            font-size: 16px;
             color: var(--aged-brown-dark, #4a2c2a);
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
         }
         .weather-row-header .loc-address {
-            font-size: 0.7em;
+            font-size: 13px;
             color: var(--aged-brown-light, #a0522d);
-            opacity: 0.8;
+            opacity: 0.9;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -106,6 +108,7 @@
         .weather-day-block {
             min-width: 90px;
             max-width: 90px;
+            box-sizing: border-box;
             background: #fff8e1;
             border: 1px solid var(--aged-brown-medium, #8b4513);
             border-radius: 5px;
@@ -118,11 +121,11 @@
             flex-shrink: 0;
         }
         .weather-day-block .wx-icon {
-            font-size: 1.4em;
+            font-size: 1.6em;
             line-height: 1;
         }
         .weather-day-block .wx-temps {
-            font-size: 0.8em;
+            font-size: 15px;
             font-weight: bold;
             color: var(--aged-brown-dark, #4a2c2a);
         }
@@ -133,9 +136,9 @@
             color: #4682b4;
         }
         .weather-day-block .wx-precip {
-            font-size: 0.7em;
+            font-size: 13px;
             color: var(--aged-brown-light, #a0522d);
-            opacity: 0.8;
+            opacity: 0.9;
         }
 
         /* ── Today highlight ── */
@@ -143,6 +146,27 @@
             border-color: var(--accent-gold, #d4af37);
             border-width: 2px;
             background: #fffde7;
+        }
+
+        /* ── Event highlight (chit exists at this location on this day) ── */
+        .weather-day-block.has-event {
+            background: #f0e0b0;
+        }
+        .weather-day-block.today.has-event {
+            background: #f0e0b0;
+        }
+
+        /* ── Week-start separator line (absolute, full-height) ── */
+        .wx-week-line {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: var(--aged-brown-dark, #4a2c2a);
+            opacity: 0.7;
+            pointer-events: none;
+            z-index: 1;
+            margin-left: -1px;
         }
 
         /* ── Error row ── */
@@ -154,23 +178,47 @@
         }
         .weather-row-error .error-msg {
             color: var(--danger-red, #b22222);
-            font-size: 0.9em;
+            font-size: 15px;
             padding: 8px;
+        }
+
+        /* ── Drag-and-drop row reordering ── */
+        .weather-row[draggable="true"],
+        .weather-row-error[draggable="true"] {
+            cursor: grab;
+        }
+        .weather-row[draggable="true"]:active,
+        .weather-row-error[draggable="true"]:active {
+            cursor: grabbing;
+        }
+        .weather-row.wx-drag-over {
+            border-top: 3px solid var(--accent-gold, #d4af37);
+        }
+        .weather-row-error.wx-drag-over {
+            border-top: 3px solid var(--accent-gold, #d4af37);
+        }
+        .weather-row.wx-dragging,
+        .weather-row-error.wx-dragging {
+            opacity: 0.4;
+        }
+        .weather-row-header .drag-handle {
+            font-size: 12px;
+            color: var(--aged-brown-light, #a0522d);
+            opacity: 0.5;
+            margin-bottom: 2px;
+            cursor: grab;
+        }
+        .weather-row-header .drag-handle:hover {
+            opacity: 1;
         }
 
         /* ── Responsive: tablet ── */
         @media (max-width: 768px) {
-            .weather-date-row {
-                padding-left: 100px;
-            }
             .weather-row-header {
                 min-width: 96px;
                 max-width: 96px;
             }
-            .weather-day-block {
-                min-width: 76px;
-                max-width: 76px;
-            }
+            .weather-day-block,
             .weather-date-header {
                 min-width: 76px;
                 max-width: 76px;
@@ -179,45 +227,47 @@
 
         /* ── Responsive: mobile ── */
         @media (max-width: 480px) {
-            .weather-date-row {
-                padding-left: 70px;
-            }
             .weather-row-header {
                 min-width: 66px;
                 max-width: 66px;
                 padding: 4px;
             }
             .weather-row-header .loc-label {
-                font-size: 0.75em;
+                font-size: 13px;
             }
             .weather-row-header .loc-address {
                 display: none;
             }
-            .weather-day-block {
-                min-width: 64px;
-                max-width: 64px;
-                padding: 4px 2px;
-            }
+            .weather-day-block,
             .weather-date-header {
                 min-width: 64px;
                 max-width: 64px;
-                font-size: 0.65em;
+            }
+            .weather-date-header {
+                font-size: 12px;
             }
             .weather-day-block .wx-icon {
-                font-size: 1.1em;
+                font-size: 1.3em;
             }
             .weather-day-block .wx-temps {
-                font-size: 0.7em;
+                font-size: 13px;
             }
             .weather-day-block .wx-precip {
-                font-size: 0.6em;
+                font-size: 11px;
             }
         }
     </style>
 </head>
-<body data-page-title="Weather Forecast" data-page-icon="🌤️">
-
+<body>
     <div class="settings-panel">
+        <div class="header-and-buttons">
+            <h2><img src="/static/cwod_logo.png" alt="Logo" /> 🌤️ Weather Forecast</h2>
+            <div class="header-buttons">
+                <button onclick="window.location.href='/'" class="standard-button">🏠 Chits</button>
+                <button onclick="window.location.href='/frontend/settings.html'" class="standard-button">⚙️ Settings</button>
+            </div>
+        </div>
+
         <div id="weather-content">
             <div class="weather-loading">
                 <div class="loader"></div>
@@ -225,6 +275,8 @@
             </div>
         </div>
     </div>
+
+    <div class="author-info">by <a href="https://www.cwholemaniii.com/pages/home.shtml" target="_blank">C.W. Holeman III</a></div>
 
     <script src="/frontend/shared.js"></script>
     <script src="/frontend/shared-page.js"></script>

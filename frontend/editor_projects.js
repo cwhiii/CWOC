@@ -419,31 +419,14 @@ async function saveProjectChanges() {
       },
     );
 
-    // Save updated project chit (child_chits list)
-    const projectUpdate = {
-      ...projectState.projectChit,
-      child_chits: projectState.projectChit.child_chits || [],
-      tags: projectState.projectChit.tags || [],
-      checklist: projectState.projectChit.checklist || [],
-      is_project_master: true, // Ensure project chit is marked as master
-    };
-    const isNewProject = !(await chitExists(projectState.projectChit.id));
-    const projectMethod = isNewProject ? "POST" : "PUT";
-    const projectUrl = isNewProject
-      ? "/api/chits"
-      : `/api/chits/${projectState.projectChit.id}`;
-    const projectSavePromise = fetch(projectUrl, {
-      method: projectMethod,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(projectUpdate),
-    });
+    // NOTE: The project chit itself is saved by the editor's main save flow
+    // (saveChitData / saveChitAndStay). We only save child chits here to avoid
+    // overwriting the project with stale projectState data (which caused ghost
+    // duplicates with title "New Project" and no color).
 
-    const results = await Promise.all([
-      ...childSavePromises,
-      projectSavePromise,
-    ]);
+    const results = await Promise.all(childSavePromises);
     if (results.some((res) => res && !res.ok)) {
-      console.warn("Some save operations failed:", results);
+      console.warn("Some child chit save operations failed:", results);
     }
   } catch (error) {
     console.error("Error saving project changes:", error);

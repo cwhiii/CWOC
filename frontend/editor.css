@@ -3106,3 +3106,8 @@ input.location {
     gap: 4px;
     cursor: pointer;
 }
+
+/* ── Author Footer ──────────────────────────────────────────────────────── */
+.author-info { font-size: 0.9em; color: #1a1208; text-align: center; margin-top: 10px; padding-bottom: 8px; }
+.author-info a { color: #4a2c2a; text-decoration: underline; }
+.author-info a:hover { color: #1a1208; }

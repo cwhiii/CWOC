@@ -1941,6 +1941,28 @@ button.delete:hover {
     border-radius: 2px;
 }
 
+/* ── Author Footer ──────────────────────────────────────────────────────── */
+.author-info { font-size: 0.9em; color: #1a1208; text-align: center; margin-top: 10px; padding-bottom: 8px; }
+.author-info a { color: #4a2c2a; text-decoration: underline; }
+.author-info a:hover { color: #1a1208; }
+
+/* ── Weather nav flash animation ───────────────────────────────────────── */
+@keyframes wxFlash {
+  0%   { box-shadow: 0 0 0 0 rgba(212,175,55,0);   outline: 3px solid transparent;  background-color: inherit; }
+  10%  { box-shadow: 0 0 20px 8px rgba(212,175,55,1); outline: 3px solid #d4af37;    background-color: #fff3b0; }
+  25%  { box-shadow: 0 0 4px 2px rgba(212,175,55,0.2); outline: 3px solid transparent; background-color: inherit; }
+  40%  { box-shadow: 0 0 20px 8px rgba(212,175,55,1); outline: 3px solid #d4af37;    background-color: #fff3b0; }
+  55%  { box-shadow: 0 0 4px 2px rgba(212,175,55,0.2); outline: 3px solid transparent; background-color: inherit; }
+  70%  { box-shadow: 0 0 20px 8px rgba(212,175,55,1); outline: 3px solid #d4af37;    background-color: #fff3b0; }
+  85%  { box-shadow: 0 0 4px 2px rgba(212,175,55,0.2); outline: 3px solid transparent; background-color: inherit; }
+  100% { box-shadow: 0 0 0 0 rgba(212,175,55,0);   outline: 3px solid transparent;  background-color: inherit; }
+}
+.wx-flash {
+  animation: wxFlash 3.5s ease-in-out !important;
+  z-index: 10 !important;
+  position: relative;
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
    TABLET RESPONSIVE — max-width: 768px
    Additive rules only; desktop defaults remain untouched above.

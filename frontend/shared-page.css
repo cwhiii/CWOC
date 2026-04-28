@@ -35,13 +35,14 @@ body {
     background-size: cover;
     background-attachment: fixed;
     font-family: "Courier New", Courier, monospace;
-    color: #2b1e0f;
+    color: #1a1208;
     margin: 0;
     padding: 1em;
     min-height: 100vh;
     display: flex;
     flex-direction: column;
     align-items: center;
+    font-size: 16px;
 }
 
 /* ── Page Panel (the main content wrapper) ──────────────────────────────── */
@@ -88,8 +89,8 @@ body {
 
 /* ── Headings ───────────────────────────────────────────────────────────── */
 h2, h3 {
-    font-size: 24px;
-    color: #2b1e0f;
+    font-size: 26px;
+    color: #1a1208;
     text-align: center;
     margin-bottom: 20px;
     text-transform: uppercase;
@@ -97,7 +98,7 @@ h2, h3 {
     border-bottom: 1px solid #8b5a2b;
     padding-bottom: 10px;
 }
-h3 { font-size: 20px; }
+h3 { font-size: 22px; }
 h2 img {
     margin-right: 10px;
     vertical-align: middle;
@@ -179,7 +180,7 @@ h2 img {
     display: block;
     font-size: 18px;
     margin-bottom: 8px;
-    color: #2b1e0f;
+    color: #1a1208;
 }
 
 /* ── Form Elements ──────────────────────────────────────────────────────── */
@@ -189,7 +190,7 @@ select {
     border-radius: 5px;
     padding: 8px 12px;
     font-size: 16px;
-    color: #2b1e0f;
+    color: #1a1208;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
     cursor: pointer;
     font-family: "Courier New", Courier, monospace;
@@ -201,7 +202,7 @@ input[type="text"], input[type="number"] {
     border-radius: 5px;
     padding: 5px 8px;
     font-size: 16px;
-    color: #2b1e0f;
+    color: #1a1208;
     font-family: "Courier New", Courier, monospace;
     background: #f5e6cc;
 }
@@ -215,7 +216,7 @@ input[type="color"] {
 .cwoc-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 0.9em;
+    font-size: 1em;
     background: #fffaf0;
     border: 1px solid #6b4e31;
     border-radius: 4px;
@@ -225,11 +226,11 @@ input[type="color"] {
     padding: 8px 10px;
     text-align: left;
     border-bottom: 2px solid #6b4e31;
-    font-size: 0.85em;
+    font-size: 0.95em;
     color: var(--aged-brown-dark);
     white-space: nowrap;
 }
-.cwoc-table td { padding: 6px 10px; border-bottom: 1px solid #d4c5a9; vertical-align: top; }
+.cwoc-table td { padding: 6px 10px; border-bottom: 1px solid #d4c5a9; vertical-align: top; color: #1a1208; }
 .cwoc-table tr:hover { background: rgba(212,196,160,0.15); }
 
 /* ── Tag Chips ──────────────────────────────────────────────────────────── */
@@ -239,7 +240,7 @@ input[type="color"] {
 }
 
 /* ── Empty State ────────────────────────────────────────────────────────── */
-.cwoc-empty { text-align: center; padding: 2em; opacity: 0.5; font-size: 1.1em; color: var(--aged-brown-dark); }
+.cwoc-empty { text-align: center; padding: 2em; opacity: 0.7; font-size: 1.1em; color: var(--aged-brown-dark); }
 
 /* ── Toolbar ────────────────────────────────────────────────────────────── */
 .cwoc-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
@@ -254,14 +255,14 @@ input[type="color"] {
 .checkbox-list label { display: flex; align-items: center; padding: 8px; margin: 5px 0; }
 
 /* ── Help Content ───────────────────────────────────────────────────────── */
-.help-content { line-height: 1.7; color: #2b1e0f; }
+.help-content { line-height: 1.7; color: #1a1208; }
 .help-content h3 {
-    font-size: 20px; color: #2b1e0f; text-transform: uppercase;
+    font-size: 22px; color: #1a1208; text-transform: uppercase;
     letter-spacing: 1px; border-bottom: 1px solid #d4c5a9; padding-bottom: 6px; margin-top: 2em;
 }
-.help-content h4 { color: #6b4e31; margin-top: 1.5em; font-size: 16px; text-align: left; text-transform: none; letter-spacing: 0; border: none; }
-.help-content a { color: #6b4e31; }
-.help-content a:hover { color: #4a2c2a; }
+.help-content h4 { color: #4a2c2a; margin-top: 1.5em; font-size: 17px; text-align: left; text-transform: none; letter-spacing: 0; border: none; }
+.help-content a { color: #4a2c2a; }
+.help-content a:hover { color: #1a1208; }
 .help-content kbd { background: #e0d4b5; border: 1px solid #6b4e31; border-radius: 3px; padding: 1px 5px; font-size: 0.9em; }
 .help-content code { background: #e0d4b5; padding: 1px 4px; border-radius: 3px; }
 .help-content .index {
@@ -276,9 +277,9 @@ input[type="color"] {
 .help-content li { margin: 3px 0; }
 
 /* ── Author Footer ──────────────────────────────────────────────────────── */
-.author-info { font-size: small; color: #2b1e0f; text-align: center; margin-top: 10px; }
-.author-info a { color: #5c4033; text-decoration: none; }
-.author-info a:hover { text-decoration: underline; }
+.author-info { font-size: 0.9em; color: #1a1208; text-align: center; margin-top: 10px; padding-bottom: 8px; }
+.author-info a { color: #4a2c2a; text-decoration: underline; }
+.author-info a:hover { color: #1a1208; }
 
 /* ── Modal ───────────────────────────────────────────────────────────────── */
 .modal {

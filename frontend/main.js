@@ -1513,6 +1513,86 @@ function _prefetchChitWeather(chitList) {
   });
 }
 
+// ── Weather page → Day view navigation intent ───────────────────────────────
+
+function _handleWeatherNavIntent() {
+  var raw;
+  try { raw = sessionStorage.getItem('cwoc_wx_nav'); } catch (e) { return; }
+  if (!raw) return;
+  sessionStorage.removeItem('cwoc_wx_nav');
+
+  var nav;
+  try { nav = JSON.parse(raw); } catch (e) { return; }
+  if (!nav || !nav.date) return;
+
+  console.debug('Weather nav intent:', nav);
+
+  // Switch to Calendar → Day view on the target date
+  var parts = nav.date.split('-');
+  var targetDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+  if (isNaN(targetDate.getTime())) return;
+
+  currentTab = 'Calendar';
+  currentView = 'Day';
+  currentWeekStart = targetDate;
+  _weekViewDayOffset = 0;
+
+  // Update UI
+  document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
+  var calTab = document.querySelector(".tab[onclick=\"filterChits('Calendar')\"]");
+  if (calTab) calTab.classList.add('active');
+  var sel = document.getElementById('period-select');
+  if (sel) sel.value = 'Day';
+  // Show/hide sidebar sections for Calendar
+  var orderSection = document.getElementById('section-order');
+  if (orderSection) orderSection.style.display = 'none';
+  var periodSection = document.getElementById('section-period');
+  if (periodSection) periodSection.style.display = '';
+  var yearWeekContainer = document.getElementById('year-week-container');
+  if (yearWeekContainer) yearWeekContainer.style.display = '';
+
+  updateDateRange();
+  displayChits();
+
+  // Flash chits at the matching location after a delay for DOM to settle
+  if (nav.location) {
+    setTimeout(function() { _flashChitsAtLocation(nav.location); }, 800);
+  }
+}
+
+function _flashChitsAtLocation(location) {
+  var locLower = location.toLowerCase().trim();
+  // Find all rendered chit elements
+  var els = document.querySelectorAll('[data-chit-id]');
+  var matched = [];
+  var allVisible = [];
+
+  els.forEach(function(el) {
+    var chitId = el.dataset.chitId;
+    var chit = chits.find(function(c) { return c.id === chitId; });
+    if (!chit) return;
+    allVisible.push(el);
+    var chitLoc = (chit.location || '').toLowerCase().trim();
+    if (chitLoc && locLower && (chitLoc.indexOf(locLower) >= 0 || locLower.indexOf(chitLoc) >= 0)) {
+      matched.push(el);
+    }
+  });
+
+  // If we found location matches, flash those. Otherwise flash all visible chits on this day.
+  var toFlash = matched.length > 0 ? matched : allVisible;
+  console.debug('Weather flash: location="' + locLower + '", matched=' + matched.length + ', flashing=' + toFlash.length);
+
+  toFlash.forEach(function(el) {
+    el.classList.add('wx-flash');
+    setTimeout(function() { el.classList.remove('wx-flash'); }, 3500);
+  });
+
+  // Scroll the first one into view
+  if (toFlash.length > 0) {
+    toFlash[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+}
+
 // ── Load label/tag filters from settings ─────────────────────────────────────
 async function _loadLabelFilters() {
   try {
@@ -2431,6 +2511,8 @@ function fetchChits() {
       if (typeof _globalCheckNotifications === "function") _globalCheckNotifications();
       // Pre-fetch weather for chits with locations (populates cache for all views)
       _prefetchChitWeather(chits);
+      // Check for weather page navigation intent (day view + flash location chits)
+      _handleWeatherNavIntent();
     })
     .catch((err) => {
       console.error("Error fetching chits:", err);
@@ -5282,6 +5364,8 @@ document.addEventListener("DOMContentLoaded", function () {
     _applyEnabledPeriods();
     fetchChits();
     updateDateRange();
+    // Prefetch weather for all saved locations (async, non-blocking)
+    if (typeof prefetchSavedLocationWeather === 'function') prefetchSavedLocationWeather();
   }).catch(() => {
     fetchChits();
     updateDateRange();
