@@ -4326,3 +4326,93 @@ if (typeof document !== 'undefined') {
     initAudioUnlock();
   }
 }
+
+
+// ── WebSocket Sync Client ────────────────────────────────────────────────────
+// Connects to /ws/sync for real-time cross-device state propagation.
+// Messages are JSON objects with a "type" field indicating the event kind.
+
+window._cwocSyncWs = null;
+window._cwocSyncHandlers = {}; // type -> [callback, ...]
+window._cwocSyncReconnectDelay = 1000;
+
+function initSyncWebSocket() {
+  if (window._cwocSyncWs && window._cwocSyncWs.readyState <= 1) return; // already open/connecting
+
+  var proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  var url = proto + '//' + window.location.host + '/ws/sync';
+
+  try {
+    var ws = new WebSocket(url);
+    window._cwocSyncWs = ws;
+
+    ws.onopen = function() {
+      window._cwocSyncReconnectDelay = 1000;
+    };
+
+    ws.onmessage = function(event) {
+      try {
+        var msg = JSON.parse(event.data);
+        var handlers = window._cwocSyncHandlers[msg.type];
+        if (handlers) {
+          handlers.forEach(function(fn) { fn(msg); });
+        }
+      } catch (e) {
+        console.error('Sync WS message parse error:', e);
+      }
+    };
+
+    ws.onclose = function() {
+      window._cwocSyncWs = null;
+      // Reconnect with exponential backoff (max 30s)
+      setTimeout(initSyncWebSocket, window._cwocSyncReconnectDelay);
+      window._cwocSyncReconnectDelay = Math.min(window._cwocSyncReconnectDelay * 2, 30000);
+    };
+
+    ws.onerror = function() {
+      // onclose will fire after this, triggering reconnect
+    };
+  } catch (e) {
+    // WebSocket not supported or blocked — fall back silently
+    console.error('Sync WS init error:', e);
+  }
+}
+
+/**
+ * Send a sync message to all other connected clients.
+ * @param {string} type - Message type (e.g., 'alarm_dismissed', 'timer_state')
+ * @param {object} data - Payload data
+ */
+function syncSend(type, data) {
+  if (!window._cwocSyncWs || window._cwocSyncWs.readyState !== 1) return;
+  try {
+    window._cwocSyncWs.send(JSON.stringify(Object.assign({ type: type }, data || {})));
+  } catch (e) {
+    console.error('Sync WS send error:', e);
+  }
+}
+
+/**
+ * Register a handler for a sync message type.
+ * @param {string} type - Message type to listen for
+ * @param {function} callback - Called with the full message object
+ */
+function syncOn(type, callback) {
+  if (!window._cwocSyncHandlers[type]) window._cwocSyncHandlers[type] = [];
+  window._cwocSyncHandlers[type].push(callback);
+}
+
+// Auto-connect on page load
+if (typeof document !== 'undefined') {
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initSyncWebSocket);
+  } else {
+    initSyncWebSocket();
+  }
+  // Reconnect when page comes back from background
+  document.addEventListener('visibilitychange', function() {
+    if (document.visibilityState === 'visible') {
+      initSyncWebSocket();
+    }
+  });
+}

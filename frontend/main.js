@@ -1937,7 +1937,13 @@ function _showAlertModal(opts) {
   const dismissBtn = document.createElement("button");
   dismissBtn.className = "cwoc-alert-btn cwoc-alert-btn-primary";
   dismissBtn.textContent = "✕ Dismiss";
-  dismissBtn.onclick = () => _dismissAlertModal(overlay, opts.onDismiss);
+  dismissBtn.onclick = () => {
+    _dismissAlertModal(overlay, opts.onDismiss);
+    // Sync dismiss to other devices
+    if (opts.snoozeKey || opts.triggerKey) {
+      syncSend('alert_dismissed', { snoozeKey: opts.snoozeKey, triggerKey: opts.triggerKey });
+    }
+  };
   btnRow.appendChild(dismissBtn);
 
   if (opts.showSnooze) {
@@ -1950,6 +1956,8 @@ function _showAlertModal(opts) {
         const snoozeMs = _getSnoozeMs();
         _snoozeRegistry[opts.snoozeKey] = Date.now() + snoozeMs;
         if (opts.triggerKey) _globalTriggeredAlarms.delete(opts.triggerKey);
+        // Sync snooze to other devices
+        syncSend('alert_snoozed', { snoozeKey: opts.snoozeKey, triggerKey: opts.triggerKey, snoozeUntil: _snoozeRegistry[opts.snoozeKey] });
       }
     };
     btnRow.appendChild(snoozeBtn);
@@ -1957,6 +1965,9 @@ function _showAlertModal(opts) {
 
   modal.appendChild(btnRow);
   overlay.appendChild(modal);
+  overlay._alertSnoozeKey = opts.snoozeKey || null;
+  overlay._alertTriggerKey = opts.triggerKey || null;
+  overlay._alertOnDismiss = opts.onDismiss || null;
   document.body.appendChild(overlay);
 
   // Force reflow then add active class for animation
@@ -1996,7 +2007,10 @@ function _showTimerDoneModal(timerName, onDismiss) {
     icon: "⏱️",
     title: timerName || "Timer",
     subtitle: "Time's up!",
-    onDismiss: onDismiss,
+    onDismiss: function() {
+      if (onDismiss) onDismiss();
+      syncSend('timer_dismissed', { timerName: timerName });
+    },
     showSnooze: false,
   });
 }
@@ -2214,6 +2228,45 @@ function _startGlobalAlertSystem() {
   if (!_globalNotifInterval) {
     _globalNotifInterval = setInterval(_globalCheckNotifications, 30000);
     _globalCheckNotifications(); // check immediately on start
+  }
+
+  // ── WebSocket sync listeners for cross-device alarm/timer state ──
+  if (typeof syncOn === 'function') {
+    // Another device dismissed an alarm/timer
+    syncOn('alert_dismissed', function(msg) {
+      // Add to triggered set so local checker won't re-fire
+      if (msg.triggerKey) _globalTriggeredAlarms.add(msg.triggerKey);
+      // Stop local sound
+      _globalStopAlarm();
+      if (typeof _globalStopTimer === 'function') _globalStopTimer();
+      // Close any matching open modal
+      document.querySelectorAll('.cwoc-alert-overlay').forEach(function(ov) {
+        if (ov._alertSnoozeKey === msg.snoozeKey || ov._alertTriggerKey === msg.triggerKey) {
+          _dismissAlertModal(ov, ov._alertOnDismiss);
+        }
+      });
+    });
+
+    // Another device snoozed an alarm
+    syncOn('alert_snoozed', function(msg) {
+      if (msg.snoozeKey) _snoozeRegistry[msg.snoozeKey] = msg.snoozeUntil;
+      if (msg.triggerKey) _globalTriggeredAlarms.delete(msg.triggerKey);
+      _globalStopAlarm();
+      // Close any matching open modal
+      document.querySelectorAll('.cwoc-alert-overlay').forEach(function(ov) {
+        if (ov._alertSnoozeKey === msg.snoozeKey || ov._alertTriggerKey === msg.triggerKey) {
+          _dismissAlertModal(ov, ov._alertOnDismiss);
+        }
+      });
+    });
+
+    // Another device dismissed a timer
+    syncOn('timer_dismissed', function(msg) {
+      if (typeof _globalStopTimer === 'function') _globalStopTimer();
+      document.querySelectorAll('.cwoc-alert-overlay').forEach(function(ov) {
+        _dismissAlertModal(ov, ov._alertOnDismiss);
+      });
+    });
   }
 }
 

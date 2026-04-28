@@ -12,7 +12,7 @@ import csv
 import io
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
-from fastapi import FastAPI, HTTPException, Query, UploadFile, File, Response
+from fastapi import FastAPI, HTTPException, Query, UploadFile, File, Response, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 from uuid import uuid4
 from fastapi.staticfiles import StaticFiles
@@ -1485,6 +1485,55 @@ async def geocode_proxy(q: str = Query(..., min_length=1)):
         except Exception as e:
             logger.error(f"Geocode proxy error: {e}")
             raise HTTPException(status_code=502, detail="Geocoding service unavailable")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 6b: WebSocket Sync Hub
+# ═══════════════════════════════════════════════════════════════════════════
+
+class _SyncHub:
+    """Manages WebSocket connections and broadcasts sync messages to all clients."""
+    def __init__(self):
+        self.connections: list = []
+
+    async def connect(self, ws: WebSocket):
+        await ws.accept()
+        self.connections.append(ws)
+        logger.info(f"WS client connected ({len(self.connections)} total)")
+
+    def disconnect(self, ws: WebSocket):
+        if ws in self.connections:
+            self.connections.remove(ws)
+        logger.info(f"WS client disconnected ({len(self.connections)} total)")
+
+    async def broadcast(self, message: dict, exclude: WebSocket = None):
+        """Send a JSON message to all connected clients except the sender."""
+        dead = []
+        for ws in self.connections:
+            if ws is exclude:
+                continue
+            try:
+                await ws.send_json(message)
+            except Exception:
+                dead.append(ws)
+        for ws in dead:
+            self.disconnect(ws)
+
+_sync_hub = _SyncHub()
+
+
+@app.websocket("/ws/sync")
+async def websocket_sync(ws: WebSocket):
+    await _sync_hub.connect(ws)
+    try:
+        while True:
+            data = await ws.receive_json()
+            # Broadcast to all OTHER clients
+            await _sync_hub.broadcast(data, exclude=ws)
+    except WebSocketDisconnect:
+        _sync_hub.disconnect(ws)
+    except Exception:
+        _sync_hub.disconnect(ws)
 
 
 # Serve all files from /frontend/ (e.g., index.html, settings.html, editor.html)
