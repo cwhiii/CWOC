@@ -4460,3 +4460,433 @@ if (typeof document !== 'undefined') {
     }
   });
 }
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Global Alarm System — runs on EVERY page (dashboard, editor, settings, etc.)
+// Fetches chits + independent alerts, checks alarms every second, shows modals.
+// ══════════════════════════════════════════════════════════════════════════════
+
+window._sharedAlarmTriggered = window._sharedAlarmTriggered || new Set();
+window._sharedSnoozeRegistry = window._sharedSnoozeRegistry || {};
+window._sharedAlarmInterval = null;
+window._sharedAlarmAudio = null;
+window._sharedTimerAudio = null;
+window._sharedAlarmTimeout = null;
+window._sharedTimeFormat = '24hour';
+window._sharedChits = [];
+window._sharedIndependentAlerts = [];
+
+// ── Time format ──
+function _sharedFmtTime(time24) {
+  if (!time24) return '';
+  if (window._sharedTimeFormat === '12hour' || window._sharedTimeFormat === '12houranalog') {
+    var parts = time24.split(':').map(Number);
+    var h = parts[0], m = parts[1];
+    var ampm = h >= 12 ? 'PM' : 'AM';
+    return (h % 12 || 12) + ':' + String(m).padStart(2, '0') + ' ' + ampm;
+  }
+  return time24;
+}
+
+// ── Sound ──
+function _sharedPlayAlarm() {
+  if (!window._sharedAlarmAudio) window._sharedAlarmAudio = new Audio('/static/alarm.mp3');
+  window._sharedAlarmAudio.loop = true;
+  cwocPlayAudio(window._sharedAlarmAudio, { loop: true });
+  if (window._sharedAlarmTimeout) clearTimeout(window._sharedAlarmTimeout);
+  window._sharedAlarmTimeout = setTimeout(_sharedStopAlarm, 5 * 60 * 1000);
+}
+function _sharedStopAlarm() {
+  if (window._sharedAlarmAudio) { window._sharedAlarmAudio.pause(); window._sharedAlarmAudio.currentTime = 0; }
+  if (window._sharedAlarmTimeout) { clearTimeout(window._sharedAlarmTimeout); window._sharedAlarmTimeout = null; }
+  if (navigator.vibrate) try { navigator.vibrate(0); } catch (e) {}
+}
+function _sharedPlayTimer() {
+  if (!window._sharedTimerAudio) window._sharedTimerAudio = new Audio('/static/timer.mp3');
+  window._sharedTimerAudio.loop = true;
+  cwocPlayAudio(window._sharedTimerAudio, { loop: true });
+}
+function _sharedStopTimer() {
+  if (window._sharedTimerAudio) { window._sharedTimerAudio.pause(); window._sharedTimerAudio.currentTime = 0; window._sharedTimerAudio.loop = false; }
+}
+
+// ── Snooze helpers ──
+function _sharedGetSnoozeMs() {
+  var len = window._snoozeLength || window._sharedSnoozeLength || '5 minutes';
+  var match = String(len).match(/(\d+)\s*(minute|hour|second)/i);
+  if (!match) return 5 * 60 * 1000;
+  var val = parseInt(match[1]);
+  var unit = match[2].toLowerCase();
+  if (unit.startsWith('hour')) return val * 3600000;
+  if (unit.startsWith('second')) return val * 1000;
+  return val * 60000;
+}
+
+function _sharedPersistDismiss(key) {
+  window._sharedAlarmTriggered.add(key);
+  fetch('/api/alert-state', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ alert_key: key, state: 'dismissed' }) }).catch(function() {});
+}
+function _sharedPersistSnooze(key, untilTs) {
+  window._sharedSnoozeRegistry[key] = untilTs;
+  fetch('/api/alert-state', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ alert_key: key, state: 'snoozed', until_ts: new Date(untilTs).toISOString() }) }).catch(function() {});
+}
+
+// ── Load persisted state ──
+function _sharedLoadAlertStates() {
+  fetch('/api/alert-state').then(function(r) { return r.json(); }).then(function(states) {
+    states.forEach(function(s) {
+      if (s.state === 'dismissed') window._sharedAlarmTriggered.add(s.alert_key);
+      else if (s.state === 'snoozed' && s.until_ts) window._sharedSnoozeRegistry[s.alert_key] = new Date(s.until_ts).getTime();
+    });
+  }).catch(function() {});
+}
+
+// ── Fetch data ──
+function _sharedFetchData() {
+  // Sync from dashboard's chits array if available and populated
+  if (typeof chits !== 'undefined' && Array.isArray(chits)) {
+    window._sharedChits = chits;
+  }
+  // Always fetch fresh from API too (covers non-dashboard pages and stale data)
+  fetch('/api/chits').then(function(r) { return r.json(); }).then(function(data) {
+    if (Array.isArray(data) && data.length > 0) window._sharedChits = data;
+  }).catch(function() {});
+
+  if (typeof _independentAlerts !== 'undefined' && Array.isArray(_independentAlerts)) {
+    window._sharedIndependentAlerts = _independentAlerts;
+  }
+  fetch('/api/standalone-alerts').then(function(r) { return r.json(); }).then(function(data) {
+    if (Array.isArray(data)) window._sharedIndependentAlerts = data;
+  }).catch(function() {});
+}
+
+// ── Bold alert modal (works on any page) ──
+function _sharedShowAlertModal(opts) {
+  document.body.style.overflow = 'hidden';
+  document.body.style.touchAction = 'none';
+  var overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:100000;display:flex;justify-content:center;align-items:center;opacity:0;transition:opacity 0.3s ease;touch-action:none;user-select:none;';
+  overlay.addEventListener('touchmove', function(e) { e.preventDefault(); }, { passive: false });
+  overlay.addEventListener('wheel', function(e) { e.preventDefault(); }, { passive: false });
+
+  var modal = document.createElement('div');
+  modal.style.cssText = "background:url('/static/parchment.jpg') center/cover;background-color:#fff8e1;border:3px solid #8b4513;border-radius:12px;padding:0;width:90%;max-width:420px;box-shadow:0 8px 40px rgba(0,0,0,0.5),0 0 60px rgba(212,175,55,0.3);font-family:'Courier New',monospace;color:#3c2f2f;text-align:center;overflow:hidden;";
+  var bar = document.createElement('div'); bar.style.cssText = 'width:100%;height:6px;background:#e8dcc8;overflow:hidden;';
+  var barFill = document.createElement('div'); barFill.style.cssText = 'height:100%;width:100%;background:linear-gradient(90deg,#d4af37 0%,#c8965a 60%,#8b4513 100%);';
+  bar.appendChild(barFill); modal.appendChild(bar);
+  var iconEl = document.createElement('div'); iconEl.style.cssText = 'font-size:3em;margin:20px 0 8px;line-height:1;'; iconEl.textContent = opts.icon || '🔔'; modal.appendChild(iconEl);
+  var titleEl = document.createElement('div'); titleEl.style.cssText = 'font-size:1.5em;font-weight:bold;color:#4a2c2a;margin:0 16px 6px;word-break:break-word;'; titleEl.textContent = opts.title || 'Alert'; modal.appendChild(titleEl);
+  if (opts.subtitle) { var subEl = document.createElement('div'); subEl.style.cssText = 'font-size:1.1em;color:#6b4226;margin:0 16px 16px;opacity:0.85;'; subEl.textContent = opts.subtitle; modal.appendChild(subEl); }
+
+  var btnRow = document.createElement('div'); btnRow.style.cssText = 'display:flex;gap:8px;padding:12px 16px 16px;flex-wrap:wrap;justify-content:center;';
+  var btnStyle = "flex:1;min-width:100px;padding:10px 16px;font-size:1em;font-weight:bold;font-family:'Courier New',monospace;border:2px solid #8b5a2b;border-radius:6px;background:#fdf5e6;color:#4a2c2a;cursor:pointer;min-height:44px;";
+  var btnPrimaryStyle = btnStyle + "background:#8b5a2b;color:#fff8e1;border-color:#5a3f2a;";
+
+  // Navigation button — "Go to Chit" or "Go to Alerts"
+  function _safeNavigate(url) {
+    // Check for unsaved changes on editor page
+    if (typeof markEditorSaved === 'function' && typeof window._editorUnsaved !== 'undefined' && window._editorUnsaved) {
+      if (!confirm('You have unsaved changes. Leave this page?')) return;
+    }
+    // Check shared-page save system
+    if (typeof CwocSaveSystem !== 'undefined' && CwocSaveSystem._instance && CwocSaveSystem._instance._dirty) {
+      if (!confirm('You have unsaved changes. Leave this page?')) return;
+    }
+    window.location.href = url;
+  }
+
+  if (opts.chitId) {
+    var openBtn = document.createElement('button'); openBtn.style.cssText = btnStyle; openBtn.textContent = '📝 Go to Chit';
+    openBtn.onclick = function() {
+      _sharedStopAlarm(); _sharedStopTimer();
+      if (typeof _timerAudio !== 'undefined' && _timerAudio) { _timerAudio.pause(); _timerAudio.currentTime = 0; }
+      if (typeof _alarmAudio !== 'undefined' && _alarmAudio) { _alarmAudio.pause(); _alarmAudio.currentTime = 0; }
+      _sharedDismissModal(overlay, opts);
+      if (opts.triggerKey) _sharedPersistDismiss(opts.triggerKey);
+      if (opts.snoozeKey) _sharedPersistDismiss(opts.snoozeKey);
+      syncSend('alert_dismissed', { snoozeKey: opts.snoozeKey, triggerKey: opts.triggerKey });
+      _safeNavigate('/editor?id=' + opts.chitId);
+    };
+    btnRow.appendChild(openBtn);
+  } else {
+    // Independent alert — navigate to the independent alerts view
+    var goBtn = document.createElement('button'); goBtn.style.cssText = btnStyle; goBtn.textContent = '🛎️ Go to Alerts';
+    goBtn.onclick = function() {
+      _sharedStopAlarm(); _sharedStopTimer();
+      if (typeof _timerAudio !== 'undefined' && _timerAudio) { _timerAudio.pause(); _timerAudio.currentTime = 0; }
+      if (typeof _alarmAudio !== 'undefined' && _alarmAudio) { _alarmAudio.pause(); _alarmAudio.currentTime = 0; }
+      _sharedDismissModal(overlay, opts);
+      if (opts.triggerKey) _sharedPersistDismiss(opts.triggerKey);
+      if (opts.snoozeKey) _sharedPersistDismiss(opts.snoozeKey);
+      syncSend('alert_dismissed', { snoozeKey: opts.snoozeKey, triggerKey: opts.triggerKey });
+      // Set the alarms view mode to independent and navigate to dashboard
+      try { localStorage.setItem('cwoc_alarmsViewMode', 'independent'); } catch(e) {}
+      _safeNavigate('/?tab=Alarms');
+    };
+    btnRow.appendChild(goBtn);
+  }
+  var dismissBtn = document.createElement('button'); dismissBtn.style.cssText = btnPrimaryStyle; dismissBtn.textContent = '✕ Dismiss';
+  dismissBtn.onclick = function() {
+    _sharedStopAlarm(); _sharedStopTimer();
+    // Also stop editor-specific audio
+    if (typeof _timerAudio !== 'undefined' && _timerAudio) { _timerAudio.pause(); _timerAudio.currentTime = 0; }
+    if (typeof _alarmAudio !== 'undefined' && _alarmAudio) { _alarmAudio.pause(); _alarmAudio.currentTime = 0; }
+    _sharedDismissModal(overlay, opts);
+    if (opts.triggerKey) _sharedPersistDismiss(opts.triggerKey);
+    if (opts.snoozeKey) _sharedPersistDismiss(opts.snoozeKey);
+    syncSend('alert_dismissed', { snoozeKey: opts.snoozeKey, triggerKey: opts.triggerKey });
+  };
+  btnRow.appendChild(dismissBtn);
+  if (opts.showSnooze) {
+    var snoozeBtn = document.createElement('button'); snoozeBtn.style.cssText = btnStyle; snoozeBtn.textContent = '💤 Snooze';
+    snoozeBtn.onclick = function() {
+      _sharedStopAlarm(); _sharedStopTimer();
+      if (typeof _timerAudio !== 'undefined' && _timerAudio) { _timerAudio.pause(); _timerAudio.currentTime = 0; }
+      if (typeof _alarmAudio !== 'undefined' && _alarmAudio) { _alarmAudio.pause(); _alarmAudio.currentTime = 0; }
+      _sharedDismissModal(overlay, opts);
+      if (opts.snoozeKey) {
+        var untilTs = Date.now() + _sharedGetSnoozeMs();
+        _sharedPersistSnooze(opts.snoozeKey, untilTs);
+        if (opts.triggerKey) window._sharedAlarmTriggered.delete(opts.triggerKey);
+        syncSend('alert_snoozed', { snoozeKey: opts.snoozeKey, triggerKey: opts.triggerKey, snoozeUntil: untilTs });
+      }
+      // Re-render alarm containers to show snooze countdown bar
+      setTimeout(function() {
+        if (typeof renderAlarmsContainer === 'function') renderAlarmsContainer();
+        if (typeof displayChits === 'function' && typeof currentTab !== 'undefined' && currentTab === 'Alarms') displayChits();
+      }, 400);
+    };
+    btnRow.appendChild(snoozeBtn);
+  }
+  modal.appendChild(btnRow);
+  overlay.appendChild(modal);
+  overlay._snoozeKey = opts.snoozeKey; overlay._triggerKey = opts.triggerKey;
+  overlay.setAttribute('data-cwoc-alert', 'true');
+  document.body.appendChild(overlay);
+  void overlay.offsetWidth;
+  overlay.style.opacity = '1';
+
+  // Block keyboard
+  function _block(e) { if (e.key !== 'Tab') { e.preventDefault(); e.stopImmediatePropagation(); } }
+  document.addEventListener('keydown', _block, true);
+  overlay._blockKeys = _block;
+
+  // Try to unlock audio on click
+  modal.addEventListener('click', function() {
+    if (window._sharedAlarmAudio && window._sharedAlarmAudio.paused && window._sharedAlarmAudio.loop) window._sharedAlarmAudio.play().catch(function(){});
+    if (window._sharedTimerAudio && window._sharedTimerAudio.paused && window._sharedTimerAudio.loop) window._sharedTimerAudio.play().catch(function(){});
+  }, { once: true });
+
+  return overlay;
+}
+
+function _sharedDismissModal(overlay, opts) {
+  overlay.style.opacity = '0';
+  if (overlay._blockKeys) document.removeEventListener('keydown', overlay._blockKeys, true);
+  setTimeout(function() {
+    if (overlay.parentNode) overlay.remove();
+    if (!document.querySelector('[data-cwoc-alert]')) { document.body.style.overflow = ''; document.body.style.touchAction = ''; }
+  }, 300);
+}
+
+// ── Browser notification ──
+function _sharedBrowserNotif(title, body, chitId) {
+  if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+  try {
+    var n = new Notification(title, { body: body, icon: '/static/cwod_logo-favicon.png', tag: 'cwoc-' + (chitId || 'alert'), renotify: true, requireInteraction: true, silent: true });
+    n.onclick = function() { window.focus(); if (chitId) window.location.href = '/editor?id=' + chitId; };
+  } catch (e) {}
+}
+
+// ── The alarm checker — runs every second on every page ──
+function _sharedCheckAlarms() {
+  var now = new Date();
+  var hh = String(now.getHours()).padStart(2, '0');
+  var mm = String(now.getMinutes()).padStart(2, '0');
+  var currentTime = hh + ':' + mm;
+  var days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  var currentDay = days[now.getDay()];
+  var dateStr = now.toDateString();
+
+  // Check chit alarms
+  window._sharedChits.forEach(function(chit) {
+    if (!Array.isArray(chit.alerts)) return;
+    chit.alerts.forEach(function(alert, idx) {
+      if (alert._type !== 'alarm' || !alert.enabled || !alert.time) return;
+      var alertDays = alert.days && alert.days.length > 0 ? alert.days : [currentDay];
+      if (alertDays.indexOf(currentDay) === -1) return;
+      if (alert.time !== currentTime) return;
+      var key = chit.id + '-' + idx + '-' + alert.time + '-' + dateStr;
+      if (window._sharedAlarmTriggered.has(key)) return;
+      var snoozeKey = chit.id + '-' + idx;
+      if (window._sharedSnoozeRegistry[snoozeKey] && Date.now() < window._sharedSnoozeRegistry[snoozeKey]) return;
+      window._sharedAlarmTriggered.add(key);
+      _sharedPlayAlarm();
+      _sharedShowAlertModal({ icon: '🔔', title: chit.title || 'Alarm', subtitle: _sharedFmtTime(alert.time) + (alert.name ? ' — ' + alert.name : ''), chitId: chit.id, onDismiss: _sharedStopAlarm, showSnooze: true, snoozeKey: snoozeKey, triggerKey: key });
+      _sharedBrowserNotif('🔔 Alarm: ' + (chit.title || 'Alarm'), _sharedFmtTime(alert.time), chit.id);
+      syncSend('alarm_fired', { title: chit.title, subtitle: _sharedFmtTime(alert.time), chitId: chit.id, snoozeKey: snoozeKey, triggerKey: key });
+    });
+  });
+
+  // Check independent alarms
+  window._sharedIndependentAlerts.forEach(function(ia) {
+    var ad = ia.data || ia;
+    if (ad._type !== 'alarm' || !ad.enabled || !ad.time) return;
+    var alertDays = ad.days && ad.days.length > 0 ? ad.days : [currentDay];
+    if (alertDays.indexOf(currentDay) === -1) return;
+    if (ad.time !== currentTime) return;
+    var key = 'ia-' + ia.id + '-' + ad.time + '-' + dateStr;
+    if (window._sharedAlarmTriggered.has(key)) return;
+    var snoozeKey = 'ia-' + ia.id;
+    if (window._sharedSnoozeRegistry[snoozeKey] && Date.now() < window._sharedSnoozeRegistry[snoozeKey]) return;
+    window._sharedAlarmTriggered.add(key);
+    var name = ad.name || 'Independent Alarm';
+    _sharedPlayAlarm();
+    _sharedShowAlertModal({ icon: '🔔', title: name, subtitle: _sharedFmtTime(ad.time), onDismiss: _sharedStopAlarm, showSnooze: true, snoozeKey: snoozeKey, triggerKey: key });
+    _sharedBrowserNotif('🔔 ' + name, _sharedFmtTime(ad.time));
+    syncSend('alarm_fired', { title: name, subtitle: _sharedFmtTime(ad.time), snoozeKey: snoozeKey, triggerKey: key });
+  });
+
+  // Check expired snoozes
+  Object.keys(window._sharedSnoozeRegistry).forEach(function(snoozeKey) {
+    var until = window._sharedSnoozeRegistry[snoozeKey];
+    if (!until || Date.now() < until) return;
+    var refireKey = 'snooze-refire-' + snoozeKey + '-' + dateStr;
+    if (window._sharedAlarmTriggered.has(refireKey)) return;
+    window._sharedAlarmTriggered.add(refireKey);
+    delete window._sharedSnoozeRegistry[snoozeKey];
+    var name = 'Alarm', time = '', chitId = null;
+    if (snoozeKey.indexOf('ia-') === 0) {
+      var iaId = snoozeKey.slice(3);
+      var ia = window._sharedIndependentAlerts.find(function(a) { return a.id === iaId; });
+      if (ia) { var ad = ia.data || ia; name = ad.name || 'Independent Alarm'; time = ad.time || ''; }
+    } else {
+      var parts = snoozeKey.split('-'); var cId = parts.slice(0,-1).join('-'); var aIdx = parseInt(parts[parts.length-1]);
+      var chit = window._sharedChits.find(function(c) { return c.id === cId; });
+      if (chit && Array.isArray(chit.alerts) && chit.alerts[aIdx]) { name = chit.title || 'Alarm'; time = chit.alerts[aIdx].time || ''; chitId = chit.id; }
+    }
+    _sharedPlayAlarm();
+    _sharedShowAlertModal({ icon: '🔔', title: name, subtitle: _sharedFmtTime(time) + ' (snoozed)', chitId: chitId, onDismiss: _sharedStopAlarm, showSnooze: true, snoozeKey: snoozeKey, triggerKey: refireKey });
+    _sharedBrowserNotif('🔔 ' + name, _sharedFmtTime(time));
+    syncSend('alarm_fired', { title: name, subtitle: _sharedFmtTime(time) + ' (snoozed)', chitId: chitId, snoozeKey: snoozeKey, triggerKey: refireKey });
+  });
+
+  // Cleanup old keys
+  window._sharedAlarmTriggered.forEach(function(key) {
+    if (key.indexOf(dateStr) === -1 && key.indexOf('snooze-refire') === -1) window._sharedAlarmTriggered.delete(key);
+  });
+}
+
+// ── Sync handlers for the shared alarm system ──
+function _initSharedAlarmSync() {
+  if (typeof syncOn !== 'function') return;
+
+  syncOn('alarm_fired', function(msg) {
+    if (msg.triggerKey && window._sharedAlarmTriggered.has(msg.triggerKey)) return;
+    if (msg.triggerKey) window._sharedAlarmTriggered.add(msg.triggerKey);
+    _sharedPlayAlarm();
+    _sharedShowAlertModal({ icon: '🔔', title: msg.title || 'Alarm', subtitle: msg.subtitle || '', chitId: msg.chitId, onDismiss: _sharedStopAlarm, showSnooze: true, snoozeKey: msg.snoozeKey, triggerKey: msg.triggerKey });
+  });
+
+  syncOn('alert_dismissed', function(msg) {
+    if (msg.triggerKey) window._sharedAlarmTriggered.add(msg.triggerKey);
+    if (msg.snoozeKey) {
+      window._sharedAlarmTriggered.add(msg.snoozeKey);
+      // Clear snooze from registry so the bar disappears
+      delete window._sharedSnoozeRegistry[msg.snoozeKey];
+      if (typeof _snoozeRegistry !== 'undefined') delete _snoozeRegistry[msg.snoozeKey];
+    }
+    _sharedStopAlarm(); _sharedStopTimer();
+    document.querySelectorAll('[data-cwoc-alert]').forEach(function(ov) {
+      if (ov._snoozeKey === msg.snoozeKey || ov._triggerKey === msg.triggerKey) {
+        if (ov._blockKeys) document.removeEventListener('keydown', ov._blockKeys, true);
+        ov.remove();
+      }
+    });
+    document.body.style.overflow = ''; document.body.style.touchAction = '';
+    // Re-render to remove snooze bars
+    setTimeout(function() {
+      if (typeof renderAlarmsContainer === 'function') renderAlarmsContainer();
+      if (typeof displayChits === 'function' && typeof currentTab !== 'undefined' && currentTab === 'Alarms') displayChits();
+    }, 300);
+  });
+
+  syncOn('alert_snoozed', function(msg) {
+    if (msg.snoozeKey && msg.snoozeUntil) window._sharedSnoozeRegistry[msg.snoozeKey] = msg.snoozeUntil;
+    if (msg.triggerKey) window._sharedAlarmTriggered.delete(msg.triggerKey);
+    _sharedStopAlarm(); _sharedStopTimer();
+    document.querySelectorAll('[data-cwoc-alert]').forEach(function(ov) {
+      if (ov._snoozeKey === msg.snoozeKey || ov._triggerKey === msg.triggerKey) {
+        if (ov._blockKeys) document.removeEventListener('keydown', ov._blockKeys, true);
+        ov.remove();
+      }
+    });
+    document.body.style.overflow = ''; document.body.style.touchAction = '';
+    // Re-render to show snooze countdown bar
+    setTimeout(function() {
+      if (typeof renderAlarmsContainer === 'function') renderAlarmsContainer();
+      if (typeof displayChits === 'function' && typeof currentTab !== 'undefined' && currentTab === 'Alarms') displayChits();
+    }, 400);
+  });
+
+  syncOn('timer_fired', function(msg) {
+    _sharedPlayTimer();
+    _sharedShowAlertModal({ icon: '⏱️', title: msg.timerName || 'Timer', subtitle: "Time's up!", chitId: msg.chitId || null, onDismiss: _sharedStopTimer, showSnooze: false });
+  });
+
+  syncOn('timer_dismissed', function(msg) {
+    _sharedStopAlarm(); _sharedStopTimer();
+    document.querySelectorAll('[data-cwoc-alert]').forEach(function(ov) {
+      if (ov._blockKeys) document.removeEventListener('keydown', ov._blockKeys, true);
+      ov.remove();
+    });
+    document.body.style.overflow = ''; document.body.style.touchAction = '';
+  });
+
+  // Data sync
+  syncOn('alerts_changed', function() { _sharedFetchData(); });
+  syncOn('chits_changed', function() { _sharedFetchData(); });
+}
+
+// ── Init the shared alarm system ──
+function _initSharedAlarmSystem() {
+  // Load settings
+  getCachedSettings().then(function(s) {
+    window._sharedTimeFormat = s.time_format || '24hour';
+    window._sharedSnoozeLength = s.snooze_length || '5 minutes';
+  }).catch(function() {});
+
+  // Load persisted state
+  _sharedLoadAlertStates();
+
+  // Fetch data
+  _sharedFetchData();
+
+  // Request notification permission
+  if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
+
+  // Start alarm checker (every second)
+  if (!window._sharedAlarmInterval) {
+    window._sharedAlarmInterval = setInterval(_sharedCheckAlarms, 1000);
+  }
+
+  // Periodic data refresh (every 30s)
+  setInterval(function() { _sharedFetchData(); _sharedLoadAlertStates(); }, 30000);
+
+  // Init sync handlers
+  _initSharedAlarmSync();
+}
+
+// Auto-init on page load
+if (typeof document !== 'undefined') {
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _initSharedAlarmSystem);
+  } else {
+    _initSharedAlarmSystem();
+  }
+}

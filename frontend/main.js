@@ -2190,6 +2190,62 @@ function _globalCheckAlarms() {
     if (!key.endsWith(now.toDateString())) _globalTriggeredAlarms.delete(key);
   });
 
+  // ── Check for expired snoozes — re-fire alarms whose snooze just ran out ──
+  var _snoozeKeys = Object.keys(_snoozeRegistry);
+  _snoozeKeys.forEach(function(snoozeKey) {
+    var until = _snoozeRegistry[snoozeKey];
+    if (!until || Date.now() < until) return; // still snoozed
+    // Snooze expired — check if we already re-fired (use a special key)
+    var refireKey = 'snooze-refire-' + snoozeKey + '-' + dateStr;
+    if (_globalTriggeredAlarms.has(refireKey)) return;
+    _globalTriggeredAlarms.add(refireKey);
+    delete _snoozeRegistry[snoozeKey];
+
+    // Find the alarm to get its name/title
+    var alarmName = 'Alarm';
+    var alarmTime = '';
+    var chitId = null;
+
+    // Check independent alarms
+    if (snoozeKey.startsWith('ia-') && Array.isArray(_independentAlerts)) {
+      var iaId = snoozeKey.slice(3);
+      var ia = _independentAlerts.find(function(a) { return a.id === iaId; });
+      if (ia) {
+        var ad = ia.data || ia;
+        alarmName = ad.name || 'Independent Alarm';
+        alarmTime = ad.time || '';
+      }
+    } else {
+      // Check chit alarms (snoozeKey = "chitId-alertIdx")
+      var parts = snoozeKey.split('-');
+      if (parts.length >= 2) {
+        var cId = parts.slice(0, -1).join('-');
+        var aIdx = parseInt(parts[parts.length - 1]);
+        var chit = chits.find(function(c) { return c.id === cId; });
+        if (chit && Array.isArray(chit.alerts) && chit.alerts[aIdx]) {
+          alarmName = chit.title || 'Alarm';
+          alarmTime = chit.alerts[aIdx].time || '';
+          chitId = chit.id;
+        }
+      }
+    }
+
+    var label = _globalFmtTime(alarmTime) + (alarmName !== 'Alarm' ? ' — ' + alarmName : '');
+    _globalPlayAlarm();
+    _showAlertModal({
+      icon: '🔔',
+      title: alarmName,
+      subtitle: label + ' (snoozed)',
+      chitId: chitId,
+      onDismiss: function() { _globalStopAlarm(); },
+      showSnooze: true,
+      snoozeKey: snoozeKey,
+      triggerKey: refireKey,
+    });
+    _sendBrowserNotification('🔔 ' + alarmName, label);
+    syncSend('alarm_fired', { title: alarmName, subtitle: label + ' (snoozed)', chitId: chitId, snoozeKey: snoozeKey, triggerKey: refireKey });
+  });
+
   // Delete Past Alarm Chits: auto-archive alarm-only chits whose time has passed
   if (_chitOptions.delete_past_alarm_chits) {
     chits.forEach((chit) => {
@@ -2254,9 +2310,16 @@ function _globalCheckNotifications() {
 }
 
 function _getSnoozeMs() {
-  const s = window._snoozeLength || '5 minutes';
-  const match = s.match(/(\d+)/);
-  return (match ? parseInt(match[1]) : 5) * 60 * 1000;
+  // Delegate to shared helper which properly parses units
+  if (typeof _sharedGetSnoozeMs === 'function') return _sharedGetSnoozeMs();
+  var s = window._snoozeLength || window._sharedSnoozeLength || '5 minutes';
+  var match = String(s).match(/(\d+)\s*(minute|hour|second)/i);
+  if (!match) return 5 * 60 * 1000;
+  var val = parseInt(match[1]);
+  var unit = match[2].toLowerCase();
+  if (unit.startsWith('hour')) return val * 3600000;
+  if (unit.startsWith('second')) return val * 1000;
+  return val * 60000;
 }
 
 function _startGlobalAlertSystem() {
@@ -2281,10 +2344,9 @@ function _startGlobalAlertSystem() {
   // Load persisted dismiss/snooze states before starting alarm checker
   _loadAlertStates();
 
-  // Start alarm checker (every second)
-  if (!_globalAlarmInterval) {
-    _globalAlarmInterval = setInterval(_globalCheckAlarms, 1000);
-  }
+  // Alarm checker is now handled by shared.js (_sharedCheckAlarms) on all pages.
+  // Keep the dashboard's _globalCheckAlarms for backward compat but don't start a separate interval.
+  // The shared system in shared.js handles everything.
 
   // Start notification checker (every 30 seconds)
   if (!_globalNotifInterval) {
@@ -2292,81 +2354,14 @@ function _startGlobalAlertSystem() {
     _globalCheckNotifications(); // check immediately on start
   }
 
-  // ── WebSocket sync listeners for cross-device alarm/timer state ──
+  // ── WebSocket sync listeners — dashboard-specific (alarm/timer modals handled by shared.js) ──
   if (typeof syncOn === 'function') {
-    // Another device dismissed an alarm/timer
-    syncOn('alert_dismissed', function(msg) {
-      if (msg.triggerKey) _globalTriggeredAlarms.add(msg.triggerKey);
-      if (msg.snoozeKey) _globalTriggeredAlarms.add(msg.snoozeKey);
-      // Stop ALL sounds
-      _globalStopAlarm();
-      _globalStopTimer();
-      // Close ALL open alert modals (not just matching ones — dismiss means dismiss)
-      document.querySelectorAll('.cwoc-alert-overlay').forEach(function(ov) {
-        if (ov._alertSnoozeKey === msg.snoozeKey || ov._alertTriggerKey === msg.triggerKey) {
-          // Remove keyboard blocker and overlay without calling onDismiss (sound already stopped)
-          if (ov._blockKeys) document.removeEventListener('keydown', ov._blockKeys, true);
-          ov.remove();
-        }
-      });
-      document.body.style.overflow = '';
-      document.body.style.touchAction = '';
-    });
-
-    // Another device snoozed an alarm
+    // Re-render snooze bars when snoozed on another device
     syncOn('alert_snoozed', function(msg) {
       if (msg.snoozeKey && msg.snoozeUntil) _snoozeRegistry[msg.snoozeKey] = msg.snoozeUntil;
-      if (msg.triggerKey) _globalTriggeredAlarms.delete(msg.triggerKey);
-      _globalStopAlarm();
-      _globalStopTimer();
-      document.querySelectorAll('.cwoc-alert-overlay').forEach(function(ov) {
-        if (ov._alertSnoozeKey === msg.snoozeKey || ov._alertTriggerKey === msg.triggerKey) {
-          if (ov._blockKeys) document.removeEventListener('keydown', ov._blockKeys, true);
-          ov.remove();
-        }
-      });
-      document.body.style.overflow = '';
-      document.body.style.touchAction = '';
-      // Re-render to show snooze countdown bar
       if (currentTab === 'Alarms' && _alarmsViewMode === 'independent') {
         displayChits();
       }
-    });
-
-    // Another device dismissed a timer
-    syncOn('timer_dismissed', function(msg) {
-      _globalStopAlarm();
-      _globalStopTimer();
-      document.querySelectorAll('.cwoc-alert-overlay').forEach(function(ov) {
-        if (ov._blockKeys) document.removeEventListener('keydown', ov._blockKeys, true);
-        ov.remove();
-      });
-      document.body.style.overflow = '';
-      document.body.style.touchAction = '';
-    });
-
-    // Another device fired an alarm — show it here too
-    syncOn('alarm_fired', function(msg) {
-      // Don't re-fire if we already have this one
-      if (msg.triggerKey && _globalTriggeredAlarms.has(msg.triggerKey)) return;
-      if (msg.triggerKey) _globalTriggeredAlarms.add(msg.triggerKey);
-      _globalPlayAlarm();
-      _showAlertModal({
-        icon: "🔔",
-        title: msg.title || "Alarm",
-        subtitle: msg.subtitle || "",
-        chitId: msg.chitId || null,
-        onDismiss: function() { _globalStopAlarm(); },
-        showSnooze: true,
-        snoozeKey: msg.snoozeKey || null,
-        triggerKey: msg.triggerKey || null,
-      });
-    });
-
-    // Another device's timer finished — show it here too
-    syncOn('timer_fired', function(msg) {
-      _globalPlayTimer();
-      _showTimerDoneModal(msg.timerName, function() { _globalStopTimer(); });
     });
 
     // Another device started a timer — start local countdown from end timestamp
@@ -2374,13 +2369,11 @@ function _startGlobalAlertSystem() {
       if (!msg.alertId || !msg.endTs) return;
       var rt = _saTimerRuntime[msg.alertId];
       if (!rt) { rt = { remaining: 0, intervalId: null, running: false }; _saTimerRuntime[msg.alertId] = rt; }
-      // Calculate remaining from absolute end timestamp
       var remainMs = msg.endTs - Date.now();
       if (remainMs <= 0) return;
       rt.remaining = remainMs / 1000;
       rt.running = true;
       rt._endTs = msg.endTs;
-      // Re-render the alerts view if we're on it
       if (currentTab === 'Alarms' && _alarmsViewMode === 'independent') {
         displayChits();
       }
@@ -2404,7 +2397,6 @@ function _startGlobalAlertSystem() {
       var rt = _saTimerRuntime[msg.alertId];
       if (rt) {
         clearInterval(rt.intervalId); rt.intervalId = null; rt.running = false;
-        // Find the alert to get totalSeconds
         var alert = _independentAlerts.find(function(a) { return a.id === msg.alertId; });
         var alertData = alert ? (alert.data || alert) : {};
         rt.remaining = alertData.totalSeconds || 0;
@@ -5414,6 +5406,16 @@ function _buildSaAlarmCard(card, id, data) {
   toggleBtn.textContent = data.enabled ? "On" : "Off";
   toggleBtn.onclick = () => {
     data.enabled = !data.enabled;
+    // If turning off while snoozed, cancel the snooze
+    if (!data.enabled) {
+      var _snzKey = 'ia-' + id;
+      if (_snoozeRegistry[_snzKey]) {
+        delete _snoozeRegistry[_snzKey];
+        if (window._sharedSnoozeRegistry) delete window._sharedSnoozeRegistry[_snzKey];
+        _persistDismiss(_snzKey);
+        syncSend('alert_dismissed', { snoozeKey: _snzKey });
+      }
+    }
     _updateIndependentAlert(id, data);
   };
 
@@ -5478,6 +5480,8 @@ function _buildSaAlarmCard(card, id, data) {
     const snoozeBar = document.createElement("div");
     snoozeBar.className = "sa-timer-bar";
     snoozeBar.style.marginTop = "0.3em";
+    snoozeBar.style.cursor = "pointer";
+    snoozeBar.title = "Click to restart snooze · Shift+click to cancel";
     const snoozeFill = document.createElement("div");
     snoozeFill.className = "sa-timer-bar-fill";
     snoozeFill.style.transition = 'none';
@@ -5488,19 +5492,52 @@ function _buildSaAlarmCard(card, id, data) {
     snoozeBar.appendChild(snoozeText);
     card.appendChild(snoozeBar);
 
-    const snoozeTotal = snoozeEnd - (snoozeEnd - _getSnoozeMs());
+    let _snoozeEndLocal = snoozeEnd;
     const _snoozeInterval = setInterval(() => {
-      const remain = Math.max(0, snoozeEnd - Date.now());
+      const remain = Math.max(0, _snoozeEndLocal - Date.now());
       const secs = Math.ceil(remain / 1000);
       const pct = Math.max(0, (remain / _getSnoozeMs()) * 100);
       snoozeFill.style.width = pct + '%';
       const m = Math.floor(secs / 60), s = secs % 60;
       snoozeText.textContent = `💤 ${m}:${String(s).padStart(2,'0')}`;
-      if (remain <= 0) {
-        clearInterval(_snoozeInterval);
-        snoozeBar.remove();
-      }
+      if (remain <= 0) { clearInterval(_snoozeInterval); snoozeBar.remove(); }
     }, 200);
+
+    // Click = restart snooze, Shift+click = cancel snooze
+    snoozeBar.addEventListener("click", (e) => {
+      if (e.shiftKey) {
+        // Cancel snooze — dismiss the alarm
+        clearInterval(_snoozeInterval);
+        delete _snoozeRegistry[snoozeKey];
+        if (window._sharedSnoozeRegistry) delete window._sharedSnoozeRegistry[snoozeKey];
+        _persistDismiss(snoozeKey);
+        syncSend('alert_dismissed', { snoozeKey: snoozeKey });
+        snoozeBar.remove();
+      } else {
+        // Restart snooze
+        const newEnd = Date.now() + _getSnoozeMs();
+        _snoozeEndLocal = newEnd;
+        _snoozeRegistry[snoozeKey] = newEnd;
+        if (window._sharedSnoozeRegistry) window._sharedSnoozeRegistry[snoozeKey] = newEnd;
+        _persistSnooze(snoozeKey, newEnd);
+        syncSend('alert_snoozed', { snoozeKey: snoozeKey, snoozeUntil: newEnd });
+      }
+    });
+
+    // Long press on mobile = cancel snooze
+    let _lpTimer = null;
+    snoozeBar.addEventListener("touchstart", () => {
+      _lpTimer = setTimeout(() => {
+        clearInterval(_snoozeInterval);
+        delete _snoozeRegistry[snoozeKey];
+        if (window._sharedSnoozeRegistry) delete window._sharedSnoozeRegistry[snoozeKey];
+        _persistDismiss(snoozeKey);
+        syncSend('alert_dismissed', { snoozeKey: snoozeKey });
+        snoozeBar.remove();
+      }, 600);
+    }, { passive: true });
+    snoozeBar.addEventListener("touchend", () => { if (_lpTimer) { clearTimeout(_lpTimer); _lpTimer = null; } }, { passive: true });
+    snoozeBar.addEventListener("touchmove", () => { if (_lpTimer) { clearTimeout(_lpTimer); _lpTimer = null; } }, { passive: true });
   }
 }
 

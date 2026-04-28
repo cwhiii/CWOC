@@ -46,6 +46,7 @@
 ### Repeating task management. 
 - better handling for visualization of which are ocmpleted, which need doing, which are every day, which are "hide when done, but show on my list toehrwise," etc.
 
+
 ### Templates
 - a tool for making a chit, saving it as a template, and having the ability to auto-populate a new chit with the values/variables in it. probaly requires a new chit editor Mode, etc. And a SHIFT+click on new chit button, ot a button to "Make this a template"  in the editor itself, along with a SHIFT+K hotlkey 
 

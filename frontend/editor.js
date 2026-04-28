@@ -1689,7 +1689,8 @@ function _playTimerSound() {
   if (!_timerAudio) {
     _timerAudio = new Audio("/static/timer.mp3");
   }
-  cwocPlayAudio(_timerAudio);
+  _timerAudio.loop = true;
+  cwocPlayAudio(_timerAudio, { loop: true });
 }
 
 // ── Alarm checker — runs every second ───────────────────────────────────────
@@ -1862,7 +1863,7 @@ function _alertsFromChit(chit) {
   });
 
   renderAllAlerts();
-  if (window._alertsData.alarms.length > 0) _startAlarmChecker();
+  // Alarm checking is handled by the shared system in shared.js (runs on all pages)
   if (window._alertsData.notifications.length > 0) _startNotificationChecker();
 }
 
@@ -1998,6 +1999,66 @@ function renderAlarmsContainer() {
     dadRow.appendChild(dadLbl);
     wrap.appendChild(dadRow);
 
+    // Snooze countdown bar — show if this alarm is currently snoozed
+    var _chitId = window.currentChitId || new URLSearchParams(window.location.search).get('id');
+    if (_chitId) {
+      var _snKey = _chitId + '-' + idx;
+      var _snEnd = (window._sharedSnoozeRegistry || {})[_snKey];
+      if (_snEnd && Date.now() < _snEnd) {
+        var snzBar = document.createElement('div');
+        snzBar.style.cssText = 'position:relative;width:100%;height:2em;background:#f5e6cc;border:2px solid #8b4513;border-radius:6px;overflow:hidden;margin-top:0.3em;cursor:pointer;';
+        snzBar.title = 'Click to restart snooze · Shift+click to cancel';
+        var snzFill = document.createElement('div');
+        snzFill.style.cssText = 'position:absolute;top:2px;left:2px;bottom:2px;width:100%;background:linear-gradient(90deg,#d4af37 0%,#c8965a 60%,#8b4513 100%);border-radius:4px;';
+        var snzText = document.createElement('div');
+        snzText.style.cssText = "position:relative;width:100%;text-align:center;font-family:monospace;font-size:1em;font-weight:bold;color:#4a2c2a;line-height:2em;text-shadow:0 0 4px #fff8e1;z-index:1;";
+        snzBar.appendChild(snzFill); snzBar.appendChild(snzText);
+        wrap.appendChild(snzBar);
+        var _snzMs = (typeof _sharedGetSnoozeMs === 'function') ? _sharedGetSnoozeMs() : 300000;
+        var _snEndLocal = _snEnd;
+        var _snzInt = setInterval(function() {
+          var remain = Math.max(0, _snEndLocal - Date.now());
+          var secs = Math.ceil(remain / 1000);
+          var pct = Math.max(0, (remain / _snzMs) * 100);
+          snzFill.style.width = pct + '%';
+          var m = Math.floor(secs / 60), s = secs % 60;
+          snzText.textContent = '💤 ' + m + ':' + String(s).padStart(2, '0');
+          if (remain <= 0) { clearInterval(_snzInt); snzBar.remove(); }
+        }, 200);
+
+        // Click = restart snooze, Shift+click = cancel
+        snzBar.addEventListener('click', function(e) {
+          if (e.shiftKey) {
+            clearInterval(_snzInt);
+            delete (window._sharedSnoozeRegistry || {})[_snKey];
+            if (typeof _sharedPersistDismiss === 'function') _sharedPersistDismiss(_snKey);
+            if (typeof syncSend === 'function') syncSend('alert_dismissed', { snoozeKey: _snKey });
+            snzBar.remove();
+          } else {
+            var newEnd = Date.now() + _snzMs;
+            _snEndLocal = newEnd;
+            if (window._sharedSnoozeRegistry) window._sharedSnoozeRegistry[_snKey] = newEnd;
+            if (typeof _sharedPersistSnooze === 'function') _sharedPersistSnooze(_snKey, newEnd);
+            if (typeof syncSend === 'function') syncSend('alert_snoozed', { snoozeKey: _snKey, snoozeUntil: newEnd });
+          }
+        });
+
+        // Long press on mobile = cancel
+        var _lpT = null;
+        snzBar.addEventListener('touchstart', function() {
+          _lpT = setTimeout(function() {
+            clearInterval(_snzInt);
+            delete (window._sharedSnoozeRegistry || {})[_snKey];
+            if (typeof _sharedPersistDismiss === 'function') _sharedPersistDismiss(_snKey);
+            if (typeof syncSend === 'function') syncSend('alert_dismissed', { snoozeKey: _snKey });
+            snzBar.remove();
+          }, 600);
+        }, { passive: true });
+        snzBar.addEventListener('touchend', function() { if (_lpT) { clearTimeout(_lpT); _lpT = null; } }, { passive: true });
+        snzBar.addEventListener('touchmove', function() { if (_lpT) { clearTimeout(_lpT); _lpT = null; } }, { passive: true });
+      }
+    }
+
     c.appendChild(wrap);
   });
 }
@@ -2127,6 +2188,18 @@ function addAlarm() {
 
 function toggleAlarmEnabled(idx) {
   window._alertsData.alarms[idx].enabled = !window._alertsData.alarms[idx].enabled;
+  // If turning off while snoozed, cancel the snooze
+  if (!window._alertsData.alarms[idx].enabled) {
+    var _chitId = window.currentChitId || new URLSearchParams(window.location.search).get('id');
+    if (_chitId) {
+      var _snKey = _chitId + '-' + idx;
+      if (window._sharedSnoozeRegistry && window._sharedSnoozeRegistry[_snKey]) {
+        delete window._sharedSnoozeRegistry[_snKey];
+        if (typeof _sharedPersistDismiss === 'function') _sharedPersistDismiss(_snKey);
+        if (typeof syncSend === 'function') syncSend('alert_dismissed', { snoozeKey: _snKey });
+      }
+    }
+  }
   renderAlarmsContainer();
   setSaveButtonUnsaved();
 }
@@ -2526,19 +2599,18 @@ function renderTimersContainer() {
             clearInterval(rt.intervalId); rt.intervalId = null; rt.running = false;
             startStopBtn.textContent = "▶ Start";
             rt.remaining = 0;
-            _playTimerSound();
+            // Use shared audio so dismiss stops the right one
+            if (typeof _sharedPlayTimer === 'function') { _sharedPlayTimer(); } else { _playTimerSound(); }
             barFill.style.width = '100%';
             barFill.style.background = '';
             barText.textContent = '✓ DONE';
-            // Show bold modal if _showTimerDoneModal exists (dashboard), else inline toast
-            if (typeof _showTimerDoneModal === 'function') {
-              _showTimerDoneModal(window._alertsData.timers[idx].name);
-            } else {
-              const toast = document.createElement("div");
-              toast.style.cssText = "position:fixed;top:20px;right:20px;z-index:9999;background:#fff5e6;border:2px solid #8b5a2b;border-radius:8px;padding:0.75em 1.5em;box-shadow:0 4px 16px rgba(0,0,0,0.3);";
-              toast.innerHTML = `⏱️ Timer "${window._alertsData.timers[idx].name || "Timer"}" finished! <button onclick="this.parentElement.remove();_stopAlarmSound();" style="margin-left:8px;padding:2px 8px;">OK</button>`;
-              document.body.appendChild(toast);
+            var timerName = window._alertsData.timers[idx].name || 'Timer';
+            var _chitId = window.currentChitId || new URLSearchParams(window.location.search).get('id');
+            if (typeof _sharedShowAlertModal === 'function') {
+              _sharedShowAlertModal({ icon: '⏱️', title: timerName, subtitle: "Time's up!", chitId: _chitId, onDismiss: function() { _sharedStopTimer(); _sharedStopAlarm(); if (_timerAudio) { _timerAudio.pause(); _timerAudio.currentTime = 0; } if (_alarmAudio) { _alarmAudio.pause(); _alarmAudio.currentTime = 0; } }, showSnooze: false });
             }
+            // Sync to other devices
+            if (typeof syncSend === 'function') syncSend('timer_fired', { timerName: timerName, chitId: _chitId });
             if (window._alertsData.timers[idx].loop) {
               setTimeout(() => {
                 rt.remaining = window._alertsData.timers[idx].totalSeconds;
