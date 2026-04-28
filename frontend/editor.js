@@ -1674,10 +1674,9 @@ let _timerAudio = null;
 function _playAlarmSound() {
   if (!_alarmAudio) {
     _alarmAudio = new Audio("/static/alarm.mp3");
-    _alarmAudio.loop = true;
   }
-  _alarmAudio.currentTime = 0;
-  _alarmAudio.play().catch(() => {});
+  _alarmAudio.loop = true;
+  cwocPlayAudio(_alarmAudio, { loop: true });
 }
 
 function _stopAlarmSound() {
@@ -1688,8 +1687,7 @@ function _playTimerSound() {
   if (!_timerAudio) {
     _timerAudio = new Audio("/static/timer.mp3");
   }
-  _timerAudio.currentTime = 0;
-  _timerAudio.play().catch(() => {});
+  cwocPlayAudio(_timerAudio);
 }
 
 // ── Alarm checker — runs every second ───────────────────────────────────────
@@ -1913,12 +1911,12 @@ function renderAlarmsContainer() {
     timeInput.type = "time";
     timeInput.value = alarm.time || "";
     timeInput.style.cssText = `font-size:1.1em;padding:3px 6px;font-weight:bold;${!alarm.enabled ? "opacity:0.45;" : ""}`;
+
     timeInput.addEventListener("change", () => {
       window._alertsData.alarms[idx].time = timeInput.value;
-      // If no days set, default to today
       if (!window._alertsData.alarms[idx].days || window._alertsData.alarms[idx].days.length === 0) {
         window._alertsData.alarms[idx].days = [_dayAbbr(new Date())];
-        renderAlarmsContainer(); // re-render to show checked day
+        renderAlarmsContainer();
       }
       setSaveButtonUnsaved();
     });
@@ -2376,46 +2374,13 @@ function renderTimersContainer() {
     const wrap = document.createElement("div");
     wrap.style.cssText = "border:1px solid #e0d4b5;border-radius:4px;padding:0.4em 0.6em;margin-bottom:0.4em;";
 
-    // Name + duration inputs row
-    const row1 = document.createElement("div");
-    row1.style.cssText = "display:flex;align-items:center;gap:0.4em;margin-bottom:0.3em;flex-wrap:wrap;";
-
+    // Name row (always visible)
+    const nameRow = document.createElement("div");
+    nameRow.style.cssText = "display:flex;align-items:center;gap:0.4em;margin-bottom:0.3em;";
     const nameInput = document.createElement("input");
     nameInput.type = "text"; nameInput.value = timer.name || ""; nameInput.placeholder = "Timer name";
     nameInput.style.cssText = "flex:1;min-width:80px;font-size:0.9em;padding:2px 4px;";
     nameInput.addEventListener("input", () => { window._alertsData.timers[idx].name = nameInput.value; setSaveButtonUnsaved(); });
-
-    // HH:MM:SS inputs
-    const hInput = document.createElement("input");
-    hInput.type = "number"; hInput.min = "0"; hInput.placeholder = "HH";
-    hInput.value = Math.floor(timer.totalSeconds / 3600) || "";
-    hInput.style.cssText = "width:42px;font-size:0.9em;padding:2px 4px;text-align:center;";
-
-    const mInput = document.createElement("input");
-    mInput.type = "number"; mInput.min = "0"; mInput.max = "59"; mInput.placeholder = "MM";
-    mInput.value = Math.floor((timer.totalSeconds % 3600) / 60) || "";
-    mInput.style.cssText = "width:42px;font-size:0.9em;padding:2px 4px;text-align:center;";
-
-    const sInput = document.createElement("input");
-    sInput.type = "number"; sInput.min = "0"; sInput.max = "59"; sInput.placeholder = "SS";
-    sInput.value = timer.totalSeconds % 60 || "";
-    sInput.style.cssText = "width:42px;font-size:0.9em;padding:2px 4px;text-align:center;";
-
-    const updateDuration = () => {
-      const h = parseInt(hInput.value) || 0;
-      const m = parseInt(mInput.value) || 0;
-      const s = parseInt(sInput.value) || 0;
-      const total = h * 3600 + m * 60 + s;
-      window._alertsData.timers[idx].totalSeconds = total;
-      if (!rt.running) {
-        rt.remaining = total;
-        const d = document.getElementById(`timer-display-${idx}`);
-        if (d) d.textContent = fmtTimer(rt.remaining);
-      }
-      setSaveButtonUnsaved();
-    };
-    [hInput, mInput, sInput].forEach((inp) => inp.addEventListener("change", updateDuration));
-
     const loopLbl = document.createElement("label");
     loopLbl.style.cssText = "display:flex;align-items:center;gap:2px;font-size:0.85em;cursor:pointer;";
     const loopCb = document.createElement("input");
@@ -2423,31 +2388,90 @@ function renderTimersContainer() {
     loopCb.addEventListener("change", () => { window._alertsData.timers[idx].loop = loopCb.checked; setSaveButtonUnsaved(); });
     loopLbl.appendChild(loopCb);
     loopLbl.appendChild(document.createTextNode("🔁"));
-
     const delBtn = document.createElement("button");
     delBtn.type = "button"; delBtn.textContent = "❌"; delBtn.style.cssText = "padding:1px 5px;";
     delBtn.onclick = () => deleteTimerItem(idx);
+    nameRow.appendChild(nameInput);
+    nameRow.appendChild(loopLbl);
+    nameRow.appendChild(delBtn);
+    wrap.appendChild(nameRow);
 
-    row1.appendChild(nameInput);
-    row1.appendChild(hInput);
-    row1.appendChild(document.createTextNode(":"));
-    row1.appendChild(mInput);
-    row1.appendChild(document.createTextNode(":"));
-    row1.appendChild(sInput);
-    row1.appendChild(loopLbl);
-    row1.appendChild(delBtn);
-    wrap.appendChild(row1);
+    // Shared display area
+    const displayArea = document.createElement("div");
+    displayArea.style.cssText = "margin:0.3em 0;";
 
-    // Countdown display
+    // Input mode: HH:MM:SS
+    const inputRow = document.createElement("div");
+    inputRow.style.cssText = "display:flex;align-items:center;justify-content:center;gap:0.2em;";
+    const hInput = document.createElement("input");
+    hInput.type = "number"; hInput.min = "0"; hInput.placeholder = "HH";
+    hInput.value = Math.floor(timer.totalSeconds / 3600) || "";
+    hInput.style.cssText = "width:42px;font-size:0.9em;padding:2px 4px;text-align:center;";
+    const mInput = document.createElement("input");
+    mInput.type = "number"; mInput.min = "0"; mInput.max = "59"; mInput.placeholder = "MM";
+    mInput.value = Math.floor((timer.totalSeconds % 3600) / 60) || "";
+    mInput.style.cssText = "width:42px;font-size:0.9em;padding:2px 4px;text-align:center;";
+    const sInput = document.createElement("input");
+    sInput.type = "number"; sInput.min = "0"; sInput.max = "59"; sInput.placeholder = "SS";
+    sInput.value = timer.totalSeconds % 60 || "";
+    sInput.style.cssText = "width:42px;font-size:0.9em;padding:2px 4px;text-align:center;";
+    inputRow.appendChild(hInput);
+    inputRow.appendChild(document.createTextNode(":"));
+    inputRow.appendChild(mInput);
+    inputRow.appendChild(document.createTextNode(":"));
+    inputRow.appendChild(sInput);
+
+    // Countdown mode: progress bar (HST-style)
+    const countdownBar = document.createElement("div");
+    countdownBar.style.cssText = "position:relative;width:100%;height:2.2em;background:#f5e6cc;border:2px solid #8b4513;border-radius:6px;overflow:hidden;box-shadow:inset 0 2px 4px rgba(0,0,0,0.15);cursor:pointer;";
+    const barFill = document.createElement("div");
+    barFill.style.cssText = "position:absolute;top:2px;left:2px;bottom:2px;width:100%;background:linear-gradient(90deg,#d4af37 0%,#c8965a 60%,#8b4513 100%);border-radius:4px;";
+    const barText = document.createElement("div");
+    barText.style.cssText = "position:relative;width:100%;text-align:center;font-family:monospace;font-size:1.3em;font-weight:bold;color:#4a2c2a;line-height:2.2em;letter-spacing:2px;text-shadow:0 0 4px #fff8e1,0 0 8px #fff8e1,0 0 2px #fff8e1;z-index:1;";
     const fmtTimer = (s) => {
       const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
       return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:${String(sec).padStart(2,"0")}`;
     };
-    const display = document.createElement("div");
-    display.id = `timer-display-${idx}`;
-    display.style.cssText = "font-family:monospace;font-size:1.4em;text-align:center;padding:0.2em 0;";
-    display.textContent = fmtTimer(rt.remaining);
-    wrap.appendChild(display);
+    barText.textContent = fmtTimer(rt.remaining);
+    countdownBar.appendChild(barFill);
+    countdownBar.appendChild(barText);
+
+    displayArea.appendChild(inputRow);
+    displayArea.appendChild(countdownBar);
+    wrap.appendChild(displayArea);
+
+    function _showInputMode() { inputRow.style.display = ''; countdownBar.style.display = 'none'; }
+    function _showCountdownMode() { inputRow.style.display = 'none'; countdownBar.style.display = ''; _updateBar(); }
+    function _updateBar() {
+      const total = window._alertsData.timers[idx].totalSeconds || 1;
+      const pct = Math.max(0, Math.min(100, (rt.remaining / total) * 100));
+      barFill.style.width = pct + '%';
+      barText.textContent = fmtTimer(rt.remaining);
+    }
+
+    countdownBar.addEventListener("click", () => {
+      if (rt.running) {
+        clearInterval(rt.intervalId); rt.intervalId = null; rt.running = false;
+        startStopBtn.textContent = "▶ Start";
+      } else {
+        _showInputMode();
+      }
+    });
+
+    if (rt.running) { _showCountdownMode(); }
+    else if (rt.remaining > 0 && rt.remaining < (window._alertsData.timers[idx].totalSeconds || 0)) { _showCountdownMode(); }
+    else { _showInputMode(); }
+
+    const updateDuration = () => {
+      const h = parseInt(hInput.value) || 0;
+      const m = parseInt(mInput.value) || 0;
+      const s = parseInt(sInput.value) || 0;
+      const total = h * 3600 + m * 60 + s;
+      window._alertsData.timers[idx].totalSeconds = total;
+      if (!rt.running) { rt.remaining = total; _updateBar(); }
+      setSaveButtonUnsaved();
+    };
+    [hInput, mInput, sInput].forEach((inp) => inp.addEventListener("change", updateDuration));
 
     // Controls
     const controls = document.createElement("div");
@@ -2462,28 +2486,52 @@ function renderTimersContainer() {
       if (rt.running) {
         clearInterval(rt.intervalId); rt.intervalId = null; rt.running = false;
         startStopBtn.textContent = "▶ Start";
+        // Keep bar visible, frozen — click bar to edit
       } else {
         if (rt.remaining <= 0) rt.remaining = window._alertsData.timers[idx].totalSeconds;
-        rt.intervalId = setInterval(() => {
-          rt.remaining = Math.max(0, rt.remaining - 1);
-          const d = document.getElementById(`timer-display-${idx}`);
-          if (d) d.textContent = fmtTimer(rt.remaining);
-          if (rt.remaining <= 0) {
+        _showCountdownMode();
+        let _edFracRemain = rt.remaining * 10;
+        const _edTickFn = () => {
+          _edFracRemain = Math.max(0, _edFracRemain - 1);
+          rt.remaining = _edFracRemain / 10;
+          const wholeSec = Math.floor(rt.remaining);
+          const tenths = Math.floor(_edFracRemain % 10);
+          if (wholeSec < 10) {
+            const total = window._alertsData.timers[idx].totalSeconds || 1;
+            const pct = Math.max(0, Math.min(100, (rt.remaining / total) * 100));
+            barFill.style.width = pct + '%';
+            barText.textContent = fmtTimer(wholeSec) + '.' + tenths;
+          } else {
+            _updateBar();
+          }
+          if (_edFracRemain <= 0) {
             clearInterval(rt.intervalId); rt.intervalId = null; rt.running = false;
-            const btn = document.getElementById(`timer-startstop-${idx}`);
-            if (btn) btn.textContent = "▶ Start";
+            startStopBtn.textContent = "▶ Start";
+            rt.remaining = 0;
             _playTimerSound();
-            if (window._alertsData.timers[idx].loop) {
-              rt.remaining = window._alertsData.timers[idx].totalSeconds;
+            barFill.style.width = '100%';
+            barFill.style.background = '';
+            barText.textContent = '✓ DONE';
+            // Show bold modal if _showTimerDoneModal exists (dashboard), else inline toast
+            if (typeof _showTimerDoneModal === 'function') {
+              _showTimerDoneModal(window._alertsData.timers[idx].name);
             } else {
-              // Show toast instead of blocking alert
               const toast = document.createElement("div");
               toast.style.cssText = "position:fixed;top:20px;right:20px;z-index:9999;background:#fff5e6;border:2px solid #8b5a2b;border-radius:8px;padding:0.75em 1.5em;box-shadow:0 4px 16px rgba(0,0,0,0.3);";
               toast.innerHTML = `⏱️ Timer "${window._alertsData.timers[idx].name || "Timer"}" finished! <button onclick="this.parentElement.remove();_stopAlarmSound();" style="margin-left:8px;padding:2px 8px;">OK</button>`;
               document.body.appendChild(toast);
             }
+            if (window._alertsData.timers[idx].loop) {
+              setTimeout(() => {
+                rt.remaining = window._alertsData.timers[idx].totalSeconds;
+                startStopBtn.click();
+              }, 1500);
+            } else {
+              setTimeout(() => { _showInputMode(); }, 2500);
+            }
           }
-        }, 1000);
+        };
+        rt.intervalId = setInterval(_edTickFn, 100);
         rt.running = true; startStopBtn.textContent = "⏸ Pause";
       }
     };
@@ -2493,8 +2541,9 @@ function renderTimersContainer() {
     resetBtn.onclick = () => {
       clearInterval(rt.intervalId); rt.intervalId = null; rt.running = false;
       rt.remaining = window._alertsData.timers[idx].totalSeconds;
-      display.textContent = fmtTimer(rt.remaining);
       startStopBtn.textContent = "▶ Start";
+      _showInputMode();
+      _updateBar();
     };
 
     controls.appendChild(startStopBtn);

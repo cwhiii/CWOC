@@ -4218,3 +4218,111 @@ function _showDeleteUndoToast(chitId, chitTitle, onExpire, onUndo) {
     if (onUndo) onUndo();
   };
 }
+
+
+// ── Shared Audio Unlock System (Mobile) ──────────────────────────────────────
+// Mobile browsers block audio playback unless triggered by a user gesture.
+// This system pre-unlocks audio on the first interaction and re-unlocks when
+// the page returns from background. Works across dashboard and editor pages.
+
+window._cwocAudioUnlocked = false;
+window._cwocAudioContext = null;
+
+/**
+ * Initialize the audio unlock system. Call once per page load.
+ * Resumes the AudioContext on first user gesture so audio can play from timers/intervals.
+ */
+function initAudioUnlock() {
+  // Create AudioContext (needed for iOS Safari)
+  try {
+    var AC = window.AudioContext || window.webkitAudioContext;
+    if (AC && !window._cwocAudioContext) {
+      window._cwocAudioContext = new AC();
+    }
+  } catch (e) { /* no AudioContext support */ }
+
+  var events = ['click', 'touchstart', 'keydown'];
+  function _doUnlock() {
+    if (window._cwocAudioUnlocked) return;
+    window._cwocAudioUnlocked = true;
+
+    // Resume AudioContext (iOS requirement)
+    if (window._cwocAudioContext && window._cwocAudioContext.state === 'suspended') {
+      window._cwocAudioContext.resume().catch(function() {});
+    }
+
+    // Play a tiny silent buffer to unlock audio on iOS/Android
+    try {
+      var ctx = window._cwocAudioContext;
+      if (ctx) {
+        var buf = ctx.createBuffer(1, 1, 22050);
+        var src = ctx.createBufferSource();
+        src.buffer = buf;
+        src.connect(ctx.destination);
+        src.start(0);
+      }
+    } catch (e) {}
+
+    events.forEach(function(evt) {
+      document.removeEventListener(evt, _doUnlock, true);
+    });
+  }
+
+  events.forEach(function(evt) {
+    document.addEventListener(evt, _doUnlock, { capture: true, passive: true });
+  });
+
+  // Re-unlock when page returns from background
+  document.addEventListener('visibilitychange', function() {
+    if (document.visibilityState === 'visible') {
+      window._cwocAudioUnlocked = false;
+      events.forEach(function(evt) {
+        document.addEventListener(evt, _doUnlock, { capture: true, passive: true });
+      });
+      if (window._cwocAudioContext && window._cwocAudioContext.state === 'suspended') {
+        window._cwocAudioContext.resume().catch(function() {});
+      }
+    }
+  });
+}
+
+/**
+ * Play an audio file reliably. If blocked, retries on next user gesture.
+ */
+function cwocPlayAudio(audio, opts) {
+  if (!audio) return;
+  opts = opts || {};
+  if (opts.loop !== undefined) audio.loop = opts.loop;
+  audio.currentTime = 0;
+
+  // Vibrate as fallback/supplement on mobile
+  if (navigator.vibrate) {
+    try { navigator.vibrate([200, 100, 200, 100, 300, 200, 500]); } catch (e) {}
+  }
+
+  var playPromise = audio.play();
+  if (playPromise && typeof playPromise.then === 'function') {
+    playPromise.catch(function() {
+      // Playback blocked — retry on next user gesture
+      var retryEvents = ['click', 'touchstart', 'keydown'];
+      function _retry() {
+        audio.play().catch(function() {});
+        retryEvents.forEach(function(evt) {
+          document.removeEventListener(evt, _retry, true);
+        });
+      }
+      retryEvents.forEach(function(evt) {
+        document.addEventListener(evt, _retry, { capture: true, once: true, passive: true });
+      });
+    });
+  }
+}
+
+// Auto-initialize on load
+if (typeof document !== 'undefined') {
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initAudioUnlock);
+  } else {
+    initAudioUnlock();
+  }
+}

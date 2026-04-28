@@ -1792,27 +1792,11 @@ function _globalFmtTime(time24) {
 }
 
 function _globalPlayAlarm() {
-  // Vibrate on mobile/Android as a fallback for sound
-  if ('vibrate' in navigator) {
-    try { navigator.vibrate([200, 100, 200, 100, 300, 200, 500]); } catch (e) {}
-  }
   if (!_globalAlarmAudio) {
     _globalAlarmAudio = new Audio("/static/alarm.mp3");
-    _globalAlarmAudio.loop = true;
   }
-  _globalAlarmAudio.currentTime = 0;
-  const playPromise = _globalAlarmAudio.play();
-  if (playPromise !== undefined) {
-    playPromise.catch(() => {
-      const unlock = () => {
-        _globalAlarmAudio.play().catch(() => {});
-        document.removeEventListener("click", unlock);
-        document.removeEventListener("keydown", unlock);
-      };
-      document.addEventListener("click", unlock, { once: true });
-      document.addEventListener("keydown", unlock, { once: true });
-    });
-  }
+  _globalAlarmAudio.loop = true;
+  cwocPlayAudio(_globalAlarmAudio, { loop: true });
   // Auto-stop after 5 minutes
   if (_globalAlarmTimeout) clearTimeout(_globalAlarmTimeout);
   _globalAlarmTimeout = setTimeout(() => _globalStopAlarm(), 5 * 60 * 1000);
@@ -1828,8 +1812,12 @@ function _globalStopAlarm() {
 
 function _globalPlayTimer() {
   if (!_globalTimerAudio) _globalTimerAudio = new Audio("/static/timer.mp3");
-  _globalTimerAudio.currentTime = 0;
-  _globalTimerAudio.play().catch(() => {});
+  _globalTimerAudio.loop = true;
+  cwocPlayAudio(_globalTimerAudio, { loop: true });
+}
+
+function _globalStopTimer() {
+  if (_globalTimerAudio) { _globalTimerAudio.pause(); _globalTimerAudio.currentTime = 0; _globalTimerAudio.loop = false; }
 }
 
 function _globalDayAbbr(date) {
@@ -1841,75 +1829,176 @@ function _globalDayAbbr(date) {
  * Clicking Open navigates to the chit editor.
  */
 function _showGlobalToast(emoji, label, chitTitle, chitId, onDismiss) {
+  // Delegate to the bold alert modal for alarms
+  if (emoji === "🔔") {
+    return _showAlertModal({
+      icon: "🔔",
+      title: chitTitle || "Alarm",
+      subtitle: label,
+      chitId: chitId,
+      onDismiss: onDismiss,
+      showSnooze: true,
+    });
+  }
+  // Notifications still use a compact toast
   const toast = document.createElement("div");
-  toast.style.cssText = [
-    "position:fixed",
-    "top:16px",
-    "right:16px",
-    "z-index:99999",
-    "background:#fff5e6",
-    "border:2px solid #8b5a2b",
-    "border-radius:8px",
-    "padding:0.75em 1em",
-    "box-shadow:0 4px 20px rgba(0,0,0,0.35)",
-    "min-width:240px",
-    "max-width:320px",
-    "font-family:'Courier New',monospace",
-    "display:flex",
-    "flex-direction:column",
-    "gap:0.4em",
-  ].join(";");
-
+  toast.style.cssText = "position:fixed;top:16px;right:16px;z-index:99999;background:#fff5e6;border:2px solid #8b5a2b;border-radius:8px;padding:0.75em 1em;box-shadow:0 4px 20px rgba(0,0,0,0.35);min-width:240px;max-width:320px;font-family:'Courier New',monospace;display:flex;flex-direction:column;gap:0.4em;";
   const titleRow = document.createElement("div");
   titleRow.style.cssText = "font-weight:bold;font-size:1em;";
   titleRow.textContent = `${emoji} ${chitTitle || "Alert"}`;
-
   const labelRow = document.createElement("div");
   labelRow.style.cssText = "font-size:0.85em;opacity:0.8;";
   labelRow.textContent = label;
-
   const btnRow = document.createElement("div");
   btnRow.style.cssText = "display:flex;gap:0.5em;margin-top:0.2em;";
-
   const openBtn = document.createElement("button");
   openBtn.textContent = chitTitle || "Open Chit";
   openBtn.style.cssText = "flex:1;padding:3px 8px;cursor:pointer;font-weight:bold;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:160px;";
-  openBtn.onclick = () => {
-    toast.remove();
-    if (onDismiss) onDismiss();
-    window.location.href = `/editor?id=${chitId}`;
-  };
-
+  openBtn.onclick = () => { toast.remove(); if (onDismiss) onDismiss(); window.location.href = `/editor?id=${chitId}`; };
   const dismissBtn = document.createElement("button");
   dismissBtn.textContent = "Dismiss";
   dismissBtn.style.cssText = "padding:3px 8px;cursor:pointer;";
-  dismissBtn.onclick = () => {
-    toast.remove();
-    if (onDismiss) onDismiss();
-  };
-
-  const snoozeBtn = document.createElement("button");
-  snoozeBtn.textContent = "Snooze 5m";
-  snoozeBtn.style.cssText = "padding:3px 8px;cursor:pointer;";
-  snoozeBtn.onclick = () => {
-    toast.remove();
-    if (onDismiss) onDismiss();
-    // Snooze handled by caller if needed
-  };
-
+  dismissBtn.onclick = () => { toast.remove(); if (onDismiss) onDismiss(); };
   btnRow.appendChild(openBtn);
   btnRow.appendChild(dismissBtn);
-  if (emoji === "🔔") btnRow.appendChild(snoozeBtn);
-
   toast.appendChild(titleRow);
   toast.appendChild(labelRow);
   toast.appendChild(btnRow);
   document.body.appendChild(toast);
-
-  // Auto-dismiss after 60 seconds
   setTimeout(() => { if (toast.parentNode) toast.remove(); }, 60000);
-
   return toast;
+}
+
+// ── Bold full-screen alert modal for alarms & timers ─────────────────────────
+function _showAlertModal(opts) {
+  // opts: { icon, title, subtitle, chitId, onDismiss, showSnooze, snoozeKey, triggerKey }
+
+  // Lock body scroll
+  document.body.style.overflow = 'hidden';
+  document.body.style.touchAction = 'none';
+
+  const overlay = document.createElement("div");
+  overlay.className = "cwoc-alert-overlay";
+
+  // Block all scroll/touch events on the overlay
+  overlay.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
+  overlay.addEventListener('wheel', (e) => e.preventDefault(), { passive: false });
+  // Block clicks on the backdrop (only buttons should work)
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) e.stopPropagation();
+  });
+
+  const modal = document.createElement("div");
+  modal.className = "cwoc-alert-modal";
+
+  // Pulsing progress bar at top
+  const bar = document.createElement("div");
+  bar.className = "cwoc-alert-bar";
+  const barFill = document.createElement("div");
+  barFill.className = "cwoc-alert-bar-fill";
+  bar.appendChild(barFill);
+  modal.appendChild(bar);
+
+  // Icon
+  const iconEl = document.createElement("div");
+  iconEl.className = "cwoc-alert-icon";
+  iconEl.textContent = opts.icon || "🔔";
+  modal.appendChild(iconEl);
+
+  // Title
+  const titleEl = document.createElement("div");
+  titleEl.className = "cwoc-alert-title";
+  titleEl.textContent = opts.title || "Alert";
+  modal.appendChild(titleEl);
+
+  // Subtitle
+  if (opts.subtitle) {
+    const subEl = document.createElement("div");
+    subEl.className = "cwoc-alert-subtitle";
+    subEl.textContent = opts.subtitle;
+    modal.appendChild(subEl);
+  }
+
+  // Buttons
+  const btnRow = document.createElement("div");
+  btnRow.className = "cwoc-alert-buttons";
+
+  if (opts.chitId) {
+    const openBtn = document.createElement("button");
+    openBtn.className = "cwoc-alert-btn";
+    openBtn.textContent = "📝 Open Chit";
+    openBtn.onclick = () => {
+      _dismissAlertModal(overlay, opts.onDismiss);
+      window.location.href = `/editor?id=${opts.chitId}`;
+    };
+    btnRow.appendChild(openBtn);
+  }
+
+  const dismissBtn = document.createElement("button");
+  dismissBtn.className = "cwoc-alert-btn cwoc-alert-btn-primary";
+  dismissBtn.textContent = "✕ Dismiss";
+  dismissBtn.onclick = () => _dismissAlertModal(overlay, opts.onDismiss);
+  btnRow.appendChild(dismissBtn);
+
+  if (opts.showSnooze) {
+    const snoozeBtn = document.createElement("button");
+    snoozeBtn.className = "cwoc-alert-btn";
+    snoozeBtn.textContent = "💤 Snooze";
+    snoozeBtn.onclick = () => {
+      _dismissAlertModal(overlay, opts.onDismiss);
+      if (opts.snoozeKey) {
+        const snoozeMs = _getSnoozeMs();
+        _snoozeRegistry[opts.snoozeKey] = Date.now() + snoozeMs;
+        if (opts.triggerKey) _globalTriggeredAlarms.delete(opts.triggerKey);
+      }
+    };
+    btnRow.appendChild(snoozeBtn);
+  }
+
+  modal.appendChild(btnRow);
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+
+  // Force reflow then add active class for animation
+  void overlay.offsetWidth;
+  overlay.classList.add("active");
+
+  // Block all keyboard events while modal is open (no ESC escape, no hotkeys)
+  function _blockKeys(e) {
+    e.preventDefault();
+    e.stopImmediatePropagation();
+  }
+  document.addEventListener('keydown', _blockKeys, true);
+  overlay._blockKeys = _blockKeys;
+
+  return overlay;
+}
+
+function _dismissAlertModal(overlay, onDismiss) {
+  overlay.classList.remove("active");
+  // Remove keyboard blocker
+  if (overlay._blockKeys) {
+    document.removeEventListener('keydown', overlay._blockKeys, true);
+  }
+  // Unlock body scroll (only if no other alert modals are open)
+  setTimeout(() => {
+    if (overlay.parentNode) overlay.remove();
+    if (!document.querySelector('.cwoc-alert-overlay')) {
+      document.body.style.overflow = '';
+      document.body.style.touchAction = '';
+    }
+  }, 300);
+  if (onDismiss) onDismiss();
+}
+
+function _showTimerDoneModal(timerName, onDismiss) {
+  return _showAlertModal({
+    icon: "⏱️",
+    title: timerName || "Timer",
+    subtitle: "Time's up!",
+    onDismiss: onDismiss,
+    showSnooze: false,
+  });
 }
 
 function _sendBrowserNotification(title, body, chitId, playSound) {
@@ -1917,7 +2006,7 @@ function _sendBrowserNotification(title, body, chitId, playSound) {
   var opts = {
     body: body,
     icon: "/static/cwod_logo-favicon.png",
-    tag: 'cwoc-alert-' + chitId,
+    tag: 'cwoc-alert-' + (chitId || 'independent'),
     renotify: true,
     requireInteraction: true,
     silent: false
@@ -1930,7 +2019,7 @@ function _sendBrowserNotification(title, body, chitId, playSound) {
     var n = new Notification(title, opts);
     n.onclick = function() {
       window.focus();
-      window.location.href = '/editor?id=' + chitId;
+      if (chitId) window.location.href = '/editor?id=' + chitId;
     };
   } catch (e) {
     // Fallback for environments where Notification constructor fails (some Android browsers)
@@ -1950,6 +2039,7 @@ function _globalCheckAlarms() {
   const currentDay = _globalDayAbbr(now);
   const dateStr = now.toDateString();
 
+  // ── Check chit-based alarms ──
   chits.forEach((chit) => {
     if (!Array.isArray(chit.alerts)) return;
     chit.alerts.forEach((alert, alertIdx) => {
@@ -1967,38 +2057,60 @@ function _globalCheckAlarms() {
 
       const label = `${_globalFmtTime(alert.time)}${alert.name ? " — " + alert.name : ""}`;
       _globalPlayAlarm();
-      const toast = _showGlobalToast("🔔", label, chit.title, chit.id, _globalStopAlarm);
-
-      // Delete after dismissal: override dismiss button if flag is set
-      if (alert.delete_after_dismiss) {
-        const dismissBtn = toast.querySelectorAll("button")[1]; // Open, Dismiss, Snooze
-        if (dismissBtn) {
-          const origClick = dismissBtn.onclick;
-          dismissBtn.onclick = () => {
-            if (origClick) origClick();
+      const modal = _showAlertModal({
+        icon: "🔔",
+        title: chit.title || "Alarm",
+        subtitle: label,
+        chitId: chit.id,
+        onDismiss: () => {
+          _globalStopAlarm();
+          if (alert.delete_after_dismiss) {
             fetch(`/api/chits/${chit.id}`, { method: 'DELETE' })
               .then(() => fetchChits())
               .catch(err => console.error('Delete after dismiss failed:', err));
-          };
-        }
-      }
-
-      // Snooze: add to registry for snooze_length from settings
-      const snoozeBtn = toast.querySelector("button:last-child");
-      if (snoozeBtn) {
-        snoozeBtn.onclick = () => {
-          toast.remove();
-          _globalStopAlarm();
-          // Snooze for configured duration (default 5 min)
-          const snoozeMs = _getSnoozeMs();
-          _snoozeRegistry[snoozeKey] = Date.now() + snoozeMs;
-          _globalTriggeredAlarms.delete(key);
-        };
-      }
+          }
+        },
+        showSnooze: true,
+        snoozeKey: snoozeKey,
+        triggerKey: key,
+      });
 
       _sendBrowserNotification(`🔔 Alarm: ${chit.title}`, label, chit.id);
     });
   });
+
+  // ── Check independent alarms ──
+  if (Array.isArray(_independentAlerts)) {
+    _independentAlerts.forEach((ia) => {
+      const alertData = ia.data || ia;
+      if (alertData._type !== 'alarm' || !alertData.enabled || !alertData.time) return;
+      const days = alertData.days && alertData.days.length > 0 ? alertData.days : [currentDay];
+      if (!days.includes(currentDay)) return;
+      if (alertData.time !== currentTime) return;
+
+      const key = `ia-${ia.id}-${alertData.time}-${dateStr}`;
+      if (_globalTriggeredAlarms.has(key)) return;
+      const snoozeKey = `ia-${ia.id}`;
+      if (_snoozeRegistry[snoozeKey] && Date.now() < _snoozeRegistry[snoozeKey]) return;
+      _globalTriggeredAlarms.add(key);
+
+      const alarmName = alertData.name || 'Independent Alarm';
+      const label = `${_globalFmtTime(alertData.time)}${alertData.name ? " — " + alertData.name : ""}`;
+      _globalPlayAlarm();
+
+      _showAlertModal({
+        icon: "🔔",
+        title: alarmName,
+        subtitle: label,
+        onDismiss: () => _globalStopAlarm(),
+        showSnooze: true,
+        snoozeKey: snoozeKey,
+        triggerKey: key,
+      });
+
+      _sendBrowserNotification(`🔔 ${alarmName}`, label);
+    });
+  }
 
   // Clean up old keys
   _globalTriggeredAlarms.forEach((key) => {
@@ -2086,18 +2198,7 @@ function _startGlobalAlertSystem() {
     if (s.snooze_length) window._snoozeLength = s.snooze_length;
   }).catch(() => {});
 
-  // Pre-unlock audio on first user interaction so alarms can play immediately
-  const unlockAudio = () => {
-    if (!_globalAlarmAudio) _globalAlarmAudio = new Audio("/static/alarm.mp3");
-    if (!_globalTimerAudio) _globalTimerAudio = new Audio("/static/timer.mp3");
-    // Play and immediately pause to unlock the audio context
-    _globalAlarmAudio.play().then(() => _globalAlarmAudio.pause()).catch(() => {});
-    _globalTimerAudio.play().then(() => _globalTimerAudio.pause()).catch(() => {});
-    document.removeEventListener("click", unlockAudio);
-    document.removeEventListener("keydown", unlockAudio);
-  };
-  document.addEventListener("click", unlockAudio, { once: true });
-  document.addEventListener("keydown", unlockAudio, { once: true });
+  // Audio unlock is handled by shared.js initAudioUnlock()
 
   // Load time format
   getCachedSettings()
@@ -5074,12 +5175,6 @@ function _buildSaAlarmCard(card, id, data) {
   timeInput.className = "sa-time-input";
   if (!data.enabled) timeInput.style.opacity = "0.45";
 
-  // Formatted time display that respects the 12/24h setting
-  const timeFmt = document.createElement("span");
-  timeFmt.className = "sa-time-fmt";
-  timeFmt.textContent = _globalFmtTime(data.time || "");
-  if (!data.enabled) timeFmt.style.opacity = "0.45";
-
   const toggleBtn = document.createElement("button");
   toggleBtn.className = "sa-btn";
   toggleBtn.textContent = data.enabled ? "On" : "Off";
@@ -5095,7 +5190,6 @@ function _buildSaAlarmCard(card, id, data) {
 
   row1.appendChild(nameInput);
   row1.appendChild(timeInput);
-  row1.appendChild(timeFmt);
   row1.appendChild(toggleBtn);
   row1.appendChild(delBtn);
   card.appendChild(row1);
@@ -5130,19 +5224,53 @@ function _buildSaAlarmCard(card, id, data) {
   nameInput.addEventListener("change", () => { data.name = nameInput.value; _updateIndependentAlert(id, data); });
   timeInput.addEventListener("change", () => {
     data.time = timeInput.value;
-    timeFmt.textContent = _globalFmtTime(data.time);
     if (!data.days || data.days.length === 0) {
       data.days = [allDays[new Date().getDay()]];
     }
     _updateIndependentAlert(id, data);
   });
+
+  // Snooze countdown bar — show if this alarm is currently snoozed
+  const snoozeKey = `ia-${id}`;
+  const snoozeEnd = _snoozeRegistry[snoozeKey];
+  if (snoozeEnd && Date.now() < snoozeEnd) {
+    const snoozeBar = document.createElement("div");
+    snoozeBar.className = "sa-timer-bar";
+    snoozeBar.style.marginTop = "0.3em";
+    const snoozeFill = document.createElement("div");
+    snoozeFill.className = "sa-timer-bar-fill";
+    snoozeFill.style.transition = 'none';
+    const snoozeText = document.createElement("div");
+    snoozeText.className = "sa-timer-bar-text";
+    snoozeText.style.fontSize = "1em";
+    snoozeBar.appendChild(snoozeFill);
+    snoozeBar.appendChild(snoozeText);
+    card.appendChild(snoozeBar);
+
+    const snoozeTotal = snoozeEnd - (snoozeEnd - _getSnoozeMs());
+    const _snoozeInterval = setInterval(() => {
+      const remain = Math.max(0, snoozeEnd - Date.now());
+      const secs = Math.ceil(remain / 1000);
+      const pct = Math.max(0, (remain / _getSnoozeMs()) * 100);
+      snoozeFill.style.width = pct + '%';
+      const m = Math.floor(secs / 60), s = secs % 60;
+      snoozeText.textContent = `💤 ${m}:${String(s).padStart(2,'0')}`;
+      if (remain <= 0) {
+        clearInterval(_snoozeInterval);
+        snoozeBar.remove();
+      }
+    }, 200);
+  }
 }
 
 // ── Independent Timer Card ───────────────────────────────────────────────────
 
-function _saFmtTimer(s) {
-  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
-  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+function _saFmtTimer(s, tenths) {
+  if (s === undefined || s === null) s = 0;
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = Math.floor(s % 60);
+  let str = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+  if (tenths !== undefined) str += `.${tenths}`;
+  return str;
 }
 
 function _buildSaTimerCard(card, id, data) {
@@ -5151,31 +5279,14 @@ function _buildSaTimerCard(card, id, data) {
   }
   const rt = _saTimerRuntime[id];
 
-  // Name + duration row
-  const row1 = document.createElement("div");
-  row1.className = "sa-card-row";
-
+  // Name row (always visible)
+  const nameRow = document.createElement("div");
+  nameRow.className = "sa-card-row";
   const nameInput = document.createElement("input");
   nameInput.type = "text";
   nameInput.value = data.name || "";
   nameInput.placeholder = "Timer name";
   nameInput.className = "sa-input sa-name-input";
-
-  const hInput = document.createElement("input");
-  hInput.type = "number"; hInput.min = "0"; hInput.placeholder = "HH";
-  hInput.value = Math.floor((data.totalSeconds || 0) / 3600) || "";
-  hInput.className = "sa-dur-input";
-
-  const mInput = document.createElement("input");
-  mInput.type = "number"; mInput.min = "0"; mInput.max = "59"; mInput.placeholder = "MM";
-  mInput.value = Math.floor(((data.totalSeconds || 0) % 3600) / 60) || "";
-  mInput.className = "sa-dur-input";
-
-  const sInput = document.createElement("input");
-  sInput.type = "number"; sInput.min = "0"; sInput.max = "59"; sInput.placeholder = "SS";
-  sInput.value = (data.totalSeconds || 0) % 60 || "";
-  sInput.className = "sa-dur-input";
-
   const loopLbl = document.createElement("label");
   loopLbl.className = "sa-day-label";
   const loopCb = document.createElement("input");
@@ -5184,37 +5295,92 @@ function _buildSaTimerCard(card, id, data) {
   loopCb.addEventListener("change", () => { data.loop = loopCb.checked; _updateIndependentAlert(id, data); });
   loopLbl.appendChild(loopCb);
   loopLbl.appendChild(document.createTextNode("🔁"));
-
   const delBtn = document.createElement("button");
   delBtn.className = "sa-btn sa-del-btn";
   delBtn.textContent = "❌";
   delBtn.onclick = () => _deleteIndependentAlert(id);
+  nameRow.appendChild(nameInput);
+  nameRow.appendChild(loopLbl);
+  nameRow.appendChild(delBtn);
+  card.appendChild(nameRow);
+  nameInput.addEventListener("change", () => { data.name = nameInput.value; _updateIndependentAlert(id, data); });
 
-  row1.appendChild(nameInput);
-  row1.appendChild(hInput);
-  row1.appendChild(document.createTextNode(":"));
-  row1.appendChild(mInput);
-  row1.appendChild(document.createTextNode(":"));
-  row1.appendChild(sInput);
-  row1.appendChild(loopLbl);
-  row1.appendChild(delBtn);
-  card.appendChild(row1);
+  // Shared display area
+  const displayArea = document.createElement("div");
+  displayArea.className = "sa-timer-area";
 
-  // Save name/duration on change
+  // Input mode: HH:MM:SS inputs
+  const inputRow = document.createElement("div");
+  inputRow.className = "sa-timer-input-row";
+  const hInput = document.createElement("input");
+  hInput.type = "number"; hInput.min = "0"; hInput.placeholder = "HH";
+  hInput.value = Math.floor((data.totalSeconds || 0) / 3600) || "";
+  hInput.className = "sa-dur-input";
+  const mInput = document.createElement("input");
+  mInput.type = "number"; mInput.min = "0"; mInput.max = "59"; mInput.placeholder = "MM";
+  mInput.value = Math.floor(((data.totalSeconds || 0) % 3600) / 60) || "";
+  mInput.className = "sa-dur-input";
+  const sInput = document.createElement("input");
+  sInput.type = "number"; sInput.min = "0"; sInput.max = "59"; sInput.placeholder = "SS";
+  sInput.value = (data.totalSeconds || 0) % 60 || "";
+  sInput.className = "sa-dur-input";
+  inputRow.appendChild(hInput);
+  inputRow.appendChild(document.createTextNode(":"));
+  inputRow.appendChild(mInput);
+  inputRow.appendChild(document.createTextNode(":"));
+  inputRow.appendChild(sInput);
+
+  // Countdown mode: progress bar (HST-style, no CSS transition — instant updates)
+  const countdownBar = document.createElement("div");
+  countdownBar.className = "sa-timer-bar";
+  const barFill = document.createElement("div");
+  barFill.className = "sa-timer-bar-fill";
+  barFill.style.transition = 'none';
+  const barText = document.createElement("div");
+  barText.className = "sa-timer-bar-text";
+  barText.textContent = _saFmtTimer(rt.remaining);
+  countdownBar.appendChild(barFill);
+  countdownBar.appendChild(barText);
+
+  displayArea.appendChild(inputRow);
+  displayArea.appendChild(countdownBar);
+  card.appendChild(displayArea);
+
+  function _showInputMode() { inputRow.style.display = ''; countdownBar.style.display = 'none'; }
+  function _showBarMode() { inputRow.style.display = 'none'; countdownBar.style.display = ''; }
+  function _updateBar(remainSec, tenths) {
+    const total = data.totalSeconds || 1;
+    const effective = tenths !== undefined ? remainSec + tenths / 10 : remainSec;
+    const pct = Math.max(0, Math.min(100, (effective / total) * 100));
+    barFill.style.width = pct + '%';
+    barFill.style.background = '';
+    barText.textContent = (remainSec < 10 && tenths !== undefined) ? _saFmtTimer(remainSec, tenths) : _saFmtTimer(remainSec);
+  }
+
+  // Click countdown bar to pause (keep bar visible, frozen)
+  countdownBar.addEventListener("click", () => {
+    if (rt.running) {
+      clearInterval(rt.intervalId); rt.intervalId = null; rt.running = false;
+      startStopBtn.textContent = "▶ Start";
+      // Bar stays visible and frozen — don't switch to inputs
+    } else {
+      // If paused and user clicks bar, switch to input mode to edit
+      _showInputMode();
+    }
+  });
+
+  // Set initial mode
+  if (rt.running) { _showBarMode(); _updateBar(rt.remaining); }
+  else if (rt.remaining > 0 && rt.remaining < (data.totalSeconds || 0)) { _showBarMode(); _updateBar(rt.remaining); }
+  else { _showInputMode(); }
+
   const updateDuration = () => {
     const total = (parseInt(hInput.value) || 0) * 3600 + (parseInt(mInput.value) || 0) * 60 + (parseInt(sInput.value) || 0);
     data.totalSeconds = total;
-    if (!rt.running) { rt.remaining = total; display.textContent = _saFmtTimer(rt.remaining); }
+    if (!rt.running) { rt.remaining = total; }
     _updateIndependentAlert(id, data);
   };
-  nameInput.addEventListener("change", () => { data.name = nameInput.value; _updateIndependentAlert(id, data); });
   [hInput, mInput, sInput].forEach(inp => inp.addEventListener("change", updateDuration));
-
-  // Countdown display
-  const display = document.createElement("div");
-  display.className = "sa-timer-display";
-  display.textContent = _saFmtTimer(rt.remaining);
-  card.appendChild(display);
 
   // Controls
   const controls = document.createElement("div");
@@ -5227,17 +5393,45 @@ function _buildSaTimerCard(card, id, data) {
     if (rt.running) {
       clearInterval(rt.intervalId); rt.intervalId = null; rt.running = false;
       startStopBtn.textContent = "▶ Start";
+      // Keep bar visible, frozen
     } else {
       if (rt.remaining <= 0) rt.remaining = data.totalSeconds || 0;
+      _showBarMode();
+      _updateBar(rt.remaining);
+      // Use 100ms ticks for precision; decrement by 0.1s internally
+      let _fracRemain = rt.remaining * 10; // tenths of a second
       rt.intervalId = setInterval(() => {
-        rt.remaining = Math.max(0, rt.remaining - 1);
-        display.textContent = _saFmtTimer(rt.remaining);
-        if (rt.remaining <= 0) {
+        _fracRemain = Math.max(0, _fracRemain - 1);
+        rt.remaining = _fracRemain / 10;
+        const wholeSec = Math.floor(rt.remaining);
+        const tenths = Math.floor(_fracRemain % 10);
+        if (wholeSec < 10) {
+          _updateBar(wholeSec, tenths);
+        } else {
+          _updateBar(Math.ceil(rt.remaining));
+        }
+        if (_fracRemain <= 0) {
           clearInterval(rt.intervalId); rt.intervalId = null; rt.running = false;
           startStopBtn.textContent = "▶ Start";
-          if (data.loop) { rt.remaining = data.totalSeconds || 0; }
+          rt.remaining = 0;
+          // Play sound (loops until dismissed)
+          _globalPlayTimer();
+          // Flash full gold bar (same color as countdown)
+          barFill.style.width = '100%';
+          barFill.style.background = '';
+          barText.textContent = '✓ DONE';
+          // Show bold modal — stop sound on dismiss
+          _showTimerDoneModal(data.name, () => { _globalStopTimer(); });
+          if (data.loop) {
+            setTimeout(() => {
+              rt.remaining = data.totalSeconds || 0;
+              startStopBtn.click();
+            }, 1500);
+          } else {
+            setTimeout(() => { _showInputMode(); }, 2500);
+          }
         }
-      }, 1000);
+      }, 100);
       rt.running = true;
       startStopBtn.textContent = "⏸ Pause";
     }
@@ -5249,8 +5443,8 @@ function _buildSaTimerCard(card, id, data) {
   resetBtn.onclick = () => {
     clearInterval(rt.intervalId); rt.intervalId = null; rt.running = false;
     rt.remaining = data.totalSeconds || 0;
-    display.textContent = _saFmtTimer(rt.remaining);
     startStopBtn.textContent = "▶ Start";
+    _showInputMode();
   };
 
   controls.appendChild(startStopBtn);
@@ -5910,10 +6104,8 @@ document.addEventListener("DOMContentLoaded", function () {
   // Restore persisted view mode button highlights
   _restoreViewModeButtons();
 
-  // Pre-fetch independent alerts if that's the saved mode
-  if (_alarmsViewMode === 'independent') {
-    _fetchIndependentAlerts();
-  }
+  // Always fetch independent alerts — needed for the alarm checker regardless of view mode
+  _fetchIndependentAlerts();
 
   // Default: hide archived chits, show pinned
   const saInit = document.getElementById('show-archived');

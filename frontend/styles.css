@@ -2710,20 +2710,13 @@ button.delete:hover {
 }
 
 .sa-time-input {
-    font-size: 1.05em;
+    font-size: 0.95em;
     padding: 3px 6px;
     font-weight: bold;
     border: 1px solid #d4c4a0;
     border-radius: 3px;
     background: rgba(255, 255, 255, 0.5);
     font-family: 'Courier New', monospace;
-}
-
-.sa-time-fmt {
-    font-weight: bold;
-    font-size: 1.05em;
-    color: #4a2c2a;
-    white-space: nowrap;
 }
 
 .sa-dur-input {
@@ -2779,6 +2772,54 @@ button.delete:hover {
     letter-spacing: 0.05em;
 }
 
+/* ── Timer shared display area ── */
+.sa-timer-area {
+    margin: 0.3em 0;
+}
+
+.sa-timer-input-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.2em;
+}
+
+.sa-timer-bar {
+    position: relative;
+    width: 100%;
+    height: 2.2em;
+    background: #f5e6cc;
+    border: 2px solid #8b4513;
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.15);
+    cursor: pointer;
+}
+
+.sa-timer-bar-fill {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    bottom: 2px;
+    width: 100%;
+    background: linear-gradient(90deg, #d4af37 0%, #c8965a 60%, #8b4513 100%);
+    border-radius: 4px;
+}
+
+.sa-timer-bar-text {
+    position: relative;
+    width: 100%;
+    text-align: center;
+    font-family: monospace;
+    font-size: 1.3em;
+    font-weight: bold;
+    color: #4a2c2a;
+    line-height: 2.2em;
+    letter-spacing: 2px;
+    text-shadow: 0 0 4px #fff8e1, 0 0 8px #fff8e1, 0 0 2px #fff8e1;
+    z-index: 1;
+}
+
 .sa-controls {
     display: flex;
     gap: 0.4em;
@@ -2817,5 +2858,147 @@ button.delete:hover {
 
     .sa-column:last-child {
         border-bottom: none;
+    }
+}
+
+/* ── Bold Alert Modal (Alarms & Timers) ──────────────────────────────────── */
+
+.cwoc-alert-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 100000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    touch-action: none;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: auto;
+    user-select: none;
+}
+
+.cwoc-alert-overlay.active {
+    opacity: 1;
+}
+
+.cwoc-alert-modal {
+    background: url("/static/parchment.jpg") center/cover;
+    background-color: #fff8e1;
+    border: 3px solid #8b4513;
+    border-radius: 12px;
+    padding: 0;
+    width: 90%;
+    max-width: 420px;
+    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5), 0 0 60px rgba(212, 175, 55, 0.3);
+    font-family: 'Courier New', monospace;
+    color: #3c2f2f;
+    text-align: center;
+    overflow: hidden;
+    animation: cwocAlertPulse 2s ease-in-out infinite;
+}
+
+@keyframes cwocAlertPulse {
+    0%, 100% { box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5), 0 0 30px rgba(212, 175, 55, 0.2); }
+    50% { box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5), 0 0 60px rgba(212, 175, 55, 0.5); }
+}
+
+.cwoc-alert-bar {
+    width: 100%;
+    height: 6px;
+    background: #e8dcc8;
+    overflow: hidden;
+}
+
+.cwoc-alert-bar-fill {
+    height: 100%;
+    width: 100%;
+    background: linear-gradient(90deg, #d4af37 0%, #c8965a 60%, #8b4513 100%);
+    animation: cwocAlertBarPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes cwocAlertBarPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.cwoc-alert-icon {
+    font-size: 3em;
+    margin: 20px 0 8px;
+    line-height: 1;
+}
+
+.cwoc-alert-title {
+    font-size: 1.5em;
+    font-weight: bold;
+    color: #4a2c2a;
+    margin: 0 16px 6px;
+    word-break: break-word;
+}
+
+.cwoc-alert-subtitle {
+    font-size: 1.1em;
+    color: #6b4226;
+    margin: 0 16px 16px;
+    opacity: 0.85;
+}
+
+.cwoc-alert-buttons {
+    display: flex;
+    gap: 8px;
+    padding: 12px 16px 16px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.cwoc-alert-btn {
+    flex: 1;
+    min-width: 100px;
+    padding: 10px 16px;
+    font-size: 1em;
+    font-weight: bold;
+    font-family: 'Courier New', monospace;
+    border: 2px solid #8b5a2b;
+    border-radius: 6px;
+    background: #fdf5e6;
+    color: #4a2c2a;
+    cursor: pointer;
+    min-height: 44px;
+}
+
+.cwoc-alert-btn:hover {
+    background: #f0e6d3;
+}
+
+.cwoc-alert-btn-primary {
+    background: #8b5a2b;
+    color: #fff8e1;
+    border-color: #5a3f2a;
+}
+
+.cwoc-alert-btn-primary:hover {
+    background: #6b4226;
+}
+
+/* Mobile: full-width buttons */
+@media (max-width: 480px) {
+    .cwoc-alert-modal {
+        width: calc(100% - 24px);
+        max-width: none;
+    }
+    .cwoc-alert-btn {
+        min-width: 0;
+        flex-basis: 100%;
+    }
+    .cwoc-alert-icon {
+        font-size: 2.5em;
+        margin: 14px 0 6px;
+    }
+    .cwoc-alert-title {
+        font-size: 1.3em;
     }
 }
