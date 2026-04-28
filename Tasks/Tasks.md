@@ -119,7 +119,7 @@
 ### Data & Infrastructure
 - `[ ]` E2E encryption
 - `[ ]` Server configurator script for deployment
-- `[ ]` Local device storage with server sync
+- `[ ]` Local desktop storage (cookies?) with server sync
 - `[ ]` Phone app with offline store + sync
 
 ### UI & Layout
@@ -141,16 +141,16 @@
 - `[ ]` Reports system
 - `[ ]` Automations (if this, then that)
 - `[ ]` Appointments (from other people)
-- `[ ]` Fragments to GitHub
+- `[X]` Fragments to GitHub
 - `[ ]` Notification based on start time + location + drive time
 - `[ ]` Biometric triggers (steps, heart rate, cycle state)
-- `[ ]` Workgroup chat link
+- `[X]` Workgroup chat link
 
 ---
 
 ## Decisions Needed
 
-- `[ ]` Demo/hosting environment — Digital Ocean or other?
+- `[X]` Demo/hosting environment — Digital Ocean or other?
 - `[ ]` Support file attachments on chits?
 - `[ ]` Event by quantity of TIME vs chronological (snooze slides the event until started)
-- `[ ]` Chit groups (like Google calendars) — just use tags?
+- `[ ]` Chit groups (like Google calendars) — just use tags? maybe a chckbox to "use as group"?

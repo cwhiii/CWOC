@@ -362,24 +362,44 @@ function _buildChitHeader(chit, titleHtml, settings) {
     }
   }
 
-  // Weather indicator — async-populated with actual forecast
+  // Weather indicator — stored weather_data or async-populated fallback
   if (chit.location && chit.location.trim()) {
     var weatherMode = (settings || {}).weather || 'always';
     if (typeof _shouldShow === 'function' && _shouldShow(weatherMode, 'card')) {
       const wxSpan = document.createElement('span');
       wxSpan.className = 'chit-weather-indicator';
       wxSpan.dataset.chitLocation = chit.location;
-      // Check cache first for instant display
-      var wxCacheKey = 'cwoc_wx_' + chit.location.toLowerCase().trim();
-      var wxCached = null;
-      try { wxCached = JSON.parse(localStorage.getItem(wxCacheKey)); } catch (e) {}
-      if (wxCached && wxCached.icon && (Date.now() - wxCached.ts < 3600000)) {
-        wxSpan.innerHTML = wxCached.icon + ' <span class="chit-wx-detail">' + _escHtml(wxCached.tooltip) + '</span> ';
-        wxSpan.title = wxCached.tooltip;
+
+      // Prefer stored weather_data from backend
+      var wd = chit.weather_data;
+      if (typeof wd === 'string') { try { wd = JSON.parse(wd); } catch (e) { wd = null; } }
+      if (wd && wd.weather_code !== undefined && wd.high !== undefined && wd.low !== undefined) {
+        var wdIcon = _getWeatherIcon(wd.weather_code);
+        var wdHighF = _celsiusToFahrenheit(wd.high);
+        var wdLowF = _celsiusToFahrenheit(wd.low);
+        var wdStale = _isWeatherStale(wd.updated_time) ? '⏳' : '';
+        var wdDetail = wdHighF + '°/' + wdLowF + '°';
+        // Show precipitation for Day/Week/Work/X-Days views
+        var _showPrecip = ['Day', 'Week', 'Work', 'SevenDay'].includes(currentView);
+        if (_showPrecip && wd.precipitation !== undefined) {
+          var wdPrecipIn = Math.ceil(wd.precipitation * 0.0393701 * 10) / 10;
+          if (wdPrecipIn > 0) wdDetail += ' ' + wdPrecipIn + '"';
+        }
+        wxSpan.innerHTML = wdStale + wdIcon + ' <span class="chit-wx-detail">' + _escHtml(wdDetail) + '</span> ';
+        wxSpan.title = wdDetail + (wdStale ? ' (stale)' : '');
       } else {
-        wxSpan.textContent = '⏳ ';
-        wxSpan.title = 'Loading weather…';
-        _queueChitWeatherFetch(chit.location, wxSpan);
+        // Fallback: live-fetch weather indicator
+        var wxCacheKey = 'cwoc_wx_' + chit.location.toLowerCase().trim();
+        var wxCached = null;
+        try { wxCached = JSON.parse(localStorage.getItem(wxCacheKey)); } catch (e) {}
+        if (wxCached && wxCached.icon && (Date.now() - wxCached.ts < 3600000)) {
+          wxSpan.innerHTML = wxCached.icon + ' <span class="chit-wx-detail">' + _escHtml(wxCached.tooltip) + '</span> ';
+          wxSpan.title = wxCached.tooltip;
+        } else {
+          wxSpan.textContent = '⏳ ';
+          wxSpan.title = 'Loading weather…';
+          _queueChitWeatherFetch(chit.location, wxSpan);
+        }
       }
       left.appendChild(wxSpan);
     }
@@ -1150,6 +1170,21 @@ function _getPrecipLabel(code) {
   return '';
 }
 
+// ── Weather Utility Functions ─────────────────────────────────────────────────
+
+/** Convert Celsius to Fahrenheit, rounded to nearest integer. */
+function _celsiusToFahrenheit(c) {
+  return Math.round(c * 9 / 5 + 32);
+}
+
+/** Returns true if the given ISO timestamp is older than 24 hours from now. */
+function _isWeatherStale(updatedTime) {
+  if (!updatedTime) return true;
+  var then = new Date(updatedTime).getTime();
+  if (isNaN(then)) return true;
+  return (Date.now() - then) > 24 * 60 * 60 * 1000;
+}
+
 // ── Chit Weather Indicators (async fetch for card views) ─────────────────────
 
 var _chitWxQueue = [];       // [{location, span}] — pending fetches
@@ -1252,7 +1287,7 @@ async function _fetchAndApplyChitWeather(address, spans) {
 }
 
 function _buildWeatherModalHTML(content) {
-  return `<div class="weather-modal">${content}<div class="weather-modal-close" onclick="_closeWeatherModal()">ESC or click outside to close</div></div>`;
+  return `<div class="weather-modal">${content}<div class="weather-modal-actions"><button class="weather-modal-forecast-btn" onclick="_closeWeatherModal(); storePreviousState(); window.location.href='/frontend/weather.html';">📊 Full Forecast</button></div><div class="weather-modal-close" onclick="_closeWeatherModal()">ESC or click outside to close</div></div>`;
 }
 
 function _buildLocationSelectorHTML(locations, selectedAddress) {
@@ -3656,16 +3691,30 @@ function displayNotesView(chitsToDisplay) {
         if (typeof _shouldShow === 'function' && _shouldShow(_nwMode, 'card')) {
           const wxSpan = document.createElement('span');
           wxSpan.className = 'chit-weather-indicator';
-          var _nwKey = 'cwoc_wx_' + chit.location.toLowerCase().trim();
-          var _nwCached = null;
-          try { _nwCached = JSON.parse(localStorage.getItem(_nwKey)); } catch (e) {}
-          if (_nwCached && _nwCached.icon && (Date.now() - _nwCached.ts < 3600000)) {
-            wxSpan.innerHTML = _nwCached.icon + ' <span class="chit-wx-detail">' + _escHtml(_nwCached.tooltip) + '</span> ';
-            wxSpan.title = _nwCached.tooltip;
+
+          // Prefer stored weather_data from backend
+          var _nwWd = chit.weather_data;
+          if (typeof _nwWd === 'string') { try { _nwWd = JSON.parse(_nwWd); } catch (e) { _nwWd = null; } }
+          if (_nwWd && _nwWd.weather_code !== undefined && _nwWd.high !== undefined && _nwWd.low !== undefined) {
+            var _nwIcon = _getWeatherIcon(_nwWd.weather_code);
+            var _nwHighF = _celsiusToFahrenheit(_nwWd.high);
+            var _nwLowF = _celsiusToFahrenheit(_nwWd.low);
+            var _nwStale = _isWeatherStale(_nwWd.updated_time) ? '⏳' : '';
+            var _nwDetail = _nwHighF + '°/' + _nwLowF + '°';
+            wxSpan.innerHTML = _nwStale + _nwIcon + ' <span class="chit-wx-detail">' + _escHtml(_nwDetail) + '</span> ';
+            wxSpan.title = _nwDetail + (_nwStale ? ' (stale)' : '');
           } else {
-            wxSpan.textContent = '⏳ ';
-            wxSpan.title = 'Loading weather…';
-            _queueChitWeatherFetch(chit.location, wxSpan);
+            var _nwKey = 'cwoc_wx_' + chit.location.toLowerCase().trim();
+            var _nwCached = null;
+            try { _nwCached = JSON.parse(localStorage.getItem(_nwKey)); } catch (e) {}
+            if (_nwCached && _nwCached.icon && (Date.now() - _nwCached.ts < 3600000)) {
+              wxSpan.innerHTML = _nwCached.icon + ' <span class="chit-wx-detail">' + _escHtml(_nwCached.tooltip) + '</span> ';
+              wxSpan.title = _nwCached.tooltip;
+            } else {
+              wxSpan.textContent = '⏳ ';
+              wxSpan.title = 'Loading weather…';
+              _queueChitWeatherFetch(chit.location, wxSpan);
+            }
           }
           titleRow.appendChild(wxSpan);
         }
@@ -5608,7 +5657,12 @@ document.addEventListener("DOMContentLoaded", function () {
 
     if (keyLower === 'w' && !_hotkeyMode) {
       e.preventDefault();
-      _openWeatherModal();
+      if (e.shiftKey) {
+        storePreviousState();
+        window.location.href = '/frontend/weather.html';
+      } else {
+        _openWeatherModal();
+      }
       return;
     }
   });

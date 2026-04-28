@@ -94,7 +94,7 @@
                 <li><kbd>F</kbd> — Filter: <kbd>S</kbd>tatus <kbd>T</kbd>ags <kbd>P</kbd>riority <kbd>D</kbd> Filter Text</li>
                 <li><kbd>O</kbd> — Order: <kbd>T</kbd>itle <kbd>S</kbd>tart <kbd>D</kbd>ue <kbd>U</kbd>pdated <kbd>C</kbd>reated <kbd>X</kbd> Status <kbd>M</kbd>anual <kbd>R</kbd>andom <kbd>G</kbd> Upcoming</li>
                 <li><kbd>G</kbd> — Global Search</li>
-                <li><kbd>W</kbd> — Weather (default location forecast)</li>
+                <li><kbd>W</kbd> — Weather (default location forecast) · <kbd>Shift+W</kbd> — Weather Page (full forecast)</li>
                 <li><kbd>L</kbd> — Clock · <kbd>R</kbd> — Reference · <kbd>Shift+R</kbd> — Help · <kbd>S</kbd> — Settings</li>
                 <li><kbd>ESC</kbd> — Close/exit · <kbd>Backspace</kbd> — Clear filters</li>
             </ul>
@@ -133,9 +133,42 @@
             </ul>
             <p>Drag clocks between Active and Inactive zones in Settings to choose which appear. Use "Change Orientation" to switch between horizontal and vertical layout.</p>
             <h3 id="weather">Weather</h3>
-            <p>Press <kbd>W</kbd> on the dashboard to open the weather modal. It shows the current forecast for your default saved location, including weather icon, high/low temperatures (°F), and precipitation. If no default location is configured, the modal will prompt you to set one in Settings.</p>
-            <p>In the chit editor, weather loads automatically when a chit has both a location and a date. Placeholder messages appear when either is missing.</p>
-            <p>On the dashboard, chits with a location display a weather icon (☀️ sunny, 🌧️ rainy, 🌨️ snowy, etc.) next to the title. Hover over the icon to see high/low temperatures, expected precipitation, and wind speed (💨 shown when 15+ mph). Weather data is fetched in the background and cached for one hour.</p>
+            <p>Press <kbd>W</kbd> on the dashboard to open the weather modal. It shows the current forecast for your default saved location, including weather icon, high/low temperatures (°F), and precipitation. If no default location is configured, the modal will prompt you to set one in Settings. The modal includes a <strong>📊 Full Forecast</strong> button that opens the dedicated Weather page.</p>
+            <p>In the chit editor, weather loads automatically when a chit has both a location and a date. Stored forecast data displays immediately on load, then a live fetch updates it in the background. Placeholder messages appear when either location or date is missing.</p>
+            <h4>Weather Data on Chits</h4>
+            <p>Each chit with a location and date stores its own weather forecast. The stored data includes:</p>
+            <ul>
+                <li><strong>High / Low</strong> — Forecast high and low temperatures (stored in Celsius, displayed in °F)</li>
+                <li><strong>Precipitation</strong> — Expected precipitation sum in mm</li>
+                <li><strong>Weather Code</strong> — Determines the weather icon (☀️ sunny, 🌧️ rainy, 🌨️ snowy, etc.)</li>
+                <li><strong>Focus Date</strong> — The date the forecast applies to (earliest of start or due date)</li>
+                <li><strong>Updated Time</strong> — When the forecast was last refreshed</li>
+            </ul>
+            <p>Weather data is updated automatically by the server — no browser needs to be open. When you save a chit in the editor, any fetched weather data is saved with it.</p>
+            <h4>Calendar View Weather Display</h4>
+            <p>On the calendar, chits with stored weather data show a compact weather summary on their event card:</p>
+            <ul>
+                <li><strong>Weather icon</strong> — Derived from the weather code (e.g., ☀️, 🌤️, 🌧️, 🌨️)</li>
+                <li><strong>High / Low temps</strong> — Displayed in °F</li>
+                <li><strong>Precipitation</strong> — Shown on Day, Week, Work Hours, and X Days views</li>
+                <li><strong>⏳ Stale indicator</strong> — Appears when the forecast data is more than 24 hours old</li>
+            </ul>
+            <p>If a chit has a location but no stored weather data yet, it falls back to fetching weather in the background. The 🌤️ Weather button in the calendar view header navigates to the full Weather page.</p>
+            <h4>Weather Page</h4>
+            <p>The Weather page shows a comprehensive forecast table for all your saved locations. Access it via:</p>
+            <ul>
+                <li><kbd>Shift+W</kbd> from the dashboard</li>
+                <li>The <strong>📊 Full Forecast</strong> button in the weather modal</li>
+                <li>The <strong>🌤️</strong> button in the calendar view header</li>
+            </ul>
+            <p>The page displays one row per saved location, with up to 16 days of forecast data. Each day block shows the weather icon, high/low temperatures in °F, and precipitation. If no saved locations are configured, a message directs you to add them in Settings. Press <kbd>ESC</kbd> to navigate back.</p>
+            <h4>Weather Update Schedule</h4>
+            <p>The server automatically refreshes weather forecasts on two schedules:</p>
+            <ul>
+                <li><strong>Hourly</strong> — Chits with dates in the next 7 days are updated every 60 minutes for higher accuracy</li>
+                <li><strong>Daily</strong> — Chits with dates 8–16 days out are updated once every 24 hours for a general outlook</li>
+            </ul>
+            <p>Updates run in the background on the server. Each unique location is geocoded once and reused for all chits at that address. You can also trigger a manual update via the API.</p>
             <h3 id="saved-locations">Saved Locations</h3>
             <p>Manage saved locations in Settings → Saved Locations. Each location has a label and an address. Use the radio button to mark one as the default.</p>
             <ul>

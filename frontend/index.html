@@ -30,6 +30,7 @@
                     <button class="action-button" onclick="nextPeriod()">►</button>
                 </div>
                 <button class="action-button today-btn" onclick="goToToday()">Today</button>
+                <button class="action-button today-btn" id="cal-weather-btn" onclick="storePreviousState(); window.location.href='/frontend/weather.html'" title="Full Weather Forecast (Shift+W)">🌤️ Weather</button>
             </div>
 
             <!-- 1. Create -->
@@ -289,6 +290,8 @@
                         <h4>General</h4>
                         <div><span class="ref-key">K</span> Create Chit</div>
                         <div><span class="ref-key">S</span> Settings</div>
+                        <div><span class="ref-key">W</span> Weather Modal</div>
+                        <div><span class="ref-key">⇧W</span> Weather Page</div>
                         <div><span class="ref-key">L</span> Clock</div>
                         <div><span class="ref-key">R</span> This Reference</div>
                         <div><span class="ref-key">ESC</span> Close / Exit</div>

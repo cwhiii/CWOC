@@ -1835,6 +1835,27 @@ button.delete:hover {
     cursor: pointer;
 }
 
+.weather-modal-actions {
+    margin-top: 12px;
+    text-align: center;
+}
+
+.weather-modal-forecast-btn {
+    padding: 8px 16px;
+    font-family: "Courier New", Courier, monospace;
+    font-weight: bold;
+    font-size: 0.95em;
+    background-color: var(--header-bg);
+    border: 1px solid #6b4e31;
+    border-radius: 3px;
+    cursor: pointer;
+    color: #3c2f2f;
+}
+
+.weather-modal-forecast-btn:hover {
+    background-color: #d2b48c;
+}
+
 .weather-modal-error {
     font-size: 0.95em;
     color: #8b4513;

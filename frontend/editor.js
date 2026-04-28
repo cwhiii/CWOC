@@ -92,6 +92,29 @@ async function _fetchWeatherData(address) {
 
     _displayWeatherInCompactSection(weather, address);
 
+    // Update weather_data in memory for save payload (6.2)
+    if (weather && weather.daily) {
+      const today = weather.daily;
+      // Derive focus_date from the chit's earliest date field
+      let focusDate = '';
+      const startVal = document.getElementById('start_datetime')?.value;
+      const dueVal = document.getElementById('due_datetime')?.value;
+      if (startVal) {
+        try { focusDate = new Date(convertMonthFormat(startVal) + 'T12:00:00').toISOString().split('T')[0]; } catch (e) { /* skip */ }
+      }
+      if (!focusDate && dueVal) {
+        try { focusDate = new Date(convertMonthFormat(dueVal) + 'T12:00:00').toISOString().split('T')[0]; } catch (e) { /* skip */ }
+      }
+      window._currentChitWeatherData = {
+        focus_date: focusDate || new Date().toISOString().split('T')[0],
+        updated_time: new Date().toISOString(),
+        high: today.temperature_2m_max[0],
+        low: today.temperature_2m_min[0],
+        precipitation: today.precipitation_sum[0],
+        weather_code: today.weathercode[0]
+      };
+    }
+
     // Cache the result
     try { localStorage.setItem(cacheKey, JSON.stringify({ weather, ts: Date.now() })); } catch (e) { /* ignore */ }
 
@@ -1409,6 +1432,11 @@ async function buildChitObject() {
     alert("Please provide at least a title, note, date, tag, checklist item, or child chit before saving.");
     return null;
   }
+
+  // Include weather_data in save payload (6.3)
+  chit.weather_data = window._currentChitWeatherData
+    ? JSON.stringify(window._currentChitWeatherData)
+    : null;
 
   return chit;
 }
@@ -2992,6 +3020,27 @@ async function loadChitData(chitId) {
     _loadTags().then((tags) => {
       _renderTags(tags, chit.tags || []);
     });
+
+    // Display stored weather_data immediately (before live fetch)
+    if (chit.weather_data) {
+      try {
+        const wd = typeof chit.weather_data === 'string' ? JSON.parse(chit.weather_data) : chit.weather_data;
+        if (wd && wd.weather_code !== undefined) {
+          // Build an Open-Meteo-shaped object so _displayWeatherInCompactSection can render it
+          const apiShaped = {
+            daily: {
+              weathercode: [wd.weather_code],
+              temperature_2m_max: [wd.high],
+              temperature_2m_min: [wd.low],
+              precipitation_sum: [wd.precipitation]
+            }
+          };
+          _displayWeatherInCompactSection(apiShaped, chit.location || '');
+          // Also seed the in-memory weather data for save
+          window._currentChitWeatherData = wd;
+        }
+      } catch (e) { /* stored weather_data malformed, skip */ }
+    }
 
     // Fetch weather for the chit's location
     const hasDate = !!(chit.start_datetime || chit.due_datetime);
