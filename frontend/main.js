@@ -13,7 +13,7 @@ let currentSortField = null;   // null | 'title' | 'start' | 'due' | 'updated' |
 let currentSortDir = 'asc';    // 'asc' | 'desc'
 
 // ── Hotkey submenu state ─────────────────────────────────────────────────────
-let _hotkeyMode = null;  // null | 'PERIOD' | 'FILTER' | 'ORDER' | 'FILTER_STATUS' | 'FILTER_LABEL' | 'FILTER_PRIORITY' | 'FILTER_PEOPLE'
+let _hotkeyMode = null;  // null | 'PERIOD' | 'FILTER' | 'ORDER' | 'NAVIGATE' | 'FILTER_STATUS' | 'FILTER_LABEL' | 'FILTER_PRIORITY' | 'FILTER_PEOPLE'
 
 // Global tag objects cache for color lookups
 let _cachedTagObjects = [];
@@ -362,7 +362,7 @@ function _buildChitHeader(chit, titleHtml, settings) {
     }
   }
 
-  // Weather indicator — icon only, details on hover
+  // Weather indicator — icon only, details in tooltip
   if (chit.location && chit.location.trim()) {
     var weatherMode = (settings || {}).weather || 'always';
     if (typeof _shouldShow === 'function' && _shouldShow(weatherMode, 'card')) {
@@ -378,20 +378,19 @@ function _buildChitHeader(chit, titleHtml, settings) {
         var wdHighF = _celsiusToFahrenheit(wd.high);
         var wdLowF = _celsiusToFahrenheit(wd.low);
         var wdStale = _isWeatherStale(wd.updated_time) ? '⏳' : '';
-        var wdDetail = wdHighF + '°/' + wdLowF + '°';
-        if (wd.precipitation !== undefined && wd.precipitation > 0) {
-          var wdPrecipIn = Math.ceil(wd.precipitation * 0.0393701 * 10) / 10;
-          if (wdPrecipIn > 0) wdDetail += ' ' + wdPrecipIn + '"';
-        }
-        wxSpan.innerHTML = wdStale + wdIcon + '<span class="chit-wx-detail">' + _escHtml(wdDetail) + '</span>';
-        wxSpan.title = wdDetail + (wdStale ? ' (stale)' : '');
+        var wdTooltip = wdHighF + '°/' + wdLowF + '°';
+        var wdPrecipText = _formatPrecip(wd.precipitation, wd.weather_code);
+        if (wdPrecipText) wdTooltip += ' · ' + wdPrecipText;
+        if (wdStale) wdTooltip += ' (stale)';
+        wxSpan.textContent = wdStale + wdIcon;
+        wxSpan.title = wdTooltip;
       } else {
         // Fallback: live-fetch weather indicator
         var wxCacheKey = 'cwoc_wx_' + chit.location.toLowerCase().trim();
         var wxCached = null;
         try { wxCached = JSON.parse(localStorage.getItem(wxCacheKey)); } catch (e) {}
         if (wxCached && wxCached.icon && (Date.now() - wxCached.ts < 3600000)) {
-          wxSpan.innerHTML = wxCached.icon + '<span class="chit-wx-detail">' + _escHtml(wxCached.tooltip) + '</span>';
+          wxSpan.textContent = wxCached.icon;
           wxSpan.title = wxCached.tooltip;
         } else {
           wxSpan.textContent = '⏳';
@@ -492,6 +491,18 @@ function _undimSidebar() {
 function _exitHotkeyMode() {
   _hotkeyMode = null;
   _hideAllPanels();
+}
+
+// ── Navigate panel handler ───────────────────────────────────────────────────
+var _navTargets = ['/', '/frontend/weather.html', '/frontend/people.html', '/frontend/help.html', '/frontend/settings.html', '/frontend/audit-log.html', '/frontend/trash.html'];
+function _pickNav(href) {
+  _exitHotkeyMode();
+  if (href === '/') {
+    // Already on chits
+    return;
+  }
+  storePreviousState();
+  window.location.href = href;
 }
 
 // ── Panel click handlers ─────────────────────────────────────────────────────
@@ -1168,6 +1179,20 @@ function _getPrecipLabel(code) {
   return '';
 }
 
+/**
+ * Format precipitation for display. Returns '' if no precip.
+ * precipMm: precipitation in mm, weatherCode: WMO code for type.
+ * Rounds to nearest cm. If > 0 but < 0.5cm, just says the type word.
+ */
+function _formatPrecip(precipMm, weatherCode) {
+  if (!precipMm || precipMm <= 0) return '';
+  var pType = _getPrecipLabel(weatherCode);
+  if (!pType) pType = 'precip';
+  var cm = Math.round(precipMm / 10);
+  if (cm < 1) return pType;
+  return cm + 'cm ' + pType;
+}
+
 // ── Weather Utility Functions ─────────────────────────────────────────────────
 
 /** Convert Celsius to Fahrenheit, rounded to nearest integer. */
@@ -1231,7 +1256,7 @@ async function _fetchAndApplyChitWeather(address, spans) {
     var cached = JSON.parse(localStorage.getItem(cacheKey));
     if (cached && cached.icon && (Date.now() - cached.ts < 3600000)) {
       spans.forEach(function(s) {
-        s.innerHTML = cached.icon + ' <span class="chit-wx-detail">' + _escHtml(cached.tooltip) + '</span> ';
+        s.textContent = cached.icon;
         s.title = cached.tooltip;
       });
       return;
@@ -1265,16 +1290,16 @@ async function _fetchAndApplyChitWeather(address, spans) {
   var windKmh = today.wind_speed_10m_max ? today.wind_speed_10m_max[0] : 0;
   var windMph = Math.round(windKmh * 0.621371);
   var minF = Math.round((minC * 9) / 5 + 32), maxF = Math.round((maxC * 9) / 5 + 32);
-  var precipInches = Math.ceil(precipMm * 0.0393701 * 10) / 10;
   var icon = _getWeatherIcon(weatherCode);
-  var precipType = _getPrecipLabel(weatherCode);
-  var precipText = precipType ? precipInches + '" ' + precipType : 'No precip';
+  var precipText = _formatPrecip(precipMm, weatherCode);
   var windText = windMph >= 20 ? ' · 💨' + windMph + 'mph' : '';
-  var tooltip = maxF + '°F / ' + minF + '°F · ' + precipText + windText;
+  var tooltip = maxF + '°/' + minF + '°';
+  if (precipText) tooltip += ' · ' + precipText;
+  tooltip += windText;
 
-  // Update all spans for this location
+  // Update all spans for this location — icon only, details in title
   spans.forEach(function(s) {
-    s.innerHTML = icon + ' <span class="chit-wx-detail">' + _escHtml(tooltip) + '</span> ';
+    s.textContent = icon;
     s.title = tooltip;
   });
 
@@ -1426,11 +1451,9 @@ async function _fetchWeatherForModal(address, label) {
 
     var minF = Math.round((minC * 9) / 5 + 32);
     var maxF = Math.round((maxC * 9) / 5 + 32);
-    var precipInches = Math.ceil(precipMm * 0.0393701 * 10) / 10;
 
     var icon = _getWeatherIcon(weatherCode);
-    var precipType = _getPrecipLabel(weatherCode);
-    var precipText = precipType ? precipInches + '" ' + precipType : 'No precipitation';
+    var precipText = _formatPrecip(precipMm, weatherCode);
     var windText = windMph >= 15 ? '💨 ' + windMph + ' mph wind' : '';
 
     var barMin = -14, barMax = 104, barRange = barMax - barMin;
@@ -1441,7 +1464,7 @@ async function _fetchWeatherForModal(address, label) {
       var weatherHtml =
         '<div class="weather-modal-icon">' + icon + '</div>' +
         '<div class="weather-modal-temps"><span class="temp-high">' + maxF + '°F</span> / <span class="temp-low">' + minF + '°F</span></div>' +
-        '<div class="weather-modal-precip">' + precipText + '</div>' +
+        (precipText ? '<div class="weather-modal-precip">' + precipText + '</div>' : '') +
         (windText ? '<div class="weather-modal-precip" style="margin-top:2px;">' + windText + '</div>' : '') +
         '<div class="weather-modal-temp-bar"><div class="temp-bar-marker" style="left:' + lowPct + '%" title="Low ' + minF + '°F"></div><div class="temp-bar-marker" style="left:' + highPct + '%" title="High ' + maxF + '°F"></div></div>';
       bodyEl.innerHTML = weatherHtml;
@@ -1479,14 +1502,12 @@ async function _fetchWeatherForCache(address, cacheKey) {
     var weatherCode = today.weathercode[0];
     var minC = today.temperature_2m_min[0], maxC = today.temperature_2m_max[0], precipMm = today.precipitation_sum[0];
     var minF = Math.round((minC * 9) / 5 + 32), maxF = Math.round((maxC * 9) / 5 + 32);
-    var precipInches = Math.ceil(precipMm * 0.0393701 * 10) / 10;
     var icon = _getWeatherIcon(weatherCode);
-    var precipType = _getPrecipLabel(weatherCode);
-    var precipText = precipType ? precipInches + '" ' + precipType : 'No precipitation';
+    var precipText = _formatPrecip(precipMm, weatherCode);
     var barMin = -14, barMax = 104, barRange = barMax - barMin;
     var lowPct = Math.max(0, Math.min(100, ((minF - barMin) / barRange) * 100));
     var highPct = Math.max(0, Math.min(100, ((maxF - barMin) / barRange) * 100));
-    var html = '<div class="weather-modal-icon">' + icon + '</div><div class="weather-modal-temps"><span class="temp-high">' + maxF + '°F</span> / <span class="temp-low">' + minF + '°F</span></div><div class="weather-modal-precip">' + precipText + '</div><div class="weather-modal-temp-bar"><div class="temp-bar-marker" style="left:' + lowPct + '%" title="Low ' + minF + '°F"></div><div class="temp-bar-marker" style="left:' + highPct + '%" title="High ' + maxF + '°F"></div></div>';
+    var html = '<div class="weather-modal-icon">' + icon + '</div><div class="weather-modal-temps"><span class="temp-high">' + maxF + '°F</span> / <span class="temp-low">' + minF + '°F</span></div>' + (precipText ? '<div class="weather-modal-precip">' + precipText + '</div>' : '') + '<div class="weather-modal-temp-bar"><div class="temp-bar-marker" style="left:' + lowPct + '%" title="Low ' + minF + '°F"></div><div class="temp-bar-marker" style="left:' + highPct + '%" title="High ' + maxF + '°F"></div></div>';
     try { localStorage.setItem(cacheKey, JSON.stringify({ html: html, ts: Date.now() })); } catch (e) { /* ignore */ }
   } catch (e) { /* background fetch — silently fail */ }
 }
@@ -2293,7 +2314,7 @@ function _restoreUIState() {
     document.querySelector(`.tab[onclick="filterChits('${currentTab}')"]`)?.classList.add('active');
 
     // Restore period select
-    const periodSel = document.getElementById('period-select');
+    var periodSel = document.getElementById('period-select');
     if (periodSel) periodSel.value = currentView;
 
     // Show/hide sections based on tab
@@ -3860,18 +3881,21 @@ function displayNotesView(chitsToDisplay) {
             var _nwHighF = _celsiusToFahrenheit(_nwWd.high);
             var _nwLowF = _celsiusToFahrenheit(_nwWd.low);
             var _nwStale = _isWeatherStale(_nwWd.updated_time) ? '⏳' : '';
-            var _nwDetail = _nwHighF + '°/' + _nwLowF + '°';
-            wxSpan.innerHTML = _nwStale + _nwIcon + ' <span class="chit-wx-detail">' + _escHtml(_nwDetail) + '</span> ';
-            wxSpan.title = _nwDetail + (_nwStale ? ' (stale)' : '');
+            var _nwTooltip = _nwHighF + '°/' + _nwLowF + '°';
+            var _nwPrecipText = _formatPrecip(_nwWd.precipitation, _nwWd.weather_code);
+            if (_nwPrecipText) _nwTooltip += ' · ' + _nwPrecipText;
+            if (_nwStale) _nwTooltip += ' (stale)';
+            wxSpan.textContent = _nwStale + _nwIcon;
+            wxSpan.title = _nwTooltip;
           } else {
             var _nwKey = 'cwoc_wx_' + chit.location.toLowerCase().trim();
             var _nwCached = null;
             try { _nwCached = JSON.parse(localStorage.getItem(_nwKey)); } catch (e) {}
             if (_nwCached && _nwCached.icon && (Date.now() - _nwCached.ts < 3600000)) {
-              wxSpan.innerHTML = _nwCached.icon + ' <span class="chit-wx-detail">' + _escHtml(_nwCached.tooltip) + '</span> ';
+              wxSpan.textContent = _nwCached.icon;
               wxSpan.title = _nwCached.tooltip;
             } else {
-              wxSpan.textContent = '⏳ ';
+              wxSpan.textContent = '⏳';
               wxSpan.title = 'Loading weather…';
               _queueChitWeatherFetch(chit.location, wxSpan);
             }
@@ -5609,6 +5633,16 @@ document.addEventListener("DOMContentLoaded", function () {
       _closeReference();
     }
 
+    // ── NAVIGATE submenu (after 'V') ──
+    if (_hotkeyMode === 'NAVIGATE') {
+      e.preventDefault();
+      var num = parseInt(key);
+      if (num >= 1 && num <= _navTargets.length) {
+        _pickNav(_navTargets[num - 1]);
+      }
+      return;
+    }
+
     // ── PERIOD submenu (after '.') ──
     if (_hotkeyMode === 'PERIOD') {
       const periodMap = { i: 'Itinerary', d: 'Day', w: 'Week', k: 'Work', s: 'SevenDay', m: 'Month', y: 'Year' };
@@ -5820,6 +5854,13 @@ document.addEventListener("DOMContentLoaded", function () {
     if (keyLower === 'l' && !_hotkeyMode) {
       e.preventDefault();
       _openClockModal();
+      return;
+    }
+
+    if (keyLower === 'v' && !_hotkeyMode) {
+      e.preventDefault();
+      _hotkeyMode = 'NAVIGATE';
+      _showPanel('panel-navigate');
       return;
     }
 

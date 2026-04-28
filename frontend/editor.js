@@ -148,10 +148,21 @@ async function _fetchWeatherData(address) {
 }
 
 function _getPrecipType(code) {
-  if ([61, 63, 65, 80, 81, 82].includes(code)) return "rain";
-  if ([71, 73, 75].includes(code)) return "snow";
+  if ([61, 63, 65, 66, 67, 80, 81, 82].includes(code)) return "rain";
+  if ([71, 73, 75, 77, 85, 86].includes(code)) return "snow";
   if ([95, 96, 99].includes(code)) return "thunder";
+  if ([51, 53, 55, 56, 57].includes(code)) return "drizzle";
   return "";
+}
+
+/** Format precipitation: nearest cm with type. Sub-0.5cm = just the type word. No precip = empty. */
+function _editorFormatPrecip(precipMm, weatherCode) {
+  if (!precipMm || precipMm <= 0) return '';
+  var pType = _getPrecipType(weatherCode);
+  if (!pType) pType = 'precip';
+  var cm = Math.round(precipMm / 10);
+  if (cm < 1) return pType;
+  return cm + 'cm ' + pType;
 }
 
 function _displayWeatherInCompactSection(weatherData, address) {
@@ -169,15 +180,13 @@ function _displayWeatherInCompactSection(weatherData, address) {
     const weatherCode = today.weathercode[0];
     const minC = today.temperature_2m_min[0];
     const maxC = today.temperature_2m_max[0];
-    const precipMm = Math.ceil(today.precipitation_sum[0]);
+    const precipMm = today.precipitation_sum[0];
 
     const min = Math.round((minC * 9) / 5 + 32);
     const max = Math.round((maxC * 9) / 5 + 32);
-    const precipInches = Math.ceil(precipMm * 0.0393701 * 10) / 10;
 
     const icon = weatherIcons[weatherCode] || "❓";
-    const precipType = _getPrecipType(weatherCode);
-    const precip = precipType ? `${precipInches} inch ${precipType}` : "";
+    const precip = _editorFormatPrecip(precipMm, weatherCode);
 
     const d = new Date();
     const formattedDate = `${d.toLocaleDateString("en-US", { weekday: "short" })} ${d.getFullYear()}-${d.toLocaleDateString("en-US", { month: "short" })}-${String(d.getDate()).padStart(2, "0")}`;
@@ -2862,9 +2871,6 @@ async function loadChitData(chitId) {
       }
     }
 
-    // Load per-chit audit history
-    loadAuditHistory(chitId);
-
     const allDayInput = document.getElementById("allDay");
     if (allDayInput) {
       const isAllDay = !!(chit.all_day || chit.allDay);
@@ -2976,9 +2982,7 @@ async function loadChitData(chitId) {
     const locationInput = document.getElementById("location");
     if (locationInput) {
       locationInput.value = chit.location || "";
-      locationInput.addEventListener('input', _updateGoogleMapsBtn);
     }
-    _updateGoogleMapsBtn();
 
     // Restore people (stored as array, display as chips)
     const peopleArray = Array.isArray(chit.people)
@@ -3236,12 +3240,10 @@ function onSavedLocationSelect() {
   if (!address) {
     // Null option selected — clear the field
     locationInput.value = '';
-    _updateGoogleMapsBtn();
     return;
   }
 
   locationInput.value = address;
-  _updateGoogleMapsBtn();
   setSaveButtonUnsaved();
   searchLocationMap();
 }
@@ -3259,7 +3261,6 @@ function onAddDefaultLocation(event) {
   var locationInput = document.getElementById('location');
   if (locationInput) {
     locationInput.value = defaultLoc.address || '';
-    _updateGoogleMapsBtn();
     setSaveButtonUnsaved();
     searchLocationMap();
   }
@@ -3272,7 +3273,6 @@ function onClearLocation(event) {
   if (event) event.stopPropagation();
   var locationInput = document.getElementById('location');
   if (locationInput) locationInput.value = '';
-  _updateGoogleMapsBtn();
 
   var mapDisplay = document.getElementById('location-map');
   if (mapDisplay) mapDisplay.innerHTML = '';
@@ -3403,83 +3403,62 @@ function searchLocationMap(event) {
 }
 
 function openLocationInNewTab(event) {
+  if (event) { event.stopPropagation(); event.preventDefault(); }
   const loc = document.getElementById("location");
-  if (loc && loc.value) {
-    window.open(
-      `https://www.openstreetmap.org/search?query=${encodeURIComponent(loc.value)}`,
-      "_blank",
-    );
-  }
-}
-
-function openInGoogleMaps(event) {
-  if (event) event.stopPropagation();
-  // Only opens Google Maps when explicitly clicked — no prefetching or tracking
-  var settings = window._cwocSettings || {};
-  var co = settings.chit_options || {};
-  if (co.disable_google_mapping) return;
-  var loc = document.getElementById("location");
   if (!loc || !loc.value.trim()) return;
-  window.open("https://www.google.com/maps/search/" + encodeURIComponent(loc.value.trim()), "_blank");
-}
-
-function _updateGoogleMapsBtn() {
-  var btn = document.getElementById("googleMapsBtn");
-  if (!btn) return;
-  var settings = window._cwocSettings || {};
-  var co = settings.chit_options || {};
-  if (co.disable_google_mapping) {
-    btn.style.display = "none";
-    return;
+  const q = encodeURIComponent(loc.value.trim());
+  const co = (window._cwocSettings && window._cwocSettings.chit_options) || {};
+  if (co.prefer_google_maps) {
+    window.open("https://www.google.com/maps/search/?api=1&query=" + q, "_blank", "noopener");
+  } else {
+    window.open("https://www.openstreetmap.org/search?query=" + q, "_blank");
   }
-  btn.style.display = "";
-  var loc = document.getElementById("location");
-  btn.disabled = !loc || !loc.value.trim();
 }
 
 function openLocationDirections(event) {
+  if (event) { event.stopPropagation(); event.preventDefault(); }
   const loc = document.getElementById("location");
   if (!loc || !loc.value) {
     alert("Please enter a destination first.");
     return;
   }
+  const co = (window._cwocSettings && window._cwocSettings.chit_options) || {};
+  const destination = loc.value.trim();
+  const destEnc = encodeURIComponent(destination);
 
-  if (!window.isSecureContext) {
-    console.warn(
-      "Geolocation requires HTTPS. Opening directions without starting location.",
-    );
-    window.open(
-      `https://www.openstreetmap.org/directions?to=${encodeURIComponent(loc.value)}`,
-      "_blank",
-    );
+  if (co.prefer_google_maps) {
+    // Google Maps directions — try geolocation for origin
+    if (window.isSecureContext && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          window.open("https://www.google.com/maps/dir/" + pos.coords.latitude + "," + pos.coords.longitude + "/" + destEnc, "_blank", "noopener");
+        },
+        () => {
+          window.open("https://www.google.com/maps/dir//" + destEnc, "_blank", "noopener");
+        },
+        { enableHighAccuracy: false, timeout: 5000, maximumAge: 60000 }
+      );
+    } else {
+      window.open("https://www.google.com/maps/dir//" + destEnc, "_blank", "noopener");
+    }
     return;
   }
 
-  if (!navigator.geolocation) {
-    console.warn("Geolocation is not supported by this browser.");
-    window.open(
-      `https://www.openstreetmap.org/directions?to=${encodeURIComponent(loc.value)}`,
-      "_blank",
-    );
+  // Default: OpenStreetMap directions
+  if (!window.isSecureContext || !navigator.geolocation) {
+    window.open("https://www.openstreetmap.org/directions?to=" + destEnc, "_blank");
     return;
   }
-
-  const destination = encodeURIComponent(loc.value);
 
   navigator.geolocation.getCurrentPosition(
     (position) => {
-      const userLat = position.coords.latitude;
-      const userLon = position.coords.longitude;
       window.open(
-        `https://www.openstreetmap.org/directions?from=${userLat},${userLon}&to=${destination}`,
+        "https://www.openstreetmap.org/directions?from=" + position.coords.latitude + "," + position.coords.longitude + "&to=" + destEnc,
         "_blank",
       );
     },
-    (error) => {
-      window.open(
-        `https://www.openstreetmap.org/directions?to=${destination}`,
-        "_blank",
-      );
+    () => {
+      window.open("https://www.openstreetmap.org/directions?to=" + destEnc, "_blank");
     },
     { enableHighAccuracy: false, timeout: 5000, maximumAge: 60000 },
   );
@@ -4301,99 +4280,4 @@ function _setPeopleFromArray(peopleArray) {
 
 document.addEventListener('DOMContentLoaded', _initPeopleAutocomplete);
 
-// ── Audit History (per-chit change tracking) ───────────────────────────────
 
-async function loadAuditHistory(chitId) {
-  var container = document.getElementById('auditHistoryContainer');
-  if (!container) return;
-  if (!chitId) {
-    container.innerHTML = '<p class="audit-history-empty">No audit history for this chit</p>';
-    return;
-  }
-  try {
-    var resp = await fetch('/api/audit-log?entity_type=chit&entity_id=' + encodeURIComponent(chitId) + '&limit=50&sort_order=desc');
-    if (!resp.ok) throw new Error('Failed to fetch audit history');
-    var data = await resp.json();
-    var entries = data.entries || [];
-    if (entries.length === 0) {
-      container.innerHTML = '<p class="audit-history-empty">No audit history for this chit</p>';
-      return;
-    }
-    var html = '';
-    entries.forEach(function (entry, idx) {
-      var ts = _formatAuditTimestamp(entry.timestamp);
-      var actor = entry.actor || '—';
-      var action = entry.action || '—';
-      var actionClass = 'audit-action-' + (entry.action || 'unknown');
-      html += '<div class="audit-history-entry">';
-      html += '  <div class="audit-history-row" onclick="_toggleAuditDetail(' + idx + ')">';
-      html += '    <span class="audit-history-toggle" id="ah-toggle-' + idx + '">▶</span>';
-      html += '    <span class="audit-history-ts">' + _escAuditHtml(ts) + '</span>';
-      html += '    <span class="audit-history-actor">' + _escAuditHtml(actor) + '</span>';
-      html += '    <span class="audit-history-action ' + actionClass + '">' + _escAuditHtml(action) + '</span>';
-      html += '  </div>';
-      html += '  <div class="audit-history-detail" id="ah-detail-' + idx + '" style="display:none;">';
-      html += _renderAuditChanges(entry.changes);
-      html += '  </div>';
-      html += '</div>';
-    });
-    container.innerHTML = html;
-  } catch (err) {
-    console.error('Error loading audit history:', err);
-    container.innerHTML = '<p class="audit-history-empty">Could not load audit history</p>';
-  }
-}
-
-function _formatAuditTimestamp(iso) {
-  if (!iso) return '—';
-  var d = new Date(iso);
-  if (isNaN(d.getTime())) return iso;
-  var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  var mon = months[d.getMonth()];
-  var day = String(d.getDate()).padStart(2, '0');
-  var yr = d.getFullYear();
-  var hr = String(d.getHours()).padStart(2, '0');
-  var min = String(d.getMinutes()).padStart(2, '0');
-  return yr + '-' + mon + '-' + day + ' ' + hr + ':' + min;
-}
-
-function _escAuditHtml(str) {
-  var div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
-}
-
-function _renderAuditChanges(changes) {
-  if (!changes || !Array.isArray(changes) || changes.length === 0) {
-    return '<em class="audit-history-no-changes">No field changes recorded.</em>';
-  }
-  var html = '<table class="audit-history-changes-table"><thead><tr><th>Field</th><th>Old</th><th>New</th></tr></thead><tbody>';
-  changes.forEach(function (c) {
-    var oldVal = _fmtAuditVal(c.old);
-    var newVal = _fmtAuditVal(c.new);
-    html += '<tr><td><strong>' + _escAuditHtml(c.field || '—') + '</strong></td>';
-    html += '<td class="audit-change-old">' + _escAuditHtml(oldVal) + '</td>';
-    html += '<td class="audit-change-new">' + _escAuditHtml(newVal) + '</td></tr>';
-  });
-  html += '</tbody></table>';
-  return html;
-}
-
-function _fmtAuditVal(val) {
-  if (val === null || val === undefined) return '(none)';
-  if (typeof val === 'object') return JSON.stringify(val);
-  return String(val);
-}
-
-function _toggleAuditDetail(idx) {
-  var detail = document.getElementById('ah-detail-' + idx);
-  var toggle = document.getElementById('ah-toggle-' + idx);
-  if (!detail) return;
-  if (detail.style.display === 'none') {
-    detail.style.display = '';
-    if (toggle) toggle.textContent = '▼';
-  } else {
-    detail.style.display = 'none';
-    if (toggle) toggle.textContent = '▶';
-  }
-}

@@ -11,12 +11,6 @@
             <style>
                 /* ── Settings-specific styles (shared styles come from shared-page.css + shared-editor.css) ── */
 
-                /* Settings header-row lives inside .settings-panel, so use full width */
-                .settings-panel .header-row {
-                    width: 100%;
-                    box-sizing: border-box;
-                }
-
                 /* Restore settings body styles (shared-editor.css overrides shared-page.css body) */
                 body {
                     font-family: "Courier New", Courier, monospace;
@@ -315,45 +309,14 @@
                 .log-hint { color: #7b2d8b; }
             </style>
         </head>
-        <body>
+        <body data-page-title="Settings" data-page-icon="⚙️" data-hide-nav="settings">
             <div class="settings-panel">
-                <div class="header-row">
-                    <img src="/static/settings.png" alt="Logo" class="header-image" />
-                    <h1>Settings</h1>
-                    <div class="buttons">
-                        <div class="left-buttons">
-                            <button
-                                id="save-single-btn"
-                                class="save-settings"
-                                disabled
-                                style="opacity:0.6;pointer-events:none;"
-                            >
-                                ✅ Saved
-                            </button>
-                            <button
-                                onclick="saveSettingsAndStay()"
-                                class="save-settings"
-                                id="save-stay-btn"
-                                style="display:none;"
-                            >
-                                <i class="fas fa-save"></i> 📌 Save &amp; Stay
-                            </button>
-                            <button
-                                onclick="saveSettings()"
-                                class="save-settings"
-                                id="save-exit-btn"
-                                style="display:none;"
-                            >
-                                <i class="fas fa-save"></i> 🚪 Save &amp; Exit
-                            </button>
-                            <button
-                                onclick="cancelSettings()"
-                                class="cancel cancel-settings"
-                            >
-                                <i class="fas fa-times"></i> Exit
-                            </button>
-                        </div>
-                    </div>
+                <!-- Save/Cancel buttons (positioned after auto-injected header) -->
+                <div class="cwoc-toolbar" style="margin-bottom:16px;">
+                    <button id="save-single-btn" class="standard-button" disabled style="opacity:0.6;pointer-events:none;">✅ Saved</button>
+                    <button onclick="saveSettingsAndStay()" class="standard-button" id="save-stay-btn" style="display:none;"><i class="fas fa-save"></i> 📌 Save &amp; Stay</button>
+                    <button onclick="saveSettings()" class="standard-button" id="save-exit-btn" style="display:none;"><i class="fas fa-save"></i> 🚪 Save &amp; Exit</button>
+                    <button onclick="cancelSettings()" class="standard-button cancel-settings"><i class="fas fa-times"></i> Exit</button>
                 </div>
 
                 <div class="settings-grid">
@@ -559,18 +522,8 @@
                             <label><input type="checkbox" id="highlight-overdue" name="highlight_overdue_chits" checked /> 🚨 Highlight Overdue</label>
                             <label><input type="checkbox" id="delete-past" name="delete_past_alarm_chits" /> 🗑️ Delete Past Alarms</label>
                             <label><input type="checkbox" id="show-tab-counts" name="show_tab_counts" /> 🔢 Show Tab Counts</label>
-                            <label><input type="checkbox" id="disable-google-mapping" name="disable_google_mapping" /> 🗺️ Disable Google Mapping</label>
+                            <label><input type="checkbox" id="prefer-google-maps" name="prefer_google_maps" /> 🗺️ Prefer Google for Maps</label>
                         </div>
-                        <hr style="border:none;border-top:1px solid var(--aged-brown-medium,#8b4513);margin:12px 0 10px;" />
-                        <h3 style="margin-top:0;">📤 Export / Import</h3>
-                        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                            <button onclick="exportCSV()" class="standard-button" style="flex:1;">📄 Export</button>
-                            <button onclick="document.getElementById('csv-import-input').click()" class="standard-button" style="flex:1;">📥 Import</button>
-                            <input type="file" id="csv-import-input" accept=".csv" style="display:none;" onchange="importCSV(this)" />
-                        </div>
-                        <hr style="border:none;border-top:1px solid var(--aged-brown-medium,#8b4513);margin:12px 0 10px;" />
-                        <h3 style="margin-top:0;">🗑️ Trash</h3>
-                        <button onclick="window.location.href='/frontend/trash.html'" class="standard-button" style="width:100%;">View Deleted Chits →</button>
                     </div>
                     <div class="setting-group">
                         <h3>🎨 Custom Colors</h3>
@@ -629,8 +582,26 @@
                         <button id="update-log-btn" class="standard-button" style="width:100%;margin-top:6px;" onclick="loadLastLog()">📄 Show Log</button>
                     </div>
                     <div class="setting-group">
-                        <h3>🖥️ System</h3>
+                        <h3>🗄️ Data</h3>
                         <button onclick="window.location.href='/frontend/audit-log.html'" class="standard-button" style="width:100%;">📋 Audit Log →</button>
+                        <hr style="border:none;border-top:1px solid var(--aged-brown-medium,#8b4513);margin:12px 0 10px;" />
+                        <h3 style="margin-top:0;">📤 Export / Import</h3>
+                        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                            <button onclick="exportCSV()" class="standard-button" style="flex:1;">📄 Export</button>
+                            <button onclick="document.getElementById('csv-import-input').click()" class="standard-button" style="flex:1;">📥 Import</button>
+                            <input type="file" id="csv-import-input" accept=".csv" style="display:none;" onchange="importCSV(this)" />
+                        </div>
+                        <hr style="border:none;border-top:1px solid var(--aged-brown-medium,#8b4513);margin:12px 0 10px;" />
+                        <h3 style="margin-top:0;">🗑️ Trash</h3>
+                        <button onclick="window.location.href='/frontend/trash.html'" class="standard-button" style="width:100%;">View Deleted Chits →</button>
+                        <hr style="border:none;border-top:1px solid var(--aged-brown-medium,#8b4513);margin:12px 0 10px;" />
+                        <h3 style="margin-top:0;">📜 Audit Log Limits</h3>
+                        <label><input type="checkbox" id="audit-prune-enabled" checked onchange="toggleAuditPruneInputs(); setSaveButtonUnsaved();" /> Enable Pruning</label>
+                        <label for="audit-max-days" style="margin-top:8px;">Max Age (days)</label>
+                        <input type="number" id="audit-max-days" min="1" step="1" placeholder="1096" style="width:100%;" />
+                        <label for="audit-max-mb" style="margin-top:8px;">Max Size (MB)</label>
+                        <input type="number" id="audit-max-mb" min="1" step="1" placeholder="1" style="width:100%;" />
+                        <p style="font-size:0.8em;opacity:0.7;margin-top:4px;">Uncheck to disable pruning. When either limit is reached, oldest entries are pruned first.</p>
                     </div>
                 </div>
                 <div class="loader" id="loader" style="display: none"></div>

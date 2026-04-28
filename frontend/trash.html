@@ -20,15 +20,8 @@
         .selected-count { font-size: 0.85em; opacity: 0.8; }
     </style>
 </head>
-<body>
+<body data-page-title="Deleted Chits" data-page-icon="🗑️" data-show-nav="trash">
     <div class="settings-panel">
-        <div class="header-and-buttons">
-            <h2><img src="/static/cwod_logo.png" alt="Logo" /> Deleted Chits</h2>
-            <div class="header-buttons">
-                <button onclick="window.location.href='/'" class="standard-button">🏠 Chits</button>
-                <button onclick="window.location.href='/frontend/settings.html'" class="standard-button">⚙️ Settings</button>
-            </div>
-        </div>
         <div class="cwoc-toolbar">
             <div id="trash-count" style="font-size:0.9em;opacity:0.7;"></div>
             <span class="selected-count" id="selected-count"></span>
@@ -39,8 +32,8 @@
         </div>
         <div id="trash-table-wrap"></div>
     </div>
-    <div class="author-info">by <a href="https://www.cwholemaniii.com/pages/home.shtml" target="_blank">C.W. Holeman III</a></div>
     <script src="/frontend/shared.js"></script>
+    <script src="/frontend/shared-page.js"></script>
     <script>
         const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
         const DAYS = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];

@@ -71,22 +71,6 @@
             accent-color: #8b5a2b;
             cursor: pointer;
         }
-        .sidebar-apply-btn {
-            margin-top: 14px;
-            width: 100%;
-            padding: 8px;
-            background: linear-gradient(#d4a373, #c8965a);
-            color: #2b1e0f;
-            border: 1px solid #8b5a2b;
-            border-radius: 5px;
-            cursor: pointer;
-            font-family: "Courier New", Courier, monospace;
-            font-size: 14px;
-            font-weight: bold;
-        }
-        .sidebar-apply-btn:hover {
-            background: linear-gradient(#c8965a, #a86b3e);
-        }
 
         /* ── Main content area ── */
         .audit-main {
@@ -103,15 +87,6 @@
             flex-wrap: wrap;
         }
         .audit-toolbar .toolbar-spacer { flex: 1; }
-        .trim-group {
-            display: flex;
-            align-items: center;
-            gap: 4px;
-        }
-        .trim-group select {
-            font-size: 13px;
-            padding: 4px 6px;
-        }
 
         /* ── Sortable table headers ── */
         .cwoc-table th.sortable {
@@ -195,6 +170,18 @@
         .action-badge.updated { background: #fff3cd; color: #856404; }
         .action-badge.deleted { background: #f8d7da; color: #b22222; }
 
+        /* ── Entity link ── */
+        .entity-link {
+            color: #5c4033;
+            text-decoration: underline;
+            cursor: pointer;
+        }
+        .entity-link:hover { color: #8b4513; }
+
+        /* ── Delete modal ── */
+        .nuke-count { font-size: 1.1em; font-weight: bold; margin: 8px 0; }
+        .nuke-warning { font-size: 0.8em; opacity: 0.7; margin-top: 6px; }
+
         /* ── Mobile responsive ── */
         @media (max-width: 768px) {
             .audit-layout {
@@ -205,6 +192,10 @@
                 min-width: 0;
             }
         }
+
+        /* ── Drag-and-drop column reorder ── */
+        .dragging { opacity: 0.5; }
+        .drag-over { border-left: 2px solid #8b5a2b; }
     </style>
 </head>
 <body data-page-title="Audit Log" data-page-icon="📋">
@@ -217,33 +208,31 @@
 
                 <label>Entity Type</label>
                 <div class="filter-radios" id="entity-type-radios">
-                    <label><input type="radio" name="entity_type" value="" checked /> All</label>
-                    <label><input type="radio" name="entity_type" value="chit" /> Chits</label>
-                    <label><input type="radio" name="entity_type" value="contact" /> Contacts</label>
-                    <label><input type="radio" name="entity_type" value="settings" /> Settings</label>
-                    <label><input type="radio" name="entity_type" value="system" /> System</label>
+                    <label><input type="radio" name="entity_type" value="" checked onchange="applyFilters()" /> All</label>
+                    <label><input type="radio" name="entity_type" value="chit" onchange="applyFilters()" /> Chits</label>
+                    <label><input type="radio" name="entity_type" value="contact" onchange="applyFilters()" /> Contacts</label>
+                    <label><input type="radio" name="entity_type" value="settings" onchange="applyFilters()" /> Settings</label>
+                    <label><input type="radio" name="entity_type" value="system" onchange="applyFilters()" /> System</label>
                 </div>
 
                 <label for="filter-actor">Actor</label>
-                <select id="filter-actor">
+                <select id="filter-actor" onchange="applyFilters()">
                     <option value="">All Actors</option>
                 </select>
 
-                <label for="filter-since">Since</label>
-                <input type="date" id="filter-since" />
+                <label for="filter-since">Start</label>
+                <input type="date" id="filter-since" onchange="applyFilters()" />
 
-                <label for="filter-until">Until</label>
-                <input type="date" id="filter-until" />
+                <label for="filter-until">End</label>
+                <input type="date" id="filter-until" onchange="applyFilters()" />
 
                 <label for="filter-page-size">Page Size</label>
-                <select id="filter-page-size">
+                <select id="filter-page-size" onchange="applyFilters()">
                     <option value="25">25</option>
                     <option value="50" selected>50</option>
                     <option value="100">100</option>
                     <option value="500">500</option>
                 </select>
-
-                <button class="sidebar-apply-btn" onclick="applyFilters()"><i class="fas fa-search"></i> Apply Filters</button>
             </div>
 
             <!-- ═══ MAIN CONTENT ═══ -->
@@ -252,17 +241,7 @@
                 <div class="audit-toolbar">
                     <button class="cwoc-btn" onclick="downloadCSV()" title="Download CSV export"><i class="fas fa-download"></i> Download CSV</button>
                     <div class="toolbar-spacer"></div>
-                    <div class="trim-group">
-                        <select id="trim-select">
-                            <option value="1h">Past Hour</option>
-                            <option value="1d">Past Day</option>
-                            <option value="1w">Past Week</option>
-                            <option value="1m">Past Month</option>
-                            <option value="1y">Past Year</option>
-                        </select>
-                        <button class="cwoc-btn" onclick="confirmTrim()" title="Trim old entries"><i class="fas fa-cut"></i> Trim</button>
-                    </div>
-                    <button class="cwoc-btn danger" onclick="confirmClearAll()" title="Clear all audit entries"><i class="fas fa-trash-alt"></i> Clear All</button>
+                    <button class="cwoc-btn danger" onclick="openDeleteModal()" title="Delete audit logs">🗑️ Delete Audit Logs</button>
                 </div>
 
                 <!-- Table -->
@@ -277,26 +256,35 @@
         </div>
     </div>
 
-    <!-- ═══ TRIM CONFIRMATION MODAL ═══ -->
-    <div class="modal" id="trim-modal">
+    <!-- ═══ DELETE AUDIT LOGS MODAL ═══ -->
+    <div class="modal" id="delete-modal">
         <div class="modal-content">
-            <h3>Confirm Trim</h3>
-            <p id="trim-modal-msg">Remove audit entries older than the selected timeframe?</p>
-            <div style="display:flex;gap:8px;justify-content:flex-end;">
-                <button class="standard-button" onclick="closeTrimModal()">Cancel</button>
-                <button class="cwoc-btn danger" onclick="executeTrim()"><i class="fas fa-cut"></i> Trim</button>
+            <h3>🗑️ Delete Audit Logs</h3>
+            <label for="prune-select" style="font-weight:bold;margin-bottom:4px;display:block;">Prune older than:</label>
+            <select id="prune-select" onchange="onPruneSelectChange()" style="width:100%;margin-bottom:10px;">
+                <option value="">Select...</option>
+            </select>
+            <div class="nuke-count" id="prune-count-display" style="display:none;"></div>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-bottom:10px;">
+                <input type="checkbox" id="download-first-cb" checked /> 📥 Download first?
+            </label>
+            <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;">
+                <button class="standard-button" onclick="closeDeleteModal()">Cancel</button>
+                <button class="cwoc-btn danger" id="nuke-btn" onclick="confirmNuke()" disabled>☢️ NUKE AUDIT LOGS</button>
             </div>
+            <p class="nuke-warning">There is no undo for this action.</p>
         </div>
     </div>
 
-    <!-- ═══ CLEAR ALL CONFIRMATION MODAL ═══ -->
-    <div class="modal" id="clear-modal">
-        <div class="modal-content">
-            <h3>Clear Entire Audit Log?</h3>
-            <p>This will permanently delete <strong>all</strong> audit log entries. This cannot be undone.</p>
-            <div style="display:flex;gap:8px;justify-content:flex-end;">
-                <button class="standard-button" onclick="closeClearModal()">Cancel</button>
-                <button class="cwoc-btn danger" onclick="executeClearAll()"><i class="fas fa-trash-alt"></i> Clear All</button>
+    <!-- ═══ FINAL NUKE CONFIRMATION MODAL ═══ -->
+    <div class="modal" id="nuke-confirm-modal">
+        <div class="modal-content" style="text-align:center;">
+            <h3 style="color:#b22222;">☢️ Are you sure?</h3>
+            <p id="nuke-confirm-msg" style="font-weight:bold;"></p>
+            <p style="font-size:0.85em;opacity:0.7;">This cannot be undone.</p>
+            <div style="display:flex;gap:8px;justify-content:center;margin-top:12px;">
+                <button class="standard-button" onclick="closeNukeConfirm()">Cancel</button>
+                <button class="cwoc-btn danger" onclick="executeDelete()">☢️ NUKE THEM</button>
             </div>
         </div>
     </div>
@@ -314,6 +302,17 @@
     let currentOffset = 0;
     let sortBy = 'timestamp';
     let sortOrder = 'desc';
+    let pruneCount = 0;
+
+    // ── Column order (mutable for drag reorder) ──
+    let columns = [
+        { key: 'timestamp',      label: 'Time' },
+        { key: 'entity_summary', label: 'Entity' },
+        { key: 'actor',          label: 'Actor' },
+        { key: 'action',         label: 'Action' },
+        { key: 'entity_type',    label: 'Entity Type' },
+    ];
+    let _dragColIdx = null;
 
     // ── Helpers ──
     function getEntityType() {
@@ -355,22 +354,36 @@
         }
     }
 
-    // ── Populate actor dropdown from existing entries ──
+    // ── Populate actor dropdown from existing entries + current username ──
     async function populateActors() {
         try {
             const resp = await fetch('/api/audit-log?limit=1000&offset=0');
-            if (!resp.ok) return;
-            const data = await resp.json();
-            const actors = [...new Set(data.entries.map(e => e.actor).filter(Boolean))].sort();
+            const actors = new Set();
+            actors.add('Unknown Gremlin');
+            if (resp.ok) {
+                const data = await resp.json();
+                data.entries.forEach(e => { if (e.actor) actors.add(e.actor); });
+            }
+            // Also fetch current username from settings
+            try {
+                const settingsResp = await fetch('/api/settings/default_user');
+                if (settingsResp.ok) {
+                    const settings = await settingsResp.json();
+                    if (settings.username) actors.add(settings.username);
+                }
+            } catch (e) { /* ignore */ }
+
+            const sorted = [...actors].sort();
             const sel = document.getElementById('filter-actor');
-            // Keep the "All Actors" option
+            const currentVal = sel.value;
             sel.innerHTML = '<option value="">All Actors</option>';
-            actors.forEach(a => {
+            sorted.forEach(a => {
                 const opt = document.createElement('option');
                 opt.value = a;
                 opt.textContent = a;
                 sel.appendChild(opt);
             });
+            if (currentVal) sel.value = currentVal;
         } catch (e) {
             console.error('Failed to populate actors:', e);
         }
@@ -410,20 +423,14 @@
         const totalEl = document.getElementById('audit-total');
         if (auditEntries.length < auditTotal) {
             wrap.style.display = '';
-            totalEl.textContent = `Showing ${auditEntries.length} of ${auditTotal} entries`;
-        } else {
-            // Still show total count but hide button
-            if (auditTotal > 0) {
-                wrap.style.display = '';
-                wrap.querySelector('.cwoc-btn').style.display = 'none';
-                totalEl.textContent = `Showing all ${auditTotal} entries`;
-            } else {
-                wrap.style.display = 'none';
-            }
-        }
-        // Re-show button if there are more
-        if (auditEntries.length < auditTotal) {
             wrap.querySelector('.cwoc-btn').style.display = '';
+            totalEl.textContent = `Showing ${auditEntries.length} of ${auditTotal} entries`;
+        } else if (auditTotal > 0) {
+            wrap.style.display = '';
+            wrap.querySelector('.cwoc-btn').style.display = 'none';
+            totalEl.textContent = `Showing all ${auditTotal} entries`;
+        } else {
+            wrap.style.display = 'none';
         }
     }
 
@@ -438,6 +445,28 @@
         applyFilters();
     }
 
+    // ── Build entity link ──
+    function buildEntityLink(entry) {
+        const summary = escHtml(entry.entity_summary || '—');
+        const eid = entry.entity_id || '';
+        const etype = entry.entity_type || '';
+        const action = entry.action || '';
+
+        if (etype === 'chit') {
+            if (action === 'deleted') {
+                return '<a class="entity-link" href="/frontend/trash.html?id=' + encodeURIComponent(eid) + '">' + summary + '</a>';
+            }
+            return '<a class="entity-link" href="/frontend/editor.html?id=' + encodeURIComponent(eid) + '">' + summary + '</a>';
+        }
+        if (etype === 'contact') {
+            return '<a class="entity-link" href="/frontend/contact-editor.html?id=' + encodeURIComponent(eid) + '">' + summary + '</a>';
+        }
+        if (etype === 'settings') {
+            return '<a class="entity-link" href="/frontend/settings.html">' + summary + '</a>';
+        }
+        return summary;
+    }
+
     // ── Render table ──
     function renderTable() {
         const wrap = document.getElementById('audit-table-wrap');
@@ -447,44 +476,75 @@
             return;
         }
 
-        const columns = [
-            { key: 'timestamp',      label: 'Timestamp' },
-            { key: 'actor',          label: 'Actor' },
-            { key: 'action',         label: 'Action' },
-            { key: 'entity_type',    label: 'Entity Type' },
-            { key: 'entity_summary', label: 'Entity Summary' },
-        ];
+        const colCount = columns.length + 1; // +1 for detail toggle
 
         let html = '<table class="cwoc-table"><thead><tr>';
-        // Detail toggle column
+        // Detail toggle column (NOT draggable)
         html += '<th style="width:30px;"></th>';
-        columns.forEach(col => {
+        columns.forEach((col, ci) => {
             const isActive = sortBy === col.key;
             const arrow = isActive ? (sortOrder === 'asc' ? '▲' : '▼') : '▲';
             const cls = isActive ? 'active' : '';
-            html += `<th class="sortable" onclick="toggleSort('${col.key}')">${col.label}<span class="sort-arrow ${cls}">${arrow}</span></th>`;
+            html += `<th class="sortable" draggable="true" data-col-idx="${ci}" onclick="toggleSort('${col.key}')">${col.label}<span class="sort-arrow ${cls}">${arrow}</span></th>`;
         });
         html += '</tr></thead><tbody>';
 
         auditEntries.forEach((entry, idx) => {
-            const ts = formatTimestamp(entry.timestamp);
-            const actionClass = entry.action || '';
+            const cellMap = {
+                'timestamp': escHtml(formatTimestamp(entry.timestamp)),
+                'entity_summary': buildEntityLink(entry),
+                'actor': escHtml(entry.actor || '—'),
+                'action': '<span class="action-badge ' + (entry.action || '') + '">' + escHtml(entry.action || '—') + '</span>',
+                'entity_type': escHtml(entry.entity_type || '—'),
+            };
             html += `<tr>`;
             html += `<td><span class="detail-toggle" onclick="toggleDetail(${idx})" id="toggle-${idx}" title="Show changes">▶</span></td>`;
-            html += `<td>${escHtml(ts)}</td>`;
-            html += `<td>${escHtml(entry.actor || '—')}</td>`;
-            html += `<td><span class="action-badge ${actionClass}">${escHtml(entry.action || '—')}</span></td>`;
-            html += `<td>${escHtml(entry.entity_type || '—')}</td>`;
-            html += `<td>${escHtml(entry.entity_summary || '—')}</td>`;
+            columns.forEach(col => {
+                html += `<td>${cellMap[col.key]}</td>`;
+            });
             html += `</tr>`;
             // Hidden detail row
-            html += `<tr class="audit-detail-row" id="detail-${idx}" style="display:none;"><td colspan="6">`;
+            html += `<tr class="audit-detail-row" id="detail-${idx}" style="display:none;"><td colspan="${colCount}">`;
             html += renderChanges(entry.changes);
             html += `</td></tr>`;
         });
 
         html += '</tbody></table>';
         wrap.innerHTML = html;
+
+        // Attach drag-and-drop listeners to column headers
+        wrap.querySelectorAll('th[draggable="true"]').forEach(th => {
+            th.addEventListener('dragstart', function(e) {
+                _dragColIdx = parseInt(this.dataset.colIdx);
+                this.classList.add('dragging');
+                e.dataTransfer.effectAllowed = 'move';
+            });
+            th.addEventListener('dragend', function() {
+                this.classList.remove('dragging');
+                wrap.querySelectorAll('th').forEach(h => h.classList.remove('drag-over'));
+            });
+            th.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                this.classList.add('drag-over');
+            });
+            th.addEventListener('dragleave', function() {
+                this.classList.remove('drag-over');
+            });
+            th.addEventListener('drop', function(e) {
+                e.preventDefault();
+                this.classList.remove('drag-over');
+                const targetIdx = parseInt(this.dataset.colIdx);
+                if (_dragColIdx !== null && _dragColIdx !== targetIdx) {
+                    // Swap columns in the array
+                    const temp = columns[_dragColIdx];
+                    columns[_dragColIdx] = columns[targetIdx];
+                    columns[targetIdx] = temp;
+                    renderTable();
+                }
+                _dragColIdx = null;
+            });
+        });
     }
 
     function renderChanges(changes) {
@@ -555,48 +615,161 @@
         window.location.href = '/api/audit-log/export?' + params.toString();
     }
 
-    // ── Trim ──
-    function confirmTrim() {
-        const sel = document.getElementById('trim-select');
-        const labels = { '1h': 'Past Hour', '1d': 'Past Day', '1w': 'Past Week', '1m': 'Past Month', '1y': 'Past Year' };
-        const label = labels[sel.value] || sel.value;
-        document.getElementById('trim-modal-msg').textContent = `Remove all audit entries older than ${label}?`;
-        document.getElementById('trim-modal').style.display = 'flex';
-    }
-    function closeTrimModal() {
-        document.getElementById('trim-modal').style.display = 'none';
-    }
-    async function executeTrim() {
-        closeTrimModal();
-        const val = document.getElementById('trim-select').value;
-        try {
-            const resp = await fetch('/api/audit-log/trim?older_than=' + encodeURIComponent(val), { method: 'DELETE' });
-            if (!resp.ok) throw new Error('Trim failed');
-            const data = await resp.json();
-            console.log('Trim result:', data);
-        } catch (e) {
-            console.error('Trim error:', e);
+    // ── Delete Audit Logs Modal ──
+
+    // Compute start-of-period cutoff dates for the dropdown labels
+    function _startOfPeriodCutoff(key) {
+        var now = new Date();
+        var d;
+        if (key === '1h') {
+            // Start of the current hour, minus 1 hour
+            d = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours() - 1, 0, 0, 0);
+        } else if (key === '1d') {
+            // Start of yesterday
+            d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 0, 0, 0, 0);
+        } else if (key === '1w') {
+            // Start of the day 7 days ago
+            d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7, 0, 0, 0, 0);
+        } else if (key === '1m') {
+            // Start of the day 30 days ago
+            d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30, 0, 0, 0, 0);
+        } else if (key === '1y') {
+            // Start of the day 365 days ago
+            d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 365, 0, 0, 0, 0);
+        } else {
+            return null;
         }
-        applyFilters();
-        populateActors();
+        return d;
     }
 
-    // ── Clear All ──
-    function confirmClearAll() {
-        document.getElementById('clear-modal').style.display = 'flex';
+    function _fmtShortDate(d) {
+        var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        return months[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear();
     }
-    function closeClearModal() {
-        document.getElementById('clear-modal').style.display = 'none';
+
+    function _populatePruneDropdown() {
+        var sel = document.getElementById('prune-select');
+        sel.innerHTML = '<option value="">Select...</option>';
+        var periods = [
+            { key: '1h', label: 'Past Hour' },
+            { key: '1d', label: 'Past Day' },
+            { key: '1w', label: 'Past Week' },
+            { key: '1m', label: 'Past Month' },
+            { key: '1y', label: 'Past Year' },
+        ];
+        periods.forEach(function(p) {
+            var cutoff = _startOfPeriodCutoff(p.key);
+            var label = p.label;
+            if (cutoff) label += ' (older than ' + _fmtShortDate(cutoff) + ')';
+            var opt = document.createElement('option');
+            opt.value = p.key;
+            opt.textContent = label;
+            sel.appendChild(opt);
+        });
+        var allOpt = document.createElement('option');
+        allOpt.value = 'all';
+        allOpt.textContent = 'All Logs';
+        sel.appendChild(allOpt);
     }
-    async function executeClearAll() {
-        closeClearModal();
+
+    function openDeleteModal() {
+        pruneCount = 0;
+        _populatePruneDropdown();
+        document.getElementById('prune-select').value = '';
+        document.getElementById('prune-count-display').style.display = 'none';
+        document.getElementById('nuke-btn').disabled = true;
+        document.getElementById('nuke-btn').textContent = '☢️ NUKE AUDIT LOGS';
+        document.getElementById('download-first-cb').checked = true;
+        document.getElementById('delete-modal').style.display = 'flex';
+    }
+
+    function closeDeleteModal() {
+        document.getElementById('delete-modal').style.display = 'none';
+    }
+
+    async function onPruneSelectChange() {
+        const val = document.getElementById('prune-select').value;
+        const countDisplay = document.getElementById('prune-count-display');
+        const nukeBtn = document.getElementById('nuke-btn');
+
+        if (!val) {
+            countDisplay.style.display = 'none';
+            nukeBtn.disabled = true;
+            nukeBtn.textContent = '☢️ NUKE AUDIT LOGS';
+            return;
+        }
+
+        // Fetch count of entries that will be deleted
         try {
-            const resp = await fetch('/api/audit-log', { method: 'DELETE' });
-            if (!resp.ok) throw new Error('Clear failed');
-            const data = await resp.json();
-            console.log('Clear result:', data);
+            let count = 0;
+            if (val === 'all') {
+                const resp = await fetch('/api/audit-log?limit=1&offset=0');
+                if (resp.ok) {
+                    const data = await resp.json();
+                    count = data.total || 0;
+                }
+            } else {
+                var cutoff = _startOfPeriodCutoff(val);
+                if (cutoff) {
+                    var cutoffISO = cutoff.toISOString();
+                    const resp = await fetch('/api/audit-log?limit=1&offset=0&until=' + encodeURIComponent(cutoffISO));
+                    if (resp.ok) {
+                        const data = await resp.json();
+                        count = data.total || 0;
+                    }
+                }
+            }
+            pruneCount = count;
+            countDisplay.textContent = count + ' entries will be deleted.';
+            countDisplay.style.display = '';
+            nukeBtn.disabled = false;
+            nukeBtn.textContent = '☢️ NUKE ' + count + ' AUDIT LOGS';
         } catch (e) {
-            console.error('Clear error:', e);
+            console.error('Failed to get prune count:', e);
+            countDisplay.textContent = 'Could not determine count.';
+            countDisplay.style.display = '';
+            nukeBtn.disabled = false;
+            nukeBtn.textContent = '☢️ NUKE AUDIT LOGS';
+        }
+    }
+
+    // First click on NUKE → open second confirmation
+    function confirmNuke() {
+        document.getElementById('nuke-confirm-msg').textContent = 'NUKE ' + pruneCount + ' AUDIT LOGS?';
+        document.getElementById('delete-modal').style.display = 'none';
+        document.getElementById('nuke-confirm-modal').style.display = 'flex';
+    }
+
+    function closeNukeConfirm() {
+        document.getElementById('nuke-confirm-modal').style.display = 'none';
+        // Re-open the delete modal so user can change their mind
+        document.getElementById('delete-modal').style.display = 'flex';
+    }
+
+    async function executeDelete() {
+        const val = document.getElementById('prune-select').value;
+        if (!val) return;
+
+        // Download first if checked
+        if (document.getElementById('download-first-cb').checked) {
+            downloadCSV();
+            // Small delay to let the download start
+            await new Promise(r => setTimeout(r, 500));
+        }
+
+        document.getElementById('nuke-confirm-modal').style.display = 'none';
+        closeDeleteModal();
+
+        try {
+            let resp;
+            if (val === 'all') {
+                resp = await fetch('/api/audit-log', { method: 'DELETE' });
+            } else {
+                resp = await fetch('/api/audit-log/trim?older_than=' + encodeURIComponent(val), { method: 'DELETE' });
+            }
+            if (!resp.ok) throw new Error('Delete failed');
+        } catch (e) {
+            console.error('Delete error:', e);
         }
         applyFilters();
         populateActors();
@@ -605,15 +778,45 @@
     // ── ESC key: close modals first, then default shared-page.js behavior ──
     document.addEventListener('keydown', function(e) {
         if (e.key !== 'Escape') return;
-        const trimModal = document.getElementById('trim-modal');
-        const clearModal = document.getElementById('clear-modal');
-        if (trimModal.style.display === 'flex') { closeTrimModal(); e.stopImmediatePropagation(); return; }
-        if (clearModal.style.display === 'flex') { closeClearModal(); e.stopImmediatePropagation(); return; }
+        var nukeConfirm = document.getElementById('nuke-confirm-modal');
+        if (nukeConfirm && nukeConfirm.style.display === 'flex') { closeNukeConfirm(); e.stopImmediatePropagation(); return; }
+        var deleteModal = document.getElementById('delete-modal');
+        if (deleteModal && deleteModal.style.display === 'flex') { closeDeleteModal(); e.stopImmediatePropagation(); return; }
         // Let shared-page.js handle the rest (page exit)
     });
 
+    // ── Read URL params for deep-linking ──
+    function readUrlParams() {
+        const params = new URLSearchParams(window.location.search);
+        const entityType = params.get('entity_type');
+        const entityId = params.get('entity_id');
+
+        if (entityType) {
+            // Set the entity type radio
+            const radio = document.querySelector('input[name="entity_type"][value="' + entityType + '"]');
+            if (radio) radio.checked = true;
+        }
+
+        // If entity_id is present, add it to the query params
+        if (entityId) {
+            window._filterEntityId = entityId;
+        }
+    }
+
+    // Override buildQueryParams to include entity_id if set
+    const _origBuildQueryParams = buildQueryParams;
+    buildQueryParams = function(offset, limit) {
+        const qs = _origBuildQueryParams(offset, limit);
+        const params = new URLSearchParams(qs);
+        if (window._filterEntityId) {
+            params.set('entity_id', window._filterEntityId);
+        }
+        return params.toString();
+    };
+
     // ── Init ──
     async function initAuditLog() {
+        readUrlParams();
         await populateActors();
         await loadEntries();
     }

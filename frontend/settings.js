@@ -363,6 +363,16 @@ function _toggleCombineAlerts() {
   setSaveButtonUnsaved();
 }
 
+/** Toggle disabled state of audit prune inputs based on Enable Pruning checkbox */
+function toggleAuditPruneInputs() {
+  var cb = document.getElementById('audit-prune-enabled');
+  var daysInput = document.getElementById('audit-max-days');
+  var mbInput = document.getElementById('audit-max-mb');
+  var disabled = !(cb && cb.checked);
+  if (daysInput) { daysInput.disabled = disabled; daysInput.style.opacity = disabled ? '0.5' : '1'; }
+  if (mbInput) { mbInput.disabled = disabled; mbInput.style.opacity = disabled ? '0.5' : '1'; }
+}
+
 /** Toggle visibility of Work Week config based on Work Hours period checkbox */
 function _toggleWorkConfig() {
   var workCb = document.querySelector('.period-cb[value="Work"]');
@@ -1206,13 +1216,28 @@ class SettingsManager {
     const usernameInput = document.getElementById("username-input");
     if (usernameInput) usernameInput.value = this.settings.username || "";
 
+    // Audit log limits
+    const auditMaxDaysInput = document.getElementById("audit-max-days");
+    if (auditMaxDaysInput) auditMaxDaysInput.value = (this.settings.audit_log_max_days != null && this.settings.audit_log_max_days !== '') ? this.settings.audit_log_max_days : '';
+    const auditMaxMbInput = document.getElementById("audit-max-mb");
+    if (auditMaxMbInput) auditMaxMbInput.value = (this.settings.audit_log_max_mb != null && this.settings.audit_log_max_mb !== '') ? this.settings.audit_log_max_mb : '';
+
+    // Audit prune checkbox: unchecked if both limits are null
+    const auditPruneCb = document.getElementById("audit-prune-enabled");
+    if (auditPruneCb) {
+      const bothNull = (this.settings.audit_log_max_days == null || this.settings.audit_log_max_days === '') &&
+                        (this.settings.audit_log_max_mb == null || this.settings.audit_log_max_mb === '');
+      auditPruneCb.checked = !bothNull;
+      toggleAuditPruneInputs();
+    }
+
     // Chit options checkboxes
     const co = this.settings.chit_options || {};
     document.getElementById("fade-past").checked = co.fade_past_chits !== false;
     document.getElementById("highlight-overdue").checked = co.highlight_overdue_chits !== false;
     document.getElementById("delete-past").checked = !!co.delete_past_alarm_chits;
     document.getElementById("show-tab-counts").checked = !!co.show_tab_counts;
-    document.getElementById("disable-google-mapping").checked = !!co.disable_google_mapping;
+    document.getElementById("prefer-google-maps").checked = !!co.prefer_google_maps;
 
     const genderToggle = document.getElementById("gender-toggle");
     const genderLabel = document.getElementById("gender-label");
@@ -1472,9 +1497,11 @@ class SettingsManager {
           document.getElementById("highlight-overdue").checked,
         delete_past_alarm_chits: document.getElementById("delete-past").checked,
         show_tab_counts: document.getElementById("show-tab-counts").checked,
-        disable_google_mapping: document.getElementById("disable-google-mapping").checked,
+        prefer_google_maps: document.getElementById("prefer-google-maps").checked,
       },
       saved_locations: JSON.stringify(collectLocationsData()),
+      audit_log_max_days: (() => { const cb = document.getElementById("audit-prune-enabled"); if (cb && !cb.checked) return null; const v = (document.getElementById("audit-max-days") || {}).value; return v === '' ? null : parseInt(v, 10); })(),
+      audit_log_max_mb: (() => { const cb = document.getElementById("audit-prune-enabled"); if (cb && !cb.checked) return null; const v = (document.getElementById("audit-max-mb") || {}).value; return v === '' ? null : parseInt(v, 10); })(),
     };
   }
 
@@ -1501,9 +1528,8 @@ class SettingsManager {
   }
 
   setupEventListeners() {
-    document
-      .querySelector(".save-settings")
-      .addEventListener("click", () => this.save());
+    // Save buttons are wired via onclick in HTML (saveSettingsAndStay / saveSettings)
+    // No additional wiring needed here
   }
 }
 

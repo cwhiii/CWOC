@@ -7,15 +7,8 @@
     <title>CWOC Help — C.W.'s Omni Chits</title>
     <link rel="stylesheet" href="/frontend/shared-page.css" />
 </head>
-<body>
+<body data-page-title="Help Guide" data-page-icon="❓">
     <div class="settings-panel">
-        <div class="header-and-buttons">
-            <h2><img src="/static/cwod_logo.png" alt="Logo" /> Help Guide</h2>
-            <div class="header-buttons">
-                <button onclick="window.location.href='/'" class="standard-button">🏠 Chits</button>
-                <button onclick="window.location.href='/frontend/settings.html'" class="standard-button">⚙️ Settings</button>
-            </div>
-        </div>
         <div class="help-content">
             <div class="index">
                 <strong>Contents</strong>
@@ -181,7 +174,7 @@
             </ul>
             <p>Saved locations are used by the editor's Location zone dropdown, the compact 📍 dropdown in the title area, the +Location button, and the dashboard weather modal (<kbd>W</kbd>).</p>
             <h3 id="editor">Chit Editor</h3>
-            <p>Collapsible zones: Title, Dates & Times, Task, Location, Tags, People, Notes, Checklist, Alerts, Health Indicators, Color, Projects, Audit Log. 📱 QR button generates data or link QR codes.</p>
+            <p>Collapsible zones: Title, Dates & Times, Task, Location, Tags, People, Notes, Checklist, Alerts, Health Indicators, Color, Projects, Audit Log. An "📜 Audit Log" button at the bottom links to the filtered audit log for the current chit. 📱 QR button generates data or link QR codes.</p>
             <p>When creating a new chit, only the zone relevant to the current view is expanded (e.g., Notes zone when coming from the Notes tab). All other zones start collapsed. The title field is auto-focused. If you have a default saved location, it's auto-applied to new chits.</p>
             <h4>Alerts Zone</h4>
             <p>Add alarms, timers, stopwatches, and notifications. Each alarm has a time, days, and optional "Delete chit after dismissal" checkbox — when checked, dismissing the alarm soft-deletes the chit. The 🔄 button on the weather bar refreshes the forecast.</p>
@@ -195,7 +188,7 @@
                 <li><strong>Saved Locations dropdown</strong> — Select any saved location by label to populate the address</li>
                 <li><strong>✕ Clear</strong> — Clears the address, map, and weather display</li>
                 <li><strong>📍 compact dropdown</strong> — Quick-access dropdown in the title/weather area for selecting a saved location without scrolling to the Location zone</li>
-                <li><strong>Google Maps button</strong> — The small "G" button next to the address opens the location in Google Maps. Greyed out when no address is entered. Google is only ever contacted when you explicitly click this button — no data is sent to Google otherwise. Can be hidden via Settings → Chit Options → Disable Google Mapping.</li>
+                <li><strong>Google Maps button</strong> — When "Prefer Google for Maps" is enabled in Settings → Chit Options, the Map and Directions buttons use Google Maps instead of OpenStreetMap. No API key or account needed — these are plain web links.</li>
             </ul>
             <p>A chit can have at most one location. Weather and map load automatically when a location and date are both present.</p>
             <h3 id="quick-edit">Quick Edit Modal</h3>
@@ -209,7 +202,7 @@
                 <li><strong>Tag Editor</strong> — Tree view, create/edit/delete/favorite, "+" for child tags</li>
                 <li><strong>Saved Locations</strong> — Add, label, and set a default location for use across the editor and dashboard weather</li>
                 <li><strong>Custom Colors</strong> — Color picker for chit colors</li>
-                <li><strong>Chit Options</strong> — Fade past, highlight overdue, delete past alarms, disable Google Mapping</li>
+                <li><strong>Chit Options</strong> — Fade past, highlight overdue, delete past alarms, prefer Google for Maps</li>
                 <li><strong>Export / Import</strong> — CSV export and import</li>
                 <li><strong>Trash</strong> — View, restore, or permanently delete chits</li>
             </ul>
@@ -263,24 +256,34 @@
             <p>The actor field reflects the username configured in Settings → General. If no username is set, the actor defaults to <strong>"Unknown Gremlin"</strong>. The username is stored as a snapshot at the time of the change — if you later change your username, older entries still show the name you had when the change was made.</p>
             <h4>Accessing the Audit Log</h4>
             <ul>
-                <li><strong>Global Audit Log page</strong> — Access via Settings → System → Audit Log, or the Audit Log link in the navigation header. Shows all audit entries across all entities.</li>
-                <li><strong>Per-chit audit panel</strong> — The chit editor includes a collapsible "Audit History" zone (collapsed by default) showing changes for that specific chit.</li>
-                <li><strong>Per-contact audit panel</strong> — The contact editor includes a collapsible "Audit History" zone showing changes for that specific contact.</li>
+                <li><strong>Global Audit Log page</strong> — Access via Settings → Data → Audit Log, or the Audit Log link in the navigation header. Shows all audit entries across all entities.</li>
+                <li><strong>Per-chit link</strong> — The chit editor has an "📜 Audit Log" button at the bottom that deep-links to the audit log filtered for that chit.</li>
+                <li><strong>Per-contact link</strong> — The contact editor has an "📜 Audit Log" button that deep-links to the audit log filtered for that contact.</li>
             </ul>
             <h4>Global Audit Log Page</h4>
             <p>The dedicated audit log page provides a full-featured interface for browsing change history:</p>
             <ul>
-                <li><strong>Filtering</strong> — Filter entries by entity type (All / Chits / Contacts / Settings / System), actor, and date range (since/until)</li>
-                <li><strong>Sorting</strong> — Click column headers (timestamp, actor, action, entity type, entity summary) to toggle ascending/descending sort</li>
+                <li><strong>Real-time filtering</strong> — Filters apply immediately as you change entity type, actor, date range (Start/End), or page size. No "Apply" button needed.</li>
+                <li><strong>Sorting</strong> — Click column headers (Time, Entity, Actor, Action, Entity Type) to toggle ascending/descending sort</li>
+                <li><strong>Entity links</strong> — The Entity column links directly to the chit editor, contact editor, settings page, or trash (for deleted chits)</li>
                 <li><strong>Pagination</strong> — Configurable page size (25 / 50 / 100 / 500) with a "Load More" button</li>
                 <li><strong>Change details</strong> — Expand any entry to see which fields changed, with old → new values</li>
             </ul>
             <h4>Log Management</h4>
             <ul>
-                <li><strong>Clear All</strong> — Removes all audit log entries (confirmation required)</li>
-                <li><strong>Trim</strong> — Removes entries older than a selected timeframe (Past Hour / Day / Week / Month / Year)</li>
+                <li><strong>Delete Audit Logs</strong> — Opens a modal to prune entries older than a selected timeframe (Past Hour / Day / Week / Month / Year / All Time). Shows the count of entries to be deleted. Option to download CSV before deleting.</li>
                 <li><strong>CSV Export</strong> — Downloads the currently filtered entries as a CSV file</li>
             </ul>
+            <h4>Audit Log Limits</h4>
+            <p>In Settings → Data → Audit Log Limits, you can configure automatic pruning:</p>
+            <ul>
+                <li><strong>Enable Pruning</strong> — Checkbox to enable or disable automatic pruning. When unchecked, both limit inputs are disabled and pruning is skipped entirely.</li>
+                <li><strong>Max Age (days)</strong> — Entries older than this are pruned automatically. Default: 1096 (3 years). Minimum: 1.</li>
+                <li><strong>Max Size (MB)</strong> — When the audit log exceeds this size (whole integers only), oldest entries are pruned. Default: 1 MB. Minimum: 1.</li>
+            </ul>
+            <p>Auto-pruning runs at startup and after saving settings. Uncheck "Enable Pruning" to disable all automatic pruning.</p>
+            <h4>Column Reordering</h4>
+            <p>On the audit log page, you can drag and drop column headers to reorder them. The detail toggle column (first column) is fixed. Column order is not persisted — it resets on page reload.</p>
             <h3 id="contacts">Contact Editor</h3>
             <p>Contacts have name fields (prefix, given, middle, surname, suffix), phone, email, address, social/web, security (Signal, PGP), and context (organization, social context).</p>
             <ul>
@@ -290,14 +293,7 @@
             </ul>
         </div>
     </div>
-    <div class="author-info">by <a href="https://www.cwholemaniii.com/pages/home.shtml" target="_blank">C.W. Holeman III</a></div>
-    <script>
-        document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape') {
-                e.preventDefault();
-                history.back();
-            }
-        });
-    </script>
+    <script src="/frontend/shared.js"></script>
+    <script src="/frontend/shared-page.js"></script>
 </body>
 </html>

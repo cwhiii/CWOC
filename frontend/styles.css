@@ -1309,26 +1309,14 @@ button.delete:hover {
     white-space: nowrap;
 }
 
-/* Weather indicator on chit cards — icon only, details on hover */
+/* Weather indicator on chit cards — icon only, details in title tooltip */
 .chit-weather-indicator {
     display: inline-flex;
     align-items: center;
-    gap: 2px;
     font-size: 0.85em;
     white-space: nowrap;
     margin-right: 2px;
     cursor: default;
-    position: relative;
-}
-.chit-wx-detail {
-    display: none;
-    font-size: 0.85em;
-    opacity: 0.85;
-    font-weight: normal;
-    margin-left: 2px;
-}
-.chit-weather-indicator:hover .chit-wx-detail {
-    display: inline;
 }
 
 .chit-card .chit-meta {

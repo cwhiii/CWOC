@@ -1016,3 +1016,13 @@ Fully implemented. Ported from `Prototypes/CWOC UI/UI.html`:
 - On hover (`.chit-weather-indicator:hover .chit-wx-detail`), details appear inline
 - Consistent across all views (Calendar cards, Tasks, Checklists, Alarms, Projects, Search)
 - Removed the view-specific precipitation logic — precipitation now always included in hover detail when > 0
+
+### Weather: icon-only display with tooltip details everywhere ✅
+- All views now show only the weather emoji icon on chits — no inline text
+- High/low temps and precipitation details are in the `title` attribute (native browser tooltip on hover)
+- Removed `.chit-wx-detail` span and hover CSS entirely — no visible text on the chit at all
+- Precipitation format: type-aware (rain/snow/thunder/drizzle), rounded to nearest cm
+- If > 0 but < 0.5cm: just says the type word (e.g. "rain")
+- If >= 0.5cm: says amount + type (e.g. "3cm snow")
+- If no precipitation: says nothing (omitted from tooltip)
+- Applied consistently in: _buildChitHeader (all card views), live-fetch callback, cache-hit display, editor compact weather, weather page day blocks

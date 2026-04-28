@@ -91,6 +91,8 @@ class Settings(BaseModel):
     all_view_end_hour: Optional[str] = "24"
     day_scroll_to_hour: Optional[str] = "5"  # initial scroll position on calendar load
     username: Optional[str] = None  # Display name for audit log attribution
+    audit_log_max_days: Optional[int] = 1096
+    audit_log_max_mb: Optional[int] = 1
 
 class Chit(BaseModel):
     id: Optional[str] = None
@@ -158,6 +160,10 @@ class Contact(BaseModel):
     tags: Optional[List[str]] = None
     created_datetime: Optional[str] = None
     modified_datetime: Optional[str] = None
+
+class ImportRequest(BaseModel):
+    mode: str   # "add" or "replace"
+    data: dict  # The full ExportEnvelope
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -302,6 +308,29 @@ def get_or_create_instance_id():
     finally:
         if conn:
             conn.close()
+
+# Export envelope builder
+def _build_export_envelope(data_type, data):
+    """Build a self-contained export envelope with metadata and payload.
+    Reads VERSION from /app/VERSION (production) or project-root VERSION (dev).
+    """
+    version = "unknown"
+    for path in ["/app/VERSION", os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "VERSION")]:
+        try:
+            with open(path, "r") as f:
+                first_line = f.readline().strip()
+                if first_line:
+                    version = first_line
+                    break
+        except (FileNotFoundError, IOError):
+            continue
+    return {
+        "type": data_type,
+        "version": version,
+        "exported_at": datetime.utcnow().isoformat() + "Z",
+        "instance_id": get_or_create_instance_id(),
+        "data": data,
+    }
 
 # Version info helpers
 def get_version_info():
@@ -727,6 +756,90 @@ def migrate_add_audit_log():
     finally:
         if conn:
             conn.close()
+
+
+def migrate_add_audit_settings():
+    """Add audit_log_max_days and audit_log_max_mb columns to settings table."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(settings)")
+        existing = {row[1] for row in cursor.fetchall()}
+        if "audit_log_max_days" not in existing:
+            cursor.execute("ALTER TABLE settings ADD COLUMN audit_log_max_days INTEGER DEFAULT 1096")
+        if "audit_log_max_mb" not in existing:
+            cursor.execute("ALTER TABLE settings ADD COLUMN audit_log_max_mb REAL DEFAULT 1.0")
+        conn.commit()
+        logger.info("Audit settings columns ready")
+    except Exception as e:
+        logger.error(f"Error adding audit settings columns: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
+def _run_auto_prune():
+    """Auto-prune audit log based on settings limits. Returns (pruned_by_age, pruned_by_size)."""
+    pruned_by_age = 0
+    pruned_by_size = 0
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        # Read audit settings
+        cursor.execute("SELECT audit_log_max_days, audit_log_max_mb FROM settings WHERE user_id = 'default_user'")
+        row = cursor.fetchone()
+        if not row:
+            return (0, 0)
+
+        max_days = row[0]
+        max_mb = row[1]
+
+        # If both limits are None, skip pruning entirely
+        if max_days is None and max_mb is None:
+            return (0, 0)
+
+        # Prune by age
+        if max_days and max_days > 0:
+            cutoff = (datetime.utcnow() - timedelta(days=max_days)).isoformat()
+            cursor.execute("DELETE FROM audit_log WHERE timestamp < ?", (cutoff,))
+            pruned_by_age = cursor.rowcount
+
+        # Prune by size — single bulk DELETE based on average row size estimate
+        if max_mb and max_mb > 0:
+            max_bytes = max_mb * 1024 * 1024
+            cursor.execute("""
+                SELECT COUNT(*),
+                       SUM(LENGTH(id) + LENGTH(entity_type) + LENGTH(entity_id) + LENGTH(action) +
+                           LENGTH(actor) + LENGTH(timestamp) + COALESCE(LENGTH(changes),0) +
+                           COALESCE(LENGTH(entity_summary),0))
+                FROM audit_log
+            """)
+            count_row = cursor.fetchone()
+            total_rows = count_row[0] or 0
+            total_size = count_row[1] or 0
+            if total_rows > 0 and total_size > max_bytes:
+                avg_row_size = total_size / total_rows
+                rows_to_keep = int(max_bytes / avg_row_size) if avg_row_size > 0 else total_rows
+                rows_to_delete = total_rows - rows_to_keep
+                if rows_to_delete > 0:
+                    cursor.execute("""
+                        DELETE FROM audit_log WHERE id IN (
+                            SELECT id FROM audit_log ORDER BY timestamp ASC LIMIT ?
+                        )
+                    """, (rows_to_delete,))
+                    pruned_by_size = cursor.rowcount
+
+        conn.commit()
+        logger.info(f"Auto-prune: removed {pruned_by_age} by age, {pruned_by_size} by size")
+    except Exception as e:
+        logger.error(f"Auto-prune error: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+    return (pruned_by_age, pruned_by_size)
 
 
 def get_current_actor() -> str:
@@ -1291,6 +1404,7 @@ migrate_add_progress_and_estimate()
 migrate_add_username()
 migrate_add_weather_data()
 migrate_add_audit_log()
+migrate_add_audit_settings()
 seed_version_info()
 
 # Create directory for contact images
@@ -1886,6 +2000,104 @@ def purge_chit(chit_id: str):
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Section 9b: Data Management Export/Import API Routes
+# ═══════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/export/chits")
+def export_chits():
+    """Export ALL chit records (including soft-deleted) as a JSON export envelope."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM chits")
+        rows = cursor.fetchall()
+
+        chits = []
+        for row in rows:
+            chit = dict(row)
+            # Deserialize JSON-serialized fields
+            chit["tags"] = deserialize_json_field(chit.get("tags"))
+            chit["checklist"] = deserialize_json_field(chit.get("checklist"))
+            chit["people"] = deserialize_json_field(chit.get("people"))
+            chit["child_chits"] = deserialize_json_field(chit.get("child_chits"))
+            chit["alerts"] = deserialize_json_field(chit.get("alerts"))
+            chit["recurrence_rule"] = deserialize_json_field(chit.get("recurrence_rule"))
+            chit["recurrence_exceptions"] = deserialize_json_field(chit.get("recurrence_exceptions"))
+            chit["weather_data"] = deserialize_json_field(chit.get("weather_data"))
+            # Convert boolean fields to native booleans
+            chit["alarm"] = bool(chit.get("alarm"))
+            chit["notification"] = bool(chit.get("notification"))
+            chit["pinned"] = bool(chit.get("pinned"))
+            chit["archived"] = bool(chit.get("archived"))
+            chit["deleted"] = bool(chit.get("deleted"))
+            chit["is_project_master"] = bool(chit.get("is_project_master"))
+            chit["all_day"] = bool(chit.get("all_day"))
+            chits.append(chit)
+
+        envelope = _build_export_envelope("chits", chits)
+        return Response(content=json.dumps(envelope, indent=2), media_type="application/json")
+    except Exception as e:
+        logger.error(f"Export chits failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
+@app.get("/api/export/userdata")
+def export_userdata():
+    """Export ALL settings and contacts records as a JSON export envelope."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        # --- Settings ---
+        cursor.execute("SELECT * FROM settings")
+        settings_rows = cursor.fetchall()
+        settings = []
+        for row in settings_rows:
+            s = dict(row)
+            s["tags"] = deserialize_json_field(s.get("tags"))
+            s["default_filters"] = deserialize_json_field(s.get("default_filters"))
+            s["custom_colors"] = deserialize_json_field(s.get("custom_colors"))
+            s["visual_indicators"] = deserialize_json_field(s.get("visual_indicators"))
+            s["chit_options"] = deserialize_json_field(s.get("chit_options"))
+            # active_clocks is a comma-separated string, not JSON — keep as-is
+            s["saved_locations"] = deserialize_json_field(s.get("saved_locations"))
+            settings.append(s)
+
+        # --- Contacts ---
+        cursor.execute("SELECT * FROM contacts")
+        contact_rows = cursor.fetchall()
+        contacts = []
+        for row in contact_rows:
+            c = dict(row)
+            c["phones"] = deserialize_json_field(c.get("phones"))
+            c["emails"] = deserialize_json_field(c.get("emails"))
+            c["addresses"] = deserialize_json_field(c.get("addresses"))
+            c["call_signs"] = deserialize_json_field(c.get("call_signs"))
+            c["x_handles"] = deserialize_json_field(c.get("x_handles"))
+            c["websites"] = deserialize_json_field(c.get("websites"))
+            c["tags"] = deserialize_json_field(c.get("tags"))
+            c["has_signal"] = bool(c.get("has_signal"))
+            c["favorite"] = bool(c.get("favorite"))
+            contacts.append(c)
+
+        envelope = _build_export_envelope("userdata", {"settings": settings, "contacts": contacts})
+        return Response(content=json.dumps(envelope, indent=2), media_type="application/json")
+    except Exception as e:
+        logger.error(f"Export userdata failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Section 10: Settings API Routes
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -1956,6 +2168,9 @@ def save_settings(settings: Settings):
             "all_view_start_hour": settings.all_view_start_hour or "0",
             "all_view_end_hour": settings.all_view_end_hour or "24",
             "day_scroll_to_hour": settings.day_scroll_to_hour or "5",
+            "username": settings.username,
+            "audit_log_max_days": settings.audit_log_max_days,
+            "audit_log_max_mb": settings.audit_log_max_mb,
         }
 
         cursor.execute(
@@ -1964,8 +2179,9 @@ def save_settings(settings: Settings):
                 user_id, time_format, sex, snooze_length, default_filters,
                 alarm_orientation, active_clocks, saved_locations, tags, custom_colors, visual_indicators, chit_options,
                 calendar_snap, week_start_day, work_start_hour, work_end_hour, work_days, enabled_periods, custom_days_count,
-                all_view_start_hour, all_view_end_hour, day_scroll_to_hour
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                all_view_start_hour, all_view_end_hour, day_scroll_to_hour,
+                username, audit_log_max_days, audit_log_max_mb
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 new_settings_dict["user_id"],
@@ -1990,6 +2206,9 @@ def save_settings(settings: Settings):
                 new_settings_dict["all_view_start_hour"],
                 new_settings_dict["all_view_end_hour"],
                 new_settings_dict["day_scroll_to_hour"],
+                new_settings_dict["username"],
+                new_settings_dict["audit_log_max_days"],
+                new_settings_dict["audit_log_max_mb"],
             )
         )
 
@@ -2005,6 +2224,13 @@ def save_settings(settings: Settings):
             logger.error(f"Audit: failed to log settings change: {str(e)}")
 
         conn.commit()
+
+        # Auto-prune audit log if limits changed
+        try:
+            _run_auto_prune()
+        except Exception as e:
+            logger.error(f"Auto-prune after settings save failed: {str(e)}")
+
         return settings
     except Exception as e:
         logger.error(f"Error saving settings: {str(e)}")
@@ -2874,6 +3100,13 @@ def clear_audit_log():
             conn.close()
 
 
+@app.post("/api/audit-log/auto-prune")
+def auto_prune_audit_log():
+    """Auto-prune audit log based on settings limits."""
+    pruned_by_age, pruned_by_size = _run_auto_prune()
+    return {"pruned_by_age": pruned_by_age, "pruned_by_size": pruned_by_size}
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Section 12: Version Management & Update Streaming
 # ═══════════════════════════════════════════════════════════════════════════
@@ -3405,6 +3638,14 @@ async def _weather_daily_loop():
 # Register background weather tasks on startup
 @app.on_event("startup")
 async def start_weather_schedulers():
+    # Auto-prune audit log in background (never blocks server startup)
+    async def _deferred_auto_prune():
+        await asyncio.sleep(10)  # Let server fully start first
+        try:
+            _run_auto_prune()
+        except Exception as e:
+            logger.error(f"Deferred auto-prune failed: {str(e)}")
+    asyncio.create_task(_deferred_auto_prune())
     asyncio.create_task(_weather_hourly_loop())
     asyncio.create_task(_weather_daily_loop())
     logger.info("Weather scheduler tasks started (hourly + daily)")

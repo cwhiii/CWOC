@@ -23,6 +23,25 @@ function _wxPageC2F(c) {
   return Math.round(c * 9 / 5 + 32);
 }
 
+/** Get precipitation type from WMO weather code. */
+function _wxPrecipType(code) {
+  if ([61, 63, 65, 66, 67, 80, 81, 82].includes(code)) return 'rain';
+  if ([71, 73, 75, 77, 85, 86].includes(code)) return 'snow';
+  if ([95, 96, 99].includes(code)) return 'thunder';
+  if ([51, 53, 55, 56, 57].includes(code)) return 'drizzle';
+  return '';
+}
+
+/** Format precipitation: nearest cm with type. Sub-0.5cm = just the type. No precip = '—'. */
+function _wxFormatPrecip(precipMm, weatherCode) {
+  if (!precipMm || precipMm <= 0) return '—';
+  var pType = _wxPrecipType(weatherCode);
+  if (!pType) pType = 'precip';
+  var cm = Math.round(precipMm / 10);
+  if (cm < 1) return pType;
+  return cm + 'cm ' + pType;
+}
+
 // ── Day-of-week abbreviations ────────────────────────────────────────────────
 var _wxDow = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -312,7 +331,8 @@ function _wxRenderTable(container, locations, results, weekStartDay, chitsByLocD
       var highF = _wxPageC2F(daily.temperature_2m_max[dd]);
       var lowF = _wxPageC2F(daily.temperature_2m_min[dd]);
       var precip = daily.precipitation_sum[dd];
-      var precipStr = precip > 0 ? (precip.toFixed(1) + ' mm') : '—';
+      var wCode = daily.weathercode[dd];
+      var precipStr = _wxFormatPrecip(precip, wCode);
 
       var blockClasses = 'weather-day-block';
       if (isToday) blockClasses += ' today';

@@ -245,26 +245,19 @@
         .export-option i { margin-right: 6px; }
     </style>
 </head>
-<body>
+<body data-page-title="People" data-page-icon="👥" data-show-nav="people">
     <div class="settings-panel">
-        <div class="header-and-buttons">
-            <h2><img src="/static/cwod_logo.png" alt="Logo" /> People</h2>
-            <div class="header-buttons">
-                <button onclick="window.location.href='/'" class="standard-button">🏠 Chits</button>
-                <button onclick="window.location.href='/frontend/settings.html'" class="standard-button">⚙️ Settings</button>
-                <button onclick="window.location.href='/frontend/contact-editor.html'" class="standard-button">
-                    <i class="fas fa-user-plus"></i> New Contact
-                </button>
-                <button id="import-btn" class="standard-button" title="Import contacts from .vcf or .csv file">
-                    <i class="fas fa-file-import"></i> Import
-                </button>
-                <button id="export-btn" class="standard-button" title="Export all contacts">
-                    <i class="fas fa-file-export"></i> Export
-                </button>
-            </div>
-        </div>
 
         <div class="people-toolbar">
+            <button onclick="window.location.href='/frontend/contact-editor.html'" class="standard-button">
+                <i class="fas fa-user-plus"></i> New Contact
+            </button>
+            <button id="import-btn" class="standard-button" title="Import contacts from .vcf or .csv file">
+                <i class="fas fa-file-import"></i> Import
+            </button>
+            <button id="export-btn" class="standard-button" title="Export all contacts">
+                <i class="fas fa-file-export"></i> Export
+            </button>
             <input type="text" id="people-search" class="people-search" placeholder="🔍 Search contacts..." autocomplete="off" />
         </div>
 
@@ -299,7 +292,6 @@
 
     <script src="/frontend/shared.js"></script>
     <script src="/frontend/shared-page.js"></script>
-    <div class="author-info">by <a href="https://www.cwholemaniii.com/pages/home.shtml" target="_blank">C.W. Holeman III</a></div>
     <script src="/frontend/contact-qr.js"></script>
     <script src="/frontend/people.js"></script>
 </body>

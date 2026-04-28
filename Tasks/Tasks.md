@@ -6,6 +6,9 @@
 
 ## Known Bugs
 
+### Mobile
+- `[ ]` 7 Day view doesn't show up in the period list
+- `[ ]` X Days view doesn't show X days
 
 ### Editor
 - notifications have a checkbox: "before due/start" wihch seems redundant & confusing. change to a drop down of before/after start / due. 
@@ -95,9 +98,8 @@ ability to import calendar data from googe & apple & windows
 ### Weather
 - `[ ]` Save expected weather per chit (forecast fields: focus, updated time, high, low, precipitation, weather code)
 - `[ ]` Display weather on calendar views
-- `[ ]` Hourly weather update for chits in next 7 days
-- `[ ]` Daily weather update for chits in next 16 days
-- `[ ]` Weather as full page like settings. Available via SHIFT+W, from views, or a button on the weather modal. Shows all saved weather's full corcast, 1 location per row, with each day as a separatte block, with the dates above, basically a large table
+- even if the page isntre relaoded, refresh the forcast every 4 hours. 
+- `[ ]` Weather  page . Available via SHIFT+W, from views, or a button on the weather modal. also, add a  row for every specific day that has weather (location & date), for non-saved locations. generalize to per city. so if there's events in non-saved locations in address1 address2, in city1, address3 and address4 in city2, and address5 in cty3, it should add 3 rows, one for each CITY. then only load/display the weather for days that have an invent in that coity on that day.
 
 ---
 
@@ -169,6 +171,7 @@ ability to import calendar data from googe & apple & windows
 - `[ ]` Notification based on start time + location + drive time
 - `[ ]` Biometric triggers (steps, heart rate, cycle state)
 - `[X]` Workgroup chat link
+- auto backup & export to other machine.
 
 ---
 

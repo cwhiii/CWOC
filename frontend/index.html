@@ -274,6 +274,19 @@
             <div class="hotkey-panel-footer">↑↓ for Asc/Desc · ESC to cancel</div>
         </div>
 
+        <!-- Navigate submenu panel (V) -->
+        <div class="hotkey-panel" id="panel-navigate">
+            <h3>🧭 Navigate</h3>
+            <div class="hotkey-panel-option" onclick="_pickNav('/')"><span class="panel-key">1</span><span class="panel-label">🏠 Chits</span></div>
+            <div class="hotkey-panel-option" onclick="_pickNav('/frontend/weather.html')"><span class="panel-key">2</span><span class="panel-label">🌤️ Weather</span></div>
+            <div class="hotkey-panel-option" onclick="_pickNav('/frontend/people.html')"><span class="panel-key">3</span><span class="panel-label">👥 People</span></div>
+            <div class="hotkey-panel-option" onclick="_pickNav('/frontend/help.html')"><span class="panel-key">4</span><span class="panel-label">❓ Help</span></div>
+            <div class="hotkey-panel-option" onclick="_pickNav('/frontend/settings.html')"><span class="panel-key">5</span><span class="panel-label">⚙️ Settings</span></div>
+            <div class="hotkey-panel-option" onclick="_pickNav('/frontend/audit-log.html')"><span class="panel-key">6</span><span class="panel-label">📋 Audit Log</span></div>
+            <div class="hotkey-panel-option" onclick="_pickNav('/frontend/trash.html')"><span class="panel-key">7</span><span class="panel-label">🗑️ Trash</span></div>
+            <div class="hotkey-panel-footer">Number keys to jump · ESC to cancel</div>
+        </div>
+
         <!-- Reference overlay (R) -->
         <div class="reference-overlay" id="reference-overlay" onclick="if(event.target===this)_closeReference()">
             <div class="reference-content">
@@ -386,6 +399,7 @@
         </div>
         <div class="author-info">by <a href="https://www.cwholemaniii.com/pages/home.shtml" target="_blank">C.W. Holeman III</a></div>
         <script src="/frontend/shared.js"></script>
+        <script src="/frontend/shared-page.js"></script>
         <script src="/frontend/main.js"></script>
     </body>
 </html>

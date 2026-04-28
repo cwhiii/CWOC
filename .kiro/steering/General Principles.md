@@ -17,6 +17,9 @@ DO NOT INSTALL THINGS!
 - Before writing a new helper, check `shared.js` and `shared-page.js` for an existing equivalent.
 - Reuse `shared-page.css` for all secondary pages. Only add page-specific styles when truly unique to that page.
 - Extract repeated logic into parameterized functions rather than copy-pasting across files.
+- **Never use inline styles in JS for things that belong in a shared CSS file.** If you're injecting DOM elements from JS, define the CSS classes in `shared-page.css` (or `styles.css` for dashboard-only) and just assign the class names. Inline style injection via JS `<style>` tags is a last resort, not a default.
+- **Proactively consolidate.** When adding new functionality, always check: can this reuse an existing shared pattern? Would a small refactor to an existing shared file make this cleaner for everyone? If the cost is trivial, do it. If it's not worth the change, leave a comment explaining why.
+- **One source of truth.** If the same HTML structure, CSS, or JS logic appears on multiple pages, it must live in a shared file (`shared-page.js`, `shared-page.css`, `shared.js`). Page-specific files should only contain what's truly unique to that page.
 
 ## Keep It Simple
 - This is a vanilla JS/HTML/CSS project with no frameworks and no build step. Do not introduce bundlers, transpilers, or JS module systems.

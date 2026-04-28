@@ -258,15 +258,8 @@
         }
     </style>
 </head>
-<body>
+<body data-page-title="Weather Forecast" data-page-icon="🌤️">
     <div class="settings-panel">
-        <div class="header-and-buttons">
-            <h2><img src="/static/cwod_logo.png" alt="Logo" /> 🌤️ Weather Forecast</h2>
-            <div class="header-buttons">
-                <button onclick="window.location.href='/'" class="standard-button">🏠 Chits</button>
-                <button onclick="window.location.href='/frontend/settings.html'" class="standard-button">⚙️ Settings</button>
-            </div>
-        </div>
 
         <div id="weather-content">
             <div class="weather-loading">
@@ -275,8 +268,6 @@
             </div>
         </div>
     </div>
-
-    <div class="author-info">by <a href="https://www.cwholemaniii.com/pages/home.shtml" target="_blank">C.W. Holeman III</a></div>
 
     <script src="/frontend/shared.js"></script>
     <script src="/frontend/shared-page.js"></script>

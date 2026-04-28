@@ -282,107 +282,7 @@
                     min-height: 44px;
                 }
             }
-            /* Google Maps button for address rows */
-            .google-maps-btn {
-                width: 28px;
-                height: 28px;
-                padding: 4px;
-                border: 1px solid #c4a882;
-                border-radius: 4px;
-                background: #fdf6e3;
-                cursor: pointer;
-                display: inline-flex;
-                align-items: center;
-                justify-content: center;
-                flex-shrink: 0;
-            }
-            .google-maps-btn:hover:not(:disabled) {
-                background: #f0e6d0;
-                border-color: #8b5a2b;
-            }
-            .google-maps-btn:disabled {
-                opacity: 0.35;
-                cursor: default;
-            }
 
-            /* ── Audit History (per-contact change tracking) ─────────────── */
-            .audit-history-empty {
-                color: #5a3e2b;
-                font-style: italic;
-                padding: 8px 0;
-                margin: 0;
-            }
-            .audit-history-entry {
-                border-bottom: 1px dashed #c4a882;
-            }
-            .audit-history-entry:last-child {
-                border-bottom: none;
-            }
-            .audit-history-row {
-                display: flex;
-                align-items: center;
-                gap: 10px;
-                padding: 6px 4px;
-                cursor: pointer;
-                font-size: 0.92em;
-            }
-            .audit-history-row:hover {
-                background-color: rgba(74, 44, 42, 0.06);
-            }
-            .audit-history-toggle {
-                font-size: 0.75em;
-                color: #4a2c2a;
-                flex-shrink: 0;
-                width: 14px;
-                text-align: center;
-            }
-            .audit-history-ts {
-                color: #5a3e2b;
-                font-family: 'Courier New', monospace;
-                font-size: 0.88em;
-                white-space: nowrap;
-            }
-            .audit-history-actor {
-                color: #1a1208;
-                font-weight: bold;
-                flex-shrink: 0;
-            }
-            .audit-history-action {
-                padding: 1px 6px;
-                border-radius: 3px;
-                font-size: 0.85em;
-                font-weight: bold;
-            }
-            .audit-action-created { color: #2e7d32; }
-            .audit-action-updated { color: #1565c0; }
-            .audit-action-deleted { color: #c62828; }
-            .audit-history-detail {
-                padding: 4px 8px 8px 28px;
-            }
-            .audit-history-no-changes {
-                color: #5a3e2b;
-                opacity: 0.7;
-            }
-            .audit-history-changes-table {
-                width: 100%;
-                border-collapse: collapse;
-                font-size: 0.88em;
-            }
-            .audit-history-changes-table th {
-                text-align: left;
-                padding: 3px 6px;
-                border-bottom: 1px solid #c4a882;
-                color: #4a2c2a;
-                font-size: 0.9em;
-            }
-            .audit-history-changes-table td {
-                padding: 3px 6px;
-                border-bottom: 1px dashed #e0d5c0;
-                color: #1a1208;
-                word-break: break-word;
-            }
-            .audit-change-old { color: #c62828; }
-            .audit-change-new { color: #2e7d32; }
         </style>
     </head>
     <body>
@@ -655,19 +555,13 @@
                         </div>
                     </div>
 
-                    <!-- Audit History (per-contact change tracking) -->
-                    <div id="contactAuditHistorySection" class="zone-container">
-                        <div class="zone-header" onclick="cwocToggleZone(event, 'contactAuditHistorySection', 'contactAuditHistoryContent')">
-                            <h2 class="zone-title">🕵️ Audit History</h2>
-                            <span class="zone-toggle-icon">🔽</span>
-                        </div>
-                        <div id="contactAuditHistoryContent" class="zone-body" style="display:none;">
-                            <div id="contactAuditHistoryContainer"></div>
-                        </div>
-                    </div>
                 </div>
 
             </div>
+        </div>
+
+        <div style="text-align:center;margin:16px 0 8px;">
+            <button class="standard-button" onclick="window.location.href='/frontend/audit-log.html?entity_type=contact&entity_id=' + encodeURIComponent(new URLSearchParams(window.location.search).get('id') || '')" style="font-size:0.95em;">📜 Audit Log</button>
         </div>
 
         <!-- ═══ Image Full-Size Modal ═══ -->
