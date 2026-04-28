@@ -1974,6 +1974,9 @@ function _showAlertModal(opts) {
   dismissBtn.className = "cwoc-alert-btn cwoc-alert-btn-primary";
   dismissBtn.textContent = "✕ Dismiss";
   dismissBtn.onclick = () => {
+    // Stop ALL sounds immediately
+    _globalStopAlarm();
+    if (typeof _globalStopTimer === 'function') _globalStopTimer();
     _dismissAlertModal(overlay, opts.onDismiss);
     // Persist dismiss and sync
     if (opts.triggerKey) _persistDismiss(opts.triggerKey);
@@ -1987,6 +1990,9 @@ function _showAlertModal(opts) {
     snoozeBtn.className = "cwoc-alert-btn";
     snoozeBtn.textContent = "💤 Snooze";
     snoozeBtn.onclick = () => {
+      // Stop ALL sounds immediately
+      _globalStopAlarm();
+      if (typeof _globalStopTimer === 'function') _globalStopTimer();
       _dismissAlertModal(overlay, opts.onDismiss);
       if (opts.snoozeKey) {
         const snoozeMs = _getSnoozeMs();
@@ -2289,33 +2295,49 @@ function _startGlobalAlertSystem() {
     syncOn('alert_dismissed', function(msg) {
       if (msg.triggerKey) _globalTriggeredAlarms.add(msg.triggerKey);
       if (msg.snoozeKey) _globalTriggeredAlarms.add(msg.snoozeKey);
+      // Stop ALL sounds
       _globalStopAlarm();
-      if (typeof _globalStopTimer === 'function') _globalStopTimer();
+      _globalStopTimer();
+      // Close ALL open alert modals (not just matching ones — dismiss means dismiss)
       document.querySelectorAll('.cwoc-alert-overlay').forEach(function(ov) {
         if (ov._alertSnoozeKey === msg.snoozeKey || ov._alertTriggerKey === msg.triggerKey) {
-          _dismissAlertModal(ov, ov._alertOnDismiss);
+          // Remove keyboard blocker and overlay without calling onDismiss (sound already stopped)
+          if (ov._blockKeys) document.removeEventListener('keydown', ov._blockKeys, true);
+          ov.remove();
         }
       });
+      document.body.style.overflow = '';
+      document.body.style.touchAction = '';
     });
 
     // Another device snoozed an alarm
     syncOn('alert_snoozed', function(msg) {
       if (msg.snoozeKey && msg.snoozeUntil) _snoozeRegistry[msg.snoozeKey] = msg.snoozeUntil;
       if (msg.triggerKey) _globalTriggeredAlarms.delete(msg.triggerKey);
+      // Stop ALL sounds
       _globalStopAlarm();
+      _globalStopTimer();
+      // Close matching modals
       document.querySelectorAll('.cwoc-alert-overlay').forEach(function(ov) {
         if (ov._alertSnoozeKey === msg.snoozeKey || ov._alertTriggerKey === msg.triggerKey) {
-          _dismissAlertModal(ov, ov._alertOnDismiss);
+          if (ov._blockKeys) document.removeEventListener('keydown', ov._blockKeys, true);
+          ov.remove();
         }
       });
+      document.body.style.overflow = '';
+      document.body.style.touchAction = '';
     });
 
     // Another device dismissed a timer
     syncOn('timer_dismissed', function(msg) {
-      if (typeof _globalStopTimer === 'function') _globalStopTimer();
+      _globalStopAlarm();
+      _globalStopTimer();
       document.querySelectorAll('.cwoc-alert-overlay').forEach(function(ov) {
-        _dismissAlertModal(ov, ov._alertOnDismiss);
+        if (ov._blockKeys) document.removeEventListener('keydown', ov._blockKeys, true);
+        ov.remove();
       });
+      document.body.style.overflow = '';
+      document.body.style.touchAction = '';
     });
 
     // Another device fired an alarm — show it here too

@@ -4328,74 +4328,118 @@ if (typeof document !== 'undefined') {
 }
 
 
-// ── WebSocket Sync Client ────────────────────────────────────────────────────
-// Connects to /ws/sync for real-time cross-device state propagation.
-// Messages are JSON objects with a "type" field indicating the event kind.
+// ── Sync Client (WebSocket primary, HTTP polling fallback) ───────────────────
+// Provides cross-device real-time sync for alarms, timers, dismiss/snooze state.
 
 window._cwocSyncWs = null;
 window._cwocSyncHandlers = {}; // type -> [callback, ...]
 window._cwocSyncReconnectDelay = 1000;
+window._cwocSyncMode = 'none'; // 'ws' | 'poll' | 'none'
+window._cwocSyncPollId = 0; // last seen poll message ID
+window._cwocSyncPollTimer = null;
 
 function initSyncWebSocket() {
-  if (window._cwocSyncWs && window._cwocSyncWs.readyState <= 1) return; // already open/connecting
+  if (window._cwocSyncMode === 'poll') return; // already fell back to polling
+  if (window._cwocSyncWs && window._cwocSyncWs.readyState <= 1) return;
 
   var proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   var url = proto + '//' + window.location.host + '/ws/sync';
+  console.log('CWOC Sync: trying WebSocket', url);
 
   try {
     var ws = new WebSocket(url);
     window._cwocSyncWs = ws;
 
     ws.onopen = function() {
+      console.log('CWOC Sync: WebSocket connected');
+      window._cwocSyncMode = 'ws';
       window._cwocSyncReconnectDelay = 1000;
+      // Stop polling if it was running
+      if (window._cwocSyncPollTimer) { clearInterval(window._cwocSyncPollTimer); window._cwocSyncPollTimer = null; }
     };
 
     ws.onmessage = function(event) {
       try {
         var msg = JSON.parse(event.data);
-        var handlers = window._cwocSyncHandlers[msg.type];
-        if (handlers) {
-          handlers.forEach(function(fn) { fn(msg); });
-        }
-      } catch (e) {
-        console.error('Sync WS message parse error:', e);
-      }
+        _dispatchSyncMessage(msg);
+      } catch (e) { console.error('Sync WS parse error:', e); }
     };
 
     ws.onclose = function() {
       window._cwocSyncWs = null;
-      // Reconnect with exponential backoff (max 30s)
-      setTimeout(initSyncWebSocket, window._cwocSyncReconnectDelay);
-      window._cwocSyncReconnectDelay = Math.min(window._cwocSyncReconnectDelay * 2, 30000);
+      if (window._cwocSyncMode === 'ws') {
+        // Was connected, try to reconnect
+        window._cwocSyncMode = 'none';
+        setTimeout(initSyncWebSocket, window._cwocSyncReconnectDelay);
+        window._cwocSyncReconnectDelay = Math.min(window._cwocSyncReconnectDelay * 2, 30000);
+      } else {
+        // Never connected — fall back to polling
+        console.log('CWOC Sync: WebSocket failed, falling back to HTTP polling');
+        _startSyncPolling();
+      }
     };
 
-    ws.onerror = function() {
-      // onclose will fire after this, triggering reconnect
-    };
+    ws.onerror = function() { /* onclose handles it */ };
   } catch (e) {
-    // WebSocket not supported or blocked — fall back silently
-    console.error('Sync WS init error:', e);
+    console.log('CWOC Sync: WebSocket not available, using HTTP polling');
+    _startSyncPolling();
+  }
+}
+
+function _startSyncPolling() {
+  if (window._cwocSyncPollTimer) return; // already polling
+  window._cwocSyncMode = 'poll';
+  // Get initial poll ID
+  fetch('/api/sync/poll?after=0').then(function(r) { return r.json(); }).then(function(d) {
+    window._cwocSyncPollId = d.last_id || 0;
+  }).catch(function() {});
+  // Poll every 2 seconds
+  window._cwocSyncPollTimer = setInterval(_pollSync, 2000);
+  console.log('CWOC Sync: HTTP polling started');
+}
+
+function _pollSync() {
+  fetch('/api/sync/poll?after=' + window._cwocSyncPollId)
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.last_id) window._cwocSyncPollId = d.last_id;
+      if (d.messages && d.messages.length > 0) {
+        d.messages.forEach(function(msg) { _dispatchSyncMessage(msg); });
+      }
+    })
+    .catch(function() {});
+}
+
+function _dispatchSyncMessage(msg) {
+  var handlers = window._cwocSyncHandlers[msg.type];
+  if (handlers) {
+    handlers.forEach(function(fn) { fn(msg); });
   }
 }
 
 /**
- * Send a sync message to all other connected clients.
- * @param {string} type - Message type (e.g., 'alarm_dismissed', 'timer_state')
- * @param {object} data - Payload data
+ * Send a sync message. Uses WebSocket if connected, HTTP POST otherwise.
  */
 function syncSend(type, data) {
-  if (!window._cwocSyncWs || window._cwocSyncWs.readyState !== 1) return;
-  try {
-    window._cwocSyncWs.send(JSON.stringify(Object.assign({ type: type }, data || {})));
-  } catch (e) {
-    console.error('Sync WS send error:', e);
+  var msg = Object.assign({ type: type }, data || {});
+
+  if (window._cwocSyncWs && window._cwocSyncWs.readyState === 1) {
+    try {
+      window._cwocSyncWs.send(JSON.stringify(msg));
+      return;
+    } catch (e) { /* fall through to HTTP */ }
   }
+
+  // HTTP fallback
+  fetch('/api/sync/send', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(msg),
+  }).catch(function(e) { console.error('Sync send error:', e); });
 }
 
 /**
  * Register a handler for a sync message type.
- * @param {string} type - Message type to listen for
- * @param {function} callback - Called with the full message object
  */
 function syncOn(type, callback) {
   if (!window._cwocSyncHandlers[type]) window._cwocSyncHandlers[type] = [];
@@ -4409,10 +4453,10 @@ if (typeof document !== 'undefined') {
   } else {
     initSyncWebSocket();
   }
-  // Reconnect when page comes back from background
   document.addEventListener('visibilitychange', function() {
     if (document.visibilityState === 'visible') {
-      initSyncWebSocket();
+      if (window._cwocSyncMode === 'none') initSyncWebSocket();
+      if (window._cwocSyncMode === 'poll') _pollSync(); // immediate poll on return
     }
   });
 }

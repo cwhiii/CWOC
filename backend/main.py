@@ -1512,8 +1512,38 @@ async def geocode_proxy(q: str = Query(..., min_length=1)):
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# Section 6b: WebSocket Sync Hub
+# Section 6b: Sync Hub (WebSocket + HTTP polling fallback)
 # ═══════════════════════════════════════════════════════════════════════════
+
+# ── HTTP polling sync queue ──
+# Each message gets a sequential ID. Clients poll with their last-seen ID.
+_sync_messages = []  # list of { id: int, data: dict, ts: float }
+_sync_next_id = 1
+_sync_max_messages = 200  # keep last 200 messages
+
+@app.post("/api/sync/send")
+async def sync_send_message(body: dict):
+    """Post a sync message. All other polling clients will receive it."""
+    global _sync_next_id
+    msg = {"id": _sync_next_id, "data": body, "ts": time.time()}
+    _sync_next_id += 1
+    _sync_messages.append(msg)
+    # Trim old messages
+    if len(_sync_messages) > _sync_max_messages:
+        _sync_messages[:] = _sync_messages[-_sync_max_messages:]
+    # Also broadcast to WebSocket clients
+    await _sync_hub.broadcast(body)
+    return {"ok": True, "id": msg["id"]}
+
+@app.get("/api/sync/poll")
+def sync_poll(after: int = Query(0)):
+    """Get sync messages after the given ID."""
+    results = [m["data"] for m in _sync_messages if m["id"] > after]
+    last_id = _sync_messages[-1]["id"] if _sync_messages else after
+    return {"messages": results, "last_id": last_id}
+
+
+# ── WebSocket sync (used when proxy supports it) ──
 
 class _SyncHub:
     """Manages WebSocket connections and broadcasts sync messages to all clients."""
@@ -1552,7 +1582,13 @@ async def websocket_sync(ws: WebSocket):
     try:
         while True:
             data = await ws.receive_json()
-            # Broadcast to all OTHER clients
+            # Also add to polling queue
+            global _sync_next_id
+            msg = {"id": _sync_next_id, "data": data, "ts": time.time()}
+            _sync_next_id += 1
+            _sync_messages.append(msg)
+            if len(_sync_messages) > _sync_max_messages:
+                _sync_messages[:] = _sync_messages[-_sync_max_messages:]
             await _sync_hub.broadcast(data, exclude=ws)
     except WebSocketDisconnect:
         _sync_hub.disconnect(ws)
