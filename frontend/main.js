@@ -1990,7 +1990,6 @@ function _showAlertModal(opts) {
     snoozeBtn.className = "cwoc-alert-btn";
     snoozeBtn.textContent = "💤 Snooze";
     snoozeBtn.onclick = () => {
-      // Stop ALL sounds immediately
       _globalStopAlarm();
       if (typeof _globalStopTimer === 'function') _globalStopTimer();
       _dismissAlertModal(overlay, opts.onDismiss);
@@ -2000,6 +1999,10 @@ function _showAlertModal(opts) {
         _persistSnooze(opts.snoozeKey, untilTs);
         if (opts.triggerKey) _globalTriggeredAlarms.delete(opts.triggerKey);
         syncSend('alert_snoozed', { snoozeKey: opts.snoozeKey, triggerKey: opts.triggerKey, snoozeUntil: untilTs });
+      }
+      // Re-render to show snooze countdown bar
+      if (currentTab === 'Alarms' && _alarmsViewMode === 'independent') {
+        setTimeout(function() { displayChits(); }, 400);
       }
     };
     btnRow.appendChild(snoozeBtn);
@@ -2314,10 +2317,8 @@ function _startGlobalAlertSystem() {
     syncOn('alert_snoozed', function(msg) {
       if (msg.snoozeKey && msg.snoozeUntil) _snoozeRegistry[msg.snoozeKey] = msg.snoozeUntil;
       if (msg.triggerKey) _globalTriggeredAlarms.delete(msg.triggerKey);
-      // Stop ALL sounds
       _globalStopAlarm();
       _globalStopTimer();
-      // Close matching modals
       document.querySelectorAll('.cwoc-alert-overlay').forEach(function(ov) {
         if (ov._alertSnoozeKey === msg.snoozeKey || ov._alertTriggerKey === msg.triggerKey) {
           if (ov._blockKeys) document.removeEventListener('keydown', ov._blockKeys, true);
@@ -2326,6 +2327,10 @@ function _startGlobalAlertSystem() {
       });
       document.body.style.overflow = '';
       document.body.style.touchAction = '';
+      // Re-render to show snooze countdown bar
+      if (currentTab === 'Alarms' && _alarmsViewMode === 'independent') {
+        displayChits();
+      }
     });
 
     // Another device dismissed a timer
@@ -2362,6 +2367,51 @@ function _startGlobalAlertSystem() {
     syncOn('timer_fired', function(msg) {
       _globalPlayTimer();
       _showTimerDoneModal(msg.timerName, function() { _globalStopTimer(); });
+    });
+
+    // Another device started a timer — start local countdown from end timestamp
+    syncOn('timer_started', function(msg) {
+      if (!msg.alertId || !msg.endTs) return;
+      var rt = _saTimerRuntime[msg.alertId];
+      if (!rt) { rt = { remaining: 0, intervalId: null, running: false }; _saTimerRuntime[msg.alertId] = rt; }
+      // Calculate remaining from absolute end timestamp
+      var remainMs = msg.endTs - Date.now();
+      if (remainMs <= 0) return;
+      rt.remaining = remainMs / 1000;
+      rt.running = true;
+      rt._endTs = msg.endTs;
+      // Re-render the alerts view if we're on it
+      if (currentTab === 'Alarms' && _alarmsViewMode === 'independent') {
+        displayChits();
+      }
+    });
+
+    // Another device paused a timer
+    syncOn('timer_paused', function(msg) {
+      if (!msg.alertId) return;
+      var rt = _saTimerRuntime[msg.alertId];
+      if (!rt) return;
+      clearInterval(rt.intervalId); rt.intervalId = null; rt.running = false;
+      if (msg.remaining !== undefined) rt.remaining = msg.remaining;
+      if (currentTab === 'Alarms' && _alarmsViewMode === 'independent') {
+        displayChits();
+      }
+    });
+
+    // Another device reset a timer
+    syncOn('timer_reset', function(msg) {
+      if (!msg.alertId) return;
+      var rt = _saTimerRuntime[msg.alertId];
+      if (rt) {
+        clearInterval(rt.intervalId); rt.intervalId = null; rt.running = false;
+        // Find the alert to get totalSeconds
+        var alert = _independentAlerts.find(function(a) { return a.id === msg.alertId; });
+        var alertData = alert ? (alert.data || alert) : {};
+        rt.remaining = alertData.totalSeconds || 0;
+      }
+      if (currentTab === 'Alarms' && _alarmsViewMode === 'independent') {
+        displayChits();
+      }
     });
 
     // Another device created/updated/deleted an independent alert — re-fetch
@@ -5552,18 +5602,54 @@ function _buildSaTimerCard(card, id, data) {
   countdownBar.addEventListener("click", () => {
     if (rt.running) {
       clearInterval(rt.intervalId); rt.intervalId = null; rt.running = false;
-      startStopBtn.textContent = "▶ Start";
-      // Bar stays visible and frozen — don't switch to inputs
+      if (startStopBtn) startStopBtn.textContent = "▶ Start";
     } else {
-      // If paused and user clicks bar, switch to input mode to edit
       _showInputMode();
     }
   });
 
-  // Set initial mode
-  if (rt.running) { _showBarMode(); _updateBar(rt.remaining); }
-  else if (rt.remaining > 0 && rt.remaining < (data.totalSeconds || 0)) { _showBarMode(); _updateBar(rt.remaining); }
-  else { _showInputMode(); }
+  // Controls (declared early so auto-start can reference startStopBtn)
+  const controls = document.createElement("div");
+  controls.className = "sa-controls";
+
+  const startStopBtn = document.createElement("button");
+  startStopBtn.className = "sa-btn";
+  startStopBtn.textContent = rt.running ? "⏸ Pause" : "▶ Start";
+
+  const resetBtn = document.createElement("button");
+  resetBtn.className = "sa-btn";
+  resetBtn.textContent = "🔄 Reset";
+
+  // Set initial mode — if running (from sync), auto-start the local countdown
+  if (rt.running) {
+    _showBarMode();
+    _updateBar(rt.remaining);
+    if (!rt.intervalId) {
+      var _fracRemainInit = rt.remaining * 10;
+      rt.intervalId = setInterval(function() {
+        _fracRemainInit = Math.max(0, _fracRemainInit - 1);
+        rt.remaining = _fracRemainInit / 10;
+        var wholeSec = Math.floor(rt.remaining);
+        var tenths = Math.floor(_fracRemainInit % 10);
+        if (wholeSec < 10) { _updateBar(wholeSec, tenths); } else { _updateBar(Math.ceil(rt.remaining)); }
+        if (_fracRemainInit <= 0) {
+          clearInterval(rt.intervalId); rt.intervalId = null; rt.running = false;
+          startStopBtn.textContent = "▶ Start";
+          rt.remaining = 0;
+          _globalPlayTimer();
+          barFill.style.width = '100%'; barFill.style.background = ''; barText.textContent = '✓ DONE';
+          _showTimerDoneModal(data.name, function() { _globalStopTimer(); });
+          if (data.loop) { setTimeout(function() { rt.remaining = data.totalSeconds || 0; startStopBtn.click(); }, 1500); }
+          else { setTimeout(function() { _showInputMode(); }, 2500); }
+        }
+      }, 100);
+      startStopBtn.textContent = "⏸ Pause";
+    }
+  } else if (rt.remaining > 0 && rt.remaining < (data.totalSeconds || 0)) {
+    _showBarMode(); _updateBar(rt.remaining);
+  } else {
+    _showInputMode();
+  }
 
   const updateDuration = () => {
     const total = (parseInt(hInput.value) || 0) * 3600 + (parseInt(mInput.value) || 0) * 60 + (parseInt(sInput.value) || 0);
@@ -5573,22 +5659,19 @@ function _buildSaTimerCard(card, id, data) {
   };
   [hInput, mInput, sInput].forEach(inp => inp.addEventListener("change", updateDuration));
 
-  // Controls
-  const controls = document.createElement("div");
-  controls.className = "sa-controls";
-
-  const startStopBtn = document.createElement("button");
-  startStopBtn.className = "sa-btn";
-  startStopBtn.textContent = rt.running ? "⏸ Pause" : "▶ Start";
+  // Wire up button handlers
   startStopBtn.onclick = () => {
     if (rt.running) {
       clearInterval(rt.intervalId); rt.intervalId = null; rt.running = false;
       startStopBtn.textContent = "▶ Start";
-      // Keep bar visible, frozen
+      syncSend('timer_paused', { alertId: id, remaining: rt.remaining });
     } else {
       if (rt.remaining <= 0) rt.remaining = data.totalSeconds || 0;
       _showBarMode();
       _updateBar(rt.remaining);
+      var endTs = Date.now() + rt.remaining * 1000;
+      rt._endTs = endTs;
+      syncSend('timer_started', { alertId: id, totalSeconds: data.totalSeconds, endTs: endTs, name: data.name });
       // Use 100ms ticks for precision; decrement by 0.1s internally
       let _fracRemain = rt.remaining * 10; // tenths of a second
       rt.intervalId = setInterval(() => {
@@ -5605,15 +5688,12 @@ function _buildSaTimerCard(card, id, data) {
           clearInterval(rt.intervalId); rt.intervalId = null; rt.running = false;
           startStopBtn.textContent = "▶ Start";
           rt.remaining = 0;
-          // Play sound (loops until dismissed)
           _globalPlayTimer();
-          // Flash full gold bar (same color as countdown)
           barFill.style.width = '100%';
           barFill.style.background = '';
           barText.textContent = '✓ DONE';
-          // Show bold modal — stop sound on dismiss
           _showTimerDoneModal(data.name, () => { _globalStopTimer(); });
-          syncSend('timer_fired', { timerName: data.name });
+          syncSend('timer_fired', { timerName: data.name, alertId: id });
           if (data.loop) {
             setTimeout(() => {
               rt.remaining = data.totalSeconds || 0;
@@ -5629,14 +5709,12 @@ function _buildSaTimerCard(card, id, data) {
     }
   };
 
-  const resetBtn = document.createElement("button");
-  resetBtn.className = "sa-btn";
-  resetBtn.textContent = "🔄 Reset";
   resetBtn.onclick = () => {
     clearInterval(rt.intervalId); rt.intervalId = null; rt.running = false;
     rt.remaining = data.totalSeconds || 0;
     startStopBtn.textContent = "▶ Start";
     _showInputMode();
+    syncSend('timer_reset', { alertId: id });
   };
 
   controls.appendChild(startStopBtn);
