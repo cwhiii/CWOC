@@ -13,3 +13,5 @@
 - **Duration field** on chits
 - **Progress % field** on chits (auto-calculate from checklist/children, or manual — needs design decision)
 - **Time estimate field** on chits
+- `[ ]` **Progress % field** on chits
+- `[ ]` **Time estimate field** on chits

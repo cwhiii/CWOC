@@ -10,7 +10,7 @@ import os
 import re
 import csv
 import io
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
 from fastapi import FastAPI, HTTPException, Query, UploadFile, File, Response
 from pydantic import BaseModel
@@ -353,6 +353,17 @@ def seed_version_info():
     try:
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
+
+        # Read the currently stored version before upserting
+        old_version = None
+        try:
+            cursor.execute("SELECT value FROM instance_meta WHERE key = 'version'")
+            row = cursor.fetchone()
+            if row:
+                old_version = row[0]
+        except Exception:
+            pass
+
         # Read version from /app/VERSION
         version = "unknown"
         try:
@@ -375,6 +386,19 @@ def seed_version_info():
             (installed_datetime,)
         )
         conn.commit()
+
+        # Audit: log version change if version actually changed
+        if old_version is not None and old_version != version:
+            try:
+                audit_conn = sqlite3.connect(DB_PATH)
+                actor = get_current_actor()
+                changes = [{"field": "version", "old": old_version, "new": version}]
+                insert_audit_entry(audit_conn, "system", "version", "updated", actor, changes=changes)
+                audit_conn.commit()
+                audit_conn.close()
+            except Exception as e:
+                logger.error(f"Audit: failed to log version change in seed_version_info: {str(e)}")
+
     except Exception as e:
         logger.error(f"Error seeding version info: {str(e)}")
     finally:
@@ -666,6 +690,132 @@ def migrate_add_weather_data():
     finally:
         if conn:
             conn.close()
+
+
+# ── Audit Log: migration + helpers ───────────────────────────────────────
+
+def migrate_add_audit_log():
+    """Create audit_log table and indexes if they don't already exist."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS audit_log (
+                id TEXT PRIMARY KEY,
+                entity_type TEXT NOT NULL,
+                entity_id TEXT NOT NULL,
+                action TEXT NOT NULL,
+                actor TEXT NOT NULL,
+                timestamp TEXT NOT NULL,
+                changes TEXT,
+                entity_summary TEXT
+            )
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_audit_entity
+            ON audit_log (entity_type, entity_id)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_audit_timestamp
+            ON audit_log (timestamp)
+        """)
+        conn.commit()
+        logger.info("Audit log table and indexes ready")
+    except Exception as e:
+        logger.error(f"Error creating audit_log table: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
+def get_current_actor() -> str:
+    """Read the username from settings for default_user.
+    Returns 'Unknown Gremlin' if no username is configured or on any error."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("SELECT username FROM settings WHERE user_id = 'default_user'")
+        row = cursor.fetchone()
+        if row and row[0]:
+            return row[0]
+        return "Unknown Gremlin"
+    except Exception:
+        return "Unknown Gremlin"
+    finally:
+        if conn:
+            conn.close()
+
+
+# Fields stored as JSON strings in SQLite that need deserialization before diff comparison
+_JSON_SERIALIZED_FIELDS = {
+    "tags", "checklist", "people", "child_chits", "alerts",
+    "recurrence_rule", "recurrence_exceptions", "weather_data",
+    "phones", "emails", "addresses", "call_signs", "x_handles",
+    "websites", "default_filters", "custom_colors", "visual_indicators",
+    "chit_options", "active_clocks", "saved_locations",
+}
+
+# Fields excluded from audit diffs by default
+_AUDIT_EXCLUDE_FIELDS = {"modified_datetime", "created_datetime"}
+
+
+def compute_audit_diff(old_dict, new_dict, exclude_fields=None):
+    """Compare two dicts field-by-field and return a list of change details.
+
+    Each entry is {"field": str, "old": any, "new": any} for fields that differ.
+    JSON-serialized fields are deserialized before comparison.
+    Excludes modified_datetime and created_datetime by default.
+    Returns empty list for non-dict input (with a logged warning).
+    """
+    if not isinstance(old_dict, dict) or not isinstance(new_dict, dict):
+        logger.warning("compute_audit_diff called with non-dict input")
+        return []
+
+    if exclude_fields is None:
+        exclude_fields = _AUDIT_EXCLUDE_FIELDS
+
+    changes = []
+    all_keys = set(old_dict.keys()) | set(new_dict.keys())
+
+    for key in sorted(all_keys):
+        if key in exclude_fields:
+            continue
+
+        old_val = old_dict.get(key)
+        new_val = new_dict.get(key)
+
+        # Deserialize JSON-serialized fields for meaningful comparison
+        if key in _JSON_SERIALIZED_FIELDS:
+            if isinstance(old_val, str):
+                old_val = deserialize_json_field(old_val)
+            if isinstance(new_val, str):
+                new_val = deserialize_json_field(new_val)
+
+        if old_val != new_val:
+            changes.append({"field": key, "old": old_val, "new": new_val})
+
+    return changes
+
+
+def insert_audit_entry(conn, entity_type, entity_id, action, actor, changes=None, entity_summary=None):
+    """Insert a single audit log row. Best-effort — never raises."""
+    try:
+        cursor = conn.cursor()
+        entry_id = str(uuid4())
+        ts = datetime.utcnow().isoformat()
+        changes_json = json.dumps(changes) if changes is not None else None
+        cursor.execute(
+            """
+            INSERT INTO audit_log (id, entity_type, entity_id, action, actor, timestamp, changes, entity_summary)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (entry_id, entity_type, str(entity_id), action, actor, ts, changes_json, entity_summary)
+        )
+    except Exception as e:
+        logger.error(f"Audit insert failed (best-effort): {str(e)}")
+
 
 # Contact DB helpers
 
@@ -1140,6 +1290,7 @@ migrate_contacts_add_new_fields()
 migrate_add_progress_and_estimate()
 migrate_add_username()
 migrate_add_weather_data()
+migrate_add_audit_log()
 seed_version_info()
 
 # Create directory for contact images
@@ -1459,6 +1610,9 @@ def update_chit(chit_id: str, chit: Chit):
         current_time = datetime.utcnow().isoformat()
         chit_tags = compute_system_tags(chit)
         if existing:
+            # Capture old state for audit diff
+            old_chit_dict = dict(zip([col[0] for col in cursor.description], existing))
+
             # Update existing chit
             cursor.execute(
                 """
@@ -1503,6 +1657,32 @@ def update_chit(chit_id: str, chit: Chit):
                     chit_id,
                 )
             )
+            # Audit logging for chit update (Task 2.2)
+            try:
+                new_chit_dict = {
+                    "title": chit.title, "note": chit.note, "tags": serialize_json_field(chit_tags),
+                    "start_datetime": chit.start_datetime, "end_datetime": chit.end_datetime,
+                    "due_datetime": chit.due_datetime, "completed_datetime": chit.completed_datetime,
+                    "status": chit.status, "priority": chit.priority, "severity": chit.severity,
+                    "checklist": serialize_json_field(chit.checklist), "alarm": chit.alarm,
+                    "notification": chit.notification, "recurrence": chit.recurrence,
+                    "recurrence_id": chit.recurrence_id, "location": chit.location, "color": chit.color,
+                    "people": serialize_json_field(chit.people), "pinned": chit.pinned,
+                    "archived": chit.archived, "deleted": chit.deleted if chit.deleted is not None else False,
+                    "is_project_master": chit.is_project_master,
+                    "child_chits": serialize_json_field(chit.child_chits),
+                    "all_day": chit.all_day if chit.all_day is not None else False,
+                    "alerts": serialize_json_field(chit.alerts),
+                    "recurrence_rule": serialize_json_field(chit.recurrence_rule),
+                    "recurrence_exceptions": serialize_json_field(chit.recurrence_exceptions),
+                    "weather_data": serialize_json_field(chit.weather_data),
+                }
+                diff = compute_audit_diff(old_chit_dict, new_chit_dict, exclude_fields={"modified_datetime", "created_datetime"})
+                if diff:
+                    actor = get_current_actor()
+                    insert_audit_entry(conn, "chit", chit_id, "updated", actor, changes=diff, entity_summary=chit.title)
+            except Exception as e:
+                logger.error(f"Audit logging failed for chit update (best-effort): {str(e)}")
         else:
             # Create new chit
             cursor.execute(
@@ -1549,6 +1729,12 @@ def update_chit(chit_id: str, chit: Chit):
                     serialize_json_field(chit.weather_data),
                 )
             )
+            # Audit logging for chit creation (Task 2.1)
+            try:
+                actor = get_current_actor()
+                insert_audit_entry(conn, "chit", chit_id, "created", actor, entity_summary=chit.title)
+            except Exception as e:
+                logger.error(f"Audit logging failed for chit creation (best-effort): {str(e)}")
         conn.commit()
         return {**chit.dict(), "id": chit_id, "tags": chit_tags, "modified_datetime": current_time}
     except Exception as e:
@@ -1565,10 +1751,22 @@ def delete_chit(chit_id: str):
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM chits WHERE id = ?", (chit_id,))
-        if not cursor.fetchone():
+        existing_chit = cursor.fetchone()
+        if not existing_chit:
             raise HTTPException(status_code=404, detail="Chit not found")
+        # Capture chit title for audit logging before soft-delete
+        chit_columns = [col[0] for col in cursor.description]
+        chit_dict = dict(zip(chit_columns, existing_chit))
+        chit_title = chit_dict.get("title")
+
         cursor.execute("UPDATE chits SET deleted = 1, modified_datetime = ? WHERE id = ?",
                        (datetime.utcnow().isoformat(), chit_id))
+        # Audit logging for chit deletion (Task 2.3)
+        try:
+            actor = get_current_actor()
+            insert_audit_entry(conn, "chit", chit_id, "deleted", actor, entity_summary=chit_title)
+        except Exception as e:
+            logger.error(f"Audit logging failed for chit deletion (best-effort): {str(e)}")
         conn.commit()
         return {"message": "Chit deleted successfully"}
     except Exception as e:
@@ -1723,6 +1921,43 @@ def save_settings(settings: Settings):
     try:
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
+
+        # --- Audit: fetch old settings before overwrite ---
+        old_settings_dict = None
+        try:
+            cursor.execute("SELECT * FROM settings WHERE user_id = ?", (settings.user_id,))
+            old_row = cursor.fetchone()
+            if old_row:
+                old_settings_dict = dict(zip([col[0] for col in cursor.description], old_row))
+        except Exception as e:
+            logger.error(f"Audit: failed to fetch old settings: {str(e)}")
+
+        # Build the new settings dict using the same serialization as the INSERT
+        new_settings_dict = {
+            "user_id": settings.user_id,
+            "time_format": settings.time_format,
+            "sex": settings.sex,
+            "snooze_length": settings.snooze_length,
+            "default_filters": serialize_json_field(settings.default_filters),
+            "alarm_orientation": settings.alarm_orientation,
+            "active_clocks": settings.active_clocks,
+            "saved_locations": settings.saved_locations,
+            "tags": serialize_json_field([t.dict() for t in settings.tags]) if settings.tags else None,
+            "custom_colors": serialize_json_field(settings.custom_colors),
+            "visual_indicators": serialize_json_field(settings.visual_indicators),
+            "chit_options": serialize_json_field(settings.chit_options),
+            "calendar_snap": settings.calendar_snap or "15",
+            "week_start_day": settings.week_start_day or "0",
+            "work_start_hour": settings.work_start_hour or "8",
+            "work_end_hour": settings.work_end_hour or "17",
+            "work_days": settings.work_days or "1,2,3,4,5",
+            "enabled_periods": settings.enabled_periods or "Itinerary,Day,Week,Work,SevenDay,Month,Year",
+            "custom_days_count": settings.custom_days_count or "7",
+            "all_view_start_hour": settings.all_view_start_hour or "0",
+            "all_view_end_hour": settings.all_view_end_hour or "24",
+            "day_scroll_to_hour": settings.day_scroll_to_hour or "5",
+        }
+
         cursor.execute(
             """
             INSERT OR REPLACE INTO settings (
@@ -1733,31 +1968,42 @@ def save_settings(settings: Settings):
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                settings.user_id,
-                settings.time_format,
-                settings.sex,
-                settings.snooze_length,
-                serialize_json_field(settings.default_filters),
-                settings.alarm_orientation,
-                settings.active_clocks,
-                settings.saved_locations,
-                # Serialize tags as list of dicts (Pydantic Tag objects need .dict())
-                serialize_json_field([t.dict() for t in settings.tags]) if settings.tags else None,
-                serialize_json_field(settings.custom_colors),
-                serialize_json_field(settings.visual_indicators),
-                serialize_json_field(settings.chit_options),
-                settings.calendar_snap or "15",
-                settings.week_start_day or "0",
-                settings.work_start_hour or "8",
-                settings.work_end_hour or "17",
-                settings.work_days or "1,2,3,4,5",
-                settings.enabled_periods or "Itinerary,Day,Week,Work,SevenDay,Month,Year",
-                settings.custom_days_count or "7",
-                settings.all_view_start_hour or "0",
-                settings.all_view_end_hour or "24",
-                settings.day_scroll_to_hour or "5"
+                new_settings_dict["user_id"],
+                new_settings_dict["time_format"],
+                new_settings_dict["sex"],
+                new_settings_dict["snooze_length"],
+                new_settings_dict["default_filters"],
+                new_settings_dict["alarm_orientation"],
+                new_settings_dict["active_clocks"],
+                new_settings_dict["saved_locations"],
+                new_settings_dict["tags"],
+                new_settings_dict["custom_colors"],
+                new_settings_dict["visual_indicators"],
+                new_settings_dict["chit_options"],
+                new_settings_dict["calendar_snap"],
+                new_settings_dict["week_start_day"],
+                new_settings_dict["work_start_hour"],
+                new_settings_dict["work_end_hour"],
+                new_settings_dict["work_days"],
+                new_settings_dict["enabled_periods"],
+                new_settings_dict["custom_days_count"],
+                new_settings_dict["all_view_start_hour"],
+                new_settings_dict["all_view_end_hour"],
+                new_settings_dict["day_scroll_to_hour"],
             )
         )
+
+        # --- Audit: compute diff and insert entry if anything changed ---
+        try:
+            if old_settings_dict:
+                audit_exclude = {"modified_datetime", "created_datetime", "user_id"}
+                changes = compute_audit_diff(old_settings_dict, new_settings_dict, exclude_fields=audit_exclude)
+                if changes:
+                    actor = get_current_actor()
+                    insert_audit_entry(conn, "settings", settings.user_id, "updated", actor, changes=changes)
+        except Exception as e:
+            logger.error(f"Audit: failed to log settings change: {str(e)}")
+
         conn.commit()
         return settings
     except Exception as e:
@@ -1833,6 +2079,12 @@ def create_contact(contact: Contact):
                 current_time,
             ),
         )
+        # Audit logging for contact creation (Task 3.1)
+        try:
+            actor = get_current_actor()
+            insert_audit_entry(conn, "contact", contact_id, "created", actor, entity_summary=display_name)
+        except Exception as e:
+            logger.error(f"Audit logging failed for contact creation (best-effort): {str(e)}")
         conn.commit()
         return contact_dict
     except Exception as e:
@@ -2010,6 +2262,9 @@ def update_contact(contact_id: str, contact: Contact):
         # Write updated .vcf file
         _write_vcf_file(contact_id, contact_dict)
 
+        # Capture old contact state for audit diff (Task 3.2)
+        old_contact_dict = dict(existing_row)
+
         # Update SQLite row
         db_fields = _serialize_contact_for_db(contact)
         cursor.execute(
@@ -2052,6 +2307,18 @@ def update_contact(contact_id: str, contact: Contact):
                 contact_id,
             ),
         )
+        # Audit logging for contact update (Task 3.2)
+        try:
+            new_contact_dict = dict(db_fields)
+            new_contact_dict["id"] = contact_id
+            new_contact_dict["modified_datetime"] = current_time
+            new_contact_dict["created_datetime"] = existing_row["created_datetime"]
+            diff = compute_audit_diff(old_contact_dict, new_contact_dict, exclude_fields={"modified_datetime", "created_datetime"})
+            if diff:
+                actor = get_current_actor()
+                insert_audit_entry(conn, "contact", contact_id, "updated", actor, changes=diff, entity_summary=display_name)
+        except Exception as e:
+            logger.error(f"Audit logging failed for contact update (best-effort): {str(e)}")
         conn.commit()
         return contact_dict
     except HTTPException:
@@ -2070,9 +2337,11 @@ def delete_contact(contact_id: str):
     try:
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
-        cursor.execute("SELECT id FROM contacts WHERE id = ?", (contact_id,))
-        if not cursor.fetchone():
+        cursor.execute("SELECT id, display_name FROM contacts WHERE id = ?", (contact_id,))
+        existing = cursor.fetchone()
+        if not existing:
             raise HTTPException(status_code=404, detail=f"Contact {contact_id} not found")
+        contact_display_name = existing[1]
 
         # Remove .vcf file from disk
         vcf_path = os.path.join(CONTACTS_DIR, f"{contact_id}.vcf")
@@ -2081,6 +2350,12 @@ def delete_contact(contact_id: str):
 
         # Delete SQLite row
         cursor.execute("DELETE FROM contacts WHERE id = ?", (contact_id,))
+        # Audit logging for contact deletion (Task 3.3)
+        try:
+            actor = get_current_actor()
+            insert_audit_entry(conn, "contact", contact_id, "deleted", actor, entity_summary=contact_display_name)
+        except Exception as e:
+            logger.error(f"Audit logging failed for contact deletion (best-effort): {str(e)}")
         conn.commit()
         return {"message": f"Contact {contact_id} deleted"}
     except HTTPException:
@@ -2374,6 +2649,232 @@ async def import_contacts(file: UploadFile = File(...)):
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Section 11.5: Audit Log API Endpoints
+# ═══════════════════════════════════════════════════════════════════════════
+
+# ── Allowed sort columns for audit log queries ────────────────────────────
+_AUDIT_SORT_COLUMNS = {"timestamp", "actor", "action", "entity_type", "entity_summary"}
+
+# ── Trim duration map ─────────────────────────────────────────────────────
+_TRIM_DURATIONS = {
+    "1h": timedelta(hours=1),
+    "1d": timedelta(days=1),
+    "1w": timedelta(weeks=1),
+    "1m": timedelta(days=30),
+    "1y": timedelta(days=365),
+}
+
+
+@app.get("/api/audit-log/export")
+def export_audit_log_csv(
+    entity_type: Optional[str] = Query(None),
+    actor: Optional[str] = Query(None),
+    since: Optional[str] = Query(None),
+    until: Optional[str] = Query(None),
+):
+    """Export audit log entries as a CSV file download.
+    Accepts same filters as GET /api/audit-log but no limit/offset — exports all matching."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+
+        query = "SELECT * FROM audit_log"
+        conditions = []
+        params = []
+
+        if entity_type:
+            conditions.append("entity_type = ?")
+            params.append(entity_type)
+        if actor:
+            conditions.append("actor = ?")
+            params.append(actor)
+        if since:
+            conditions.append("timestamp >= ?")
+            params.append(since)
+        if until:
+            conditions.append("timestamp <= ?")
+            params.append(until)
+
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
+        query += " ORDER BY timestamp DESC"
+
+        cursor = conn.cursor()
+        cursor.execute(query, params)
+        rows = cursor.fetchall()
+
+        output = io.StringIO()
+        writer = csv.writer(output)
+        columns = ["timestamp", "actor", "action", "entity_type", "entity_id", "entity_summary", "changes"]
+        writer.writerow(columns)
+
+        for row in rows:
+            writer.writerow([
+                row["timestamp"],
+                row["actor"],
+                row["action"],
+                row["entity_type"],
+                row["entity_id"],
+                row["entity_summary"] or "",
+                row["changes"] or "",
+            ])
+
+        csv_content = output.getvalue()
+        return Response(
+            content=csv_content,
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=audit_log.csv"},
+        )
+    except Exception as e:
+        logger.error(f"Error exporting audit log CSV: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to export audit log: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
+@app.get("/api/audit-log")
+def get_audit_log(
+    entity_type: Optional[str] = Query(None),
+    entity_id: Optional[str] = Query(None),
+    actor: Optional[str] = Query(None),
+    since: Optional[str] = Query(None),
+    until: Optional[str] = Query(None),
+    limit: int = Query(50),
+    offset: int = Query(0),
+    sort_by: str = Query("timestamp"),
+    sort_order: str = Query("desc"),
+):
+    """Return audit log entries with optional filters, sorting, and pagination."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+
+        # Clamp negative limit/offset to 0
+        if limit < 0:
+            limit = 0
+        if offset < 0:
+            offset = 0
+
+        # Validate sort_by against allowed columns
+        if sort_by not in _AUDIT_SORT_COLUMNS:
+            sort_by = "timestamp"
+        if sort_order.lower() not in ("asc", "desc"):
+            sort_order = "desc"
+
+        base_query = "FROM audit_log"
+        conditions = []
+        params = []
+
+        if entity_type:
+            conditions.append("entity_type = ?")
+            params.append(entity_type)
+        if entity_id:
+            conditions.append("entity_id = ?")
+            params.append(entity_id)
+        if actor:
+            conditions.append("actor = ?")
+            params.append(actor)
+        if since:
+            conditions.append("timestamp >= ?")
+            params.append(since)
+        if until:
+            conditions.append("timestamp <= ?")
+            params.append(until)
+
+        if conditions:
+            base_query += " WHERE " + " AND ".join(conditions)
+
+        # Get total count
+        cursor = conn.cursor()
+        cursor.execute(f"SELECT COUNT(*) {base_query}", params)
+        total = cursor.fetchone()[0]
+
+        # Get paginated entries
+        data_query = f"SELECT * {base_query} ORDER BY {sort_by} {sort_order} LIMIT ? OFFSET ?"
+        cursor.execute(data_query, params + [limit, offset])
+        rows = cursor.fetchall()
+
+        entries = []
+        for row in rows:
+            entry = dict(row)
+            # Deserialize changes from JSON
+            if entry.get("changes"):
+                try:
+                    entry["changes"] = json.loads(entry["changes"])
+                except (json.JSONDecodeError, TypeError):
+                    pass  # Return raw string if invalid JSON
+            entries.append(entry)
+
+        return {"entries": entries, "total": total}
+    except Exception as e:
+        logger.error(f"Error fetching audit log: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch audit log: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
+@app.delete("/api/audit-log/trim")
+def trim_audit_log(
+    older_than: str = Query(...),
+):
+    """Trim audit log entries older than a specified timeframe.
+    Accepted values: 1h, 1d, 1w, 1m, 1y."""
+    conn = None
+    try:
+        duration = _TRIM_DURATIONS.get(older_than)
+        if not duration:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid older_than value: '{older_than}'. Use one of: 1h, 1d, 1w, 1m, 1y",
+            )
+
+        cutoff = (datetime.utcnow() - duration).isoformat()
+
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM audit_log WHERE timestamp < ?", (cutoff,))
+        deleted_count = cursor.rowcount
+        conn.commit()
+
+        label_map = {"1h": "1 hour", "1d": "1 day", "1w": "1 week", "1m": "1 month", "1y": "1 year"}
+        label = label_map.get(older_than, older_than)
+
+        return {"message": f"Trimmed entries older than {label}", "deleted_count": deleted_count}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error trimming audit log: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to trim audit log: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
+@app.delete("/api/audit-log")
+def clear_audit_log():
+    """Delete all audit log entries."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM audit_log")
+        total = cursor.fetchone()[0]
+        cursor.execute("DELETE FROM audit_log")
+        conn.commit()
+        return {"message": "Audit log cleared", "deleted_count": total}
+    except Exception as e:
+        logger.error(f"Error clearing audit log: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to clear audit log: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Section 12: Version Management & Update Streaming
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -2404,6 +2905,19 @@ async def run_update():
                 if not os.path.isfile(CONFIGURINATOR_PATH):
                     yield 'data: {"type":"error","message":"Configurinator script not found"}\n\n'
                     return
+
+                # Read the current version before the update starts (for audit)
+                old_version = None
+                try:
+                    audit_pre_conn = sqlite3.connect(DB_PATH)
+                    audit_pre_cursor = audit_pre_conn.cursor()
+                    audit_pre_cursor.execute("SELECT value FROM instance_meta WHERE key = 'version'")
+                    row = audit_pre_cursor.fetchone()
+                    if row:
+                        old_version = row[0]
+                    audit_pre_conn.close()
+                except Exception:
+                    pass
 
                 try:
                     process = await asyncio.create_subprocess_exec(
@@ -2446,6 +2960,19 @@ async def run_update():
                         pass
                     installed_datetime = datetime.utcnow().isoformat() + "Z"
                     update_version_info(version, installed_datetime)
+
+                    # Audit: log the upgrade if version changed
+                    try:
+                        if old_version is not None and old_version != version:
+                            audit_conn = sqlite3.connect(DB_PATH)
+                            actor = get_current_actor()
+                            changes = [{"field": "version", "old": old_version, "new": version}]
+                            insert_audit_entry(audit_conn, "system", "version", "updated", actor, changes=changes)
+                            audit_conn.commit()
+                            audit_conn.close()
+                    except Exception as e:
+                        logger.error(f"Audit: failed to log version change in run_update: {str(e)}")
+
                     log_lines.append("[OK] Update complete! Version: " + version)
                     yield f'data: {json.dumps({"type":"done","exit_code":0,"version":version})}\n\n'
 

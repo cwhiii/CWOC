@@ -6,21 +6,43 @@
 
 ## Known Bugs
 
+
 ### Editor
+- notifications have a checkbox: "before due/start" wihch seems redundant & confusing. change to a drop down of before/after start / due. 
+- add a "loop notificaiton until acknoledged" functionality. this basically a snooze for notifications. it should reuse what the "notify at start" alert is doing. 
+- clean up behavior of all notifications to be consistant.
+- get rid of the filter button on notificationtion zone.
+- change the add order for alerts: notifications, alarms, timeers, stopwatcvhes
+
 - `[ ]` Can't save health indicators
+
 
 ---
 
 ## Easy Fixes / Low-Hanging Fruit
 
-*All items from this batch completed — see done.md*
-- `[ ]` **Progress % field** on chits
-- `[ ]` **Time estimate field** on chits
+- on settgins page, move week starts & views hours above the checkboxes for enabled periods. generally clean upo the order, and put options for each one below that one. so X days count should be direcly below rthe checkbox to enable X day checkbox, etc. 
+- `[ ]` Remove the Save Search button for now (park it in parking_lot.md)
+- `[ ]` Move the Clock button back to its original position; move Weather button to where Clock was (shift-click → full page, normal click → modal)
+- `[ ]` Better footer styling
+- `[ ]` Hide Completes (not past-due) sidebar toggle button — persist state across sessions
+- `[ ]` Box/group all sidebar filters with a tap/click to collapse each group — persist collapsed/expanded state across sessions
+- `[ ]` Style the Period dropdown in the sidebar
+- `[ ]` Task view: don't show created/updated dates or weather text — only show the weather icon
+- `[ ]` Update the weather flash colors to match the HST bar colors
+- `[ ]` Screenshot and video walkthrough of the app
+- `[ ]` **Custom Colors cleanup** — clean up the color name labels (make user-settable, or just don't display them). Use horizontal rows for the color swatches so the block is shorter.
+- `[ ]` **Settings blocks collapsible** — make each settings block collapsible like zones in the chit editor
+- `[ ]` **Settings layout reorganization** — collect blocks that grow/scroll into their own row. balance this with Arrange short blocks side-by-side with other short blocks, long blocks with long blocks (fixed layout, not dynamic reflow). Order by most-frequently-accessed near the top.
 
 
 ---
 
 ## Medium Features
+ability to import calendar data from googe & apple & windows
+
+### Templates
+- a tool for making a chit, saving it as a template, and having the ability to auto-populate a new chit with the values/variables in it. probaly requires a new chit editor Mode, etc. And a SHIFT+click on new chit button, ot a button to "Make this a template"  in the editor itself, along with a SHIFT+K hotlkey 
 
 ### Data Management (Settings Page)
 - `[ ]` New "Data Management" settings box with download/upload controls
@@ -44,11 +66,13 @@
 
 ### Calendar & Scheduling
 - `[ ]` Show alarms/notifications/timers on calendar view
-- `[ ]` Jitter for reminders (±X minutes, configurable globally and per-chit)
+- `[ ]` Jitter for reminders (±X minutes, configurable globally and per-chit, including to disable fo this chit, and to use a different value for this chit.)
 - `[ ]` Alarm: chained variable-length intervals (5 min, then 4, then 4...)
 - `[ ]` Busy/Free/Unspecified status for calendar events
 - `[ ]` Declined events view
 - `[ ]` Time zones support on chits with dates
+- `[ ]` Weather & clock on the sides of the current date block? Show the HST bar as part of that block (without numbers)?
+- `[ ]` Calendar view: for all days with weather, show each location/city on its own row
 
 ### Alerts & Notifications
 - `[ ]` Persistent/nag/alarm mode (force acknowledgement)
@@ -93,7 +117,7 @@
 - `[ ]` Each user has their own chits, contacts, and settings
 - `[ ]` User switcher
 - all users get a "Profile" page, with all the info as in a contact. Plus password
-- ALl users on the system are automctiaclly gnereated ass Contacts for all other users, and their contact info is syncted with any changes in the user's profile. 
+- ALl users on the system are automctiaclly gnereated as Contacts for all other users, and their contact info is synced with any changes in the user's profile. ? Decisions to be made here.
 - `[ ]` **Sharing by chit** — share a chit so all users on the instance can access it
 - `[ ]` **Sharing by tag** — anything tagged XYZ for user A, user B also gets access (or a clone)
 - `[ ]` Shared calendars between users via tag-based sharing

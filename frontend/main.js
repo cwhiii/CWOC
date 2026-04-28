@@ -362,7 +362,7 @@ function _buildChitHeader(chit, titleHtml, settings) {
     }
   }
 
-  // Weather indicator — stored weather_data or async-populated fallback
+  // Weather indicator — icon only, details on hover
   if (chit.location && chit.location.trim()) {
     var weatherMode = (settings || {}).weather || 'always';
     if (typeof _shouldShow === 'function' && _shouldShow(weatherMode, 'card')) {
@@ -379,13 +379,11 @@ function _buildChitHeader(chit, titleHtml, settings) {
         var wdLowF = _celsiusToFahrenheit(wd.low);
         var wdStale = _isWeatherStale(wd.updated_time) ? '⏳' : '';
         var wdDetail = wdHighF + '°/' + wdLowF + '°';
-        // Show precipitation for Day/Week/Work/X-Days views
-        var _showPrecip = ['Day', 'Week', 'Work', 'SevenDay'].includes(currentView);
-        if (_showPrecip && wd.precipitation !== undefined) {
+        if (wd.precipitation !== undefined && wd.precipitation > 0) {
           var wdPrecipIn = Math.ceil(wd.precipitation * 0.0393701 * 10) / 10;
           if (wdPrecipIn > 0) wdDetail += ' ' + wdPrecipIn + '"';
         }
-        wxSpan.innerHTML = wdStale + wdIcon + ' <span class="chit-wx-detail">' + _escHtml(wdDetail) + '</span> ';
+        wxSpan.innerHTML = wdStale + wdIcon + '<span class="chit-wx-detail">' + _escHtml(wdDetail) + '</span>';
         wxSpan.title = wdDetail + (wdStale ? ' (stale)' : '');
       } else {
         // Fallback: live-fetch weather indicator
@@ -393,10 +391,10 @@ function _buildChitHeader(chit, titleHtml, settings) {
         var wxCached = null;
         try { wxCached = JSON.parse(localStorage.getItem(wxCacheKey)); } catch (e) {}
         if (wxCached && wxCached.icon && (Date.now() - wxCached.ts < 3600000)) {
-          wxSpan.innerHTML = wxCached.icon + ' <span class="chit-wx-detail">' + _escHtml(wxCached.tooltip) + '</span> ';
+          wxSpan.innerHTML = wxCached.icon + '<span class="chit-wx-detail">' + _escHtml(wxCached.tooltip) + '</span>';
           wxSpan.title = wxCached.tooltip;
         } else {
-          wxSpan.textContent = '⏳ ';
+          wxSpan.textContent = '⏳';
           wxSpan.title = 'Loading weather…';
           _queueChitWeatherFetch(chit.location, wxSpan);
         }
@@ -1515,7 +1513,13 @@ function _prefetchChitWeather(chitList) {
 
 // ── Weather page → Day view navigation intent ───────────────────────────────
 
-function _handleWeatherNavIntent() {
+var _wxNavPending = null;
+
+/**
+ * Check for weather nav intent EARLY — before fetchChits.
+ * Sets currentTab/currentView/currentWeekStart so fetchChits renders the right day.
+ */
+function _checkWeatherNavIntent() {
   var raw;
   try { raw = sessionStorage.getItem('cwoc_wx_nav'); } catch (e) { return; }
   if (!raw) return;
@@ -1525,25 +1529,38 @@ function _handleWeatherNavIntent() {
   try { nav = JSON.parse(raw); } catch (e) { return; }
   if (!nav || !nav.date) return;
 
-  console.debug('Weather nav intent:', nav);
+  console.debug('Weather nav: detected intent', nav);
 
-  // Switch to Calendar → Day view on the target date
   var parts = nav.date.split('-');
   var targetDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
   if (isNaN(targetDate.getTime())) return;
 
+  // Override state BEFORE fetchChits runs — so displayChits renders Day view on this date
   currentTab = 'Calendar';
   currentView = 'Day';
   currentWeekStart = targetDate;
   _weekViewDayOffset = 0;
 
-  // Update UI
+  // Store location for flashing after chits render
+  _wxNavPending = nav.location || null;
+}
+
+/**
+ * Called from fetchChits .then() — polls for rendered chit elements then flashes.
+ */
+function _executeWeatherFlash() {
+  if (!_wxNavPending) return;
+  var location = _wxNavPending;
+  _wxNavPending = null;
+
+  console.debug('Weather flash: starting poll for elements, location="' + location + '"');
+
+  // Update sidebar UI to reflect Calendar/Day
   document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
   var calTab = document.querySelector(".tab[onclick=\"filterChits('Calendar')\"]");
   if (calTab) calTab.classList.add('active');
   var sel = document.getElementById('period-select');
   if (sel) sel.value = 'Day';
-  // Show/hide sidebar sections for Calendar
   var orderSection = document.getElementById('section-order');
   if (orderSection) orderSection.style.display = 'none';
   var periodSection = document.getElementById('section-period');
@@ -1551,45 +1568,66 @@ function _handleWeatherNavIntent() {
   var yearWeekContainer = document.getElementById('year-week-container');
   if (yearWeekContainer) yearWeekContainer.style.display = '';
 
-  updateDateRange();
-  displayChits();
-
-  // Flash chits at the matching location after a delay for DOM to settle
-  if (nav.location) {
-    setTimeout(function() { _flashChitsAtLocation(nav.location); }, 800);
-  }
+  // Poll until chit elements appear in the DOM
+  var attempts = 0;
+  var poller = setInterval(function() {
+    attempts++;
+    var els = document.querySelectorAll('[data-chit-id]');
+    console.debug('Weather flash poll #' + attempts + ': found ' + els.length + ' elements');
+    if (els.length > 0 || attempts > 30) {
+      clearInterval(poller);
+      if (els.length > 0) {
+        _flashChitsAtLocation(location);
+      } else {
+        console.debug('Weather flash: no chit elements found after 30 polls — no events on this day?');
+      }
+    }
+  }, 150);
 }
 
 function _flashChitsAtLocation(location) {
   var locLower = location.toLowerCase().trim();
-  // Find all rendered chit elements
   var els = document.querySelectorAll('[data-chit-id]');
   var matched = [];
-  var allVisible = [];
 
   els.forEach(function(el) {
     var chitId = el.dataset.chitId;
     var chit = chits.find(function(c) { return c.id === chitId; });
     if (!chit) return;
-    allVisible.push(el);
     var chitLoc = (chit.location || '').toLowerCase().trim();
     if (chitLoc && locLower && (chitLoc.indexOf(locLower) >= 0 || locLower.indexOf(chitLoc) >= 0)) {
       matched.push(el);
     }
   });
 
-  // If we found location matches, flash those. Otherwise flash all visible chits on this day.
-  var toFlash = matched.length > 0 ? matched : allVisible;
-  console.debug('Weather flash: location="' + locLower + '", matched=' + matched.length + ', flashing=' + toFlash.length);
+  console.debug('Weather flash: location="' + locLower + '", matched=' + matched.length);
 
-  toFlash.forEach(function(el) {
-    el.classList.add('wx-flash');
-    setTimeout(function() { el.classList.remove('wx-flash'); }, 3500);
+  matched.forEach(function(el) {
+    // Store original background
+    var origBg = el.style.backgroundColor || '';
+    var count = 0;
+    var flashInterval = setInterval(function() {
+      count++;
+      if (count > 6) {
+        clearInterval(flashInterval);
+        el.style.backgroundColor = origBg;
+        el.style.outline = '';
+        return;
+      }
+      if (count % 2 === 1) {
+        // Dark beat
+        el.style.backgroundColor = '#c8b830';
+        el.style.outline = '3px solid rgba(200,190,60,0.7)';
+      } else {
+        // Light beat
+        el.style.backgroundColor = origBg;
+        el.style.outline = '';
+      }
+    }, 500);
   });
 
-  // Scroll the first one into view
-  if (toFlash.length > 0) {
-    toFlash[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+  if (matched.length > 0) {
+    matched[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 }
 
@@ -2188,7 +2226,26 @@ function attachEmptySlotCreate(col, day, defaultDurationMin) {
 function _restoreUIState() {
   try {
     const raw = localStorage.getItem('cwoc_ui_state');
-    if (!raw) return false;
+    if (!raw) {
+      // No editor-return state — check for refresh recovery
+      try {
+        var refreshRaw = sessionStorage.getItem('cwoc_refresh_state');
+        if (refreshRaw) {
+          var rs = JSON.parse(refreshRaw);
+          if (rs.tab) currentTab = rs.tab;
+          if (rs.view) currentView = rs.view;
+          if (rs.weekStart) currentWeekStart = new Date(rs.weekStart);
+          // Update tab highlight
+          document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
+          var calTab = document.querySelector(".tab[onclick=\"filterChits('" + currentTab + "')\"]");
+          if (calTab) calTab.classList.add('active');
+          var periodSel = document.getElementById('period-select');
+          if (periodSel) periodSel.value = currentView;
+          return true;
+        }
+      } catch (e) { /* ignore */ }
+      return false;
+    }
     const state = JSON.parse(raw);
     localStorage.removeItem('cwoc_ui_state'); // one-time restore
 
@@ -2511,8 +2568,8 @@ function fetchChits() {
       if (typeof _globalCheckNotifications === "function") _globalCheckNotifications();
       // Pre-fetch weather for chits with locations (populates cache for all views)
       _prefetchChitWeather(chits);
-      // Check for weather page navigation intent (day view + flash location chits)
-      _handleWeatherNavIntent();
+      // Execute weather flash if navigating from weather page
+      _executeWeatherFlash();
     })
     .catch((err) => {
       console.error("Error fetching chits:", err);
@@ -2574,6 +2631,16 @@ function displayChits() {
     console.error("Chit list container not found");
     return;
   }
+
+  // Persist current view state to sessionStorage for refresh recovery
+  try {
+    sessionStorage.setItem('cwoc_refresh_state', JSON.stringify({
+      tab: currentTab,
+      view: currentView,
+      weekStart: currentWeekStart ? currentWeekStart.toISOString() : null,
+    }));
+  } catch (e) { /* ignore */ }
+
   const searchText = document.getElementById("search")?.value?.toLowerCase() || "";
 
   let filteredChits = chits.filter((chit) => {
@@ -3011,16 +3078,20 @@ function displayWeekView(chitsToDisplay, opts) {
       let _pos = 0;
       while (true) { let c = false; for (let t = _startMin; t < _endMin; t++) { if (_timeSlots[t].includes(_pos)) { c = true; break; } } if (!c) break; _pos++; }
       for (let t = _startMin; t < _endMin; t++) { _timeSlots[t].push(_pos); }
-      _evData.push({ chit, info, top: _top, height: _height, pos: _pos });
+      _evData.push({ chit, info, top: _top, height: _height, pos: _pos, startMin: _startMin, endMin: _endMin });
     });
-    const _maxOvlp = Math.max(1, ...Object.values(_timeSlots).map(s => s.length));
 
-    _evData.forEach(({ chit, info, top, height, pos }) => {
+    _evData.forEach(({ chit, info, top, height, pos, startMin, endMin }) => {
+      // Calculate max overlap only for the time slots THIS event occupies
+      let _localMax = 1;
+      for (let t = startMin; t < endMin; t++) {
+        if (_timeSlots[t] && _timeSlots[t].length > _localMax) _localMax = _timeSlots[t].length;
+      }
       const ev = document.createElement("div");
       ev.className = "timed-event";
       ev.dataset.chitId = chit.id;
       if (chit.status === "Complete") ev.classList.add("completed-task");
-      const _wPct = 95 / _maxOvlp;
+      const _wPct = 95 / _localMax;
       ev.style.top = `${top}px`;
       ev.style.height = `${height}px`;
       applyChitColors(ev, chitColor(chit));
@@ -3432,12 +3503,21 @@ function displayDayView(chitsToDisplay, opts) {
     }
     for (let t = startTime; t < endTime; t++) { timeSlots[t].push(position); }
 
+    dayChitsMap.push({ chit, info, startTime, endTime, position, height: Math.max(endTime - startTime, 30) });
+  });
+
+  // Second pass: render events with per-event local overlap width
+  const dayChitsMapFinal = [];
+  dayChitsMap.forEach(({ chit, info, startTime, endTime, position, height }) => {
+    // Calculate max overlap only for the time slots THIS event occupies
+    let localMax = 1;
+    for (let t = startTime; t < endTime; t++) {
+      if (timeSlots[t] && timeSlots[t].length > localMax) localMax = timeSlots[t].length;
+    }
     const el = document.createElement("div");
     el.className = "day-event";
-    let height = endTime - startTime;
-    if (height < 30) height = 30;
-    const maxOverlap = Math.max(...Object.values(timeSlots).map(s => s.length));
-    const widthPct = 95 / maxOverlap;
+    el.dataset.chitId = chit.id;
+    const widthPct = 95 / localMax;
     el.style.cssText = `top:${startTime}px;height:${height}px;left:${position * widthPct}%;width:${widthPct - 1}%;position:absolute;box-sizing:border-box;`;
     applyChitColors(el, chitColor(chit));
     el.title = calendarEventTooltip(chit, info);
@@ -3446,7 +3526,7 @@ function displayDayView(chitsToDisplay, opts) {
     el.innerHTML = `${calendarEventTitle(chit, info.isDueOnly, info, _viSettings, 'calendar-slot')}<br>${timeLabel}`;
     attachCalendarChitEvents(el, chit);
     eventsContainer.appendChild(el);
-    dayChitsMap.push({ el, chit, info });
+    dayChitsMapFinal.push({ el, chit, info });
   });
 
   dayView.appendChild(eventsContainer);
@@ -3458,7 +3538,7 @@ function displayDayView(chitsToDisplay, opts) {
   renderTimeBar("Day");
 
   _loadCalSnapSetting().then(() => {
-    enableCalendarDrag(dayView, dayViewColumns, dayViewDays, dayChitsMap);
+    enableCalendarDrag(dayView, dayViewColumns, dayViewDays, dayChitsMapFinal);
   });
 
   // Enable pinch-to-zoom on mobile (vertical axis only)
@@ -3494,10 +3574,8 @@ function displayYearView(chitsToDisplay) {
   months.forEach((month, idx) => {
     const monthBlock = document.createElement("div");
     monthBlock.className = "year-month";
-    monthBlock.style.flex = "1 0 25%";
     monthBlock.style.padding = "10px";
     monthBlock.style.boxSizing = "border-box";
-    monthBlock.style.minWidth = "200px";
 
     const monthHeader = document.createElement("div");
     monthHeader.className = "month-header";
@@ -4246,16 +4324,20 @@ function displaySevenDayView(chitsToDisplay, opts) {
       let _p = 0;
       while (true) { let c = false; for (let t = _s; t < _e; t++) { if (_ts7[t].includes(_p)) { c = true; break; } } if (!c) break; _p++; }
       for (let t = _s; t < _e; t++) { _ts7[t].push(_p); }
-      _ed7.push({ chit, info, top: _top, height: _height, pos: _p });
+      _ed7.push({ chit, info, top: _top, height: _height, pos: _p, startMin: _s, endMin: _e });
     });
-    const _mo7 = Math.max(1, ...Object.values(_ts7).map(s => s.length));
 
-    _ed7.forEach(({ chit, info, top, height, pos }) => {
+    _ed7.forEach(({ chit, info, top, height, pos, startMin, endMin }) => {
+      // Calculate max overlap only for the time slots THIS event occupies
+      let _localMax = 1;
+      for (let t = startMin; t < endMin; t++) {
+        if (_ts7[t] && _ts7[t].length > _localMax) _localMax = _ts7[t].length;
+      }
       const ev = document.createElement("div");
       ev.className = "timed-event";
       ev.dataset.chitId = chit.id;
       if (chit.status === "Complete") ev.classList.add("completed-task");
-      const _w = 95 / _mo7;
+      const _w = 95 / _localMax;
       ev.style.top = `${top}px`;
       ev.style.height = `${height}px`;
       applyChitColors(ev, chitColor(chit));
@@ -5362,6 +5444,8 @@ document.addEventListener("DOMContentLoaded", function () {
     }
     // Now fetch chits and render with correct settings
     _applyEnabledPeriods();
+    // Check for weather page nav intent BEFORE fetching — overrides view/date state
+    _checkWeatherNavIntent();
     fetchChits();
     updateDateRange();
     // Prefetch weather for all saved locations (async, non-blocking)

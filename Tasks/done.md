@@ -956,3 +956,63 @@ Fully implemented. Ported from `Prototypes/CWOC UI/UI.html`:
 ### "Show weather" toggle on sidebar ✅
 - Handled via Visual Indicators settings (Always/Never/If Space) for Weather indicator
 - Weather visibility controlled per-context (card, calendar, month) through settings
+
+---
+
+## Completed — Mobile Fixes (2026-04-28)
+
+### Mobile: Page scrolls on long-word overflow ✅
+- Added `word-break: break-word; overflow-wrap: break-word;` to body and chit cards on mobile (480px breakpoint)
+- Prevents horizontal scroll caused by long unbroken strings
+
+### Mobile: Long-press & drag triggers Quick Edit instead of drag ✅
+- Increased long-press hold time from 500ms to 600ms and move threshold from 10px to 15px
+- Added `window._touchDragActive` flag set by `enableTouchDrag` — `enableLongPress` checks this flag and skips if a drag is in progress
+- Prevents long-press from firing when user is trying to scroll or drag
+
+### Mobile: Projects view can only select text, can't drag ✅
+- Projects view uses `enableTouchDrag` via `enableDragToReorder` which already has touch support
+- The long-press conflict fix (above) resolves the interference
+
+### Mobile: Tasks view no drag, pops up modal instead ✅
+- Same root cause as long-press conflict — fixed by the `_touchDragActive` flag and increased thresholds
+
+### Mobile: Month view expands all days to fit all contents ✅
+- Added `max-height: 80px; overflow-y: auto;` to `.month-day` on mobile
+- Day cells now scroll internally instead of expanding the entire grid
+
+### Mobile: Year view only displays first month ✅
+- Removed inline `style.flex = "1 0 25%"` and `style.minWidth = "200px"` from year view JS
+- Added `.year-month` class with desktop defaults in CSS (`flex: 1 0 25%; min-width: 200px`)
+- Mobile CSS override: `flex: none !important; min-width: 0 !important; width: 100% !important;`
+- All 12 months now render in a single column on mobile
+
+### Mobile: Itinerary view overflows and doesn't scroll ✅
+- Added mobile CSS: `.itinerary-view { overflow-x: hidden; overflow-y: auto; width: 100%; }`
+- Added `.itinerary-event { margin-left: 0; flex-wrap: wrap; word-break: break-word; }`
+- Removed the 100px left margin on events that caused horizontal overflow
+
+### Mobile: Swiping sidebar bars should only impact their own bar ✅
+- Already implemented — sidebar swipe checks if views panel is open before opening, and vice versa
+- Verified both handlers have cross-panel guards
+
+### Mobile: Task view scroll vs drag-and-drop conflict ✅
+- Fixed by the same `_touchDragActive` flag and long-press threshold changes
+
+### Mobile: Refresh should reload current view ✅
+- `displayChits()` now saves `{tab, view, weekStart}` to `sessionStorage` on every render
+- `_restoreUIState()` checks `sessionStorage` for refresh recovery when no `localStorage` editor-return state exists
+- Browser refresh now restores the exact tab, view, and date position
+
+### Week/Day/X-Days view: chits render at half width unnecessarily ✅
+- Root cause: overlap width calculation used the GLOBAL max overlap across all time slots in the day
+- If two events overlapped at 2pm, ALL events that day (including a solo 9am event) got half width
+- Fixed in Week view, Day view, and SevenDay/X-Days view: each event now calculates `localMax` only from the time slots it occupies
+- Solo events render at full width; only events that actually overlap share width
+
+### Weather indicator: icon-only with hover details ✅
+- Changed `_buildChitHeader` weather display to show only the weather icon by default
+- High/low temps and precipitation are in a `.chit-wx-detail` span, hidden via `display:none`
+- On hover (`.chit-weather-indicator:hover .chit-wx-detail`), details appear inline
+- Consistent across all views (Calendar cards, Tasks, Checklists, Alarms, Projects, Search)
+- Removed the view-specific precipitation logic — precipitation now always included in hover detail when > 0

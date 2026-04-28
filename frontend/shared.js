@@ -3334,6 +3334,7 @@ function enableTouchDrag(element, callbacks) {
     function _onTouchStart(e) {
       const data = _extractTouchData(e);
       if (!data) return;
+      window._touchDragActive = true;
       if (typeof callbacks.onStart === 'function') {
         callbacks.onStart(data);
       }
@@ -3349,6 +3350,7 @@ function enableTouchDrag(element, callbacks) {
     }
 
     function _onTouchEnd(e) {
+      window._touchDragActive = false;
       const data = _extractTouchData(e);
       if (!data) return;
       if (typeof callbacks.onEnd === 'function') {
@@ -3823,11 +3825,13 @@ function enableLongPress(el, callback) {
   var _lpFired = false;
   var _startX = 0;
   var _startY = 0;
-  var HOLD_MS = 500;
-  var MOVE_THRESHOLD = 10;
+  var HOLD_MS = 600;
+  var MOVE_THRESHOLD = 15;
 
   el.addEventListener('touchstart', function (e) {
     if (e.touches.length !== 1) return;
+    // Don't start long-press if a drag operation is in progress
+    if (window._touchDragActive) return;
     _lpFired = false;
     _startX = e.touches[0].clientX;
     _startY = e.touches[0].clientY;

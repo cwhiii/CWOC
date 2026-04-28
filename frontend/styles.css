@@ -1309,20 +1309,26 @@ button.delete:hover {
     white-space: nowrap;
 }
 
-/* Weather indicator on chit cards */
+/* Weather indicator on chit cards — icon only, details on hover */
 .chit-weather-indicator {
     display: inline-flex;
     align-items: center;
-    gap: 3px;
+    gap: 2px;
     font-size: 0.85em;
     white-space: nowrap;
-    margin-right: 4px;
+    margin-right: 2px;
     cursor: default;
+    position: relative;
 }
 .chit-wx-detail {
+    display: none;
     font-size: 0.85em;
     opacity: 0.85;
     font-weight: normal;
+    margin-left: 2px;
+}
+.chit-weather-indicator:hover .chit-wx-detail {
+    display: inline;
 }
 
 .chit-card .chit-meta {
@@ -1946,21 +1952,27 @@ button.delete:hover {
 .author-info a { color: #4a2c2a; text-decoration: underline; }
 .author-info a:hover { color: #1a1208; }
 
+/* ── Year view month blocks ────────────────────────────────────────────── */
+.year-month {
+  flex: 1 0 25%;
+  min-width: 200px;
+}
+
 /* ── Weather nav flash animation ───────────────────────────────────────── */
 @keyframes wxFlash {
-  0%   { box-shadow: 0 0 0 0 rgba(212,175,55,0);   outline: 3px solid transparent;  background-color: inherit; }
-  10%  { box-shadow: 0 0 20px 8px rgba(212,175,55,1); outline: 3px solid #d4af37;    background-color: #fff3b0; }
-  25%  { box-shadow: 0 0 4px 2px rgba(212,175,55,0.2); outline: 3px solid transparent; background-color: inherit; }
-  40%  { box-shadow: 0 0 20px 8px rgba(212,175,55,1); outline: 3px solid #d4af37;    background-color: #fff3b0; }
-  55%  { box-shadow: 0 0 4px 2px rgba(212,175,55,0.2); outline: 3px solid transparent; background-color: inherit; }
-  70%  { box-shadow: 0 0 20px 8px rgba(212,175,55,1); outline: 3px solid #d4af37;    background-color: #fff3b0; }
-  85%  { box-shadow: 0 0 4px 2px rgba(212,175,55,0.2); outline: 3px solid transparent; background-color: inherit; }
-  100% { box-shadow: 0 0 0 0 rgba(212,175,55,0);   outline: 3px solid transparent;  background-color: inherit; }
+  0%   { box-shadow: inset 0 0 0 0 rgba(200,190,60,0); outline: 0px solid transparent; filter: brightness(1); }
+  12%  { box-shadow: inset 0 0 30px 10px rgba(200,190,60,0.6); outline: 3px solid rgba(200,190,60,0.7); filter: brightness(0.7); }
+  25%  { box-shadow: inset 0 0 5px 2px rgba(200,190,60,0.1); outline: 0px solid transparent; filter: brightness(1.1); }
+  40%  { box-shadow: inset 0 0 30px 10px rgba(200,190,60,0.6); outline: 3px solid rgba(200,190,60,0.7); filter: brightness(0.7); }
+  55%  { box-shadow: inset 0 0 5px 2px rgba(200,190,60,0.1); outline: 0px solid transparent; filter: brightness(1.1); }
+  70%  { box-shadow: inset 0 0 30px 10px rgba(200,190,60,0.5); outline: 3px solid rgba(200,190,60,0.6); filter: brightness(0.7); }
+  85%  { box-shadow: inset 0 0 5px 2px rgba(200,190,60,0.1); outline: 0px solid transparent; filter: brightness(1); }
+  100% { box-shadow: inset 0 0 0 0 rgba(200,190,60,0); outline: 0px solid transparent; filter: brightness(1); }
 }
 .wx-flash {
   animation: wxFlash 3.5s ease-in-out !important;
-  z-index: 10 !important;
-  position: relative;
+  z-index: 100 !important;
+  overflow: visible !important;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -2102,6 +2114,8 @@ button.delete:hover {
     body {
         overflow: auto;
         overflow-x: hidden;
+        word-break: break-word;
+        overflow-wrap: break-word;
     }
 
     /* ── Header: fixed at top, compact, row layout ──────────────────────── */
@@ -2210,6 +2224,8 @@ button.delete:hover {
     /* ── Month day: compact cells ─────────────────────────────────────────── */
     .month-day {
         min-height: 50px;
+        max-height: 80px;
+        overflow-y: auto;
         font-size: 0.7em;
         padding: 2px;
     }
@@ -2423,6 +2439,9 @@ button.delete:hover {
         padding: 10px !important;
         box-sizing: border-box !important;
         font-size: 0.9em;
+        word-break: break-word;
+        overflow-wrap: break-word;
+        overflow: hidden;
     }
 
     /* ── Chit header: title on top, meta below ────────────────────────────── */
@@ -2536,12 +2555,34 @@ button.delete:hover {
     }
     .year-view > div {
         width: 100% !important;
+        flex: none !important;
+        min-width: 0 !important;
+    }
+    .year-view .year-month {
+        flex: none !important;
+        min-width: 0 !important;
+        width: 100% !important;
     }
 
     /* ── Itinerary view: compact ──────────────────────────────────────────── */
     .chit {
         margin-left: 0 !important;
         padding: 8px 4px;
+    }
+    .itinerary-view {
+        overflow-x: hidden !important;
+        overflow-y: auto !important;
+        width: 100% !important;
+    }
+    .itinerary-event {
+        margin-left: 0 !important;
+        flex-wrap: wrap !important;
+        word-break: break-word;
+    }
+    .itinerary-event .time-column {
+        width: auto !important;
+        margin-right: 8px !important;
+        font-size: 0.85em;
     }
 
     /* ── All selects and inputs in views: touch-friendly ──────────────────── */
