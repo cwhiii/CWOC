@@ -1781,6 +1781,42 @@ let _globalAlarmAudio = null;
 let _globalTimerAudio = null;
 let _globalTimeFormat = "24hour";
 
+// Load persisted dismiss/snooze state from backend
+async function _loadAlertStates() {
+  try {
+    const resp = await fetch('/api/alert-state');
+    if (!resp.ok) return;
+    const states = await resp.json();
+    states.forEach(s => {
+      if (s.state === 'dismissed') {
+        _globalTriggeredAlarms.add(s.alert_key);
+      } else if (s.state === 'snoozed' && s.until_ts) {
+        _snoozeRegistry[s.alert_key] = new Date(s.until_ts).getTime();
+      }
+    });
+  } catch (e) { console.error('Failed to load alert states:', e); }
+}
+
+// Persist dismiss state to backend
+function _persistDismiss(alertKey) {
+  _globalTriggeredAlarms.add(alertKey);
+  fetch('/api/alert-state', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ alert_key: alertKey, state: 'dismissed' }),
+  }).catch(e => console.error('Failed to persist dismiss:', e));
+}
+
+// Persist snooze state to backend
+function _persistSnooze(snoozeKey, untilTs) {
+  _snoozeRegistry[snoozeKey] = untilTs;
+  fetch('/api/alert-state', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ alert_key: snoozeKey, state: 'snoozed', until_ts: new Date(untilTs).toISOString() }),
+  }).catch(e => console.error('Failed to persist snooze:', e));
+}
+
 function _globalFmtTime(time24) {
   if (!time24) return "";
   if (_globalTimeFormat === "12hour" || _globalTimeFormat === "12houranalog") {
@@ -1939,10 +1975,10 @@ function _showAlertModal(opts) {
   dismissBtn.textContent = "✕ Dismiss";
   dismissBtn.onclick = () => {
     _dismissAlertModal(overlay, opts.onDismiss);
-    // Sync dismiss to other devices
-    if (opts.snoozeKey || opts.triggerKey) {
-      syncSend('alert_dismissed', { snoozeKey: opts.snoozeKey, triggerKey: opts.triggerKey });
-    }
+    // Persist dismiss and sync
+    if (opts.triggerKey) _persistDismiss(opts.triggerKey);
+    if (opts.snoozeKey) _persistDismiss(opts.snoozeKey);
+    syncSend('alert_dismissed', { snoozeKey: opts.snoozeKey, triggerKey: opts.triggerKey });
   };
   btnRow.appendChild(dismissBtn);
 
@@ -1954,10 +1990,10 @@ function _showAlertModal(opts) {
       _dismissAlertModal(overlay, opts.onDismiss);
       if (opts.snoozeKey) {
         const snoozeMs = _getSnoozeMs();
-        _snoozeRegistry[opts.snoozeKey] = Date.now() + snoozeMs;
+        const untilTs = Date.now() + snoozeMs;
+        _persistSnooze(opts.snoozeKey, untilTs);
         if (opts.triggerKey) _globalTriggeredAlarms.delete(opts.triggerKey);
-        // Sync snooze to other devices
-        syncSend('alert_snoozed', { snoozeKey: opts.snoozeKey, triggerKey: opts.triggerKey, snoozeUntil: _snoozeRegistry[opts.snoozeKey] });
+        syncSend('alert_snoozed', { snoozeKey: opts.snoozeKey, triggerKey: opts.triggerKey, snoozeUntil: untilTs });
       }
     };
     btnRow.appendChild(snoozeBtn);
@@ -1974,13 +2010,25 @@ function _showAlertModal(opts) {
   void overlay.offsetWidth;
   overlay.classList.add("active");
 
-  // Block all keyboard events while modal is open (no ESC escape, no hotkeys)
+  // Block keyboard shortcuts but allow clicks (needed for audio retry)
   function _blockKeys(e) {
+    // Allow Tab for accessibility
+    if (e.key === 'Tab') return;
     e.preventDefault();
     e.stopImmediatePropagation();
   }
   document.addEventListener('keydown', _blockKeys, true);
   overlay._blockKeys = _blockKeys;
+
+  // Try to play audio on first button interaction (unlocks audio on desktop)
+  modal.addEventListener('click', function() {
+    if (_globalAlarmAudio && _globalAlarmAudio.paused && _globalAlarmAudio.loop) {
+      _globalAlarmAudio.play().catch(function() {});
+    }
+    if (_globalTimerAudio && _globalTimerAudio.paused && _globalTimerAudio.loop) {
+      _globalTimerAudio.play().catch(function() {});
+    }
+  }, { once: true });
 
   return overlay;
 }
@@ -2023,7 +2071,7 @@ function _sendBrowserNotification(title, body, chitId, playSound) {
     tag: 'cwoc-alert-' + (chitId || 'independent'),
     renotify: true,
     requireInteraction: true,
-    silent: false
+    silent: true
   };
   // Vibrate pattern for Android/mobile (200ms on, 100ms off, 200ms on)
   if ('vibrate' in navigator) {
@@ -2090,6 +2138,7 @@ function _globalCheckAlarms() {
       });
 
       _sendBrowserNotification(`🔔 Alarm: ${chit.title}`, label, chit.id);
+      syncSend('alarm_fired', { title: chit.title, subtitle: label, chitId: chit.id, snoozeKey: snoozeKey, triggerKey: key });
     });
   });
 
@@ -2123,6 +2172,7 @@ function _globalCheckAlarms() {
       });
 
       _sendBrowserNotification(`🔔 ${alarmName}`, label);
+      syncSend('alarm_fired', { title: alarmName, subtitle: label, snoozeKey: snoozeKey, triggerKey: key });
     });
   }
 
@@ -2219,6 +2269,9 @@ function _startGlobalAlertSystem() {
     .then((s) => { _globalTimeFormat = s.time_format || "24hour"; })
     .catch(() => {});
 
+  // Load persisted dismiss/snooze states before starting alarm checker
+  _loadAlertStates();
+
   // Start alarm checker (every second)
   if (!_globalAlarmInterval) {
     _globalAlarmInterval = setInterval(_globalCheckAlarms, 1000);
@@ -2234,12 +2287,10 @@ function _startGlobalAlertSystem() {
   if (typeof syncOn === 'function') {
     // Another device dismissed an alarm/timer
     syncOn('alert_dismissed', function(msg) {
-      // Add to triggered set so local checker won't re-fire
       if (msg.triggerKey) _globalTriggeredAlarms.add(msg.triggerKey);
-      // Stop local sound
+      if (msg.snoozeKey) _globalTriggeredAlarms.add(msg.snoozeKey);
       _globalStopAlarm();
       if (typeof _globalStopTimer === 'function') _globalStopTimer();
-      // Close any matching open modal
       document.querySelectorAll('.cwoc-alert-overlay').forEach(function(ov) {
         if (ov._alertSnoozeKey === msg.snoozeKey || ov._alertTriggerKey === msg.triggerKey) {
           _dismissAlertModal(ov, ov._alertOnDismiss);
@@ -2249,10 +2300,9 @@ function _startGlobalAlertSystem() {
 
     // Another device snoozed an alarm
     syncOn('alert_snoozed', function(msg) {
-      if (msg.snoozeKey) _snoozeRegistry[msg.snoozeKey] = msg.snoozeUntil;
+      if (msg.snoozeKey && msg.snoozeUntil) _snoozeRegistry[msg.snoozeKey] = msg.snoozeUntil;
       if (msg.triggerKey) _globalTriggeredAlarms.delete(msg.triggerKey);
       _globalStopAlarm();
-      // Close any matching open modal
       document.querySelectorAll('.cwoc-alert-overlay').forEach(function(ov) {
         if (ov._alertSnoozeKey === msg.snoozeKey || ov._alertTriggerKey === msg.triggerKey) {
           _dismissAlertModal(ov, ov._alertOnDismiss);
@@ -2267,7 +2317,47 @@ function _startGlobalAlertSystem() {
         _dismissAlertModal(ov, ov._alertOnDismiss);
       });
     });
+
+    // Another device fired an alarm — show it here too
+    syncOn('alarm_fired', function(msg) {
+      // Don't re-fire if we already have this one
+      if (msg.triggerKey && _globalTriggeredAlarms.has(msg.triggerKey)) return;
+      if (msg.triggerKey) _globalTriggeredAlarms.add(msg.triggerKey);
+      _globalPlayAlarm();
+      _showAlertModal({
+        icon: "🔔",
+        title: msg.title || "Alarm",
+        subtitle: msg.subtitle || "",
+        chitId: msg.chitId || null,
+        onDismiss: function() { _globalStopAlarm(); },
+        showSnooze: true,
+        snoozeKey: msg.snoozeKey || null,
+        triggerKey: msg.triggerKey || null,
+      });
+    });
+
+    // Another device's timer finished — show it here too
+    syncOn('timer_fired', function(msg) {
+      _globalPlayTimer();
+      _showTimerDoneModal(msg.timerName, function() { _globalStopTimer(); });
+    });
+
+    // Another device created/updated/deleted an independent alert — re-fetch
+    syncOn('alerts_changed', function() {
+      _fetchIndependentAlerts();
+    });
+
+    // Another device saved a chit — re-fetch chits
+    syncOn('chits_changed', function() {
+      fetchChits();
+    });
   }
+
+  // Periodic re-fetch of independent alerts as safety net (every 30s)
+  setInterval(function() {
+    _fetchIndependentAlerts();
+    _loadAlertStates();
+  }, 30000);
 }
 
 // ── End Global Alert System ──────────────────────────────────────────────────
@@ -4590,6 +4680,7 @@ async function _createIndependentAlert(alertData) {
     const created = await resp.json();
     await _fetchIndependentAlerts();
     displayChits();
+    syncSend('alerts_changed', {});
     return created;
   } catch (e) {
     console.error('Error creating independent alert:', e);
@@ -4606,6 +4697,7 @@ async function _updateIndependentAlert(id, alertData) {
     if (!resp.ok) throw new Error('Failed to update independent alert');
     await _fetchIndependentAlerts();
     displayChits();
+    syncSend('alerts_changed', {});
   } catch (e) {
     console.error('Error updating independent alert:', e);
   }
@@ -4630,6 +4722,7 @@ async function _deleteIndependentAlert(id) {
     if (!resp.ok) throw new Error('Failed to delete independent alert');
     await _fetchIndependentAlerts();
     displayChits();
+    syncSend('alerts_changed', {});
   } catch (e) {
     console.error('Error deleting independent alert:', e);
   }
@@ -5210,6 +5303,19 @@ function _buildIndependentCard(id, type, data) {
 
 // ── Independent Alarm Card ───────────────────────────────────────────────────
 
+function _parseTimeInput(str) {
+  // Parse "HH:MM", "H:MM", "HH:MM AM/PM", "H:MM PM" etc. into "HH:MM" 24h format
+  if (!str) return null;
+  str = str.trim().toUpperCase();
+  var match = str.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/);
+  if (!match) return null;
+  var h = parseInt(match[1]), m = parseInt(match[2]), ampm = match[3];
+  if (ampm === 'PM' && h < 12) h += 12;
+  if (ampm === 'AM' && h === 12) h = 0;
+  if (h < 0 || h > 23 || m < 0 || m > 59) return null;
+  return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+}
+
 function _buildSaAlarmCard(card, id, data) {
   // Name row
   const row1 = document.createElement("div");
@@ -5222,10 +5328,13 @@ function _buildSaAlarmCard(card, id, data) {
   nameInput.className = "sa-input sa-name-input";
   if (!data.enabled) nameInput.style.opacity = "0.45";
 
+  // Text input for time — displays in CWOC format, stores as 24h HH:MM
   const timeInput = document.createElement("input");
-  timeInput.type = "time";
-  timeInput.value = data.time || "";
+  timeInput.type = "text";
+  timeInput.value = _globalFmtTime(data.time || "") || "";
+  timeInput.placeholder = _globalTimeFormat === '24hour' ? "HH:MM" : "H:MM AM";
   timeInput.className = "sa-time-input";
+  timeInput.inputMode = "numeric";
   if (!data.enabled) timeInput.style.opacity = "0.45";
 
   const toggleBtn = document.createElement("button");
@@ -5276,11 +5385,18 @@ function _buildSaAlarmCard(card, id, data) {
   // Save name/time on blur
   nameInput.addEventListener("change", () => { data.name = nameInput.value; _updateIndependentAlert(id, data); });
   timeInput.addEventListener("change", () => {
-    data.time = timeInput.value;
-    if (!data.days || data.days.length === 0) {
-      data.days = [allDays[new Date().getDay()]];
+    const parsed = _parseTimeInput(timeInput.value);
+    if (parsed) {
+      data.time = parsed;
+      timeInput.value = _globalFmtTime(parsed);
+      if (!data.days || data.days.length === 0) {
+        data.days = [allDays[new Date().getDay()]];
+      }
+      _updateIndependentAlert(id, data);
+    } else {
+      // Revert to current value
+      timeInput.value = _globalFmtTime(data.time || "") || "";
     }
-    _updateIndependentAlert(id, data);
   });
 
   // Snooze countdown bar — show if this alarm is currently snoozed
@@ -5475,6 +5591,7 @@ function _buildSaTimerCard(card, id, data) {
           barText.textContent = '✓ DONE';
           // Show bold modal — stop sound on dismiss
           _showTimerDoneModal(data.name, () => { _globalStopTimer(); });
+          syncSend('timer_fired', { timerName: data.name });
           if (data.loop) {
             setTimeout(() => {
               rt.remaining = data.totalSeconds || 0;

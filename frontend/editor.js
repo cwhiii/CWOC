@@ -1551,6 +1551,8 @@ async function saveChitData() {
 
     window.currentChitId = updatedChit.id;
     markEditorSaved();
+    // Notify other devices that chits changed
+    if (typeof syncSend === 'function') syncSend('chits_changed', {});
     window.location.href = "/";
   } catch (error) {
     console.error("[saveChitData] Error saving chit:", error);
@@ -1908,17 +1910,33 @@ function renderAlarmsContainer() {
     nameInput.addEventListener("input", () => { window._alertsData.alarms[idx].name = nameInput.value; setSaveButtonUnsaved(); });
 
     const timeInput = document.createElement("input");
-    timeInput.type = "time";
-    timeInput.value = alarm.time || "";
-    timeInput.style.cssText = `font-size:1.1em;padding:3px 6px;font-weight:bold;${!alarm.enabled ? "opacity:0.45;" : ""}`;
+    timeInput.type = "text";
+    timeInput.value = _fmtAlarmTime(alarm.time || "") || "";
+    timeInput.placeholder = window._editorTimeFormat === '24hour' ? "HH:MM" : "H:MM AM";
+    timeInput.inputMode = "numeric";
+    timeInput.style.cssText = `font-size:1.1em;padding:3px 6px;font-weight:bold;width:7em;${!alarm.enabled ? "opacity:0.45;" : ""}`;
 
     timeInput.addEventListener("change", () => {
-      window._alertsData.alarms[idx].time = timeInput.value;
-      if (!window._alertsData.alarms[idx].days || window._alertsData.alarms[idx].days.length === 0) {
-        window._alertsData.alarms[idx].days = [_dayAbbr(new Date())];
-        renderAlarmsContainer();
+      var str = timeInput.value.trim().toUpperCase();
+      var match = str.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/);
+      if (match) {
+        var h = parseInt(match[1]), m = parseInt(match[2]), ampm = match[3];
+        if (ampm === 'PM' && h < 12) h += 12;
+        if (ampm === 'AM' && h === 12) h = 0;
+        if (h >= 0 && h <= 23 && m >= 0 && m <= 59) {
+          var parsed = String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0');
+          window._alertsData.alarms[idx].time = parsed;
+          timeInput.value = _fmtAlarmTime(parsed);
+          if (!window._alertsData.alarms[idx].days || window._alertsData.alarms[idx].days.length === 0) {
+            window._alertsData.alarms[idx].days = [_dayAbbr(new Date())];
+            renderAlarmsContainer();
+          }
+          setSaveButtonUnsaved();
+          return;
+        }
       }
-      setSaveButtonUnsaved();
+      // Invalid — revert
+      timeInput.value = _fmtAlarmTime(alarm.time || "") || "";
     });
 
     const toggleBtn = document.createElement("button");

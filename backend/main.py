@@ -804,6 +804,29 @@ def migrate_add_standalone_alerts():
             conn.close()
 
 
+def migrate_add_alert_state():
+    """Create alert_state table for persisting dismiss/snooze state across devices."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS alert_state (
+                alert_key TEXT PRIMARY KEY,
+                state TEXT NOT NULL,
+                until_ts TEXT,
+                updated_at TEXT NOT NULL
+            )
+        """)
+        conn.commit()
+        logger.info("alert_state table ready")
+    except Exception as e:
+        logger.error(f"Error creating alert_state table: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
 def _run_auto_prune():
     """Auto-prune audit log based on settings limits. Returns (pruned_by_age, pruned_by_size)."""
     pruned_by_age = 0
@@ -1431,6 +1454,7 @@ migrate_add_weather_data()
 migrate_add_audit_log()
 migrate_add_audit_settings()
 migrate_add_standalone_alerts()
+migrate_add_alert_state()
 seed_version_info()
 
 # Create directory for contact images
@@ -2835,6 +2859,80 @@ def delete_standalone_alert(alert_id: str):
     except Exception as e:
         logger.error(f"Error deleting standalone alert: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 10c: Alert State API (dismiss/snooze persistence)
+# ═══════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/alert-state")
+def get_alert_states():
+    """Get all non-expired alert states (dismissed/snoozed)."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        now = datetime.utcnow().isoformat()
+        # Return dismissed (no expiry) and snoozed (not yet expired)
+        cursor.execute("SELECT * FROM alert_state WHERE state = 'dismissed' OR (state = 'snoozed' AND until_ts > ?)", (now,))
+        return [dict(row) for row in cursor.fetchall()]
+    except Exception as e:
+        logger.error(f"Error fetching alert states: {str(e)}")
+        return []
+    finally:
+        if conn:
+            conn.close()
+
+
+@app.post("/api/alert-state")
+def set_alert_state(body: dict):
+    """Set dismiss/snooze state for an alert key."""
+    conn = None
+    try:
+        alert_key = body.get("alert_key")
+        state = body.get("state", "dismissed")  # 'dismissed' or 'snoozed'
+        until_ts = body.get("until_ts")
+        if not alert_key:
+            raise HTTPException(status_code=400, detail="alert_key required")
+        now = datetime.utcnow().isoformat()
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT OR REPLACE INTO alert_state (alert_key, state, until_ts, updated_at) VALUES (?,?,?,?)",
+            (alert_key, state, until_ts, now)
+        )
+        conn.commit()
+        # Broadcast via WebSocket to all connected clients
+        return {"alert_key": alert_key, "state": state, "until_ts": until_ts}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error setting alert state: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
+
+
+@app.delete("/api/alert-state/cleanup")
+def cleanup_alert_states():
+    """Remove expired snooze states and old dismissed states (>24h)."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        now = datetime.utcnow().isoformat()
+        yesterday = (datetime.utcnow() - timedelta(days=1)).isoformat()
+        cursor.execute("DELETE FROM alert_state WHERE (state = 'snoozed' AND until_ts < ?) OR (state = 'dismissed' AND updated_at < ?)", (now, yesterday))
+        conn.commit()
+        return {"cleaned": cursor.rowcount}
+    except Exception as e:
+        logger.error(f"Error cleaning alert states: {str(e)}")
+        return {"cleaned": 0}
     finally:
         if conn:
             conn.close()
