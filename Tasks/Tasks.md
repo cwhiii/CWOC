@@ -98,6 +98,11 @@ ability to import calendar data from googe & apple & windows
 - even if the page isntre relaoded, refresh the forcast every 4 hours. 
 - `[ ]` Weather  page . Available via SHIFT+W, from views, or a button on the weather modal. also, add a  row for every specific day that has weather (location & date), for non-saved locations. generalize to per city. so if there's events in non-saved locations in address1 address2, in city1, address3 and address4 in city2, and address5 in cty3, it should add 3 rows, one for each CITY. then only load/display the weather for days that have an invent in that coity on that day.
 
+### Self-Audit
+- are there UI elements that do not have functonality associatetd with them?
+- Make a list to clearn them but, BUT DO NOT START YET.
+- For each will need to know if it can be cut, or if I want to build the functionality. 
+
 ---
 
 ## Major Features / Overhauls

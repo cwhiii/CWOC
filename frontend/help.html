@@ -51,6 +51,7 @@
             <p>A single chit can appear in multiple views if it has the relevant fields.</p>
             <h3 id="views">Views & Tabs</h3>
             <p>The top tab bar switches between six views: Calendar, Checklists, Alerts, Projects, Tasks, Notes. The <strong>sidebar</strong> (toggle by clicking the logo) provides sorting, period selection, and filters.</p>
+            <p>The Alerts and Projects tabs have a <strong>View Mode</strong> toggle in the sidebar. Projects switches between List and Kanban; Alerts switches between Chits (showing chits that have alerts) and Standalone (a 3-column board for quick alarms, timers, and stopwatches not tied to any chit).</p>
             <h3 id="calendar">Calendar View</h3>
             <p>Periods: Itinerary, Day, Week, Work Hours, X Days, Month, Year. Switch with the Period dropdown or <kbd>.</kbd> hotkey.</p>
             <ul>
@@ -180,6 +181,8 @@
             <p>Add notifications, alarms, timers, and stopwatches. Each alarm has a time, days, and optional "Delete chit after dismissal" checkbox — when checked, dismissing the alarm soft-deletes the chit.</p>
             <p>Notifications fire relative to a chit's start or due time. Each notification has a timing dropdown (before/after) and automatically targets the chit's due date if set, otherwise the start date.</p>
             <p>Alarms trigger system notifications with sound on all platforms (macOS, Linux, Android) via the browser Notification API. On Android and Linux Firefox, the device will also vibrate. If sound cannot autoplay due to browser restrictions, a tap or keypress will unlock audio playback. Grant notification permission when prompted for full functionality.</p>
+            <h4>Standalone Alerts Board</h4>
+            <p>Switch to the <strong>Standalone</strong> view mode in the Alarms tab sidebar to access a 3-column board for quick alarms, timers, and stopwatches that aren't connected to any chit. Click the <strong>+</strong> button in each column header to add a new item. Edit names, times, and durations inline — changes save automatically on blur. Delete items with the ❌ button. Timers and stopwatches have Start/Pause, Reset, and Lap controls just like in the chit editor.</p>
             <h4>Task Zone</h4>
             <p>Status (ToDo, In Progress, Blocked, Complete), Priority (High, Medium, Low), and Severity (Critical, Major, Normal, Minor).</p>
             <p>In the Tasks view, status is shown with matching icons: ● ToDo, ⟳ In Progress, ⊘ Blocked, ✓ Complete.</p>

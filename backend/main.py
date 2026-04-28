@@ -779,6 +779,31 @@ def migrate_add_audit_settings():
             conn.close()
 
 
+def migrate_add_standalone_alerts():
+    """Create standalone_alerts table for alerts not connected to any chit."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS standalone_alerts (
+                id TEXT PRIMARY KEY,
+                _type TEXT NOT NULL,
+                name TEXT,
+                data TEXT,
+                created_datetime TEXT,
+                modified_datetime TEXT
+            )
+        """)
+        conn.commit()
+        logger.info("standalone_alerts table ready")
+    except Exception as e:
+        logger.error(f"Error creating standalone_alerts table: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
 def _run_auto_prune():
     """Auto-prune audit log based on settings limits. Returns (pruned_by_age, pruned_by_size)."""
     pruned_by_age = 0
@@ -1405,6 +1430,7 @@ migrate_add_username()
 migrate_add_weather_data()
 migrate_add_audit_log()
 migrate_add_audit_settings()
+migrate_add_standalone_alerts()
 seed_version_info()
 
 # Create directory for contact images
@@ -2618,6 +2644,112 @@ def save_settings(settings: Settings):
     except Exception as e:
         logger.error(f"Error saving settings: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to save settings: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Section 10b: Standalone Alerts API Routes
+# ═══════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/standalone-alerts")
+def get_standalone_alerts():
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM standalone_alerts ORDER BY created_datetime DESC")
+        rows = cursor.fetchall()
+        results = []
+        for row in rows:
+            item = dict(row)
+            item["data"] = deserialize_json_field(item.get("data"))
+            results.append(item)
+        return results
+    except Exception as e:
+        logger.error(f"Error fetching standalone alerts: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
+
+
+@app.post("/api/standalone-alerts")
+def create_standalone_alert(body: dict):
+    conn = None
+    try:
+        alert_id = str(uuid4())
+        now = datetime.utcnow().isoformat()
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        _type = body.get("_type", "alarm")
+        name = body.get("name", "")
+        data = {k: v for k, v in body.items() if k not in ("id", "created_datetime", "modified_datetime")}
+        cursor.execute(
+            "INSERT INTO standalone_alerts (id, _type, name, data, created_datetime, modified_datetime) VALUES (?,?,?,?,?,?)",
+            (alert_id, _type, name, serialize_json_field(data), now, now)
+        )
+        conn.commit()
+        data["id"] = alert_id
+        data["created_datetime"] = now
+        data["modified_datetime"] = now
+        return data
+    except Exception as e:
+        logger.error(f"Error creating standalone alert: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
+
+
+@app.put("/api/standalone-alerts/{alert_id}")
+def update_standalone_alert(alert_id: str, body: dict):
+    conn = None
+    try:
+        now = datetime.utcnow().isoformat()
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        _type = body.get("_type", "alarm")
+        name = body.get("name", "")
+        data = {k: v for k, v in body.items() if k not in ("id", "created_datetime", "modified_datetime")}
+        cursor.execute(
+            "UPDATE standalone_alerts SET _type=?, name=?, data=?, modified_datetime=? WHERE id=?",
+            (_type, name, serialize_json_field(data), now, alert_id)
+        )
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Standalone alert not found")
+        conn.commit()
+        data["id"] = alert_id
+        data["modified_datetime"] = now
+        return data
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating standalone alert: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
+
+
+@app.delete("/api/standalone-alerts/{alert_id}")
+def delete_standalone_alert(alert_id: str):
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM standalone_alerts WHERE id=?", (alert_id,))
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Standalone alert not found")
+        conn.commit()
+        return {"message": "Standalone alert deleted"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting standalone alert: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
     finally:
         if conn:
             conn.close()

@@ -84,6 +84,15 @@
                 </div>
             </div>
 
+            <!-- 3c. Alarms view mode toggle (only visible on Alarms tab) -->
+            <div class="sidebar-section" id="section-alarms-mode" style="display:none;">
+                <label class="sidebar-section-label">View Mode</label>
+                <div style="display:flex;gap:4px;">
+                    <button class="action-button" id="alarms-mode-list" onclick="_setAlarmsMode('list')" style="flex:1;margin-bottom:0;font-size:0.8em;padding:6px;background:ivory;">📋 Chits</button>
+                    <button class="action-button" id="alarms-mode-standalone" onclick="_setAlarmsMode('standalone')" style="flex:1;margin-bottom:0;font-size:0.8em;padding:6px;">🔔 Standalone</button>
+                </div>
+            </div>
+
             <!-- 4. Filters — each sub-section individually collapsible -->
             <div class="sidebar-section" id="section-filters">
                 <label class="sidebar-section-label">Filters <span class="hotkey-hint">F</span></label>

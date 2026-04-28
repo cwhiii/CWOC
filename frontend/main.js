@@ -2296,6 +2296,8 @@ function _restoreUIState() {
     if (orderSection) orderSection.style.display = (currentTab === 'Calendar') ? 'none' : '';
     const kanbanSectionRestore = document.getElementById('section-kanban');
     if (kanbanSectionRestore) kanbanSectionRestore.style.display = (currentTab === 'Projects') ? '' : 'none';
+    const alarmsSectionRestore = document.getElementById('section-alarms-mode');
+    if (alarmsSectionRestore) alarmsSectionRestore.style.display = (currentTab === 'Alarms') ? '' : 'none';
 
     // Restore label filters after they load
     if (state.labelFilters && state.labelFilters.length > 0) {
@@ -4378,6 +4380,90 @@ function _setProjectsMode(mode) {
   displayChits();
 }
 
+// ── Alarms View Mode (Chits list vs Standalone board) ────────────────────────
+let _alarmsViewMode = 'list'; // 'list' | 'standalone'
+let _standaloneAlerts = []; // cached standalone alerts from API
+let _saTimerRuntime = {}; // standalone timer runtime state
+let _saSwRuntime = {}; // standalone stopwatch runtime state
+
+function _setAlarmsMode(mode) {
+  _alarmsViewMode = mode;
+  const listBtn = document.getElementById('alarms-mode-list');
+  const standaloneBtn = document.getElementById('alarms-mode-standalone');
+  if (listBtn) listBtn.style.background = mode === 'list' ? 'ivory' : '';
+  if (standaloneBtn) standaloneBtn.style.background = mode === 'standalone' ? 'ivory' : '';
+  if (mode === 'standalone') {
+    _fetchStandaloneAlerts().then(() => displayChits());
+  } else {
+    displayChits();
+  }
+}
+
+async function _fetchStandaloneAlerts() {
+  try {
+    const resp = await fetch('/api/standalone-alerts');
+    if (!resp.ok) throw new Error('Failed to fetch standalone alerts');
+    _standaloneAlerts = await resp.json();
+  } catch (e) {
+    console.error('Error fetching standalone alerts:', e);
+    _standaloneAlerts = [];
+  }
+}
+
+async function _createStandaloneAlert(alertData) {
+  try {
+    const resp = await fetch('/api/standalone-alerts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(alertData),
+    });
+    if (!resp.ok) throw new Error('Failed to create standalone alert');
+    await _fetchStandaloneAlerts();
+    displayChits();
+  } catch (e) {
+    console.error('Error creating standalone alert:', e);
+  }
+}
+
+async function _updateStandaloneAlert(id, alertData) {
+  try {
+    const resp = await fetch(`/api/standalone-alerts/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(alertData),
+    });
+    if (!resp.ok) throw new Error('Failed to update standalone alert');
+    await _fetchStandaloneAlerts();
+    displayChits();
+  } catch (e) {
+    console.error('Error updating standalone alert:', e);
+  }
+}
+
+async function _deleteStandaloneAlert(id) {
+  // Clean up runtime state
+  const idx = _standaloneAlerts.findIndex(a => a.id === id);
+  if (idx !== -1) {
+    const a = _standaloneAlerts[idx];
+    if (a._type === 'timer' && _saTimerRuntime[id]) {
+      clearInterval(_saTimerRuntime[id].intervalId);
+      delete _saTimerRuntime[id];
+    }
+    if (a._type === 'stopwatch' && _saSwRuntime[id]) {
+      clearInterval(_saSwRuntime[id].intervalId);
+      delete _saSwRuntime[id];
+    }
+  }
+  try {
+    const resp = await fetch(`/api/standalone-alerts/${id}`, { method: 'DELETE' });
+    if (!resp.ok) throw new Error('Failed to delete standalone alert');
+    await _fetchStandaloneAlerts();
+    displayChits();
+  } catch (e) {
+    console.error('Error deleting standalone alert:', e);
+  }
+}
+
 /**
  * Projects tab: tree view — each project master with its child chits nested.
  */
@@ -4794,6 +4880,10 @@ function _displayProjectsKanban(chitsToDisplay) {
  * Alarms tab: list all chits that have any alert (alarm, notification, timer, stopwatch).
  */
 function displayAlarmsView(chitsToDisplay) {
+  if (_alarmsViewMode === 'standalone') {
+    return _displayStandaloneAlertsBoard();
+  }
+
   const chitList = document.getElementById("chit-list");
   chitList.innerHTML = "";
   const _viSettings = (window._cwocSettings || {}).visual_indicators || {};
@@ -4852,6 +4942,386 @@ function displayAlarmsView(chitsToDisplay) {
   enableDragToReorder(view, 'Alarms', () => displayChits());
 }
 
+// ── Standalone Alerts Board ──────────────────────────────────────────────────
+
+function _displayStandaloneAlertsBoard() {
+  const chitList = document.getElementById("chit-list");
+  chitList.innerHTML = "";
+
+  const types = [
+    { key: 'alarm', icon: '🔔', label: 'Alarms' },
+    { key: 'timer', icon: '⏱️', label: 'Timers' },
+    { key: 'stopwatch', icon: '⏲️', label: 'Stopwatches' },
+  ];
+
+  const wrapper = document.createElement("div");
+  wrapper.className = "standalone-alerts-board";
+
+  types.forEach(typeInfo => {
+    const col = document.createElement("div");
+    col.className = "sa-column";
+
+    // Column header with add button
+    const colHeader = document.createElement("div");
+    colHeader.className = "sa-column-header";
+    colHeader.innerHTML = `<span>${typeInfo.icon} ${typeInfo.label}</span>`;
+    const addBtn = document.createElement("button");
+    addBtn.className = "sa-add-btn";
+    addBtn.textContent = "+";
+    addBtn.title = `Add ${typeInfo.label.slice(0, -1)}`;
+    addBtn.onclick = () => _addStandaloneAlert(typeInfo.key);
+    colHeader.appendChild(addBtn);
+    col.appendChild(colHeader);
+
+    // Cards for this type
+    const items = _standaloneAlerts.filter(a => a._type === typeInfo.key);
+    if (items.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "sa-empty";
+      empty.textContent = `No standalone ${typeInfo.label.toLowerCase()} yet.`;
+      col.appendChild(empty);
+    } else {
+      items.forEach(alert => {
+        const data = alert.data || alert;
+        col.appendChild(_buildStandaloneCard(alert.id, typeInfo.key, data));
+      });
+    }
+
+    wrapper.appendChild(col);
+  });
+
+  chitList.appendChild(wrapper);
+}
+
+function _addStandaloneAlert(type) {
+  if (type === 'alarm') {
+    const now = new Date();
+    now.setMinutes(now.getMinutes() + 1);
+    const defaultTime = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+    const dayAbbrs = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+    _createStandaloneAlert({ _type: 'alarm', name: '', time: defaultTime, days: [dayAbbrs[now.getDay()]], enabled: true });
+  } else if (type === 'timer') {
+    _createStandaloneAlert({ _type: 'timer', name: '', totalSeconds: 0, loop: false });
+  } else if (type === 'stopwatch') {
+    _createStandaloneAlert({ _type: 'stopwatch', name: '' });
+  }
+}
+
+function _buildStandaloneCard(id, type, data) {
+  const card = document.createElement("div");
+  card.className = "sa-card";
+  card.dataset.alertId = id;
+
+  if (type === 'alarm') _buildSaAlarmCard(card, id, data);
+  else if (type === 'timer') _buildSaTimerCard(card, id, data);
+  else if (type === 'stopwatch') _buildSaStopwatchCard(card, id, data);
+
+  return card;
+}
+
+// ── Standalone Alarm Card ────────────────────────────────────────────────────
+
+function _buildSaAlarmCard(card, id, data) {
+  // Name row
+  const row1 = document.createElement("div");
+  row1.className = "sa-card-row";
+
+  const nameInput = document.createElement("input");
+  nameInput.type = "text";
+  nameInput.value = data.name || "";
+  nameInput.placeholder = "Alarm name";
+  nameInput.className = "sa-input sa-name-input";
+  if (!data.enabled) nameInput.style.opacity = "0.45";
+
+  const timeInput = document.createElement("input");
+  timeInput.type = "time";
+  timeInput.value = data.time || "";
+  timeInput.className = "sa-time-input";
+  if (!data.enabled) timeInput.style.opacity = "0.45";
+
+  const toggleBtn = document.createElement("button");
+  toggleBtn.className = "sa-btn";
+  toggleBtn.textContent = data.enabled ? "On" : "Off";
+  toggleBtn.onclick = () => {
+    data.enabled = !data.enabled;
+    _updateStandaloneAlert(id, data);
+  };
+
+  const delBtn = document.createElement("button");
+  delBtn.className = "sa-btn sa-del-btn";
+  delBtn.textContent = "❌";
+  delBtn.onclick = () => _deleteStandaloneAlert(id);
+
+  row1.appendChild(nameInput);
+  row1.appendChild(timeInput);
+  row1.appendChild(toggleBtn);
+  row1.appendChild(delBtn);
+  card.appendChild(row1);
+
+  // Days row
+  const daysRow = document.createElement("div");
+  daysRow.className = "sa-days-row";
+  if (!data.enabled) daysRow.style.opacity = "0.45";
+  const allDays = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  const wsd = (window._cwocSettings && window._cwocSettings.week_start_day !== undefined) ? parseInt(window._cwocSettings.week_start_day) || 0 : 0;
+  for (let d = 0; d < 7; d++) {
+    const day = allDays[(wsd + d) % 7];
+    const lbl = document.createElement("label");
+    lbl.className = "sa-day-label";
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.checked = (data.days || []).includes(day);
+    cb.addEventListener("change", () => {
+      const days = data.days || [];
+      if (cb.checked) { if (!days.includes(day)) days.push(day); }
+      else { const i = days.indexOf(day); if (i !== -1) days.splice(i, 1); }
+      data.days = days;
+      _updateStandaloneAlert(id, data);
+    });
+    lbl.appendChild(cb);
+    lbl.appendChild(document.createTextNode(day));
+    daysRow.appendChild(lbl);
+  }
+  card.appendChild(daysRow);
+
+  // Save name/time on blur
+  nameInput.addEventListener("change", () => { data.name = nameInput.value; _updateStandaloneAlert(id, data); });
+  timeInput.addEventListener("change", () => {
+    data.time = timeInput.value;
+    if (!data.days || data.days.length === 0) {
+      data.days = [allDays[new Date().getDay()]];
+    }
+    _updateStandaloneAlert(id, data);
+  });
+}
+
+// ── Standalone Timer Card ────────────────────────────────────────────────────
+
+function _saFmtTimer(s) {
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+}
+
+function _buildSaTimerCard(card, id, data) {
+  if (!_saTimerRuntime[id]) {
+    _saTimerRuntime[id] = { remaining: data.totalSeconds || 0, intervalId: null, running: false };
+  }
+  const rt = _saTimerRuntime[id];
+
+  // Name + duration row
+  const row1 = document.createElement("div");
+  row1.className = "sa-card-row";
+
+  const nameInput = document.createElement("input");
+  nameInput.type = "text";
+  nameInput.value = data.name || "";
+  nameInput.placeholder = "Timer name";
+  nameInput.className = "sa-input sa-name-input";
+
+  const hInput = document.createElement("input");
+  hInput.type = "number"; hInput.min = "0"; hInput.placeholder = "HH";
+  hInput.value = Math.floor((data.totalSeconds || 0) / 3600) || "";
+  hInput.className = "sa-dur-input";
+
+  const mInput = document.createElement("input");
+  mInput.type = "number"; mInput.min = "0"; mInput.max = "59"; mInput.placeholder = "MM";
+  mInput.value = Math.floor(((data.totalSeconds || 0) % 3600) / 60) || "";
+  mInput.className = "sa-dur-input";
+
+  const sInput = document.createElement("input");
+  sInput.type = "number"; sInput.min = "0"; sInput.max = "59"; sInput.placeholder = "SS";
+  sInput.value = (data.totalSeconds || 0) % 60 || "";
+  sInput.className = "sa-dur-input";
+
+  const loopLbl = document.createElement("label");
+  loopLbl.className = "sa-day-label";
+  const loopCb = document.createElement("input");
+  loopCb.type = "checkbox";
+  loopCb.checked = !!data.loop;
+  loopCb.addEventListener("change", () => { data.loop = loopCb.checked; _updateStandaloneAlert(id, data); });
+  loopLbl.appendChild(loopCb);
+  loopLbl.appendChild(document.createTextNode("🔁"));
+
+  const delBtn = document.createElement("button");
+  delBtn.className = "sa-btn sa-del-btn";
+  delBtn.textContent = "❌";
+  delBtn.onclick = () => _deleteStandaloneAlert(id);
+
+  row1.appendChild(nameInput);
+  row1.appendChild(hInput);
+  row1.appendChild(document.createTextNode(":"));
+  row1.appendChild(mInput);
+  row1.appendChild(document.createTextNode(":"));
+  row1.appendChild(sInput);
+  row1.appendChild(loopLbl);
+  row1.appendChild(delBtn);
+  card.appendChild(row1);
+
+  // Save name/duration on change
+  const updateDuration = () => {
+    const total = (parseInt(hInput.value) || 0) * 3600 + (parseInt(mInput.value) || 0) * 60 + (parseInt(sInput.value) || 0);
+    data.totalSeconds = total;
+    if (!rt.running) { rt.remaining = total; display.textContent = _saFmtTimer(rt.remaining); }
+    _updateStandaloneAlert(id, data);
+  };
+  nameInput.addEventListener("change", () => { data.name = nameInput.value; _updateStandaloneAlert(id, data); });
+  [hInput, mInput, sInput].forEach(inp => inp.addEventListener("change", updateDuration));
+
+  // Countdown display
+  const display = document.createElement("div");
+  display.className = "sa-timer-display";
+  display.textContent = _saFmtTimer(rt.remaining);
+  card.appendChild(display);
+
+  // Controls
+  const controls = document.createElement("div");
+  controls.className = "sa-controls";
+
+  const startStopBtn = document.createElement("button");
+  startStopBtn.className = "sa-btn";
+  startStopBtn.textContent = rt.running ? "⏸ Pause" : "▶ Start";
+  startStopBtn.onclick = () => {
+    if (rt.running) {
+      clearInterval(rt.intervalId); rt.intervalId = null; rt.running = false;
+      startStopBtn.textContent = "▶ Start";
+    } else {
+      if (rt.remaining <= 0) rt.remaining = data.totalSeconds || 0;
+      rt.intervalId = setInterval(() => {
+        rt.remaining = Math.max(0, rt.remaining - 1);
+        display.textContent = _saFmtTimer(rt.remaining);
+        if (rt.remaining <= 0) {
+          clearInterval(rt.intervalId); rt.intervalId = null; rt.running = false;
+          startStopBtn.textContent = "▶ Start";
+          if (data.loop) { rt.remaining = data.totalSeconds || 0; }
+        }
+      }, 1000);
+      rt.running = true;
+      startStopBtn.textContent = "⏸ Pause";
+    }
+  };
+
+  const resetBtn = document.createElement("button");
+  resetBtn.className = "sa-btn";
+  resetBtn.textContent = "🔄 Reset";
+  resetBtn.onclick = () => {
+    clearInterval(rt.intervalId); rt.intervalId = null; rt.running = false;
+    rt.remaining = data.totalSeconds || 0;
+    display.textContent = _saFmtTimer(rt.remaining);
+    startStopBtn.textContent = "▶ Start";
+  };
+
+  controls.appendChild(startStopBtn);
+  controls.appendChild(resetBtn);
+  card.appendChild(controls);
+}
+
+// ── Standalone Stopwatch Card ────────────────────────────────────────────────
+
+function _saSwFmt(ms) {
+  const totalSec = Math.floor(ms / 1000);
+  const h = Math.floor(totalSec / 3600), m = Math.floor((totalSec % 3600) / 60), s = totalSec % 60;
+  const cs = Math.floor((ms % 1000) / 10);
+  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}.${String(cs).padStart(2,'0')}`;
+}
+
+function _buildSaStopwatchCard(card, id, data) {
+  if (!_saSwRuntime[id]) {
+    _saSwRuntime[id] = { running: false, elapsed: 0, intervalId: null, laps: [] };
+  }
+  const rt = _saSwRuntime[id];
+
+  // Name row
+  const row1 = document.createElement("div");
+  row1.className = "sa-card-row";
+
+  const nameInput = document.createElement("input");
+  nameInput.type = "text";
+  nameInput.value = data.name || "";
+  nameInput.placeholder = "Stopwatch name";
+  nameInput.className = "sa-input sa-name-input";
+  nameInput.addEventListener("change", () => { data.name = nameInput.value; _updateStandaloneAlert(id, data); });
+
+  const delBtn = document.createElement("button");
+  delBtn.className = "sa-btn sa-del-btn";
+  delBtn.textContent = "❌";
+  delBtn.onclick = () => _deleteStandaloneAlert(id);
+
+  row1.appendChild(nameInput);
+  row1.appendChild(delBtn);
+  card.appendChild(row1);
+
+  // Display
+  const display = document.createElement("div");
+  display.className = "sa-timer-display";
+  display.textContent = _saSwFmt(rt.elapsed);
+  card.appendChild(display);
+
+  // Controls
+  const controls = document.createElement("div");
+  controls.className = "sa-controls";
+
+  const startStopBtn = document.createElement("button");
+  startStopBtn.className = "sa-btn";
+  startStopBtn.textContent = rt.running ? "⏸ Pause" : "▶ Start";
+  startStopBtn.onclick = () => {
+    if (rt.running) {
+      clearInterval(rt.intervalId); rt.intervalId = null; rt.running = false;
+      startStopBtn.textContent = "▶ Start";
+    } else {
+      const startMs = Date.now() - rt.elapsed;
+      rt.intervalId = setInterval(() => {
+        rt.elapsed = Date.now() - startMs;
+        display.textContent = _saSwFmt(rt.elapsed);
+      }, 50);
+      rt.running = true;
+      startStopBtn.textContent = "⏸ Pause";
+    }
+  };
+
+  const lapBtn = document.createElement("button");
+  lapBtn.className = "sa-btn";
+  lapBtn.textContent = "🏁 Lap";
+  lapBtn.onclick = () => {
+    if (rt.running) {
+      rt.laps.push(_saSwFmt(rt.elapsed));
+      _renderSaLaps(lapsDiv, rt.laps);
+    }
+  };
+
+  const resetBtn = document.createElement("button");
+  resetBtn.className = "sa-btn";
+  resetBtn.textContent = "🔄 Reset";
+  resetBtn.onclick = () => {
+    clearInterval(rt.intervalId); rt.intervalId = null; rt.running = false;
+    rt.elapsed = 0; rt.laps = [];
+    display.textContent = _saSwFmt(0);
+    startStopBtn.textContent = "▶ Start";
+    _renderSaLaps(lapsDiv, rt.laps);
+  };
+
+  controls.appendChild(startStopBtn);
+  controls.appendChild(lapBtn);
+  controls.appendChild(resetBtn);
+  card.appendChild(controls);
+
+  // Laps
+  const lapsDiv = document.createElement("div");
+  lapsDiv.className = "sa-laps";
+  _renderSaLaps(lapsDiv, rt.laps);
+  card.appendChild(lapsDiv);
+}
+
+function _renderSaLaps(container, laps) {
+  container.innerHTML = "";
+  if (!laps || laps.length === 0) return;
+  laps.forEach((lap, i) => {
+    const el = document.createElement("div");
+    el.style.cssText = "font-size:0.8em;opacity:0.7;font-family:monospace;";
+    el.textContent = `Lap ${i + 1}: ${lap}`;
+    container.appendChild(el);
+  });
+}
+
 function filterChits(tab) {
   storePreviousState();
 
@@ -4881,6 +5351,17 @@ function filterChits(tab) {
   const kanbanSection = document.getElementById('section-kanban');
   if (kanbanSection) {
     kanbanSection.style.display = (tab === 'Projects') ? '' : 'none';
+  }
+
+  // Show/hide Alarms view mode toggle
+  const alarmsSection = document.getElementById('section-alarms-mode');
+  if (alarmsSection) {
+    alarmsSection.style.display = (tab === 'Alarms') ? '' : 'none';
+  }
+
+  // Pre-fetch standalone alerts when switching to Alarms tab in standalone mode
+  if (tab === 'Alarms' && _alarmsViewMode === 'standalone') {
+    _fetchStandaloneAlerts();
   }
 
   _loadLabelFilters();
@@ -5402,6 +5883,8 @@ document.addEventListener("DOMContentLoaded", function () {
   if (yearWeekContainer) yearWeekContainer.style.display = (currentTab === 'Calendar') ? '' : 'none';
   const kanbanSection = document.getElementById('section-kanban');
   if (kanbanSection) kanbanSection.style.display = (currentTab === 'Projects') ? '' : 'none';
+  const alarmsSection = document.getElementById('section-alarms-mode');
+  if (alarmsSection) alarmsSection.style.display = (currentTab === 'Alarms') ? '' : 'none';
 
   _loadLabelFilters();
   _buildPeopleFilterPanel();
