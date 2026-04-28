@@ -8,7 +8,7 @@ allow edxporting any pice of segragated data, or evertyhign (all chits, all cont
 
 ## Tasks
 
-- [ ] 1. Add backend export endpoints and data models
+- [x] 1. Add backend export endpoints and data models
   - [x] 1.1 Add `ImportRequest` Pydantic model and Export Envelope builder helper in `backend/main.py`
     - Add `ImportRequest(BaseModel)` with `mode: str` and `data: dict`
     - Add helper function `_build_export_envelope(data_type, data)` that reads VERSION file, calls `get_or_create_instance_id()`, and returns the envelope dict with `type`, `version`, `exported_at`, `instance_id`, `data`
@@ -28,20 +28,20 @@ allow edxporting any pice of segragated data, or evertyhign (all chits, all cont
     - Return with `json.dumps(indent=2)` for human-readable formatting
     - _Requirements: 3.2, 3.4, 3.5, 3.6, 9.2, 9.4_
 
-  - [-] 1.4 Write property test: Chit export completeness and correctness
+  - [x] 1.4 Write property test: Chit export completeness and correctness
     - **Property 1: Chit export completeness and correctness**
     - Generate random chit records with varied field combinations (null/populated JSON fields), insert into test DB, call export endpoint, verify envelope structure and all records present with deserialized fields
     - Use stdlib only (random, string, uuid, unittest), minimum 100 iterations
     - **Validates: Requirements 2.2, 2.4, 2.5, 9.3**
 
-  - [~] 1.5 Write property test: User data export completeness and correctness
+  - [x] 1.5 Write property test: User data export completeness and correctness
     - **Property 2: User data export completeness and correctness**
     - Generate random settings and contact records, insert into test DB, call export endpoint, verify envelope structure with both `settings` and `contacts` arrays, all JSON fields deserialized
     - Use stdlib only, minimum 100 iterations
     - **Validates: Requirements 3.2, 3.4, 3.5, 3.6, 9.4**
 
 - [ ] 2. Add backend import endpoints
-  - [~] 2.1 Implement `POST /api/import/chits` endpoint
+  - [x] 2.1 Implement `POST /api/import/chits` endpoint
     - Validate `mode` is "add" or "replace" → HTTP 400 if not
     - Validate `data.type` is "chits" → HTTP 400 if not
     - Validate envelope has required fields (type, version, exported_at, data) → HTTP 400 if missing
@@ -50,7 +50,7 @@ allow edxporting any pice of segragated data, or evertyhign (all chits, all cont
     - Return `{ "summary": { "imported": N } }`
     - _Requirements: 4.4, 5.3, 10.1, 10.3, 10.4, 10.5_
 
-  - [~] 2.2 Implement `POST /api/import/userdata` endpoint
+  - [x] 2.2 Implement `POST /api/import/userdata` endpoint
     - Validate `mode` is "add" or "replace" → HTTP 400 if not
     - Validate `data.type` is "userdata" → HTTP 400 if not
     - Validate envelope has required fields → HTTP 400 if missing
@@ -60,7 +60,7 @@ allow edxporting any pice of segragated data, or evertyhign (all chits, all cont
     - Return appropriate summary response with counts
     - _Requirements: 6.4, 6.5, 7.3, 10.2, 10.3, 10.4, 10.5_
 
-  - [~] 2.3 Write property test: Import validation rejects invalid requests
+  - [-] 2.3 Write property test: Import validation rejects invalid requests
     - **Property 3: Import validation rejects invalid requests**
     - Generate random invalid modes and mismatched envelope types, call import endpoints, verify HTTP 400 and no DB changes
     - Use stdlib only, minimum 100 iterations

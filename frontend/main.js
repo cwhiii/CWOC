@@ -2038,28 +2038,82 @@ function _globalCheckNotifications() {
       const unitMs = { minutes: 60000, hours: 3600000, days: 86400000, weeks: 604800000 };
       const offsetMs = alert.value * (unitMs[alert.unit] || 60000);
 
-      const targetStr = alert.relativeTo
-        ? (chit.due_datetime || chit.start_datetime)
-        : chit.start_datetime;
+      // Determine target — use due if present, otherwise start
+      const targetStr = chit.due_datetime || chit.start_datetime;
       if (!targetStr) return;
 
       const targetDate = new Date(targetStr);
       if (isNaN(targetDate.getTime())) return;
 
-      const fireAt = new Date(targetDate.getTime() - offsetMs);
+      // before = target - offset, after = target + offset
+      const fireAt = alert.afterTarget
+        ? new Date(targetDate.getTime() + offsetMs)
+        : new Date(targetDate.getTime() - offsetMs);
       const diff = now - fireAt;
 
-      // Fire if within 60 seconds past the fire time (check runs every 30s)
-      if (diff < 0 || diff > 60000) return;
+      const snoozeKey = `${chit.id}-notif-${alertIdx}`;
 
-      const key = `${chit.id}-notif-${alertIdx}-${fireAt.toISOString()}`;
-      if (_globalFiredNotifications.has(key)) return;
-      _globalFiredNotifications.add(key);
+      // Initial fire: within 60 seconds past fire time
+      if (diff >= 0 && diff < 60000) {
+        const key = `${chit.id}-notif-${alertIdx}-${fireAt.toISOString()}`;
+        if (_globalFiredNotifications.has(key)) return;
+        // Check snooze registry (used by loop dismiss)
+        if (_snoozeRegistry[snoozeKey] && _snoozeRegistry[snoozeKey] === -1) return; // permanently dismissed
+        _globalFiredNotifications.add(key);
 
-      const label = `${alert.value} ${alert.unit} before ${alert.relativeTo ? "due/start" : "start"}`;
-      const toastTitle = alert.message ? `${chit.title} — ${alert.message}` : chit.title;
-      _showGlobalToast("📢", label, toastTitle, chit.id, null);
-      _sendBrowserNotification(`📢 Reminder: ${toastTitle}`, label, chit.id);
+        const targetName = chit.due_datetime ? "due" : "start";
+        const dir = alert.afterTarget ? "after" : "before";
+        const label = `${alert.value} ${alert.unit} ${dir} ${targetName}`;
+        const toastTitle = alert.message ? `${chit.title} — ${alert.message}` : chit.title;
+        const toast = _showGlobalToast("📢", label, toastTitle, chit.id, null);
+        _sendBrowserNotification(`📢 Reminder: ${toastTitle}`, label, chit.id);
+
+        // If loop, add dismiss handler that stops future loops
+        if (alert.loop && toast) {
+          const dismissBtn = toast.querySelectorAll("button")[1]; // Open, Dismiss
+          if (dismissBtn) {
+            const origClick = dismissBtn.onclick;
+            dismissBtn.onclick = () => {
+              _snoozeRegistry[snoozeKey] = -1; // permanently dismiss loop
+              if (origClick) origClick();
+            };
+          }
+        }
+        return;
+      }
+
+      // Loop: re-fire at snooze intervals after initial fire
+      if (alert.loop && diff >= 60000) {
+        if (_snoozeRegistry[snoozeKey] && _snoozeRegistry[snoozeKey] === -1) return; // dismissed
+        const snoozeMs = _getSnoozeMs();
+        const elapsed = diff - 60000;
+        const loopCount = Math.floor(elapsed / snoozeMs);
+        const loopFireAt = new Date(fireAt.getTime() + 60000 + loopCount * snoozeMs);
+        const loopDiff = now - loopFireAt;
+        if (loopDiff >= 0 && loopDiff < 60000) {
+          const loopKey = `${chit.id}-notif-loop-${alertIdx}-${loopCount}`;
+          if (_globalFiredNotifications.has(loopKey)) return;
+          _globalFiredNotifications.add(loopKey);
+
+          const targetName = chit.due_datetime ? "due" : "start";
+          const dir = alert.afterTarget ? "after" : "before";
+          const label = `🔁 ${alert.value} ${alert.unit} ${dir} ${targetName} (reminder)`;
+          const toastTitle = alert.message ? `${chit.title} — ${alert.message}` : chit.title;
+          const toast = _showGlobalToast("📢", label, toastTitle, chit.id, null);
+          _sendBrowserNotification(`📢 Reminder: ${toastTitle}`, label, chit.id);
+
+          if (toast) {
+            const dismissBtn = toast.querySelectorAll("button")[1];
+            if (dismissBtn) {
+              const origClick = dismissBtn.onclick;
+              dismissBtn.onclick = () => {
+                _snoozeRegistry[snoozeKey] = -1;
+                if (origClick) origClick();
+              };
+            }
+          }
+        }
+      }
     });
   });
 

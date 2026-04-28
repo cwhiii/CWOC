@@ -2097,6 +2097,389 @@ def export_userdata():
             conn.close()
 
 
+@app.post("/api/import/chits")
+def import_chits(req: ImportRequest):
+    """Import chit records from a JSON export envelope."""
+    # Validate mode
+    if req.mode not in ("add", "replace"):
+        raise HTTPException(status_code=400, detail="Invalid mode: must be 'add' or 'replace'")
+
+    envelope = req.data
+
+    # Validate envelope required fields
+    for field in ("type", "version", "exported_at", "data"):
+        if field not in envelope:
+            raise HTTPException(status_code=400, detail="Invalid export envelope: missing required fields")
+
+    # Validate envelope type
+    if envelope.get("type") != "chits":
+        raise HTTPException(status_code=400, detail="Invalid data: expected type 'chits'")
+
+    records = envelope.get("data", [])
+    if not isinstance(records, list):
+        raise HTTPException(status_code=400, detail="Invalid data: expected 'data' to be a list")
+
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.execute("BEGIN")
+
+        if req.mode == "replace":
+            conn.execute("DELETE FROM chits")
+
+        imported = 0
+        for chit in records:
+            new_id = str(uuid4())
+            conn.execute(
+                """INSERT INTO chits (
+                    id, title, note, tags, start_datetime, end_datetime,
+                    due_datetime, completed_datetime, status, priority, severity,
+                    checklist, alarm, notification, recurrence, recurrence_id,
+                    location, color, people, pinned, archived, deleted,
+                    created_datetime, modified_datetime, is_project_master,
+                    child_chits, all_day, alerts, recurrence_rule,
+                    recurrence_exceptions, progress_percent, time_estimate,
+                    weather_data
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    new_id,
+                    chit.get("title"),
+                    chit.get("note"),
+                    serialize_json_field(chit.get("tags")),
+                    chit.get("start_datetime"),
+                    chit.get("end_datetime"),
+                    chit.get("due_datetime"),
+                    chit.get("completed_datetime"),
+                    chit.get("status"),
+                    chit.get("priority"),
+                    chit.get("severity"),
+                    serialize_json_field(chit.get("checklist")),
+                    1 if chit.get("alarm") else 0,
+                    1 if chit.get("notification") else 0,
+                    chit.get("recurrence"),
+                    chit.get("recurrence_id"),
+                    chit.get("location"),
+                    chit.get("color"),
+                    serialize_json_field(chit.get("people")),
+                    1 if chit.get("pinned") else 0,
+                    1 if chit.get("archived") else 0,
+                    1 if chit.get("deleted") else 0,
+                    chit.get("created_datetime"),
+                    chit.get("modified_datetime"),
+                    1 if chit.get("is_project_master") else 0,
+                    serialize_json_field(chit.get("child_chits")),
+                    1 if chit.get("all_day") else 0,
+                    serialize_json_field(chit.get("alerts")),
+                    serialize_json_field(chit.get("recurrence_rule")),
+                    serialize_json_field(chit.get("recurrence_exceptions")),
+                    chit.get("progress_percent"),
+                    chit.get("time_estimate"),
+                    serialize_json_field(chit.get("weather_data")),
+                ),
+            )
+            imported += 1
+
+        conn.commit()
+        return {"summary": {"imported": imported}}
+    except HTTPException:
+        raise
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logger.error(f"Import chits failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Import failed: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
+@app.post("/api/import/userdata")
+def import_userdata(req: ImportRequest):
+    """Import user data (settings + contacts) from a JSON export envelope."""
+    # Validate mode
+    if req.mode not in ("add", "replace"):
+        raise HTTPException(status_code=400, detail="Invalid mode: must be 'add' or 'replace'")
+
+    envelope = req.data
+
+    # Validate envelope required fields
+    for field in ("type", "version", "exported_at", "data"):
+        if field not in envelope:
+            raise HTTPException(status_code=400, detail="Invalid export envelope: missing required fields")
+
+    # Validate envelope type
+    if envelope.get("type") != "userdata":
+        raise HTTPException(status_code=400, detail="Invalid data: expected type 'userdata'")
+
+    payload = envelope.get("data", {})
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="Invalid data: expected 'data' to be an object")
+
+    settings_records = payload.get("settings", [])
+    contact_records = payload.get("contacts", [])
+
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.execute("BEGIN")
+
+        if req.mode == "replace":
+            # ── Replace mode: delete everything, then insert all ──
+            conn.execute("DELETE FROM settings")
+            conn.execute("DELETE FROM contacts")
+
+            settings_replaced = 0
+            for s in settings_records:
+                conn.execute(
+                    """INSERT OR REPLACE INTO settings (
+                        user_id, time_format, sex, snooze_length, default_filters,
+                        alarm_orientation, active_clocks, saved_locations, tags, custom_colors,
+                        visual_indicators, chit_options, calendar_snap, week_start_day,
+                        work_start_hour, work_end_hour, work_days, enabled_periods,
+                        custom_days_count, all_view_start_hour, all_view_end_hour,
+                        day_scroll_to_hour, username, audit_log_max_days, audit_log_max_mb
+                    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    (
+                        s.get("user_id"),
+                        s.get("time_format"),
+                        s.get("sex"),
+                        s.get("snooze_length"),
+                        serialize_json_field(s.get("default_filters")),
+                        s.get("alarm_orientation"),
+                        s.get("active_clocks"),
+                        serialize_json_field(s.get("saved_locations")),
+                        serialize_json_field(s.get("tags")),
+                        serialize_json_field(s.get("custom_colors")),
+                        serialize_json_field(s.get("visual_indicators")),
+                        serialize_json_field(s.get("chit_options")),
+                        s.get("calendar_snap"),
+                        s.get("week_start_day"),
+                        s.get("work_start_hour"),
+                        s.get("work_end_hour"),
+                        s.get("work_days"),
+                        s.get("enabled_periods"),
+                        s.get("custom_days_count"),
+                        s.get("all_view_start_hour"),
+                        s.get("all_view_end_hour"),
+                        s.get("day_scroll_to_hour"),
+                        s.get("username"),
+                        s.get("audit_log_max_days"),
+                        s.get("audit_log_max_mb"),
+                    ),
+                )
+                settings_replaced += 1
+
+            contacts_replaced = 0
+            for c in contact_records:
+                new_id = str(uuid4())
+                conn.execute(
+                    """INSERT INTO contacts (
+                        id, given_name, surname, middle_names, prefix, suffix,
+                        nickname, display_name, phones, emails, addresses, call_signs,
+                        x_handles, websites, has_signal, signal_username, pgp_key, favorite,
+                        color, organization, social_context, image_url, notes, tags,
+                        created_datetime, modified_datetime
+                    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    (
+                        new_id,
+                        c.get("given_name"),
+                        c.get("surname"),
+                        c.get("middle_names"),
+                        c.get("prefix"),
+                        c.get("suffix"),
+                        c.get("nickname"),
+                        c.get("display_name"),
+                        serialize_json_field(c.get("phones")),
+                        serialize_json_field(c.get("emails")),
+                        serialize_json_field(c.get("addresses")),
+                        serialize_json_field(c.get("call_signs")),
+                        serialize_json_field(c.get("x_handles")),
+                        serialize_json_field(c.get("websites")),
+                        1 if c.get("has_signal") else 0,
+                        c.get("signal_username"),
+                        c.get("pgp_key"),
+                        1 if c.get("favorite") else 0,
+                        c.get("color"),
+                        c.get("organization"),
+                        c.get("social_context"),
+                        c.get("image_url"),
+                        c.get("notes"),
+                        serialize_json_field(c.get("tags")),
+                        c.get("created_datetime"),
+                        c.get("modified_datetime"),
+                    ),
+                )
+                contacts_replaced += 1
+
+            conn.commit()
+            return {"summary": {"settings_replaced": settings_replaced, "contacts_replaced": contacts_replaced}}
+
+        else:
+            # ── Add mode: merge settings arrays, insert non-duplicate contacts ──
+            settings_merged = 0
+            for s in settings_records:
+                user_id = s.get("user_id", "default_user")
+                cursor = conn.cursor()
+                cursor.execute("SELECT * FROM settings WHERE user_id = ?", (user_id,))
+                existing_row = cursor.fetchone()
+
+                if existing_row:
+                    col_names = [desc[0] for desc in cursor.description]
+                    existing = dict(zip(col_names, existing_row))
+
+                    # Deserialize existing array fields
+                    existing_tags = deserialize_json_field(existing.get("tags")) or []
+                    existing_custom_colors = deserialize_json_field(existing.get("custom_colors")) or []
+                    existing_saved_locations = deserialize_json_field(existing.get("saved_locations")) or []
+
+                    # Imported array fields (already deserialized in envelope)
+                    imported_tags = s.get("tags") or []
+                    imported_custom_colors = s.get("custom_colors") or []
+                    imported_saved_locations = s.get("saved_locations") or []
+
+                    # Merge tags: deduplicate by tag name
+                    existing_tag_names = {t.get("name") for t in existing_tags if isinstance(t, dict)}
+                    for tag in imported_tags:
+                        if isinstance(tag, dict) and tag.get("name") not in existing_tag_names:
+                            existing_tags.append(tag)
+                            existing_tag_names.add(tag.get("name"))
+
+                    # Merge custom_colors: deduplicate by string value
+                    existing_color_set = set(existing_custom_colors)
+                    for color in imported_custom_colors:
+                        if color not in existing_color_set:
+                            existing_custom_colors.append(color)
+                            existing_color_set.add(color)
+
+                    # Merge saved_locations: deduplicate by label
+                    existing_loc_labels = {loc.get("label") for loc in existing_saved_locations if isinstance(loc, dict)}
+                    for loc in imported_saved_locations:
+                        if isinstance(loc, dict) and loc.get("label") not in existing_loc_labels:
+                            existing_saved_locations.append(loc)
+                            existing_loc_labels.add(loc.get("label"))
+
+                    # UPDATE existing row with merged arrays only
+                    conn.execute(
+                        """UPDATE settings SET tags = ?, custom_colors = ?, saved_locations = ?
+                           WHERE user_id = ?""",
+                        (
+                            serialize_json_field(existing_tags),
+                            serialize_json_field(existing_custom_colors),
+                            serialize_json_field(existing_saved_locations),
+                            user_id,
+                        ),
+                    )
+                    settings_merged += 1
+                else:
+                    # No existing settings row — insert the imported one
+                    conn.execute(
+                        """INSERT OR REPLACE INTO settings (
+                            user_id, time_format, sex, snooze_length, default_filters,
+                            alarm_orientation, active_clocks, saved_locations, tags, custom_colors,
+                            visual_indicators, chit_options, calendar_snap, week_start_day,
+                            work_start_hour, work_end_hour, work_days, enabled_periods,
+                            custom_days_count, all_view_start_hour, all_view_end_hour,
+                            day_scroll_to_hour, username, audit_log_max_days, audit_log_max_mb
+                        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                        (
+                            user_id,
+                            s.get("time_format"),
+                            s.get("sex"),
+                            s.get("snooze_length"),
+                            serialize_json_field(s.get("default_filters")),
+                            s.get("alarm_orientation"),
+                            s.get("active_clocks"),
+                            serialize_json_field(s.get("saved_locations")),
+                            serialize_json_field(s.get("tags")),
+                            serialize_json_field(s.get("custom_colors")),
+                            serialize_json_field(s.get("visual_indicators")),
+                            serialize_json_field(s.get("chit_options")),
+                            s.get("calendar_snap"),
+                            s.get("week_start_day"),
+                            s.get("work_start_hour"),
+                            s.get("work_end_hour"),
+                            s.get("work_days"),
+                            s.get("enabled_periods"),
+                            s.get("custom_days_count"),
+                            s.get("all_view_start_hour"),
+                            s.get("all_view_end_hour"),
+                            s.get("day_scroll_to_hour"),
+                            s.get("username"),
+                            s.get("audit_log_max_days"),
+                            s.get("audit_log_max_mb"),
+                        ),
+                    )
+                    settings_merged += 1
+
+            # ── Add mode contacts: skip duplicates by display_name + given_name ──
+            cursor = conn.cursor()
+            cursor.execute("SELECT display_name, given_name FROM contacts")
+            existing_contacts = {(row[0], row[1]) for row in cursor.fetchall()}
+
+            contacts_added = 0
+            contacts_skipped = 0
+            for c in contact_records:
+                dn = c.get("display_name")
+                gn = c.get("given_name")
+                if (dn, gn) in existing_contacts:
+                    contacts_skipped += 1
+                    continue
+
+                new_id = str(uuid4())
+                conn.execute(
+                    """INSERT INTO contacts (
+                        id, given_name, surname, middle_names, prefix, suffix,
+                        nickname, display_name, phones, emails, addresses, call_signs,
+                        x_handles, websites, has_signal, signal_username, pgp_key, favorite,
+                        color, organization, social_context, image_url, notes, tags,
+                        created_datetime, modified_datetime
+                    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    (
+                        new_id,
+                        c.get("given_name"),
+                        c.get("surname"),
+                        c.get("middle_names"),
+                        c.get("prefix"),
+                        c.get("suffix"),
+                        c.get("nickname"),
+                        c.get("display_name"),
+                        serialize_json_field(c.get("phones")),
+                        serialize_json_field(c.get("emails")),
+                        serialize_json_field(c.get("addresses")),
+                        serialize_json_field(c.get("call_signs")),
+                        serialize_json_field(c.get("x_handles")),
+                        serialize_json_field(c.get("websites")),
+                        1 if c.get("has_signal") else 0,
+                        c.get("signal_username"),
+                        c.get("pgp_key"),
+                        1 if c.get("favorite") else 0,
+                        c.get("color"),
+                        c.get("organization"),
+                        c.get("social_context"),
+                        c.get("image_url"),
+                        c.get("notes"),
+                        serialize_json_field(c.get("tags")),
+                        c.get("created_datetime"),
+                        c.get("modified_datetime"),
+                    ),
+                )
+                contacts_added += 1
+
+            conn.commit()
+            return {"summary": {"contacts_added": contacts_added, "contacts_skipped": contacts_skipped, "settings_merged": settings_merged}}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logger.error(f"Import userdata failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Import failed: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Section 10: Settings API Routes
 # ═══════════════════════════════════════════════════════════════════════════

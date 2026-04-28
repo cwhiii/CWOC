@@ -1790,19 +1790,23 @@ function _checkNotificationAlerts() {
 
   window._alertsData.notifications.forEach((n, idx) => {
     if (!n.value || !n.unit) return;
+    if (n._acknowledged) return; // loop was dismissed
 
     // Convert to milliseconds
     const unitMs = { minutes: 60000, hours: 3600000, days: 86400000, weeks: 604800000 };
     const offsetMs = n.value * (unitMs[n.unit] || 60000);
 
-    // Determine target datetime
-    const targetStr = n.relativeTo ? (dueVal || startVal) : startVal;
+    // Determine target datetime — use due if present, otherwise start
+    const targetStr = dueVal || startVal;
     if (!targetStr) return;
 
     const targetDate = new Date(targetStr);
     if (isNaN(targetDate.getTime())) return;
 
-    const fireAt = new Date(targetDate.getTime() - offsetMs);
+    // before = target - offset, after = target + offset
+    const fireAt = n.afterTarget
+      ? new Date(targetDate.getTime() + offsetMs)
+      : new Date(targetDate.getTime() - offsetMs);
     const now = new Date();
 
     // Fire if we're within 30 seconds past the fire time
@@ -1812,19 +1816,64 @@ function _checkNotificationAlerts() {
       if (_firedNotifications.has(key)) return;
       _firedNotifications.add(key);
 
-      const msg = `${n.value} ${n.unit} before ${n.relativeTo ? "due/start" : "start"}: "${title}"`;
-      if (Notification.permission === "granted") {
-        new Notification("📢 Reminder", { body: msg });
-      } else {
-        // Fallback: show inline toast
-        const toast = document.createElement("div");
-        toast.style.cssText = "position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:9999;background:#fff5e6;border:2px solid #8b5a2b;border-radius:8px;padding:0.75em 1.5em;box-shadow:0 4px 16px rgba(0,0,0,0.3);";
-        toast.textContent = `📢 ${msg}`;
-        document.body.appendChild(toast);
-        setTimeout(() => toast.remove(), 8000);
+      const timingLabel = _notifTimingLabel(n);
+      const msg = `${n.value} ${n.unit} ${timingLabel}: "${title}"`;
+      _fireNotificationAlert(msg, n, idx);
+    }
+
+    // Loop: re-fire at snooze intervals after initial fire
+    if (n.loop && diff >= 30000) {
+      const snoozeMs = _getEditorSnoozeMs();
+      const elapsed = diff - 30000;
+      const loopCount = Math.floor(elapsed / snoozeMs);
+      const loopFireAt = new Date(fireAt.getTime() + 30000 + loopCount * snoozeMs);
+      const loopDiff = now - loopFireAt;
+      if (loopDiff >= 0 && loopDiff < 30000) {
+        const loopKey = `notif-loop-${idx}-${loopCount}`;
+        if (_firedNotifications.has(loopKey)) return;
+        _firedNotifications.add(loopKey);
+
+        const timingLabel = _notifTimingLabel(n);
+        const msg = `🔁 ${n.value} ${n.unit} ${timingLabel}: "${title}" (reminder)`;
+        _fireNotificationAlert(msg, n, idx);
       }
     }
   });
+}
+
+function _notifTimingLabel(n) {
+  const target = _notifTargetLabel();
+  const dir = n.afterTarget ? "after" : "before";
+  return `${dir} ${target}`;
+}
+
+function _getEditorSnoozeMs() {
+  const s = window._snoozeLength || window._editorSnoozeLength || '5 minutes';
+  const match = s.match(/(\d+)/);
+  return (match ? parseInt(match[1]) : 5) * 60 * 1000;
+}
+
+function _fireNotificationAlert(msg, n, idx) {
+  if (Notification.permission === "granted") {
+    new Notification("📢 Reminder", { body: msg });
+  }
+  // Always show inline toast as well
+  const toast = document.createElement("div");
+  toast.style.cssText = "position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:9999;background:#fff5e6;border:2px solid #8b5a2b;border-radius:8px;padding:0.75em 1.5em;box-shadow:0 4px 16px rgba(0,0,0,0.3);display:flex;align-items:center;gap:0.5em;";
+  toast.innerHTML = `<span>📢 ${msg}</span>`;
+  const dismissBtn = document.createElement("button");
+  dismissBtn.textContent = "Dismiss";
+  dismissBtn.style.cssText = "padding:3px 8px;cursor:pointer;margin-left:0.5em;";
+  dismissBtn.onclick = () => {
+    toast.remove();
+    // If loop, stop looping by marking as acknowledged
+    if (n.loop) {
+      window._alertsData.notifications[idx]._acknowledged = true;
+    }
+  };
+  toast.appendChild(dismissBtn);
+  document.body.appendChild(toast);
+  if (!n.loop) setTimeout(() => toast.remove(), 8000);
 }
 
 function _alertsFromChit(chit) {
@@ -1870,10 +1919,10 @@ function _alertsToArray() {
 // ── Render all alert containers ──────────────────────────────────────────────
 
 function renderAllAlerts() {
+  renderNotificationsContainer();
   renderAlarmsContainer();
   renderTimersContainer();
   renderStopwatchesContainer();
-  renderNotificationsContainer();
 }
 
 function renderAlarmsContainer() {
@@ -2004,13 +2053,37 @@ function renderNotificationsContainer() {
     });
     unitSel.addEventListener("change", () => { window._alertsData.notifications[idx].unit = unitSel.value; setSaveButtonUnsaved(); });
 
-    const relLbl = document.createElement("label");
-    relLbl.style.cssText = "display:flex;align-items:center;gap:2px;font-size:0.85em;cursor:pointer;white-space:nowrap;";
-    const relCb = document.createElement("input");
-    relCb.type = "checkbox"; relCb.checked = !!n.relativeTo;
-    relCb.addEventListener("change", () => { window._alertsData.notifications[idx].relativeTo = relCb.checked; setSaveButtonUnsaved(); });
-    relLbl.appendChild(relCb);
-    relLbl.appendChild(document.createTextNode("before due/start"));
+    // Timing dropdown: before/after — label shows start or due based on chit dates
+    const timingSel = document.createElement("select");
+    timingSel.style.cssText = "font-size:0.85em;padding:2px 4px;";
+    [
+      { value: "before", label: "before" },
+      { value: "after",  label: "after" },
+    ].forEach((t) => {
+      const opt = document.createElement("option");
+      opt.value = t.value; opt.textContent = t.label;
+      if ((!!n.afterTarget ? "after" : "before") === t.value) opt.selected = true;
+      timingSel.appendChild(opt);
+    });
+    timingSel.addEventListener("change", () => {
+      window._alertsData.notifications[idx].afterTarget = (timingSel.value === "after");
+      setSaveButtonUnsaved();
+    });
+
+    // Dynamic label: shows "start" or "due" based on which dates the chit has
+    const targetLabel = document.createElement("span");
+    targetLabel.style.cssText = "font-size:0.85em;white-space:nowrap;";
+    targetLabel.textContent = _notifTargetLabel();
+
+    // Loop until acknowledged checkbox
+    const loopLbl = document.createElement("label");
+    loopLbl.style.cssText = "display:flex;align-items:center;gap:2px;font-size:0.85em;cursor:pointer;white-space:nowrap;";
+    loopLbl.title = "Re-notify at snooze interval until dismissed";
+    const loopCb = document.createElement("input");
+    loopCb.type = "checkbox"; loopCb.checked = !!n.loop;
+    loopCb.addEventListener("change", () => { window._alertsData.notifications[idx].loop = loopCb.checked; setSaveButtonUnsaved(); });
+    loopLbl.appendChild(loopCb);
+    loopLbl.appendChild(document.createTextNode("🔁 Loop"));
 
     const delBtn = document.createElement("button");
     delBtn.type = "button"; delBtn.textContent = "❌"; delBtn.style.cssText = "padding:1px 5px;";
@@ -2019,10 +2092,21 @@ function renderNotificationsContainer() {
     row.appendChild(document.createTextNode("Notify "));
     row.appendChild(valInput);
     row.appendChild(unitSel);
-    row.appendChild(relLbl);
+    row.appendChild(timingSel);
+    row.appendChild(targetLabel);
+    row.appendChild(loopLbl);
     row.appendChild(delBtn);
     c.appendChild(row);
   });
+}
+
+/** Returns "start", "due", or "start/due" based on which date fields the chit has */
+function _notifTargetLabel() {
+  const hasStart = !!document.getElementById("start_datetime")?.value;
+  const hasDue = !!document.getElementById("due_datetime")?.value;
+  if (hasStart && hasDue) return "start/due";
+  if (hasDue) return "due";
+  return "start";
 }
 
 // ── Alarm CRUD ───────────────────────────────────────────────────────────────
@@ -2489,7 +2573,7 @@ function deleteTimerItem(idx) {
 function openNotificationModal(event) {
   if (event) event.stopPropagation();
   // Add a new notification inline
-  window._alertsData.notifications.push({ _type: "notification", value: 15, unit: "minutes", relativeTo: false });
+  window._alertsData.notifications.push({ _type: "notification", value: 15, unit: "minutes", afterTarget: false, loop: false });
   _startNotificationChecker();
   renderNotificationsContainer();
   setSaveButtonUnsaved();
@@ -2498,11 +2582,10 @@ function openNotificationModal(event) {
 function addNotification() {
   const value = parseInt(document.getElementById("notificationValue")?.value);
   const unit = document.getElementById("notificationUnit")?.value || "minutes";
-  const relativeTo = document.getElementById("notificationRelativeToToggle")?.checked || false;
   const onlyIfUndone = document.getElementById("notificationOnlyIfUndone")?.checked ?? true;
   const message = document.getElementById("notificationMessage")?.value?.trim() || '';
   if (!value || value <= 0) { alert("Please enter a valid number."); return; }
-  window._alertsData.notifications.push({ _type: "notification", value, unit, relativeTo, only_if_undone: onlyIfUndone, message });
+  window._alertsData.notifications.push({ _type: "notification", value, unit, afterTarget: false, loop: false, only_if_undone: onlyIfUndone, message });
   closeNotificationModal(true);
   renderNotificationsContainer();
   setSaveButtonUnsaved();
@@ -2523,19 +2606,6 @@ function validateNotificationInputs() {
   const val = document.getElementById("notificationValue")?.value;
   const btn = document.getElementById("modalNotificationSubmit");
   if (btn) btn.disabled = !val || isNaN(val) || Number(val) <= 0;
-}
-
-function toggleAlertFilterDropdown(event) {
-  if (event) event.stopPropagation();
-  const containers = ["alarms-container", "timers-container", "stopwatches-container", "notifications-container"];
-  const anyVisible = containers.some((id) => {
-    const el = document.getElementById(id);
-    return el && el.style.display !== "none" && el.innerHTML !== "";
-  });
-  containers.forEach((id) => {
-    const el = document.getElementById(id);
-    if (el) el.style.display = anyVisible ? "none" : "";
-  });
 }
 
 // ── End alerts zone ──────────────────────────────────────────────────────────
@@ -3527,6 +3597,11 @@ document.addEventListener("DOMContentLoaded", function () {
 
   // Load time format setting for alarm display
   _loadEditorTimeFormat();
+
+  // Load snooze length for notification loop
+  getCachedSettings().then(s => {
+    if (s.snooze_length) window._editorSnoozeLength = s.snooze_length;
+  }).catch(() => {});
 
   // Request notification permission
   if (typeof Notification !== "undefined" && Notification.permission === "default") {
