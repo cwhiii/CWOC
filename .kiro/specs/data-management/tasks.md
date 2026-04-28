@@ -60,25 +60,25 @@ allow edxporting any pice of segragated data, or evertyhign (all chits, all cont
     - Return appropriate summary response with counts
     - _Requirements: 6.4, 6.5, 7.3, 10.2, 10.3, 10.4, 10.5_
 
-  - [-] 2.3 Write property test: Import validation rejects invalid requests
+  - [x] 2.3 Write property test: Import validation rejects invalid requests
     - **Property 3: Import validation rejects invalid requests**
     - Generate random invalid modes and mismatched envelope types, call import endpoints, verify HTTP 400 and no DB changes
     - Use stdlib only, minimum 100 iterations
     - **Validates: Requirements 4.6, 6.7, 10.3, 10.4**
 
-  - [~] 2.4 Write property test: Add mode chit import preserves fields with new IDs
+  - [x] 2.4 Write property test: Add mode chit import preserves fields with new IDs
     - **Property 4: Add mode chit import preserves fields with new IDs**
     - Generate random chit envelopes, import in add mode, verify each inserted chit has a new UUID different from original and all other fields match
     - Use stdlib only, minimum 100 iterations
     - **Validates: Requirements 4.4**
 
-  - [~] 2.5 Write property test: Add mode settings merge deduplicates array fields
+  - [x] 2.5 Write property test: Add mode settings merge deduplicates array fields
     - **Property 5: Add mode settings merge deduplicates array fields**
     - Generate random existing settings and imported settings with overlapping array fields, import in add mode, verify result is deduplicated union with no items removed
     - Use stdlib only, minimum 100 iterations
     - **Validates: Requirements 6.4**
 
-  - [~] 2.6 Write property test: Add mode contact import skips duplicates
+  - [-] 2.6 Write property test: Add mode contact import skips duplicates
     - **Property 6: Add mode contact import skips duplicates**
     - Generate random existing and imported contacts with some matching display_name+given_name pairs, import in add mode, verify duplicates skipped and non-matching inserted with new UUIDs
     - Use stdlib only, minimum 100 iterations

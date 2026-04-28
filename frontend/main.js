@@ -2051,104 +2051,20 @@ function _globalCheckNotifications() {
         : new Date(targetDate.getTime() - offsetMs);
       const diff = now - fireAt;
 
-      const snoozeKey = `${chit.id}-notif-${alertIdx}`;
+      // Fire if within 60 seconds past the fire time
+      if (diff < 0 || diff > 60000) return;
 
-      // Initial fire: within 60 seconds past fire time
-      if (diff >= 0 && diff < 60000) {
-        const key = `${chit.id}-notif-${alertIdx}-${fireAt.toISOString()}`;
-        if (_globalFiredNotifications.has(key)) return;
-        // Check snooze registry (used by loop dismiss)
-        if (_snoozeRegistry[snoozeKey] && _snoozeRegistry[snoozeKey] === -1) return; // permanently dismissed
-        _globalFiredNotifications.add(key);
+      const key = `${chit.id}-notif-${alertIdx}-${fireAt.toISOString()}`;
+      if (_globalFiredNotifications.has(key)) return;
+      _globalFiredNotifications.add(key);
 
-        const targetName = chit.due_datetime ? "due" : "start";
-        const dir = alert.afterTarget ? "after" : "before";
-        const label = `${alert.value} ${alert.unit} ${dir} ${targetName}`;
-        const toastTitle = alert.message ? `${chit.title} — ${alert.message}` : chit.title;
-        const toast = _showGlobalToast("📢", label, toastTitle, chit.id, null);
-        _sendBrowserNotification(`📢 Reminder: ${toastTitle}`, label, chit.id);
-
-        // If loop, add dismiss handler that stops future loops
-        if (alert.loop && toast) {
-          const dismissBtn = toast.querySelectorAll("button")[1]; // Open, Dismiss
-          if (dismissBtn) {
-            const origClick = dismissBtn.onclick;
-            dismissBtn.onclick = () => {
-              _snoozeRegistry[snoozeKey] = -1; // permanently dismiss loop
-              if (origClick) origClick();
-            };
-          }
-        }
-        return;
-      }
-
-      // Loop: re-fire at snooze intervals after initial fire
-      if (alert.loop && diff >= 60000) {
-        if (_snoozeRegistry[snoozeKey] && _snoozeRegistry[snoozeKey] === -1) return; // dismissed
-        const snoozeMs = _getSnoozeMs();
-        const elapsed = diff - 60000;
-        const loopCount = Math.floor(elapsed / snoozeMs);
-        const loopFireAt = new Date(fireAt.getTime() + 60000 + loopCount * snoozeMs);
-        const loopDiff = now - loopFireAt;
-        if (loopDiff >= 0 && loopDiff < 60000) {
-          const loopKey = `${chit.id}-notif-loop-${alertIdx}-${loopCount}`;
-          if (_globalFiredNotifications.has(loopKey)) return;
-          _globalFiredNotifications.add(loopKey);
-
-          const targetName = chit.due_datetime ? "due" : "start";
-          const dir = alert.afterTarget ? "after" : "before";
-          const label = `🔁 ${alert.value} ${alert.unit} ${dir} ${targetName} (reminder)`;
-          const toastTitle = alert.message ? `${chit.title} — ${alert.message}` : chit.title;
-          const toast = _showGlobalToast("📢", label, toastTitle, chit.id, null);
-          _sendBrowserNotification(`📢 Reminder: ${toastTitle}`, label, chit.id);
-
-          if (toast) {
-            const dismissBtn = toast.querySelectorAll("button")[1];
-            if (dismissBtn) {
-              const origClick = dismissBtn.onclick;
-              dismissBtn.onclick = () => {
-                _snoozeRegistry[snoozeKey] = -1;
-                if (origClick) origClick();
-              };
-            }
-          }
-        }
-      }
+      const targetName = chit.due_datetime ? "due" : "start";
+      const dir = alert.afterTarget ? "after" : "before";
+      const label = `${alert.value} ${alert.unit} ${dir} ${targetName}`;
+      const toastTitle = alert.message ? `${chit.title} — ${alert.message}` : chit.title;
+      _showGlobalToast("📢", label, toastTitle, chit.id, null);
+      _sendBrowserNotification(`📢 Reminder: ${toastTitle}`, label, chit.id);
     });
-  });
-
-  // Check for "notify at start" and "notify at due" (per-chit flags in alerts)
-  const nowMs = now.getTime();
-  chits.forEach((chit) => {
-    // Read notify flags from alerts array
-    const flags = (chit.alerts || []).find(a => a._type === '_notify_flags');
-    const notifyStart = flags ? !!flags.at_start : true; // default true
-    const notifyDue = flags ? !!flags.at_due : true;
-
-    if (notifyStart && chit.start_datetime) {
-      const startMs = new Date(chit.start_datetime).getTime();
-      const diff = nowMs - startMs;
-      if (diff >= 0 && diff < 60000) {
-        const key = `${chit.id}-start-notify`;
-        if (!_globalFiredNotifications.has(key)) {
-          _globalFiredNotifications.add(key);
-          _showGlobalToast("🔔", "Starting now", chit.title, chit.id, null);
-          _sendBrowserNotification(`🔔 Starting: ${chit.title}`, "Event starting now", chit.id);
-        }
-      }
-    }
-    if (notifyDue && chit.due_datetime && chit.status !== 'Complete') {
-      const dueMs = new Date(chit.due_datetime).getTime();
-      const diff = nowMs - dueMs;
-      if (diff >= 0 && diff < 60000) {
-        const key = `${chit.id}-due-notify`;
-        if (!_globalFiredNotifications.has(key)) {
-          _globalFiredNotifications.add(key);
-          _showGlobalToast("⏰", "Due now", chit.title, chit.id, null);
-          _sendBrowserNotification(`⏰ Due: ${chit.title}`, "This chit is due now", chit.id);
-        }
-      }
-    }
   });
 }
 
@@ -2830,7 +2746,7 @@ function _updateTabCounts(filteredChits) {
     Checklists: unique.filter(c => Array.isArray(c.checklist) && c.checklist.length > 0).length,
     Alarms: unique.filter(c => {
       if (!Array.isArray(c.alerts) || c.alerts.length === 0) return c.alarm || c.notification;
-      return c.alerts.filter(a => a._type !== '_notify_flags').length > 0;
+      return c.alerts.length > 0;
     }).length,
     Projects: chits.filter(c => c.is_project_master && !c.deleted && !c.archived).length,
     Tasks: unique.filter(c => c.status || c.due_datetime).length,
@@ -4888,9 +4804,7 @@ function displayAlarmsView(chitsToDisplay) {
     if (!Array.isArray(c.alerts) || c.alerts.length === 0) {
       return c.alarm || c.notification;
     }
-    // Filter out _notify_flags entries — they're not real alerts
-    const realAlerts = c.alerts.filter(a => a._type !== '_notify_flags');
-    return realAlerts.length > 0;
+    return c.alerts.length > 0;
   });
 
   if (alertChits.length === 0) {
@@ -4920,10 +4834,10 @@ function displayAlarmsView(chitsToDisplay) {
 
     const summaryRow = document.createElement("div");
     summaryRow.style.cssText = "margin-top:0.3em;display:flex;align-items:center;gap:0.5em;font-size:0.9em;";
+    if (notifCount > 0 || chit.notification) summaryRow.appendChild(Object.assign(document.createElement("span"), { textContent: `📢 ${notifCount || 1}` }));
     if (alarmCount > 0 || chit.alarm) summaryRow.appendChild(Object.assign(document.createElement("span"), { textContent: `🔔 ${alarmCount || 1}` }));
     if (timerCount > 0) summaryRow.appendChild(Object.assign(document.createElement("span"), { textContent: `⏱️ ${timerCount}` }));
     if (swCount > 0) summaryRow.appendChild(Object.assign(document.createElement("span"), { textContent: `⏲️ ${swCount}` }));
-    if (notifCount > 0 || chit.notification) summaryRow.appendChild(Object.assign(document.createElement("span"), { textContent: `📢 ${notifCount || 1}` }));
     if (summaryRow.children.length > 0) card.appendChild(summaryRow);
 
     card.addEventListener("dblclick", () => {
@@ -5379,7 +5293,10 @@ function deleteChit() {
     return;
   }
   if (!confirm("Are you sure you want to delete this chit?")) return;
-  fetch(`/api/chits/${chitId}`, { method: "DELETE" })
+  var delId = chitId;
+  var chit = chits.find(function(c) { return c.id === delId; });
+  var delTitle = (chit && chit.title) || "(Untitled)";
+  fetch(`/api/chits/${delId}`, { method: "DELETE" })
     .then((response) => {
       if (!response.ok)
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -5398,6 +5315,11 @@ function deleteChit() {
         .classList.add("active");
       document.getElementById("period-select").value = currentView;
       fetchChits();
+      _showDeleteUndoToast(delId, delTitle, null, function () {
+        fetch("/api/trash/" + delId + "/restore", { method: "POST" })
+          .then(function () { fetchChits(); })
+          .catch(function (err) { console.error("Undo restore failed:", err); });
+      });
     })
     .catch((err) => {
       console.error("Error deleting chit:", err);

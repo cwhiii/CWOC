@@ -5,10 +5,7 @@
 ---
 
 ## Known Bugs
-
-### Mobile
-- `[ ]` 7 Day view doesn't show up in the period list
-- `[ ]` X Days view doesn't show X days
+- `[ ]` X Days view doesn't show X days. only does show a few days.
 
 ### Editor
 - notifications have a checkbox: "before due/start" wihch seems redundant & confusing. change to a drop down of before/after start / due. 
@@ -37,7 +34,7 @@
 - `[ ]` **Custom Colors cleanup** — clean up the color name labels (make user-settable, or just don't display them). Use horizontal rows for the color swatches so the block is shorter.
 - `[ ]` **Settings blocks collapsible** — make each settings block collapsible like zones in the chit editor
 - `[ ]` **Settings layout reorganization** — collect blocks that grow/scroll into their own row. balance this with Arrange short blocks side-by-side with other short blocks, long blocks with long blocks (fixed layout, not dynamic reflow). Order by most-frequently-accessed near the top.
-
+- when double ckilking a chit in the views it starts showinfg all the span lines befoer the doubleclick compltes. 
 
 ---
 

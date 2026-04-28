@@ -495,14 +495,11 @@ function onDateModeChange() {
     if (dueTime) dueTime.style.display = '';
   }
 
-  // Show/hide notify checkboxes based on date mode
-  const notifyStartLabel = document.getElementById('notifyAtStart')?.parentElement;
-  const notifyDueLabel = document.getElementById('notifyAtDue')?.parentElement;
-  if (notifyStartLabel) notifyStartLabel.style.display = (mode === 'startend') ? '' : 'none';
-  if (notifyDueLabel) notifyDueLabel.style.display = (mode === 'due') ? '' : 'none';
-
   // Update recurrence labels when date context changes
   _updateRecurrenceLabels();
+
+  // Show/hide Add Notification button based on whether dates are set
+  _updateNotificationBtnVisibility();
 
   if (!_dateModeSuppressUnsaved) setSaveButtonUnsaved();
 }
@@ -1603,16 +1600,25 @@ function deleteChit() {
 }
 
 function performDeleteChit() {
-  fetch(`/api/chits/${chitId}`, { method: "DELETE" })
-    .then((response) => {
-      if (!response.ok)
-        throw new Error(`HTTP error! status: ${response.status}`);
+  var title = document.getElementById("title")?.value || "(Untitled)";
+  var deletedId = chitId;
+  fetch("/api/chits/" + deletedId, { method: "DELETE" })
+    .then(function (response) {
+      if (!response.ok) throw new Error("HTTP error! status: " + response.status);
       return response.json();
     })
-    .then(() => {
-      window.location.href = "/";
+    .then(function () {
+      _showDeleteUndoToast(deletedId, title, function () {
+        // Timer expired — navigate to dashboard
+        window.location.href = "/";
+      }, function () {
+        // Undo clicked — restore and stay on editor
+        fetch("/api/trash/" + deletedId + "/restore", { method: "POST" })
+          .then(function () { window.location.reload(); })
+          .catch(function (err) { console.error("Undo restore failed:", err); });
+      });
     })
-    .catch((err) => {
+    .catch(function (err) {
       console.error("Error deleting chit:", err);
       alert("Failed to delete chit. Check console for details.");
     });
@@ -1790,7 +1796,6 @@ function _checkNotificationAlerts() {
 
   window._alertsData.notifications.forEach((n, idx) => {
     if (!n.value || !n.unit) return;
-    if (n._acknowledged) return; // loop was dismissed
 
     // Convert to milliseconds
     const unitMs = { minutes: 60000, hours: 3600000, days: 86400000, weeks: 604800000 };
@@ -1818,25 +1823,7 @@ function _checkNotificationAlerts() {
 
       const timingLabel = _notifTimingLabel(n);
       const msg = `${n.value} ${n.unit} ${timingLabel}: "${title}"`;
-      _fireNotificationAlert(msg, n, idx);
-    }
-
-    // Loop: re-fire at snooze intervals after initial fire
-    if (n.loop && diff >= 30000) {
-      const snoozeMs = _getEditorSnoozeMs();
-      const elapsed = diff - 30000;
-      const loopCount = Math.floor(elapsed / snoozeMs);
-      const loopFireAt = new Date(fireAt.getTime() + 30000 + loopCount * snoozeMs);
-      const loopDiff = now - loopFireAt;
-      if (loopDiff >= 0 && loopDiff < 30000) {
-        const loopKey = `notif-loop-${idx}-${loopCount}`;
-        if (_firedNotifications.has(loopKey)) return;
-        _firedNotifications.add(loopKey);
-
-        const timingLabel = _notifTimingLabel(n);
-        const msg = `🔁 ${n.value} ${n.unit} ${timingLabel}: "${title}" (reminder)`;
-        _fireNotificationAlert(msg, n, idx);
-      }
+      _fireNotificationAlert(msg);
     }
   });
 }
@@ -1847,13 +1834,7 @@ function _notifTimingLabel(n) {
   return `${dir} ${target}`;
 }
 
-function _getEditorSnoozeMs() {
-  const s = window._snoozeLength || window._editorSnoozeLength || '5 minutes';
-  const match = s.match(/(\d+)/);
-  return (match ? parseInt(match[1]) : 5) * 60 * 1000;
-}
-
-function _fireNotificationAlert(msg, n, idx) {
+function _fireNotificationAlert(msg) {
   if (Notification.permission === "granted") {
     new Notification("📢 Reminder", { body: msg });
   }
@@ -1864,34 +1845,21 @@ function _fireNotificationAlert(msg, n, idx) {
   const dismissBtn = document.createElement("button");
   dismissBtn.textContent = "Dismiss";
   dismissBtn.style.cssText = "padding:3px 8px;cursor:pointer;margin-left:0.5em;";
-  dismissBtn.onclick = () => {
-    toast.remove();
-    // If loop, stop looping by marking as acknowledged
-    if (n.loop) {
-      window._alertsData.notifications[idx]._acknowledged = true;
-    }
-  };
+  dismissBtn.onclick = () => toast.remove();
   toast.appendChild(dismissBtn);
   document.body.appendChild(toast);
-  if (!n.loop) setTimeout(() => toast.remove(), 8000);
+  setTimeout(() => toast.remove(), 8000);
 }
 
 function _alertsFromChit(chit) {
   if (!Array.isArray(chit.alerts)) chit.alerts = [];
   window._alertsData = { alarms: [], timers: [], stopwatches: [], notifications: [] };
-  let notifyFlags = null;
   chit.alerts.forEach((a) => {
     if (a._type === "alarm") window._alertsData.alarms.push(a);
     else if (a._type === "timer") window._alertsData.timers.push(a);
     else if (a._type === "stopwatch") window._alertsData.stopwatches.push(a);
     else if (a._type === "notification") window._alertsData.notifications.push(a);
-    else if (a._type === "_notify_flags") notifyFlags = a;
   });
-  // Restore notify checkboxes
-  const startCb = document.getElementById('notifyAtStart');
-  const dueCb = document.getElementById('notifyAtDue');
-  if (startCb) startCb.checked = notifyFlags ? !!notifyFlags.at_start : true;
-  if (dueCb) dueCb.checked = notifyFlags ? !!notifyFlags.at_due : true;
 
   renderAllAlerts();
   if (window._alertsData.alarms.length > 0) _startAlarmChecker();
@@ -1899,21 +1867,12 @@ function _alertsFromChit(chit) {
 }
 
 function _alertsToArray() {
-  const arr = [
+  return [
     ...window._alertsData.alarms,
     ...window._alertsData.timers,
     ...window._alertsData.stopwatches,
     ...window._alertsData.notifications,
   ];
-  // Save notify flags
-  const startCb = document.getElementById('notifyAtStart');
-  const dueCb = document.getElementById('notifyAtDue');
-  arr.push({
-    _type: '_notify_flags',
-    at_start: startCb ? startCb.checked : true,
-    at_due: dueCb ? dueCb.checked : true,
-  });
-  return arr;
 }
 
 // ── Render all alert containers ──────────────────────────────────────────────
@@ -1980,10 +1939,14 @@ function renderAlarmsContainer() {
     row1.appendChild(delBtn);
     wrap.appendChild(row1);
 
-    // Days row
+    // Days row — order honors week_start_day setting
     const daysRow = document.createElement("div");
     daysRow.style.cssText = `display:flex;gap:0.3em;flex-wrap:wrap;font-size:0.8em;${!alarm.enabled ? "opacity:0.45;" : ""}`;
-    ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].forEach((day) => {
+    const allDays = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+    const wsd = (window._cwocSettings && window._cwocSettings.week_start_day !== undefined) ? parseInt(window._cwocSettings.week_start_day) || 0 : 0;
+    const orderedDays = [];
+    for (let d = 0; d < 7; d++) orderedDays.push(allDays[(wsd + d) % 7]);
+    orderedDays.forEach((day) => {
       const lbl = document.createElement("label");
       lbl.style.cssText = "display:flex;align-items:center;gap:2px;cursor:pointer;";
       const cb = document.createElement("input");
@@ -2075,16 +2038,6 @@ function renderNotificationsContainer() {
     targetLabel.style.cssText = "font-size:0.85em;white-space:nowrap;";
     targetLabel.textContent = _notifTargetLabel();
 
-    // Loop until acknowledged checkbox
-    const loopLbl = document.createElement("label");
-    loopLbl.style.cssText = "display:flex;align-items:center;gap:2px;font-size:0.85em;cursor:pointer;white-space:nowrap;";
-    loopLbl.title = "Re-notify at snooze interval until dismissed";
-    const loopCb = document.createElement("input");
-    loopCb.type = "checkbox"; loopCb.checked = !!n.loop;
-    loopCb.addEventListener("change", () => { window._alertsData.notifications[idx].loop = loopCb.checked; setSaveButtonUnsaved(); });
-    loopLbl.appendChild(loopCb);
-    loopLbl.appendChild(document.createTextNode("🔁 Loop"));
-
     const delBtn = document.createElement("button");
     delBtn.type = "button"; delBtn.textContent = "❌"; delBtn.style.cssText = "padding:1px 5px;";
     delBtn.onclick = () => deleteNotificationItem(idx);
@@ -2094,7 +2047,6 @@ function renderNotificationsContainer() {
     row.appendChild(unitSel);
     row.appendChild(timingSel);
     row.appendChild(targetLabel);
-    row.appendChild(loopLbl);
     row.appendChild(delBtn);
     c.appendChild(row);
   });
@@ -2120,7 +2072,6 @@ function openAlarmModal(event) {
   now.setMinutes(now.getMinutes() + 1);
   const defaultTime = `${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`;
   window._alertsData.alarms.push({ _type: "alarm", name: "", time: defaultTime, recurrence: "none", days: [_dayAbbr(new Date())], enabled: true });
-  _startAlarmChecker();
   renderAlarmsContainer();
   setSaveButtonUnsaved();
 }
@@ -2570,11 +2521,19 @@ function deleteTimerItem(idx) {
 
 // ── Notification CRUD ────────────────────────────────────────────────────────
 
+function _updateNotificationBtnVisibility() {
+  const btn = document.getElementById("addNewNotificationButton");
+  if (!btn) return;
+  const hasStart = !!document.getElementById("start_datetime")?.value;
+  const hasDue = !!document.getElementById("due_datetime")?.value;
+  const mode = document.querySelector('input[name="dateMode"]:checked')?.value;
+  btn.style.display = (mode === 'due' || mode === 'startend' || hasStart || hasDue) ? '' : 'none';
+}
+
 function openNotificationModal(event) {
   if (event) event.stopPropagation();
   // Add a new notification inline
-  window._alertsData.notifications.push({ _type: "notification", value: 15, unit: "minutes", afterTarget: false, loop: false });
-  _startNotificationChecker();
+  window._alertsData.notifications.push({ _type: "notification", value: 15, unit: "minutes", afterTarget: false });
   renderNotificationsContainer();
   setSaveButtonUnsaved();
 }
@@ -2585,7 +2544,7 @@ function addNotification() {
   const onlyIfUndone = document.getElementById("notificationOnlyIfUndone")?.checked ?? true;
   const message = document.getElementById("notificationMessage")?.value?.trim() || '';
   if (!value || value <= 0) { alert("Please enter a valid number."); return; }
-  window._alertsData.notifications.push({ _type: "notification", value, unit, afterTarget: false, loop: false, only_if_undone: onlyIfUndone, message });
+  window._alertsData.notifications.push({ _type: "notification", value, unit, afterTarget: false, only_if_undone: onlyIfUndone, message });
   closeNotificationModal(true);
   renderNotificationsContainer();
   setSaveButtonUnsaved();
@@ -3597,11 +3556,6 @@ document.addEventListener("DOMContentLoaded", function () {
 
   // Load time format setting for alarm display
   _loadEditorTimeFormat();
-
-  // Load snooze length for notification loop
-  getCachedSettings().then(s => {
-    if (s.snooze_length) window._editorSnoozeLength = s.snooze_length;
-  }).catch(() => {});
 
   // Request notification permission
   if (typeof Notification !== "undefined" && Notification.permission === "default") {

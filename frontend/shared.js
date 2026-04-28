@@ -679,13 +679,13 @@ function enableDragToReorder(container, tab, onReorder) {
 
 // ── Alert Indicator Helpers ───────────────────────────────────────────────────
 
-/** Valid alert _type values (excludes _notify_flags) */
+/** Valid alert _type values */
 var _ALERT_TYPES = ['alarm', 'timer', 'stopwatch', 'notification'];
 
 /**
  * Returns true if a chit has any real alerts.
- * Checks the alerts array for entries with _type in {alarm, timer, stopwatch, notification},
- * excluding _notify_flags entries. Falls back to legacy boolean alarm/notification flags
+ * Checks the alerts array for entries with _type in {alarm, timer, stopwatch, notification}.
+ * Falls back to legacy boolean alarm/notification flags
  * when alerts is null, undefined, or not an array.
  * @param {object} chit
  * @returns {boolean}
@@ -2522,11 +2522,18 @@ function showQuickEditModal(chit, onRefresh) {
       _showDeleteSubMenu(actionRow, delBtn, parentId, chitId, dateStr, chit, close, onRefresh);
     } else {
       if (!confirm('Delete this chit?')) return;
-      fetch(`/api/chits/${chitId}`, { method: 'DELETE' }).then(() => {
+      var delTitle = chit.title || '(Untitled)';
+      var delId = chitId;
+      fetch('/api/chits/' + delId, { method: 'DELETE' }).then(function () {
         close();
         if (typeof fetchChits === 'function') fetchChits();
         else if (onRefresh) onRefresh();
-      });
+        _showDeleteUndoToast(delId, delTitle, null, function () {
+          fetch('/api/trash/' + delId + '/restore', { method: 'POST' })
+            .then(function () { if (typeof fetchChits === 'function') fetchChits(); else if (onRefresh) onRefresh(); })
+            .catch(function (err) { console.error('Undo restore failed:', err); });
+        });
+      }).catch(function (err) { console.error('Delete failed:', err); });
     }
   });
   actionRow.appendChild(delBtn);
@@ -2643,7 +2650,16 @@ function _showDeleteSubMenu(actionRow, delBtn, parentId, chitId, dateStr, chit, 
 
   addSubBtn('🗑️ Delete all (entire series)', async () => {
     if (!confirm('Delete the entire recurring series?')) return;
+    var seriesTitle = chit.title || '(Untitled)';
     await fetch(`/api/chits/${parentId}`, { method: 'DELETE' });
+    close();
+    _showDeleteUndoToast(parentId, seriesTitle, null, function () {
+      fetch('/api/trash/' + parentId + '/restore', { method: 'POST' })
+        .then(function () { if (typeof fetchChits === 'function') fetchChits(); else if (onRefresh) onRefresh(); })
+        .catch(function (err) { console.error('Undo restore failed:', err); });
+    });
+    if (typeof fetchChits === 'function') fetchChits();
+    else if (onRefresh) onRefresh();
   });
 
   const cancelBtn = document.createElement('button');
@@ -4140,4 +4156,65 @@ async function prefetchSavedLocationWeather() {
   } catch (e) {
     console.error('Error prefetching weather:', e);
   }
+}
+
+// ── Delete Undo Toast ────────────────────────────────────────────────────────
+
+/**
+ * Show a delete-undo toast with a countdown timer bar.
+ * @param {string} chitId - The deleted chit's ID
+ * @param {string} chitTitle - The chit title for display
+ * @param {function} onExpire - Called when toast expires (no undo)
+ * @param {function} onUndo - Called when user clicks Undo
+ */
+function _showDeleteUndoToast(chitId, chitTitle, onExpire, onUndo) {
+  var DURATION = 10000;
+  var toast = document.createElement("div");
+  toast.style.cssText = "position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:9999;background:#fff5e6;border:2px solid #8b5a2b;border-radius:8px;padding:0.75em 1.2em 0.5em;box-shadow:0 4px 16px rgba(0,0,0,0.3);min-width:280px;max-width:420px;font-family:'Courier New',monospace;";
+
+  var msgRow = document.createElement("div");
+  msgRow.style.cssText = "display:flex;align-items:center;justify-content:space-between;gap:0.8em;margin-bottom:0.5em;";
+  var msg = document.createElement("span");
+  msg.style.cssText = "font-size:0.9em;color:#1a1208;";
+  msg.textContent = "🗑️ Deleted: " + (chitTitle || "(Untitled)");
+  var undoBtn = document.createElement("button");
+  undoBtn.textContent = "Undo";
+  undoBtn.style.cssText = "padding:4px 12px;cursor:pointer;font-weight:bold;border:1px solid #8b5a2b;border-radius:4px;background:#f5e6cc;color:#1a1208;font-family:inherit;";
+  msgRow.appendChild(msg);
+  msgRow.appendChild(undoBtn);
+  toast.appendChild(msgRow);
+
+  // Timer bar (HST-style)
+  var barOuter = document.createElement("div");
+  barOuter.style.cssText = "width:100%;height:6px;background:#f5e6cc;border:1px solid #8b4513;border-radius:4px;overflow:hidden;";
+  var barInner = document.createElement("div");
+  barInner.style.cssText = "height:100%;width:100%;background:linear-gradient(90deg,#d4af37 0%,#c8965a 60%,#8b4513 100%);transition:width 0.1s linear;border-radius:3px;";
+  barOuter.appendChild(barInner);
+  toast.appendChild(barOuter);
+
+  document.body.appendChild(toast);
+
+  var start = Date.now();
+  var dismissed = false;
+  var interval = setInterval(function () {
+    var elapsed = Date.now() - start;
+    var pct = Math.max(0, 100 - (elapsed / DURATION) * 100);
+    barInner.style.width = pct + "%";
+    if (elapsed >= DURATION) {
+      clearInterval(interval);
+      if (!dismissed) {
+        dismissed = true;
+        toast.remove();
+        if (onExpire) onExpire();
+      }
+    }
+  }, 50);
+
+  undoBtn.onclick = function () {
+    if (dismissed) return;
+    dismissed = true;
+    clearInterval(interval);
+    toast.remove();
+    if (onUndo) onUndo();
+  };
 }
