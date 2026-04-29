@@ -17,7 +17,7 @@ Restructure the CWOC codebase from a flat directory layout with five monolithic 
 | 7 | Split frontend/editor.js into focused sub-scripts | **Complete** | 2026-04-29 |
 | 8 | Split frontend/styles.css into focused sub-stylesheets | **Complete** | 2026-04-29 |
 | 9 | Move frontend to src/frontend/ | **Complete** | 2026-04-29 |
-| 10 | Move static assets to src/static/ | Not Started | — |
+| 10 | Move static assets to src/static/ | **Complete** | 2026-04-29 |
 | 11 | Create INDEX.md and finalize documentation | Not Started | — |
 | 12 | Cleanup and final verification | Not Started | — |
 
@@ -224,14 +224,14 @@ Restructure the CWOC codebase from a flat directory layout with five monolithic 
 **Files affected:** All files in `static/` (moved). `src/backend/main.py` (StaticFiles mount update).
 
 **Tasks:**
-- [ ] Move all static assets to `src/static/`
-- [ ] Update `/static/` StaticFiles mount
-- [ ] Remove old `static/` directory
+- [x] Move all static assets to `src/static/`
+- [x] Update `/static/` StaticFiles mount
+- [x] Remove old `static/` directory
 
 **Verification:**
-- [ ] All images and audio load correctly
-- [ ] No 404s for static assets
-- [ ] Profile pictures still load from `data/contacts/` (unchanged)
+- [x] All images and audio load correctly
+- [x] No 404s for static assets
+- [x] Profile pictures still load from `data/contacts/` (unchanged)
 
 ---
 

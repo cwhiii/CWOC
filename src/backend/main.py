@@ -125,8 +125,8 @@ app.mount("/frontend/html", StaticFiles(directory="/app/src/frontend/html"), nam
 app.mount("/frontend/js", StaticFiles(directory="/app/src/frontend/js"), name="frontend_js")
 app.mount("/frontend/css", StaticFiles(directory="/app/src/frontend/css"), name="frontend_css")
 
-# Serve all files from /static/ (e.g., images)
-app.mount("/static", StaticFiles(directory="/app/static"), name="static")
+# Serve all files from /static/ (e.g., images, audio)
+app.mount("/static", StaticFiles(directory="/app/src/static"), name="static")
 
 # Serve contact profile pictures from data/contacts/
 app.mount("/data/contacts", StaticFiles(directory="/app/data/contacts"), name="data_contacts")
