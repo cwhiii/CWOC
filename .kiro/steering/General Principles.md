@@ -88,7 +88,7 @@ Ensure that any time you change or add a feature that has or should have, docume
 Version numbering is: 
 YYYYMMDD.time, with time in format HHMM.
 
-As the last step of any change, call the real time and use that to  Update the version number every time you make changes. (via  /app/VERSION)
+As the last step of any change, call the real time and use that to  Update the version number every time you make changes. (via  src/VERSION)
 
 NEVER guess the time! always run date "+%Y%m%d.%H%M", and use the returned value. 
 

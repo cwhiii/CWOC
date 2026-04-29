@@ -151,15 +151,23 @@ deploy_from_zip() {
     chmod 700 "$APP_DIR/data"
 
     # Copy requirements.txt if present
-    if [[ -f "$src_dir/requirements.txt" ]]; then
-        cp "$src_dir/requirements.txt" "$APP_DIR/requirements.txt"
+    if [[ -f "$src_dir/src/requirements.txt" ]]; then
+        cp "$src_dir/src/requirements.txt" "$APP_DIR/src/requirements.txt"
         log_ok "Copied requirements.txt"
+    elif [[ -f "$src_dir/requirements.txt" ]]; then
+        cp "$src_dir/requirements.txt" "$APP_DIR/src/requirements.txt"
+        log_ok "Copied requirements.txt (legacy location)"
     fi
 
     # Copy VERSION file if present
-    if [[ -f "$src_dir/VERSION" ]]; then
-        cp "$src_dir/VERSION" "$APP_DIR/VERSION"
-        log_ok "Copied VERSION file ($(cat "$APP_DIR/VERSION" | head -1))"
+    if [[ -f "$src_dir/src/VERSION" ]]; then
+        cp "$src_dir/src/VERSION" "$APP_DIR/src/VERSION"
+        log_ok "Copied VERSION file ($(cat "$APP_DIR/src/VERSION" | head -1))"
+    elif [[ -f "$src_dir/VERSION" ]]; then
+        # Legacy fallback: VERSION at root level
+        mkdir -p "$APP_DIR/src"
+        cp "$src_dir/VERSION" "$APP_DIR/src/VERSION"
+        log_ok "Copied VERSION file from root ($(cat "$APP_DIR/src/VERSION" | head -1))"
     fi
 
     # Cleanup
@@ -201,11 +209,16 @@ install_python_deps() {
     "$APP_DIR/venv/bin/pip" install --upgrade pip 2>/dev/null
 
     # Install from requirements.txt if present
-    if [[ -f "$APP_DIR/requirements.txt" ]]; then
+    if [[ -f "$APP_DIR/src/requirements.txt" ]]; then
+        "$APP_DIR/venv/bin/pip" install --upgrade -r "$APP_DIR/src/requirements.txt" \
+            || log_error "Failed to install from requirements.txt." \
+                "Check internet connectivity. Review $APP_DIR/src/requirements.txt for invalid package names."
+        log_ok "Installed packages from requirements.txt."
+    elif [[ -f "$APP_DIR/requirements.txt" ]]; then
         "$APP_DIR/venv/bin/pip" install --upgrade -r "$APP_DIR/requirements.txt" \
             || log_error "Failed to install from requirements.txt." \
                 "Check internet connectivity. Review $APP_DIR/requirements.txt for invalid package names."
-        log_ok "Installed packages from requirements.txt."
+        log_ok "Installed packages from requirements.txt (legacy location)."
     fi
 
     # Always ensure the known required packages are present, even if

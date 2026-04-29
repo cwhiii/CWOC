@@ -749,6 +749,9 @@ document.addEventListener("DOMContentLoaded", function () {
   // ESC key — layered escape chain
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
+      const quickAlertOverlay = document.getElementById('cwoc-quick-alert-overlay');
+      if (quickAlertOverlay) { _closeQuickAlertModal(); return; }
+
       const qrModal = document.getElementById('cwoc-qr-overlay');
       if (qrModal) { qrModal.remove(); return; }
 

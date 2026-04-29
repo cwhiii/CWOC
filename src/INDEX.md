@@ -62,7 +62,7 @@ Registers all route modules, runs all migrations and `init_db()` at import time,
 | `_build_export_envelope(data_type, data)` | Wrap data in an export envelope with metadata |
 | `get_version_info()` | Read version info from the `version_info` table |
 | `update_version_info(version, installed_datetime)` | Write version info |
-| `seed_version_info()` | Seed initial version info from `/app/VERSION` if table is empty |
+| `seed_version_info()` | Seed initial version info from `/app/src/VERSION` if table is empty |
 
 ### 1.5 `src/backend/migrations.py` — Database Migrations
 
@@ -461,6 +461,14 @@ Coordinator for shared code between dashboard and editor. Contains glue code for
 | `_sharedCheckAlarms()` | The alarm checker — runs every second, checks chit alarms and independent alerts |
 | `_initSharedAlarmSync()` | Register sync handlers for alarm_fired, alert_dismissed, alert_snoozed, timer_fired, etc. |
 | `_initSharedAlarmSystem()` | Initialize the global alarm system (settings, state, data fetch, interval, sync) |
+| `_openQuickAlertModal()` | Open the Quick Alert modal (! hotkey) — context-aware for dashboard vs editor |
+| `_closeQuickAlertModal()` | Close the Quick Alert modal |
+| `_quickAlertCreate(type)` | Dispatch alert creation by type (alarm/timer/stopwatch) to the correct context |
+| `_quickAlertAddToChit(type)` | Add an alert to the current chit's _alertsData without saving (editor context) |
+| `_quickAlertAddIndependent(type)` | Create an independent alert — delegates to dashboard or direct fetch |
+| `_quickAlertAddIndependentDashboard(type)` | Create an independent alert using the dashboard's _createIndependentAlert |
+| `_showQuickAlertToast(type)` | Show a brief toast confirming alert creation (non-dashboard pages) |
+| `_initSharedHotkeys()` | Register the global keydown listener for !, \`, ~ hotkeys on all pages |
 
 ### 2.2 Dashboard (`src/frontend/js/dashboard/`)
 
@@ -496,6 +504,8 @@ Coordinator for shared code between dashboard and editor. Contains glue code for
 | `_isPeopleColorLight(hex)` | Check if a people chip color is light (delegates to isLightColor) |
 | `clearPeopleFilter()` | Clear the people filter selection and re-render |
 | `toggleSidebar()` | Toggle sidebar open/closed and persist state to localStorage |
+| `_toggleTopbar()` | Toggle the topbar (header) visibility and persist to localStorage |
+| `_restoreTopbarState()` | Restore topbar visibility from localStorage on page load |
 | `toggleSidebarSection(sectionId)` | Toggle a sidebar section's body visibility |
 | `expandSidebarSection(sectionId)` | Expand a sidebar section (used by hotkeys) |
 | `_toggleFiltersSection()` | Toggle the entire Filters section open/closed |

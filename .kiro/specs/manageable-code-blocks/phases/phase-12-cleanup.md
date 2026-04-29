@@ -1,7 +1,7 @@
 # Phase 12 — Cleanup and final verification
 
-- [-] 12. Phase 12 — Cleanup and final verification
-  - [ ] 12.1 Remove any remaining empty old directories
+- [x] 12. Phase 12 — Cleanup and final verification
+  - [x] 12.1 Remove any remaining empty old directories
     - Verify `backend/`, `frontend/`, `static/` are fully removed
     - Remove any leftover `__pycache__`, `.pyc`, or temp files from old locations
     - _Requirements: 13.11_
@@ -11,7 +11,7 @@
     - Search all JS files for `window.location.href` or `fetch()` referencing old page paths
     - Search backend for `FileResponse` or `StaticFiles` referencing old directory paths
     - _Requirements: 7.1–7.12_
-  - [-] 12.3 Full end-to-end verification
+  - [x] 12.3 Full end-to-end verification
     - Start server with `uvicorn src.backend.main:app --port 3333`
     - Dashboard: all 6 C CAPTN tabs render, all 7 calendar views work, sidebar filters work, hotkeys work
     - Editor: all zones work, save/load works, date modes work, recurrence works
@@ -26,11 +26,11 @@
     - All static assets load from `src/static/`
     - No console errors on any page
     - _Requirements: 7.1–7.12, 14.5_
-  - [ ] 12.4 Run existing test files
+  - [x] 12.4 Run existing test files
     - Run `src/backend/test_audit.py` — confirm all tests pass
     - Run `src/backend/test_vcard.py` — confirm all tests pass
     - _Requirements: 2.6_
-  - [ ] 12.5 Final update to `mega_restructure_plan.md`
+  - [x] 12.5 Final update to `mega_restructure_plan.md`
     - Mark Phase 12 complete
     - Mark overall restructuring as complete in the summary table
     - Record completion date

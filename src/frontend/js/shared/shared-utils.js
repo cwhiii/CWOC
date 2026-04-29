@@ -12,6 +12,8 @@
  *             shared-geocoding.js, shared-qr.js, shared.js
  */
 
+console.log('%c[CWOC] post-mega src/ layout — 20260429.1655', 'color:#8b4513;font-weight:bold;');
+
 // ── Settings Cache ───────────────────────────────────────────────────────────
 // Promise-based cache so concurrent callers share a single in-flight request.
 // Call _invalidateSettingsCache() after saving settings to force a fresh fetch.

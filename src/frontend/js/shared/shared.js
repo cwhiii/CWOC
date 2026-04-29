@@ -18,6 +18,8 @@
  *   - Sync client (WebSocket + HTTP polling fallback)
  *   - Global alarm system (runs on every page)
  *   - Delete undo toast
+ *   - Quick Alert modal (! hotkey — adds alarm/timer/stopwatch)
+ *   - Global hotkey listener (!, `, ~ — works on all pages)
  *
  * Sub-scripts loaded before this file (in order):
  *   shared-utils.js, shared-touch.js, shared-checklist.js, shared-sort.js,
@@ -2544,11 +2546,306 @@ function _initSharedAlarmSystem() {
   _initSharedAlarmSync();
 }
 
+// ── Quick Alert Modal (! hotkey) ─────────────────────────────────────────────
+// Opens a small modal with A/T/S options. Context-aware:
+//   - On dashboard: creates an independent alert via the API
+//   - On editor: adds to the chit's _alertsData without saving
+//   - On other pages: creates an independent alert via direct fetch
+
+function _openQuickAlertModal() {
+  // Don't open if already open
+  if (document.getElementById('cwoc-quick-alert-overlay')) return;
+
+  var overlay = document.createElement('div');
+  overlay.id = 'cwoc-quick-alert-overlay';
+  overlay.className = 'cwoc-quick-alert-overlay';
+  overlay.addEventListener('click', function(e) {
+    if (e.target === overlay) _closeQuickAlertModal();
+  });
+
+  var box = document.createElement('div');
+  box.className = 'cwoc-quick-alert-box';
+
+  box.innerHTML =
+    '<h3 style="margin:0 0 12px;font-size:1.15em;color:#4a2c2a;">⚡ Quick Alert</h3>' +
+    '<p style="margin:0 0 14px;font-size:0.9em;opacity:0.7;">Press a key or click to add:</p>' +
+    '<div class="cwoc-quick-alert-options">' +
+      '<div class="cwoc-quick-alert-option" data-type="alarm" tabindex="0">' +
+        '<span class="cwoc-quick-alert-key">A</span>' +
+        '<span>🔔 Alarm</span>' +
+      '</div>' +
+      '<div class="cwoc-quick-alert-option" data-type="timer" tabindex="0">' +
+        '<span class="cwoc-quick-alert-key">T</span>' +
+        '<span>⏱️ Timer</span>' +
+      '</div>' +
+      '<div class="cwoc-quick-alert-option" data-type="stopwatch" tabindex="0">' +
+        '<span class="cwoc-quick-alert-key">S</span>' +
+        '<span>⏲️ Stopwatch</span>' +
+      '</div>' +
+    '</div>' +
+    '<div style="margin-top:14px;text-align:center;">' +
+      '<button class="cwoc-quick-alert-done">Done</button>' +
+    '</div>' +
+    '<div style="margin-top:8px;font-size:0.75em;opacity:0.45;text-align:center;">ESC or click outside to close</div>';
+
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+
+  // Done button handler
+  box.querySelector('.cwoc-quick-alert-done').addEventListener('click', function() {
+    _closeQuickAlertModal();
+  });
+
+  // Click handlers on options
+  var opts = box.querySelectorAll('.cwoc-quick-alert-option');
+  for (var i = 0; i < opts.length; i++) {
+    (function(opt) {
+      opt.addEventListener('click', function() {
+        _quickAlertCreate(opt.getAttribute('data-type'));
+      });
+    })(opts[i]);
+  }
+
+  // Keyboard handler for the modal (capture phase so it fires before page handlers)
+  function _qaKeyHandler(e) {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      _closeQuickAlertModal();
+      return;
+    }
+    var k = e.key.toLowerCase();
+    if (k === 'a') { e.preventDefault(); e.stopPropagation(); _quickAlertCreate('alarm'); }
+    else if (k === 't') { e.preventDefault(); e.stopPropagation(); _quickAlertCreate('timer'); }
+    else if (k === 's') { e.preventDefault(); e.stopPropagation(); _quickAlertCreate('stopwatch'); }
+  }
+  overlay._keyHandler = _qaKeyHandler;
+  document.addEventListener('keydown', _qaKeyHandler, true);
+}
+
+function _closeQuickAlertModal() {
+  var overlay = document.getElementById('cwoc-quick-alert-overlay');
+  if (!overlay) return;
+  if (overlay._keyHandler) {
+    document.removeEventListener('keydown', overlay._keyHandler, true);
+  }
+  overlay.remove();
+}
+
+function _quickAlertCreate(type) {
+  var isEditor = !!document.getElementById('chit-form');
+
+  if (isEditor) {
+    _quickAlertAddToChit(type);
+  } else {
+    _quickAlertAddIndependent(type);
+  }
+
+  // Flash the selected option briefly
+  var overlay = document.getElementById('cwoc-quick-alert-overlay');
+  if (overlay) {
+    var opt = overlay.querySelector('.cwoc-quick-alert-option[data-type="' + type + '"]');
+    if (opt) {
+      opt.classList.add('flash');
+      setTimeout(function() { opt.classList.remove('flash'); }, 300);
+    }
+  }
+}
+
+function _quickAlertAddToChit(type) {
+  if (!window._alertsData) {
+    window._alertsData = { alarms: [], timers: [], stopwatches: [], notifications: [] };
+  }
+
+  // Expand the alerts zone if collapsed
+  var alertsContent = document.getElementById('alertsContent');
+  if (alertsContent && alertsContent.classList.contains('collapsed')) {
+    if (typeof cwocToggleZone === 'function') {
+      cwocToggleZone(new MouseEvent('click'), 'alertsSection', 'alertsContent');
+    }
+  }
+
+  if (type === 'alarm') {
+    var now = new Date();
+    now.setMinutes(now.getMinutes() + 1);
+    var defaultTime = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+    var dayAbbrs = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    window._alertsData.alarms.push({
+      _type: 'alarm', name: '', time: defaultTime,
+      recurrence: 'none', days: [dayAbbrs[new Date().getDay()]], enabled: true
+    });
+    if (typeof renderAlarmsContainer === 'function') renderAlarmsContainer();
+  } else if (type === 'timer') {
+    window._alertsData.timers.push({ _type: 'timer', name: '', totalSeconds: 0, loop: false });
+    var tIdx = window._alertsData.timers.length - 1;
+    if (!window._timerRuntime) window._timerRuntime = {};
+    window._timerRuntime[tIdx] = { remaining: 0, intervalId: null, running: false };
+    if (typeof renderTimersContainer === 'function') renderTimersContainer();
+  } else if (type === 'stopwatch') {
+    var swIdx = window._alertsData.stopwatches.length;
+    window._alertsData.stopwatches.push({ _type: 'stopwatch', name: '' });
+    if (!window._swRuntime) window._swRuntime = {};
+    window._swRuntime[swIdx] = { running: false, elapsed: 0, intervalId: null, laps: [] };
+    // Auto-start the stopwatch
+    var rt = window._swRuntime[swIdx];
+    var startMs = Date.now();
+    rt.intervalId = setInterval(function() {
+      rt.elapsed = Date.now() - startMs;
+      var d = document.getElementById('sw-display-' + swIdx);
+      if (d && typeof _swFmt === 'function') d.textContent = _swFmt(rt.elapsed);
+    }, 50);
+    rt.running = true;
+    if (typeof renderStopwatchesContainer === 'function') renderStopwatchesContainer();
+    setTimeout(function() {
+      var btn = document.getElementById('sw-startstop-' + swIdx);
+      if (btn) btn.textContent = '⏸ Pause';
+    }, 50);
+  }
+
+  // Mark unsaved (but do NOT save the chit)
+  if (typeof setSaveButtonUnsaved === 'function') setSaveButtonUnsaved();
+}
+
+function _quickAlertAddIndependent(type) {
+  // If the dashboard's _createIndependentAlert is available, use it (handles UI refresh)
+  if (typeof _createIndependentAlert === 'function') {
+    _quickAlertAddIndependentDashboard(type);
+    return;
+  }
+
+  // Otherwise (settings, people, weather, etc.) — create via direct fetch
+  var alertData;
+  var now = new Date();
+  if (type === 'alarm') {
+    now.setMinutes(now.getMinutes() + 1);
+    var defaultTime = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+    var dayAbbrs = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    alertData = { _type: 'alarm', name: '', time: defaultTime, days: [dayAbbrs[now.getDay()]], enabled: true };
+  } else if (type === 'timer') {
+    alertData = { _type: 'timer', name: '', totalSeconds: 0, loop: false };
+  } else if (type === 'stopwatch') {
+    alertData = { _type: 'stopwatch', name: '' };
+  }
+
+  fetch('/api/standalone-alerts', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(alertData),
+  }).then(function(resp) {
+    if (!resp.ok) throw new Error('Failed to create alert');
+    return resp.json();
+  }).then(function(created) {
+    _showQuickAlertToast(type);
+    if (typeof syncSend === 'function') syncSend('alerts_changed', {});
+  }).catch(function(e) {
+    console.error('Quick alert creation failed:', e);
+  });
+}
+
+function _quickAlertAddIndependentDashboard(type) {
+  if (type === 'alarm') {
+    var now = new Date();
+    now.setMinutes(now.getMinutes() + 1);
+    var defaultTime = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+    var dayAbbrs = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    _createIndependentAlert({ _type: 'alarm', name: '', time: defaultTime, days: [dayAbbrs[now.getDay()]], enabled: true });
+  } else if (type === 'timer') {
+    _createIndependentAlert({ _type: 'timer', name: '', totalSeconds: 0, loop: false });
+  } else if (type === 'stopwatch') {
+    _createIndependentAlert({ _type: 'stopwatch', name: '' }).then(function(created) {
+      if (created && created.id && typeof _saSwRuntime !== 'undefined') {
+        var id = created.id;
+        if (!_saSwRuntime[id]) {
+          _saSwRuntime[id] = { running: false, elapsed: 0, intervalId: null, laps: [] };
+        }
+        var rt = _saSwRuntime[id];
+        var startMs = Date.now();
+        rt.intervalId = setInterval(function() {
+          rt.elapsed = Date.now() - startMs;
+          var d = document.getElementById('sa-sw-display-' + id);
+          if (d) d.textContent = _saSwFmt(rt.elapsed);
+        }, 50);
+        rt.running = true;
+        var btn = document.getElementById('sa-sw-startstop-' + id);
+        if (btn) btn.textContent = '⏸ Pause';
+      }
+    });
+  }
+}
+
+/** Show a brief toast confirming the alert was created (for non-dashboard pages). */
+function _showQuickAlertToast(type) {
+  var labels = { alarm: '🔔 Alarm', timer: '⏱️ Timer', stopwatch: '⏲️ Stopwatch' };
+  var toast = document.createElement('div');
+  toast.style.cssText = 'position:fixed;bottom:20px;right:20px;z-index:99999;background:#fff8e1;border:2px solid #8b4513;border-radius:8px;padding:10px 18px;box-shadow:0 4px 16px rgba(0,0,0,0.3);font-family:"Courier New",monospace;font-size:0.95em;color:#4a2c2a;opacity:1;transition:opacity 0.3s;';
+  toast.textContent = (labels[type] || 'Alert') + ' created as independent alert';
+  document.body.appendChild(toast);
+  setTimeout(function() { toast.style.opacity = '0'; }, 1500);
+  setTimeout(function() { toast.remove(); }, 1800);
+}
+
+// ── Global Hotkey Listener (shared across ALL pages) ─────────────────────────
+// This runs on every page that loads shared.js — dashboard, editor, settings, etc.
+// Handles: ! (quick alert), ` (sidebar toggle, dashboard only), ~ (topbar toggle, dashboard only)
+
+function _initSharedHotkeys() {
+  document.addEventListener('keydown', function(e) {
+    // Skip if inside a text input
+    var el = document.activeElement;
+    var tag = el ? (el.tagName || '').toLowerCase() : '';
+    var inputType = el ? (el.type || '').toLowerCase() : '';
+    var isTextInput = (tag === 'input' && inputType !== 'checkbox' && inputType !== 'radio')
+      || tag === 'textarea' || tag === 'select'
+      || (el && el.isContentEditable);
+    if (isTextInput) return;
+
+    // Skip if modifier keys (except Shift, which is needed for ! and ~)
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+    // Skip if the quick alert modal is already open (it has its own capture handler)
+    if (document.getElementById('cwoc-quick-alert-overlay')) return;
+
+    var key = e.key;
+
+    // ── ! = Quick Alert modal (works on ALL pages) ──
+    if (key === '!') {
+      e.preventDefault();
+      _openQuickAlertModal();
+      return;
+    }
+
+    // ── Dashboard-only hotkeys (check for sidebar element) ──
+    var sidebar = document.getElementById('sidebar');
+    if (!sidebar) return; // Not on dashboard — skip ` and ~
+
+    // Skip if dashboard has its own hotkey mode active
+    if (typeof _hotkeyMode !== 'undefined' && _hotkeyMode) return;
+
+    // ── ` = Toggle sidebar ──
+    if (key === '`' && !e.shiftKey) {
+      e.preventDefault();
+      if (typeof toggleSidebar === 'function') toggleSidebar();
+      return;
+    }
+
+    // ── ~ = Toggle topbar ──
+    if (key === '~') {
+      e.preventDefault();
+      if (typeof _toggleTopbar === 'function') _toggleTopbar();
+      return;
+    }
+  });
+}
+
 // Auto-init on page load
 if (typeof document !== 'undefined') {
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', _initSharedAlarmSystem);
+    document.addEventListener('DOMContentLoaded', function() {
+      _initSharedAlarmSystem();
+      _initSharedHotkeys();
+    });
   } else {
     _initSharedAlarmSystem();
+    _initSharedHotkeys();
   }
 }

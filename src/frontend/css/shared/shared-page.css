@@ -512,3 +512,91 @@ input[type="color"] {
     .cwoc-alert-icon { font-size: 2.5em; margin: 14px 0 6px; }
     .cwoc-alert-title { font-size: 1.3em; }
 }
+
+/* ── Quick Alert Modal (! hotkey) ─────────────────────────────────────────── */
+.cwoc-quick-alert-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 99999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.cwoc-quick-alert-box {
+    background: #fff8e1;
+    border: 2px solid #8b4513;
+    border-radius: 10px;
+    padding: 24px 32px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    font-family: "Courier New", Courier, monospace;
+    min-width: 260px;
+    max-width: 340px;
+    text-align: center;
+    color: #2b1e0f;
+}
+
+.cwoc-quick-alert-options {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.cwoc-quick-alert-option {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 16px;
+    border: 1px solid #d2b48c;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 1em;
+    transition: background 0.15s, border-color 0.15s;
+    background: rgba(139, 69, 19, 0.04);
+}
+
+.cwoc-quick-alert-option:hover {
+    background: rgba(139, 69, 19, 0.12);
+    border-color: #8b4513;
+}
+
+.cwoc-quick-alert-option.flash {
+    background: rgba(139, 69, 19, 0.25);
+    border-color: #8b4513;
+}
+
+.cwoc-quick-alert-key {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    background: #e0d4b5;
+    border: 1px solid #8b5a2b;
+    border-radius: 4px;
+    font-weight: bold;
+    font-size: 0.9em;
+    color: #4a2c2a;
+    flex-shrink: 0;
+}
+
+.cwoc-quick-alert-done {
+    padding: 8px 24px;
+    font-family: "Courier New", Courier, monospace;
+    font-size: 0.95em;
+    font-weight: bold;
+    background: #8b5a2b;
+    color: #fff8e1;
+    border: 1px solid #5a3f2a;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.cwoc-quick-alert-done:hover {
+    background: #6b4226;
+}

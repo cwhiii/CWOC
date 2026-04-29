@@ -352,10 +352,10 @@ async def run_update():
                 exit_code = await process.wait()
 
                 if exit_code == 0:
-                    # Read version from /app/VERSION
+                    # Read version from /app/src/VERSION
                     version = "unknown"
                     try:
-                        with open("/app/VERSION", "r") as f:
+                        with open("/app/src/VERSION", "r") as f:
                             first_line = f.readline().strip()
                             if first_line:
                                 version = first_line

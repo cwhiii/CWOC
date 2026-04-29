@@ -178,10 +178,10 @@ def get_or_create_instance_id():
 # Export envelope builder
 def _build_export_envelope(data_type, data):
     """Build a self-contained export envelope with metadata and payload.
-    Reads VERSION from /app/VERSION (production) or project-root VERSION (dev).
+    Reads VERSION from /app/src/VERSION (production) or project-root VERSION (dev).
     """
     version = "unknown"
-    for path in ["/app/VERSION", os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "VERSION")]:
+    for path in ["/app/src/VERSION", os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "VERSION")]:
         try:
             with open(path, "r") as f:
                 first_line = f.readline().strip()
@@ -244,7 +244,7 @@ def update_version_info(version, installed_datetime):
             conn.close()
 
 def seed_version_info():
-    """At startup, always sync version from /app/VERSION into the database."""
+    """At startup, always sync version from /app/src/VERSION into the database."""
     # Import here to avoid circular imports — audit helpers live in routes.audit
     from src.backend.routes.audit import get_current_actor, insert_audit_entry
 
@@ -263,10 +263,10 @@ def seed_version_info():
         except Exception:
             pass
 
-        # Read version from /app/VERSION
+        # Read version from /app/src/VERSION
         version = "unknown"
         try:
-            with open("/app/VERSION", "r") as f:
+            with open("/app/src/VERSION", "r") as f:
                 first_line = f.readline().strip()
                 if first_line:
                     version = first_line

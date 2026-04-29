@@ -644,6 +644,9 @@ document.addEventListener("DOMContentLoaded", function () {
   // Initialize mobile sidebar overlay behavior (backdrop, resize handling)
   initMobileSidebar();
 
+  // Restore topbar visibility from localStorage
+  _restoreTopbarState();
+
   // Initialize mobile Views button (replaces tab bar on mobile)
   if (typeof initMobileViewsButton === 'function') initMobileViewsButton();
 
@@ -961,6 +964,10 @@ document.addEventListener("DOMContentLoaded", function () {
           return;
         }
         _closeWeatherModal();
+        return;
+      }
+      if (document.getElementById('cwoc-quick-alert-overlay')) {
+        _closeQuickAlertModal();
         return;
       }
       if (_hotkeyMode) {

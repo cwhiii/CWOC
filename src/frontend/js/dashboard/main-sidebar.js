@@ -6,6 +6,7 @@
  *   - Tag filter panel (_buildTagFilterPanel, _syncSidebarTagCheckboxes)
  *   - People filter panel (_buildPeopleFilterPanel, _renderPeopleFilterPanel, _renderPeopleChipFilter)
  *   - Sidebar toggle/section expand/collapse (toggleSidebar, toggleSidebarSection, restoreSidebarState)
+ *   - Topbar toggle (_toggleTopbar, _restoreTopbarState)
  *   - Filter toggle/clear functions (onFilterChange, onFilterAnyToggle, onFilterSpecificToggle, etc.)
  *   - Archive/pinned/unmarked toggles
  *   - Sort UI helpers (_updateSortUI, onSortSelectChange, toggleSortDir)
@@ -529,6 +530,25 @@ function toggleSidebar() {
 
   window.dispatchEvent(new Event("resize"));
   setTimeout(function() { window.dispatchEvent(new Event("resize")); }, 350);
+}
+
+/** Toggle the topbar (header) visibility. Persists to localStorage. */
+function _toggleTopbar() {
+  var header = document.querySelector('.main-content > .header');
+  if (!header) return;
+  var isHidden = header.style.display === 'none';
+  header.style.display = isHidden ? '' : 'none';
+  localStorage.setItem('cwoc_topbar_hidden', isHidden ? 'false' : 'true');
+  window.dispatchEvent(new Event("resize"));
+}
+
+/** Restore topbar visibility from localStorage on load. */
+function _restoreTopbarState() {
+  var hidden = localStorage.getItem('cwoc_topbar_hidden') === 'true';
+  if (hidden) {
+    var header = document.querySelector('.main-content > .header');
+    if (header) header.style.display = 'none';
+  }
 }
 
 /** Toggle a sidebar section's body visibility */
