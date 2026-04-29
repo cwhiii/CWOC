@@ -99,17 +99,28 @@
             <div class="sidebar-section" id="section-indicators" style="display:none;">
                 <label class="sidebar-section-label">Time Range</label>
                 <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px;">
-                    <button class="action-button _ind-btn _ind-active" onclick="_indicatorsSetRange('day')" style="flex:1;margin-bottom:0;font-size:0.75em;padding:5px;">Day</button>
-                    <button class="action-button _ind-btn" onclick="_indicatorsSetRange('week')" style="flex:1;margin-bottom:0;font-size:0.75em;padding:5px;">Week</button>
-                    <button class="action-button _ind-btn" onclick="_indicatorsSetRange('month')" style="flex:1;margin-bottom:0;font-size:0.75em;padding:5px;">Month</button>
-                    <button class="action-button _ind-btn" onclick="_indicatorsSetRange('year')" style="flex:1;margin-bottom:0;font-size:0.75em;padding:5px;">Year</button>
-                    <button class="action-button _ind-btn" onclick="_indicatorsSetRange('all')" style="flex:1;margin-bottom:0;font-size:0.75em;padding:5px;">All</button>
+                    <button class="action-button _ind-btn _ind-active" onclick="_indicatorsSetRange('day')" style="flex:1;margin-bottom:0;font-size:0.8em;padding:5px;">Day</button>
+                    <button class="action-button _ind-btn" onclick="_indicatorsSetRange('week')" style="flex:1;margin-bottom:0;font-size:0.8em;padding:5px;">Week</button>
+                    <button class="action-button _ind-btn" onclick="_indicatorsSetRange('month')" style="flex:1;margin-bottom:0;font-size:0.8em;padding:5px;">Month</button>
+                    <button class="action-button _ind-btn" onclick="_indicatorsSetRange('year')" style="flex:1;margin-bottom:0;font-size:0.8em;padding:5px;">Year</button>
+                    <button class="action-button _ind-btn" onclick="_indicatorsSetRange('all')" style="flex:1;margin-bottom:0;font-size:0.8em;padding:5px;">All</button>
                 </div>
                 <label class="sidebar-section-label">Custom Range</label>
-                <div style="display:flex;flex-direction:column;gap:4px;">
-                    <input type="date" id="ind-start" style="width:100%;padding:4px;font-family:inherit;font-size:0.85em;border:1px solid #6b4e31;border-radius:3px;box-sizing:border-box;background:#f5e6cc;" />
-                    <input type="date" id="ind-end" style="width:100%;padding:4px;font-family:inherit;font-size:0.85em;border:1px solid #6b4e31;border-radius:3px;box-sizing:border-box;background:#f5e6cc;" />
+                <div style="display:flex;flex-direction:column;gap:4px;margin-bottom:8px;">
+                    <input type="date" id="ind-start" style="width:100%;padding:4px;font-family:inherit;font-size:0.8em;border:1px solid #6b4e31;border-radius:3px;box-sizing:border-box;background:#f5e6cc;" />
+                    <input type="date" id="ind-end" style="width:100%;padding:4px;font-family:inherit;font-size:0.8em;border:1px solid #6b4e31;border-radius:3px;box-sizing:border-box;background:#f5e6cc;" />
                     <button class="action-button" onclick="_indicatorsLoadCustomRange()" style="margin-bottom:0;font-size:0.8em;padding:5px;">Go</button>
+                </div>
+                <label class="sidebar-section-label">Show Indicators</label>
+                <div class="multi-select" id="ind-select" style="max-height:200px;">
+                    <label><input type="checkbox" data-ind="heart_rate" onchange="_indSaveSelection();_indicatorsLoad()" checked /> 💓 Heart Rate</label>
+                    <label><input type="checkbox" data-ind="bp_systolic" onchange="_indSaveSelection();_indicatorsLoad()" checked /> 🩸 Blood Pressure</label>
+                    <label><input type="checkbox" data-ind="spo2" onchange="_indSaveSelection();_indicatorsLoad()" checked /> 🫁 Oxygen Sat.</label>
+                    <label><input type="checkbox" data-ind="temperature" onchange="_indSaveSelection();_indicatorsLoad()" checked /> 🌡️ Temperature</label>
+                    <label><input type="checkbox" data-ind="weight" onchange="_indSaveSelection();_indicatorsLoad()" checked /> ⚖️ Weight</label>
+                    <label><input type="checkbox" data-ind="height" onchange="_indSaveSelection();_indicatorsLoad()" /> 📐 Height</label>
+                    <label><input type="checkbox" data-ind="glucose" onchange="_indSaveSelection();_indicatorsLoad()" checked /> 🍬 Glucose</label>
+                    <label><input type="checkbox" data-ind="distance" onchange="_indSaveSelection();_indicatorsLoad()" /> 🏃 Distance</label>
                 </div>
             </div>
 

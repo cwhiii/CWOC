@@ -6048,12 +6048,10 @@ async function displayIndicatorsView() {
   if (!chitList) return;
 
   chitList.innerHTML = '<div style="padding:1em;overflow-y:auto;height:100%;">' +
-    '<div id="indicators-charts" style="display:flex;flex-direction:column;gap:16px;">' +
-      '<div style="text-align:center;padding:2em;opacity:0.5;">⏳ Loading health data…</div>' +
-    '</div>' +
+    '<div id="indicators-latest" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;"></div>' +
+    '<div id="indicators-charts" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:10px;"></div>' +
   '</div>';
 
-  // Set default range to past month if not already set
   var now = new Date();
   var startInput = document.getElementById('ind-start');
   var endInput = document.getElementById('ind-end');
@@ -6066,11 +6064,29 @@ async function displayIndicatorsView() {
     endInput.value = _indFmtDate(now);
   }
   if (!window._indRange) window._indRange = 'month';
-
-  // Highlight the active range button
   _indicatorsHighlightBtn(window._indRange);
-
+  _indRestoreSelection();
   _indicatorsLoad();
+}
+
+// Persist/restore indicator checkbox selection
+function _indSaveSelection() {
+  var sel = [];
+  document.querySelectorAll('#ind-select input[data-ind]').forEach(function(cb) {
+    if (cb.checked) sel.push(cb.dataset.ind);
+  });
+  try { localStorage.setItem('cwoc_ind_selection', JSON.stringify(sel)); } catch(e) {}
+}
+function _indRestoreSelection() {
+  try {
+    var raw = localStorage.getItem('cwoc_ind_selection');
+    if (!raw) return;
+    var sel = JSON.parse(raw);
+    if (!Array.isArray(sel)) return;
+    document.querySelectorAll('#ind-select input[data-ind]').forEach(function(cb) {
+      cb.checked = sel.indexOf(cb.dataset.ind) !== -1;
+    });
+  } catch(e) {}
 }
 
 function _indFmtDate(d) {
@@ -6148,44 +6164,92 @@ async function _indicatorsLoad() {
       { key: 'distance', label: '🏃 Distance', unit: isMetric ? 'km' : 'mi', color: '#2e8b57' },
     ];
 
+    // Get selected indicators from sidebar checkboxes + persist
+    var selectedKeys = [];
+    document.querySelectorAll('#ind-select input[data-ind]').forEach(function(cb) {
+      if (cb.checked) selectedKeys.push(cb.dataset.ind);
+    });
+    _indSaveSelection();
+
+    // Build latest values header
+    var latestDiv = document.getElementById('indicators-latest');
+    if (latestDiv) {
+      latestDiv.innerHTML = '';
+      charts.forEach(function(ch) {
+        var latest = null;
+        if (data && data.length > 0) {
+          for (var di = data.length - 1; di >= 0; di--) {
+            if (data[di][ch.key] != null) { latest = data[di]; break; }
+          }
+        }
+        var val = latest ? latest[ch.key] : '—';
+        var card = document.createElement('div');
+        card.style.cssText = 'background:#fff8e1;border:1px solid #8b5a2b;border-radius:5px;padding:6px 10px;text-align:center;min-width:70px;';
+        card.innerHTML = '<div style="font-size:0.7em;color:#6b4e31;">' + ch.label.split(' ').slice(1).join(' ') + '</div>' +
+          '<div style="font-size:1.2em;font-weight:bold;color:' + ch.color + ';">' + (val !== '—' ? (Math.round(val * 10) / 10) : '—') + '</div>' +
+          '<div style="font-size:0.65em;color:#8b7355;">' + ch.unit + '</div>';
+        latestDiv.appendChild(card);
+      });
+    }
+
     container.innerHTML = '';
 
     charts.forEach(function(chart) {
+      if (selectedKeys.indexOf(chart.key) === -1) return;
+
       var points = [];
-      data.forEach(function(d) {
-        if (d[chart.key] != null) points.push({ date: d.date, datetime: d.datetime, value: d[chart.key], title: d.chit_title, chitId: d.chit_id });
-      });
+      if (data && data.length > 0) {
+        data.forEach(function(d) {
+          if (d[chart.key] != null) points.push({ date: d.date, datetime: d.datetime, value: d[chart.key], title: d.chit_title, chitId: d.chit_id });
+        });
+      }
       var pairedPoints = [];
-      if (chart.paired) {
+      if (chart.paired && data && data.length > 0) {
         data.forEach(function(d) {
           if (d[chart.paired] != null) pairedPoints.push({ date: d.date, datetime: d.datetime, value: d[chart.paired] });
         });
       }
-      if (points.length === 0) return;
 
       var chartDiv = document.createElement('div');
-      chartDiv.style.cssText = 'background:#fff8e1;border:1px solid #8b5a2b;border-radius:6px;padding:12px;';
+      chartDiv.style.cssText = 'background:#fff8e1;border:1px solid #8b5a2b;border-radius:6px;padding:8px 10px;';
+      chartDiv.dataset.indKey = chart.key;
 
+      // Header with expand button
       var header = document.createElement('div');
-      header.style.cssText = 'font-weight:bold;font-size:1em;color:#2b1e0f;margin-bottom:8px;';
-      header.textContent = chart.label + ' (' + chart.unit + ')';
-      if (chart.paired) header.textContent += ' / ' + chart.pairedLabel;
+      header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;';
+      var title = document.createElement('span');
+      title.style.cssText = 'font-weight:bold;font-size:0.9em;color:#2b1e0f;';
+      title.textContent = chart.label + ' (' + chart.unit + ')' + (chart.paired ? ' / ' + chart.pairedLabel : '');
+      header.appendChild(title);
+      var expandBtn = document.createElement('button');
+      expandBtn.textContent = '⛶';
+      expandBtn.title = 'Expand this chart';
+      expandBtn.style.cssText = 'background:none;border:1px solid #8b5a2b;border-radius:3px;cursor:pointer;font-size:1em;padding:1px 6px;color:#6b4e31;';
+      expandBtn.addEventListener('click', function() { _indToggleExpand(chart.key); });
+      header.appendChild(expandBtn);
       chartDiv.appendChild(header);
 
-      var svgWidth = 700, svgHeight = 200, padL = 55, padR = 15, padT = 10, padB = 28;
+      if (points.length === 0) {
+        var empty = document.createElement('div');
+        empty.style.cssText = 'text-align:center;padding:20px 0;opacity:0.4;font-size:0.85em;';
+        empty.textContent = 'No data';
+        chartDiv.appendChild(empty);
+        container.appendChild(chartDiv);
+        return;
+      }
+
+      var svgWidth = 500, svgHeight = 180, padL = 45, padR = 10, padT = 8, padB = 22;
       var plotW = svgWidth - padL - padR, plotH = svgHeight - padT - padB;
 
       var allVals = points.map(function(p) { return p.value; });
       if (pairedPoints.length) pairedPoints.forEach(function(p) { allVals.push(p.value); });
-      var minVal = Math.min.apply(null, allVals);
-      var maxVal = Math.max.apply(null, allVals);
-      var pad = (maxVal - minVal) * 0.1 || 1;
-      minVal -= pad; maxVal += pad;
+      var minVal = Math.min.apply(null, allVals), maxVal = Math.max.apply(null, allVals);
+      var valPad = (maxVal - minVal) * 0.1 || 1;
+      minVal -= valPad; maxVal += valPad;
       var valRange = maxVal - minVal;
 
       var allDates = points.map(function(p) { return new Date(p.datetime || p.date).getTime(); });
-      var minDate = Math.min.apply(null, allDates);
-      var maxDate = Math.max.apply(null, allDates);
+      var minDate = Math.min.apply(null, allDates), maxDate = Math.max.apply(null, allDates);
       if (minDate === maxDate) { minDate -= 86400000; maxDate += 86400000; }
       var dateRange = maxDate - minDate;
 
@@ -6193,67 +6257,39 @@ async function _indicatorsLoad() {
       function yPos(v) { return padT + plotH - ((v - minVal) / valRange) * plotH; }
 
       var svg = '<svg viewBox="0 0 ' + svgWidth + ' ' + svgHeight + '" style="width:100%;height:auto;" xmlns="http://www.w3.org/2000/svg">';
-
-      // Grid
-      for (var gi = 0; gi <= 4; gi++) {
-        var gy = padT + (plotH / 4) * gi;
-        var gv = maxVal - (valRange / 4) * gi;
-        svg += '<line x1="' + padL + '" y1="' + gy + '" x2="' + (svgWidth - padR) + '" y2="' + gy + '" stroke="#e0d4b5" stroke-width="1"/>';
-        svg += '<text x="' + (padL - 4) + '" y="' + (gy + 4) + '" text-anchor="end" font-size="10" fill="#6b4e31">' + (Math.round(gv * 10) / 10) + '</text>';
+      for (var gi = 0; gi <= 3; gi++) {
+        var gy = padT + (plotH / 3) * gi, gv = maxVal - (valRange / 3) * gi;
+        svg += '<line x1="' + padL + '" y1="' + gy + '" x2="' + (svgWidth - padR) + '" y2="' + gy + '" stroke="#e0d4b5" stroke-width="0.5"/>';
+        svg += '<text x="' + (padL - 3) + '" y="' + (gy + 3) + '" text-anchor="end" font-size="9" fill="#6b4e31">' + (Math.round(gv * 10) / 10) + '</text>';
       }
-
-      // X labels
-      var xSteps = Math.min(points.length, 8);
+      var xSteps = Math.min(points.length, 6);
       for (var xi = 0; xi < xSteps; xi++) {
         var idx = Math.round(xi * (points.length - 1) / Math.max(xSteps - 1, 1));
-        var pt = points[idx];
-        var tx = xPos(new Date(pt.datetime || pt.date).getTime());
-        svg += '<text x="' + tx + '" y="' + (svgHeight - 4) + '" text-anchor="middle" font-size="9" fill="#6b4e31">' + pt.date + '</text>';
+        var pt = points[idx], tx = xPos(new Date(pt.datetime || pt.date).getTime());
+        svg += '<text x="' + tx + '" y="' + (svgHeight - 3) + '" text-anchor="middle" font-size="8" fill="#6b4e31">' + pt.date + '</text>';
       }
-
-      // Paired line
       if (pairedPoints.length > 1) {
         var pp = 'M';
-        pairedPoints.forEach(function(p, i) {
-          pp += (i ? ' L' : '') + xPos(new Date(p.datetime || p.date).getTime()).toFixed(1) + ' ' + yPos(p.value).toFixed(1);
-        });
-        svg += '<path d="' + pp + '" fill="none" stroke="' + chart.pairedColor + '" stroke-width="1.5" stroke-dasharray="4,3" opacity="0.7"/>';
+        pairedPoints.forEach(function(p, i) { pp += (i ? ' L' : '') + xPos(new Date(p.datetime || p.date).getTime()).toFixed(1) + ' ' + yPos(p.value).toFixed(1); });
+        svg += '<path d="' + pp + '" fill="none" stroke="' + chart.pairedColor + '" stroke-width="1" stroke-dasharray="3,2" opacity="0.6"/>';
       }
-
-      // Primary line
       if (points.length > 1) {
         var lp = 'M';
-        points.forEach(function(p, i) {
-          lp += (i ? ' L' : '') + xPos(new Date(p.datetime || p.date).getTime()).toFixed(1) + ' ' + yPos(p.value).toFixed(1);
-        });
-        svg += '<path d="' + lp + '" fill="none" stroke="' + chart.color + '" stroke-width="2.5"/>';
+        points.forEach(function(p, i) { lp += (i ? ' L' : '') + xPos(new Date(p.datetime || p.date).getTime()).toFixed(1) + ' ' + yPos(p.value).toFixed(1); });
+        svg += '<path d="' + lp + '" fill="none" stroke="' + chart.color + '" stroke-width="2"/>';
       }
-
-      // Dots with tooltips
       points.forEach(function(p) {
-        var cx = xPos(new Date(p.datetime || p.date).getTime());
-        var cy = yPos(p.value);
-        svg += '<circle cx="' + cx.toFixed(1) + '" cy="' + cy.toFixed(1) + '" r="4" fill="' + chart.color + '" stroke="#fff8e1" stroke-width="1.5" style="cursor:pointer" onclick="storePreviousState();window.location.href=\'/editor?id=' + p.chitId + '\'">' +
+        var cx = xPos(new Date(p.datetime || p.date).getTime()), cy = yPos(p.value);
+        svg += '<circle cx="' + cx.toFixed(1) + '" cy="' + cy.toFixed(1) + '" r="3.5" fill="' + chart.color + '" stroke="#fff8e1" stroke-width="1" style="cursor:pointer" onclick="storePreviousState();window.location.href=\'/editor?id=' + p.chitId + '\'">' +
           '<title>' + p.date + ': ' + p.value + ' ' + chart.unit + '\n' + p.title + '</title></circle>';
       });
-
       svg += '</svg>';
       chartDiv.innerHTML += svg;
-
-      // Stats
-      var avg = allVals.reduce(function(a, b) { return a + b; }, 0) / allVals.length;
-      var stats = document.createElement('div');
-      stats.style.cssText = 'font-size:0.8em;color:#6b4e31;margin-top:4px;display:flex;gap:16px;flex-wrap:wrap;';
-      stats.innerHTML = '<span>Min: <b>' + (Math.round(Math.min.apply(null, points.map(function(p){return p.value;})) * 10) / 10) + '</b></span>' +
-        '<span>Max: <b>' + (Math.round(Math.max.apply(null, points.map(function(p){return p.value;})) * 10) / 10) + '</b></span>' +
-        '<span>Avg: <b>' + (Math.round(avg * 10) / 10) + '</b></span>' +
-        '<span>Points: <b>' + points.length + '</b></span>';
-      chartDiv.appendChild(stats);
       container.appendChild(chartDiv);
     });
 
     if (container.children.length === 0) {
-      container.innerHTML = '<div style="text-align:center;padding:2em;opacity:0.5;">No health data in this time range.</div>';
+      container.innerHTML = '<div style="text-align:center;padding:2em;opacity:0.5;">Select indicators in the sidebar.</div>';
     }
   } catch (e) {
     console.error('Indicators load error:', e);
@@ -6261,12 +6297,27 @@ async function _indicatorsLoad() {
   }
 }
 
+// Expand/collapse a single indicator chart to fill the view
+function _indToggleExpand(key) {
+  var container = document.getElementById('indicators-charts');
+  if (!container) return;
+  var expanded = container.dataset.expanded;
+  if (expanded === key) {
+    // Collapse — show all again
+    delete container.dataset.expanded;
+    container.style.gridTemplateColumns = 'repeat(auto-fill,minmax(380px,1fr))';
+    Array.from(container.children).forEach(function(c) { c.style.display = ''; });
+  } else {
+    // Expand — hide all except this one
+    container.dataset.expanded = key;
+    container.style.gridTemplateColumns = '1fr';
+    Array.from(container.children).forEach(function(c) {
+      c.style.display = (c.dataset.indKey === key) ? '' : 'none';
+    });
+  }
+}
 
-/**
- * Render the Global Search view into #chit-list.
- * Shows a search bar + Go button, fetches results from the API, applies sidebar filters,
- * and renders Result_Cards with highlighted match excerpts.
- */
+
 async function displaySearchView() {
   var chitList = document.getElementById('chit-list');
   if (!chitList) return;

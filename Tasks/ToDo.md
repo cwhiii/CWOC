@@ -13,12 +13,15 @@
 - get rid of the filter button on notification zone.
 - change the add order for alerts: notifications, alarms, timers, stopwatches
 - `[ ]` Can't save health indicators
-
+- single click/tap shouldn't show the jump snaps until dragging starts. 
+- there's a double footer on settings 
 ---
 
 ## Easy Fixes / Low-Hanging Fruit
-
-
+- Weather modsl: half-size drop down, move button for full up next to it, and make it a wordless with hover. 
+Make reference more clear which are lists of options, and which are submenues. Do it like a tree. 
+Make reference links (mention setting page, it should be a clickable link). On mobile the text is too small. 
+- PNT? Actual android notifications for alerts
 - `[ ]` Hide Completes (not past-due) sidebar toggle button — persist state across sessions
 - `[ ]` Screenshot and video walkthrough of the app
 - even if the page isn't reloaded, refresh the forecast every 4 hours
@@ -28,6 +31,8 @@
 ## UI Audit — Non-Functional Elements
 
 *Elements that exist in the UI but have no working functionality. Each needs a decision: build it, or remove it.*
+
+Use consistent system for modals. So they Re all styled the same, and have the same in/out functions, etc. 
 
 ### Editor — Health Indicators Zone (entire zone is non-functional)
 - `renderHealthIndicator()` is an empty stub — called for all 7 indicators but renders nothing
@@ -101,6 +106,14 @@
 ---
 
 ## Major Features / Overhauls
+
+Real World Use
+- Establish external access path.   
+   - home assistant? 
+   - just secured? Mobile platform? 
+   - existing tool to do external access safelt from home network? 
+- Security audit 
+
 
 ### HST Time Format (Global)
 - `[ ]` When "HST" is selected as time format in settings, ALL times throughout the tool should display in HST
