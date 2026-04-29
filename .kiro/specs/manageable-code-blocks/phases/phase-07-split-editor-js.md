@@ -1,58 +1,58 @@
 # Phase 7 — Split frontend/editor.js into focused sub-scripts
 
-- [ ] 7. Phase 7 — Split frontend/editor.js into focused sub-scripts
-  - [ ] 7.1 Extract `frontend/editor-dates.js`
+- [x] 7. Phase 7 — Split frontend/editor.js into focused sub-scripts
+  - [x] 7.1 Extract `frontend/editor-dates.js`
     - Move `onDateModeChange`, `_detectDateMode`, `_setDateMode`, `toggleAllDay`, `onRecurrenceChange`, `onRepeatToggle`, `_buildRecurrenceRule`, `_loadRecurrenceRule`, `_showTimeDropdown`, `_loadSnapSetting`, `clearStartAndEndDates`, `clearDueDate`
     - Add file-level comment block
     - _Requirements: 4.1, 10.1_
-  - [ ] 7.2 Extract `frontend/editor-tags.js`
+  - [x] 7.2 Extract `frontend/editor-tags.js`
     - Move `_loadTags`, `_renderTags`, `toggleAllTags`, `createTag`, `clearTagSearch`, `_filterTagTree`, `addSearchedTag`, `navigateToSettings`
     - Add file-level comment block
     - _Requirements: 4.1, 10.1_
-  - [ ] 7.3 Extract `frontend/editor-people.js`
+  - [x] 7.3 Extract `frontend/editor-people.js`
     - Move `_focusPeopleSearch`, `_initPeopleAutocomplete`, `_clearPeopleSearch`, `_loadAllContactsForTree`, `_renderPeopleTree`, `_filterPeopleTree`, `_toggleAllPeopleGroups`, `_addPeopleChip`, `_removePeopleChip`, `_renderPeopleChips`, `_syncPeopleHiddenField`, `_setPeopleFromArray`
     - Add file-level comment block
     - _Requirements: 4.1, 10.1_
-  - [ ] 7.4 Extract `frontend/editor-location.js`
+  - [x] 7.4 Extract `frontend/editor-location.js`
     - Move `_getCoordinates`, `_getWeather`, `_fetchWeatherData`, `_displayWeatherInCompactSection`, `_displayMapInUI`, `loadSavedLocationsDropdown`, `onSavedLocationSelect`, `onAddDefaultLocation`, `onClearLocation`, `loadCompactLocationDropdown`, `onCompactLocationSelect`, `searchLocationMap`, `openLocationInNewTab`, `openLocationDirections`
     - Add file-level comment block
     - _Requirements: 4.1, 10.1_
-  - [ ] 7.5 Extract `frontend/editor-notes.js`
+  - [x] 7.5 Extract `frontend/editor-notes.js`
     - Move `autoGrowNote`, `_checkChitLinkAutocomplete`, `_showChitLinkDropdown`, `_removeChitLinkDropdown`, `_insertChitLink`, `shrinkNoteToFourLines`, `_setNotesRenderToggleLabel`, `toggleNotesViewMode`, `copyNotesToClipboard`, `downloadNotes`, `openNotesModal`, `closeNotesModal`, `toggleModalNotesRender`
     - Add file-level comment block
     - _Requirements: 4.1, 10.1_
-  - [ ] 7.6 Extract `frontend/editor-alerts.js`
+  - [x] 7.6 Extract `frontend/editor-alerts.js`
     - Move `renderAllAlerts`, `renderAlarmsContainer`, `renderNotificationsContainer`, `renderTimersContainer`, `renderStopwatchesContainer`, `_applyDefaultNotifications`
     - Move alarm/timer/stopwatch/notification CRUD modal functions
     - Move `_alertsFromChit`, `_alertsToArray`, `_startAlarmChecker`, `_checkAlarms`
     - Add file-level comment block
     - _Requirements: 4.1, 10.1_
-  - [ ] 7.7 Extract `frontend/editor-color.js`
+  - [x] 7.7 Extract `frontend/editor-color.js`
     - Move `_fetchCustomColors`, `_setColor`, `_updateColorPreview`, `_renderCustomColors`, `_attachColorSwatchListeners`
     - Add file-level comment block
     - _Requirements: 4.1, 10.1_
-  - [ ] 7.8 Extract `frontend/editor-health.js`
+  - [x] 7.8 Extract `frontend/editor-health.js`
     - Move `renderHealthIndicator`, `_loadHealthData`, `_gatherHealthData`
     - Add file-level comment block
     - _Requirements: 4.1, 10.1_
-  - [ ] 7.9 Extract `frontend/editor-save.js`
+  - [x] 7.9 Extract `frontend/editor-save.js`
     - Move `buildChitObject`, `saveChitData`, `saveChit`, `saveChitAndStay`, `deleteChit`, `performDeleteChit`, `chitExists`, `cancelOrExit`, `setSaveButtonSaved`, `markEditorUnsaved`, `markEditorSaved`, `togglePinned`, `toggleArchived`, `_showQRCode`, `_showInstanceBanner`, `_saveInstanceException`
     - Add file-level comment block
     - _Requirements: 4.1, 10.1_
-  - [ ] 7.10 Extract `frontend/editor-init.js`
+  - [x] 7.10 Extract `frontend/editor-init.js`
     - Move `_initializeChitId`, `resetEditorForNewChit`, `_collapseAllZonesForNewChit`, `loadChitData`, `applyZoneStates`, `setSelectValue`, `toggleZone`, `_toggleSection`, `initializeFlatpickr`, `_loadEditorTimeFormat`, `DOMContentLoaded` handler
     - Add file-level comment block
     - _Requirements: 4.1, 10.1_
-  - [ ] 7.11 Reduce `frontend/editor.js` to a minimal coordinator
+  - [x] 7.11 Reduce `frontend/editor.js` to a minimal coordinator
     - Keep shared editor state variables: `chitId`, `currentWeatherLat`, `currentWeatherLon`, `currentWeatherData`, `weatherIcons`, `defaultColors`
     - Remove all functions that were extracted to sub-scripts
     - Add comment block documenting coordinator role
     - _Requirements: 4.2, 10.1_
-  - [ ] 7.12 Update `editor.html` with new editor script load order
+  - [x] 7.12 Update `editor.html` with new editor script load order
     - Add `<script>` tags for all editor sub-scripts after shared scripts, `shared-page.js`, `shared-editor.js`, `editor_checklists.js`, and `editor_projects.js`, before coordinator `editor.js`
     - Load order: `editor-dates.js` → `editor-tags.js` → `editor-people.js` → `editor-location.js` → `editor-notes.js` → `editor-alerts.js` → `editor-color.js` → `editor-health.js` → `editor-save.js` → `editor-init.js` → `editor.js`
     - _Requirements: 4.3, 8.2, 8.5, 8.6_
-  - [ ] 7.13 Verify editor functionality
+  - [x] 7.13 Verify editor functionality
     - Editor loads, all zones expand/collapse correctly
     - Save creates a chit, load populates all fields
     - Date mode switching works (Start/End, Due, None)
@@ -67,5 +67,5 @@
     - Confirm all `onclick` handlers in `editor.html` still resolve
     - Confirm each sub-script is under 800 lines
     - _Requirements: 4.4, 4.5, 7.4, 7.5, 7.6, 9.1, 9.5_
-  - [ ] 7.14 Update `mega_restructure_plan.md` — mark Phase 7 complete
+  - [x] 7.14 Update `mega_restructure_plan.md` — mark Phase 7 complete
     - _Requirements: 14.6_

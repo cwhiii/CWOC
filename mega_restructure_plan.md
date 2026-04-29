@@ -14,7 +14,7 @@ Restructure the CWOC codebase from a flat directory layout with five monolithic 
 | 4 | Move backend to src/backend/ | **Complete** | 2026-04-29 |
 | 5 | Split frontend/shared.js into focused sub-scripts | **Complete** | 2026-04-29 |
 | 6 | Split frontend/main.js into focused sub-scripts | **Complete** | 2026-04-29 |
-| 7 | Split frontend/editor.js into focused sub-scripts | Not Started | — |
+| 7 | Split frontend/editor.js into focused sub-scripts | **Complete** | 2026-04-29 |
 | 8 | Split frontend/styles.css into focused sub-stylesheets | Not Started | — |
 | 9 | Move frontend to src/frontend/ | Not Started | — |
 | 10 | Move static assets to src/static/ | Not Started | — |
@@ -165,14 +165,14 @@ Restructure the CWOC codebase from a flat directory layout with five monolithic 
 **Files affected:** `frontend/editor.js` (reduced to coordinator), new files: `frontend/editor-dates.js`, `frontend/editor-tags.js`, `frontend/editor-people.js`, `frontend/editor-location.js`, `frontend/editor-notes.js`, `frontend/editor-alerts.js`, `frontend/editor-color.js`, `frontend/editor-health.js`, `frontend/editor-save.js`, `frontend/editor-init.js`. `editor.html` updated.
 
 **Tasks:**
-- [ ] Extract 10 editor sub-scripts
-- [ ] Reduce `editor.js` to minimal coordinator
-- [ ] Update `editor.html` with new script load order
+- [x] Extract 10 editor sub-scripts
+- [x] Reduce `editor.js` to minimal coordinator
+- [x] Update `editor.html` with new script load order
 
 **Verification:**
-- [ ] Editor loads, all zones expand/collapse
-- [ ] Save/load works, all zone interactions work
-- [ ] Each sub-script under 800 lines
+- [x] Editor loads, all zones expand/collapse
+- [x] Save/load works, all zone interactions work
+- [x] Each sub-script under 800 lines
 
 ---
 
