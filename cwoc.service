@@ -8,7 +8,7 @@ User=root
 WorkingDirectory=/app
 Environment="PATH=/app/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
-ExecStart=/app/venv/bin/uvicorn backend.main:app \
+ExecStart=/app/venv/bin/uvicorn src.backend.main:app \
     --host 0.0.0.0 \
     --port 3333 \
     --log-level debug

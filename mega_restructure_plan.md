@@ -11,8 +11,8 @@ Restructure the CWOC codebase from a flat directory layout with five monolithic 
 | 1 | Create directory structure | **Complete** | 2026-04-29 |
 | 2 | Reorganize data directory (contact images) | **Complete** | 2026-04-29 |
 | 3 | Split backend/main.py into Python modules | **Complete** | 2026-04-29 |
-| 4 | Move backend to src/backend/ | Not Started | — |
-| 5 | Split frontend/shared.js into focused sub-scripts | Not Started | — |
+| 4 | Move backend to src/backend/ | **Complete** | 2026-04-29 |
+| 5 | Split frontend/shared.js into focused sub-scripts | **Complete** | 2026-04-29 |
 | 6 | Split frontend/main.js into focused sub-scripts | Not Started | — |
 | 7 | Split frontend/editor.js into focused sub-scripts | Not Started | — |
 | 8 | Split frontend/styles.css into focused sub-stylesheets | Not Started | — |
@@ -104,20 +104,20 @@ Restructure the CWOC codebase from a flat directory layout with five monolithic 
 **Files affected:** All `backend/*.py` and `backend/routes/*.py` (moved), `start.sh`, `cwoc.service`, `install/configurinator.sh`.
 
 **Tasks:**
-- [ ] Move all backend Python files to `src/backend/` and `src/backend/routes/`
-- [ ] Update all intra-backend Python imports
-- [ ] Update `DB_PATH` to reference flattened `data/app.db`
-- [ ] Update `StaticFiles` mounts
-- [ ] Update `FileResponse` paths
-- [ ] Update `start.sh` and `cwoc.service` with new uvicorn path
-- [ ] Update `install/configurinator.sh`
-- [ ] Move and update test files
-- [ ] Remove old `backend/` directory
+- [x] Move all backend Python files to `src/backend/` and `src/backend/routes/`
+- [x] Update all intra-backend Python imports
+- [x] Update `DB_PATH` to reference flattened `data/app.db`
+- [x] Update `StaticFiles` mounts
+- [x] Update `FileResponse` paths
+- [x] Update `start.sh` and `cwoc.service` with new uvicorn path
+- [x] Update `install/configurinator.sh`
+- [x] Move and update test files
+- [x] Remove old `backend/` directory
 
 **Verification:**
-- [ ] `uvicorn src.backend.main:app` starts without errors
-- [ ] All API endpoints return correct responses
-- [ ] Test files pass with updated imports
+- [x] `uvicorn src.backend.main:app` starts without errors
+- [x] All API endpoints return correct responses
+- [x] Test files pass with updated imports
 
 ---
 
@@ -128,14 +128,14 @@ Restructure the CWOC codebase from a flat directory layout with five monolithic 
 **Files affected:** `frontend/shared.js` (reduced to coordinator), new files: `frontend/shared-utils.js`, `frontend/shared-touch.js`, `frontend/shared-checklist.js`, `frontend/shared-sort.js`, `frontend/shared-indicators.js`, `frontend/shared-calendar.js`, `frontend/shared-tags.js`, `frontend/shared-recurrence.js`, `frontend/shared-geocoding.js`, `frontend/shared-qr.js`. All HTML files updated with new `<script>` tags.
 
 **Tasks:**
-- [ ] Extract 10 shared sub-scripts
-- [ ] Reduce `shared.js` to minimal coordinator
-- [ ] Update all HTML files with new script load order
+- [x] Extract 10 shared sub-scripts
+- [x] Reduce `shared.js` to minimal coordinator
+- [x] Update all HTML files with new script load order
 
 **Verification:**
-- [ ] All pages load without console errors
-- [ ] All shared functions available globally
-- [ ] Each sub-script under 600 lines
+- [x] All pages load without console errors
+- [x] All shared functions available globally
+- [x] Each sub-script under 600 lines
 
 ---
 

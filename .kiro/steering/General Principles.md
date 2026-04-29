@@ -79,3 +79,23 @@ when adding code, ensure youre doing so in an organized manner. Use the applicab
 Ensure there's no tasks that require installing software (no hypothisys!), or running the server here.
 
 no installs, no pip, no npm.
+
+## Help & Reference
+Ensure that any time you change or add a feature that has or should have, documentaion that you update both the help & reference, as applicable.
+
+## Versioning
+
+Version numbering is: 
+YYYYMMDD.time, with time in format HHMM.
+
+As the last step of any change, call the real time and use that to  Update the version number every time you make changes. (via  /app/VERSION)
+
+NEVER guess the time! always run date "+%Y%m%d.%H%M", and use the returned value. 
+
+ALSO: only do this ONCE at the VERY END of any set of work/tasks. Not multiple times throught the task.
+
+## The Mega Index
+There is an index. It contains a complete map of where every function is, and what it does. If this is helpful, use it for finding where to do work. Anytime you change something that would impact this, make sure you update the index. But only at the end of the task.
+
+## Modularity
+CWOC is broken up into a bunch of code files. Each one is very tight and directed. Ensure that code that you ad gets put in the correct file for the applicable functionality. If there is not a good file to place a new functionality into, find the best place to put a new file based on the structure and index, and then make the new file. The point of these is to keep each file relatively small and more maintainable. If you ever create new files, ensure you update the index file.

@@ -24,7 +24,13 @@ Make reference links (mention setting page, it should be a clickable link). On m
 - PNT? Actual android notifications for alerts
 - `[ ]` Hide Completes (not past-due) sidebar toggle button — persist state across sessions
 - `[ ]` Screenshot and video walkthrough of the app
-- even if the page isn't reloaded, refresh the forecast every 4 hours
+- Done: even if the page isn't reloaded, refresh the forecast every 4 hours
+- Add NEW ALERT hotkeys: CRTL+ ... (only in alerts? Or anywhere, and it adds it to the alerts view?, if he latter, do it as a modal, and once kicked off, it saves them to the independent alerts view)
+   - A = alarm
+   - T = Timer
+   - S = Stopwatch (auto start upon creation)
+- Add new hotkey: ` to hide & show sidebar. (retain setting)
+- Add new hotkey: ~ (SHIFT+`) to hide & show topbar. (retain setting)
 
 ---
 

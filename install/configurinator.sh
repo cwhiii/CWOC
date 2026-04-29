@@ -129,14 +129,14 @@ deploy_from_zip() {
     local subdir_count
     subdir_count=$(echo "$subdirs" | wc -l)
 
-    # If there's exactly one top-level dir containing backend/, use it
-    if [[ "$subdir_count" -eq 1 ]] && [[ -d "$(echo "$subdirs")/backend" ]]; then
+    # If there's exactly one top-level dir containing src/backend/, use it
+    if [[ "$subdir_count" -eq 1 ]] && [[ -d "$(echo "$subdirs")/src/backend" ]]; then
         src_dir="$(echo "$subdirs")"
         log_ok "Detected wrapper folder: $(basename "$src_dir")"
     fi
 
     # Copy app directories into /app (skip data/ to preserve DB)
-    for dir in backend frontend static install; do
+    for dir in src frontend static install; do
         if [[ -d "$src_dir/$dir" ]]; then
             rm -rf "$APP_DIR/$dir"
             cp -r "$src_dir/$dir" "$APP_DIR/$dir"
@@ -237,7 +237,7 @@ Type=simple
 User=root
 WorkingDirectory=/app
 Environment="PATH=/app/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-ExecStart=/app/venv/bin/uvicorn backend.main:app --host 0.0.0.0 --port 3333 --log-level debug
+ExecStart=/app/venv/bin/uvicorn src.backend.main:app --host 0.0.0.0 --port 3333 --log-level debug
 Restart=always
 RestartSec=3
 StandardOutput=journal
@@ -371,9 +371,9 @@ NGINX_EOF
 # ---------------------------------------------------------------------------
 
 start_and_verify() {
-    if [[ ! -f "$APP_DIR/backend/main.py" ]]; then
-        log_error "backend/main.py not found at $APP_DIR/backend/main.py — deploy failed." \
-            "The release zip may not contain the expected file structure. Check: ls -la $APP_DIR/backend/"
+    if [[ ! -f "$APP_DIR/src/backend/main.py" ]]; then
+        log_error "src/backend/main.py not found at $APP_DIR/src/backend/main.py — deploy failed." \
+            "The release zip may not contain the expected file structure. Check: ls -la $APP_DIR/src/backend/"
     fi
 
     log_ok "Upgrade complete — service will restart automatically."
@@ -393,7 +393,7 @@ main() {
     log_ok "Running as root. Package manager: $PKG_MGR"
 
     # If CWOC is already installed, skip system packages and venv creation
-    if [[ -f "$APP_DIR/backend/main.py" ]] && [[ -f "$APP_DIR/venv/bin/python" ]]; then
+    if [[ -f "$APP_DIR/src/backend/main.py" ]] && [[ -f "$APP_DIR/venv/bin/python" ]]; then
         log_ok "Existing CWOC installation detected — running upgrade only."
 
         # Ensure required tools are available (they may be missing if the
