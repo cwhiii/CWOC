@@ -1,21 +1,21 @@
 # Phase 2 — Reorganize data directory (contact images)
 
-- [ ] 2. Phase 2 — Reorganize data directory (contact images)
-  - [ ] 2.1 Add backend migration to move contact images and update DB paths
+- [x] 2. Phase 2 — Reorganize data directory (contact images)
+  - [x] 2.1 Add backend migration to move contact images and update DB paths
     - Write a migration function in `backend/main.py` that copies files from `/app/static/contact_images/` to `data/contacts/profile_pictures/`, preserving filenames
     - Write a DB migration that updates all `image_url` values from old path prefix (`/static/contact_images/`) to new serving path — skip NULL/empty rows
     - _Requirements: 13.2, 13.7, 13.8_
-  - [ ] 2.2 Update `CONTACT_IMAGES_DIR` and route handlers
+  - [x] 2.2 Update `CONTACT_IMAGES_DIR` and route handlers
     - Update `CONTACT_IMAGES_DIR` constant to point to `data/contacts/profile_pictures/`
     - Update `upload_contact_image` to save to the new path and store the updated URL
     - Update `delete_contact_image` to resolve files from the new path
     - _Requirements: 13.3, 13.4, 13.5_
-  - [ ] 2.3 Add a `StaticFiles` mount for the data/contacts directory
+  - [x] 2.3 Add a `StaticFiles` mount for the data/contacts directory
     - Mount `data/contacts/profile_pictures/` so profile images are accessible via HTTP
     - _Requirements: 13.6_
-  - [ ] 2.4 Remove old `/app/static/contact_images/` directory reference
+  - [x] 2.4 Remove old `/app/static/contact_images/` directory reference
     - After migration, the old directory can be cleaned up (or left for Phase 12)
     - Verify frontend contact pages (people.html, contact-editor.html) display images correctly at the new URL
     - _Requirements: 13.11, 13.12_
-  - [ ] 2.5 Update `mega_restructure_plan.md` — mark Phase 2 complete
+  - [x] 2.5 Update `mega_restructure_plan.md` — mark Phase 2 complete
     - _Requirements: 14.6_

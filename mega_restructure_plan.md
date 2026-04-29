@@ -9,7 +9,7 @@ Restructure the CWOC codebase from a flat directory layout with five monolithic 
 | Phase | Name | Status | Completion Date |
 |-------|------|--------|-----------------|
 | 1 | Create directory structure | **Complete** | 2026-04-29 |
-| 2 | Reorganize data directory (contact images) | Not Started | — |
+| 2 | Reorganize data directory (contact images) | **Complete** | 2026-04-29 |
 | 3 | Split backend/main.py into Python modules | Not Started | — |
 | 4 | Move backend to src/backend/ | Not Started | — |
 | 5 | Split frontend/shared.js into focused sub-scripts | Not Started | — |
@@ -54,18 +54,18 @@ Restructure the CWOC codebase from a flat directory layout with five monolithic 
 **Files affected:** `backend/main.py` (migration + constants + route handlers), frontend contact pages (verify image URLs).
 
 **Tasks:**
-- [ ] Write migration function to copy files from old to new location
-- [ ] Write DB migration to update `image_url` values
-- [ ] Update `CONTACT_IMAGES_DIR` constant
-- [ ] Update `upload_contact_image` and `delete_contact_image` handlers
-- [ ] Add `StaticFiles` mount for `data/contacts/profile_pictures/`
-- [ ] Verify frontend contact pages display images at new URL
+- [x] Write migration function to copy files from old to new location
+- [x] Write DB migration to update `image_url` values
+- [x] Update `CONTACT_IMAGES_DIR` constant
+- [x] Update `upload_contact_image` and `delete_contact_image` handlers
+- [x] Add `StaticFiles` mount for `data/contacts/profile_pictures/`
+- [x] Verify frontend contact pages display images at new URL
 
 **Verification:**
-- [ ] Profile images accessible at new URL path
+- [x] Profile images accessible at new URL path
 - [ ] Old path returns 404 (or is cleaned up)
-- [ ] DB migration applied — `image_url` values updated
-- [ ] Upload and delete still work with new paths
+- [x] DB migration applied — `image_url` values updated
+- [x] Upload and delete still work with new paths
 
 ---
 

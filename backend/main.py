@@ -858,6 +858,46 @@ def migrate_add_alert_state():
             conn.close()
 
 
+def migrate_contact_images_to_data():
+    """Move contact profile images from /app/static/contact_images/ to data/contacts/profile_pictures/
+    and update image_url values in the contacts table."""
+    import shutil
+    old_dir = "/app/static/contact_images/"
+    new_dir = "/app/data/contacts/profile_pictures/"
+    os.makedirs(new_dir, exist_ok=True)
+
+    # Step 1: Copy image files from old to new location (if old dir exists and has files)
+    if os.path.isdir(old_dir):
+        for fname in os.listdir(old_dir):
+            old_path = os.path.join(old_dir, fname)
+            new_path = os.path.join(new_dir, fname)
+            if os.path.isfile(old_path) and not os.path.exists(new_path):
+                shutil.copy2(old_path, new_path)
+                logger.info(f"Copied contact image {fname} to {new_dir}")
+
+    # Step 2: Update image_url values in the contacts table
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, image_url FROM contacts WHERE image_url IS NOT NULL AND image_url != ''")
+        rows = cursor.fetchall()
+        updated = 0
+        for row in rows:
+            contact_id, image_url = row
+            if image_url and image_url.startswith("/static/contact_images/"):
+                new_url = image_url.replace("/static/contact_images/", "/data/contacts/profile_pictures/")
+                cursor.execute("UPDATE contacts SET image_url = ? WHERE id = ?", (new_url, contact_id))
+                updated += 1
+        conn.commit()
+        logger.info(f"migrate_contact_images_to_data: updated {updated} image_url rows")
+    except Exception as e:
+        logger.error(f"Error in migrate_contact_images_to_data: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
 def _run_auto_prune():
     """Auto-prune audit log based on settings limits. Returns (pruned_by_age, pruned_by_size)."""
     pruned_by_age = 0
@@ -1487,10 +1527,11 @@ migrate_add_audit_settings()
 migrate_add_default_notifications()
 migrate_add_standalone_alerts()
 migrate_add_alert_state()
+migrate_contact_images_to_data()
 seed_version_info()
 
 # Create directory for contact images
-CONTACT_IMAGES_DIR = "/app/static/contact_images/"
+CONTACT_IMAGES_DIR = "/app/data/contacts/profile_pictures/"
 os.makedirs(CONTACT_IMAGES_DIR, exist_ok=True)
 
 
@@ -1710,6 +1751,9 @@ app.mount("/frontend", StaticFiles(directory="/app/frontend"), name="frontend")
 
 # Serve all files from /static/ (e.g., images)
 app.mount("/static", StaticFiles(directory="/app/static"), name="static")
+
+# Serve contact profile pictures from data/contacts/
+app.mount("/data/contacts", StaticFiles(directory="/app/data/contacts"), name="data_contacts")
 
 # Root route to serve index.html as the main page
 @app.get("/")
@@ -3460,7 +3504,7 @@ def delete_contact(contact_id: str):
 
 @app.post("/api/contacts/{contact_id}/image")
 async def upload_contact_image(contact_id: str, file: UploadFile = File(...)):
-    """Upload a profile image for a contact. Stores in /static/contact_images/."""
+    """Upload a profile image for a contact. Stores in data/contacts/profile_pictures/."""
     conn = None
     try:
         conn = sqlite3.connect(DB_PATH)
@@ -3491,7 +3535,7 @@ async def upload_contact_image(contact_id: str, file: UploadFile = File(...)):
         with open(filepath, "wb") as f:
             f.write(contents)
 
-        image_url = f"/static/contact_images/{filename}"
+        image_url = f"/data/contacts/profile_pictures/{filename}"
 
         # Update DB
         cursor.execute("UPDATE contacts SET image_url = ?, modified_datetime = ? WHERE id = ?",
