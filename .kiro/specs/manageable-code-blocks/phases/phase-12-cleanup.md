@@ -1,17 +1,17 @@
 # Phase 12 — Cleanup and final verification
 
-- [ ] 12. Phase 12 — Cleanup and final verification
+- [-] 12. Phase 12 — Cleanup and final verification
   - [ ] 12.1 Remove any remaining empty old directories
     - Verify `backend/`, `frontend/`, `static/` are fully removed
     - Remove any leftover `__pycache__`, `.pyc`, or temp files from old locations
     - _Requirements: 13.11_
-  - [ ] 12.2 Verify no broken references remain
+  - [x] 12.2 Verify no broken references remain
     - Search all Python files for imports referencing old `backend.` module paths
     - Search all HTML files for `<script src>` and `<link href>` referencing old `frontend/` paths
     - Search all JS files for `window.location.href` or `fetch()` referencing old page paths
     - Search backend for `FileResponse` or `StaticFiles` referencing old directory paths
     - _Requirements: 7.1–7.12_
-  - [ ] 12.3 Full end-to-end verification
+  - [-] 12.3 Full end-to-end verification
     - Start server with `uvicorn src.backend.main:app --port 3333`
     - Dashboard: all 6 C CAPTN tabs render, all 7 calendar views work, sidebar filters work, hotkeys work
     - Editor: all zones work, save/load works, date modes work, recurrence works
