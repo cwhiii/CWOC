@@ -1,0 +1,473 @@
+"""Database migration functions for the CWOC backend.
+
+All migrate_* functions and init_contacts_table() live here.
+Each migration checks if the column/table already exists before making changes.
+Migrations are called sequentially at startup from main.py.
+"""
+
+import logging
+import os
+import sqlite3
+
+from backend.db import DB_PATH, serialize_json_field
+
+
+logger = logging.getLogger(__name__)
+
+
+# Migration: Rename labels to tags
+def migrate_labels_to_tags():
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(chits)")
+        columns = [col[1] for col in cursor.fetchall()]
+        if "labels" in columns and "tags" not in columns:
+            cursor.execute("ALTER TABLE chits RENAME COLUMN labels TO tags")
+            conn.commit()
+            logger.info("Migrated labels column to tags")
+    except Exception as e:
+        logger.error(f"Error migrating labels to tags: {str(e)}")
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+# Migration: Add all_day column if missing
+def migrate_add_all_day():
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(chits)")
+        columns = [col[1] for col in cursor.fetchall()]
+        if "all_day" not in columns:
+            cursor.execute("ALTER TABLE chits ADD COLUMN all_day BOOLEAN DEFAULT 0")
+            conn.commit()
+            logger.info("Added all_day column to chits table")
+    except Exception as e:
+        logger.error(f"Error adding all_day column: {str(e)}")
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+# Migration: Add alerts column if missing
+def migrate_add_alerts():
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(chits)")
+        columns = [col[1] for col in cursor.fetchall()]
+        if "alerts" not in columns:
+            cursor.execute("ALTER TABLE chits ADD COLUMN alerts TEXT")
+            conn.commit()
+            logger.info("Added alerts column to chits table")
+    except Exception as e:
+        logger.error(f"Error adding alerts column: {str(e)}")
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+def migrate_add_calendar_snap():
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(settings)")
+        columns = [col[1] for col in cursor.fetchall()]
+        if "calendar_snap" not in columns:
+            cursor.execute("ALTER TABLE settings ADD COLUMN calendar_snap TEXT DEFAULT '15'")
+            conn.commit()
+            logger.info("Added calendar_snap column to settings table")
+        if "week_start_day" not in columns:
+            cursor.execute("ALTER TABLE settings ADD COLUMN week_start_day TEXT DEFAULT '0'")
+            conn.commit()
+            logger.info("Added week_start_day column to settings table")
+    except Exception as e:
+        logger.error(f"Error adding calendar settings columns: {str(e)}")
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+def migrate_add_recurrence_fields():
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(chits)")
+        columns = [col[1] for col in cursor.fetchall()]
+        if "recurrence_rule" not in columns:
+            cursor.execute("ALTER TABLE chits ADD COLUMN recurrence_rule TEXT")
+            conn.commit()
+            logger.info("Added recurrence_rule column to chits table")
+        if "recurrence_exceptions" not in columns:
+            cursor.execute("ALTER TABLE chits ADD COLUMN recurrence_exceptions TEXT")
+            conn.commit()
+            logger.info("Added recurrence_exceptions column to chits table")
+        # Migrate old recurrence strings to new format
+        cursor.execute("SELECT id, recurrence FROM chits WHERE recurrence IS NOT NULL AND recurrence != ''")
+        rows = cursor.fetchall()
+        for row in rows:
+            chit_id, old_rec = row
+            freq_map = {"Hourly": "HOURLY", "Daily": "DAILY", "Weekly": "WEEKLY", "Monthly": "MONTHLY", "Yearly": "YEARLY"}
+            if old_rec in freq_map:
+                new_rule = serialize_json_field({"freq": freq_map[old_rec], "interval": 1})
+                cursor.execute("UPDATE chits SET recurrence_rule = ? WHERE id = ?", (new_rule, chit_id))
+        conn.commit()
+    except Exception as e:
+        logger.error(f"Error adding recurrence fields: {str(e)}")
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+def migrate_add_work_hours():
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(settings)")
+        columns = [col[1] for col in cursor.fetchall()]
+        if "work_start_hour" not in columns:
+            cursor.execute("ALTER TABLE settings ADD COLUMN work_start_hour TEXT DEFAULT '8'")
+        if "work_end_hour" not in columns:
+            cursor.execute("ALTER TABLE settings ADD COLUMN work_end_hour TEXT DEFAULT '17'")
+        if "work_days" not in columns:
+            cursor.execute("ALTER TABLE settings ADD COLUMN work_days TEXT DEFAULT '1,2,3,4,5'")
+        if "enabled_periods" not in columns:
+            cursor.execute("ALTER TABLE settings ADD COLUMN enabled_periods TEXT DEFAULT 'Itinerary,Day,Week,Work,SevenDay,Month,Year'")
+        if "custom_days_count" not in columns:
+            cursor.execute("ALTER TABLE settings ADD COLUMN custom_days_count TEXT DEFAULT '7'")
+        if "active_clocks" not in columns:
+            cursor.execute("ALTER TABLE settings ADD COLUMN active_clocks TEXT")
+        if "all_view_start_hour" not in columns:
+            cursor.execute("ALTER TABLE settings ADD COLUMN all_view_start_hour TEXT DEFAULT '0'")
+        if "all_view_end_hour" not in columns:
+            cursor.execute("ALTER TABLE settings ADD COLUMN all_view_end_hour TEXT DEFAULT '24'")
+        if "day_scroll_to_hour" not in columns:
+            cursor.execute("ALTER TABLE settings ADD COLUMN day_scroll_to_hour TEXT DEFAULT '5'")
+        conn.commit()
+    except Exception as e:
+        logger.error(f"Error adding work hours columns: {str(e)}")
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+# Migration: Add saved_locations column if missing
+def migrate_add_saved_locations():
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(settings)")
+        columns = [col[1] for col in cursor.fetchall()]
+        if "saved_locations" not in columns:
+            cursor.execute("ALTER TABLE settings ADD COLUMN saved_locations TEXT")
+            conn.commit()
+            logger.info("Added saved_locations column to settings table")
+    except Exception as e:
+        logger.error(f"Error adding saved_locations column: {str(e)}")
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+# Initialize contacts table
+def init_contacts_table():
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS contacts (
+            id TEXT PRIMARY KEY,
+            given_name TEXT NOT NULL,
+            surname TEXT,
+            middle_names TEXT,
+            prefix TEXT,
+            suffix TEXT,
+            display_name TEXT,
+            phones TEXT,
+            emails TEXT,
+            addresses TEXT,
+            call_signs TEXT,
+            x_handles TEXT,
+            websites TEXT,
+            has_signal BOOLEAN DEFAULT 0,
+            pgp_key TEXT,
+            favorite BOOLEAN DEFAULT 0,
+            created_datetime TEXT,
+            modified_datetime TEXT
+        )
+        """)
+        conn.commit()
+    except Exception as e:
+        logger.error(f"Error initializing contacts table: {str(e)}")
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+def migrate_contacts_add_new_fields():
+    """Add nickname, signal_username, color, organization, social_context, image_url, notes, tags columns."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(contacts)")
+        existing = {row[1] for row in cursor.fetchall()}
+        new_cols = [
+            ("nickname", "TEXT"),
+            ("signal_username", "TEXT"),
+            ("color", "TEXT"),
+            ("organization", "TEXT"),
+            ("social_context", "TEXT"),
+            ("image_url", "TEXT"),
+            ("notes", "TEXT"),
+            ("tags", "TEXT"),
+        ]
+        for col_name, col_type in new_cols:
+            if col_name not in existing:
+                cursor.execute(f"ALTER TABLE contacts ADD COLUMN {col_name} {col_type}")
+                logger.info(f"Added column {col_name} to contacts table")
+        conn.commit()
+    except Exception as e:
+        logger.error(f"Error adding new contact fields: {str(e)}")
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+def migrate_add_progress_and_estimate():
+    """Add progress_percent and time_estimate columns to chits if missing."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(chits)")
+        existing = {row[1] for row in cursor.fetchall()}
+        if "progress_percent" not in existing:
+            cursor.execute("ALTER TABLE chits ADD COLUMN progress_percent INTEGER")
+            logger.info("Added column progress_percent to chits table")
+        if "time_estimate" not in existing:
+            cursor.execute("ALTER TABLE chits ADD COLUMN time_estimate TEXT")
+            logger.info("Added column time_estimate to chits table")
+        conn.commit()
+    except Exception as e:
+        logger.error(f"Error adding progress/estimate fields: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+def migrate_add_username():
+    """Add username column to settings if missing."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(settings)")
+        existing = {row[1] for row in cursor.fetchall()}
+        if "username" not in existing:
+            cursor.execute("ALTER TABLE settings ADD COLUMN username TEXT")
+            logger.info("Added column username to settings table")
+        conn.commit()
+    except Exception as e:
+        logger.error(f"Error adding username field: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+def migrate_add_weather_data():
+    """Add weather_data column to chits if missing."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(chits)")
+        existing = {row[1] for row in cursor.fetchall()}
+        if "weather_data" not in existing:
+            cursor.execute("ALTER TABLE chits ADD COLUMN weather_data TEXT")
+            logger.info("Added weather_data column to chits table")
+        if "health_data" not in existing:
+            cursor.execute("ALTER TABLE chits ADD COLUMN health_data TEXT")
+            logger.info("Added health_data column to chits table")
+        conn.commit()
+    except Exception as e:
+        logger.error(f"Error adding weather_data column: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
+# ── Audit Log: migration ─────────────────────────────────────────────────
+
+def migrate_add_audit_log():
+    """Create audit_log table and indexes if they don't already exist."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS audit_log (
+                id TEXT PRIMARY KEY,
+                entity_type TEXT NOT NULL,
+                entity_id TEXT NOT NULL,
+                action TEXT NOT NULL,
+                actor TEXT NOT NULL,
+                timestamp TEXT NOT NULL,
+                changes TEXT,
+                entity_summary TEXT
+            )
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_audit_entity
+            ON audit_log (entity_type, entity_id)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_audit_timestamp
+            ON audit_log (timestamp)
+        """)
+        conn.commit()
+        logger.info("Audit log table and indexes ready")
+    except Exception as e:
+        logger.error(f"Error creating audit_log table: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
+def migrate_add_audit_settings():
+    """Add audit_log_max_days and audit_log_max_mb columns to settings table."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(settings)")
+        existing = {row[1] for row in cursor.fetchall()}
+        if "audit_log_max_days" not in existing:
+            cursor.execute("ALTER TABLE settings ADD COLUMN audit_log_max_days INTEGER DEFAULT 1096")
+        if "audit_log_max_mb" not in existing:
+            cursor.execute("ALTER TABLE settings ADD COLUMN audit_log_max_mb REAL DEFAULT 1.0")
+        conn.commit()
+        logger.info("Audit settings columns ready")
+    except Exception as e:
+        logger.error(f"Error adding audit settings columns: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
+def migrate_add_default_notifications():
+    """Add default_notifications and unit_system columns to settings table."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(settings)")
+        existing = {row[1] for row in cursor.fetchall()}
+        if "default_notifications" not in existing:
+            cursor.execute("ALTER TABLE settings ADD COLUMN default_notifications TEXT")
+            conn.commit()
+            logger.info("Added default_notifications column to settings table")
+        if "unit_system" not in existing:
+            cursor.execute("ALTER TABLE settings ADD COLUMN unit_system TEXT DEFAULT 'imperial'")
+            conn.commit()
+            logger.info("Added unit_system column to settings table")
+    except Exception as e:
+        logger.error(f"Error adding settings columns: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+def migrate_add_standalone_alerts():
+    """Create standalone_alerts table for independent alerts not connected to any chit."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS standalone_alerts (
+                id TEXT PRIMARY KEY,
+                _type TEXT NOT NULL,
+                name TEXT,
+                data TEXT,
+                created_datetime TEXT,
+                modified_datetime TEXT
+            )
+        """)
+        conn.commit()
+        logger.info("standalone_alerts table ready")
+    except Exception as e:
+        logger.error(f"Error creating standalone_alerts table: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
+def migrate_add_alert_state():
+    """Create alert_state table for persisting dismiss/snooze state across devices."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS alert_state (
+                alert_key TEXT PRIMARY KEY,
+                state TEXT NOT NULL,
+                until_ts TEXT,
+                updated_at TEXT NOT NULL
+            )
+        """)
+        conn.commit()
+        logger.info("alert_state table ready")
+    except Exception as e:
+        logger.error(f"Error creating alert_state table: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
+def migrate_contact_images_to_data():
+    """Move contact profile images from /app/static/contact_images/ to data/contacts/profile_pictures/
+    and update image_url values in the contacts table."""
+    import shutil
+    old_dir = "/app/static/contact_images/"
+    new_dir = "/app/data/contacts/profile_pictures/"
+    os.makedirs(new_dir, exist_ok=True)
+
+    # Step 1: Copy image files from old to new location (if old dir exists and has files)
+    if os.path.isdir(old_dir):
+        for fname in os.listdir(old_dir):
+            old_path = os.path.join(old_dir, fname)
+            new_path = os.path.join(new_dir, fname)
+            if os.path.isfile(old_path) and not os.path.exists(new_path):
+                shutil.copy2(old_path, new_path)
+                logger.info(f"Copied contact image {fname} to {new_dir}")
+
+    # Step 2: Update image_url values in the contacts table
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, image_url FROM contacts WHERE image_url IS NOT NULL AND image_url != ''")
+        rows = cursor.fetchall()
+        updated = 0
+        for row in rows:
+            contact_id, image_url = row
+            if image_url and image_url.startswith("/static/contact_images/"):
+                new_url = image_url.replace("/static/contact_images/", "/data/contacts/profile_pictures/")
+                cursor.execute("UPDATE contacts SET image_url = ? WHERE id = ?", (new_url, contact_id))
+                updated += 1
+        conn.commit()
+        logger.info(f"migrate_contact_images_to_data: updated {updated} image_url rows")
+    except Exception as e:
+        logger.error(f"Error in migrate_contact_images_to_data: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
