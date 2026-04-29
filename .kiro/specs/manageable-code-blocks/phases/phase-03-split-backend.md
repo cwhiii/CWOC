@@ -1,83 +1,83 @@
 # Phase 3 — Split backend/main.py into Python modules
 
-- [ ] 3. Phase 3 — Split backend/main.py into Python modules
-  - [ ] 3.1 Extract `backend/models.py`
+- [x] 3. Phase 3 — Split backend/main.py into Python modules
+  - [x] 3.1 Extract `backend/models.py`
     - Move all Pydantic model classes: `Chit`, `Settings`, `Contact`, `Tag`, `MultiValueEntry`, `ImportRequest`
     - Add file-level docstring describing purpose and relationship to main.py
     - _Requirements: 2.1, 10.2_
-  - [ ] 3.2 Extract `backend/db.py`
+  - [x] 3.2 Extract `backend/db.py`
     - Move `DB_PATH`, `_update_lock`, `CONTACT_IMAGES_DIR` (shared state)
     - Move `init_db()`, `get_or_create_instance_id()`, `_build_export_envelope()`, `get_version_info()`, `update_version_info()`, `seed_version_info()`
     - Move `serialize_json_field()`, `deserialize_json_field()`, `compute_display_name()`, `compute_system_tags()`
     - Import from `models.py` as needed
     - Add file-level docstring
     - _Requirements: 2.1, 2.4, 10.2_
-  - [ ] 3.3 Extract `backend/migrations.py`
+  - [x] 3.3 Extract `backend/migrations.py`
     - Move all `migrate_*` functions (15+) and `init_contacts_table()`
     - Import `DB_PATH` from `db.py`
     - Add file-level docstring
     - _Requirements: 2.1, 10.2_
-  - [ ] 3.4 Extract `backend/serializers.py`
+  - [x] 3.4 Extract `backend/serializers.py`
     - Move `vcard_parse()`, `vcard_print()`, `csv_export()`, `csv_import()`, `_csv_header()`
     - Import from `models.py` for Contact field definitions
     - Add file-level docstring
     - _Requirements: 2.1, 10.2_
-  - [ ] 3.5 Extract `backend/weather.py`
+  - [x] 3.5 Extract `backend/weather.py`
     - Move all weather/geocoding functions: `_sync_weather_fetch`, `_fetch_weather_for_location`, `_geocode_address`, `_sync_geocode_fetch`, `weather_update`, `_weather_hourly_loop`, `_weather_daily_loop`, `start_weather_schedulers`, `_get_chit_focus_date`, `_partition_eligible_chits`, `_extract_weather_for_date`
     - Import `DB_PATH` from `db.py`
     - Add file-level docstring
     - _Requirements: 2.1, 10.2_
-  - [ ] 3.6 Extract `backend/routes/chits.py`
+  - [x] 3.6 Extract `backend/routes/chits.py`
     - Create `APIRouter` with prefix `/api`
     - Move handlers: `get_all_chits`, `search_chits`, `create_chit`, `get_chit`, `update_chit`, `delete_chit`, `patch_recurrence_exceptions`, `export_chits`, `export_userdata`, `import_chits`, `import_userdata`
     - Import from `db.py` and `models.py`
     - Add file-level docstring
     - _Requirements: 2.1, 10.2, 10.6_
-  - [ ] 3.7 Extract `backend/routes/trash.py`
+  - [x] 3.7 Extract `backend/routes/trash.py`
     - Create `APIRouter` with prefix `/api`
     - Move handlers: `get_trash`, `restore_chit`, `purge_chit`
     - Import from `db.py`
     - Add file-level docstring
     - _Requirements: 2.1, 10.2_
-  - [ ] 3.8 Extract `backend/routes/settings.py`
+  - [x] 3.8 Extract `backend/routes/settings.py`
     - Create `APIRouter` with prefix `/api`
     - Move handlers: `get_settings`, `save_settings`, standalone alert CRUD, alert state management
     - Import from `db.py` and `models.py`
     - Add file-level docstring
     - _Requirements: 2.1, 10.2_
-  - [ ] 3.9 Extract `backend/routes/contacts.py`
+  - [x] 3.9 Extract `backend/routes/contacts.py`
     - Create `APIRouter` with prefix `/api`
     - Move all contact handlers, `_serialize_contact_for_db`, `_row_to_contact`, `_write_vcf_file`
     - Import from `db.py`, `models.py`, `serializers.py`
     - May be up to 700 lines due to vCard/CSV import coupling
     - Add file-level docstring
     - _Requirements: 2.1, 2.7, 10.2, 10.6_
-  - [ ] 3.10 Extract `backend/routes/audit.py`
+  - [x] 3.10 Extract `backend/routes/audit.py`
     - Create `APIRouter` with prefix `/api`
     - Move handlers: `get_audit_log`, `export_audit_log_csv`, `trim_audit_log`, `clear_audit_log`, `auto_prune_audit_log`
     - Move helpers: `get_current_actor`, `compute_audit_diff`, `insert_audit_entry`, `_run_auto_prune`
     - Import from `db.py`
     - Add file-level docstring
     - _Requirements: 2.1, 10.2_
-  - [ ] 3.11 Extract `backend/routes/health.py`
+  - [x] 3.11 Extract `backend/routes/health.py`
     - Create `APIRouter` with prefix `/api`
     - Move handlers: `health_check`, `get_instance_id`, `get_version`, `get_health_data`, `get_update_log`, `run_update`
     - Move `root()`, `editor()` (page serving), WebSocket `websocket_sync`, `sync_send_message`, `sync_poll`, `_SyncHub`, `geocode_proxy`
     - Import from `db.py`
     - Add file-level docstring
     - _Requirements: 2.1, 10.2_
-  - [ ] 3.12 Refactor `backend/main.py` into a minimal entry point
+  - [x] 3.12 Refactor `backend/main.py` into a minimal entry point
     - Keep FastAPI app creation, `NoCacheStaticMiddleware`, `StaticFiles` mounts
     - Import and register all route modules via `app.include_router()`
     - Call all migration functions and `init_db()` at startup
     - Start weather schedulers via `@app.on_event("startup")`
     - Ensure migrations execute in the same order as before the split
     - _Requirements: 2.2, 2.3, 2.6, 7.10_
-  - [ ] 3.13 Verify backend split — all endpoints and existing tests
+  - [x] 3.13 Verify backend split — all endpoints and existing tests
     - Confirm `uvicorn backend.main:app` starts without import errors
     - Verify all 24+ API endpoints return correct responses (chits, settings, contacts, audit, health, trash, WebSocket)
     - Run `backend/test_audit.py` and `backend/test_vcard.py` — update imports if needed to reference new module paths
     - Confirm each Module_File is under 500 lines (except `routes/contacts.py` which may be up to 700)
     - _Requirements: 2.3, 2.5, 2.6, 2.7, 7.1, 7.10_
-  - [ ] 3.14 Update `mega_restructure_plan.md` — mark Phase 3 complete
+  - [x] 3.14 Update `mega_restructure_plan.md` — mark Phase 3 complete
     - _Requirements: 14.6_

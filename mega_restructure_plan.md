@@ -10,7 +10,7 @@ Restructure the CWOC codebase from a flat directory layout with five monolithic 
 |-------|------|--------|-----------------|
 | 1 | Create directory structure | **Complete** | 2026-04-29 |
 | 2 | Reorganize data directory (contact images) | **Complete** | 2026-04-29 |
-| 3 | Split backend/main.py into Python modules | Not Started | — |
+| 3 | Split backend/main.py into Python modules | **Complete** | 2026-04-29 |
 | 4 | Move backend to src/backend/ | Not Started | — |
 | 5 | Split frontend/shared.js into focused sub-scripts | Not Started | — |
 | 6 | Split frontend/main.js into focused sub-scripts | Not Started | — |
@@ -76,24 +76,24 @@ Restructure the CWOC codebase from a flat directory layout with five monolithic 
 **Files affected:** `backend/main.py` (reduced to entry point), new files: `backend/models.py`, `backend/db.py`, `backend/migrations.py`, `backend/serializers.py`, `backend/weather.py`, `backend/routes/chits.py`, `backend/routes/trash.py`, `backend/routes/settings.py`, `backend/routes/contacts.py`, `backend/routes/audit.py`, `backend/routes/health.py`.
 
 **Tasks:**
-- [ ] Extract `models.py` — all Pydantic model classes
-- [ ] Extract `db.py` — DB init, helpers, shared state
-- [ ] Extract `migrations.py` — all migrate_* functions
-- [ ] Extract `serializers.py` — vCard/CSV functions
-- [ ] Extract `weather.py` — weather/geocoding functions
-- [ ] Extract `routes/chits.py` — chit CRUD endpoints
-- [ ] Extract `routes/trash.py` — trash endpoints
-- [ ] Extract `routes/settings.py` — settings endpoints
-- [ ] Extract `routes/contacts.py` — contact endpoints
-- [ ] Extract `routes/audit.py` — audit log endpoints
-- [ ] Extract `routes/health.py` — health, version, WebSocket, page serving
-- [ ] Refactor `main.py` into minimal entry point
+- [x] Extract `models.py` — all Pydantic model classes
+- [x] Extract `db.py` — DB init, helpers, shared state
+- [x] Extract `migrations.py` — all migrate_* functions
+- [x] Extract `serializers.py` — vCard/CSV functions
+- [x] Extract `weather.py` — weather/geocoding functions
+- [x] Extract `routes/chits.py` — chit CRUD endpoints
+- [x] Extract `routes/trash.py` — trash endpoints
+- [x] Extract `routes/settings.py` — settings endpoints
+- [x] Extract `routes/contacts.py` — contact endpoints
+- [x] Extract `routes/audit.py` — audit log endpoints
+- [x] Extract `routes/health.py` — health, version, WebSocket, page serving
+- [x] Refactor `main.py` into minimal entry point
 
 **Verification:**
-- [ ] `uvicorn backend.main:app` starts without import errors
-- [ ] All 24+ API endpoints return correct responses
-- [ ] `backend/test_audit.py` and `backend/test_vcard.py` pass
-- [ ] Each module file under 500 lines (contacts.py up to 700)
+- [x] `uvicorn backend.main:app` starts without import errors
+- [x] All 24+ API endpoints return correct responses
+- [x] `backend/test_audit.py` and `backend/test_vcard.py` pass
+- [x] Each module file under 500 lines (contacts.py up to 700)
 
 ---
 

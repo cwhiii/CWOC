@@ -2,10 +2,11 @@
 import sys
 import os
 
-# Allow importing main from the backend directory
+# Allow importing modules from the backend directory
 sys.path.insert(0, os.path.dirname(__file__))
 
-from main import vcard_parse, vcard_print, compute_display_name
+from serializers import vcard_parse, vcard_print
+from db import compute_display_name
 
 
 def test_basic_round_trip():
