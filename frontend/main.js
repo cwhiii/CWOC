@@ -3310,45 +3310,32 @@ function displayWeekView(chitsToDisplay, opts) {
     allDayContainer.style.cssText = "flex-shrink:0;border-bottom:1px solid #6b4e31;";
 
     const allDayEventsRow = document.createElement("div");
+    allDayEventsRow.className = "allday-events-area";
     allDayEventsRow.style.cssText = "display:flex;background:#e8dcc8;min-height:24px;";
 
-    // Toggle button in the header spacer
+    // Toggle button in the header spacer — hides/shows entire all-day section
+    var _adBtnStyle = 'cursor:pointer;font-size:0.75em;font-weight:bold;user-select:none;display:block;text-align:center;padding:3px 4px;background:#8b5a2b;color:#fff8e1;border:1px solid #5a3f2a;border-radius:3px;font-family:inherit;line-height:1.2;';
     const toggleBtn = document.createElement("span");
-    toggleBtn.style.cssText = "cursor:pointer;font-size:1.4em;line-height:1;user-select:none;";
-    toggleBtn.textContent = "\u2600"; // sun = all-day visible
+    toggleBtn.style.cssText = _adBtnStyle;
+    toggleBtn.textContent = "\u2600 Hide";
     toggleBtn.title = "Collapse all-day events";
     toggleBtn.addEventListener("click", () => {
       const isHidden = allDayContainer.style.display === "none";
       allDayContainer.style.display = isHidden ? "" : "none";
-      toggleBtn.textContent = isHidden ? "\u2600" : "\u25B2"; // sun vs up triangle
+      toggleBtn.textContent = isHidden ? "\u2600 Hide" : "\u25B2 Show";
       toggleBtn.title = isHidden ? "Collapse all-day events" : "Expand all-day events";
     });
     headerSpacer.appendChild(toggleBtn);
 
-    // Spacer in events row to align with hour column
+    // Spacer in events row — more/less button goes at bottom
     const rowSpacer = document.createElement("div");
-    rowSpacer.style.cssText = "width:60px;flex-shrink:0;";
+    rowSpacer.style.cssText = "width:60px;flex-shrink:0;display:flex;flex-direction:column;justify-content:flex-end;padding:2px;box-sizing:border-box;";
     allDayEventsRow.appendChild(rowSpacer);
 
     renderAllDayEventsInCells(dayData, allDayEventsRow, _viSettings, 'calendar-slot');
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     allDayContainer.appendChild(allDayEventsRow);
+    _addAllDayHeightCap(allDayEventsRow, allDayContainer);
     wrapper.appendChild(allDayContainer);
     enableAllDayDrag(allDayEventsRow, days);
   }
@@ -3761,6 +3748,7 @@ function displayDayView(chitsToDisplay, opts) {
   // Row 2: All-day events
   if (allDayChits.length > 0) {
     const allDayRow = document.createElement("div");
+    allDayRow.className = "allday-events-area";
     allDayRow.style.cssText = "flex-shrink:0;background:#e8dcc8;border-bottom:1px solid #6b4e31;padding:4px 8px;";
     allDayChits.forEach(({ chit, info }) => {
       const ev = document.createElement("div");
@@ -4349,6 +4337,59 @@ function displayNotesView(chitsToDisplay) {
 }
 
 /**
+ * Cap the all-day events area height and add a Show More / Show Less toggle.
+ * Places the toggle in the 60px hour-label spacer on the left side.
+ */
+function _addAllDayHeightCap(eventsRow, container) {
+  var MAX_HEIGHT_PX = 80;
+  requestAnimationFrame(function() {
+    var actualHeight = eventsRow.scrollHeight;
+    if (actualHeight <= MAX_HEIGHT_PX) return;
+
+    eventsRow.style.maxHeight = MAX_HEIGHT_PX + 'px';
+    eventsRow.style.overflow = 'hidden';
+
+    var expanded = false;
+
+    // Find the 60px spacer div inside the events row (first child)
+    var spacer = eventsRow.querySelector('div');
+    if (!spacer || spacer.offsetWidth > 70) spacer = null;
+
+    var toggleBtn = document.createElement('div');
+    var btnStyle = 'cursor:pointer;font-size:0.75em;font-weight:bold;user-select:none;display:block;text-align:center;padding:3px 4px;background:#8b5a2b;color:#fff8e1;border:1px solid #5a3f2a;border-radius:3px;font-family:inherit;line-height:1.2;';
+    toggleBtn.style.cssText = btnStyle;
+    toggleBtn.textContent = '\u25BC all';
+    toggleBtn.title = 'Show all all-day events';
+    toggleBtn.addEventListener('click', function() {
+      expanded = !expanded;
+      if (expanded) {
+        eventsRow.style.maxHeight = 'none';
+        eventsRow.style.overflow = '';
+        toggleBtn.textContent = '\u25B2 less';
+        toggleBtn.title = 'Collapse all-day events';
+      } else {
+        eventsRow.style.maxHeight = MAX_HEIGHT_PX + 'px';
+        eventsRow.style.overflow = 'hidden';
+        toggleBtn.textContent = '\u25BC all';
+        toggleBtn.title = 'Show all all-day events';
+      }
+    });
+
+    if (spacer) {
+      spacer.appendChild(toggleBtn);
+    } else {
+      // Fallback: bar below
+      toggleBtn.style.cssText = btnStyle + 'width:60px;margin:2px;';
+      if (eventsRow.nextSibling) {
+        container.insertBefore(toggleBtn, eventsRow.nextSibling);
+      } else {
+        container.appendChild(toggleBtn);
+      }
+    }
+  });
+}
+
+/**
  * Scroll the time-based view to the configured "scroll to" hour (default 5am).
  * If that hour is outside the visible range, scrolls to the top.
  */
@@ -4561,45 +4602,32 @@ function displaySevenDayView(chitsToDisplay, opts) {
     allDayContainer.style.cssText = "flex-shrink:0;border-bottom:1px solid #6b4e31;";
 
     const allDayEventsRow = document.createElement("div");
+    allDayEventsRow.className = "allday-events-area";
     allDayEventsRow.style.cssText = "display:flex;background:#e8dcc8;min-height:24px;";
 
-    // Toggle button in the header spacer
+    // Toggle button in the header spacer — hides/shows entire all-day section
+    var _adBtnStyle = 'cursor:pointer;font-size:0.75em;font-weight:bold;user-select:none;display:block;text-align:center;padding:3px 4px;background:#8b5a2b;color:#fff8e1;border:1px solid #5a3f2a;border-radius:3px;font-family:inherit;line-height:1.2;';
     const toggleBtn = document.createElement("span");
-    toggleBtn.style.cssText = "cursor:pointer;font-size:1.4em;line-height:1;user-select:none;";
-    toggleBtn.textContent = "\u2600"; // sun = all-day visible
+    toggleBtn.style.cssText = _adBtnStyle;
+    toggleBtn.textContent = "\u2600 Hide";
     toggleBtn.title = "Collapse all-day events";
     toggleBtn.addEventListener("click", () => {
       const isHidden = allDayContainer.style.display === "none";
       allDayContainer.style.display = isHidden ? "" : "none";
-      toggleBtn.textContent = isHidden ? "\u2600" : "\u25B2"; // sun vs up triangle
+      toggleBtn.textContent = isHidden ? "\u2600 Hide" : "\u25B2 Show";
       toggleBtn.title = isHidden ? "Collapse all-day events" : "Expand all-day events";
     });
     headerSpacer.appendChild(toggleBtn);
 
-    // Spacer in events row to align with hour column
+    // Spacer in events row — more/less button goes at bottom
     const rowSpacer = document.createElement("div");
-    rowSpacer.style.cssText = "width:60px;flex-shrink:0;";
+    rowSpacer.style.cssText = "width:60px;flex-shrink:0;display:flex;flex-direction:column;justify-content:flex-end;padding:2px;box-sizing:border-box;";
     allDayEventsRow.appendChild(rowSpacer);
 
     renderAllDayEventsInCells(dayData, allDayEventsRow, _viSettings, 'calendar-slot');
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     allDayContainer.appendChild(allDayEventsRow);
+    _addAllDayHeightCap(allDayEventsRow, allDayContainer);
     wrapper.appendChild(allDayContainer);
     enableAllDayDrag(allDayEventsRow, days);
   }
@@ -6519,6 +6547,77 @@ document.addEventListener("DOMContentLoaded", function () {
   restoreSidebarState();
   _checkTabOverflow();
   _startGlobalAlertSystem();
+
+  // ── Mobile swipe on calendar to navigate periods ──────────────────────
+  (function() {
+    var chitList = document.getElementById('chit-list');
+    if (!chitList) return;
+    var _swStartX = 0, _swStartY = 0;
+    var SWIPE_MIN = 60;
+    var EDGE_ZONE = 30;
+    var _swiping = false;
+
+    chitList.addEventListener('touchstart', function(e) {
+      var t = e.touches[0];
+      _swStartX = t.clientX;
+      _swStartY = t.clientY;
+    }, { passive: true });
+
+    chitList.addEventListener('touchend', function(e) {
+      if (_swiping) return;
+      var t = e.changedTouches[0];
+      var dx = t.clientX - _swStartX;
+      var dy = Math.abs(t.clientY - _swStartY);
+      if (Math.abs(dx) < SWIPE_MIN || dy > Math.abs(dx)) return;
+      if (_swStartX < EDGE_ZONE) return;
+      var sidebar = document.getElementById('sidebar');
+      if (sidebar && sidebar.classList.contains('active')) return;
+      if (currentTab !== 'Calendar') return;
+
+      _swiping = true;
+      var goNext = dx < 0;
+
+      // Find the inner scrollable content (not the headers/time labels)
+      var inner = chitList.querySelector('.week-view') || chitList.querySelector('.day-view') || chitList.querySelector('.month-view') || chitList.firstElementChild;
+      if (!inner) { _swiping = false; if (goNext) nextPeriod(); else previousPeriod(); return; }
+
+      // Save current scroll position
+      var savedScroll = inner.scrollTop || 0;
+
+      // Slide-out animation on the inner content only
+      var slideDir = goNext ? '-100%' : '100%';
+      inner.style.transition = 'transform 0.2s ease-out';
+      inner.style.transform = 'translateX(' + slideDir + ')';
+
+      setTimeout(function() {
+        inner.style.transition = 'none';
+        inner.style.transform = '';
+
+        if (goNext) { nextPeriod(); } else { previousPeriod(); }
+
+        // Restore scroll and slide-in after render
+        requestAnimationFrame(function() {
+          var newInner = chitList.querySelector('.week-view') || chitList.querySelector('.day-view') || chitList.querySelector('.month-view') || chitList.firstElementChild;
+          if (newInner) {
+            newInner.scrollTop = savedScroll;
+            newInner.style.transition = 'none';
+            newInner.style.transform = 'translateX(' + (goNext ? '100%' : '-100%') + ')';
+            requestAnimationFrame(function() {
+              newInner.style.transition = 'transform 0.25s ease-out';
+              newInner.style.transform = 'translateX(0)';
+              setTimeout(function() {
+                newInner.style.transition = '';
+                newInner.style.transform = '';
+                _swiping = false;
+              }, 260);
+            });
+          } else {
+            _swiping = false;
+          }
+        });
+      }, 200);
+    }, { passive: true });
+  })();
 
   const now = new Date();
   const oneHourLater = new Date(now.getTime() + 60 * 60 * 1000);

@@ -459,6 +459,16 @@ h1 {
     min-height: 0;
 }
 
+/* Cap all-day events area — JS handles row limiting with +N more button for grid views */
+.allday-events-area {
+    overflow-x: hidden;
+}
+/* Fallback max-height for non-grid all-day areas (day/itinerary view) */
+.allday-events-area:not(:has(.all-day-grid)) {
+    max-height: 140px;
+    overflow-y: auto;
+}
+
 .all-day-event {
     display: block;
     padding: 2px 4px;

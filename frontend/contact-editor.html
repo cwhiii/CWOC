@@ -305,6 +305,7 @@
                 </div>
                 <div class="right-buttons">
                     <button id="qrButton" onclick="shareContact()" title="Share contact via QR code" style="font-size:0.9em;">📱 QR</button>
+                    <button class="standard-button" id="headerAuditBtn" onclick="window.location.href='/frontend/audit-log.html?entity_type=contact&entity_id=' + encodeURIComponent(new URLSearchParams(window.location.search).get('id') || '')" style="font-size:0.85em;" title="View audit history for this contact">📜 Audit</button>
                     <button id="deleteButton" class="delete" onclick="deleteContact()"><i class="fas fa-trash-alt"></i> Delete</button>
                 </div>
             </div>
@@ -560,9 +561,7 @@
             </div>
         </div>
 
-        <div style="text-align:center;margin:16px 0 8px;">
-            <button class="standard-button" onclick="window.location.href='/frontend/audit-log.html?entity_type=contact&entity_id=' + encodeURIComponent(new URLSearchParams(window.location.search).get('id') || '')" style="font-size:0.95em;">📜 Audit Log</button>
-        </div>
+
 
         <!-- ═══ Image Full-Size Modal ═══ -->
         <div class="image-modal" id="image-modal" onclick="this.style.display='none'">
@@ -575,7 +574,7 @@
         <script src="/frontend/shared.js"></script>
         <script src="/frontend/shared-page.js"></script>
         <script src="/frontend/shared-editor.js"></script>
-        <div class="author-info">by <a href="https://www.cwholemaniii.com/pages/home.shtml" target="_blank">C.W. Holeman III</a></div>
+        <div class="author-info">C.W.'s Omni Chits &middot; <a href="https://www.cwholemaniii.com" target="_blank">cwholemaniii.com</a></div>
         <script src="/frontend/contact-qr.js"></script>
         <script src="/frontend/contact-editor.js"></script>
     </body>

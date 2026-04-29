@@ -42,6 +42,9 @@
                     <button id="qrButton" onclick="_showQRCode(event)" title="📦 Data QR (Shift+click for 🔗 Link QR)" style="font-size:0.9em;">
                         📱 QR
                     </button>
+                    <button class="standard-button" id="headerAuditBtn" onclick="window.location.href='/frontend/audit-log.html?entity_type=chit&entity_id=' + encodeURIComponent(new URLSearchParams(window.location.search).get('id') || '')" style="font-size:0.85em;" title="View audit history for this chit">
+                        📜 Audit
+                    </button>
                     <button id="archivedButton" class="delete archive-btn" onclick="toggleArchived()" title="Toggle Archived State">
                         📦 Archive
                     </button>
@@ -831,9 +834,7 @@
             </div>
         </div>
 
-        <div style="text-align:center;margin:16px 0 8px;">
-            <button class="standard-button" onclick="window.location.href='/frontend/audit-log.html?entity_type=chit&entity_id=' + encodeURIComponent(new URLSearchParams(window.location.search).get('id') || '')" style="font-size:0.95em;">📜 Audit Log</button>
-        </div>
+
 
         <div id="notesModal" class="modal-overlay" style="display: none">
             <div class="modal-contentFull" style="width:92vw;max-width:92vw;height:88vh;display:flex;flex-direction:column;">
@@ -1218,7 +1219,7 @@
                 </div>
             </div>
         </div>
-        <div class="author-info">by <a href="https://www.cwholemaniii.com/pages/home.shtml" target="_blank">C.W. Holeman III</a></div>
+        <div class="author-info">C.W.'s Omni Chits &middot; <a href="https://www.cwholemaniii.com" target="_blank">cwholemaniii.com</a></div>
         <script src="/frontend/editor_checklists.js"></script>
         <script src="/frontend/editor_projects.js"></script>
         <script src="/frontend/shared.js"></script>

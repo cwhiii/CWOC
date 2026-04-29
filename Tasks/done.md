@@ -1100,3 +1100,68 @@ Fully implemented. Ported from `Prototypes/CWOC UI/UI.html`:
 
 ### Weather page: all blocks same height ✅
 - Added `min-height: 90px` and `justify-content: center` to `.weather-day-block`
+
+
+## Completed — Session 2026-04-28 (continued)
+
+### System tags as sub-tags ✅
+- `compute_system_tags()` now generates `CWOC_System/Calendar`, `CWOC_System/Checklists`, etc. instead of flat names
+- Old flat system tags ("Calendar", "Checklists", etc.) are stripped from user tags before merging
+- `isSystemTag()` updated to match both old flat format and new `CWOC_System/` prefix for backward compatibility
+
+### Shared `createTagInline()` ✅
+- New function in `shared.js` — creates a tag in the settings tag list from any page (editor, settings, dashboard)
+- Checks for duplicates (case-insensitive), uses default colors, saves via `/api/settings` POST
+- Returns `Promise<boolean>` — true if created, false if exists or failed
+
+### All `confirm()` dialogs replaced with `cwocConfirm()` ✅
+- Parchment-styled modal with ESC/click-outside to cancel
+- Replaced in: settings.js, editor_projects.js, shared.js, editor.js, main.js, contact-editor.js
+- All modal buttons now horizontal via `.modal-buttons` flex wrapper
+
+### Color delete modal: buttons swapped, "KEEP" → "Cancel" ✅
+- Cancel button now on left, Delete button on right with danger styling
+
+### Custom Colors: horizontal rows with proper spacing ✅
+- Fixed `.color-list` class not matching `<ul id="color-list">` — added `class="color-list"`
+- Swatches now display in horizontal rows with 1em gap
+
+### Tag default colors updated ✅
+- Background: `#d4c4b0` (light mauve-taupe)
+- Text: `#5c3317` (amber/umber), bold, 1em size
+- High contrast, warm, generic
+
+
+### Weather: save per-chit, display on calendar, weather page with city rows ✅
+- Weather data saved per chit (forecast fields: focus, updated time, high, low, precipitation, weather code)
+- Weather displayed on calendar views (icon + tooltip)
+- Weather page with city rows for non-saved-location chits (grouped by city, sparse day blocks)
+
+### Alerts: persistent/nag mode, before/after start/due, default sound/snooze ✅
+- Persistent/nag/alarm mode (force acknowledgement) — implemented via looping alarm sound
+- Create alerts based on: arbitrary time, X units before/after start, X units before/after due — notification timing dropdown
+- Setting: default snooze length — configurable in settings
+
+### Data Management (Settings Page) ✅
+- New "Data Management" settings box with download/upload controls
+- Separate controls for Chit data and User data
+- Export as JSON, Import with Add or Replace modes
+- Replace mode: confirmation dialog
+- Exported format self-contained and portable
+
+### Calendar: weather on date block, city rows on weather page ✅
+- Weather & clock on calendar date blocks
+- Calendar view: per-city weather rows on weather page
+
+### All-day section: capped height with scroll ✅
+- Max-height 100px (~5 rows of text) with overflow-y: auto
+
+### Mobile swipe navigation ✅
+- Horizontal swipe on calendar chit-list navigates periods (left = next, right = previous)
+- Only on Calendar tab, only when sidebar is closed, ignores edge-zone swipes (sidebar territory)
+
+### ToDo cleanup ✅
+- Removed completed items (Data Management, Weather page, Alerts, Calendar weather)
+- Removed "move to done" annotations
+- Removed already-done markers ([X])
+- Cleaned up spelling and formatting

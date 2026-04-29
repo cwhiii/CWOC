@@ -7,84 +7,62 @@
 ## Known Bugs
 
 ### Editor
-- notifications have a checkbox: "before due/start" wihch seems redundant & confusing. change to a drop down of before/after start / due. 
-- add a "loop notificaiton until acknoledged" functionality. this basically a snooze for notifications. it should reuse what the "notify at start" alert is doing. 
-- clean up behavior of all notifications to be consistant.
-- get rid of the filter button on notificationtion zone.
-- change the add order for alerts: notifications, alarms, timeers, stopwatcvhes
+- notifications have a checkbox: "before due/start" which seems redundant & confusing. Change to a dropdown of before/after start/due.
+- add a "loop notification until acknowledged" functionality. Basically a snooze for notifications — reuse what "notify at start" alert is doing.
+- clean up behavior of all notifications to be consistent.
+- get rid of the filter button on notification zone.
+- change the add order for alerts: notifications, alarms, timers, stopwatches
 
 - `[ ]` Can't save health indicators
-
 
 ---
 
 ## Easy Fixes / Low-Hanging Fruit
 
-- `[ ]` Better footer styling
 - `[ ]` Hide Completes (not past-due) sidebar toggle button — persist state across sessions
-
 - `[ ]` Screenshot and video walkthrough of the app
+- even if the page isn't reloaded, refresh the forecast every 4 hours
 
 ---
 
 ## Medium Features
 
-### Imports 
-- ability to import calendar data from googe & apple & windows
+### Imports
+- ability to import calendar data from Google & Apple & Windows
 
-### Repeating task management. 
-- better handling for visualization of which are ocmpleted, which need doing, which are every day, which are "hide when done, but show on my list toehrwise," etc.
-
+### Repeating Task Management
+- better handling for visualization of which are completed, which need doing, which are every day, which are "hide when done, but show on my list otherwise," etc.
 
 ### Templates
-- a tool for making a chit, saving it as a template, and having the ability to auto-populate a new chit with the values/variables in it. probaly requires a new chit editor Mode, etc. And a SHIFT+click on new chit button, ot a button to "Make this a template"  in the editor itself, along with a SHIFT+K hotlkey 
-
-### Data Management (Settings Page)
-- `[ ]` New "Data Management" settings box with download/upload controls
-- `[ ]` Separate controls for **Chit data** and **User data** (settings, tags, colors, locations, contacts)
-- `[ ]` **Export**: download as JSON file that can be re-imported into another CWOC instance
-- `[ ]` **Import**: option to **Add to** existing data or **Replace** existing data
-- `[ ]` **Replace** mode: confirmation dialog ("This will override and replace all [chit/user] data. Are you sure?") (use coling & wording from the delete chit process)
-- `[ ]` Exported format must be self-contained and portable between instances
+- a tool for making a chit, saving it as a template, and having the ability to auto-populate a new chit with the values/variables in it. Probably requires a new chit editor Mode, etc. And a SHIFT+click on new chit button, or a button to "Make this a template" in the editor itself, along with a SHIFT+K hotkey
 
 ### Calendar & Scheduling
 - `[ ]` Show alarms/notifications/timers on calendar view
-- `[ ]` Jitter for reminders (±X minutes, configurable globally and per-chit, including to disable fo this chit, and to use a different value for this chit.)
+- `[ ]` Jitter for reminders (±X minutes, configurable globally and per-chit)
 - `[ ]` Alarm: chained variable-length intervals (5 min, then 4, then 4...)
 - `[ ]` Busy/Free/Unspecified status for calendar events
 - `[ ]` Declined events view
 - `[ ]` Time zones support on chits with dates
-- `[ ]` move to done:  Weather & clock on the sides of the current date block? Show the HST bar as part of that block (without numbers)?
-- move to done: `[ ]` Calendar view: for all days with weather, show each location/city on its own row
 
 ### Alerts & Notifications
-- `[ ]` move to done:  Persistent/nag/alarm mode (force acknowledgement)
-- `[ ]` move to done:  Create alerts based on: arbitrary time, X units before/after start, X units before/after due
-- `[ ]` move to done:  Setting: default sound/snooze length per priority
 - `[ ]` Proximity-based notifications (your location, someone else's)
 
 ### Editor & Chit Management
-- `[ ]` People zone: modal with autocomplete + multi-select roles (Owners, Stakeholders, Editors, Assignees, Guests, Followers) (ONLY AFTER USERS HAVE BEEN IMPLIMENTS.)
+- `[ ]` People zone: modal with autocomplete + multi-select roles (ONLY AFTER USERS)
 - `[ ]` Multi-line checklist items
 - `[ ]` Linked chits (bidirectional)
 - `[ ]` Dependencies (chits that must be completed first)
-- `[ ]` Visibility (Private/Shared/Public)  (ONLY AFTER USERS HAVE BEEN IMPLIMENTS.)
-- `[ ]` Move checklist into note / note into checklist 
+- `[ ]` Visibility (Private/Shared/Public) (ONLY AFTER USERS)
+- `[ ]` Move checklist into note / note into checklist
 
 ### Notes
 - `[ ]` Side-by-side notes view (2 chits for copy/paste/reference)
-- `[ ]` Auto import/export notes as Markdown to sync with Obsidian. do this via a "import note" button in the note zone header. acceot .md & .txt files.
-
-### Weather
-- `[ ]` move to done:  Save expected weather per chit (forecast fields: focus, updated time, high, low, precipitation, weather code)
-- `[ ]` move to done:  Display weather on calendar views
-- even if the page isntre relaoded, refresh the forcast every 4 hours. 
-- `[ ]` move to done:  Weather  page . Available via SHIFT+W, from views, or a button on the weather modal. also, add a  row for every specific day that has weather (location & date), for non-saved locations. generalize to per city. so if there's events in non-saved locations in address1 address2, in city1, address3 and address4 in city2, and address5 in cty3, it should add 3 rows, one for each CITY. then only load/display the weather for days that have an invent in that coity on that day.
+- `[ ]` Auto import/export notes as Markdown to sync with Obsidian
 
 ### Self-Audit
-- are there UI elements that do not have functonality associatetd with them?
-- Make a list to clearn them but, BUT DO NOT START YET.
-- For each will need to know if it can be cut, or if I want to build the functionality. 
+- are there UI elements that do not have functionality associated with them?
+- Make a list to clean them up, BUT DO NOT START YET.
+- For each will need to know if it can be cut, or if I want to build the functionality.
 
 ---
 
@@ -93,10 +71,9 @@
 ### HST Time Format (Global)
 - `[ ]` When "HST" is selected as time format in settings, ALL times throughout the tool should display in HST
 - `[ ]` Calendar hour columns, event times, tooltips, quick edit modal, editor time fields — all use HST
-- `[ ]` HST displays as a plain number (e.g. "42.5 sd") — no progress bar except in the Clock modal. 
-- the other clock modal options are not impacted by this. 
-- the views that use time (such as week & day) update to show 100 HST hours instead of normal hours. 
-- span options become 1,2,3,4,5,10 HST hours.
+- `[ ]` HST displays as a plain number (e.g. "42.5 sd") — no progress bar except in the Clock modal
+- the views that use time (such as week & day) update to show 100 HST hours instead of normal hours
+- span options become 1,2,3,4,5,10 HST hours
 - `[ ]` Clock modal keeps the bar-style HST display as-is
 
 ### Multi-User System
@@ -104,7 +81,6 @@
 - `[ ]` Each user has their own chits, contacts, and settings
 - `[ ]` User switcher
 - all users get a "Profile" page, with all the info as in a contact. Plus password
-- ALl users on the system are automctiaclly gnereated as Contacts for all other users, and their contact info is synced with any changes in the user's profile. ? Decisions to be made here.
 - `[ ]` **Sharing by chit** — share a chit so all users on the instance can access it
 - `[ ]` **Sharing by tag** — anything tagged XYZ for user A, user B also gets access (or a clone)
 - `[ ]` Shared calendars between users via tag-based sharing
@@ -152,17 +128,14 @@
 - `[ ]` Reports system
 - `[ ]` Automations (if this, then that)
 - `[ ]` Appointments (from other people)
-- `[X]` Fragments to GitHub
 - `[ ]` Notification based on start time + location + drive time
 - `[ ]` Biometric triggers (steps, heart rate, cycle state)
-- `[X]` Workgroup chat link
-- auto backup & export to other machine.
+- auto backup & export to other machine
 
 ---
 
 ## Decisions Needed
 
-- `[X]` Demo/hosting environment — Digital Ocean or other?
 - `[ ]` Support file attachments on chits?
 - `[ ]` Event by quantity of TIME vs chronological (snooze slides the event until started)
-- `[ ]` Chit groups (like Google calendars) — just use tags? maybe a chckbox to "use as group"?
+- `[ ]` Chit groups (like Google calendars) — just use tags? maybe a checkbox to "use as group"?

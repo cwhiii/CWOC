@@ -3643,6 +3643,12 @@ document.addEventListener("DOMContentLoaded", function () {
     labelsInput.addEventListener('input', function () {
       _filterTagTree(labelsInput.value.trim());
     });
+    labelsInput.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        addSearchedTag();
+      }
+    });
   }
 
   // Initialize shared save/cancel button system
@@ -4049,6 +4055,11 @@ function addSearchedTag(event) {
     if (typeof trackRecentTag === 'function') trackRecentTag(tagName);
   }
   input.value = '';
+
+  // Persist the tag to settings if it's new
+  if (typeof createTagInline === 'function') {
+    createTagInline(tagName);
+  }
 
   // Re-render tags
   _loadTags().then(tags => _renderTags(tags, window._currentTagSelection));

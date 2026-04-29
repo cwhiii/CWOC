@@ -210,18 +210,21 @@ def compute_system_tags(chit) -> List[str]:
     """Compute system tags based on chit properties. Returns merged list of user + system tags."""
     system_tags = []
     if chit.due_datetime or chit.start_datetime:
-        system_tags.append("Calendar")
+        system_tags.append("CWOC_System/Calendar")
     if chit.checklist:
-        system_tags.append("Checklists")
+        system_tags.append("CWOC_System/Checklists")
     if chit.alarm:
-        system_tags.append("Alarms")
+        system_tags.append("CWOC_System/Alarms")
     if "Project" in (chit.tags or []):
-        system_tags.append("Projects")
+        system_tags.append("CWOC_System/Projects")
     if chit.status in ["ToDo", "In Progress", "Blocked", "Complete"]:
-        system_tags.append("Tasks")
+        system_tags.append("CWOC_System/Tasks")
     if not (chit.due_datetime or chit.start_datetime or chit.end_datetime):
-        system_tags.append("Notes")
-    return list(set((chit.tags or []) + system_tags))
+        system_tags.append("CWOC_System/Notes")
+    # Strip old flat system tags from user tags before merging
+    old_system = {"Calendar", "Checklists", "Alarms", "Projects", "Tasks", "Notes"}
+    user_tags = [t for t in (chit.tags or []) if t not in old_system]
+    return list(set(user_tags + system_tags))
 
 # Database initialization
 def init_db():

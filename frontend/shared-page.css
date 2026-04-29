@@ -283,9 +283,17 @@ input[type="color"] {
 .help-content li { margin: 3px 0; }
 
 /* ── Author Footer ──────────────────────────────────────────────────────── */
-.author-info { font-size: 0.9em; color: #1a1208; text-align: center; margin-top: 10px; padding-bottom: 8px; }
-.author-info a { color: #4a2c2a; text-decoration: underline; }
-.author-info a:hover { color: #1a1208; }
+.author-info {
+    font-size: 0.8em;
+    color: #8b7355;
+    text-align: center;
+    margin-top: 20px;
+    padding: 12px 0 10px;
+    border-top: 1px solid rgba(139, 90, 43, 0.15);
+    letter-spacing: 0.5px;
+}
+.author-info a { color: #6b4e31; text-decoration: none; }
+.author-info a:hover { color: #4a2c2a; text-decoration: underline; }
 
 /* ── Modal ───────────────────────────────────────────────────────────────── */
 .modal {
