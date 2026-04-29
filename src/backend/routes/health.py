@@ -248,15 +248,15 @@ def get_health_data(since: Optional[str] = Query(None), until: Optional[str] = Q
 # Root route to serve index.html as the main page
 @router.get("/")
 async def root():
-    return FileResponse("/app/frontend/index.html")
+    return FileResponse("/app/src/frontend/html/index.html")
 
 # Editor route to serve editor.html and handle chit data
 @router.get("/editor")
 async def editor(id: str = None):
     if id:
         # Serve editor.html; data will be fetched via /api/chit/{id}
-        return FileResponse("/app/frontend/editor.html")
-    return FileResponse("/app/frontend/editor.html")
+        return FileResponse("/app/src/frontend/html/editor.html")
+    return FileResponse("/app/src/frontend/html/editor.html")
 
 
 # ═══════════════════════════════════════════════════════════════════════════

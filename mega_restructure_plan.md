@@ -16,7 +16,7 @@ Restructure the CWOC codebase from a flat directory layout with five monolithic 
 | 6 | Split frontend/main.js into focused sub-scripts | **Complete** | 2026-04-29 |
 | 7 | Split frontend/editor.js into focused sub-scripts | **Complete** | 2026-04-29 |
 | 8 | Split frontend/styles.css into focused sub-stylesheets | **Complete** | 2026-04-29 |
-| 9 | Move frontend to src/frontend/ | Not Started | — |
+| 9 | Move frontend to src/frontend/ | **Complete** | 2026-04-29 |
 | 10 | Move static assets to src/static/ | Not Started | — |
 | 11 | Create INDEX.md and finalize documentation | Not Started | — |
 | 12 | Cleanup and final verification | Not Started | — |
@@ -202,18 +202,18 @@ Restructure the CWOC codebase from a flat directory layout with five monolithic 
 **Files affected:** All `frontend/*.html`, `frontend/*.js`, `frontend/*.css` (moved). All HTML files (path updates). `src/backend/main.py` (StaticFiles mounts). `src/backend/routes/health.py` (FileResponse paths). JS files (window.location.href updates).
 
 **Tasks:**
-- [ ] Move HTML files to `src/frontend/html/`
-- [ ] Move JS files to `src/frontend/js/shared/`, `dashboard/`, `editor/`, `pages/`
-- [ ] Move CSS files to `src/frontend/css/shared/`, `dashboard/`, `editor/`
-- [ ] Update all `<script src>` and `<link href>` paths
-- [ ] Update `StaticFiles` mounts and `FileResponse` paths
-- [ ] Update JS `window.location.href` references
-- [ ] Remove old `frontend/` directory
+- [x] Move HTML files to `src/frontend/html/`
+- [x] Move JS files to `src/frontend/js/shared/`, `dashboard/`, `editor/`, `pages/`
+- [x] Move CSS files to `src/frontend/css/shared/`, `dashboard/`, `editor/`
+- [x] Update all `<script src>` and `<link href>` paths
+- [x] Update `StaticFiles` mounts and `FileResponse` paths
+- [x] Update JS `window.location.href` references
+- [x] Remove old `frontend/` directory
 
 **Verification:**
-- [ ] All pages load from new paths
-- [ ] No 404s in network tab
-- [ ] No console errors on any page
+- [x] All pages load from new paths
+- [x] No 404s in network tab
+- [x] No console errors on any page
 
 ---
 

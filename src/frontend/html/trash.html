@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <link rel="icon" type="image/x-icon" href="/static/cwod_logo-favicon.png" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Trash — C.W.'s Omni Chits</title>
+    <link rel="stylesheet" href="/frontend/css/shared/shared-page.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
+    <style>
+        /* Page-specific only — everything else comes from shared-page.css */
+        .col-check { width: 30px; text-align: center; }
+        .col-check input[type="checkbox"] { cursor: pointer; }
+        .col-title { max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: bold; }
+        .col-note { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: 0.7; font-size: 0.9em; }
+        .col-tags { max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .col-actions { white-space: nowrap; }
+        .action-cell { display: flex; gap: 6px; align-items: center; }
+        .bulk-actions { display: flex; gap: 8px; margin-left: auto; }
+        .selected-count { font-size: 0.85em; opacity: 0.8; }
+    </style>
+</head>
+<body data-page-title="Deleted Chits" data-page-icon="🗑️" data-show-nav="trash">
+    <div class="settings-panel">
+        <div class="cwoc-toolbar">
+            <div id="trash-count" style="font-size:0.9em;opacity:0.7;"></div>
+            <span class="selected-count" id="selected-count"></span>
+            <div class="bulk-actions" id="bulk-actions" style="display:none;">
+                <button class="cwoc-btn restore" onclick="bulkRestore()"><i class="fas fa-undo"></i> Restore Selected</button>
+                <button class="cwoc-btn danger" onclick="bulkPurge()"><i class="fas fa-trash-alt"></i> Delete Selected</button>
+            </div>
+        </div>
+        <div id="trash-table-wrap"></div>
+    </div>
+    <script src="/frontend/js/shared/shared-utils.js"></script>
+    <script src="/frontend/js/shared/shared-touch.js"></script>
+    <script src="/frontend/js/shared/shared-checklist.js"></script>
+    <script src="/frontend/js/shared/shared-sort.js"></script>
+    <script src="/frontend/js/shared/shared-indicators.js"></script>
+    <script src="/frontend/js/shared/shared-calendar.js"></script>
+    <script src="/frontend/js/shared/shared-tags.js"></script>
+    <script src="/frontend/js/shared/shared-recurrence.js"></script>
+    <script src="/frontend/js/shared/shared-geocoding.js"></script>
+    <script src="/frontend/js/shared/shared-qr.js"></script>
+    <script src="/frontend/js/shared/shared.js"></script>
+    <script src="/frontend/js/pages/shared-page.js"></script>
+    <script>
+        const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+        const DAYS = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+        let trashData = [], selectedIds = new Set();
+        function fmtDate(iso) { if (!iso) return '—'; const d = new Date(iso); if (isNaN(d.getTime())) return '—'; return `${MONTHS[d.getMonth()]}-${String(d.getDate()).padStart(2,'0')} ${DAYS[d.getDay()]}`; }
+        function fmtDateTime(iso) { if (!iso) return '—'; const d = new Date(iso); if (isNaN(d.getTime())) return '—'; return `${MONTHS[d.getMonth()]}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; }
+        function updateSelectionUI() {
+            const count = selectedIds.size;
+            document.getElementById('bulk-actions').style.display = count > 0 ? 'flex' : 'none';
+            document.getElementById('selected-count').textContent = count > 0 ? `${count} selected` : '';
+            const sa = document.getElementById('select-all');
+            if (sa && trashData.length > 0) { sa.checked = selectedIds.size === trashData.length; sa.indeterminate = selectedIds.size > 0 && selectedIds.size < trashData.length; }
+        }
+        function toggleSelectAll() { const sa = document.getElementById('select-all'); if (sa.checked) trashData.forEach(c => selectedIds.add(c.id)); else selectedIds.clear(); document.querySelectorAll('.row-check').forEach(cb => { cb.checked = sa.checked; }); updateSelectionUI(); }
+        function toggleRow(id) { if (selectedIds.has(id)) selectedIds.delete(id); else selectedIds.add(id); updateSelectionUI(); }
+        async function bulkRestore() { for (const id of [...selectedIds]) await fetch(`/api/trash/${id}/restore`,{method:'POST'}); selectedIds.clear(); loadTrash(); }
+        async function bulkPurge() { if (!confirm(`Permanently delete ${selectedIds.size} chit(s)?`)) return; for (const id of [...selectedIds]) await fetch(`/api/trash/${id}/purge`,{method:'DELETE'}); selectedIds.clear(); loadTrash(); }
+        async function loadTrash() {
+            const wrap = document.getElementById('trash-table-wrap'), countEl = document.getElementById('trash-count');
+            selectedIds.clear(); updateSelectionUI();
+            try {
+                const resp = await fetch('/api/trash');
+                if (!resp.ok) { wrap.innerHTML = '<p style="color:#a33;">Failed to load.</p>'; return; }
+                trashData = await resp.json();
+                countEl.textContent = `${trashData.length} deleted chit${trashData.length !== 1 ? 's' : ''}`;
+                if (trashData.length === 0) { wrap.innerHTML = '<div class="cwoc-empty">Trash is empty.</div>'; return; }
+                renderTable(wrap, trashData);
+            } catch (e) { wrap.innerHTML = '<p style="color:#a33;">Error loading trash.</p>'; }
+        }
+        function renderTable(wrap, trash) {
+            const table = document.createElement('table'); table.className = 'cwoc-table';
+            const thead = document.createElement('thead');
+            thead.innerHTML = '<tr><th class="col-check"><input type="checkbox" id="select-all" onchange="toggleSelectAll()" title="Select All" /></th><th>Title</th><th>Status</th><th>Priority</th><th>Due / Start</th><th>Tags</th><th>Note</th><th>Deleted</th><th class="col-actions">Actions</th></tr>';
+            table.appendChild(thead);
+            const tbody = document.createElement('tbody'), SYS = ['Calendar','Checklists','Alarms','Projects','Tasks','Notes'];
+            trash.forEach(chit => {
+                const tr = document.createElement('tr');
+                let td = document.createElement('td'); td.className = 'col-check'; const cb = document.createElement('input'); cb.type = 'checkbox'; cb.className = 'row-check'; cb.checked = selectedIds.has(chit.id); cb.onchange = () => toggleRow(chit.id); td.appendChild(cb); tr.appendChild(td);
+                td = document.createElement('td'); td.className = 'col-title'; td.textContent = chit.title || '(Untitled)'; td.title = chit.title || ''; tr.appendChild(td);
+                td = document.createElement('td'); td.textContent = chit.status || '—'; tr.appendChild(td);
+                td = document.createElement('td'); td.textContent = chit.priority || '—'; tr.appendChild(td);
+                td = document.createElement('td'); td.textContent = fmtDate(chit.due_datetime || chit.start_datetime); tr.appendChild(td);
+                td = document.createElement('td'); td.className = 'col-tags'; const tags = (chit.tags||[]).filter(t => !SYS.includes(t));
+                if (tags.length > 0) tags.forEach(t => { const c = document.createElement('span'); c.className = 'cwoc-tag-chip'; c.textContent = t.split('/').pop(); td.appendChild(c); }); else td.textContent = '—'; td.title = tags.join(', '); tr.appendChild(td);
+                td = document.createElement('td'); td.className = 'col-note'; td.textContent = chit.note ? chit.note.slice(0,80)+(chit.note.length>80?'…':'') : '—'; td.title = chit.note||''; tr.appendChild(td);
+                td = document.createElement('td'); td.textContent = fmtDateTime(chit.modified_datetime); tr.appendChild(td);
+                td = document.createElement('td'); td.className = 'col-actions'; const ad = document.createElement('div'); ad.className = 'action-cell';
+                const rb = document.createElement('button'); rb.className = 'cwoc-btn restore'; rb.innerHTML = '<i class="fas fa-undo"></i> Restore'; rb.onclick = async () => { await fetch(`/api/trash/${chit.id}/restore`,{method:'POST'}); loadTrash(); };
+                const pb = document.createElement('button'); pb.className = 'cwoc-btn danger'; pb.innerHTML = '<i class="fas fa-trash-alt"></i> Delete'; pb.onclick = async () => { if (confirm('Permanently delete?')) { await fetch(`/api/trash/${chit.id}/purge`,{method:'DELETE'}); loadTrash(); } };
+                ad.appendChild(rb); ad.appendChild(pb); td.appendChild(ad); tr.appendChild(td); tbody.appendChild(tr);
+            });
+            table.appendChild(tbody); wrap.innerHTML = ''; wrap.appendChild(table);
+        }
+        loadTrash();
+    </script>
+</body>
+</html>

@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <link rel="icon" type="image/x-icon" href="/static/cwod_logo-favicon.png" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>People — C.W.'s Omni Chits</title>
+    <link rel="stylesheet" href="/frontend/css/shared/shared-page.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
+    <!-- QR code generator CDN (wired up in Task 7.3) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+    <style>
+        /* ══ People Page-Specific Styles ══ */
+        .people-toolbar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+        .people-search {
+            flex: 1;
+            min-width: 180px;
+            padding: 8px 12px;
+            border: 1px solid #8b5a2b;
+            border-radius: 5px;
+            font-size: 16px;
+            font-family: "Courier New", Courier, monospace;
+            background: #f5e6cc;
+            color: #2b1e0f;
+        }
+        .people-search:focus {
+            outline: none;
+            border-color: #008080;
+            box-shadow: 0 0 0 2px rgba(0, 128, 128, 0.25);
+        }
+        .people-list {
+            max-height: 70vh;
+            overflow-y: auto;
+            border: 1px solid #8b5a2b;
+            border-radius: 5px;
+            background: #fffaf0;
+        }
+        .people-row {
+            display: flex;
+            align-items: center;
+            padding: 10px 12px;
+            border-bottom: 1px solid #d4c5a9;
+            cursor: pointer;
+            transition: background 0.15s;
+            gap: 10px;
+        }
+        .people-row:last-child { border-bottom: none; }
+        .people-row:hover { background: rgba(212, 196, 160, 0.2); }
+        .people-row.people-header { cursor: default; background: #e8dcc8; padding: 6px 12px; font-size: 0.85em; }
+        .people-row.people-header:hover { background: #e8dcc8; }
+        .people-row .star-toggle {
+            font-size: 1.3em;
+            cursor: pointer;
+            flex-shrink: 0;
+            width: 28px;
+            text-align: center;
+            user-select: none;
+        }
+        .people-row .star-toggle:hover { transform: scale(1.2); }
+        .people-row .contact-thumb {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 1px solid #8b5a2b;
+            flex-shrink: 0;
+        }
+        .people-row .contact-thumb-placeholder {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: 1px solid #c4a484;
+            background: #f5e6cc;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8em;
+            color: #8b5a2b;
+            flex-shrink: 0;
+        }
+        .people-row .contact-name {
+            flex: 1;
+            font-size: 1em;
+            color: #2b1e0f;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .people-row .contact-name.favorite { font-weight: bold; }
+        .people-row .contact-info {
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 1px;
+        }
+        .people-row .contact-detail {
+            font-size: 0.8em;
+            color: #6b4e31;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .people-row .share-btn {
+            flex-shrink: 0;
+            padding: 4px 10px;
+            font-size: 0.85em;
+            background: linear-gradient(#d4a373, #c8965a);
+            color: #2b1e0f;
+            border: 1px solid #8b5a2b;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: "Courier New", Courier, monospace;
+            transition: background 0.2s;
+        }
+        .people-row .share-btn:hover { background: linear-gradient(#c8965a, #a86b3e); }
+        .people-divider {
+            padding: 6px 12px;
+            font-size: 0.8em;
+            font-weight: bold;
+            color: #8b5a2b;
+            background: #e0d4b5;
+            border-bottom: 1px solid #d4c5a9;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .people-empty {
+            text-align: center;
+            padding: 2em;
+            opacity: 0.5;
+            font-size: 1.1em;
+            color: #4a2c2a;
+        }
+
+        /* QR Modal — now uses shared showQRModal() overlay */
+        @media (max-width: 500px) {
+            /* Shared QR overlay handles its own responsive sizing */
+        }
+
+        /* ══ Import Result Modal ══ */
+        .import-modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .import-modal-content {
+            background: #fff8e1;
+            border: 2px solid #8b5a2b;
+            border-radius: 10px;
+            padding: 20px;
+            width: 90%;
+            max-width: 420px;
+            text-align: center;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+            font-family: "Courier New", Courier, monospace;
+        }
+        .import-modal-content h3 {
+            margin-top: 0;
+            color: #2b1e0f;
+        }
+        .import-summary {
+            margin: 12px 0;
+            font-size: 1em;
+            color: #2b1e0f;
+        }
+        .import-summary .stat {
+            display: inline-block;
+            margin: 4px 8px;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .import-summary .stat-imported {
+            background: #c8e6c9;
+            color: #2e7d32;
+        }
+        .import-summary .stat-skipped {
+            background: #fff9c4;
+            color: #f57f17;
+        }
+        .import-errors {
+            max-height: 150px;
+            overflow-y: auto;
+            text-align: left;
+            margin: 8px 0;
+            font-size: 0.85em;
+            color: #b71c1c;
+        }
+        .import-errors .error-item {
+            padding: 3px 0;
+            border-bottom: 1px solid #f5e6cc;
+        }
+        .import-modal-content .close-btn {
+            margin-top: 10px;
+            padding: 6px 16px;
+            background: linear-gradient(#d4a373, #c8965a);
+            border: 1px solid #8b5a2b;
+            border-radius: 5px;
+            cursor: pointer;
+            font-family: "Courier New", Courier, monospace;
+            font-size: 14px;
+        }
+        .import-modal-content .close-btn:hover {
+            background: linear-gradient(#c8965a, #a86b3e);
+        }
+
+        /* ══ Export Dropdown ══ */
+        .export-dropdown {
+            display: none;
+            position: absolute;
+            background: #fff8e1;
+            border: 1px solid #8b5a2b;
+            border-radius: 5px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            z-index: 500;
+            min-width: 200px;
+            font-family: "Courier New", Courier, monospace;
+        }
+        .export-option {
+            display: block;
+            width: 100%;
+            padding: 10px 14px;
+            background: none;
+            border: none;
+            border-bottom: 1px solid #e0d4b5;
+            text-align: left;
+            cursor: pointer;
+            font-family: "Courier New", Courier, monospace;
+            font-size: 0.9em;
+            color: #2b1e0f;
+            transition: background 0.15s;
+        }
+        .export-option:last-child { border-bottom: none; }
+        .export-option:hover { background: rgba(212, 196, 160, 0.3); }
+        .export-option i { margin-right: 6px; }
+    </style>
+</head>
+<body data-page-title="People" data-page-icon="👥" data-show-nav="people">
+    <div class="settings-panel">
+
+        <div class="people-toolbar">
+            <button onclick="window.location.href='/frontend/html/contact-editor.html'" class="standard-button">
+                <i class="fas fa-user-plus"></i> New Contact
+            </button>
+            <button id="import-btn" class="standard-button" title="Import contacts from .vcf or .csv file">
+                <i class="fas fa-file-import"></i> Import
+            </button>
+            <button id="export-btn" class="standard-button" title="Export all contacts">
+                <i class="fas fa-file-export"></i> Export
+            </button>
+            <input type="text" id="people-search" class="people-search" placeholder="🔍 Search contacts..." autocomplete="off" />
+        </div>
+
+        <div class="people-list" id="people-list">
+            <div class="people-empty" id="people-loading">
+                <div class="loader"></div>
+                Loading contacts...
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden file input for import -->
+    <input type="file" id="import-file-input" accept=".vcf,.csv" style="display:none;" />
+
+    <!-- Import Result Modal -->
+    <div class="import-modal" id="import-modal">
+        <div class="import-modal-content">
+            <h3>📋 Import Results</h3>
+            <div id="import-summary" class="import-summary"></div>
+            <div id="import-errors" class="import-errors"></div>
+            <button class="close-btn" onclick="closeImportModal()">Close</button>
+        </div>
+    </div>
+
+    <!-- Export Dropdown -->
+    <div class="export-dropdown" id="export-dropdown">
+        <button class="export-option" data-format="vcf"><i class="fas fa-address-card"></i> Export as .vcf (vCard)</button>
+        <button class="export-option" data-format="csv"><i class="fas fa-file-csv"></i> Export as .csv</button>
+    </div>
+
+    <!-- QR Code Modal — now uses shared showQRModal() from shared.js -->
+
+    <script src="/frontend/js/shared/shared-utils.js"></script>
+    <script src="/frontend/js/shared/shared-touch.js"></script>
+    <script src="/frontend/js/shared/shared-checklist.js"></script>
+    <script src="/frontend/js/shared/shared-sort.js"></script>
+    <script src="/frontend/js/shared/shared-indicators.js"></script>
+    <script src="/frontend/js/shared/shared-calendar.js"></script>
+    <script src="/frontend/js/shared/shared-tags.js"></script>
+    <script src="/frontend/js/shared/shared-recurrence.js"></script>
+    <script src="/frontend/js/shared/shared-geocoding.js"></script>
+    <script src="/frontend/js/shared/shared-qr.js"></script>
+    <script src="/frontend/js/shared/shared.js"></script>
+    <script src="/frontend/js/pages/shared-page.js"></script>
+    <script src="/frontend/js/pages/contact-qr.js"></script>
+    <script src="/frontend/js/pages/people.js"></script>
+</body>
+</html>

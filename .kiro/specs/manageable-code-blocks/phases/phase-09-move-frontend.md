@@ -1,49 +1,49 @@
 # Phase 9 — Move frontend to src/frontend/
 
-- [ ] 9. Phase 9 — Move frontend to src/frontend/
-  - [ ] 9.1 Move all HTML files to `src/frontend/html/`
+- [-] 9. Phase 9 — Move frontend to src/frontend/
+  - [x] 9.1 Move all HTML files to `src/frontend/html/`
     - Move `frontend/index.html`, `frontend/editor.html`, `frontend/settings.html`, `frontend/people.html`, `frontend/contact-editor.html`, `frontend/help.html`, `frontend/trash.html`, `frontend/audit-log.html`, `frontend/weather.html`, `frontend/_template.html`
     - _Requirements: 1.1_
-  - [ ] 9.2 Move all shared JS files to `src/frontend/js/shared/`
+  - [x] 9.2 Move all shared JS files to `src/frontend/js/shared/`
     - Move `frontend/shared-utils.js`, `frontend/shared-touch.js`, `frontend/shared-checklist.js`, `frontend/shared-sort.js`, `frontend/shared-indicators.js`, `frontend/shared-calendar.js`, `frontend/shared-tags.js`, `frontend/shared-recurrence.js`, `frontend/shared-geocoding.js`, `frontend/shared-qr.js`, `frontend/shared.js`
     - _Requirements: 1.1_
-  - [ ] 9.3 Move all dashboard JS files to `src/frontend/js/dashboard/`
+  - [x] 9.3 Move all dashboard JS files to `src/frontend/js/dashboard/`
     - Move `frontend/main-sidebar.js`, `frontend/main-hotkeys.js`, `frontend/main-calendar.js`, `frontend/main-views.js`, `frontend/main-alerts.js`, `frontend/main-search.js`, `frontend/main-modals.js`, `frontend/main-init.js`, `frontend/main.js`
     - _Requirements: 1.1_
-  - [ ] 9.4 Move all editor JS files to `src/frontend/js/editor/`
+  - [x] 9.4 Move all editor JS files to `src/frontend/js/editor/`
     - Move `frontend/editor-dates.js`, `frontend/editor-tags.js`, `frontend/editor-people.js`, `frontend/editor-location.js`, `frontend/editor-notes.js`, `frontend/editor-alerts.js`, `frontend/editor-color.js`, `frontend/editor-health.js`, `frontend/editor-save.js`, `frontend/editor-init.js`, `frontend/editor.js`
     - Move `frontend/editor_checklists.js`, `frontend/editor_projects.js`
     - _Requirements: 1.1_
-  - [ ] 9.5 Move page-specific JS files to `src/frontend/js/pages/`
+  - [x] 9.5 Move page-specific JS files to `src/frontend/js/pages/`
     - Move `frontend/shared-page.js`, `frontend/shared-editor.js`, `frontend/settings.js`, `frontend/people.js`, `frontend/contact-editor.js`, `frontend/contact-qr.js`, `frontend/weather.js`
     - _Requirements: 1.1_
-  - [ ] 9.6 Move shared CSS files to `src/frontend/css/shared/`
+  - [x] 9.6 Move shared CSS files to `src/frontend/css/shared/`
     - Move `frontend/shared-page.css`, `frontend/shared-editor.css`
     - _Requirements: 1.1_
-  - [ ] 9.7 Move dashboard CSS files to `src/frontend/css/dashboard/`
+  - [x] 9.7 Move dashboard CSS files to `src/frontend/css/dashboard/`
     - Move `frontend/styles-variables.css`, `frontend/styles-layout.css`, `frontend/styles-sidebar.css`, `frontend/styles-tabs.css`, `frontend/styles-calendar.css`, `frontend/styles-cards.css`, `frontend/styles-hotkeys.css`, `frontend/styles-modals.css`, `frontend/styles-responsive.css`, `frontend/styles.css`
     - _Requirements: 1.1_
-  - [ ] 9.8 Move editor CSS to `src/frontend/css/editor/`
+  - [x] 9.8 Move editor CSS to `src/frontend/css/editor/`
     - Move `frontend/editor.css`
     - _Requirements: 1.1_
-  - [ ] 9.9 Update all `<script src>` and `<link href>` paths in every HTML file
+  - [x] 9.9 Update all `<script src>` and `<link href>` paths in every HTML file
     - Update paths to reference new locations under `/frontend/js/`, `/frontend/css/`
     - Example: `src="/frontend/shared.js"` → `src="/frontend/js/shared/shared.js"`
     - _Requirements: 1.7, 8.5_
-  - [ ] 9.10 Update `StaticFiles` mounts in `src/backend/main.py`
+  - [x] 9.10 Update `StaticFiles` mounts in `src/backend/main.py`
     - Add/update mounts to serve from `src/frontend/html/`, `src/frontend/js/`, `src/frontend/css/`
     - _Requirements: 1.4, 9.6_
-  - [ ] 9.11 Update `FileResponse` paths in `src/backend/routes/health.py`
+  - [x] 9.11 Update `FileResponse` paths in `src/backend/routes/health.py`
     - Update `root()` to serve `src/frontend/html/index.html`
     - Update `editor()` to serve `src/frontend/html/editor.html`
     - _Requirements: 1.6_
-  - [ ] 9.12 Update all `window.location.href` and `fetch()` URL references in JS files
+  - [x] 9.12 Update all `window.location.href` and `fetch()` URL references in JS files
     - Update any JS references to frontend page paths (e.g., `/frontend/editor.html` → `/frontend/html/editor.html`)
     - _Requirements: 1.8, 12.8_
-  - [ ] 9.13 Remove old `frontend/` directory
+  - [x] 9.13 Remove old `frontend/` directory
     - After all files are moved and verified, remove the now-empty `frontend/` directory
     - _Requirements: 1.1_
-  - [ ] 9.14 Verify all pages load from new paths
+  - [x] 9.14 Verify all pages load from new paths
     - Dashboard loads, all tabs and calendar views work
     - Editor loads, all zones work, save/load works
     - All secondary pages load (settings, people, contact-editor, help, trash, audit-log, weather)
@@ -51,5 +51,5 @@
     - All `onclick` handlers still resolve
     - No console errors on any page
     - _Requirements: 7.1–7.12, 8.1–8.6_
-  - [ ] 9.15 Update `mega_restructure_plan.md` — mark Phase 9 complete
+  - [x] 9.15 Update `mega_restructure_plan.md` — mark Phase 9 complete
     - _Requirements: 14.6_

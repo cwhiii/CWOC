@@ -1,0 +1,335 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   CWOC Dashboard — Sidebar
+   Extracted from styles.css (Phase 8.3)
+
+   Sidebar positioning, sections, buttons, scroll, sidebar bottom,
+   filter groups, multi-select controls, order controls, clear filters
+   button, sidebar search, view selector, and CwocSidebarFilter component.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Sidebar styling ────────────────────────────────────────────────────── */
+.sidebar {
+    position: fixed;
+    top: 75px;
+    left: -240px;
+    width: 200px;
+    height: calc(100% - 75px);
+    background-color: var(--sidebar-bg);
+    border-right: 1px solid var(--sidebar-border);
+    padding: 0 20px;
+    transition: left 0.3s ease;
+    z-index: 999;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Scrollable content area (everything above the pinned bottom) */
+.sidebar-scroll {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-top: 25px;
+    padding-bottom: 8px;
+    min-height: 0;
+}
+
+/* Bottom pinned section: Settings + Help/Ref buttons */
+.sidebar-bottom {
+    flex-shrink: 0;
+    padding: 12px 0 20px;
+    border-top: 1px solid rgba(107, 78, 49, 0.3);
+}
+.sidebar-bottom .action-button {
+    margin-bottom: 6px;
+}
+.sidebar-bottom .sidebar-compact-btn {
+    margin-bottom: 0;
+}
+.sidebar-scroll::-webkit-scrollbar {
+    width: 6px;
+    -webkit-appearance: none;
+}
+.sidebar-scroll::-webkit-scrollbar-track {
+    background: rgba(139, 90, 43, 0.08);
+}
+.sidebar-scroll::-webkit-scrollbar-thumb {
+    background: rgba(139, 90, 43, 0.3);
+    border-radius: 3px;
+}
+.sidebar-scroll::-webkit-scrollbar-thumb:hover {
+    background: rgba(139, 90, 43, 0.5);
+}
+
+.sidebar.active {
+    left: 0;
+}
+
+/* ── Sidebar search bar ─────────────────────────────────────────────────── */
+.sidebar-search {
+    margin-bottom: 20px;
+}
+
+.sidebar-search input {
+    width: 100%;
+    padding: 8px;
+    font-family: "Courier New", Courier, monospace;
+    border: 1px solid #6b4e31;
+    background-color: #ffff0;
+    border-radius: 3px;
+    box-sizing: border-box;
+}
+
+/* ── View selector in sidebar ───────────────────────────────────────────── */
+.view-selector {
+    margin-top: 20px;
+}
+
+.view-selector label {
+    display: block;
+    margin: 5px 0;
+}
+
+.view-selector select {
+    width: 100%;
+    margin-bottom: 15px;
+    padding: 5px;
+    font-family: "Courier New", Courier, monospace;
+    border: 1px solid #6b4e31;
+    background-color: #ffff0;
+    border-radius: 3px;
+}
+
+/* ── Sidebar toggle button (positioning) ────────────────────────────────── */
+.action-button.toggle-sidebar {
+    position: fixed;
+    top: 110px;
+    left: 10px;
+    z-index: 1003;
+    width: auto;
+}
+
+/* ── Sidebar sections ─────────────────────────────────────────────────────── */
+.sidebar-section {
+    margin-bottom: 12px;
+    transition: opacity 0.2s ease, filter 0.2s ease;
+}
+
+.sidebar-section-label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.85em;
+    font-weight: bold;
+    margin-bottom: 4px;
+    opacity: 0.8;
+    color: #4a3728;
+    cursor: pointer;
+    user-select: none;
+}
+
+.section-toggle {
+    font-size: 0.7em;
+    width: 12px;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.sidebar-section-body {
+    /* collapsible content */
+}
+
+.sidebar-section select {
+    width: 100%;
+    padding: 6px 8px;
+    font-family: "Courier New", Courier, monospace;
+    font-size: 0.9em;
+    border: 1px solid #6b4e31;
+    background: #f5e6cc;
+    color: #1a1208;
+    border-radius: 3px;
+    box-sizing: border-box;
+}
+
+/* ── Order controls ───────────────────────────────────────────────────────── */
+#order-controls {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+#order-controls select { flex: 1; }
+#sort-dir-btn {
+    padding: 2px 8px;
+    font-size: 1em;
+    cursor: pointer;
+    background: #8b5a2b;
+    color: #fff8e1;
+    border: 1px solid #5a3f2a;
+    border-radius: 3px;
+}
+
+/* ── Hotkey hints ─────────────────────────────────────────────────────────── */
+.hotkey-hint {
+    display: inline-block;
+    font-size: 0.7em;
+    opacity: 0.5;
+    margin-left: 4px;
+    font-weight: normal;
+    vertical-align: middle;
+}
+
+/* ── Multi-select filter groups ───────────────────────────────────────────── */
+.filter-group {
+    margin-bottom: 8px;
+    transition: opacity 0.2s ease, filter 0.2s ease;
+}
+
+.filter-label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.8em;
+    margin-bottom: 2px;
+    opacity: 0.7;
+    color: #4a3728;
+    cursor: pointer;
+    user-select: none;
+}
+
+.filter-group input[type="text"] {
+    width: 100%;
+    padding: 6px 8px;
+    font-family: "Courier New", Courier, monospace;
+    border: 1px solid #6b4e31;
+    border-radius: 3px;
+    background: #f5e6cc;
+    color: #1a1208;
+    font-size: 0.9em;
+    box-sizing: border-box;
+}
+.filter-group input[type="text"]::placeholder {
+    color: #8b5a2b;
+    opacity: 0.6;
+}
+
+/* ── Filters section toggle button ────────────────────────────────────────── */
+.filters-toggle-btn {
+    margin-bottom: 8px !important;
+}
+.filters-toggle-btn.expanded {
+    background-color: #c4a484 !important;
+    color: #2b1e0f !important;
+}
+
+.filter-clear-btn {
+    display: block;
+    width: 100%;
+    margin-top: 4px;
+    padding: 3px 8px;
+    font-size: 0.75em;
+    font-family: "Courier New", Courier, monospace;
+    background: transparent;
+    border: 1px solid rgba(107, 78, 49, 0.3);
+    border-radius: 3px;
+    color: #6b4e31;
+    cursor: pointer;
+    opacity: 0.7;
+}
+.filter-clear-btn:hover {
+    background: rgba(107, 78, 49, 0.1);
+    opacity: 1;
+}
+
+.multi-select {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    font-size: 0.85em;
+    max-height: 120px;
+    overflow-y: auto;
+}
+
+.multi-select label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    padding: 1px 0;
+}
+
+.multi-select input[type="checkbox"] {
+    margin: 0;
+    cursor: pointer;
+}
+
+/* ── Order controls styling ───────────────────────────────────────────────── */
+#order-controls select {
+    width: 100%;
+    padding: 5px;
+    font-family: "Courier New", Courier, monospace;
+    border: 1px solid #6b4e31;
+    background-color: #fffff0;
+    border-radius: 3px;
+    box-sizing: border-box;
+    flex: 1;
+}
+
+/* ── Clear All Filters button ─────────────────────────────────────────────── */
+.clear-filters-btn {
+    background-color: #a0522d !important;
+    color: #fff8e1 !important;
+    font-size: 0.85em !important;
+    height: 32px !important;
+    opacity: 0.9;
+}
+.clear-filters-btn:hover {
+    background-color: #8b4513 !important;
+    opacity: 1;
+}
+
+/* ── Tag filter scrollbar always visible ──────────────────────────────────── */
+#label-multi {
+    overflow-y: scroll !important;
+    max-height: 200px;
+}
+#label-multi input[type="checkbox"] {
+    flex: 0 0 auto;
+    width: auto;
+    padding: 0;
+}
+#label-multi::-webkit-scrollbar {
+    width: 8px;
+    -webkit-appearance: none;
+}
+#label-multi::-webkit-scrollbar-track {
+    background: rgba(139, 90, 43, 0.1);
+    border-radius: 4px;
+}
+#label-multi::-webkit-scrollbar-thumb {
+    background: rgba(139, 90, 43, 0.35);
+    border-radius: 4px;
+}
+#label-multi::-webkit-scrollbar-thumb:hover {
+    background: rgba(139, 90, 43, 0.55);
+}
+
+/* ── CwocSidebarFilter component ──────────────────────────────────────────── */
+.cwoc-sidebar-filter-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    max-height: 320px;
+    overflow-y: auto;
+}
+
+.cwoc-sidebar-filter-dot {
+    flex-shrink: 0;
+}
+
+/* ── Sidebar compact half-width buttons ────────────────────────────────────── */
+.sidebar-compact-btn {
+    flex: 1 1 calc(50% - 3px);
+    margin-bottom: 0;
+    font-size: 0.8em;
+    padding: 6px;
+}

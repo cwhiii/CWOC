@@ -1,0 +1,705 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   CWOC Dashboard — Responsive Breakpoints
+   Extracted from styles.css (Phase 8.9)
+
+   All @media breakpoint rules (768px, 480px, 400px).
+   Preserved in the same order as the original file.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   TABLET RESPONSIVE — max-width: 768px
+   Additive rules only; desktop defaults remain untouched above.
+   ═══════════════════════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+
+    /* ── Header: allow tabs to wrap to a second row ────────────────────────── */
+    .header {
+        flex-wrap: wrap;
+        height: auto;
+        padding: 8px 12px;
+    }
+
+    /* ── Tabs: horizontal scroll ──────────────────────────────────────────── */
+    .tabs {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        white-space: nowrap;
+        width: 100%;
+        overflow: hidden;
+    }
+
+    /* ── Tab: 44px min-height for touch targets ───────────────────────────── */
+    .tab {
+        min-height: 44px;
+        flex-shrink: 1;
+        padding: 8px 10px;
+        font-size: 0.85em;
+    }
+    .tab > img {
+        height: 1.5em;
+        margin-right: 0.3em;
+    }
+
+    /* ── Sidebar: full-width overlay (hidden off-screen when closed) ──────── */
+    .sidebar {
+        width: 100% !important;
+        left: -110% !important;
+        top: 0;
+        height: 100%;
+        z-index: 1003;
+        padding: 10px !important;
+        box-sizing: border-box !important;
+    }
+
+    .sidebar.active {
+        left: 0 !important;
+    }
+
+    /* ── Sidebar close button ─────────────────────────────────────────────── */
+    .sidebar-close-btn {
+        display: block;
+        position: sticky;
+        top: 0;
+        width: 100%;
+        padding: 10px;
+        margin-bottom: 10px;
+        background: var(--aged-brown-medium, #8b4513);
+        color: #fff8e1;
+        border: 1px solid var(--btn-border, #5a3f2a);
+        border-radius: 3px;
+        font-family: "Courier New", Courier, monospace;
+        font-weight: bold;
+        font-size: 1em;
+        cursor: pointer;
+        z-index: 10;
+        min-height: 44px;
+    }
+    .sidebar-close-btn:hover {
+        background: var(--btn-hover, #6b4e31);
+    }
+
+    /* ── Sidebar backdrop for overlay mode ─────────────────────────────────── */
+    .sidebar-backdrop {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.4);
+        z-index: 1002;
+    }
+    .sidebar-backdrop.active {
+        display: block;
+    }
+
+    /* ── Overlay sidebar should NOT push main content ─────────────────────── */
+    .sidebar.active ~ .main-content {
+        margin-left: 0 !important;
+    }
+    .main-content {
+        margin-left: 0 !important;
+    }
+
+    /* ── Chit cards: full width, metadata wraps ───────────────────────────── */
+    .chit-card {
+        width: 100% !important;
+        box-sizing: border-box;
+    }
+    .chit-header-row {
+        flex-wrap: wrap;
+    }
+    .chit-header-meta {
+        flex-wrap: wrap;
+        white-space: normal;
+        overflow: visible;
+        font-size: 0.8em;
+    }
+
+    /* ── Chit list: adjust for taller wrapped header ──────────────────────── */
+    .chit-list {
+        margin-top: 110px;
+        height: calc(100vh - 110px);
+    }
+
+    /* ── All-day events: single line, truncated ───────────────────────────── */
+    .all-day-event {
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        max-height: 1.6em;
+        line-height: 1.4em;
+        font-size: 0.8em;
+        padding: 1px 4px !important;
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   MOBILE RESPONSIVE — max-width: 480px
+   Additive rules only; desktop and tablet defaults remain untouched above.
+   ═══════════════════════════════════════════════════════════════════════════ */
+@media (max-width: 480px) {
+
+    /* ── Body: allow natural scrolling on mobile ──────────────────────────── */
+    body {
+        overflow: auto;
+        overflow-x: hidden;
+        word-break: break-word;
+        overflow-wrap: break-word;
+    }
+
+    /* ── Header: fixed at top, compact, row layout ──────────────────────── */
+    .header {
+        position: fixed;
+        flex-direction: row;
+        flex-wrap: wrap;
+        height: auto;
+        padding: 4px 8px;
+        gap: 4px;
+        align-items: center;
+    }
+
+    /* ── Logo: small ──────────────────────────────────────────────────────── */
+    .logo {
+        width: 32px;
+        height: 32px;
+        margin-right: 0;
+    }
+
+    /* ── Mobile hamburger: visible, between logo and title ────────────────── */
+    .mobile-hamburger {
+        display: inline-flex !important;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        padding: 0;
+        margin: 0 4px;
+        font-size: 1.2em;
+        background: var(--btn-bg, #8b5a2b);
+        color: #fff8e1;
+        border: 1px solid var(--btn-border, #5a3f2a);
+        border-radius: 4px;
+        cursor: pointer;
+        flex-shrink: 0;
+    }
+
+    /* ── Title: compact, inline ───────────────────────────────────────────── */
+    h1 {
+        font-size: 1em;
+        padding: 2px 4px;
+        height: auto;
+        width: auto;
+        display: inline-flex;
+        flex-shrink: 1;
+        min-width: 0;
+    }
+
+    /* ── Tabs: HIDDEN on mobile — replaced by Views button ───────────────── */
+    .tabs {
+        display: none !important;
+    }
+
+    /* ── Tab bar spacer: hidden on mobile ─────────────────────────────────── */
+    .top-bar-spacer {
+        display: none !important;
+    }
+
+    /* ── Views button: visible on mobile ──────────────────────────────────── */
+    .mobile-views-btn {
+        display: inline-flex !important;
+    }
+
+    /* ── Reference overlay: single-column within each section ─────────────── */
+    .ref-col {
+        columns: 1;
+    }
+
+    /* ── Top bar: hidden on mobile (date range shown in sidebar) ──────────── */
+    .top-bar {
+        display: none;
+    }
+
+    /* ── Sidebar: full-width overlay, scrollable ──────────────────────────── */
+    .sidebar {
+        width: 100% !important;
+        left: -110% !important;
+        padding: 10px !important;
+        box-sizing: border-box !important;
+    }
+    .sidebar.active {
+        left: 0 !important;
+    }
+
+    /* ── Main content: fill viewport, never shifted by sidebar ───────────── */
+    .main-content {
+        padding: 0;
+        height: 100vh;
+        min-height: 0;
+        margin-left: 0 !important;
+    }
+    .sidebar.active ~ .main-content {
+        margin-left: 0 !important;
+    }
+
+    /* ── Chit card: full width, compact ───────────────────────────────────── */
+    .chit-card {
+        width: 100% !important;
+        margin: 4px 0 !important;
+        padding: 8px 10px;
+        box-sizing: border-box;
+    }
+
+    /* ── Chit list: below compact fixed header ───────────────────────────── */
+    .chit-list {
+        margin-top: 50px;
+        height: calc(100vh - 50px);
+    }
+
+    /* ── Month day: compact cells ─────────────────────────────────────────── */
+    .month-day {
+        min-height: 50px;
+        max-height: 80px;
+        overflow-y: auto;
+        font-size: 0.7em;
+        padding: 2px;
+    }
+
+    /* ── Month grid: tighter ──────────────────────────────────────────────── */
+    .month-grid {
+        gap: 1px;
+    }
+
+    /* ── Day headers: compact ─────────────────────────────────────────────── */
+    .day-header {
+        padding: 4px 2px;
+        font-size: 0.8em;
+    }
+
+    /* ── Reference columns: stack vertically ──────────────────────────────── */
+    .ref-columns {
+        flex-direction: column;
+        gap: 8px;
+    }
+    .ref-col {
+        columns: 2;
+        column-gap: 12px;
+    }
+    .ref-col > h4 {
+        column-span: all;
+    }
+
+    /* ── Hotkey panel: full viewport width with 8px margin ────────────────── */
+    .hotkey-panel {
+        width: calc(100% - 16px);
+        left: 8px;
+        transform: translate(0, -50%);
+        max-width: none;
+        min-width: 0;
+        padding: 12px 16px;
+    }
+
+    /* ── Reference content: full-screen scrollable modal ─────────────────── */
+    .reference-overlay {
+        align-items: flex-start;
+        padding: 0;
+        overflow-y: auto;
+        overflow-x: hidden;
+        -webkit-overflow-scrolling: touch;
+    }
+    .reference-content {
+        width: 100%;
+        max-width: 100%;
+        padding: 12px 10px;
+        box-sizing: border-box;
+        border-radius: 0;
+        border-left: none;
+        border-right: none;
+        max-height: none;
+        min-height: 100vh;
+        overflow-y: visible;
+        overflow-x: hidden;
+        font-size: 0.85em;
+    }
+    .reference-content h3 {
+        font-size: 1.1em;
+        margin-bottom: 8px;
+    }
+    .reference-content h4 {
+        font-size: 0.9em;
+        margin: 8px 0 4px 0;
+    }
+    .ref-key {
+        min-width: 1.5em;
+        font-size: 0.85em;
+    }
+    .ref-col > div {
+        font-size: 0.85em;
+        margin: 2px 0;
+        break-inside: avoid;
+    }
+
+    /* ── Sidebar controls: compact ────────────────────────────────────────── */
+    .action-button {
+        margin-bottom: 8px;
+        padding: 6px;
+        height: 36px;
+        font-size: 0.9em;
+    }
+
+    .status-filter {
+        margin-bottom: 8px;
+    }
+
+    /* ── Chit header row: wrap metadata ────────────────────────────────────── */
+    .chit-header-row {
+        flex-wrap: wrap;
+        gap: 4px;
+        padding: 3px 0;
+    }
+    .chit-header-meta {
+        flex-wrap: wrap;
+        white-space: normal;
+        font-size: 0.8em;
+    }
+
+    /* ── Week view: compact ───────────────────────────────────────────────── */
+    .week-view {
+        padding: 0;
+        gap: 1px;
+    }
+
+    /* ── Calendar events: compact, readable ──────────────────────────────── */
+    .timed-event {
+        min-height: 30px;
+        padding: 2px 4px;
+        font-size: 0.65em;
+        line-height: 1.2;
+        overflow: hidden;
+    }
+    .timed-event .label img {
+        width: 1em !important;
+        height: 1em !important;
+    }
+    /* All-day events: compact single-line (NOT 44px — they're display items) */
+    .all-day-event {
+        min-height: 0 !important;
+        max-height: 1.4em !important;
+        padding: 1px 3px !important;
+        font-size: 0.7em !important;
+        line-height: 1.3em !important;
+        border-bottom: none !important;
+    }
+    .all-day-event .label img {
+        width: 1em !important;
+        height: 1em !important;
+        vertical-align: middle;
+    }
+
+    /* ── Notes view: compact ──────────────────────────────────────────────── */
+    .notes-view {
+        padding: 4px;
+    }
+
+    /* ── List views: full width cards ─────────────────────────────────────── */
+    .checklist-view,
+    .alarms-view,
+    .projects-view {
+        padding: 4px;
+    }
+
+    /* ── People chips: compact ────────────────────────────────────────────── */
+    .cwoc-people-chip {
+        padding: 1px 5px 1px 1px;
+        font-size: 0.72em;
+    }
+
+    /* ── Quick Edit modal: full width ─────────────────────────────────────── */
+    .recurrence-modal-overlay > div {
+        min-width: 0 !important;
+        max-width: none !important;
+        width: calc(100% - 16px) !important;
+        margin: 8px !important;
+        padding: 16px !important;
+        box-sizing: border-box !important;
+    }
+
+    /* ── Clock modal: full width ──────────────────────────────────────────── */
+    #clock-modal-overlay > div {
+        min-width: 0 !important;
+        max-width: none !important;
+        width: calc(100% - 16px) !important;
+        margin: 8px !important;
+        padding: 16px 20px !important;
+        box-sizing: border-box !important;
+    }
+
+    /* ── Weather modal: full width ────────────────────────────────────────── */
+    #weather-modal-overlay .weather-modal {
+        min-width: 0 !important;
+        max-width: none !important;
+        width: calc(100% - 16px) !important;
+        margin: 8px !important;
+        padding: 16px 20px !important;
+        box-sizing: border-box !important;
+    }
+
+    /* ── Modal buttons: touch targets ─────────────────────────────────────── */
+    .recurrence-modal-overlay button,
+    #clock-modal-overlay button,
+    #weather-modal-overlay button,
+    #deleteChitModal button {
+        min-height: 44px;
+        min-width: 44px;
+    }
+
+    .recurrence-modal-overlay select,
+    .recurrence-modal-overlay input[type="checkbox"] {
+        min-height: 44px;
+        min-width: 44px;
+    }
+
+    /* ── Delete modal: full width ─────────────────────────────────────────── */
+    #deleteChitModal > div {
+        width: calc(100% - 16px);
+        margin: 20% auto;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════════
+       VIEW-SPECIFIC MOBILE OVERRIDES
+       These use !important to override inline styles set by JS rendering.
+       ═══════════════════════════════════════════════════════════════════════ */
+
+    /* ── All list views: full-width, compact ──────────────────────────────── */
+    .checklist-view,
+    .alarms-view,
+    .projects-view {
+        padding: 4px !important;
+        gap: 6px !important;
+    }
+
+    /* ── Chit cards in all views: full width, readable ────────────────────── */
+    .chit-card {
+        width: 100% !important;
+        max-width: 100% !important;
+        margin: 4px 0 !important;
+        padding: 10px !important;
+        box-sizing: border-box !important;
+        font-size: 0.9em;
+        word-break: break-word;
+        overflow-wrap: break-word;
+        overflow: hidden;
+    }
+
+    /* ── Chit header: title on top, meta below ────────────────────────────── */
+    .chit-header-row {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: 4px !important;
+    }
+    .chit-header-left {
+        width: 100%;
+        font-size: 1em;
+    }
+    .chit-header-title {
+        white-space: normal !important;
+        overflow: visible !important;
+        text-overflow: unset !important;
+    }
+    .chit-header-meta {
+        width: 100%;
+        flex-wrap: wrap !important;
+        white-space: normal !important;
+        overflow: visible !important;
+        gap: 4px !important;
+        font-size: 0.78em;
+    }
+
+    /* ── Task view: stack status + note vertically ────────────────────────── */
+    .chit-card > div[style*="display:flex"][style*="align-items:flex-start"] {
+        flex-direction: column !important;
+        gap: 6px !important;
+    }
+
+    /* ── Inline checklists: compact ───────────────────────────────────────── */
+    .chit-card ul[data-chit-id] {
+        padding-left: 8px !important;
+        font-size: 0.9em;
+    }
+    .chit-card ul[data-chit-id] li {
+        padding: 4px 2px !important;
+        min-height: 36px;
+    }
+
+    /* ── Notes view: force single column ──────────────────────────────────── */
+    .notes-view {
+        padding: 4px !important;
+    }
+    .notes-view .chit-card {
+        position: relative !important;
+        left: auto !important;
+        top: auto !important;
+        width: 100% !important;
+        margin: 6px 0 !important;
+    }
+
+    /* ── Note content: constrain to card ──────────────────────────────────── */
+    .notes-view .note-content {
+        max-height: 300px;
+        overflow-y: auto;
+        font-size: 0.9em;
+    }
+    .notes-view .note-content img {
+        max-width: 100% !important;
+        height: auto !important;
+    }
+    .notes-view .note-content pre {
+        max-width: 100% !important;
+        overflow-x: auto !important;
+        font-size: 0.85em;
+    }
+
+    /* ── Projects view: stack kanban columns ───────────────────────────────── */
+    .project-status-section {
+        width: 100% !important;
+    }
+    .status-items-container {
+        width: 100% !important;
+    }
+    .project-item {
+        width: 100% !important;
+        box-sizing: border-box;
+    }
+    .project-item > div:first-child {
+        flex-wrap: wrap !important;
+        gap: 4px !important;
+    }
+    .project-item > div:first-child > div.right-container {
+        width: 100% !important;
+        justify-content: flex-start !important;
+        flex-wrap: wrap !important;
+        gap: 4px !important;
+    }
+
+    /* ── Calendar week view: compact ──────────────────────────────────────── */
+    .hour-block {
+        font-size: 0.7em;
+        padding-right: 2px;
+    }
+    .hour-column {
+        min-width: 0;
+    }
+    .day-column {
+        min-width: 0;
+        padding: 2px;
+    }
+
+    /* ── Year view: reflow months ─────────────────────────────────────────── */
+    .year-view {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 8px !important;
+    }
+    .year-view > div {
+        width: 100% !important;
+        flex: none !important;
+        min-width: 0 !important;
+    }
+    .year-view .year-month {
+        flex: none !important;
+        min-width: 0 !important;
+        width: 100% !important;
+    }
+
+    /* ── Itinerary view: compact ──────────────────────────────────────────── */
+    .chit {
+        margin-left: 0 !important;
+        padding: 8px 4px;
+    }
+    .itinerary-view {
+        overflow-x: hidden !important;
+        overflow-y: auto !important;
+        width: 100% !important;
+    }
+    .itinerary-event {
+        margin-left: 0 !important;
+        flex-wrap: wrap !important;
+        word-break: break-word;
+    }
+    .itinerary-event .time-column {
+        width: auto !important;
+        margin-right: 8px !important;
+        font-size: 0.85em;
+    }
+
+    /* ── All selects and inputs in views: touch-friendly ──────────────────── */
+    .chit-card select,
+    .chit-card input[type="text"],
+    .chit-card button {
+        min-height: 36px;
+        font-size: 14px;
+    }
+
+    /* ── Label/tag chips in cards: compact ─────────────────────────────────── */
+    .chit .label img,
+    .timed-event .label img,
+    .all-day-event .label img {
+        width: 1.8em !important;
+        height: 1.8em !important;
+    }
+
+    /* ── Kanban columns: stack vertically on mobile ───────────────────────── */
+    .projects-view [style*="display:flex"][style*="min-height:120px"] {
+        flex-direction: column !important;
+    }
+
+    /* ── Global Search: compact on mobile ─────────────────────────────────── */
+    .global-search-bar {
+        padding: 8px 4px;
+    }
+    #global-search-input {
+        font-size: 0.9em;
+        padding: 8px;
+    }
+    .global-search-results {
+        padding: 0 4px;
+    }
+}
+
+/* ── Independent Alerts Board: Mobile ─────────────────────────────────────── */
+
+@media (max-width: 768px) {
+    .independent-alerts-board {
+        flex-direction: column;
+        gap: 0.5em;
+    }
+
+    .sa-column {
+        border-right: none;
+        border-bottom: 2px solid rgba(139, 90, 43, 0.25);
+    }
+
+    .sa-column:last-child {
+        border-bottom: none;
+    }
+}
+
+/* ── Bold Alert Modal: Mobile ─────────────────────────────────────────────── */
+@media (max-width: 480px) {
+    .cwoc-alert-modal {
+        width: calc(100% - 24px);
+        max-width: none;
+    }
+    .cwoc-alert-btn {
+        min-width: 0;
+        flex-basis: 100%;
+    }
+    .cwoc-alert-icon {
+        font-size: 2.5em;
+        margin: 14px 0 6px;
+    }
+    .cwoc-alert-title {
+        font-size: 1.3em;
+    }
+}

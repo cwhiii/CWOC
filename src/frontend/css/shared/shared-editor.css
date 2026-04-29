@@ -1,0 +1,710 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   CWOC Shared Editor Styles
+   
+   Reusable editor patterns shared by the Chit Editor and Contact Editor.
+   Provides: header row, zone containers, zones grid, form fields, buttons.
+   
+   Load this BEFORE any page-specific editor CSS (e.g. editor.css).
+   
+   The chit editor (editor.html) loads this file WITHOUT shared-page.css,
+   so this :root must be self-contained with every variable the editor needs.
+   
+   Canonical source of truth for the common variable set is
+   frontend/shared-page.css.  Keep shared values in sync with that file.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── CSS Variables (editor color palette) ──────────────────────────────── */
+/* Shared variables — must match shared-page.css exactly */
+:root {
+    --parchment-light: #fdf5e6;
+    --parchment-medium: #faebd7;
+    --parchment-dark: #fff8dc;
+    --aged-brown-dark: #4a2c2a;
+    --aged-brown-medium: #8b4513;
+    --aged-brown-light: #a0522d;
+    --accent-gold: #d4af37;
+    --button-bg: #d2b48c;
+    --button-hover: #c4a484;
+    --danger-red: #b22222;
+    --info-blue: #4682b4;
+    --border-color: var(--aged-brown-medium);
+    --text-color: var(--aged-brown-dark);
+    --header-bg: var(--button-bg);
+
+    /* Editor-specific variables */
+    --accent-teal: #008080;
+    --warning-orange: #daa520;
+    --dark-grey: #6c757d;
+    --zone-header-bg: var(--button-bg);
+    --zone-body-bg: var(--parchment-dark);
+    --input-bg: var(--parchment-light);
+    --modal-bg: var(--parchment-medium);
+    --hover-bg-light: #f0e6d0;
+}
+
+/* ── Base Body ─────────────────────────────────────────────────────────── */
+body {
+    font-family:
+        -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    margin: 0;
+    padding: 20px;
+    background-color: var(--parchment-medium);
+    transition: background-color 0.3s ease;
+}
+
+/* ── Header Row (logo + title + button groups) ─────────────────────────── */
+.header-row {
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    margin: 0 auto;
+    margin-bottom: 20px;
+    padding: 20px;
+    background: var(--header-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    position: relative;
+    transition: background-color 0.3s ease;
+    width: 95%;
+    gap: 15px;
+    overflow: hidden;
+    box-sizing: border-box;
+}
+
+.header-row h1 {
+    margin: 0;
+    color: var(--aged-brown-dark);
+}
+
+.header-image {
+    height: 2em;
+}
+
+/* ── Header Button Groups (left + right) ───────────────────────────────── */
+.buttons {
+    display: flex;
+    gap: 10px;
+    flex-grow: 1;
+    justify-content: space-between;
+    flex-wrap: wrap;
+}
+
+.buttons .left-buttons {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    flex-grow: 1;
+    flex-wrap: wrap;
+}
+
+.buttons .right-buttons {
+    display: flex;
+    gap: 10px;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+}
+
+/* ── General Button Styles ─────────────────────────────────────────────── */
+button {
+    padding: 8px 16px;
+    border: 2px outset var(--aged-brown-medium);
+    border-radius: 4px;
+    background: var(--button-bg);
+    color: var(--aged-brown-dark);
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+button i {
+    margin-right: 5px;
+    color: var(--aged-brown-dark);
+}
+
+button:hover {
+    background: var(--button-hover);
+}
+
+button.delete {
+    background: var(--danger-red);
+    color: var(--parchment-light);
+    border: 2px outset var(--aged-brown-dark);
+}
+
+button.delete:hover {
+    background: #a01c1c;
+}
+
+button.cancel {
+    background: var(--aged-brown-light);
+    color: var(--parchment-light);
+    border: 2px outset var(--aged-brown-medium);
+}
+
+button.cancel:hover {
+    background: var(--aged-brown-medium);
+}
+
+/* ── Editor Container ──────────────────────────────────────────────────── */
+.editor {
+    background: var(--parchment-dark);
+    padding: 20px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    transition: opacity 0.3s ease;
+    width: 95%;
+    margin: 0 auto;
+    box-sizing: border-box;
+}
+
+/* ── Form Field Styles ─────────────────────────────────────────────────── */
+.field {
+    margin-bottom: 15px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.field.full-width {
+    flex-direction: column;
+    align-items: stretch;
+}
+
+.field label {
+    font-weight: 500;
+    color: var(--aged-brown-dark);
+}
+
+.field.full-width label {
+    align-self: flex-start;
+    margin-bottom: 5px;
+}
+
+input[type="checkbox"] {
+    margin-right: 5px;
+    accent-color: var(--accent-teal);
+}
+
+.editor input,
+.editor select,
+.editor textarea {
+    padding: 8px 12px;
+    border: 1px inset var(--aged-brown-medium);
+    border-radius: 4px;
+    font-size: 14px;
+    flex: 1;
+    background-color: var(--input-bg);
+    color: var(--text-color);
+}
+
+.editor input:focus,
+.editor select:focus,
+.editor textarea:focus {
+    outline: none;
+    border-color: var(--accent-teal);
+    box-shadow: 0 0 0 2px rgba(0, 128, 128, 0.25);
+}
+
+.editor input:disabled,
+.editor select:disabled,
+.editor textarea:disabled,
+button:disabled:not(.status-icon-button) {
+    background-color: var(--parchment-light);
+    cursor: not-allowed;
+    color: var(--aged-brown-medium);
+    border: 1px dotted var(--aged-brown-light);
+}
+
+/* ── Zone Container Pattern (collapsible sections) ─────────────────────── */
+.zone-container {
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    margin-bottom: 20px;
+    background: var(--zone-body-bg);
+    flex: 1;
+    overflow: hidden;
+    transition: height 0.3s ease;
+}
+
+.zone-container.collapsed {
+    height: 48px;
+    opacity: 0.55;
+    transition: opacity 0.2s, height 0.3s ease;
+}
+
+.zone-container.collapsed:hover {
+    opacity: 0.85;
+}
+
+.zone-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    background-color: var(--zone-header-bg);
+    border-bottom: 1px solid var(--border-color);
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+    transition: background-color 0.3s ease;
+}
+
+.zone-header h2.zone-title {
+    margin: 0;
+    color: var(--aged-brown-dark);
+    font-size: 1.1em;
+    flex-grow: 1;
+}
+
+.zone-header .zone-toggle-icon {
+    font-size: 1.2em;
+    margin-left: 10px;
+    transition: transform 0.2s;
+    cursor: pointer;
+    color: var(--aged-brown-dark);
+}
+
+.zone-container.collapsed .zone-header .zone-toggle-icon {
+    transform: rotate(-90deg);
+}
+
+.zone-container.expanded .zone-header .zone-toggle-icon {
+    transform: rotate(0deg);
+}
+
+.zone-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-direction: row !important;
+}
+
+.zone-header .zone-button {
+    margin-right: 0;
+}
+
+.zone-button {
+    padding: 5px 10px;
+    font-size: 12px;
+    background-color: var(--aged-brown-light);
+    color: var(--parchment-light);
+    border: 1px outset var(--aged-brown-medium);
+}
+
+.zone-button:hover {
+    background-color: #924525;
+}
+
+.zone-body {
+    padding: 10px;
+    background-color: var(--zone-body-bg);
+}
+
+/* ── Modal Overlay (unsaved-changes, confirmations) ────────────────────── */
+.modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    justify-content: center;
+    align-items: center;
+    z-index: 10000;
+}
+.modal-content {
+    background: var(--parchment-medium, #faebd7);
+    border: 2px solid var(--aged-brown-medium, #8b4513);
+    border-radius: 10px;
+    padding: 20px;
+    width: 90%;
+    max-width: 400px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    text-align: center;
+}
+.modal-content h3 {
+    margin-top: 0;
+    color: var(--aged-brown-dark, #4a2c2a);
+}
+
+/* ── Main Zones Grid (two-column responsive layout) ────────────────────── */
+.main-zones-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+
+/* ── Toggle Switch (reusable on/off toggle) ────────────────────────────── */
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 40px;
+    height: 20px;
+    margin: 0 5px;
+    vertical-align: middle;
+}
+
+.switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: var(--aged-brown-light);
+    transition: 0.2s;
+    border-radius: 20px;
+    border: 1px solid var(--aged-brown-medium);
+}
+
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 16px;
+    width: 16px;
+    left: 2px;
+    bottom: 2px;
+    background-color: var(--parchment-light);
+    transition: 0.2s;
+    border-radius: 50%;
+}
+
+input:checked + .slider {
+    background-color: var(--accent-teal);
+    border-color: var(--accent-teal);
+}
+
+input:focus + .slider {
+    box-shadow: 0 0 1px var(--accent-teal);
+}
+
+input:checked + .slider:before {
+    transform: translateX(20px);
+}
+
+.slider.round {
+    border-radius: 20px;
+}
+
+.slider.round:before {
+    border-radius: 50%;
+}
+
+.switch-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin-bottom: 10px;
+    font-size: 0.9em;
+}
+
+.toggle-label {
+    color: var(--aged-brown-dark);
+    white-space: nowrap;
+}
+
+/* ── Responsive Breakpoints ────────────────────────────────────────────── */
+@media (max-width: 400px) {
+    .header-row {
+        flex-direction: column;
+        align-items: flex-start;
+        padding: 10px;
+    }
+    .header-row h1 {
+        position: static;
+        margin-bottom: 10px;
+    }
+    .buttons {
+        width: 100%;
+        justify-content: center;
+    }
+    .main-zones-grid {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+    .zone-container {
+        flex: unset;
+    }
+    .zone-header {
+        flex-wrap: wrap;
+    }
+    .zone-header h2.zone-title {
+        width: 100%;
+        margin-bottom: 5px;
+    }
+    .zone-header .zone-button {
+        flex-grow: 1;
+        margin-right: 0;
+    }
+}
+
+/* ── Tablet Breakpoint ─────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+    .main-zones-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .grid-span-2 {
+        grid-column: span 1;
+    }
+
+    .hideWhenNarrow {
+        display: none;
+    }
+
+    /* Editor container: full width */
+    .editor {
+        max-width: 100%;
+        padding: 10px;
+    }
+
+    /* Header row: full width */
+    .header-row {
+        width: 100%;
+        padding: 10px;
+        gap: 8px;
+        box-sizing: border-box;
+    }
+
+    /* Zone headers: wrap actions */
+    .zone-header {
+        flex-wrap: wrap;
+        padding: 8px;
+    }
+    .zone-actions {
+        flex-wrap: wrap;
+        gap: 4px;
+    }
+    .zone-button {
+        min-height: 36px;
+    }
+}
+
+/* ── Mobile Breakpoint (≤480px) ────────────────────────────────────────── */
+@media (max-width: 480px) {
+    /* Body: minimal padding */
+    body {
+        padding: 4px;
+    }
+
+    /* Header row: stack everything vertically */
+    .header-row {
+        flex-direction: column;
+        padding: 8px;
+        width: 100%;
+        margin-bottom: 8px;
+        gap: 6px;
+        box-sizing: border-box;
+    }
+    .header-row h1 {
+        font-size: 1.1em;
+        margin-bottom: 0;
+    }
+    .header-image {
+        height: 1.5em;
+    }
+
+    /* Buttons: wrap on mobile, full width */
+    .buttons {
+        flex-direction: row;
+        flex-wrap: wrap;
+        width: 100%;
+        gap: 4px;
+    }
+    .buttons .left-buttons,
+    .buttons .right-buttons {
+        flex-wrap: wrap;
+        width: 100%;
+        gap: 4px;
+    }
+    .buttons button {
+        flex: 1 1 auto;
+        min-height: 44px;
+        font-size: 0.8em;
+        padding: 4px 6px;
+        white-space: nowrap;
+    }
+
+    /* Actions trigger: visible on mobile — opens actions modal */
+    .mobile-actions-trigger {
+        display: inline-flex !important;
+        padding: 6px 12px;
+        min-height: 36px;
+        font-size: 0.9em;
+        font-weight: bold;
+    }
+    /* Hide the regular buttons container on mobile — use actions modal instead */
+    .header-row .buttons {
+        display: none !important;
+    }
+
+    /* Editor container: full width, no margin */
+    .editor {
+        max-width: 100%;
+        padding: 6px;
+        margin: 0;
+        border-radius: 4px;
+    }
+
+    /* Grid: single column, tight gap */
+    .main-zones-grid {
+        grid-template-columns: 1fr;
+        gap: 8px;
+    }
+
+    /* Zone containers: full width */
+    .zone-container {
+        flex: unset;
+        width: 100%;
+    }
+
+    /* Zone headers: compact */
+    .zone-header {
+        flex-wrap: wrap;
+        padding: 6px 8px;
+    }
+    .zone-header h2.zone-title {
+        width: 100%;
+        font-size: 1em;
+        margin-bottom: 4px;
+    }
+    .zone-actions {
+        width: 100%;
+        flex-wrap: wrap;
+        gap: 4px;
+    }
+    .zone-button {
+        flex: 1 1 auto;
+        min-height: 36px;
+        padding: 4px 8px;
+        font-size: 11px;
+    }
+
+    /* Zone body: compact padding */
+    .zone-body {
+        padding: 6px;
+    }
+
+    /* Form fields: full width */
+    .field {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 4px;
+    }
+    .field label {
+        font-size: 0.9em;
+    }
+    .editor input, .editor select, .editor textarea {
+        width: 100% !important;
+        max-width: 100% !important;
+        box-sizing: border-box;
+        font-size: 16px; /* prevents iOS zoom on focus */
+    }
+
+    /* Toggle switch: keep inline */
+    .switch-wrapper {
+        flex-direction: row;
+    }
+}
+
+
+/* ── Mobile Actions Trigger: hidden at desktop ─────────────────────────── */
+.mobile-actions-trigger {
+    display: none;
+}
+
+/* ── Mobile Actions Modal ──────────────────────────────────────────────── */
+.mobile-actions-modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 2000;
+    justify-content: center;
+    align-items: center;
+}
+.mobile-actions-modal.active {
+    display: flex;
+}
+.mobile-actions-modal-content {
+    background: var(--parchment-medium, #faebd7);
+    border: 2px solid var(--aged-brown-medium, #8b4513);
+    border-radius: 8px;
+    padding: 20px;
+    width: calc(100% - 32px);
+    max-width: 400px;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+.mobile-actions-modal-content h3 {
+    margin: 0 0 12px 0;
+    font-size: 1.2em;
+    color: var(--aged-brown-dark, #4a2c2a);
+    text-align: center;
+    border-bottom: 2px solid var(--aged-brown-light, #a0522d);
+    padding-bottom: 8px;
+}
+.mobile-actions-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.mobile-action-btn {
+    width: 100%;
+    min-height: 48px;
+    padding: 12px 16px;
+    font-size: 1em;
+    font-weight: bold;
+    border: 2px outset var(--aged-brown-medium, #8b4513);
+    border-radius: 4px;
+    background: var(--button-bg, #d2b48c);
+    color: var(--aged-brown-dark, #4a2c2a);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+.mobile-action-btn:hover {
+    background: var(--button-hover, #c4a484);
+}
+.mobile-action-btn.delete {
+    background: var(--danger-red, #b22222);
+    color: #fff;
+}
+.mobile-action-btn.archive-btn {
+    background: #888;
+    color: #fff;
+}
+.mobile-action-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+.mobile-actions-close {
+    width: 100%;
+    min-height: 44px;
+    margin-top: 12px;
+    padding: 10px;
+    font-size: 1em;
+    font-weight: bold;
+    background: var(--aged-brown-light, #a0522d);
+    color: #fff8e1;
+    border: 1px solid var(--aged-brown-dark, #4a2c2a);
+    border-radius: 4px;
+    cursor: pointer;
+}

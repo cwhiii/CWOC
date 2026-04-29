@@ -1,0 +1,19 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   CWOC Main Dashboard Styles — Coordinator
+   
+   This file loads LAST among the dashboard sub-stylesheets.
+   All rules have been extracted into focused sub-stylesheets:
+
+     styles-variables.css   — :root CSS custom properties (loads FIRST)
+     styles-layout.css      — body, header, top bar, logo, buttons, forms
+     styles-sidebar.css     — sidebar, filters, multi-select, order controls
+     styles-tabs.css        — tab bar, active/hover states, icon-only mode
+     styles-calendar.css    — week/day/month/year views, events, drag handles
+     styles-cards.css       — chit cards, notes masonry, markdown, people chips
+     styles-hotkeys.css     — hotkey overlay, panels, reference overlay
+     styles-modals.css      — delete/clock/weather/quick-edit/alert modals
+     styles-responsive.css  — all @media breakpoint rules (768px, 480px)
+
+   This coordinator file contains only rules that don't fit cleanly into
+   any single sub-stylesheet, or future overrides that must load last.
+   ═══════════════════════════════════════════════════════════════════════════ */

@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <link rel="icon" type="image/x-icon" href="/static/cwod_logo-favicon.png" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Page Title — C.W.'s Omni Chits</title>
+    <link rel="stylesheet" href="/frontend/css/shared/shared-page.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
+    <style>
+        /* ══ PAGE-SPECIFIC STYLES ONLY ══
+           Everything shared is in shared-page.css.
+           Only add styles here that are unique to THIS page. */
+    </style>
+</head>
+<!--
+    data-page-title and data-page-icon trigger auto header/footer injection
+    via shared-page.js. The injection creates:
+      .settings-panel > .header-and-buttons (logo + title + nav buttons)
+    and appends .author-info footer after .settings-panel.
+
+    Optional: data-hide-nav="audit-log,trash" to hide specific nav buttons.
+    Optional: data-show-nav="trash,people,weather" to show normally-hidden nav buttons.
+-->
+<body data-page-title="Page Title" data-page-icon="">
+
+    <div class="settings-panel">
+        <!-- YOUR CONTENT HERE -->
+        <p>Page content goes here.</p>
+    </div>
+
+    <script src="/frontend/js/shared/shared-utils.js"></script>
+    <script src="/frontend/js/shared/shared-touch.js"></script>
+    <script src="/frontend/js/shared/shared-checklist.js"></script>
+    <script src="/frontend/js/shared/shared-sort.js"></script>
+    <script src="/frontend/js/shared/shared-indicators.js"></script>
+    <script src="/frontend/js/shared/shared-calendar.js"></script>
+    <script src="/frontend/js/shared/shared-tags.js"></script>
+    <script src="/frontend/js/shared/shared-recurrence.js"></script>
+    <script src="/frontend/js/shared/shared-geocoding.js"></script>
+    <script src="/frontend/js/shared/shared-qr.js"></script>
+    <script src="/frontend/js/shared/shared.js"></script>
+    <script src="/frontend/js/pages/shared-page.js"></script>
+</body>
+</html>

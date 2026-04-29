@@ -1,0 +1,514 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   CWOC Shared Page Styles — 1940s Parchment & Magic Aesthetic
+   
+   Single source of truth for ALL secondary pages (settings, help, trash, etc.)
+   Change once here → applies everywhere.
+   
+   The main dashboard (index.html) uses styles.css instead.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── CSS Variables ──────────────────────────────────────────────────────── */
+/* CANONICAL SOURCE OF TRUTH for the common CWOC CSS variable set.
+   All other stylesheets (styles.css, shared-editor.css) must mirror these
+   values exactly for any variables they redefine.  Change a value here
+   first, then propagate to the other files. */
+:root {
+    --parchment-light: #fdf5e6;
+    --parchment-medium: #faebd7;
+    --parchment-dark: #fff8dc;
+    --aged-brown-dark: #4a2c2a;
+    --aged-brown-medium: #8b4513;
+    --aged-brown-light: #a0522d;
+    --accent-gold: #d4af37;
+    --button-bg: #d2b48c;
+    --button-hover: #c4a484;
+    --danger-red: #b22222;
+    --info-blue: #4682b4;
+    --border-color: var(--aged-brown-medium);
+    --text-color: var(--aged-brown-dark);
+    --header-bg: #e0d4b5;
+}
+
+/* ── Base Body ──────────────────────────────────────────────────────────── */
+body {
+    background-image: url("/static/parchment.jpg");
+    background-size: cover;
+    background-attachment: fixed;
+    font-family: "Courier New", Courier, monospace;
+    color: #1a1208;
+    margin: 0;
+    padding: 1em;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    font-size: 16px;
+}
+
+/* ── Page Panel (the main content wrapper) ──────────────────────────────── */
+.settings-panel {
+    background: linear-gradient(to bottom, #fff8e1, #f5e6cc);
+    border: 2px solid #8b5a2b;
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    width: 100%;
+    max-width: calc(100% - 2em);
+    padding: 20px;
+    position: relative;
+    overflow: visible;
+    margin-bottom: 15px;
+}
+.settings-panel::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: radial-gradient(circle, rgba(255, 215, 0, 0.1), transparent);
+    pointer-events: none;
+    border-radius: 10px;
+}
+
+/* ── Page Header Bar (logo + title + buttons) ───────────────────────────── */
+.header-and-buttons {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    border-bottom: 1px solid #8b5a2b;
+    padding-bottom: 10px;
+}
+.header-and-buttons h2 {
+    margin: 0;
+    border-bottom: none;
+    padding-bottom: 0;
+    text-align: left;
+}
+.header-buttons {
+    display: flex;
+    gap: 10px;
+}
+
+/* ── Headings ───────────────────────────────────────────────────────────── */
+h2, h3 {
+    font-size: 26px;
+    color: #1a1208;
+    text-align: center;
+    margin-bottom: 20px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    border-bottom: 1px solid #8b5a2b;
+    padding-bottom: 10px;
+}
+h3 { font-size: 22px; }
+h2 img {
+    margin-right: 10px;
+    vertical-align: middle;
+    max-width: 64px;
+}
+
+/* ── Standard Button (gradient, used for nav and actions) ───────────────── */
+.standard-button {
+    background: linear-gradient(#d4a373, #c8965a);
+    color: #2b1e0f;
+    border: none;
+    border-radius: 5px;
+    padding: 6px 12px;
+    cursor: pointer;
+    font-size: 16px;
+    font-family: "Courier New", Courier, monospace;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    transition: box-shadow 0.3s, transform 0.1s;
+}
+.standard-button:hover {
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    transform: translateY(-1px);
+}
+
+/* ── Action Buttons (dark brown, matches main page sidebar buttons) ─────── */
+.cwoc-btn {
+    padding: 10px 14px;
+    height: 40px;
+    background-color: #8b5a2b;
+    border: 1px solid #5a3f2a;
+    border-radius: 3px;
+    color: inherit;
+    cursor: pointer;
+    font-family: "Courier New", Courier, monospace;
+    font-weight: bold;
+    font-size: larger;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    text-decoration: none;
+    box-sizing: border-box;
+    transition: background 0.2s;
+}
+.cwoc-btn:hover { background-color: #6b4e31; color: #d2b48c; }
+.cwoc-btn.danger { background: var(--danger-red); color: var(--parchment-light); border-color: var(--aged-brown-dark); }
+.cwoc-btn.danger:hover { background: #a01c1c; color: #fff; }
+.cwoc-btn.restore { background: var(--aged-brown-light); color: var(--parchment-light); border-color: var(--aged-brown-dark); }
+.cwoc-btn.restore:hover { background: var(--aged-brown-medium); color: #fff; }
+
+/* ── Settings Grid (for settings-like block layouts) ────────────────────── */
+.settings-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 20px;
+}
+.setting-group {
+    margin-bottom: 0;
+    padding: 15px;
+    background: #fff8e1;
+    border: 1px solid #8b5a2b;
+    border-radius: 5px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    box-sizing: border-box;
+    overflow: hidden;
+    min-width: 0;
+    word-wrap: break-word;
+}
+.setting-group h3 {
+    margin: 0 0 12px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid rgba(139, 90, 43, 0.3);
+    font-size: 18px;
+    color: #2b1e0f;
+}
+.setting-group select {
+    max-width: 100%;
+    box-sizing: border-box;
+}
+.setting-group input[type="text"],
+.setting-group input[type="number"] {
+    max-width: 100%;
+    box-sizing: border-box;
+}
+.setting-group label {
+    display: block;
+    font-size: 15px;
+    margin-bottom: 6px;
+    color: #1a1208;
+}
+
+/* ── Form Elements ──────────────────────────────────────────────────────── */
+select {
+    background: linear-gradient(#d4a373, #c8965a);
+    border: 1px solid #5c4033;
+    border-radius: 5px;
+    padding: 8px 12px;
+    font-size: 16px;
+    color: #1a1208;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    cursor: pointer;
+    font-family: "Courier New", Courier, monospace;
+    transition: background 0.3s, transform 0.1s;
+}
+select:hover { background: linear-gradient(#c8965a, #a86b3e); transform: translateY(-1px); }
+input[type="text"], input[type="number"] {
+    border: 1px solid #8b5a2b;
+    border-radius: 5px;
+    padding: 5px 8px;
+    font-size: 16px;
+    color: #1a1208;
+    font-family: "Courier New", Courier, monospace;
+    background: #f5e6cc;
+}
+input[type="color"] {
+    border: 1px solid #8b5a2b;
+    border-radius: 5px;
+    padding: 5px;
+}
+
+/* ── Tables ──────────────────────────────────────────────────────────────── */
+.cwoc-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 1em;
+    background: #fffaf0;
+    border: 1px solid #6b4e31;
+    border-radius: 4px;
+}
+.cwoc-table th {
+    background: var(--header-bg);
+    padding: 8px 10px;
+    text-align: left;
+    border-bottom: 2px solid #6b4e31;
+    font-size: 0.95em;
+    color: var(--aged-brown-dark);
+    white-space: nowrap;
+}
+.cwoc-table td { padding: 6px 10px; border-bottom: 1px solid #d4c5a9; vertical-align: top; color: #1a1208; }
+.cwoc-table tr:hover { background: rgba(212,196,160,0.15); }
+
+/* ── Tag Chips ──────────────────────────────────────────────────────────── */
+.cwoc-tag-chip {
+    display: inline-block; padding: 1px 5px; border-radius: 3px;
+    font-size: 0.8em; margin: 1px; background: rgba(139,90,43,0.15);
+}
+
+/* ── Empty State ────────────────────────────────────────────────────────── */
+.cwoc-empty { text-align: center; padding: 2em; opacity: 0.7; font-size: 1.1em; color: var(--aged-brown-dark); }
+
+/* ── Toolbar ────────────────────────────────────────────────────────────── */
+.cwoc-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+
+/* ── Indicator / Checkbox Lists ─────────────────────────────────────────── */
+.indicator-list, .checkbox-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.checkbox-list label { display: flex; align-items: center; padding: 4px 0; margin: 0; }
+
+/* ── Help Content ───────────────────────────────────────────────────────── */
+.help-content { line-height: 1.7; color: #1a1208; }
+.help-content h3 {
+    font-size: 22px; color: #1a1208; text-transform: uppercase;
+    letter-spacing: 1px; border-bottom: 1px solid #d4c5a9; padding-bottom: 6px; margin-top: 2em;
+}
+.help-content h4 { color: #4a2c2a; margin-top: 1.5em; font-size: 17px; text-align: left; text-transform: none; letter-spacing: 0; border: none; }
+.help-content a { color: #4a2c2a; }
+.help-content a:hover { color: #1a1208; }
+.help-content kbd { background: #e0d4b5; border: 1px solid #6b4e31; border-radius: 3px; padding: 1px 5px; font-size: 0.9em; }
+.help-content code { background: #e0d4b5; padding: 1px 4px; border-radius: 3px; }
+.help-content .index {
+    background: #fff8e1; border: 1px solid #8b5a2b; border-radius: 5px;
+    padding: 1em 1.5em; margin-bottom: 2em; box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+.help-content .index ul { columns: 2; column-gap: 2em; list-style: none; padding: 0; margin: 0; }
+.help-content .index li { padding: 2px 0; }
+.help-content .index li a { text-decoration: none; color: #6b4e31; }
+.help-content .index li a:hover { text-decoration: underline; }
+.help-content ul { margin: 0.5em 0; }
+.help-content li { margin: 3px 0; }
+
+/* ── Author Footer ──────────────────────────────────────────────────────── */
+.author-info {
+    font-size: 0.8em;
+    color: #8b7355;
+    text-align: center;
+    margin-top: 20px;
+    padding: 12px 0 10px;
+    border-top: 1px solid rgba(139, 90, 43, 0.15);
+    letter-spacing: 0.5px;
+}
+.author-info a { color: #6b4e31; text-decoration: none; }
+.author-info a:hover { color: #4a2c2a; text-decoration: underline; }
+
+/* ── Modal ───────────────────────────────────────────────────────────────── */
+.modal {
+    display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0, 0, 0, 0.5); justify-content: center; align-items: center; z-index: 1000;
+}
+.modal-content {
+    background: #fff8e1; border: 2px solid #8b5a2b; border-radius: 10px;
+    padding: 20px; width: 90%; max-width: 400px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+.modal-content h3 { margin-top: 0; }
+.modal-content .modal-buttons {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    margin-top: 14px;
+}
+.modal-content .modal-buttons button,
+.modal-content .modal-buttons .standard-button {
+    flex: 1;
+    min-width: 0;
+}
+
+/* ── Loader Spinner ─────────────────────────────────────────────────────── */
+.loader {
+    border: 4px solid #f5e6cc; border-top: 4px solid #5c4033; border-radius: 50%;
+    width: 20px; height: 20px; animation: spin 1s linear infinite; margin: 10px auto;
+}
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+/* ── Navigate Panel (V hotkey — used on special pages) ───────────────────── */
+#cwoc-nav-overlay {
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(40, 30, 20, 0.55);
+    z-index: 1500;
+}
+#cwoc-nav-panel {
+    position: fixed;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    background: url("/static/parchment.jpg") center/cover;
+    background-color: #fdf6e3;
+    border: 3px solid #6b4226;
+    border-radius: 12px;
+    padding: 20px 28px;
+    z-index: 1600;
+    min-width: 260px;
+    max-width: 400px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    font-family: "Courier New", Courier, monospace;
+    color: #3c2f2f;
+}
+#cwoc-nav-panel h3 {
+    margin: 0 0 14px 0;
+    font-size: 1.3em;
+    color: #4a3728;
+    text-align: center;
+    border-bottom: 2px solid #c4a882;
+    padding-bottom: 8px;
+}
+.cwoc-nav-option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 10px;
+    margin: 3px 0;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background 0.15s ease;
+    font-size: 1.05em;
+}
+.cwoc-nav-option:hover {
+    background: rgba(139, 90, 43, 0.15);
+}
+.cwoc-nav-option.current {
+    opacity: 0.4;
+    pointer-events: none;
+}
+.cwoc-nav-key {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.8em;
+    height: 1.8em;
+    background: #8b5a2b;
+    color: #fff8e1;
+    font-weight: bold;
+    font-size: 0.95em;
+    border-radius: 4px;
+    border: 1px solid #5a3f2a;
+    flex-shrink: 0;
+}
+.cwoc-nav-label {
+    color: #3c2f2f;
+}
+.cwoc-nav-footer {
+    margin-top: 12px;
+    padding-top: 8px;
+    border-top: 1px solid #c4a882;
+    font-size: 0.85em;
+    color: #8b5a2b;
+    text-align: center;
+    opacity: 0.8;
+}
+
+/* ── Tablet Responsive (≤ 768px) ────────────────────────────────────────── */
+@media (max-width: 768px) {
+    .settings-grid {
+        grid-template-columns: 1fr;
+    }
+    .settings-panel {
+        padding: 12px;
+    }
+}
+
+/* ── Mobile Responsive (≤ 480px) ────────────────────────────────────────── */
+@media (max-width: 480px) {
+    .header-and-buttons {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+    .header-buttons {
+        width: 100%;
+        justify-content: flex-start;
+    }
+    .help-content .index ul {
+        columns: 1;
+    }
+    .cwoc-table {
+        display: block;
+        overflow-x: auto;
+    }
+    .settings-panel {
+        padding: 8px;
+        max-width: 100%;
+    }
+    h2, h3 {
+        font-size: 18px;
+    }
+
+    /* ── Confirmation modals: full-screen on mobile ───────────────────────── */
+    .modal-content {
+        width: calc(100% - 24px) !important;
+        max-width: none !important;
+        padding: 16px !important;
+        box-sizing: border-box;
+    }
+    .modal-content button,
+    .modal-content .standard-button {
+        min-height: 48px;
+        margin: 4px 0;
+        font-size: 1em;
+        padding: 12px;
+        box-sizing: border-box;
+    }
+}
+
+
+/* ── Bold Alert Modal (Alarms & Timers) — shared across all pages ────────── */
+
+.cwoc-alert-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 100000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    touch-action: none;
+    overscroll-behavior: contain;
+    user-select: none;
+}
+.cwoc-alert-overlay.active { opacity: 1; }
+
+.cwoc-alert-modal {
+    background: url("/static/parchment.jpg") center/cover;
+    background-color: #fff8e1;
+    border: 3px solid #8b4513;
+    border-radius: 12px;
+    padding: 0;
+    width: 90%;
+    max-width: 420px;
+    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5), 0 0 60px rgba(212, 175, 55, 0.3);
+    font-family: 'Courier New', monospace;
+    color: #3c2f2f;
+    text-align: center;
+    overflow: hidden;
+    animation: cwocAlertPulse 2s ease-in-out infinite;
+}
+@keyframes cwocAlertPulse {
+    0%, 100% { box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5), 0 0 30px rgba(212, 175, 55, 0.2); }
+    50% { box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5), 0 0 60px rgba(212, 175, 55, 0.5); }
+}
+.cwoc-alert-bar { width: 100%; height: 6px; background: #e8dcc8; overflow: hidden; }
+.cwoc-alert-bar-fill { height: 100%; width: 100%; background: linear-gradient(90deg, #d4af37 0%, #c8965a 60%, #8b4513 100%); animation: cwocAlertBarPulse 1.5s ease-in-out infinite; }
+@keyframes cwocAlertBarPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+.cwoc-alert-icon { font-size: 3em; margin: 20px 0 8px; line-height: 1; }
+.cwoc-alert-title { font-size: 1.5em; font-weight: bold; color: #4a2c2a; margin: 0 16px 6px; word-break: break-word; }
+.cwoc-alert-subtitle { font-size: 1.1em; color: #6b4226; margin: 0 16px 16px; opacity: 0.85; }
+.cwoc-alert-buttons { display: flex; gap: 8px; padding: 12px 16px 16px; flex-wrap: wrap; justify-content: center; }
+.cwoc-alert-btn { flex: 1; min-width: 100px; padding: 10px 16px; font-size: 1em; font-weight: bold; font-family: 'Courier New', monospace; border: 2px solid #8b5a2b; border-radius: 6px; background: #fdf5e6; color: #4a2c2a; cursor: pointer; min-height: 44px; }
+.cwoc-alert-btn:hover { background: #f0e6d3; }
+.cwoc-alert-btn-primary { background: #8b5a2b; color: #fff8e1; border-color: #5a3f2a; }
+.cwoc-alert-btn-primary:hover { background: #6b4226; }
+
+@media (max-width: 480px) {
+    .cwoc-alert-modal { width: calc(100% - 24px); max-width: none; }
+    .cwoc-alert-btn { min-width: 0; flex-basis: 100%; }
+    .cwoc-alert-icon { font-size: 2.5em; margin: 14px 0 6px; }
+    .cwoc-alert-title { font-size: 1.3em; }
+}

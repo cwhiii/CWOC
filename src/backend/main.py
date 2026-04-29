@@ -120,8 +120,10 @@ app.include_router(health_router)
 # Static File Serving
 # ═══════════════════════════════════════════════════════════════════════════
 
-# Serve all files from /frontend/ (e.g., index.html, settings.html, editor.html)
-app.mount("/frontend", StaticFiles(directory="/app/frontend"), name="frontend")
+# Serve frontend files from organized subdirectories under src/frontend/
+app.mount("/frontend/html", StaticFiles(directory="/app/src/frontend/html"), name="frontend_html")
+app.mount("/frontend/js", StaticFiles(directory="/app/src/frontend/js"), name="frontend_js")
+app.mount("/frontend/css", StaticFiles(directory="/app/src/frontend/css"), name="frontend_css")
 
 # Serve all files from /static/ (e.g., images)
 app.mount("/static", StaticFiles(directory="/app/static"), name="static")

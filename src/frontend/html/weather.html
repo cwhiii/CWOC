@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <link rel="icon" type="image/x-icon" href="/static/cwod_logo-favicon.png" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Weather Forecast — C.W.'s Omni Chits</title>
+
+    <link rel="stylesheet" href="/frontend/css/shared/shared-page.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
+
+    <style>
+        /* ══ Weather Page Styles ══ */
+
+        /* ── Empty state ── */
+        .weather-empty {
+            text-align: center;
+            padding: 3em 1em;
+            color: var(--aged-brown-dark, #4a2c2a);
+            font-size: 1.1em;
+            opacity: 0.7;
+        }
+        .weather-empty a {
+            color: var(--aged-brown-medium, #8b4513);
+            text-decoration: underline;
+            cursor: pointer;
+        }
+
+        /* ── Loading state ── */
+        .weather-loading {
+            text-align: center;
+            padding: 2em;
+            color: var(--aged-brown-dark, #4a2c2a);
+            opacity: 0.7;
+        }
+
+        /* ── Date header row ── */
+        .weather-date-row {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 4px;
+        }
+        .weather-date-header {
+            min-width: 90px;
+            max-width: 90px;
+            box-sizing: border-box;
+            text-align: center;
+            font-size: 14px;
+            color: var(--aged-brown-dark, #4a2c2a);
+            font-weight: bold;
+            padding: 4px 2px;
+        }
+        .weather-date-header .date-dow {
+            display: block;
+            font-size: 13px;
+            opacity: 0.8;
+        }
+
+        /* ── Weather table (scrollable container) ── */
+        .weather-table {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            padding-bottom: 8px;
+            position: relative;
+        }
+
+        /* ── Weather row (one per location) ── */
+        .weather-row {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 8px;
+            align-items: stretch;
+        }
+
+        /* ── Row header (location label + address) ── */
+        .weather-row-header {
+            min-width: 156px;
+            max-width: 156px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: 8px 6px;
+            background: var(--header-bg, #e0d4b5);
+            border: 1px solid var(--aged-brown-medium, #8b4513);
+            border-radius: 5px;
+            flex-shrink: 0;
+        }
+        .weather-row-header .loc-label {
+            font-weight: bold;
+            font-size: 16px;
+            color: var(--aged-brown-dark, #4a2c2a);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .weather-row-header .loc-address {
+            font-size: 13px;
+            color: var(--aged-brown-light, #a0522d);
+            opacity: 0.9;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-top: 2px;
+        }
+
+        /* ── Day block (one per forecast day) ── */
+        .weather-day-block {
+            min-width: 90px;
+            max-width: 90px;
+            min-height: 90px;
+            box-sizing: border-box;
+            background: #fff8e1;
+            border: 1px solid var(--aged-brown-medium, #8b4513);
+            border-radius: 5px;
+            padding: 6px 4px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 2px;
+            flex-shrink: 0;
+        }
+        .weather-day-block .wx-icon {
+            font-size: 1.6em;
+            line-height: 1;
+        }
+        .weather-day-block .wx-temps {
+            font-size: 15px;
+            font-weight: bold;
+            color: var(--aged-brown-dark, #4a2c2a);
+        }
+        .weather-day-block .wx-high {
+            color: #b22222;
+        }
+        .weather-day-block .wx-low {
+            color: #4682b4;
+        }
+        .weather-day-block .wx-precip {
+            font-size: 13px;
+            color: var(--aged-brown-light, #a0522d);
+            opacity: 0.9;
+        }
+
+        /* ── Today highlight ── */
+        .weather-day-block.today {
+            border-color: var(--accent-gold, #d4af37);
+            border-width: 2px;
+            background: #fffde7;
+        }
+
+        /* ── Event highlight (chit exists at this location on this day) ── */
+        .weather-day-block.has-event {
+            background: #f0e0b0;
+        }
+        .weather-day-block.today.has-event {
+            background: #f0e0b0;
+        }
+
+        /* ── Extreme weather highlight ── */
+        .weather-day-block.wx-extreme {
+            outline: 2px solid #b22222;
+            outline-offset: -2px;
+        }
+
+        /* ── Week-start separator line (absolute, full-height) ── */
+        .wx-week-line {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: var(--aged-brown-dark, #4a2c2a);
+            opacity: 0.7;
+            pointer-events: none;
+            z-index: 1;
+            margin-left: -1px;
+        }
+
+        /* ── Error row ── */
+        .weather-row-error {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 8px;
+            align-items: center;
+        }
+        .weather-row-error .error-msg {
+            color: var(--danger-red, #b22222);
+            font-size: 15px;
+            padding: 8px;
+        }
+
+        /* ── Drag-and-drop row reordering ── */
+        .weather-row[draggable="true"],
+        .weather-row-error[draggable="true"] {
+            cursor: grab;
+        }
+        .weather-row[draggable="true"]:active,
+        .weather-row-error[draggable="true"]:active {
+            cursor: grabbing;
+        }
+        .weather-row.wx-drag-over {
+            border-top: 3px solid var(--accent-gold, #d4af37);
+        }
+        .weather-row-error.wx-drag-over {
+            border-top: 3px solid var(--accent-gold, #d4af37);
+        }
+        .weather-row.wx-dragging,
+        .weather-row-error.wx-dragging {
+            opacity: 0.4;
+        }
+        .weather-row-header .drag-handle {
+            font-size: 12px;
+            color: var(--aged-brown-light, #a0522d);
+            opacity: 0.5;
+            margin-bottom: 2px;
+            cursor: grab;
+        }
+        .weather-row-header .drag-handle:hover {
+            opacity: 1;
+        }
+
+        /* ── Responsive: tablet ── */
+        @media (max-width: 768px) {
+            .weather-row-header {
+                min-width: 96px;
+                max-width: 96px;
+            }
+            .weather-day-block,
+            .weather-date-header {
+                min-width: 76px;
+                max-width: 76px;
+            }
+        }
+
+        /* ── Responsive: mobile ── */
+        @media (max-width: 480px) {
+            .weather-row-header {
+                min-width: 66px;
+                max-width: 66px;
+                padding: 4px;
+            }
+            .weather-row-header .loc-label {
+                font-size: 13px;
+            }
+            .weather-row-header .loc-address {
+                display: none;
+            }
+            .weather-day-block,
+            .weather-date-header {
+                min-width: 64px;
+                max-width: 64px;
+            }
+            .weather-date-header {
+                font-size: 12px;
+            }
+            .weather-day-block .wx-icon {
+                font-size: 1.3em;
+            }
+            .weather-day-block .wx-temps {
+                font-size: 13px;
+            }
+            .weather-day-block .wx-precip {
+                font-size: 11px;
+            }
+        }
+    </style>
+</head>
+<body data-page-title="Weather Forecast" data-page-icon="🌤️">
+    <div class="settings-panel">
+
+        <div id="weather-content">
+            <div class="weather-loading">
+                <div class="loader"></div>
+                Loading forecasts…
+            </div>
+        </div>
+    </div>
+
+    <script src="/frontend/js/shared/shared-utils.js"></script>
+    <script src="/frontend/js/shared/shared-touch.js"></script>
+    <script src="/frontend/js/shared/shared-checklist.js"></script>
+    <script src="/frontend/js/shared/shared-sort.js"></script>
+    <script src="/frontend/js/shared/shared-indicators.js"></script>
+    <script src="/frontend/js/shared/shared-calendar.js"></script>
+    <script src="/frontend/js/shared/shared-tags.js"></script>
+    <script src="/frontend/js/shared/shared-recurrence.js"></script>
+    <script src="/frontend/js/shared/shared-geocoding.js"></script>
+    <script src="/frontend/js/shared/shared-qr.js"></script>
+    <script src="/frontend/js/shared/shared.js"></script>
+    <script src="/frontend/js/pages/shared-page.js"></script>
+    <script src="/frontend/js/pages/weather.js"></script>
+</body>
+</html>
