@@ -2613,9 +2613,13 @@ function _restoreUIState() {
     const orderSection = document.getElementById('section-order');
     if (periodSection) periodSection.style.display = (currentTab === 'Calendar') ? '' : 'none';
     if (yearWeekContainer) yearWeekContainer.style.display = (currentTab === 'Calendar') ? '' : 'none';
-    if (orderSection) orderSection.style.display = (currentTab === 'Calendar') ? 'none' : '';
+    if (orderSection) orderSection.style.display = (currentTab === 'Calendar' || currentTab === 'Indicators') ? 'none' : '';
     const kanbanSectionRestore = document.getElementById('section-kanban');
     if (kanbanSectionRestore) kanbanSectionRestore.style.display = (currentTab === 'Projects') ? '' : 'none';
+    const indSectionRestore = document.getElementById('section-indicators');
+    if (indSectionRestore) indSectionRestore.style.display = (currentTab === 'Indicators') ? '' : 'none';
+    const filtersSectionRestore = document.getElementById('section-filters');
+    if (filtersSectionRestore && currentTab === 'Indicators') filtersSectionRestore.style.display = 'none';
     const alarmsSectionRestore = document.getElementById('section-alarms-mode');
     if (alarmsSectionRestore) alarmsSectionRestore.style.display = (currentTab === 'Alarms') ? '' : 'none';
 
@@ -5959,7 +5963,7 @@ function filterChits(tab) {
     yearWeekContainer.style.display = (tab === 'Calendar') ? '' : 'none';
   }
   if (orderSection) {
-    orderSection.style.display = (tab === 'Calendar') ? 'none' : '';
+    orderSection.style.display = (tab === 'Calendar' || tab === 'Indicators') ? 'none' : '';
   }
 
   // Show/hide Kanban toggle for Projects tab
@@ -5972,6 +5976,22 @@ function filterChits(tab) {
   const alarmsSection = document.getElementById('section-alarms-mode');
   if (alarmsSection) {
     alarmsSection.style.display = (tab === 'Alarms') ? '' : 'none';
+  }
+
+  // Show/hide Filters for Indicators tab (hide them)
+  const filtersSection = document.getElementById('section-filters');
+  if (filtersSection) {
+    filtersSection.style.display = (tab === 'Indicators') ? 'none' : '';
+  }
+  const clearFiltersSection = document.getElementById('section-clear-filters');
+  if (clearFiltersSection && tab === 'Indicators') {
+    clearFiltersSection.style.display = 'none';
+  }
+
+  // Show/hide Indicators time range controls in sidebar
+  const indControls = document.getElementById('section-indicators');
+  if (indControls) {
+    indControls.style.display = (tab === 'Indicators') ? '' : 'none';
   }
 
   // Pre-fetch independent alerts when switching to Alarms tab in independent mode
@@ -6021,7 +6041,228 @@ function highlightMatch(text, query) {
   return escaped.replace(regex, '<mark>$1</mark>');
 }
 
-/** 
+// ── Indicators View — Health trend charts ─────────────────────────────────────
+
+async function displayIndicatorsView() {
+  var chitList = document.getElementById('chit-list');
+  if (!chitList) return;
+
+  chitList.innerHTML = '<div style="padding:1em;overflow-y:auto;height:100%;">' +
+    '<div id="indicators-charts" style="display:flex;flex-direction:column;gap:16px;">' +
+      '<div style="text-align:center;padding:2em;opacity:0.5;">⏳ Loading health data…</div>' +
+    '</div>' +
+  '</div>';
+
+  // Set default range to past month if not already set
+  var now = new Date();
+  var startInput = document.getElementById('ind-start');
+  var endInput = document.getElementById('ind-end');
+  if (startInput && !startInput.value) {
+    var monthAgo = new Date(now);
+    monthAgo.setMonth(monthAgo.getMonth() - 1);
+    startInput.value = _indFmtDate(monthAgo);
+  }
+  if (endInput && !endInput.value) {
+    endInput.value = _indFmtDate(now);
+  }
+  if (!window._indRange) window._indRange = 'month';
+
+  // Highlight the active range button
+  _indicatorsHighlightBtn(window._indRange);
+
+  _indicatorsLoad();
+}
+
+function _indFmtDate(d) {
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+function _indicatorsSetRange(range) {
+  var now = new Date();
+  var start = new Date(now);
+  if (range === 'day') start.setDate(start.getDate() - 1);
+  else if (range === 'week') start.setDate(start.getDate() - 7);
+  else if (range === 'month') start.setMonth(start.getMonth() - 1);
+  else if (range === 'year') start.setFullYear(start.getFullYear() - 1);
+  else if (range === 'all') start = new Date(2020, 0, 1);
+
+  var startInput = document.getElementById('ind-start');
+  var endInput = document.getElementById('ind-end');
+  if (startInput) startInput.value = _indFmtDate(start);
+  if (endInput) endInput.value = _indFmtDate(now);
+  window._indRange = range;
+  _indicatorsHighlightBtn(range);
+  _indicatorsLoad();
+}
+
+function _indicatorsHighlightBtn(range) {
+  document.querySelectorAll('._ind-btn').forEach(function(b) {
+    var isActive = b.textContent.trim().toLowerCase() === range;
+    b.style.background = isActive ? 'ivory' : '';
+  });
+}
+
+function _indicatorsLoadCustomRange() {
+  window._indRange = 'custom';
+  document.querySelectorAll('._ind-btn').forEach(function(b) { b.style.background = ''; });
+  _indicatorsLoad();
+}
+
+async function _indicatorsLoad() {
+  var startInput = document.getElementById('ind-start');
+  var endInput = document.getElementById('ind-end');
+  var container = document.getElementById('indicators-charts');
+  if (!container) return;
+
+  var since = startInput ? startInput.value : '';
+  var until = endInput ? endInput.value + 'T23:59:59' : '';
+  container.innerHTML = '<div style="text-align:center;padding:2em;opacity:0.5;">⏳ Loading…</div>';
+
+  try {
+    var url = '/api/health-data';
+    var params = [];
+    if (since) params.push('since=' + encodeURIComponent(since));
+    if (until) params.push('until=' + encodeURIComponent(until));
+    if (params.length) url += '?' + params.join('&');
+
+    var resp = await fetch(url);
+    if (!resp.ok) throw new Error('API error');
+    var data = await resp.json();
+
+    if (!data || data.length === 0) {
+      container.innerHTML = '<div style="text-align:center;padding:2em;opacity:0.5;">No health data in this time range.<br>Add health indicators to chits in the editor.</div>';
+      return;
+    }
+
+    var settings = await getCachedSettings();
+    var isMetric = (settings.unit_system === 'metric');
+
+    var charts = [
+      { key: 'heart_rate', label: '💓 Heart Rate', unit: 'bpm', color: '#b22222' },
+      { key: 'bp_systolic', label: '🩸 Blood Pressure', unit: 'mmHg', color: '#c44', paired: 'bp_diastolic', pairedLabel: 'Diastolic', pairedColor: '#4682b4' },
+      { key: 'spo2', label: '🫁 Oxygen Saturation', unit: '%', color: '#4682b4' },
+      { key: 'temperature', label: '🌡️ Temperature', unit: isMetric ? '°C' : '°F', color: '#d4a017' },
+      { key: 'weight', label: '⚖️ Weight', unit: isMetric ? 'kg' : 'lbs', color: '#6b8e23' },
+      { key: 'height', label: '📐 Height', unit: isMetric ? 'cm' : 'in', color: '#8b5a2b' },
+      { key: 'glucose', label: '🍬 Glucose', unit: isMetric ? 'mmol/L' : 'mg/dL', color: '#d2691e' },
+      { key: 'distance', label: '🏃 Distance', unit: isMetric ? 'km' : 'mi', color: '#2e8b57' },
+    ];
+
+    container.innerHTML = '';
+
+    charts.forEach(function(chart) {
+      var points = [];
+      data.forEach(function(d) {
+        if (d[chart.key] != null) points.push({ date: d.date, datetime: d.datetime, value: d[chart.key], title: d.chit_title, chitId: d.chit_id });
+      });
+      var pairedPoints = [];
+      if (chart.paired) {
+        data.forEach(function(d) {
+          if (d[chart.paired] != null) pairedPoints.push({ date: d.date, datetime: d.datetime, value: d[chart.paired] });
+        });
+      }
+      if (points.length === 0) return;
+
+      var chartDiv = document.createElement('div');
+      chartDiv.style.cssText = 'background:#fff8e1;border:1px solid #8b5a2b;border-radius:6px;padding:12px;';
+
+      var header = document.createElement('div');
+      header.style.cssText = 'font-weight:bold;font-size:1em;color:#2b1e0f;margin-bottom:8px;';
+      header.textContent = chart.label + ' (' + chart.unit + ')';
+      if (chart.paired) header.textContent += ' / ' + chart.pairedLabel;
+      chartDiv.appendChild(header);
+
+      var svgWidth = 700, svgHeight = 200, padL = 55, padR = 15, padT = 10, padB = 28;
+      var plotW = svgWidth - padL - padR, plotH = svgHeight - padT - padB;
+
+      var allVals = points.map(function(p) { return p.value; });
+      if (pairedPoints.length) pairedPoints.forEach(function(p) { allVals.push(p.value); });
+      var minVal = Math.min.apply(null, allVals);
+      var maxVal = Math.max.apply(null, allVals);
+      var pad = (maxVal - minVal) * 0.1 || 1;
+      minVal -= pad; maxVal += pad;
+      var valRange = maxVal - minVal;
+
+      var allDates = points.map(function(p) { return new Date(p.datetime || p.date).getTime(); });
+      var minDate = Math.min.apply(null, allDates);
+      var maxDate = Math.max.apply(null, allDates);
+      if (minDate === maxDate) { minDate -= 86400000; maxDate += 86400000; }
+      var dateRange = maxDate - minDate;
+
+      function xPos(ts) { return padL + ((ts - minDate) / dateRange) * plotW; }
+      function yPos(v) { return padT + plotH - ((v - minVal) / valRange) * plotH; }
+
+      var svg = '<svg viewBox="0 0 ' + svgWidth + ' ' + svgHeight + '" style="width:100%;height:auto;" xmlns="http://www.w3.org/2000/svg">';
+
+      // Grid
+      for (var gi = 0; gi <= 4; gi++) {
+        var gy = padT + (plotH / 4) * gi;
+        var gv = maxVal - (valRange / 4) * gi;
+        svg += '<line x1="' + padL + '" y1="' + gy + '" x2="' + (svgWidth - padR) + '" y2="' + gy + '" stroke="#e0d4b5" stroke-width="1"/>';
+        svg += '<text x="' + (padL - 4) + '" y="' + (gy + 4) + '" text-anchor="end" font-size="10" fill="#6b4e31">' + (Math.round(gv * 10) / 10) + '</text>';
+      }
+
+      // X labels
+      var xSteps = Math.min(points.length, 8);
+      for (var xi = 0; xi < xSteps; xi++) {
+        var idx = Math.round(xi * (points.length - 1) / Math.max(xSteps - 1, 1));
+        var pt = points[idx];
+        var tx = xPos(new Date(pt.datetime || pt.date).getTime());
+        svg += '<text x="' + tx + '" y="' + (svgHeight - 4) + '" text-anchor="middle" font-size="9" fill="#6b4e31">' + pt.date + '</text>';
+      }
+
+      // Paired line
+      if (pairedPoints.length > 1) {
+        var pp = 'M';
+        pairedPoints.forEach(function(p, i) {
+          pp += (i ? ' L' : '') + xPos(new Date(p.datetime || p.date).getTime()).toFixed(1) + ' ' + yPos(p.value).toFixed(1);
+        });
+        svg += '<path d="' + pp + '" fill="none" stroke="' + chart.pairedColor + '" stroke-width="1.5" stroke-dasharray="4,3" opacity="0.7"/>';
+      }
+
+      // Primary line
+      if (points.length > 1) {
+        var lp = 'M';
+        points.forEach(function(p, i) {
+          lp += (i ? ' L' : '') + xPos(new Date(p.datetime || p.date).getTime()).toFixed(1) + ' ' + yPos(p.value).toFixed(1);
+        });
+        svg += '<path d="' + lp + '" fill="none" stroke="' + chart.color + '" stroke-width="2.5"/>';
+      }
+
+      // Dots with tooltips
+      points.forEach(function(p) {
+        var cx = xPos(new Date(p.datetime || p.date).getTime());
+        var cy = yPos(p.value);
+        svg += '<circle cx="' + cx.toFixed(1) + '" cy="' + cy.toFixed(1) + '" r="4" fill="' + chart.color + '" stroke="#fff8e1" stroke-width="1.5" style="cursor:pointer" onclick="storePreviousState();window.location.href=\'/editor?id=' + p.chitId + '\'">' +
+          '<title>' + p.date + ': ' + p.value + ' ' + chart.unit + '\n' + p.title + '</title></circle>';
+      });
+
+      svg += '</svg>';
+      chartDiv.innerHTML += svg;
+
+      // Stats
+      var avg = allVals.reduce(function(a, b) { return a + b; }, 0) / allVals.length;
+      var stats = document.createElement('div');
+      stats.style.cssText = 'font-size:0.8em;color:#6b4e31;margin-top:4px;display:flex;gap:16px;flex-wrap:wrap;';
+      stats.innerHTML = '<span>Min: <b>' + (Math.round(Math.min.apply(null, points.map(function(p){return p.value;})) * 10) / 10) + '</b></span>' +
+        '<span>Max: <b>' + (Math.round(Math.max.apply(null, points.map(function(p){return p.value;})) * 10) / 10) + '</b></span>' +
+        '<span>Avg: <b>' + (Math.round(avg * 10) / 10) + '</b></span>' +
+        '<span>Points: <b>' + points.length + '</b></span>';
+      chartDiv.appendChild(stats);
+      container.appendChild(chartDiv);
+    });
+
+    if (container.children.length === 0) {
+      container.innerHTML = '<div style="text-align:center;padding:2em;opacity:0.5;">No health data in this time range.</div>';
+    }
+  } catch (e) {
+    console.error('Indicators load error:', e);
+    container.innerHTML = '<div style="text-align:center;padding:2em;color:#b22222;">Failed to load health data.</div>';
+  }
+}
+
+
+/**
  * Render the Global Search view into #chit-list.
  * Shows a search bar + Go button, fetches results from the API, applies sidebar filters,
  * and renders Result_Cards with highlighted match excerpts.
@@ -6497,7 +6738,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   // Hide Order on Calendar, show date nav + period
   const orderSection = document.getElementById('section-order');
-  if (orderSection) orderSection.style.display = (currentTab === 'Calendar') ? 'none' : '';
+  if (orderSection) orderSection.style.display = (currentTab === 'Calendar' || currentTab === 'Indicators') ? 'none' : '';
   const periodSection = document.getElementById('section-period');
   if (periodSection) periodSection.style.display = (currentTab === 'Calendar') ? '' : 'none';
   const yearWeekContainer = document.getElementById('year-week-container');
@@ -6506,6 +6747,12 @@ document.addEventListener("DOMContentLoaded", function () {
   if (kanbanSection) kanbanSection.style.display = (currentTab === 'Projects') ? '' : 'none';
   const alarmsSection = document.getElementById('section-alarms-mode');
   if (alarmsSection) alarmsSection.style.display = (currentTab === 'Alarms') ? '' : 'none';
+  const indSection = document.getElementById('section-indicators');
+  if (indSection) indSection.style.display = (currentTab === 'Indicators') ? '' : 'none';
+  if (currentTab === 'Indicators') {
+    var filtersInit = document.getElementById('section-filters');
+    if (filtersInit) filtersInit.style.display = 'none';
+  }
 
   _loadLabelFilters();
   _buildPeopleFilterPanel();

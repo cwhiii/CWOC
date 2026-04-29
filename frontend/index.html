@@ -95,6 +95,24 @@
                 </div>
             </div>
 
+            <!-- 3d. Indicators time range (only visible on Indicators tab) -->
+            <div class="sidebar-section" id="section-indicators" style="display:none;">
+                <label class="sidebar-section-label">Time Range</label>
+                <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px;">
+                    <button class="action-button _ind-btn _ind-active" onclick="_indicatorsSetRange('day')" style="flex:1;margin-bottom:0;font-size:0.75em;padding:5px;">Day</button>
+                    <button class="action-button _ind-btn" onclick="_indicatorsSetRange('week')" style="flex:1;margin-bottom:0;font-size:0.75em;padding:5px;">Week</button>
+                    <button class="action-button _ind-btn" onclick="_indicatorsSetRange('month')" style="flex:1;margin-bottom:0;font-size:0.75em;padding:5px;">Month</button>
+                    <button class="action-button _ind-btn" onclick="_indicatorsSetRange('year')" style="flex:1;margin-bottom:0;font-size:0.75em;padding:5px;">Year</button>
+                    <button class="action-button _ind-btn" onclick="_indicatorsSetRange('all')" style="flex:1;margin-bottom:0;font-size:0.75em;padding:5px;">All</button>
+                </div>
+                <label class="sidebar-section-label">Custom Range</label>
+                <div style="display:flex;flex-direction:column;gap:4px;">
+                    <input type="date" id="ind-start" style="width:100%;padding:4px;font-family:inherit;font-size:0.85em;border:1px solid #6b4e31;border-radius:3px;box-sizing:border-box;background:#f5e6cc;" />
+                    <input type="date" id="ind-end" style="width:100%;padding:4px;font-family:inherit;font-size:0.85em;border:1px solid #6b4e31;border-radius:3px;box-sizing:border-box;background:#f5e6cc;" />
+                    <button class="action-button" onclick="_indicatorsLoadCustomRange()" style="margin-bottom:0;font-size:0.8em;padding:5px;">Go</button>
+                </div>
+            </div>
+
             <!-- 4. Filters — collapsible section -->
             <div class="sidebar-section" id="section-filters">
                 <button class="action-button filters-toggle-btn" id="filters-toggle-btn" onclick="_toggleFiltersSection()" title="Toggle filters">
@@ -321,6 +339,7 @@
                         <div><span class="ref-key">P</span> Projects</div>
                         <div><span class="ref-key">T</span> Tasks</div>
                         <div><span class="ref-key">N</span> Notes</div>
+                        <div><span class="ref-key">I</span> Indicators</div>
                         <h4>General</h4>
                         <div><span class="ref-key">K</span> Create Chit</div>
                         <div><span class="ref-key">S</span> Settings</div>
@@ -413,10 +432,10 @@
                         <img src="/static/notes.png" /><span class="tab-label"> <u>N</u>otes</span>
                     </div>
                     <div class="tab" onclick="filterChits('Indicators')" title="Health Indicators">
-                        <i class="fas fa-heartbeat" style="font-size:2em;line-height:1;color:#6b4e31;"></i><span class="tab-label"> <u>I</u>ndicators</span>
+                        <i class="fas fa-heartbeat" style="font-size:1.6em;line-height:1;color:#6b4e31;"></i><span class="tab-label"> <u>I</u>ndicators</span>
                     </div>
                     <div class="tab" onclick="filterChits('Search')" title="Global Search">
-                        <i class="fas fa-search" style="font-size:2em;line-height:1;color:#6b4e31;"></i>
+                        <i class="fas fa-search" style="font-size:1.6em;line-height:1;color:#6b4e31;"></i>
                     </div>
                 </div>
                 <div class="top-bar-spacer"></div>

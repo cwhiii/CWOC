@@ -943,7 +943,7 @@ def get_current_actor() -> str:
 # Fields stored as JSON strings in SQLite that need deserialization before diff comparison
 _JSON_SERIALIZED_FIELDS = {
     "tags", "checklist", "people", "child_chits", "alerts",
-    "recurrence_rule", "recurrence_exceptions", "weather_data",
+    "recurrence_rule", "recurrence_exceptions", "weather_data", "health_data",
     "phones", "emails", "addresses", "call_signs", "x_handles",
     "websites", "default_filters", "custom_colors", "visual_indicators",
     "chit_options", "active_clocks", "saved_locations",
@@ -1634,49 +1634,72 @@ async def websocket_sync(ws: WebSocket):
 
 @app.get("/api/health-data")
 def get_health_data(since: Optional[str] = Query(None), until: Optional[str] = Query(None)):
-    """Return all health data points from chits, sorted by date.
-    Each entry: { date, chit_id, chit_title, ...health fields }"""
+    """Return all health data points from chits, sorted by date."""
     conn = None
     try:
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 
-        query = "SELECT id, title, start_datetime, due_datetime, created_datetime, health_data FROM chits WHERE (deleted = 0 OR deleted IS NULL) AND health_data IS NOT NULL AND health_data != '' AND health_data != 'null'"
+        # Check if health_data column exists
+        cursor.execute("PRAGMA table_info(chits)")
+        columns = {row[1] for row in cursor.fetchall()}
+        if "health_data" not in columns:
+            logger.info("health_data column not found — returning empty")
+            return []
+
+        # Build query
+        query = """SELECT id, title, start_datetime, due_datetime, created_datetime, health_data 
+                   FROM chits 
+                   WHERE (deleted = 0 OR deleted IS NULL) 
+                   AND health_data IS NOT NULL 
+                   AND health_data != '' 
+                   AND health_data != 'null'
+                   AND health_data != '{}'"""
         params = []
 
         if since:
-            query += " AND COALESCE(start_datetime, due_datetime, created_datetime) >= ?"
-            params.append(since)
+            query += " AND (start_datetime >= ? OR due_datetime >= ? OR created_datetime >= ?)"
+            params.extend([since, since, since])
         if until:
-            query += " AND COALESCE(start_datetime, due_datetime, created_datetime) <= ?"
-            params.append(until)
+            query += " AND (start_datetime <= ? OR due_datetime <= ? OR created_datetime <= ?)"
+            params.extend([until, until, until])
 
         query += " ORDER BY COALESCE(start_datetime, due_datetime, created_datetime) ASC"
+        
         cursor.execute(query, params)
         rows = cursor.fetchall()
 
         results = []
         for row in rows:
             try:
-                hd = json.loads(row["health_data"]) if row["health_data"] else {}
-            except (json.JSONDecodeError, TypeError):
+                raw = row["health_data"]
+                if not raw or raw in ('', 'null', '{}'):
+                    continue
+                hd = json.loads(raw) if isinstance(raw, str) else raw
+                # Handle double-encoded JSON (string inside string)
+                if isinstance(hd, str):
+                    hd = json.loads(hd)
+                if not isinstance(hd, dict) or not any(v is not None for v in hd.values()):
+                    continue
+                date_str = row["start_datetime"] or row["due_datetime"] or row["created_datetime"] or ""
+                entry = {
+                    "date": date_str[:10] if date_str else "",
+                    "datetime": date_str,
+                    "chit_id": row["id"],
+                    "chit_title": row["title"] or "(Untitled)",
+                }
+                entry.update(hd)
+                results.append(entry)
+            except (json.JSONDecodeError, TypeError, KeyError) as e:
+                logger.warning(f"Skipping bad health_data for chit {row['id']}: {e}")
                 continue
-            if not hd or not any(v is not None for v in hd.values()):
-                continue
-            date_str = row["start_datetime"] or row["due_datetime"] or row["created_datetime"] or ""
-            results.append({
-                "date": date_str[:10] if date_str else "",
-                "datetime": date_str,
-                "chit_id": row["id"],
-                "chit_title": row["title"] or "(Untitled)",
-                **hd
-            })
 
         return results
     except Exception as e:
         logger.error(f"Error fetching health data: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        # Return empty array instead of 500 to avoid breaking the UI
+        return []
     finally:
         if conn:
             conn.close()
@@ -1734,6 +1757,7 @@ def get_all_chits():
             chit["recurrence_rule"] = deserialize_json_field(chit.get("recurrence_rule"))
             chit["recurrence_exceptions"] = deserialize_json_field(chit.get("recurrence_exceptions"))
             chit["weather_data"] = deserialize_json_field(chit.get("weather_data"))
+            chit["health_data"] = deserialize_json_field(chit.get("health_data"))
             chits.append(chit)
         return chits
     except Exception as e:
@@ -1771,6 +1795,7 @@ def search_chits(q: Optional[str] = Query(None)):
             chit["recurrence_rule"] = deserialize_json_field(chit.get("recurrence_rule"))
             chit["recurrence_exceptions"] = deserialize_json_field(chit.get("recurrence_exceptions"))
             chit["weather_data"] = deserialize_json_field(chit.get("weather_data"))
+            chit["health_data"] = deserialize_json_field(chit.get("health_data"))
 
             matched_fields = []
 
@@ -1852,8 +1877,8 @@ def create_chit(chit: Chit):
                 completed_datetime, status, priority, severity, checklist, alarm, notification,
                 recurrence, recurrence_id, location, color, people, pinned, archived,
                 deleted, created_datetime, modified_datetime, is_project_master, child_chits, all_day, alerts,
-                recurrence_rule, recurrence_exceptions, weather_data
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                recurrence_rule, recurrence_exceptions, weather_data, health_data
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 chit_id,
@@ -1887,6 +1912,7 @@ def create_chit(chit: Chit):
                 serialize_json_field(chit.recurrence_rule),
                 serialize_json_field(chit.recurrence_exceptions),
                 serialize_json_field(chit.weather_data),
+                serialize_json_field(chit.health_data),
             )
         )
         conn.commit()
@@ -1921,6 +1947,7 @@ def get_chit(chit_id: str):
         chit["recurrence_rule"] = deserialize_json_field(chit.get("recurrence_rule"))
         chit["recurrence_exceptions"] = deserialize_json_field(chit.get("recurrence_exceptions"))
         chit["weather_data"] = deserialize_json_field(chit.get("weather_data"))
+        chit["health_data"] = deserialize_json_field(chit.get("health_data"))
         return chit
     except sqlite3.Error as e:
         logger.error(f"Database error fetching chit {chit_id}: {str(e)}")
@@ -1956,7 +1983,7 @@ def update_chit(chit_id: str, chit: Chit):
                     completed_datetime = ?, status = ?, priority = ?, severity = ?, checklist = ?, alarm = ?, notification = ?,
                     recurrence = ?, recurrence_id = ?, location = ?, color = ?, people = ?, pinned = ?,
                     archived = ?, deleted = ?, modified_datetime = ?, is_project_master = ?, child_chits = ?, all_day = ?, alerts = ?,
-                    recurrence_rule = ?, recurrence_exceptions = ?, weather_data = ?
+                    recurrence_rule = ?, recurrence_exceptions = ?, weather_data = ?, health_data = ?
                 WHERE id = ?
                 """,
                 (
@@ -1989,6 +2016,7 @@ def update_chit(chit_id: str, chit: Chit):
                     serialize_json_field(chit.recurrence_rule),
                     serialize_json_field(chit.recurrence_exceptions),
                     serialize_json_field(chit.weather_data),
+                    serialize_json_field(chit.health_data),
                     chit_id,
                 )
             )
@@ -2011,6 +2039,7 @@ def update_chit(chit_id: str, chit: Chit):
                     "recurrence_rule": serialize_json_field(chit.recurrence_rule),
                     "recurrence_exceptions": serialize_json_field(chit.recurrence_exceptions),
                     "weather_data": serialize_json_field(chit.weather_data),
+                    "health_data": serialize_json_field(chit.health_data),
                 }
                 diff = compute_audit_diff(old_chit_dict, new_chit_dict, exclude_fields={"modified_datetime", "created_datetime"})
                 if diff:
@@ -2027,8 +2056,8 @@ def update_chit(chit_id: str, chit: Chit):
                     completed_datetime, status, priority, severity, checklist, alarm, notification,
                     recurrence, recurrence_id, location, color, people, pinned, archived,
                     deleted, created_datetime, modified_datetime, is_project_master, child_chits, all_day, alerts,
-                    recurrence_rule, recurrence_exceptions, weather_data
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    recurrence_rule, recurrence_exceptions, weather_data, health_data
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     chit_id,
@@ -2062,6 +2091,7 @@ def update_chit(chit_id: str, chit: Chit):
                     serialize_json_field(chit.recurrence_rule),
                     serialize_json_field(chit.recurrence_exceptions),
                     serialize_json_field(chit.weather_data),
+                    serialize_json_field(chit.health_data),
                 )
             )
             # Audit logging for chit creation (Task 2.1)
@@ -2247,6 +2277,7 @@ def export_chits():
             chit["recurrence_rule"] = deserialize_json_field(chit.get("recurrence_rule"))
             chit["recurrence_exceptions"] = deserialize_json_field(chit.get("recurrence_exceptions"))
             chit["weather_data"] = deserialize_json_field(chit.get("weather_data"))
+            chit["health_data"] = deserialize_json_field(chit.get("health_data"))
             # Convert boolean fields to native booleans
             chit["alarm"] = bool(chit.get("alarm"))
             chit["notification"] = bool(chit.get("notification"))
@@ -2361,8 +2392,8 @@ def import_chits(req: ImportRequest):
                     created_datetime, modified_datetime, is_project_master,
                     child_chits, all_day, alerts, recurrence_rule,
                     recurrence_exceptions, progress_percent, time_estimate,
-                    weather_data
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    weather_data, health_data
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     new_id,
                     chit.get("title"),
@@ -2397,6 +2428,7 @@ def import_chits(req: ImportRequest):
                     chit.get("progress_percent"),
                     chit.get("time_estimate"),
                     serialize_json_field(chit.get("weather_data")),
+                    serialize_json_field(chit.get("health_data")),
                 ),
             )
             imported += 1

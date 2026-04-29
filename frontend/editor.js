@@ -1750,12 +1750,11 @@ function _loadHealthData(chit) {
 }
 
 function _gatherHealthData() {
-  // Filter out null/undefined values
   var result = {};
   for (var key in window._healthData) {
     if (window._healthData[key] != null) result[key] = window._healthData[key];
   }
-  return Object.keys(result).length > 0 ? JSON.stringify(result) : null;
+  return Object.keys(result).length > 0 ? result : null;
 }
 
 // ── Alerts zone — full implementation ───────────────────────────────────────
