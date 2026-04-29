@@ -16,3 +16,5 @@
 - **Save Search button** — sidebar button for saving current search as a quick-access chip (removed from sidebar, to be redesigned)
 - `[ ]` **Progress % field** on chits
 - `[ ]` **Time estimate field** on chits
+
+- **Settings blocks collapsible** — make each settings block collapsible like zones in the chit editor

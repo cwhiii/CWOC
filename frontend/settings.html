@@ -166,31 +166,38 @@
                 }
                 .color-list {
                     display: flex;
+                    flex-direction: row;
                     flex-wrap: wrap;
-                    gap: 10px;
-                    margin: 0 0 10px;
+                    gap: 1em;
+                    margin: 0 0 12px;
                     padding: 0;
                     list-style: none;
                 }
                 .color-item {
-                    width: 30px;
-                    height: 30px;
+                    width: 36px;
+                    height: 36px;
                     position: relative;
-                    border: 1px solid #8b5a2b;
+                    border: 2px solid #8b5a2b;
                     cursor: pointer;
                     border-radius: 50%;
+                    transition: transform 0.1s;
+                }
+                .color-item:hover {
+                    transform: scale(1.15);
                 }
                 .color-item:hover::after {
                     content: attr(data-color);
                     position: absolute;
-                    top: -20px;
+                    top: -22px;
                     left: 50%;
                     transform: translateX(-50%);
                     background: #2b1e0f;
                     color: #fff8e1;
-                    padding: 2px 5px;
-                    font-size: 12px;
+                    padding: 2px 6px;
+                    font-size: 11px;
                     border-radius: 3px;
+                    white-space: nowrap;
+                    z-index: 10;
                 }
                 .color-item button {
                     position: absolute;
@@ -213,11 +220,11 @@
                 .indicator-item span { white-space: nowrap; margin-right: 10px; }
                 .tag-editor { display: flex; flex-direction: column; gap: 8px; }
                 .tag-in-input { background: #8b5a2b; color: #fff8e1; padding: 2px 5px; border-radius: 12px; margin: 0 2px; font-size: 14px; height: 20px; }
-                .tag { align-items: center; background-color: #e0e0e0; padding: 2px 8px; border-radius: 12px; font-size: 0.9em; margin: 0 2px; vertical-align: middle; height: 20px; line-height: 20px; }
+                .tag { align-items: center; background-color: #d4c4b0; color: #5c3317; padding: 3px 10px; border-radius: 12px; font-size: 1em; font-weight: bold; margin: 0 2px; vertical-align: middle; height: auto; line-height: 1.4; }
                 .tag-input { border: 1px solid #ccc; padding: 5px; border-radius: 5px; font-size: 1em; }
                 .tag button { background: none; border: none; color: #fff8e1; cursor: pointer; font-size: 12px; width: 12px; height: 12px; display: flex; align-items: center; justify-content: center; padding: 0; }
                 .checkbox-group { display: flex; flex-direction: column; gap: 10px; }
-                .modal-content .standard-button { margin-top: 10px; margin-right: 10px; }
+                .modal-content .standard-button { margin: 0; }
                 .modal-content label { display: block; margin-bottom: 10px; }
                 .modal-content input, .modal-content select { width: 100%; margin-bottom: 10px; box-sizing: border-box; }
                 #tag-name { width: auto; flex: 1; min-width: 0; margin-bottom: 0; }
@@ -620,7 +627,7 @@
                     </div>
                     <div class="setting-group">
                         <h3>🎨 Custom Colors</h3>
-                        <ul id="color-list"></ul>
+                        <ul id="color-list" class="color-list"></ul>
                         <button onclick="openColorPicker()">➕ Add Color</button>
                         <input type="color" id="color-picker" style="display:none" />
                     </div>
@@ -722,10 +729,10 @@
                         <input type="text" id="tag-name" placeholder="Enter tag name" style="flex:1;min-width:0;" />
                     </div>
                     <label for="tag-color">Background Color:</label>
-                    <input type="color" id="tag-color" value="#8b5a2b" />
+                    <input type="color" id="tag-color" value="#d4c4b0" />
                     <div id="tag-color-swatches" style="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;"></div>
                     <label for="tag-font-color">Font Color:</label>
-                    <input type="color" id="tag-font-color" value="#2b1e0f" />
+                    <input type="color" id="tag-font-color" value="#5c3317" />
                     <div id="tag-font-color-swatches" style="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;"></div>
                     <div id="tag-preview" style="display:inline-block;padding:4px 12px;border-radius:4px;font-size:1em;margin:8px 0;font-family:'Courier New',monospace;">Preview</div>
                     <div class="color-options" id="tag-color-options"></div>
@@ -747,12 +754,14 @@
                 <div class="modal-content">
                     <h3>Confirm Deletion</h3>
                     <p>Are you sure you want to delete this item?</p>
-                    <button onclick="confirmDelete()" class="standard-button">
-                        🗑️ Delete
-                    </button>
-                    <button onclick="closeDeleteModal()" class="standard-button">
-                        KEEP
-                    </button>
+                    <div class="modal-buttons">
+                        <button onclick="closeDeleteModal()" class="standard-button">
+                            Cancel
+                        </button>
+                        <button onclick="confirmDelete()" class="standard-button" style="background:#a0522d;color:#fdf5e6;">
+                            🗑️ Delete
+                        </button>
+                    </div>
                 </div>
             </div>
             <div class="modal" id="duplicate-tag-modal">
@@ -781,9 +790,11 @@
                 <div class="modal-content">
                     <h3>Import Mode</h3>
                     <p id="import-mode-text">How would you like to import this data?</p>
-                    <button id="import-mode-add-btn" class="standard-button">➕ Add to existing data</button>
-                    <button id="import-mode-replace-btn" class="standard-button">🔄 Replace all data</button>
-                    <button id="import-mode-cancel-btn" class="standard-button" style="margin-top:6px;">Cancel</button>
+                    <div class="modal-buttons" style="flex-direction:column;">
+                        <button id="import-mode-add-btn" class="standard-button">➕ Add to existing data</button>
+                        <button id="import-mode-replace-btn" class="standard-button">🔄 Replace all data</button>
+                        <button id="import-mode-cancel-btn" class="standard-button">Cancel</button>
+                    </div>
                 </div>
             </div>
             <!-- Replace Confirmation Dialog -->
@@ -791,8 +802,10 @@
                 <div class="modal-content">
                     <h3>⚠️ Confirm Replace</h3>
                     <p id="replace-confirm-text">This will override and replace all data. Are you sure?</p>
-                    <button id="replace-confirm-btn" class="standard-button" style="background:#a0522d;color:#fdf5e6;">🔄 Replace</button>
-                    <button id="replace-cancel-btn" class="standard-button">Cancel</button>
+                    <div class="modal-buttons">
+                        <button id="replace-confirm-btn" class="standard-button" style="background:#a0522d;color:#fdf5e6;">🔄 Replace</button>
+                        <button id="replace-cancel-btn" class="standard-button">Cancel</button>
+                    </div>
                 </div>
             </div>
             <div class="author-info">by <a href="https://www.cwholemaniii.com/pages/home.shtml" target="_blank">C.W. Holeman III</a></div>

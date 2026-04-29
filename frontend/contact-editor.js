@@ -812,7 +812,7 @@
 
     window.deleteContact = async function () {
         if (!_contactId) return;
-        if (!window.confirm('Are you sure you want to permanently delete this contact?')) return;
+        if (!(await cwocConfirm('Are you sure you want to permanently delete this contact?', { title: 'Delete Contact', confirmLabel: '🗑️ Delete', danger: true }))) return;
         try {
             var resp = await fetch('/api/contacts/' + encodeURIComponent(_contactId), { method: 'DELETE' });
             if (!resp.ok) { _showBriefMessage('Delete failed', true); return; }

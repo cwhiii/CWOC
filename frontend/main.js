@@ -6341,12 +6341,12 @@ if (chitId) {
     });
 }
 
-function deleteChit() {
+async function deleteChit() {
   if (!chitId) {
     alert("No chit to delete.");
     return;
   }
-  if (!confirm("Are you sure you want to delete this chit?")) return;
+  if (!(await cwocConfirm("Are you sure you want to delete this chit?", { title: 'Delete Chit', confirmLabel: '🗑️ Delete', danger: true }))) return;
   var delId = chitId;
   var chit = chits.find(function(c) { return c.id === delId; });
   var delTitle = (chit && chit.title) || "(Untitled)";

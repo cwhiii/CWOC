@@ -22,9 +22,17 @@
     <body>
         <div class="sidebar" id="sidebar">
             <div class="sidebar-scroll">
-            <!-- Date nav (stays at top) -->
+            <!-- 1. Create Chit -->
+            <div class="sidebar-section" id="section-create" style="margin-top:0;">
+                <button class="create-chit action-button" onclick="storePreviousState(); window.location.href='/frontend/editor.html'" onauxclick="window.open('/frontend/editor.html','_blank')">
+                    <img src="/static/create_new.png" alt="" />
+                    Create Chit
+                </button>
+            </div>
+
+            <!-- Date nav -->
             <div id="year-week-container">
-                <button class="action-button today-btn" onclick="goToToday()">📅 Today</button>
+                <button class="action-button today-btn" onclick="goToToday()"><i class="fas fa-calendar-days"></i> Today</button>
                 <div class="week-nav" id="week-nav">
                     <button class="action-button" onclick="previousPeriod()">◄</button>
                     <div class="week-nav-center">
@@ -33,14 +41,6 @@
                     </div>
                     <button class="action-button" onclick="nextPeriod()">►</button>
                 </div>
-            </div>
-
-            <!-- 1. Create (directly under date nav) -->
-            <div class="sidebar-section" id="section-create" style="margin-top:0;">
-                <button class="create-chit action-button" onclick="storePreviousState(); window.location.href='/frontend/editor.html'" onauxclick="window.open('/frontend/editor.html','_blank')">
-                    <img src="/static/create_new.png" alt="" />
-                    Create Chit
-                </button>
             </div>
 
             <!-- 2. Order (always visible) -->

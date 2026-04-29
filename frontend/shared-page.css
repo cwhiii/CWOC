@@ -297,6 +297,17 @@ input[type="color"] {
     padding: 20px; width: 90%; max-width: 400px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
 }
 .modal-content h3 { margin-top: 0; }
+.modal-content .modal-buttons {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    margin-top: 14px;
+}
+.modal-content .modal-buttons button,
+.modal-content .modal-buttons .standard-button {
+    flex: 1;
+    min-width: 0;
+}
 
 /* ── Loader Spinner ─────────────────────────────────────────────────────── */
 .loader {
@@ -421,10 +432,8 @@ input[type="color"] {
     }
     .modal-content button,
     .modal-content .standard-button {
-        display: block;
-        width: 100%;
         min-height: 48px;
-        margin: 8px 0;
+        margin: 4px 0;
         font-size: 1em;
         padding: 12px;
         box-sizing: border-box;

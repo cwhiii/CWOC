@@ -37,6 +37,75 @@ function _invalidateSettingsCache() {
 
 // ── Shared Utility Functions ─────────────────────────────────────────────────
 
+/**
+ * Show a parchment-styled confirm modal. Returns a Promise that resolves to boolean.
+ * Usage: if (await cwocConfirm('Delete this chit?')) { ... }
+ * @param {string} message - The confirmation message
+ * @param {object} [opts] - Options: { title, confirmLabel, cancelLabel, danger }
+ */
+function cwocConfirm(message, opts) {
+  opts = opts || {};
+  var title = opts.title || 'Confirm';
+  var confirmLabel = opts.confirmLabel || 'OK';
+  var cancelLabel = opts.cancelLabel || 'Cancel';
+  var danger = opts.danger || false;
+
+  return new Promise(function (resolve) {
+    // Remove any existing confirm modal
+    var existing = document.getElementById('cwoc-confirm-modal');
+    if (existing) existing.remove();
+
+    var overlay = document.createElement('div');
+    overlay.id = 'cwoc-confirm-modal';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;';
+
+    var box = document.createElement('div');
+    box.style.cssText = 'background:#fffaf0;border:2px solid #8b5a2b;border-radius:8px;padding:20px 28px;max-width:400px;width:90%;font-family:"Courier New",monospace;color:#2b1e0f;box-shadow:0 4px 16px rgba(0,0,0,0.3);text-align:center;';
+
+    var h3 = document.createElement('h3');
+    h3.style.cssText = 'margin:0 0 12px;font-size:1.2em;color:#4a2c2a;';
+    h3.textContent = title;
+    box.appendChild(h3);
+
+    var p = document.createElement('p');
+    p.style.cssText = 'margin:0 0 18px;font-size:1em;line-height:1.4;';
+    p.textContent = message;
+    box.appendChild(p);
+
+    var btnRow = document.createElement('div');
+    btnRow.style.cssText = 'display:flex;gap:10px;justify-content:center;';
+
+    var cancelBtn = document.createElement('button');
+    cancelBtn.className = 'standard-button';
+    cancelBtn.textContent = cancelLabel;
+    cancelBtn.style.cssText = 'padding:8px 18px;font-family:inherit;cursor:pointer;';
+    cancelBtn.onclick = function () { overlay.remove(); resolve(false); };
+
+    var confirmBtn = document.createElement('button');
+    confirmBtn.className = 'standard-button';
+    confirmBtn.textContent = confirmLabel;
+    confirmBtn.style.cssText = 'padding:8px 18px;font-family:inherit;cursor:pointer;' + (danger ? 'background:#a0522d;color:#fdf5e6;' : '');
+    confirmBtn.onclick = function () { overlay.remove(); resolve(true); };
+
+    btnRow.appendChild(cancelBtn);
+    btnRow.appendChild(confirmBtn);
+    box.appendChild(btnRow);
+    overlay.appendChild(box);
+
+    // ESC to cancel
+    var onKey = function (e) {
+      if (e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', onKey); resolve(false); }
+    };
+    document.addEventListener('keydown', onKey);
+
+    // Click outside to cancel
+    overlay.addEventListener('click', function (e) { if (e.target === overlay) { overlay.remove(); document.removeEventListener('keydown', onKey); resolve(false); } });
+
+    document.body.appendChild(overlay);
+    confirmBtn.focus();
+  });
+}
+
 function generateUniqueId() {
   return Date.now().toString(36) + Math.random().toString(36).substr(2);
 }
@@ -2516,12 +2585,12 @@ function showQuickEditModal(chit, onRefresh) {
   delBtn.style.cssText = iconBtnStyle + 'background:#fdf5e6;color:#a33;';
   delBtn.innerHTML = '🗑️ Delete';
   delBtn.title = 'Delete this chit';
-  delBtn.addEventListener('click', () => {
+  delBtn.addEventListener('click', async () => {
     if (isRecurring) {
       // Show delete sub-menu inline
       _showDeleteSubMenu(actionRow, delBtn, parentId, chitId, dateStr, chit, close, onRefresh);
     } else {
-      if (!confirm('Delete this chit?')) return;
+      if (!(await cwocConfirm('Delete this chit?', { title: 'Delete Chit', confirmLabel: '🗑️ Delete', danger: true }))) return;
       var delTitle = chit.title || '(Untitled)';
       var delId = chitId;
       fetch('/api/chits/' + delId, { method: 'DELETE' }).then(function () {
@@ -2649,7 +2718,7 @@ function _showDeleteSubMenu(actionRow, delBtn, parentId, chitId, dateStr, chit, 
   });
 
   addSubBtn('🗑️ Delete all (entire series)', async () => {
-    if (!confirm('Delete the entire recurring series?')) return;
+    if (!(await cwocConfirm('Delete the entire recurring series?', { title: 'Delete Series', confirmLabel: '🗑️ Delete All', danger: true }))) return;
     var seriesTitle = chit.title || '(Untitled)';
     await fetch(`/api/chits/${parentId}`, { method: 'DELETE' });
     close();
@@ -4587,15 +4656,17 @@ function _sharedShowAlertModal(opts) {
 
   // Navigation button — "Go to Chit" or "Go to Alerts"
   function _safeNavigate(url) {
-    // Check for unsaved changes on editor page
-    if (typeof markEditorSaved === 'function' && typeof window._editorUnsaved !== 'undefined' && window._editorUnsaved) {
-      if (!confirm('You have unsaved changes. Leave this page?')) return;
-    }
-    // Check shared-page save system
-    if (typeof CwocSaveSystem !== 'undefined' && CwocSaveSystem._instance && CwocSaveSystem._instance._dirty) {
-      if (!confirm('You have unsaved changes. Leave this page?')) return;
-    }
-    window.location.href = url;
+    (async function() {
+      // Check for unsaved changes on editor page
+      if (typeof markEditorSaved === 'function' && typeof window._editorUnsaved !== 'undefined' && window._editorUnsaved) {
+        if (!(await cwocConfirm('You have unsaved changes. Leave this page?', { title: 'Unsaved Changes', confirmLabel: 'Leave', danger: true }))) return;
+      }
+      // Check shared-page save system
+      if (typeof CwocSaveSystem !== 'undefined' && CwocSaveSystem._instance && CwocSaveSystem._instance._dirty) {
+        if (!(await cwocConfirm('You have unsaved changes. Leave this page?', { title: 'Unsaved Changes', confirmLabel: 'Leave', danger: true }))) return;
+      }
+      window.location.href = url;
+    })();
   }
 
   if (opts.chitId) {

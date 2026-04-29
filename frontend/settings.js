@@ -567,9 +567,32 @@ async function addColor(newColor) {
 }
 
 async function deleteColor(hex, name) {
-  if (!confirm(`Delete color (${name} - ${hex})?`)) return;
+  // Use the existing delete-modal instead of confirm()
+  var modal = document.getElementById('delete-modal');
+  if (!modal) { if (!(await cwocConfirm('Delete color (' + name + ' - ' + hex + ')?', { title: 'Delete Color', confirmLabel: '🗑️ Delete', danger: true }))) return; }
+  else {
+    var msg = modal.querySelector('p');
+    if (msg) msg.textContent = 'Delete color ' + (name || 'Custom') + ' (' + hex + ')?';
+    modal.style.display = 'flex';
+    // Wait for user to confirm or cancel
+    var confirmed = await new Promise(function (resolve) {
+      var confirmBtn = modal.querySelector('button[onclick="confirmDelete()"]');
+      var cancelBtn = modal.querySelector('button[onclick="closeDeleteModal()"]');
+      // Temporarily override handlers
+      var onConfirm = function () { cleanup(); resolve(true); };
+      var onCancel = function () { cleanup(); resolve(false); };
+      function cleanup() {
+        if (confirmBtn) { confirmBtn.removeEventListener('click', onConfirm); confirmBtn.onclick = function () { confirmDelete(); }; }
+        if (cancelBtn) { cancelBtn.removeEventListener('click', onCancel); cancelBtn.onclick = function () { closeDeleteModal(); }; }
+        modal.style.display = 'none';
+      }
+      if (confirmBtn) { confirmBtn.onclick = null; confirmBtn.addEventListener('click', onConfirm); }
+      if (cancelBtn) { cancelBtn.onclick = null; cancelBtn.addEventListener('click', onCancel); }
+    });
+    if (!confirmed) return;
+  }
   try {
-    _invalidateSettingsCache(); // need fresh data for read-modify-write
+    _invalidateSettingsCache();
     const settings = await getCachedSettings();
     settings.custom_colors = (settings.custom_colors || []).filter(
       (color) => !(color.hex === hex && color.name === name),
@@ -580,7 +603,7 @@ async function deleteColor(hex, name) {
       body: JSON.stringify(settings),
     });
     if (!saveResponse.ok) throw new Error("Failed to save settings");
-    _invalidateSettingsCache(); // saved data changed
+    _invalidateSettingsCache();
     await loadColors();
     setSaveButtonUnsaved();
   } catch (e) {
@@ -598,8 +621,6 @@ function renderColors(colors) {
     colorItem.dataset.color = hex;
     colorItem.dataset.name = name || colorMap[hex] || "Custom";
     colorItem.style.backgroundColor = hex;
-    colorItem.style.color = _isColorLight(hex) ? "#000" : "#fff";
-    colorItem.textContent = colorItem.dataset.name;
     colorItem.title = `${colorItem.dataset.name} (${hex})`;
 
     // Add delete button
@@ -637,8 +658,8 @@ function handleTagInput(event) {
     if (tagText) {
       const tagDiv = document.createElement("div");
       tagDiv.className = "tag";
-      tagDiv.dataset.color = "#8b5a2b";
-      tagDiv.style.backgroundColor = "#8b5a2b";
+      tagDiv.dataset.color = "#d4c4b0";
+      tagDiv.style.backgroundColor = "#d4c4b0";
       tagDiv.innerHTML = `${tagText} <button onclick="openDeleteModal(event, this.parentElement)">✕</button>`;
       openTagModal(tagDiv);
       input.value = "";
@@ -655,8 +676,8 @@ function handleInfoClick(event) {
   if (event.shiftKey && tagText) {
     const tagDiv = document.createElement("div");
     tagDiv.className = "tag";
-    tagDiv.dataset.color = "#8b5a2b";
-    tagDiv.style.backgroundColor = "#8b5a2b";
+    tagDiv.dataset.color = "#d4c4b0";
+    tagDiv.style.backgroundColor = "#d4c4b0";
     tagDiv.innerHTML = `${tagText} <button onclick="openDeleteModal(event, this.parentElement)">✕</button>`;
     openTagModal(tagDiv);
     input.value = "";
@@ -686,8 +707,8 @@ function addTag() {
     }
     const tagDiv = document.createElement("div");
     tagDiv.className = "tag";
-    tagDiv.dataset.color = "#8b5a2b";
-    tagDiv.style.backgroundColor = "#8b5a2b";
+    tagDiv.dataset.color = "#d4c4b0";
+    tagDiv.style.backgroundColor = "#d4c4b0";
     tagDiv.innerHTML = `${tagText} <button onclick="openDeleteModal(event, this.parentElement)">✕</button>`;
     tagDiv.onclick = function (e) {
       if (e.target !== this && e.target.tagName === "BUTTON") return;
@@ -735,8 +756,8 @@ function openTagModal(tag) {
   tagNameInput.value = rawText;
   tagNameInput.disabled = false;
 
-  colorInput.value = tag.dataset.color || "#8b5a2b";
-  fontColorInput.value = tag.dataset.fontColor || "#2b1e0f";
+  colorInput.value = tag.dataset.color || "#d4c4b0";
+  fontColorInput.value = tag.dataset.fontColor || "#5c3317";
 
   // Live preview updater
   function _updateTagPreview() {
@@ -939,7 +960,7 @@ function _renderSettingsTagTree() {
   const tagDivs = document.querySelectorAll('#tag-editor-hidden .tag:not(.tag-input-container .tag)');
   const tags = Array.from(tagDivs).map(div => ({
     name: (div.childNodes[0]?.textContent || '').trim(),
-    color: div.dataset.color || '#8b5a2b',
+    color: div.dataset.color || '#d4c4b0',
     favorite: div.dataset.favorite === 'true',
   })).filter(t => t.name);
 
@@ -1465,8 +1486,8 @@ class SettingsManager {
         document.querySelectorAll("#tag-editor-hidden .tag:not(.tag-input-container .tag)"),
       ).map((tag) => ({
         name: (tag.childNodes[0]?.textContent || "").trim(),
-        color: tag.dataset.color || "#8b5a2b",
-        fontColor: tag.dataset.fontColor || "#2b1e0f",
+        color: tag.dataset.color || "#d4c4b0",
+        fontColor: tag.dataset.fontColor || "#5c3317",
         favorite: tag.dataset.favorite === 'true',
       })).filter((t) => t.name),
       custom_colors: Array.from(document.querySelectorAll(".color-item")).map(

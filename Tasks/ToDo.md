@@ -24,9 +24,6 @@
 - `[ ]` Hide Completes (not past-due) sidebar toggle button — persist state across sessions
 
 - `[ ]` Screenshot and video walkthrough of the app
-- `[ ]` **Custom Colors cleanup** — clean up the color name labels (make user-settable, or just don't display them). Use horizontal rows for the color swatches so the block is shorter.
-- `[ ]` **Settings blocks collapsible** — make each settings block collapsible like zones in the chit editor
-- when double ckilking a chit in the views it starts showinfg all the span lines befoer the doubleclick compltes. 
 
 ---
 
@@ -50,18 +47,6 @@
 - `[ ]` **Replace** mode: confirmation dialog ("This will override and replace all [chit/user] data. Are you sure?") (use coling & wording from the delete chit process)
 - `[ ]` Exported format must be self-contained and portable between instances
 
-### Nested Tags (remaining)
-- `[ ]` Migration for existing flat tag data
-- `[ ]` Settings: create nested tags (parent dropdown or drag-to-nest)
-- `[ ]` Shared `createTagInline()` for editor and settings
-- `[ ]` System tags as sub-tags: CWOC_System/Calendar, CWOC_System/Indicators, etc.
-
-### Audit Log
-- `[ ]` Full audit log of changes made to chits, settings, and contacts
-- `[ ]` Track: who made the change (username from settings), what changed, when, created/deleted
-- `[ ]` Requires username field in settings (see Easy Fixes)
-- `[ ]` Viewable audit history per chit, per contact, and globally
-
 ### Calendar & Scheduling
 - `[ ]` Show alarms/notifications/timers on calendar view
 - `[ ]` Jitter for reminders (±X minutes, configurable globally and per-chit, including to disable fo this chit, and to use a different value for this chit.)
@@ -69,13 +54,13 @@
 - `[ ]` Busy/Free/Unspecified status for calendar events
 - `[ ]` Declined events view
 - `[ ]` Time zones support on chits with dates
-- `[ ]` Weather & clock on the sides of the current date block? Show the HST bar as part of that block (without numbers)?
-- `[ ]` Calendar view: for all days with weather, show each location/city on its own row
+- `[ ]` move to done:  Weather & clock on the sides of the current date block? Show the HST bar as part of that block (without numbers)?
+- move to done: `[ ]` Calendar view: for all days with weather, show each location/city on its own row
 
 ### Alerts & Notifications
-- `[ ]` Persistent/nag/alarm mode (force acknowledgement)
-- `[ ]` Create alerts based on: arbitrary time, X units before/after start, X units before/after due
-- `[ ]` Setting: default sound/snooze length per priority
+- `[ ]` move to done:  Persistent/nag/alarm mode (force acknowledgement)
+- `[ ]` move to done:  Create alerts based on: arbitrary time, X units before/after start, X units before/after due
+- `[ ]` move to done:  Setting: default sound/snooze length per priority
 - `[ ]` Proximity-based notifications (your location, someone else's)
 
 ### Editor & Chit Management
@@ -91,10 +76,10 @@
 - `[ ]` Auto import/export notes as Markdown to sync with Obsidian. do this via a "import note" button in the note zone header. acceot .md & .txt files.
 
 ### Weather
-- `[ ]` Save expected weather per chit (forecast fields: focus, updated time, high, low, precipitation, weather code)
-- `[ ]` Display weather on calendar views
+- `[ ]` move to done:  Save expected weather per chit (forecast fields: focus, updated time, high, low, precipitation, weather code)
+- `[ ]` move to done:  Display weather on calendar views
 - even if the page isntre relaoded, refresh the forcast every 4 hours. 
-- `[ ]` Weather  page . Available via SHIFT+W, from views, or a button on the weather modal. also, add a  row for every specific day that has weather (location & date), for non-saved locations. generalize to per city. so if there's events in non-saved locations in address1 address2, in city1, address3 and address4 in city2, and address5 in cty3, it should add 3 rows, one for each CITY. then only load/display the weather for days that have an invent in that coity on that day.
+- `[ ]` move to done:  Weather  page . Available via SHIFT+W, from views, or a button on the weather modal. also, add a  row for every specific day that has weather (location & date), for non-saved locations. generalize to per city. so if there's events in non-saved locations in address1 address2, in city1, address3 and address4 in city2, and address5 in cty3, it should add 3 rows, one for each CITY. then only load/display the weather for days that have an invent in that coity on that day.
 
 ### Self-Audit
 - are there UI elements that do not have functonality associatetd with them?

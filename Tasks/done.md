@@ -1088,3 +1088,15 @@ Fully implemented. Ported from `Prototypes/CWOC UI/UI.html`:
 ### Weather flash colors updated to match HST bar ✅
 - Changed from yellowish-green `rgba(200,190,60,...)` to HST gold `rgba(212,175,55,...)` with tan outline `rgba(200,150,90,...)`
 - Brightness dimming softened from 0.7 to 0.85 for a warmer, less harsh flash
+
+
+### Custom Colors cleanup ✅
+- Removed color name text from swatches — now shows only the colored circle
+- Name and hex shown in tooltip on hover
+- Swatches displayed as horizontal row (already was flex-wrap)
+
+### Double-click span selection fix ✅
+- Added `user-select: none` to `.chit-card` and `.timed-event` to prevent text selection flash on double-click
+
+### Weather page: all blocks same height ✅
+- Added `min-height: 90px` and `justify-content: center` to `.weather-day-block`

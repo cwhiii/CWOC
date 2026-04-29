@@ -108,6 +108,7 @@
         .weather-day-block {
             min-width: 90px;
             max-width: 90px;
+            min-height: 90px;
             box-sizing: border-box;
             background: #fff8e1;
             border: 1px solid var(--aged-brown-medium, #8b4513);
@@ -117,6 +118,7 @@
             display: flex;
             flex-direction: column;
             align-items: center;
+            justify-content: center;
             gap: 2px;
             flex-shrink: 0;
         }
@@ -154,6 +156,12 @@
         }
         .weather-day-block.today.has-event {
             background: #f0e0b0;
+        }
+
+        /* ── Extreme weather highlight ── */
+        .weather-day-block.wx-extreme {
+            outline: 2px solid #b22222;
+            outline-offset: -2px;
         }
 
         /* ── Week-start separator line (absolute, full-height) ── */

@@ -4058,9 +4058,9 @@ function addSearchedTag(event) {
 function navigateToSettings() {
   localStorage.setItem('cwoc_settings_return', window.location.href);
   if (window._cwocSave && window._cwocSave.hasChanges()) {
-    if (confirm("You have unsaved changes. Leave without saving?")) {
-      window.location.href = "/frontend/settings.html";
-    }
+    cwocConfirm("You have unsaved changes. Leave without saving?", { title: 'Unsaved Changes', confirmLabel: 'Leave', danger: true }).then(function(ok) {
+      if (ok) window.location.href = "/frontend/settings.html";
+    });
   } else {
     window.location.href = "/frontend/settings.html";
   }

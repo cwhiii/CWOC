@@ -32,6 +32,15 @@ function _wxPrecipType(code) {
   return '';
 }
 
+/**
+ * Check if weather conditions are extreme.
+ * Currently: high temp > 5°C (temps are in Celsius from the API).
+ */
+function _wxIsExtreme(highC, lowC, weatherCode) {
+  if (highC !== null && highC !== undefined && highC > 5) return true;
+  return false;
+}
+
 /** Format precipitation: nearest cm with type. Sub-0.5cm = just the type. No precip = '—'. */
 function _wxFormatPrecip(precipMm, weatherCode) {
   if (!precipMm || precipMm <= 0) return '—';
@@ -117,10 +126,11 @@ function _wxIsToday(dateStr) {
 
   // Fetch all chits to find events at each location
   var chitsByLocDate = {};
+  var allChits = [];
   try {
     var chitResp = await fetch('/api/chits');
     if (chitResp.ok) {
-      var allChits = await chitResp.json();
+      allChits = await chitResp.json();
       chitsByLocDate = _wxBuildLocDateMap(allChits, locations);
     }
   } catch (e) {
@@ -129,6 +139,18 @@ function _wxIsToday(dateStr) {
 
   // Render the table
   _wxRenderTable(container, locations, results, weekStartDay, chitsByLocDate);
+
+  // Add city rows for chits at non-saved locations
+  var dates = null;
+  for (var ri = 0; ri < results.length; ri++) {
+    if (results[ri].ok && results[ri].daily && results[ri].daily.time) {
+      dates = results[ri].daily.time;
+      break;
+    }
+  }
+  if (dates && allChits.length > 0) {
+    _wxAddCityRows(container, allChits, locations, dates, weekStartDay);
+  }
 })();
 
 /**
@@ -337,6 +359,7 @@ function _wxRenderTable(container, locations, results, weekStartDay, chitsByLocD
       var blockClasses = 'weather-day-block';
       if (isToday) blockClasses += ' today';
       if (hasEvent) blockClasses += ' has-event';
+      if (_wxIsExtreme(daily.temperature_2m_max[dd], daily.temperature_2m_min[dd], wCode)) blockClasses += ' wx-extreme';
       var wsAttr = weekStartIndices[dd] ? ' data-wx-week-start="1"' : '';
       var locAddr = _wxEsc(loc.address || loc.label || '');
 
@@ -510,4 +533,251 @@ function _wxGetSavedRowOrder() {
     if (raw) return JSON.parse(raw);
   } catch (e) { /* ignore */ }
   return null;
+}
+
+
+// ── City rows for chits at non-saved locations ───────────────────────────────
+
+/**
+ * Extract a city name from a full address string.
+ * Tries to parse "City, ST" or "City, State" patterns.
+ * Falls back to the last comma-separated segment before any zip code.
+ */
+function _wxExtractCity(address) {
+  if (!address) return null;
+  var cleaned = address.trim();
+
+  // Try "City, ST ZIP" or "City, ST"
+  var m = cleaned.match(/([A-Za-z\s.'-]+),\s*([A-Z]{2})\s*(\d{5})?/);
+  if (m) return m[1].trim() + ', ' + m[2];
+
+  // Try last two comma segments (e.g. "123 Main St, Springfield, IL 62704")
+  var parts = cleaned.split(',').map(function (s) { return s.trim(); });
+  if (parts.length >= 2) {
+    var last = parts[parts.length - 1].replace(/\d{5}(-\d{4})?/, '').trim();
+    var secondLast = parts[parts.length - 2].trim();
+    if (last.length <= 3 && last.length > 0) {
+      return secondLast + ', ' + last;
+    }
+    return secondLast;
+  }
+
+  return cleaned;
+}
+
+/**
+ * Build city groups from chits that have locations NOT matching any saved location.
+ * Returns: { cityName: { dates: Set<YYYY-MM-DD>, address: string } }
+ */
+function _wxBuildCityGroups(chits, savedLocations, forecastDates) {
+  // Build a set of saved location addresses/labels for exclusion
+  var savedKeys = {};
+  for (var i = 0; i < savedLocations.length; i++) {
+    var addr = (savedLocations[i].address || '').toLowerCase().trim();
+    var label = (savedLocations[i].label || '').toLowerCase().trim();
+    if (addr) savedKeys[addr] = true;
+    if (label) savedKeys[label] = true;
+  }
+
+  // Build a set of forecast dates for range checking
+  var dateSet = {};
+  for (var d = 0; d < forecastDates.length; d++) {
+    dateSet[forecastDates[d]] = true;
+  }
+
+  // Group chits by city
+  var cities = {}; // cityName → { dates: { dateStr: [chitTitle, ...] }, address: string }
+
+  for (var c = 0; c < chits.length; c++) {
+    var chit = chits[c];
+    if (chit.deleted) continue;
+    var loc = (chit.location || '').trim();
+    if (!loc) continue;
+
+    // Skip if this location matches a saved location
+    if (savedKeys[loc.toLowerCase()]) continue;
+
+    // Extract dates from this chit
+    var chitDates = [];
+    var fields = ['start_datetime', 'end_datetime', 'due_datetime'];
+    for (var f = 0; f < fields.length; f++) {
+      var val = chit[fields[f]];
+      if (val && typeof val === 'string') {
+        var dateOnly = val.substring(0, 10);
+        if (/^\d{4}-\d{2}-\d{2}$/.test(dateOnly) && dateSet[dateOnly]) {
+          chitDates.push(dateOnly);
+        }
+      }
+    }
+
+    // Fill multi-day ranges
+    if (chit.start_datetime && chit.end_datetime) {
+      var startD = new Date(chit.start_datetime.substring(0, 10));
+      var endD = new Date(chit.end_datetime.substring(0, 10));
+      if (!isNaN(startD) && !isNaN(endD)) {
+        var cur = new Date(startD);
+        while (cur <= endD) {
+          var ds = cur.getFullYear() + '-' +
+            String(cur.getMonth() + 1).padStart(2, '0') + '-' +
+            String(cur.getDate()).padStart(2, '0');
+          if (dateSet[ds]) chitDates.push(ds);
+          cur.setDate(cur.getDate() + 1);
+        }
+      }
+    }
+
+    if (chitDates.length === 0) continue;
+
+    var city = _wxExtractCity(loc);
+    if (!city) continue;
+
+    // Normalize city key for case-insensitive grouping
+    var cityKey = city.toLowerCase();
+    var chitTitle = chit.title || '(Untitled)';
+
+    if (!cities[cityKey]) {
+      cities[cityKey] = { dates: {}, address: loc, displayName: city };
+    }
+    // Deduplicate dates for this chit, then add title
+    var seenDates = {};
+    for (var di = 0; di < chitDates.length; di++) {
+      if (seenDates[chitDates[di]]) continue;
+      seenDates[chitDates[di]] = true;
+      if (!cities[cityKey].dates[chitDates[di]]) {
+        cities[cityKey].dates[chitDates[di]] = [];
+      }
+      if (cities[cityKey].dates[chitDates[di]].indexOf(chitTitle) === -1) {
+        cities[cityKey].dates[chitDates[di]].push(chitTitle);
+      }
+    }
+  }
+
+  return cities;
+}
+
+/**
+ * Add city-based weather rows to the weather table for chits at non-saved locations.
+ * Only shows weather blocks on days that have chits in that city.
+ */
+async function _wxAddCityRows(container, allChits, savedLocations, forecastDates, weekStartDay) {
+  var cities = _wxBuildCityGroups(allChits, savedLocations, forecastDates);
+  var cityNames = Object.keys(cities);
+  if (cityNames.length === 0) return;
+
+  // Pre-compute week start indices
+  var weekStartIndices = {};
+  for (var wi = 1; wi < forecastDates.length; wi++) {
+    if (_wxDayOfWeek(forecastDates[wi]) === weekStartDay) weekStartIndices[wi] = true;
+  }
+
+  var table = container.querySelector('.weather-table');
+  if (!table) return;
+
+  // Show loading indicator below the table
+  var loadingEl = document.createElement('div');
+  loadingEl.className = 'weather-loading';
+  loadingEl.id = 'wx-city-loading';
+  loadingEl.innerHTML = '⏳ Loading weather for ' + cityNames.length + ' additional ' + (cityNames.length === 1 ? 'city' : 'cities') + '…';
+  table.parentNode.insertBefore(loadingEl, table.nextSibling);
+
+  // Fetch weather for each city (geocode by city name, not full address)
+  for (var ci = 0; ci < cityNames.length; ci++) {
+    var cityKey = cityNames[ci];
+    var cityData = cities[cityKey];
+    var cityName = cityData.displayName || cityKey;
+
+    // Update loading text with progress
+    loadingEl.innerHTML = '⏳ Loading weather for city ' + (ci + 1) + ' of ' + cityNames.length + ' (' + _wxEsc(cityName) + ')…';
+
+    // Fetch forecast for this city
+    var forecast = null;
+    try {
+      var entry = await fetchAndCacheWeather(cityName);
+      if (entry && entry.daily) {
+        forecast = entry.daily;
+      }
+    } catch (e) {
+      console.warn('Weather fetch failed for city "' + cityName + '":', e);
+    }
+
+    // Build the row HTML
+    var rowHtml = '<div class="weather-row weather-city-row" draggable="true" data-wx-idx="city-' + ci + '">';
+
+    // Row header — title on both container and label for reliable hover
+    rowHtml += '<div class="weather-row-header" title="' + _wxEsc(cityName) + '">' +
+      '<span class="drag-handle">☰</span>' +
+      '<span class="loc-label" title="' + _wxEsc(cityName) + '">📍 ' + _wxEsc(cityName) + '</span>' +
+      '<span class="loc-address" title="' + _wxEsc(cityName) + '" style="font-size:11px;opacity:0.6;">from chits</span>' +
+    '</div>';
+
+    // Day blocks — only for dates that have chits in this city
+    for (var dd = 0; dd < forecastDates.length; dd++) {
+      var dateStr = forecastDates[dd];
+      var chitTitles = cityData.dates[dateStr];
+      var hasChit = chitTitles && chitTitles.length > 0;
+
+      if (!hasChit || !forecast) {
+        // Empty placeholder to maintain alignment
+        var wsAttrEmpty = weekStartIndices[dd] ? ' data-wx-week-start="1"' : '';
+        rowHtml += '<div class="weather-day-block weather-day-empty"' + wsAttrEmpty + ' style="visibility:hidden;"></div>';
+        continue;
+      }
+
+      // Find this date in the forecast data
+      var fIdx = forecast.time ? forecast.time.indexOf(dateStr) : -1;
+      if (fIdx < 0) {
+        var wsAttrMiss = weekStartIndices[dd] ? ' data-wx-week-start="1"' : '';
+        rowHtml += '<div class="weather-day-block weather-day-empty"' + wsAttrMiss + ' style="visibility:hidden;"></div>';
+        continue;
+      }
+
+      var isToday = _wxIsToday(dateStr);
+      var icon = _wxPageGetIcon(forecast.weathercode[fIdx]);
+      var highF = _wxPageC2F(forecast.temperature_2m_max[fIdx]);
+      var lowF = _wxPageC2F(forecast.temperature_2m_min[fIdx]);
+      var precip = forecast.precipitation_sum[fIdx];
+      var wCode = forecast.weathercode[fIdx];
+      var precipStr = _wxFormatPrecip(precip, wCode);
+
+      var blockClasses = 'weather-day-block has-event';
+      if (isToday) blockClasses += ' today';
+      if (_wxIsExtreme(forecast.temperature_2m_max[fIdx], forecast.temperature_2m_min[fIdx], wCode)) blockClasses += ' wx-extreme';
+      var wsAttr = weekStartIndices[dd] ? ' data-wx-week-start="1"' : '';
+
+      // Tooltip: chit titles that triggered this day
+      var tooltip = chitTitles.join('&#10;');
+
+      rowHtml += '<div class="' + blockClasses + '"' + wsAttr +
+        ' data-wx-date="' + dateStr + '"' +
+        ' data-wx-loc="' + _wxEsc(cityName) + '"' +
+        ' title="' + tooltip + '"' +
+        ' style="cursor:pointer">' +
+        '<span class="wx-icon" title="' + tooltip + '">' + icon + '</span>' +
+        '<span class="wx-temps" title="' + tooltip + '">' +
+          '<span class="wx-high">' + highF + '°</span> ' +
+          '<span class="wx-low">' + lowF + '°</span>' +
+        '</span>' +
+        '<span class="wx-precip" title="' + tooltip + '">' + precipStr + '</span>' +
+      '</div>';
+    }
+
+    rowHtml += '</div>';
+
+    // Append to table
+    table.insertAdjacentHTML('beforeend', rowHtml);
+  }
+
+  // Remove loading indicator
+  var loadingDone = document.getElementById('wx-city-loading');
+  if (loadingDone) loadingDone.remove();
+
+  // Re-draw week lines to include new rows
+  // Remove old lines first
+  var oldLines = table.querySelectorAll('.wx-week-line');
+  for (var ol = 0; ol < oldLines.length; ol++) oldLines[ol].remove();
+  _wxDrawWeekLines(container);
+
+  // Re-wire drag-drop and click handlers for new rows
+  _wxInitDragDrop(container);
+  _wxInitBlockClick(container);
 }

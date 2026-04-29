@@ -627,8 +627,9 @@ async function toggleProjectMaster() {
     if (currentValue) {
       // currently master, about to remove
       if (projectState.projectChit?.child_chits?.length > 0) {
-        const confirmed = confirm(
+        const confirmed = await cwocConfirm(
           "This project master has child chits. Removing master status will orphan these child chits. Are you sure?",
+          { title: 'Remove Project Master', confirmLabel: 'Remove', danger: true }
         );
         if (!confirmed) return; // abort toggle
       }
