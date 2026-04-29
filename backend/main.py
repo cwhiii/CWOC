@@ -94,6 +94,7 @@ class Settings(BaseModel):
     audit_log_max_days: Optional[int] = 1096
     audit_log_max_mb: Optional[int] = 1
     default_notifications: Optional[Dict[str, Any]] = None  # { start: [...], due: [...] }
+    unit_system: Optional[str] = "imperial"  # "imperial" or "metric"
 
 class Chit(BaseModel):
     id: Optional[str] = None
@@ -129,6 +130,7 @@ class Chit(BaseModel):
     progress_percent: Optional[int] = None     # 0-100 progress percentage
     time_estimate: Optional[str] = None        # Free-text time estimate (e.g. "2h 30m")
     weather_data: Optional[str] = None         # JSON string of weather forecast data
+    health_data: Optional[str] = None          # JSON string of health indicator readings
 
 class MultiValueEntry(BaseModel):
     label: Optional[str] = None    # "Work", "Home", "Mobile", custom
@@ -717,6 +719,9 @@ def migrate_add_weather_data():
         if "weather_data" not in existing:
             cursor.execute("ALTER TABLE chits ADD COLUMN weather_data TEXT")
             logger.info("Added weather_data column to chits table")
+        if "health_data" not in existing:
+            cursor.execute("ALTER TABLE chits ADD COLUMN health_data TEXT")
+            logger.info("Added health_data column to chits table")
         conn.commit()
     except Exception as e:
         logger.error(f"Error adding weather_data column: {str(e)}")
@@ -784,7 +789,7 @@ def migrate_add_audit_settings():
 
 
 def migrate_add_default_notifications():
-    """Add default_notifications column to settings table."""
+    """Add default_notifications and unit_system columns to settings table."""
     conn = None
     try:
         conn = sqlite3.connect(DB_PATH)
@@ -795,8 +800,12 @@ def migrate_add_default_notifications():
             cursor.execute("ALTER TABLE settings ADD COLUMN default_notifications TEXT")
             conn.commit()
             logger.info("Added default_notifications column to settings table")
+        if "unit_system" not in existing:
+            cursor.execute("ALTER TABLE settings ADD COLUMN unit_system TEXT DEFAULT 'imperial'")
+            conn.commit()
+            logger.info("Added unit_system column to settings table")
     except Exception as e:
-        logger.error(f"Error adding default_notifications column: {str(e)}")
+        logger.error(f"Error adding settings columns: {str(e)}")
     finally:
         if conn:
             conn.close()
@@ -1617,6 +1626,60 @@ async def websocket_sync(ws: WebSocket):
         _sync_hub.disconnect(ws)
     except Exception:
         _sync_hub.disconnect(ws)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Health Data Aggregation API
+# ═══════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/health-data")
+def get_health_data(since: Optional[str] = Query(None), until: Optional[str] = Query(None)):
+    """Return all health data points from chits, sorted by date.
+    Each entry: { date, chit_id, chit_title, ...health fields }"""
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        query = "SELECT id, title, start_datetime, due_datetime, created_datetime, health_data FROM chits WHERE (deleted = 0 OR deleted IS NULL) AND health_data IS NOT NULL AND health_data != '' AND health_data != 'null'"
+        params = []
+
+        if since:
+            query += " AND COALESCE(start_datetime, due_datetime, created_datetime) >= ?"
+            params.append(since)
+        if until:
+            query += " AND COALESCE(start_datetime, due_datetime, created_datetime) <= ?"
+            params.append(until)
+
+        query += " ORDER BY COALESCE(start_datetime, due_datetime, created_datetime) ASC"
+        cursor.execute(query, params)
+        rows = cursor.fetchall()
+
+        results = []
+        for row in rows:
+            try:
+                hd = json.loads(row["health_data"]) if row["health_data"] else {}
+            except (json.JSONDecodeError, TypeError):
+                continue
+            if not hd or not any(v is not None for v in hd.values()):
+                continue
+            date_str = row["start_datetime"] or row["due_datetime"] or row["created_datetime"] or ""
+            results.append({
+                "date": date_str[:10] if date_str else "",
+                "datetime": date_str,
+                "chit_id": row["id"],
+                "chit_title": row["title"] or "(Untitled)",
+                **hd
+            })
+
+        return results
+    except Exception as e:
+        logger.error(f"Error fetching health data: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
 
 
 # Serve all files from /frontend/ (e.g., index.html, settings.html, editor.html)
@@ -2715,6 +2778,7 @@ def save_settings(settings: Settings):
             "audit_log_max_days": settings.audit_log_max_days,
             "audit_log_max_mb": settings.audit_log_max_mb,
             "default_notifications": serialize_json_field(settings.default_notifications),
+            "unit_system": settings.unit_system or "imperial",
         }
 
         cursor.execute(
@@ -2724,8 +2788,8 @@ def save_settings(settings: Settings):
                 alarm_orientation, active_clocks, saved_locations, tags, custom_colors, visual_indicators, chit_options,
                 calendar_snap, week_start_day, work_start_hour, work_end_hour, work_days, enabled_periods, custom_days_count,
                 all_view_start_hour, all_view_end_hour, day_scroll_to_hour,
-                username, audit_log_max_days, audit_log_max_mb, default_notifications
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                username, audit_log_max_days, audit_log_max_mb, default_notifications, unit_system
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 new_settings_dict["user_id"],
@@ -2754,6 +2818,7 @@ def save_settings(settings: Settings):
                 new_settings_dict["audit_log_max_days"],
                 new_settings_dict["audit_log_max_mb"],
                 new_settings_dict["default_notifications"],
+                new_settings_dict["unit_system"],
             )
         )
 

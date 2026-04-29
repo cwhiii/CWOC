@@ -1142,24 +1142,35 @@ document
 
 updateGrid();
 
-document
-  .getElementById("gender-toggle")
-  .addEventListener("change", function () {
-    const genderLabel = document.getElementById("gender-label");
-    const toggleLabel = this.nextElementSibling;
-    const toggleIcon = toggleLabel.querySelector("span");
-
-    if (this.checked) {
-      genderLabel.textContent = "Woman";
-      toggleIcon.style.transform = "translateX(30px)";
-      toggleIcon.innerHTML = "♀️";
-    } else {
-      genderLabel.textContent = "Man";
-      toggleIcon.style.transform = "translateX(0)";
-      toggleIcon.innerHTML = "♂️";
-    }
+// ── Pill toggle helper ────────────────────────────────────────────────────────
+function _initPillToggle(pillId, hiddenInputId) {
+  var pill = document.getElementById(pillId);
+  if (!pill) return;
+  pill.addEventListener('click', function() {
+    var hidden = document.getElementById(hiddenInputId);
+    var spans = pill.querySelectorAll('span[data-val]');
+    if (!hidden || spans.length < 2) return;
+    // Toggle to the other value
+    var current = hidden.value;
+    var next = (spans[0].dataset.val === current) ? spans[1].dataset.val : spans[0].dataset.val;
+    hidden.value = next;
+    _updatePillToggle(pillId, next);
     setSaveButtonUnsaved();
   });
+}
+
+function _updatePillToggle(pillId, activeVal) {
+  var pill = document.getElementById(pillId);
+  if (!pill) return;
+  var activeStyle = 'padding:4px 8px;background:#8b5a2b;color:#fff8e1;font-weight:bold;';
+  var inactiveStyle = 'padding:4px 8px;background:#f5e6cc;color:#bbb;';
+  pill.querySelectorAll('span[data-val]').forEach(function(span) {
+    span.style.cssText = (span.dataset.val === activeVal) ? activeStyle : inactiveStyle;
+  });
+}
+
+_initPillToggle('sex-pill', 'gender-toggle');
+_initPillToggle('unit-pill', 'unit-system-toggle');
 
 class SettingsService {
   static async loadAll() {
@@ -1261,13 +1272,12 @@ class SettingsManager {
     document.getElementById("prefer-google-maps").checked = !!co.prefer_google_maps;
 
     const genderToggle = document.getElementById("gender-toggle");
-    const genderLabel = document.getElementById("gender-label");
-    genderToggle.checked = this.settings.sex === "Woman";
-    genderLabel.textContent = this.settings.sex || "Man";
-    const toggleIcon = genderToggle.nextElementSibling.querySelector("span");
-    toggleIcon.innerHTML = this.settings.sex === "Woman" ? "♀️" : "♂️";
-    toggleIcon.style.transform =
-      this.settings.sex === "Woman" ? "translateX(30px)" : "translateX(0)";
+    if (genderToggle) genderToggle.value = this.settings.sex || "Man";
+    _updatePillToggle('sex-pill', this.settings.sex || 'Man');
+
+    const unitToggle = document.getElementById("unit-system-toggle");
+    if (unitToggle) unitToggle.value = this.settings.unit_system || "imperial";
+    _updatePillToggle('unit-pill', this.settings.unit_system || 'imperial');
 
     document.getElementById("snooze-length").value =
       this.settings.snooze_length || "5 minutes";
@@ -1459,7 +1469,8 @@ class SettingsManager {
       user_id: "default_user",
       username: (document.getElementById("username-input") || {}).value || null,
       time_format: document.getElementById("time-format").value,
-      sex: document.getElementById("gender-toggle").checked ? "Woman" : "Man",
+      sex: document.getElementById("gender-toggle").value || "Man",
+      unit_system: document.getElementById("unit-system-toggle").value || "imperial",
       snooze_length: document.getElementById("snooze-length").value,
       calendar_snap: document.getElementById("calendar-snap").value,
       week_start_day: document.getElementById("week-start-day")?.value || "0",
@@ -2112,63 +2123,79 @@ function _renderDefaultNotifList(type, items) {
   }
   items.forEach(function(item, idx) {
     var row = document.createElement('div');
-    row.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:4px;';
+    row.className = 'default-notif-row';
+    row.style.cssText = 'display:flex;align-items:center;gap:4px;margin-bottom:5px;';
 
+    // Number input
     var valInput = document.createElement('input');
     valInput.type = 'number';
     valInput.min = '1';
     valInput.value = item.value || 15;
-    valInput.style.cssText = 'width:50px;padding:4px;border:1px solid #8b5a2b;border-radius:4px;font-family:inherit;';
+    valInput.style.cssText = 'width:40px !important;min-width:40px !important;max-width:40px !important;flex:0 0 40px !important;padding:3px 2px;border:1px solid #8b5a2b;border-radius:4px;font-family:inherit;font-size:0.85em;box-sizing:border-box;text-align:center;';
     valInput.addEventListener('input', function() { setSaveButtonUnsaved(); });
-    valInput.dataset.notifType = type;
-    valInput.dataset.notifIdx = idx;
-    valInput.dataset.notifField = 'value';
     row.appendChild(valInput);
 
+    // Unit dropdown (compact)
     var unitSel = document.createElement('select');
-    ['minutes', 'hours', 'days'].forEach(function(u) {
+    [{v:'minutes',t:'min'},{v:'hours',t:'hr'},{v:'days',t:'day'}].forEach(function(u) {
       var opt = document.createElement('option');
-      opt.value = u;
-      opt.textContent = u;
-      if (u === (item.unit || 'minutes')) opt.selected = true;
+      opt.value = u.v;
+      opt.textContent = u.t;
+      if (u.v === (item.unit || 'minutes')) opt.selected = true;
       unitSel.appendChild(opt);
     });
-    unitSel.style.cssText = 'padding:4px;border:1px solid #8b5a2b;border-radius:4px;font-family:inherit;';
+    unitSel.style.cssText = 'width:auto !important;min-width:auto !important;max-width:none !important;flex:0 0 auto !important;padding:3px 2px;border:1px solid #8b5a2b;border-radius:4px;font-family:inherit;font-size:0.8em;';
     unitSel.addEventListener('change', function() { setSaveButtonUnsaved(); });
-    unitSel.dataset.notifType = type;
-    unitSel.dataset.notifIdx = idx;
-    unitSel.dataset.notifField = 'unit';
     row.appendChild(unitSel);
 
-    var timingSel = document.createElement('select');
-    [{ v: 'false', t: 'before' }, { v: 'true', t: 'after' }].forEach(function(o) {
-      var opt = document.createElement('option');
-      opt.value = o.v;
-      opt.textContent = o.t;
-      if (String(item.afterTarget) === o.v) opt.selected = true;
-      timingSel.appendChild(opt);
-    });
-    timingSel.style.cssText = 'padding:4px;border:1px solid #8b5a2b;border-radius:4px;font-family:inherit;';
-    timingSel.addEventListener('change', function() { setSaveButtonUnsaved(); });
-    timingSel.dataset.notifType = type;
-    timingSel.dataset.notifIdx = idx;
-    timingSel.dataset.notifField = 'afterTarget';
-    row.appendChild(timingSel);
+    // Before/After toggle pill
+    var isAfter = !!item.afterTarget;
+    var toggleWrap = document.createElement('div');
+    toggleWrap.style.cssText = 'display:flex;border:1px solid #8b5a2b;border-radius:4px;overflow:hidden;flex-shrink:0;cursor:pointer;font-size:0.75em;line-height:1;';
+    var hiddenInput = document.createElement('input');
+    hiddenInput.type = 'hidden';
+    hiddenInput.value = isAfter ? 'true' : 'false';
+    toggleWrap.appendChild(hiddenInput);
 
+    var beforeSide = document.createElement('span');
+    var afterSide = document.createElement('span');
+    var activeStyle = 'padding:3px 5px;background:#8b5a2b;color:#fff8e1;font-weight:bold;';
+    var inactiveStyle = 'padding:3px 5px;background:#f5e6cc;color:#bbb;';
+
+    beforeSide.textContent = 'before';
+    afterSide.textContent = 'after';
+
+    function _updateToggle() {
+      var after = hiddenInput.value === 'true';
+      beforeSide.style.cssText = after ? inactiveStyle : activeStyle;
+      afterSide.style.cssText = after ? activeStyle : inactiveStyle;
+    }
+    _updateToggle();
+
+    toggleWrap.addEventListener('click', function() {
+      hiddenInput.value = hiddenInput.value === 'true' ? 'false' : 'true';
+      _updateToggle();
+      setSaveButtonUnsaved();
+    });
+    toggleWrap.appendChild(beforeSide);
+    toggleWrap.appendChild(afterSide);
+    row.appendChild(toggleWrap);
+
+    // Type label
     var label = document.createElement('span');
     label.textContent = type === 'start' ? 'start' : 'due';
-    label.style.cssText = 'font-size:0.85em;opacity:0.7;';
+    label.style.cssText = 'font-size:0.85em;color:#1a1208;flex-shrink:0;';
     row.appendChild(label);
 
+    // Remove button
     var removeBtn = document.createElement('button');
     removeBtn.type = 'button';
     removeBtn.textContent = '✕';
-    removeBtn.title = 'Remove this notification';
-    removeBtn.style.cssText = 'background:#a0522d;color:#fdf5e6;border:1px solid #5c4033;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:14px;font-family:inherit;flex-shrink:0;';
+    removeBtn.title = 'Remove';
+    removeBtn.style.cssText = 'background:#a0522d;color:#fdf5e6;border:1px solid #5c4033;border-radius:4px;padding:1px 5px;cursor:pointer;font-size:11px;font-family:inherit;flex-shrink:0;margin-left:auto;';
     removeBtn.addEventListener('click', function() {
       row.remove();
       setSaveButtonUnsaved();
-      // If no rows left, show placeholder
       if (container.children.length === 0) {
         container.innerHTML = '<div style="opacity:0.5;font-size:0.85em;padding:4px;">None configured.</div>';
       }
@@ -2185,11 +2212,6 @@ function _renderDefaultNotifList(type, items) {
 function _addDefaultNotifRow(type) {
   var container = document.getElementById('default-notif-' + type + '-list');
   if (!container) return;
-  // Remove "None configured" placeholder
-  var placeholder = container.querySelector('div[style*="opacity"]');
-  if (placeholder && container.children.length === 1) container.innerHTML = '';
-  // Count existing rows
-  var existingCount = container.querySelectorAll('div[style*="display:flex"]').length;
   _renderDefaultNotifList(type, _gatherDefaultNotifList(type).concat([{ value: 15, unit: 'minutes', afterTarget: false }]));
   setSaveButtonUnsaved();
 }
@@ -2202,20 +2224,25 @@ function _addDefaultNotifRow(type) {
 function _gatherDefaultNotifList(type) {
   var container = document.getElementById('default-notif-' + type + '-list');
   if (!container) return [];
-  var rows = container.querySelectorAll('div[style*="display:flex"]');
+  // Try class-based selector first, fall back to any div with an input
+  var rows = container.querySelectorAll('.default-notif-row');
+  if (rows.length === 0) {
+    rows = container.querySelectorAll('div');
+  }
   var result = [];
   rows.forEach(function(row) {
     var valInput = row.querySelector('input[type="number"]');
-    var unitSel = row.querySelectorAll('select')[0];
-    var timingSel = row.querySelectorAll('select')[1];
+    var unitSel = row.querySelector('select');
+    var hiddenInput = row.querySelector('input[type="hidden"]');
     if (!valInput || !unitSel) return;
     var val = parseInt(valInput.value);
     if (!val || val <= 0) return;
     result.push({
       value: val,
       unit: unitSel.value || 'minutes',
-      afterTarget: timingSel ? timingSel.value === 'true' : false,
+      afterTarget: hiddenInput ? hiddenInput.value === 'true' : false,
     });
   });
+  console.debug('_gatherDefaultNotifList(' + type + '): found ' + rows.length + ' rows, gathered ' + result.length + ' items', result);
   return result;
 }

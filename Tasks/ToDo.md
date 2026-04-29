@@ -7,26 +7,62 @@
 ## Known Bugs
 
 ### Editor
-- notifications have a checkbox: "before due/start" which seems redundant & confusing. Change to a dropdown of before/after start/due.
+- this is done: notifications have a checkbox: "before due/start" which seems redundant & confusing. Change to a dropdown of before/after start/due.
 - add a "loop notification until acknowledged" functionality. Basically a snooze for notifications — reuse what "notify at start" alert is doing.
 - clean up behavior of all notifications to be consistent.
 - get rid of the filter button on notification zone.
 - change the add order for alerts: notifications, alarms, timers, stopwatches
-
 - `[ ]` Can't save health indicators
 
 ---
 
 ## Easy Fixes / Low-Hanging Fruit
 
+
+- `[ ]` Hide Completes (not past-due) sidebar toggle button — persist state across sessions
 - `[ ]` Screenshot and video walkthrough of the app
+- even if the page isn't reloaded, refresh the forecast every 4 hours
+
+---
+
+## UI Audit — Non-Functional Elements
+
+*Elements that exist in the UI but have no working functionality. Each needs a decision: build it, or remove it.*
+
+### Editor — Health Indicators Zone (entire zone is non-functional)
+- `renderHealthIndicator()` is an empty stub — called for all 7 indicators but renders nothing
+- `unitToggle` checkbox (Imperial/Metric) — no onchange handler, never read
+- `sexToggle` checkbox (Female/Male) — no onchange handler, never read
+- All health input divs (`weightEntry`, `distanceEntry`, `heartRateEntry`, `bpEntry`, `spo2Entry`, `glucoseEntry`, `temperatureEntry`) — present in HTML but never populated
+- Reproduction section — incomplete HTML, no JS
+- **Decision needed**: Build the full health indicators feature, or hide/remove the zone until ready
+
+### Editor — Stopwatch Modal
+- `closeStopwatchModal()` — completely empty function, modal Close button does nothing
+- `saveStopwatchDetails()` — completely empty function, modal Save button does nothing
+- **Decision needed**: Implement the modal functions, or remove the modal and use inline-only stopwatch UI
+
+### Editor — Project Kanban Delete Button
+- Delete button on child chit cards in the Kanban board shows `alert("not implemented")`
+- **Decision needed**: Wire up actual delete (with confirmation), or remove the button. wire it. 
 
 ---
 
 ## Medium Features
 
-### Imports
-- ability to import calendar data from Google & Apple & Windows
+### Calendar Import (.ics)
+- `[ ]` Import calendar data from Google, Apple, and Windows/Outlook via .ics files
+- All three platforms export iCalendar (.ics / RFC 5545) — one parser covers all three
+- **Parsing:** Follow the `vcard_parse()` pattern — line-by-line text parsing with unfolding. No external library needed.
+- **Field mapping:** SUMMARY→title, DESCRIPTION→note, DTSTART/DTEND→start/end_datetime, DUE (VTODO)→due_datetime, LOCATION→location, CATEGORIES→tags, PRIORITY (1–9)→High/Medium/Low, all-day detection→all_day
+- **Recurrence:** Map common RRULE patterns (daily, weekly, monthly, yearly) to existing `recurrence_rule` format. Skip/warn on exotic patterns (e.g., "every 2nd Tuesday of the month").
+- **Timezones:** Need a strategy — convert to local time on import, or store as-is. Design decision.
+- **VTODO support:** Apple Reminders and Outlook Tasks export as VTODO, not VEVENT. Map to Tasks view.
+- **VALARM → alerts:** Optional v2 — iCal alarm components could map to the alerts system, but data models differ enough to defer.
+- **Duplicate detection:** Match on title + start_datetime to avoid re-importing.
+- **Estimate:** ~400–600 lines backend (parser + endpoint + mapping), ~50–100 lines frontend (reuse Data Management UI pattern). No new dependencies.
+- **Backend:** `POST /api/import/calendar` endpoint, clone contacts import pattern
+- **Frontend:** File upload + import modal in Settings → Data Management, reuse existing UI
 
 ### Repeating Task Management
 - better handling for visualization of which are completed, which need doing, which are every day, which are "hide when done, but show on my list otherwise," etc.

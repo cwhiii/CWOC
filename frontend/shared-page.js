@@ -165,8 +165,10 @@ window.CwocSaveSystem = CwocSaveSystem;
   // ── ESC to go back (all secondary pages) ──────────────────────────────
   document.addEventListener('keydown', function (e) {
     if (e.key !== 'Escape') return;
-    // Don't navigate if a modal is open or an input is focused
+    // Don't navigate if a modal or nav panel is open
     if (document.querySelector('.modal[style*="flex"], .qr-modal[style*="flex"], .image-modal[style*="flex"], .import-modal[style*="flex"]')) return;
+    if (document.getElementById('cwoc-nav-overlay')) return;
+    if (document.getElementById('cwoc-confirm-modal')) return;
     var active = document.activeElement;
     if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.tagName === 'SELECT')) {
       active.blur();
@@ -298,8 +300,8 @@ window.CwocSaveSystem = CwocSaveSystem;
       return;
     }
 
-    // V to open (not when typing, not on dashboard where main.js handles it)
-    if (keyLower === 'v' && !inInput && !_isDashboard) {
+    // V to open (not when typing, not on dashboard, not with modifier keys)
+    if (keyLower === 'v' && !inInput && !_isDashboard && !e.ctrlKey && !e.metaKey && !e.altKey) {
       if (!_isNavPanelOpen() && document.querySelector('.modal[style*="flex"]')) return;
       e.preventDefault();
       _openNavPanel();

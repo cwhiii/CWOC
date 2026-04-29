@@ -309,8 +309,21 @@ function createChildChitCard(chit) {
   deleteBtn.className = "project-delete-item";
   deleteBtn.title = "Delete this chit";
   deleteBtn.innerHTML = '<i class="fas fa-trash-alt" aria-hidden="true"></i>';
-  deleteBtn.addEventListener("click", () => {
-    alert(`Delete action for chit ${chit.id} not implemented.`);
+  deleteBtn.addEventListener("click", async () => {
+    if (!(await cwocConfirm('Delete "' + (chit.title || 'Untitled') + '"?', { title: 'Delete Child Chit', confirmLabel: '🗑️ Delete', danger: true }))) return;
+    try {
+      var resp = await fetch('/api/chits/' + encodeURIComponent(chit.id), { method: 'DELETE' });
+      if (!resp.ok) throw new Error('Delete failed');
+      // Remove from parent's child_chits list
+      if (projectState.projectChit && Array.isArray(projectState.projectChit.child_chits)) {
+        projectState.projectChit.child_chits = projectState.projectChit.child_chits.filter(function(id) { return id !== chit.id; });
+      }
+      delete projectState.childChits[chit.id];
+      renderKanbanBoard();
+      setSaveButtonUnsaved();
+    } catch (e) {
+      console.error('Failed to delete child chit:', e);
+    }
   });
   rightContainer.appendChild(deleteBtn);
 

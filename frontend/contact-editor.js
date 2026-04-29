@@ -235,22 +235,43 @@
         }
     };
 
-    /** Stage an image locally (preview only) — actual upload happens on save */
+    /** Stage an image locally (preview only) — actual upload happens on save.
+     *  Resizes large images to max 512px on the longest side. */
+    var MAX_IMAGE_SIZE = 512;
     function _stageImage(file) {
-        _pendingImageFile = file;
         _pendingImageRemove = false;
-        // Show local preview via data URL
         var reader = new FileReader();
         reader.onload = function (e) {
-            var imgEl = document.getElementById('profileImage');
-            var placeholder = document.getElementById('profilePlaceholder');
-            var removeBtn = document.getElementById('removeImageBtn');
-            var viewBtn = document.getElementById('viewImageBtn');
-            imgEl.src = e.target.result;
-            imgEl.style.display = '';
-            placeholder.style.display = 'none';
-            removeBtn.style.display = '';
-            if (viewBtn) viewBtn.style.display = '';
+            var img = new Image();
+            img.onload = function () {
+                var w = img.width, h = img.height;
+                // Resize if larger than MAX_IMAGE_SIZE
+                if (w > MAX_IMAGE_SIZE || h > MAX_IMAGE_SIZE) {
+                    if (w > h) { h = Math.round(h * MAX_IMAGE_SIZE / w); w = MAX_IMAGE_SIZE; }
+                    else { w = Math.round(w * MAX_IMAGE_SIZE / h); h = MAX_IMAGE_SIZE; }
+                }
+                var canvas = document.createElement('canvas');
+                canvas.width = w;
+                canvas.height = h;
+                var ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, w, h);
+                // Convert to blob for upload
+                canvas.toBlob(function (blob) {
+                    if (!blob) { console.error('Image resize failed'); return; }
+                    _pendingImageFile = new File([blob], file.name || 'image.jpg', { type: blob.type });
+                    // Show preview
+                    var imgEl = document.getElementById('profileImage');
+                    var placeholder = document.getElementById('profilePlaceholder');
+                    var removeBtn = document.getElementById('removeImageBtn');
+                    var viewBtn = document.getElementById('viewImageBtn');
+                    imgEl.src = canvas.toDataURL();
+                    imgEl.style.display = '';
+                    placeholder.style.display = 'none';
+                    removeBtn.style.display = '';
+                    if (viewBtn) viewBtn.style.display = '';
+                }, file.type || 'image/jpeg', 0.85);
+            };
+            img.src = e.target.result;
         };
         reader.readAsDataURL(file);
         if (_saveSystem) _saveSystem.markUnsaved();

@@ -43,7 +43,7 @@
                         📱 QR
                     </button>
                     <button class="standard-button" id="headerAuditBtn" onclick="window.location.href='/frontend/audit-log.html?entity_type=chit&entity_id=' + encodeURIComponent(new URLSearchParams(window.location.search).get('id') || '')" style="font-size:0.85em;" title="View audit history for this chit">
-                        📜 Audit
+                        📜 Log
                     </button>
                     <button id="archivedButton" class="delete archive-btn" onclick="toggleArchived()" title="Toggle Archived State">
                         📦 Archive
@@ -644,52 +644,26 @@
                             onclick="toggleZone(event, 'healthIndicatorsSection', 'healthIndicatorsContent')"
                         >
                             <h2 class="zone-title">❤️ Health Indicators</h2>
-                            <div class="zone-actions" onclick="event.stopPropagation()">
-                                <label class="switch">
-                                    <input
-                                        type="checkbox"
-                                        id="unitToggle"
-                                        checked
-                                    />
-                                    <span class="slider round"></span>
-                                </label>
-                                <span class="unit-label"
-                                    >Imperial / Metric</span
-                                >
-                                <label class="switch">
-                                    <input
-                                        type="checkbox"
-                                        id="sexToggle"
-                                        checked
-                                    />
-                                    <span class="slider round"></span>
-                                </label>
-                                <span class="unit-label">Female / Male</span>
-                            </div>
                             <span class="zone-toggle-icon">🔽</span>
                         </div>
                         <div
                             id="healthIndicatorsContent"
                             class="zone-body healthBox"
+                            style="display:grid;grid-template-columns:1fr 1fr;gap:0 12px;"
                         >
-                            <div class="healthInput" id="weightEntry"></div>
-                            <div class="healthInput" id="distanceEntry"></div>
+                            <!-- Vitals -->
                             <div class="healthInput" id="heartRateEntry"></div>
                             <div class="healthInput" id="bpEntry"></div>
                             <div class="healthInput" id="spo2Entry"></div>
+                            <div class="healthInput" id="temperatureEntry"></div>
+                            <!-- Body -->
+                            <div class="healthInput" id="weightEntry"></div>
+                            <div class="healthInput" id="heightEntry"></div>
                             <div class="healthInput" id="glucoseEntry"></div>
-                            <div id="temperatureEntry"></div>
-                            <!-- Add this -->
-                            <div
-                                class="healthInput"
-                                iid="temperatureEntry"
-                            ></div>
-
-                            <div id="reproductionSection">
-                                <div
-                                    class="healthInput"
-                                    id="intercourseEntry"
-                                ></div>
+                            <!-- Activity -->
+                            <div class="healthInput" id="distanceEntry"></div>
+                            <!-- Cycle (female only) -->
+                            <div id="reproductionSection" style="display:none;">
                                 <div class="healthInput" id="cycleEntry"></div>
                             </div>
                         </div>

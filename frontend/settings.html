@@ -421,67 +421,22 @@
                             </select>
                         </div>
 
-                        <div
-                            class="settings-spacer-top"
-                            style="
-                                display: flex;
-                                align-items: center;
-                            "
-                        >
-                            <label style="margin-right: 10px">Sex</label>
-                            <div
-                                style="
-                                    position: relative;
-                                    display: inline-block;
-                                    clear: left;
-                                    width: 60px;
-                                    height: 30px;
-                                "
-                            >
-                                <input
-                                    type="checkbox"
-                                    id="gender-toggle"
-                                    style="opacity: 0; width: 0; height: 0"
-                                />
-                                <label
-                                    for="gender-toggle"
-                                    style="
-                                        position: absolute;
-                                        cursor: pointer;
-                                        top: 0;
-                                        left: 0;
-                                        right: 0;
-                                        bottom: 0;
-                                        background-color: #f5e6cc;
-                                        border-radius: 30px;
-                                        border: 1px solid #8b5a2b;
-                                        transition: 0.4s;
-                                    "
-                                >
-                                    <span
-                                        style="
-                                            position: absolute;
-                                            content: '';
-                                            height: 22px;
-                                            width: 22px;
-                                            left: 4px;
-                                            bottom: 3px;
-                                            background-color: #8b5a2b;
-                                            border-radius: 50%;
-                                            transition: 0.4s;
-                                            display: flex;
-                                            align-items: center;
-                                            justify-content: center;
-                                            color: #f5e6cc;
-                                            font-size: 12px;
-                                        "
-                                        >♂️</span
-                                    >
-                                </label>
+                        <div class="setting-inline settings-spacer-top">
+                            <label>Sex</label>
+                            <div id="sex-pill" class="cwoc-pill-toggle" style="display:flex;border:1px solid #8b5a2b;border-radius:4px;overflow:hidden;cursor:pointer;font-size:0.8em;">
+                                <input type="hidden" id="gender-toggle" value="Man" />
+                                <span data-val="Man" style="padding:4px 8px;background:#8b5a2b;color:#fff8e1;font-weight:bold;">♂ Man</span>
+                                <span data-val="Woman" style="padding:4px 8px;background:#f5e6cc;color:#bbb;">♀ Woman</span>
                             </div>
-                            <span id="gender-label" style="margin-left: 10px"
-                                >Man</span
-                            >
+                        </div>
+
+                        <div class="setting-inline">
+                            <label>📏 Units</label>
+                            <div id="unit-pill" class="cwoc-pill-toggle" style="display:flex;border:1px solid #8b5a2b;border-radius:4px;overflow:hidden;cursor:pointer;font-size:0.8em;">
+                                <input type="hidden" id="unit-system-toggle" value="imperial" />
+                                <span data-val="imperial" style="padding:4px 8px;background:#8b5a2b;color:#fff8e1;font-weight:bold;">Imperial</span>
+                                <span data-val="metric" style="padding:4px 8px;background:#f5e6cc;color:#bbb;">Metric</span>
+                            </div>
                         </div>
 
                         <div class="setting-inline settings-spacer-top">
@@ -631,11 +586,11 @@
 
                         <label class="setting-subheader">📅 Start Time Notifications</label>
                         <div id="default-notif-start-list"></div>
-                        <button type="button" class="standard-button" style="margin-top:6px;" onclick="_addDefaultNotifRow('start')">➕ Add</button>
+                        <button type="button" class="standard-button" style="margin-top:6px;width:100%;" onclick="_addDefaultNotifRow('start')">➕ Add</button>
 
                         <label class="setting-subheader">⏰ Due Time Notifications</label>
                         <div id="default-notif-due-list"></div>
-                        <button type="button" class="standard-button" style="margin-top:6px;" onclick="_addDefaultNotifRow('due')">➕ Add</button>
+                        <button type="button" class="standard-button" style="margin-top:6px;width:100%;" onclick="_addDefaultNotifRow('due')">➕ Add</button>
                     </div>
                     <div class="setting-group">
                         <h3>🎨 Custom Colors</h3>

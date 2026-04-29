@@ -3065,6 +3065,9 @@ function displayChits() {
     case "Projects":
       displayProjectsView(filteredChits);
       break;
+    case "Indicators":
+      displayIndicatorsView();
+      return; // Indicators view manages its own rendering
     case "Search":
       displaySearchView();
       return; // Search view manages its own rendering; skip post-render steps
@@ -6974,7 +6977,7 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     // ── Top-level hotkeys ──
-    const tabMap = { c: 'Calendar', h: 'Checklists', a: 'Alarms', p: 'Projects', t: 'Tasks', n: 'Notes', g: 'Search' };
+    const tabMap = { c: 'Calendar', h: 'Checklists', a: 'Alarms', p: 'Projects', t: 'Tasks', n: 'Notes', i: 'Indicators', g: 'Search' };
     if (tabMap[keyLower]) {
       e.preventDefault();
       filterChits(tabMap[keyLower]);
