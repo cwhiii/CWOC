@@ -2508,6 +2508,16 @@ button.archive-btn.archived-active {
     background: #555 !important;
 }
 
+/* Audit log button in header — warm brown */
+#headerAuditBtn {
+    background: #6b4e31 !important;
+    color: #fff8e1 !important;
+    border: 2px outset #4a2c2a !important;
+}
+#headerAuditBtn:hover {
+    background: #5a3f2a !important;
+}
+
 /* ── Date mode radio layout ───────────────────────────────────────────────── */
 .date-mode-group {
     display: table;

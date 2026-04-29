@@ -626,6 +626,18 @@
                         </div>
                     </div>
                     <div class="setting-group">
+                        <h3>🔔 Default Notifications</h3>
+                        <p class="setting-hint">Auto-added to new chits when a date is set. Editable per-chit after creation.</p>
+
+                        <label class="setting-subheader">📅 Start Time Notifications</label>
+                        <div id="default-notif-start-list"></div>
+                        <button type="button" class="standard-button" style="margin-top:6px;" onclick="_addDefaultNotifRow('start')">➕ Add</button>
+
+                        <label class="setting-subheader">⏰ Due Time Notifications</label>
+                        <div id="default-notif-due-list"></div>
+                        <button type="button" class="standard-button" style="margin-top:6px;" onclick="_addDefaultNotifRow('due')">➕ Add</button>
+                    </div>
+                    <div class="setting-group">
                         <h3>🎨 Custom Colors</h3>
                         <ul id="color-list" class="color-list"></ul>
                         <button onclick="openColorPicker()">➕ Add Color</button>
@@ -808,7 +820,7 @@
                     </div>
                 </div>
             </div>
-            <div class="author-info">C.W.'s Omni Chits &middot; <a href="https://www.cwholemaniii.com" target="_blank">cwholemaniii.com</a></div>
+            <div class="author-info">&copy; 2026 C.W.'s Omni Chits &middot; <a href="https://www.cwholemaniii.com/pages/home.shtml" target="_blank">www.cwholemaniii.com</a></div>
             <script src="/frontend/shared.js"></script>
             <script src="/frontend/shared-page.js"></script>
             <script src="/frontend/shared-editor.js"></script>

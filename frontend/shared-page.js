@@ -159,7 +159,7 @@ window.CwocSaveSystem = CwocSaveSystem;
   // ── Build footer (matches original .author-info structure) ──
   var footer = document.createElement('div');
   footer.className = 'author-info';
-  footer.innerHTML = 'C.W.\'s Omni Chits &middot; <a href="https://www.cwholemaniii.com" target="_blank">cwholemaniii.com</a>';
+  footer.innerHTML = '&copy; 2026 C.W.\'s Omni Chits &middot; <a href="https://www.cwholemaniii.com/pages/home.shtml" target="_blank">www.cwholemaniii.com</a>';
   panel.parentNode.insertBefore(footer, panel.nextSibling);
 
   // ── ESC to go back (all secondary pages) ──────────────────────────────

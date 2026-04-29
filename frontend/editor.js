@@ -501,6 +501,11 @@ function onDateModeChange() {
   // Show/hide Add Notification button based on whether dates are set
   _updateNotificationBtnVisibility();
 
+  // Auto-populate default notifications for NEW chits when a date mode is first activated
+  if (!_dateModeSuppressUnsaved && window.isNewChit && mode !== 'none') {
+    _applyDefaultNotifications(mode);
+  }
+
   if (!_dateModeSuppressUnsaved) setSaveButtonUnsaved();
 }
 
@@ -2061,6 +2066,47 @@ function renderAlarmsContainer() {
 
     c.appendChild(wrap);
   });
+}
+
+/**
+ * Apply default notifications from settings when a date mode is activated on a new chit.
+ * Only adds if no notifications exist yet.
+ */
+var _defaultNotifsApplied = false;
+function _applyDefaultNotifications(mode) {
+  if (_defaultNotifsApplied) return; // only apply once per chit
+  if (!window._alertsData || window._alertsData.notifications.length > 0) return; // already has notifications
+
+  getCachedSettings().then(function(settings) {
+    var dn = settings.default_notifications;
+    if (!dn) return;
+
+    var toAdd = [];
+    // For 'startend' mode, add start-time defaults
+    if (mode === 'startend' && Array.isArray(dn.start)) {
+      dn.start.forEach(function(n) {
+        toAdd.push({ _type: 'notification', value: n.value, unit: n.unit || 'minutes', afterTarget: !!n.afterTarget, only_if_undone: true, message: '' });
+      });
+    }
+    // For 'due' mode, add due-time defaults
+    if (mode === 'due' && Array.isArray(dn.due)) {
+      dn.due.forEach(function(n) {
+        toAdd.push({ _type: 'notification', value: n.value, unit: n.unit || 'minutes', afterTarget: !!n.afterTarget, only_if_undone: true, message: '' });
+      });
+    }
+    // For 'startend' mode, also add due defaults (chit might have both)
+    if (mode === 'startend' && Array.isArray(dn.due)) {
+      dn.due.forEach(function(n) {
+        toAdd.push({ _type: 'notification', value: n.value, unit: n.unit || 'minutes', afterTarget: !!n.afterTarget, only_if_undone: true, message: '' });
+      });
+    }
+
+    if (toAdd.length === 0) return;
+    _defaultNotifsApplied = true;
+    toAdd.forEach(function(n) { window._alertsData.notifications.push(n); });
+    renderNotificationsContainer();
+    setSaveButtonUnsaved();
+  }).catch(function() { /* ignore */ });
 }
 
 function renderNotificationsContainer() {

@@ -147,6 +147,7 @@ function _clearAllFilters() {
   const sa = document.getElementById('show-archived'); if (sa) sa.checked = false;
   const su = document.getElementById('show-unmarked'); if (su) su.checked = true;
   const hpd = document.getElementById('hide-past-due'); if (hpd) hpd.checked = false;
+  const hc = document.getElementById('hide-complete'); if (hc) hc.checked = false;
   const search = document.getElementById('search'); if (search) search.value = '';
   // Re-check "Any" checkboxes
   document.querySelectorAll('input[data-any="true"]').forEach(cb => { cb.checked = true; });
@@ -184,8 +185,9 @@ function _updateClearFiltersButton() {
   const showArchived = document.getElementById('show-archived')?.checked ?? false;
   const showUnmarked = document.getElementById('show-unmarked')?.checked ?? true;
   const hidePastDue = document.getElementById('hide-past-due')?.checked ?? false;
+  const hideComplete = document.getElementById('hide-complete')?.checked ?? false;
   const isDefault = !hasStatusFilter && !hasLabelFilter && !hasPriorityFilter && !hasPeopleFilter
-    && !searchText && showPinned && !showArchived && showUnmarked && !hidePastDue && !currentSortField;
+    && !searchText && showPinned && !showArchived && showUnmarked && !hidePastDue && !hideComplete && !currentSortField;
   section.style.display = isDefault ? 'none' : '';
 
   // Show "Reset Default Filters" button if the current tab has a default filter
@@ -2446,6 +2448,7 @@ function storePreviousState() {
     showArchived: document.getElementById('show-archived')?.checked ?? false,
     showUnmarked: document.getElementById('show-unmarked')?.checked ?? true,
     hidePastDue: document.getElementById('hide-past-due')?.checked ?? false,
+    hideComplete: document.getElementById('hide-complete')?.checked ?? false,
   };
   localStorage.setItem('cwoc_ui_state', JSON.stringify(state));
 }
@@ -2593,6 +2596,8 @@ function _restoreUIState() {
     if (su) su.checked = state.showUnmarked ?? true;
     const hpd = document.getElementById('hide-past-due');
     if (hpd) hpd.checked = state.hidePastDue ?? false;
+    const hc = document.getElementById('hide-complete');
+    if (hc) hc.checked = state.hideComplete ?? false;
 
     // Restore tab highlight
     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -2629,7 +2634,7 @@ function _restoreUIState() {
     if (state.labelFilters && state.labelFilters.length > 0) {
       expandFilterGroup('filter-label');
     }
-    if (state.showArchived || !state.showPinned || !state.showUnmarked || state.hidePastDue) {
+    if (state.showArchived || !state.showPinned || !state.showUnmarked || state.hidePastDue || state.hideComplete) {
       expandFilterGroup('filter-archive');
     }
 
@@ -3005,6 +3010,12 @@ function displayChits() {
       if (!c.due_datetime || c.status === 'Complete') return true;
       return new Date(c.due_datetime) >= now;
     });
+  }
+
+  // Apply hide-complete filter
+  const hideComplete = document.getElementById('hide-complete')?.checked ?? false;
+  if (hideComplete) {
+    filteredChits = filteredChits.filter(c => c.status !== 'Complete');
   }
 
   // Apply sort
@@ -6540,6 +6551,29 @@ document.addEventListener("DOMContentLoaded", function () {
     updateDateRange();
     // Prefetch weather for all saved locations (async, non-blocking)
     if (typeof prefetchSavedLocationWeather === 'function') prefetchSavedLocationWeather();
+
+    // Schedule weather refresh every 4 hours on the hour (midnight, 4am, 8am, noon, 4pm, 8pm)
+    (function _scheduleWeatherRefresh() {
+      var now = new Date();
+      var nextHour = Math.ceil(now.getHours() / 4) * 4;
+      if (nextHour === now.getHours() && now.getMinutes() === 0) nextHour += 4;
+      if (nextHour >= 24) nextHour = 0;
+      var next = new Date(now);
+      next.setHours(nextHour, 0, 0, 0);
+      if (next <= now) next.setDate(next.getDate() + 1);
+      var msUntilNext = next.getTime() - now.getTime();
+      console.debug('Weather refresh scheduled in ' + Math.round(msUntilNext / 60000) + ' min');
+      setTimeout(function _doWeatherRefresh() {
+        console.debug('Weather refresh triggered');
+        _invalidateSettingsCache();
+        window._weatherForecastCache = {};
+        try { localStorage.removeItem('cwoc_weather_forecast_cache'); } catch(e) {}
+        if (typeof prefetchSavedLocationWeather === 'function') prefetchSavedLocationWeather();
+        if (typeof _prefetchChitWeather === 'function') _prefetchChitWeather(chits);
+        // Schedule next in 4 hours
+        setTimeout(_doWeatherRefresh, 4 * 60 * 60 * 1000);
+      }, msUntilNext);
+    })();
   }).catch(() => {
     fetchChits();
     updateDateRange();

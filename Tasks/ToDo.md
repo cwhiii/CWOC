@@ -19,9 +19,7 @@
 
 ## Easy Fixes / Low-Hanging Fruit
 
-- `[ ]` Hide Completes (not past-due) sidebar toggle button — persist state across sessions
 - `[ ]` Screenshot and video walkthrough of the app
-- even if the page isn't reloaded, refresh the forecast every 4 hours
 
 ---
 

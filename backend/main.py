@@ -93,6 +93,7 @@ class Settings(BaseModel):
     username: Optional[str] = None  # Display name for audit log attribution
     audit_log_max_days: Optional[int] = 1096
     audit_log_max_mb: Optional[int] = 1
+    default_notifications: Optional[Dict[str, Any]] = None  # { start: [...], due: [...] }
 
 class Chit(BaseModel):
     id: Optional[str] = None
@@ -782,6 +783,24 @@ def migrate_add_audit_settings():
             conn.close()
 
 
+def migrate_add_default_notifications():
+    """Add default_notifications column to settings table."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(settings)")
+        existing = {row[1] for row in cursor.fetchall()}
+        if "default_notifications" not in existing:
+            cursor.execute("ALTER TABLE settings ADD COLUMN default_notifications TEXT")
+            conn.commit()
+            logger.info("Added default_notifications column to settings table")
+    except Exception as e:
+        logger.error(f"Error adding default_notifications column: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
 def migrate_add_standalone_alerts():
     """Create standalone_alerts table for independent alerts not connected to any chit."""
     conn = None
@@ -1456,6 +1475,7 @@ migrate_add_username()
 migrate_add_weather_data()
 migrate_add_audit_log()
 migrate_add_audit_settings()
+migrate_add_default_notifications()
 migrate_add_standalone_alerts()
 migrate_add_alert_state()
 seed_version_info()
@@ -2206,6 +2226,7 @@ def export_userdata():
             s["chit_options"] = deserialize_json_field(s.get("chit_options"))
             # active_clocks is a comma-separated string, not JSON — keep as-is
             s["saved_locations"] = deserialize_json_field(s.get("saved_locations"))
+            s["default_notifications"] = deserialize_json_field(s.get("default_notifications"))
             settings.append(s)
 
         # --- Contacts ---
@@ -2640,6 +2661,7 @@ def get_settings(user_id: str):
         settings["chit_options"] = deserialize_json_field(settings["chit_options"])
         settings["active_clocks"] = deserialize_json_field(settings.get("active_clocks"))
         settings["saved_locations"] = deserialize_json_field(settings.get("saved_locations"))
+        settings["default_notifications"] = deserialize_json_field(settings.get("default_notifications"))
         return settings
     except Exception as e:
         logger.error(f"Error fetching settings: {str(e)}")
@@ -2692,6 +2714,7 @@ def save_settings(settings: Settings):
             "username": settings.username,
             "audit_log_max_days": settings.audit_log_max_days,
             "audit_log_max_mb": settings.audit_log_max_mb,
+            "default_notifications": serialize_json_field(settings.default_notifications),
         }
 
         cursor.execute(
@@ -2701,8 +2724,8 @@ def save_settings(settings: Settings):
                 alarm_orientation, active_clocks, saved_locations, tags, custom_colors, visual_indicators, chit_options,
                 calendar_snap, week_start_day, work_start_hour, work_end_hour, work_days, enabled_periods, custom_days_count,
                 all_view_start_hour, all_view_end_hour, day_scroll_to_hour,
-                username, audit_log_max_days, audit_log_max_mb
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                username, audit_log_max_days, audit_log_max_mb, default_notifications
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 new_settings_dict["user_id"],
@@ -2730,6 +2753,7 @@ def save_settings(settings: Settings):
                 new_settings_dict["username"],
                 new_settings_dict["audit_log_max_days"],
                 new_settings_dict["audit_log_max_mb"],
+                new_settings_dict["default_notifications"],
             )
         )
 
@@ -3221,6 +3245,9 @@ def update_contact(contact_id: str, contact: Contact):
         columns = [col[0] for col in cursor.description]
         existing_row = dict(zip(columns, existing))
         contact_dict["created_datetime"] = existing_row["created_datetime"]
+        # Preserve image_url if not explicitly provided in the update
+        if contact_dict.get("image_url") is None and existing_row.get("image_url"):
+            contact_dict["image_url"] = existing_row["image_url"]
 
         # Write updated .vcf file
         _write_vcf_file(contact_id, contact_dict)
@@ -3230,6 +3257,9 @@ def update_contact(contact_id: str, contact: Contact):
 
         # Update SQLite row
         db_fields = _serialize_contact_for_db(contact)
+        # Preserve image_url from existing row if not in the update payload
+        if db_fields.get("image_url") is None and existing_row.get("image_url"):
+            db_fields["image_url"] = existing_row["image_url"]
         cursor.execute(
             """
             UPDATE contacts SET

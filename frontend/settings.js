@@ -1447,6 +1447,11 @@ class SettingsManager {
       if (individualRows) individualRows.style.display = vi.combine_alerts ? 'none' : '';
       if (combinedRow) combinedRow.style.display = vi.combine_alerts ? '' : 'none';
     }
+
+    // Default notifications
+    var dn = this.settings.default_notifications || {};
+    _renderDefaultNotifList('start', dn.start || []);
+    _renderDefaultNotifList('due', dn.due || []);
   }
 
   gatherSettings() {
@@ -1523,6 +1528,10 @@ class SettingsManager {
       saved_locations: JSON.stringify(collectLocationsData()),
       audit_log_max_days: (() => { const cb = document.getElementById("audit-prune-enabled"); if (cb && !cb.checked) return null; const v = (document.getElementById("audit-max-days") || {}).value; return v === '' ? null : parseInt(v, 10); })(),
       audit_log_max_mb: (() => { const cb = document.getElementById("audit-prune-enabled"); if (cb && !cb.checked) return null; const v = (document.getElementById("audit-max-mb") || {}).value; return v === '' ? null : parseInt(v, 10); })(),
+      default_notifications: {
+        start: _gatherDefaultNotifList('start'),
+        due: _gatherDefaultNotifList('due'),
+      },
     };
   }
 
@@ -2083,4 +2092,130 @@ async function loadLastLog() {
   }
   closeBtn.disabled = false;
   modal.style.display = 'flex';
+}
+
+
+// ── Default Notifications (settings UI) ──────────────────────────────────────
+
+/**
+ * Render the list of default notification rows for a given type ('start' or 'due').
+ * @param {string} type - 'start' or 'due'
+ * @param {Array} items - [{value, unit, afterTarget}]
+ */
+function _renderDefaultNotifList(type, items) {
+  var container = document.getElementById('default-notif-' + type + '-list');
+  if (!container) return;
+  container.innerHTML = '';
+  if (!items || items.length === 0) {
+    container.innerHTML = '<div style="opacity:0.5;font-size:0.85em;padding:4px;">None configured.</div>';
+    return;
+  }
+  items.forEach(function(item, idx) {
+    var row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:4px;';
+
+    var valInput = document.createElement('input');
+    valInput.type = 'number';
+    valInput.min = '1';
+    valInput.value = item.value || 15;
+    valInput.style.cssText = 'width:50px;padding:4px;border:1px solid #8b5a2b;border-radius:4px;font-family:inherit;';
+    valInput.addEventListener('input', function() { setSaveButtonUnsaved(); });
+    valInput.dataset.notifType = type;
+    valInput.dataset.notifIdx = idx;
+    valInput.dataset.notifField = 'value';
+    row.appendChild(valInput);
+
+    var unitSel = document.createElement('select');
+    ['minutes', 'hours', 'days'].forEach(function(u) {
+      var opt = document.createElement('option');
+      opt.value = u;
+      opt.textContent = u;
+      if (u === (item.unit || 'minutes')) opt.selected = true;
+      unitSel.appendChild(opt);
+    });
+    unitSel.style.cssText = 'padding:4px;border:1px solid #8b5a2b;border-radius:4px;font-family:inherit;';
+    unitSel.addEventListener('change', function() { setSaveButtonUnsaved(); });
+    unitSel.dataset.notifType = type;
+    unitSel.dataset.notifIdx = idx;
+    unitSel.dataset.notifField = 'unit';
+    row.appendChild(unitSel);
+
+    var timingSel = document.createElement('select');
+    [{ v: 'false', t: 'before' }, { v: 'true', t: 'after' }].forEach(function(o) {
+      var opt = document.createElement('option');
+      opt.value = o.v;
+      opt.textContent = o.t;
+      if (String(item.afterTarget) === o.v) opt.selected = true;
+      timingSel.appendChild(opt);
+    });
+    timingSel.style.cssText = 'padding:4px;border:1px solid #8b5a2b;border-radius:4px;font-family:inherit;';
+    timingSel.addEventListener('change', function() { setSaveButtonUnsaved(); });
+    timingSel.dataset.notifType = type;
+    timingSel.dataset.notifIdx = idx;
+    timingSel.dataset.notifField = 'afterTarget';
+    row.appendChild(timingSel);
+
+    var label = document.createElement('span');
+    label.textContent = type === 'start' ? 'start' : 'due';
+    label.style.cssText = 'font-size:0.85em;opacity:0.7;';
+    row.appendChild(label);
+
+    var removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.textContent = '✕';
+    removeBtn.title = 'Remove this notification';
+    removeBtn.style.cssText = 'background:#a0522d;color:#fdf5e6;border:1px solid #5c4033;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:14px;font-family:inherit;flex-shrink:0;';
+    removeBtn.addEventListener('click', function() {
+      row.remove();
+      setSaveButtonUnsaved();
+      // If no rows left, show placeholder
+      if (container.children.length === 0) {
+        container.innerHTML = '<div style="opacity:0.5;font-size:0.85em;padding:4px;">None configured.</div>';
+      }
+    });
+    row.appendChild(removeBtn);
+
+    container.appendChild(row);
+  });
+}
+
+/**
+ * Add a new default notification row for a given type.
+ */
+function _addDefaultNotifRow(type) {
+  var container = document.getElementById('default-notif-' + type + '-list');
+  if (!container) return;
+  // Remove "None configured" placeholder
+  var placeholder = container.querySelector('div[style*="opacity"]');
+  if (placeholder && container.children.length === 1) container.innerHTML = '';
+  // Count existing rows
+  var existingCount = container.querySelectorAll('div[style*="display:flex"]').length;
+  _renderDefaultNotifList(type, _gatherDefaultNotifList(type).concat([{ value: 15, unit: 'minutes', afterTarget: false }]));
+  setSaveButtonUnsaved();
+}
+
+/**
+ * Gather default notification rows from the DOM for a given type.
+ * @param {string} type - 'start' or 'due'
+ * @returns {Array} [{value, unit, afterTarget}]
+ */
+function _gatherDefaultNotifList(type) {
+  var container = document.getElementById('default-notif-' + type + '-list');
+  if (!container) return [];
+  var rows = container.querySelectorAll('div[style*="display:flex"]');
+  var result = [];
+  rows.forEach(function(row) {
+    var valInput = row.querySelector('input[type="number"]');
+    var unitSel = row.querySelectorAll('select')[0];
+    var timingSel = row.querySelectorAll('select')[1];
+    if (!valInput || !unitSel) return;
+    var val = parseInt(valInput.value);
+    if (!val || val <= 0) return;
+    result.push({
+      value: val,
+      unit: unitSel.value || 'minutes',
+      afterTarget: timingSel ? timingSel.value === 'true' : false,
+    });
+  });
+  return result;
 }
