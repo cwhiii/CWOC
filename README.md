@@ -35,7 +35,7 @@ source venv/bin/activate
 pip install -r requirements.txt
 
 # Run the server
-uvicorn backend.main:app --host 0.0.0.0 --port 3333 --reload --log-level debug
+uvicorn src.backend.main:app --host 0.0.0.0 --port 3333 --reload --log-level debug
 ```
 
 Open `http://localhost:3333` in your browser.
@@ -82,13 +82,13 @@ Click **Upgrade Omni Chits** in Settings → Version & Updates. The upgrade stre
 └────────────────────┬────────────────────────────────┘
                      │ REST API (JSON) + WebSocket
 ┌────────────────────▼────────────────────────────────┐
-│  FastAPI (Python 3) — backend/main.py               │
+│  FastAPI (Python 3) — src/backend/main.py           │
 │  Uvicorn on port 3333                               │
 │  SQLite3 — data/app.db                              │
 └─────────────────────────────────────────────────────┘
 ```
 
-- **Backend:** FastAPI + Uvicorn (Python 3), single-file backend (`backend/main.py`)
+- **Backend:** FastAPI + Uvicorn (Python 3), modular backend under `src/backend/` (main.py, routes/, models, db, migrations, weather, serializers)
 - **Database:** SQLite3 via Python stdlib — single file, no ORM
 - **Frontend:** Pure vanilla JS, HTML5, CSS3 — no framework, no build step
 - **External CDN libs:** Flatpickr (date picker), Font Awesome 6 (icons), marked.js (markdown), qrcode-generator
@@ -244,38 +244,109 @@ Click **Upgrade Omni Chits** in Settings → Version & Updates. The upgrade stre
 ## Project Structure
 
 ```
-backend/
-  main.py                  # FastAPI app — all routes, models, DB init, migrations
+src/
+  INDEX.md                 # Complete code index — every function, class, route, CSS section
 
-frontend/
-  index.html               # Main dashboard (C CAPTN tab views)
-  main.js                  # Dashboard rendering, tab logic, calendar views, sidebar
-  styles.css               # Dashboard-specific styles
-  editor.html              # Chit editor page
-  editor.js                # Editor logic (zones, save, load)
-  editor.css               # Editor-specific styles
-  editor_checklists.js     # Checklist class (nested items, drag-drop, undo)
-  editor_projects.js       # Projects zone (Kanban board for project master chits)
-  settings.html            # Settings page
-  settings.js              # Settings logic (tags, colors, indicators, options)
-  people.html              # People / contacts list page
-  people.js                # People list logic (search, import/export, QR)
-  contact-editor.html      # Contact editor page
-  contact-editor.js        # Contact editor logic
-  contact-qr.js            # Contact QR code / vCard sharing
-  weather.html             # Weather forecast page
-  weather.js               # Weather page logic (forecast table, drag reorder)
-  trash.html               # Trash view (soft-deleted chits)
-  audit-log.html           # Audit log page (filterable, sortable, exportable)
-  help.html                # Help / documentation page
-  shared.js                # Shared utilities (checklist toggle, manual sort, calendar drag, recurrence)
-  shared-page.js           # Shared page components (save system, auto header/footer injection)
-  shared-page.css          # Shared styles for secondary pages (parchment theme)
-  shared-editor.js         # Shared editor utilities (zone toggle, dirty tracking)
-  shared-editor.css        # Shared editor styles (zones, fields, buttons)
-  _template.html           # HTML template for new pages
+  backend/
+    __init__.py            # Package marker
+    main.py                # FastAPI app — startup, middleware, route registration
+    db.py                  # Database helpers, shared state, JSON serialization
+    models.py              # Pydantic models (Chit, Settings, Contact, etc.)
+    migrations.py          # Inline DB migrations (ALTER TABLE with existence checks)
+    weather.py             # Weather API integration & background schedulers
+    serializers.py         # vCard & CSV import/export
+    test_audit.py          # Audit diff property tests
+    test_vcard.py          # vCard unit tests
+    routes/
+      __init__.py          # Package marker
+      chits.py             # Chit CRUD, import/export
+      trash.py             # Trash (soft-delete restore/purge)
+      settings.py          # Settings & standalone alerts
+      contacts.py          # Contact CRUD, image upload, vCard/CSV
+      audit.py             # Audit log queries, export, pruning
+      health.py            # Health check, version, sync, geocode, pages
 
-static/                    # Images and assets (logos, icons, parchment background, audio)
+  frontend/
+    html/
+      index.html           # Main dashboard (C CAPTN tab views)
+      editor.html          # Chit editor page
+      settings.html        # Settings page
+      people.html          # People / contacts list page
+      contact-editor.html  # Contact editor page
+      weather.html         # Weather forecast page
+      trash.html           # Trash view (soft-deleted chits)
+      audit-log.html       # Audit log page
+      help.html            # Help / documentation page
+      _template.html       # HTML template for new pages
+
+    js/
+      shared/              # Shared utilities (loaded by all pages)
+        shared-utils.js    # Core utilities (settings cache, confirm, date formatting)
+        shared-touch.js    # Touch event adapter for drag interactions
+        shared-checklist.js # Inline checklist toggle, move, drag-and-drop
+        shared-sort.js     # Manual sort order persistence and drag-to-reorder
+        shared-indicators.js # Visual indicator helpers for chit cards
+        shared-calendar.js # Calendar display, drag, multi-day, pinch zoom
+        shared-tags.js     # Tag tree, filtering, inline creation
+        shared-recurrence.js # Recurrence expansion and formatting
+        shared-geocoding.js # Geocoding with progressive fallback
+        shared-qr.js       # QR code display modal
+        shared.js          # Coordinator — quick-edit, notes layout, mobile, weather, alarms, sync
+
+      dashboard/           # Dashboard-specific scripts
+        main-sidebar.js    # Sidebar controls, filters, sort
+        main-hotkeys.js    # Keyboard shortcuts and hotkey panels
+        main-calendar.js   # Calendar view rendering
+        main-views.js      # Tab view rendering (tasks, notes, checklists, projects)
+        main-alerts.js     # Alerts tab and independent alerts board
+        main-search.js     # Global search
+        main-modals.js     # Dashboard modals (delete, clock, weather, quick-edit)
+        main-init.js       # Dashboard initialization
+        main.js            # Dashboard entry point
+
+      editor/              # Chit editor scripts
+        editor.js          # Core editor globals and helpers
+        editor-dates.js    # Dates & Times zone
+        editor-tags.js     # Tags zone
+        editor-people.js   # People zone
+        editor-location.js # Location zone
+        editor-notes.js    # Notes zone
+        editor-alerts.js   # Alerts zone
+        editor-color.js    # Color zone
+        editor-health.js   # Health indicators zone
+        editor-save.js     # Save/exit logic
+        editor-init.js     # Editor initialization
+        editor_checklists.js # Checklist class (nested items, drag-drop, undo)
+        editor_projects.js # Projects zone (Kanban board)
+
+      pages/               # Secondary page scripts
+        shared-page.js     # Shared page components (save system, header/footer injection)
+        shared-editor.js   # Shared editor utilities (zone toggle, dirty tracking)
+        settings.js        # Settings page logic
+        people.js          # People list logic
+        contact-editor.js  # Contact editor logic
+        contact-qr.js      # Contact QR code / vCard sharing
+        weather.js         # Weather page logic
+
+    css/
+      shared/
+        shared-page.css    # Shared styles for secondary pages (parchment theme, variables)
+        shared-editor.css  # Shared editor styles (zones, fields, buttons)
+      dashboard/
+        styles-variables.css  # Dashboard CSS custom properties
+        styles-layout.css     # Body, header, top bar, forms
+        styles-sidebar.css    # Sidebar, filters, multi-select
+        styles-tabs.css       # Tab bar, active/hover states
+        styles-calendar.css   # Calendar views, events, drag handles
+        styles-cards.css      # Chit cards, notes masonry, markdown
+        styles-hotkeys.css    # Hotkey overlay, reference overlay
+        styles-modals.css     # Delete/clock/weather/quick-edit modals
+        styles-responsive.css # All @media breakpoint rules
+        styles.css            # Coordinator (loads last, overrides)
+      editor/
+        editor.css         # Chit-specific editor styles
+
+  static/                  # Images and assets (logos, icons, parchment background, audio)
 
 data/                      # SQLite database files (app.db)
 

@@ -6,21 +6,49 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Page Title — C.W.'s Omni Chits</title>
     <link rel="stylesheet" href="/frontend/css/shared/shared-page.css" />
+    <!-- Uncomment if this page uses editor-like zones (collapsible sections, form fields): -->
+    <!-- <link rel="stylesheet" href="/frontend/css/shared/shared-editor.css" /> -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
     <style>
         /* ══ PAGE-SPECIFIC STYLES ONLY ══
-           Everything shared is in shared-page.css.
+           Everything shared is in shared-page.css (and optionally shared-editor.css).
            Only add styles here that are unique to THIS page. */
     </style>
 </head>
 <!--
+    ═══════════════════════════════════════════════════════════════════════════
+    CWOC Page Template
+    ═══════════════════════════════════════════════════════════════════════════
+
     data-page-title and data-page-icon trigger auto header/footer injection
     via shared-page.js. The injection creates:
       .settings-panel > .header-and-buttons (logo + title + nav buttons)
     and appends .author-info footer after .settings-panel.
 
-    Optional: data-hide-nav="audit-log,trash" to hide specific nav buttons.
-    Optional: data-show-nav="trash,people,weather" to show normally-hidden nav buttons.
+    Optional body attributes:
+      data-hide-nav="audit-log,trash"   — hide specific nav buttons
+      data-show-nav="trash,people"      — show normally-hidden nav buttons
+
+    ═══════════════════════════════════════════════════════════════════════════
+    REQUIRED SCRIPT LOAD ORDER (at end of <body>):
+
+    1. Shared sub-scripts (order matters — utils first, coordinator last):
+         shared-utils.js → shared-touch.js → shared-checklist.js →
+         shared-sort.js → shared-indicators.js → shared-calendar.js →
+         shared-tags.js → shared-recurrence.js → shared-geocoding.js →
+         shared-qr.js → shared.js
+
+    2. Shared page components:
+         shared-page.js
+
+    3. (Optional) Shared editor — only if page uses editor zones:
+         shared-editor.js
+
+    4. Page-specific script(s):
+         your-page.js
+
+    See src/INDEX.md § 4 "Load Order" for the full reference.
+    ═══════════════════════════════════════════════════════════════════════════
 -->
 <body data-page-title="Page Title" data-page-icon="">
 
@@ -29,6 +57,7 @@
         <p>Page content goes here.</p>
     </div>
 
+    <!-- ── 1. Shared sub-scripts (utils first, coordinator last) ─────────── -->
     <script src="/frontend/js/shared/shared-utils.js"></script>
     <script src="/frontend/js/shared/shared-touch.js"></script>
     <script src="/frontend/js/shared/shared-checklist.js"></script>
@@ -40,6 +69,14 @@
     <script src="/frontend/js/shared/shared-geocoding.js"></script>
     <script src="/frontend/js/shared/shared-qr.js"></script>
     <script src="/frontend/js/shared/shared.js"></script>
+
+    <!-- ── 2. Shared page components ─────────────────────────────────────── -->
     <script src="/frontend/js/pages/shared-page.js"></script>
+
+    <!-- ── 3. (Optional) Shared editor — uncomment if page uses editor zones -->
+    <!-- <script src="/frontend/js/pages/shared-editor.js"></script> -->
+
+    <!-- ── 4. Page-specific script ───────────────────────────────────────── -->
+    <!-- <script src="/frontend/js/pages/your-page.js"></script> -->
 </body>
 </html>

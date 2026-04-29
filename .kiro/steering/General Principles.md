@@ -40,8 +40,8 @@ DO NOT INSTALL THINGS!
 
 ## Minimal Surface Area
 - Keep changes focused. When fixing a bug or adding a feature, avoid unrelated refactors in the same change.
-- New frontend pages must start from `frontend/_template.html` and use `shared-page.js` for automatic header/footer injection (triggered by `data-page-title` on `<body>`).
-- Database schema changes go in `backend/main.py` as inline migration functions with column-existence checks — no external migration tools.
+- New frontend pages must start from `src/frontend/html/_template.html` and use `shared-page.js` for automatic header/footer injection (triggered by `data-page-title` on `<body>`).
+- Database schema changes go in `src/backend/migrations.py` as inline migration functions with column-existence checks — no external migration tools.
 - JSON-serialized fields (`tags`, `checklist`, `alerts`, `recurrence_rule`, etc.) use `serialize_json_field` / `deserialize_json_field` helpers in the backend.
 
 ## Code Quality
@@ -63,7 +63,7 @@ DO NOT INSTALL THINGS!
 - When in doubt, make text darker and larger rather than lighter and smaller.
 
 ## Backend Architecture
-- The entire backend is a single file: `backend/main.py`. Routes, Pydantic models, DB init, and migrations all live there.
+- The backend is modular under `src/backend/`: `main.py` (entry point), `routes/` (6 route modules), `db.py`, `models.py`, `migrations.py`, `weather.py`, `serializers.py`.
 - SQLite3 via Python stdlib. Single database file. No ORM.
 - Pydantic v1 models for request validation. All fields use `Optional` with defaults.
 - Soft delete throughout — chits are never hard-deleted. Use the `deleted` flag and `deleted_datetime` column.

@@ -23,19 +23,16 @@ It organizes chits into six views called **C CAPTN**:
 ```
 ┌─────────────────────────────────────────────────────┐
 │  Browser (Vanilla JS / HTML / CSS)                  │
-│  frontend/index.html  ← main dashboard              │
-│  frontend/editor.html ← chit editor                 │
-│  frontend/settings.html ← settings panel            │
-│  frontend/main.js     ← view rendering & tabs       │
-│  frontend/editor.js   ← editor logic                │
-│  frontend/editor_checklists.js ← Checklist class    │
-│  frontend/editor_projects.js   ← Projects Zone      │
-│  frontend/settings.js ← settings logic              │
-│  frontend/styles.css / editor.css                   │
+│  src/frontend/html/index.html  ← main dashboard     │
+│  src/frontend/html/editor.html ← chit editor        │
+│  src/frontend/html/settings.html ← settings panel   │
+│  src/frontend/js/   ← JS organized by role          │
+│  src/frontend/css/  ← CSS organized by role         │
 └────────────────────┬────────────────────────────────┘
                      │ REST API (fetch)
 ┌────────────────────▼────────────────────────────────┐
-│  FastAPI (Python 3) — backend/main.py               │
+│  FastAPI (Python 3) — src/backend/main.py           │
+│  Routes in src/backend/routes/                      │
 │  Uvicorn on port 3333                               │
 │  SQLite — /app/data/app.db                          │
 └─────────────────────────────────────────────────────┘
@@ -45,7 +42,7 @@ It organizes chits into six views called **C CAPTN**:
 
 ## Code Flow
 
-The FastAPI backend serves the frontend files and exposes a REST API (`/api/chits`, `/api/settings`). The main dashboard (`index.html` + `main.js`) fetches all chits and renders them in the active tab view. Double-clicking a chit opens the editor (`editor.html` + `editor.js`), which has collapsible zones for title, dates, location (with weather), tags, notes (markdown), checklists, alerts, color, and projects. Saving a chit POSTs or PUTs to the API, which auto-generates system tags (like "Calendar" if it has dates, "Tasks" if it has a status) and stores everything in SQLite.
+The FastAPI backend serves the frontend files and exposes a REST API (`/api/chits`, `/api/settings`). The backend is modular: `src/backend/main.py` is the entry point, with routes split into `src/backend/routes/` (chits, trash, settings, contacts, audit, health), models in `models.py`, database helpers in `db.py`, and migrations in `migrations.py`. The main dashboard (`src/frontend/html/index.html` + `src/frontend/js/dashboard/main.js`) fetches all chits and renders them in the active tab view. Double-clicking a chit opens the editor (`src/frontend/html/editor.html` + `src/frontend/js/editor/editor.js`), which has collapsible zones for title, dates, location (with weather), tags, notes (markdown), checklists, alerts, color, and projects. Saving a chit POSTs or PUTs to the API, which auto-generates system tags (like "Calendar" if it has dates, "Tasks" if it has a status) and stores everything in SQLite.
 
 ---
 
@@ -144,11 +141,11 @@ Auto-generated system tags (added by backend on create/update):
 
 ## Frontend Components
 
-### Main Dashboard (`main.js` / `index.html`)
+### Main Dashboard (`src/frontend/js/dashboard/main.js` / `src/frontend/html/index.html`)
 
 Tab-based view system with Calendar (week/day/month/year/itinerary), Checklists, Alarms, Projects, Tasks, and Notes views. Sidebar with date navigation, search, status filter, sort controls, and pinned/archived toggles. Calendar views use pixel-per-minute layout for timed events with overlap detection. Double-clicking any chit opens the editor.
 
-### Chit Editor (`editor.html` / `editor.js`)
+### Chit Editor (`src/frontend/html/editor.html` / `src/frontend/js/editor/editor.js`)
 
 Collapsible zones:
 1. **Title** — text input + pinned/archived toggle buttons
@@ -164,15 +161,15 @@ Collapsible zones:
 11. **Color** — swatch picker (default + custom colors from settings)
 12. **Projects** — shown only for project master chits; renders child chits by status
 
-### Checklist System (`editor_checklists.js`)
+### Checklist System (`src/frontend/js/editor/editor_checklists.js`)
 
 Full `Checklist` class with nested items (up to 4 levels), drag-drop reordering, undo delete, checkbox toggling. Items stored as JSON array with `{id, text, level, checked, parent}` structure.
 
-### Projects Zone (`editor_projects.js`)
+### Projects Zone (`src/frontend/js/editor/editor_projects.js`)
 
 Kanban-style board for project master chits. Shows child chits in 4 status columns (ToDo, In Progress, Blocked, Complete) with drag-drop between columns. Can move chits between projects.
 
-### Settings (`settings.html` / `settings.js`)
+### Settings (`src/frontend/html/settings.html` / `src/frontend/js/pages/settings.js`)
 
 Time format selector with drag-drop ordering, tag management with color picker, custom color management, visual indicators, chit options (fade past events, highlight overdue, delete past alarms), gender toggle, snooze length, default filters.
 

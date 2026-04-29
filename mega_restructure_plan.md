@@ -18,7 +18,7 @@ Restructure the CWOC codebase from a flat directory layout with five monolithic 
 | 8 | Split frontend/styles.css into focused sub-stylesheets | **Complete** | 2026-04-29 |
 | 9 | Move frontend to src/frontend/ | **Complete** | 2026-04-29 |
 | 10 | Move static assets to src/static/ | **Complete** | 2026-04-29 |
-| 11 | Create INDEX.md and finalize documentation | Not Started | — |
+| 11 | Create INDEX.md and finalize documentation | **Complete** | 2026-04-29 |
 | 12 | Cleanup and final verification | Not Started | — |
 
 ---
@@ -242,15 +242,15 @@ Restructure the CWOC codebase from a flat directory layout with five monolithic 
 **Files affected:** New: `src/INDEX.md`. Updated: `src/frontend/html/_template.html`, `README.md`, `documentation/overview.md`, `.kiro/steering/structure.md`, `.kiro/steering/tech.md`.
 
 **Tasks:**
-- [ ] Create `src/INDEX.md` with Backend, Frontend JS, Frontend CSS, Load Order, and Dependency Map sections
-- [ ] Update `_template.html` with new script load order
-- [ ] Update `README.md` and `documentation/overview.md`
-- [ ] Update steering files
+- [x] Create `src/INDEX.md` with Backend, Frontend JS, Frontend CSS, Load Order, and Dependency Map sections
+- [x] Update `_template.html` with new script load order
+- [x] Update `README.md` and `documentation/overview.md`
+- [x] Update steering files
 
 **Verification:**
-- [ ] INDEX.md contains complete function/file listings
-- [ ] Template has correct script tags
-- [ ] Documentation reflects new structure
+- [x] INDEX.md contains complete function/file listings
+- [x] Template has correct script tags
+- [x] Documentation reflects new structure
 
 ---
 

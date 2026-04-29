@@ -18,7 +18,7 @@ inclusion: always
 
 ## Visual Theme
 - 1940s parchment/magic aesthetic with brown tones, Courier New font, parchment background textures
-- CSS variables defined in `frontend/shared-page.css` for secondary pages, `frontend/styles.css` for the dashboard
+- CSS variables defined in `frontend/css/shared/shared-page.css` for secondary pages, `frontend/css/dashboard/styles-variables.css` for the dashboard
 
 ## Key Dependencies
 - `fastapi`, `uvicorn`, `pydantic` (Python)
@@ -28,7 +28,7 @@ inclusion: always
 
 **Run the server locally:**
 ```bash
-uvicorn backend.main:app --host 0.0.0.0 --port 3333 --reload --log-level debug
+uvicorn src.backend.main:app --host 0.0.0.0 --port 3333 --reload --log-level debug
 ```
 
 **Systemd service (production):**
@@ -39,7 +39,7 @@ journalctl -u cwoc -f
 ```
 
 ## Database Migrations
-Migrations are run inline at startup in `backend/main.py` using `ALTER TABLE` statements. Each migration checks if the column already exists before adding it. There is no migration framework — just sequential function calls at module load time.
+Migrations are run inline at startup in `src/backend/main.py` (calling functions from `src/backend/migrations.py`) using `ALTER TABLE` statements. Each migration checks if the column already exists before adding it. There is no migration framework — just sequential function calls at module load time.
 
 ## API Pattern
 REST endpoints under `/api/` — JSON in, JSON out. Fields like `tags`, `checklist`, `people`, `child_chits`, `alerts`, `recurrence_rule`, `recurrence_exceptions` are stored as JSON strings in SQLite and serialized/deserialized via helper functions.
