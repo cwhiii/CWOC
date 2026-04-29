@@ -1,56 +1,56 @@
 # Phase 6 — Split frontend/main.js into focused sub-scripts
 
-- [ ] 6. Phase 6 — Split frontend/main.js into focused sub-scripts
-  - [ ] 6.1 Extract `frontend/main-sidebar.js`
+- [x] 6. Phase 6 — Split frontend/main.js into focused sub-scripts
+  - [x] 6.1 Extract `frontend/main-sidebar.js`
     - Move `CwocSidebarFilter`, `_buildTagFilterPanel`, `_buildPeopleFilterPanel`, `_renderPeopleFilterPanel`, `toggleSidebar`, `toggleSidebarSection`, `restoreSidebarState`, filter toggle/clear functions, archive/pinned/unmarked toggles
     - Add file-level comment block
     - _Requirements: 3.1, 10.1_
-  - [ ] 6.2 Extract `frontend/main-hotkeys.js`
+  - [x] 6.2 Extract `frontend/main-hotkeys.js`
     - Move `_showPanel`, `_hideAllPanels`, `_dimSidebar`, `_exitHotkeyMode`, `_pickNav`, `_pickPeriod`, `_applyEnabledPeriods`, `_enterFilterSub`, `_toggleReference`, `_closeReference`, keyboard event dispatcher
     - Add file-level comment block
     - _Requirements: 3.1, 10.1_
-  - [ ] 6.3 Extract `frontend/main-calendar.js`
+  - [x] 6.3 Extract `frontend/main-calendar.js`
     - Move all calendar period views: `displayWeekView`, `displayDayView`, `displaySevenDayView`, `displayWorkView`, `displayMonthView`, `displayItineraryView`, `displayYearView`
     - Move `renderTimeBar`, `scrollToSixAM`, `_addAllDayHeightCap`
     - Move date navigation helpers: `getWeekStart`, `getMonthStart`, `getYearStart`, `formatDate`, `formatWeekRange`, `previousPeriod`, `nextPeriod`, `changePeriod`, `goToToday`, `updateDateRange`
     - Add file-level comment block
     - _Requirements: 3.1, 10.1, 10.5_
-  - [ ] 6.4 Extract `frontend/main-views.js`
+  - [x] 6.4 Extract `frontend/main-views.js`
     - Move `displayChecklistView`, `displayTasksView`, `displayNotesView`, `displayProjectsView`, `_displayProjectsKanban`, `displayAlarmsView`, `_displayIndependentAlertsBoard`, `displayIndicatorsView`
     - Move `_buildChitHeader`, `_renderChitMeta`, `filterChits`, `searchChits`
     - Add file-level comment block
     - _Requirements: 3.1, 10.1_
-  - [ ] 6.5 Extract `frontend/main-alerts.js`
+  - [x] 6.5 Extract `frontend/main-alerts.js`
     - Move `_globalCheckAlarms`, `_globalCheckNotifications`, `_startGlobalAlertSystem`, `_showAlertModal`, `_dismissAlertModal`, `_showTimerDoneModal`, `_sendBrowserNotification`
     - Move `_globalPlayAlarm`, `_globalStopAlarm`, `_globalPlayTimer`, `_globalStopTimer`, `_showGlobalToast`, `_loadAlertStates`, `_persistDismiss`, `_persistSnooze`
     - Add file-level comment block
     - _Requirements: 3.1, 10.1_
-  - [ ] 6.6 Extract `frontend/main-search.js`
+  - [x] 6.6 Extract `frontend/main-search.js`
     - Move `displaySearchView`, `_renderSearchResults`, `_getChitFieldValue`, `_saveSearch`, `_loadSavedSearch`, `_deleteSavedSearch`, `_renderSavedSearches`
     - Add file-level comment block
     - _Requirements: 3.1, 10.1_
-  - [ ] 6.7 Extract `frontend/main-modals.js`
+  - [x] 6.7 Extract `frontend/main-modals.js`
     - Move `_openClockModal`, `_closeClockModal`, `_renderClocks`, `_renderAnalogClock`
     - Move `_openWeatherModal`, `_closeWeatherModal`, `_fetchWeatherForModal`, weather helper functions
     - Move `deleteChit`, `cancelEdit` (quick-edit modal functions)
     - Add file-level comment block
     - _Requirements: 3.1, 10.1_
-  - [ ] 6.8 Extract `frontend/main-init.js`
+  - [x] 6.8 Extract `frontend/main-init.js`
     - Move `DOMContentLoaded` handler, `displayChits` orchestrator, `fetchChits`
     - Move `_applySort`, `_applyMultiSelectFilters`, `_applyArchiveFilter`, `_applyChitDisplayOptions`, `_updateTabCounts`
     - Move `storePreviousState`, `_restoreUIState`, `_onDebouncedResize`, `_checkTabOverflow`, `_scheduleWeatherRefresh`
     - Add file-level comment block
     - _Requirements: 3.1, 10.1_
-  - [ ] 6.9 Reduce `frontend/main.js` to a minimal coordinator
+  - [x] 6.9 Reduce `frontend/main.js` to a minimal coordinator
     - Keep shared state variables: `currentTab`, `chits`, `currentWeekStart`, `currentView`, `currentSortField`, `currentSortDir`, `_hotkeyMode`, `_cachedTagObjects`, `_chitOptions`, `_snoozeRegistry`, `_defaultFilters`
     - Remove all functions that were extracted to sub-scripts
     - Add comment block documenting coordinator role
     - _Requirements: 3.2, 10.1_
-  - [ ] 6.10 Update `index.html` with new dashboard script load order
+  - [x] 6.10 Update `index.html` with new dashboard script load order
     - Add `<script>` tags for all dashboard sub-scripts after shared scripts and `shared-page.js`, before coordinator `main.js`
     - Load order: `main-sidebar.js` → `main-hotkeys.js` → `main-calendar.js` → `main-views.js` → `main-alerts.js` → `main-search.js` → `main-modals.js` → `main-init.js` → `main.js`
     - _Requirements: 3.3, 8.1, 8.5, 8.6_
-  - [ ] 6.11 Verify dashboard functionality
+  - [x] 6.11 Verify dashboard functionality
     - All 6 C CAPTN tabs render correctly
     - Calendar navigation works (all 7 period views)
     - Sidebar opens/closes, filters work, saved searches work
@@ -61,5 +61,5 @@
     - Confirm all `onclick` handlers in `index.html` still resolve
     - Confirm each sub-script is under 1,200 lines
     - _Requirements: 3.4, 3.5, 7.2, 7.3, 7.5, 7.6, 9.1, 9.5_
-  - [ ] 6.12 Update `mega_restructure_plan.md` — mark Phase 6 complete
+  - [x] 6.12 Update `mega_restructure_plan.md` — mark Phase 6 complete
     - _Requirements: 14.6_

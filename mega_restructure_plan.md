@@ -13,7 +13,7 @@ Restructure the CWOC codebase from a flat directory layout with five monolithic 
 | 3 | Split backend/main.py into Python modules | **Complete** | 2026-04-29 |
 | 4 | Move backend to src/backend/ | **Complete** | 2026-04-29 |
 | 5 | Split frontend/shared.js into focused sub-scripts | **Complete** | 2026-04-29 |
-| 6 | Split frontend/main.js into focused sub-scripts | Not Started | — |
+| 6 | Split frontend/main.js into focused sub-scripts | **Complete** | 2026-04-29 |
 | 7 | Split frontend/editor.js into focused sub-scripts | Not Started | — |
 | 8 | Split frontend/styles.css into focused sub-stylesheets | Not Started | — |
 | 9 | Move frontend to src/frontend/ | Not Started | — |
@@ -146,15 +146,15 @@ Restructure the CWOC codebase from a flat directory layout with five monolithic 
 **Files affected:** `frontend/main.js` (reduced to coordinator), new files: `frontend/main-sidebar.js`, `frontend/main-hotkeys.js`, `frontend/main-calendar.js`, `frontend/main-views.js`, `frontend/main-alerts.js`, `frontend/main-search.js`, `frontend/main-modals.js`, `frontend/main-init.js`. `index.html` updated.
 
 **Tasks:**
-- [ ] Extract 8 dashboard sub-scripts
-- [ ] Reduce `main.js` to minimal coordinator
-- [ ] Update `index.html` with new script load order
+- [x] Extract 8 dashboard sub-scripts
+- [x] Reduce `main.js` to minimal coordinator
+- [x] Update `index.html` with new script load order
 
 **Verification:**
-- [ ] All 6 C CAPTN tabs render correctly
-- [ ] Calendar navigation works (all 7 period views)
-- [ ] Sidebar, hotkeys, alerts, search, modals all work
-- [ ] Each sub-script under 1,200 lines
+- [x] All 6 C CAPTN tabs render correctly
+- [x] Calendar navigation works (all 7 period views)
+- [x] Sidebar, hotkeys, alerts, search, modals all work
+- [x] Each sub-script under 1,200 lines
 
 ---
 

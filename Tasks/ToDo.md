@@ -32,6 +32,7 @@ Make reference links (mention setting page, it should be a clickable link). On m
 - Add new hotkey: ` to hide & show sidebar. (retain setting)
 - Add new hotkey: ~ (SHIFT+`) to hide & show topbar. (retain setting)
 
+
 ---
 
 ## UI Audit — Non-Functional Elements
@@ -60,6 +61,9 @@ Use consistent system for modals. So they Re all styled the same, and have the s
 ---
 
 ## Medium Features
+### Shard Task Assignment
+- DEPENDANCY: Users feature.
+- have chits assigned to a certain person
 
 ### Calendar Import (.ics)
 - `[ ]` Import calendar data from Google, Apple, and Windows/Outlook via .ics files
