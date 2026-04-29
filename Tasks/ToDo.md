@@ -31,7 +31,7 @@ Make reference links (mention setting page, it should be a clickable link). On m
    - S = Stopwatch (auto start upon creation)
 - Add new hotkey: ` to hide & show sidebar. (retain setting)
 - Add new hotkey: ~ (SHIFT+`) to hide & show topbar. (retain setting)
-
+- Split the README into 2 files: the more user/admin-facing stuff, how it works, and why it exists. ANd the deep technical info on houw its put together. Call that 2nd one technical_details.md
 
 ---
 

@@ -1,43 +1,72 @@
 # Phase 11 — Create INDEX.md and finalize documentation
 
-- [ ] 11. Phase 11 — Create INDEX.md and finalize documentation
-  - [ ] 11.1 Create `src/INDEX.md` — Backend section
+- [x] 11. Phase 11 — Create INDEX.md and finalize documentation
+  - [x] 11.1 Create `src/INDEX.md` — Backend section
     - List every Module_File under `src/backend/`
     - For each file, list every public function, class, and route handler with a one-line description
     - Include route methods and paths for route files (e.g., `GET /api/chits`)
     - _Requirements: 11.1, 11.2_
-  - [ ] 11.2 Create `src/INDEX.md` — Frontend JS section
-    - List every JS file organized by directory (`shared/`, `dashboard/`, `editor/`, `pages/`)
-    - For each file, list every global function with a one-line description
+  - [x] 11.2 Create `src/INDEX.md` — Frontend JS section
+    - [x] 11.2.1 Index `src/frontend/js/shared/shared-utils.js`
+      - Read the file, list every global function with a one-line description
+      - Append to the Frontend JS section of `src/INDEX.md`
+    - [x] 11.2.2 Index `src/frontend/js/shared/shared-touch.js` and `shared-checklist.js`
+      - Read each file, list every global function with a one-line description
+      - Append to `src/INDEX.md`
+    - [x] 11.2.3 Index `src/frontend/js/shared/shared-sort.js`, `shared-indicators.js`, `shared-calendar.js`
+      - Read each file, list every global function with a one-line description
+      - Append to `src/INDEX.md`
+    - [x] 11.2.4 Index `src/frontend/js/shared/shared-tags.js`, `shared-recurrence.js`, `shared-geocoding.js`, `shared-qr.js`, `shared.js`
+      - Read each file, list every global function with a one-line description
+      - Append to `src/INDEX.md`
+    - [x] 11.2.5 Index `src/frontend/js/dashboard/main-sidebar.js`, `main-hotkeys.js`, `main-calendar.js`
+      - Read each file, list every global function with a one-line description
+      - Append to `src/INDEX.md`
+    - [x] 11.2.6 Index `src/frontend/js/dashboard/main-views.js`, `main-alerts.js`, `main-search.js`
+      - Read each file, list every global function with a one-line description
+      - Append to `src/INDEX.md`
+    - [x] 11.2.7 Index `src/frontend/js/dashboard/main-modals.js`, `main-init.js`, `main.js`
+      - Read each file, list every global function with a one-line description
+      - Append to `src/INDEX.md`
+    - [x] 11.2.8 Index `src/frontend/js/editor/editor.js`, `editor-dates.js`, `editor-tags.js`, `editor-people.js`, `editor-location.js`
+      - Read each file, list every global function with a one-line description
+      - Append to `src/INDEX.md`
+    - [x] 11.2.9 Index `src/frontend/js/editor/editor-notes.js`, `editor-alerts.js`, `editor-color.js`, `editor-health.js`, `editor-save.js`, `editor-init.js`, `editor_checklists.js`, `editor_projects.js`
+      - Read each file, list every global function with a one-line description
+      - Append to `src/INDEX.md`
+    - [x] 11.2.10 Index `src/frontend/js/pages/` — all 7 page-specific JS files
+      - Read `shared-page.js`, `shared-editor.js`, `settings.js`, `people.js`, `contact-editor.js`, `contact-qr.js`, `weather.js`
+      - List every global function with a one-line description
+      - Append to `src/INDEX.md`
     - _Requirements: 11.3_
-  - [ ] 11.3 Create `src/INDEX.md` — Frontend CSS section
+  - [x] 11.3 Create `src/INDEX.md` — Frontend CSS section
     - List every CSS file organized by directory (`shared/`, `dashboard/`, `editor/`)
     - For each file, list the major rule groups or sections
     - _Requirements: 11.4_
-  - [ ] 11.4 Create `src/INDEX.md` — Load Order section
+  - [x] 11.4 Create `src/INDEX.md` — Load Order section
     - Document the required `<script>` tag order for `index.html`
     - Document the required `<script>` tag order for `editor.html`
     - Document the required `<script>` tag order for secondary pages
     - Document the required `<link>` tag order for `index.html`
     - _Requirements: 11.5_
-  - [ ] 11.5 Create `src/INDEX.md` — File Dependency Map
+  - [x] 11.5 Create `src/INDEX.md` — File Dependency Map
     - Show which files depend on which other files
     - Cover both backend Python imports and frontend script load dependencies
     - _Requirements: 11.6_
-  - [ ] 11.6 Update `frontend/_template.html` (now `src/frontend/html/_template.html`)
+  - [x] 11.6 Update `frontend/_template.html` (now `src/frontend/html/_template.html`)
     - Include all shared sub-scripts in the correct load order with new paths
     - Add a comment documenting the required script load order for new pages
     - _Requirements: 12.1_
-  - [ ] 11.7 Update `README.md` to reflect new project structure
+  - [x] 11.7 Update `README.md` to reflect new project structure
     - Update directory tree, build/run commands, file descriptions
     - _Requirements: 12.5_
-  - [ ] 11.8 Update `documentation/overview.md` to reflect new project structure
+  - [x] 11.8 Update `documentation/overview.md` to reflect new project structure
     - Update any references to old file paths and directory layout
     - _Requirements: 12.5_
-  - [ ] 11.9 Update steering files in `.kiro/steering/`
+  - [x] 11.9 Update steering files in `.kiro/steering/`
     - Update `structure.md` with the new directory layout
     - Update `tech.md` with the new uvicorn command
     - Update any other steering files that reference old paths
     - _Requirements: 12.6_
-  - [ ] 11.10 Update `mega_restructure_plan.md` — mark Phase 11 complete
+  - [x] 11.10 Update `mega_restructure_plan.md` — mark Phase 11 complete
     - _Requirements: 14.6_
