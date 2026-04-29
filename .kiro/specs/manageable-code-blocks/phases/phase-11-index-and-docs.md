@@ -1,0 +1,43 @@
+# Phase 11 — Create INDEX.md and finalize documentation
+
+- [ ] 11. Phase 11 — Create INDEX.md and finalize documentation
+  - [ ] 11.1 Create `src/INDEX.md` — Backend section
+    - List every Module_File under `src/backend/`
+    - For each file, list every public function, class, and route handler with a one-line description
+    - Include route methods and paths for route files (e.g., `GET /api/chits`)
+    - _Requirements: 11.1, 11.2_
+  - [ ] 11.2 Create `src/INDEX.md` — Frontend JS section
+    - List every JS file organized by directory (`shared/`, `dashboard/`, `editor/`, `pages/`)
+    - For each file, list every global function with a one-line description
+    - _Requirements: 11.3_
+  - [ ] 11.3 Create `src/INDEX.md` — Frontend CSS section
+    - List every CSS file organized by directory (`shared/`, `dashboard/`, `editor/`)
+    - For each file, list the major rule groups or sections
+    - _Requirements: 11.4_
+  - [ ] 11.4 Create `src/INDEX.md` — Load Order section
+    - Document the required `<script>` tag order for `index.html`
+    - Document the required `<script>` tag order for `editor.html`
+    - Document the required `<script>` tag order for secondary pages
+    - Document the required `<link>` tag order for `index.html`
+    - _Requirements: 11.5_
+  - [ ] 11.5 Create `src/INDEX.md` — File Dependency Map
+    - Show which files depend on which other files
+    - Cover both backend Python imports and frontend script load dependencies
+    - _Requirements: 11.6_
+  - [ ] 11.6 Update `frontend/_template.html` (now `src/frontend/html/_template.html`)
+    - Include all shared sub-scripts in the correct load order with new paths
+    - Add a comment documenting the required script load order for new pages
+    - _Requirements: 12.1_
+  - [ ] 11.7 Update `README.md` to reflect new project structure
+    - Update directory tree, build/run commands, file descriptions
+    - _Requirements: 12.5_
+  - [ ] 11.8 Update `documentation/overview.md` to reflect new project structure
+    - Update any references to old file paths and directory layout
+    - _Requirements: 12.5_
+  - [ ] 11.9 Update steering files in `.kiro/steering/`
+    - Update `structure.md` with the new directory layout
+    - Update `tech.md` with the new uvicorn command
+    - Update any other steering files that reference old paths
+    - _Requirements: 12.6_
+  - [ ] 11.10 Update `mega_restructure_plan.md` — mark Phase 11 complete
+    - _Requirements: 14.6_

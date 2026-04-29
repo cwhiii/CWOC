@@ -1,0 +1,65 @@
+# Phase 5 — Split frontend/shared.js into focused sub-scripts
+
+- [ ] 5. Phase 5 — Split frontend/shared.js into focused sub-scripts
+  - [ ] 5.1 Extract `frontend/shared-utils.js`
+    - Move core utilities: `generateUniqueId`, `formatDate`, `formatTime`, `setSaveButtonUnsaved`, `contrastColorForBg`, `applyChitColors`, `isLightColor`, `_utcToLocalDate`, `_parseISOTime`, `getPastelColor`, `cwocConfirm`, `getCachedSettings`, `_invalidateSettingsCache`
+    - Add file-level comment block describing purpose and dependents
+    - This file must load first among shared sub-scripts
+    - _Requirements: 5.1, 5.5, 10.1_
+  - [ ] 5.2 Extract `frontend/shared-touch.js`
+    - Move `enableTouchDrag` and all touch event handling functions
+    - Add file-level comment block
+    - Must load before `shared-checklist.js` and `shared-sort.js`
+    - _Requirements: 5.1, 5.6, 10.1_
+  - [ ] 5.3 Extract `frontend/shared-checklist.js`
+    - Move `toggleChecklistItem`, `moveChecklistItem`, `moveChecklistItemCrossChit`, `renderInlineChecklist`
+    - Add file-level comment block noting dependency on `shared-utils.js` and `shared-touch.js`
+    - _Requirements: 5.1, 10.1_
+  - [ ] 5.4 Extract `frontend/shared-sort.js`
+    - Move `getManualOrder`, `saveManualOrder`, `applyManualOrder`, `enableDragToReorder`
+    - Add file-level comment block noting dependency on `shared-touch.js`
+    - _Requirements: 5.1, 10.1_
+  - [ ] 5.5 Extract `frontend/shared-indicators.js`
+    - Move `_chitHasAlerts`, `_getAlertIndicators`, `_getAllIndicators`, `_shouldShow`, `_chitAlertTypesPresent`, `_ALERT_TYPES`, `_ALERT_ICON_MAP`, `_STATUS_ICONS`, and all visual indicator functions
+    - Add file-level comment block
+    - _Requirements: 5.1, 10.1_
+  - [ ] 5.6 Extract `frontend/shared-calendar.js`
+    - Move `getCalendarDateInfo`, `chitMatchesDay`, `calendarEventTitle`, `calendarEventTooltip`, `enableCalendarDrag`, `enableMonthDrag`, `enableAllDayDrag`, `renderAllDayEventsInCells`, `enableCalendarPinchZoom`
+    - Add file-level comment block
+    - _Requirements: 5.1, 10.1_
+  - [ ] 5.7 Extract `frontend/shared-tags.js`
+    - Move `buildTagTree`, `flattenTagTree`, `matchesTagFilter`, `renderTagTree`, `trackRecentTag`, `getRecentTags`, `createTagInline`, `isSystemTag`
+    - Add file-level comment block
+    - _Requirements: 5.1, 10.1_
+  - [ ] 5.8 Extract `frontend/shared-recurrence.js`
+    - Move `formatRecurrenceRule`, `expandRecurrence`, `getRecurrenceSeriesInfo`, `_advanceRecurrence`
+    - Add file-level comment block
+    - _Requirements: 5.1, 10.1_
+  - [ ] 5.9 Extract `frontend/shared-geocoding.js`
+    - Move `_geocodeAddress` with progressive fallback logic
+    - Add file-level comment block
+    - _Requirements: 5.1, 10.1_
+  - [ ] 5.10 Extract `frontend/shared-qr.js`
+    - Move `showQRModal` and related QR display functions
+    - Add file-level comment block
+    - _Requirements: 5.1, 10.1_
+  - [ ] 5.11 Reduce `frontend/shared.js` to a minimal coordinator
+    - Keep shared state variables, remaining glue code (quick-edit modal, notes masonry layout, mobile sidebar, weather cache, sync WebSocket, shared alarm system, audio unlock, delete undo toast)
+    - Remove all functions that were extracted to sub-scripts
+    - Add comment block documenting coordinator role
+    - _Requirements: 5.2, 10.1_
+  - [ ] 5.12 Update all HTML files with new shared script load order
+    - Update `index.html`: add `<script>` tags for all shared sub-scripts before `shared.js`
+    - Update `editor.html`: same shared sub-script tags before `shared.js`
+    - Update `settings.html`, `people.html`, `contact-editor.html`, `help.html`, `trash.html`, `audit-log.html`, `weather.html`: same shared sub-script tags
+    - Load order: `shared-utils.js` → `shared-touch.js` → `shared-checklist.js` → `shared-sort.js` → `shared-indicators.js` → `shared-calendar.js` → `shared-tags.js` → `shared-recurrence.js` → `shared-geocoding.js` → `shared-qr.js` → `shared.js`
+    - _Requirements: 5.3, 8.1, 8.2, 8.3, 8.5, 8.6_
+  - [ ] 5.13 Verify all pages load without console errors
+    - Dashboard: all 6 tabs render, shared functions available globally
+    - Editor: all zones work, save/load works
+    - Settings, People, Contact Editor, Help, Trash, Audit Log, Weather: all load and function correctly
+    - Confirm no function is `undefined` due to missing script or wrong load order
+    - Confirm each sub-script is under 600 lines
+    - _Requirements: 5.4, 5.7, 7.1–7.12, 9.1, 9.5_
+  - [ ] 5.14 Update `mega_restructure_plan.md` — mark Phase 5 complete
+    - _Requirements: 14.6_

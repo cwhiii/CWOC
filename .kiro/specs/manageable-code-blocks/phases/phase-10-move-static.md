@@ -1,0 +1,21 @@
+# Phase 10 — Move static assets to src/static/
+
+- [ ] 10. Phase 10 — Move static assets to src/static/
+  - [ ] 10.1 Move all static assets to `src/static/`
+    - Move all files from `static/` to `src/static/` (logos, icons, parchment.jpg, audio files, etc.)
+    - Do NOT move `data/contacts/profile_pictures/` — those stay in `data/`
+    - _Requirements: 1.1_
+  - [ ] 10.2 Update `StaticFiles` mount for static assets
+    - Update the `/static/` mount in `src/backend/main.py` to serve from `src/static/`
+    - _Requirements: 1.4, 9.6_
+  - [ ] 10.3 Verify all static assets load correctly
+    - All images render (logos, icons, parchment background)
+    - All audio files play (alarm.mp3, timer.mp3)
+    - No 404s for any static asset in the network tab
+    - Profile pictures still load from `data/contacts/profile_pictures/` (unchanged)
+    - _Requirements: 7.9, 7.11_
+  - [ ] 10.4 Remove old `static/` directory
+    - After all assets are moved and verified, remove the now-empty `static/` directory
+    - _Requirements: 1.1_
+  - [ ] 10.5 Update `mega_restructure_plan.md` — mark Phase 10 complete
+    - _Requirements: 14.6_

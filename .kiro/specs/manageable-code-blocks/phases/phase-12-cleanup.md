@@ -1,0 +1,37 @@
+# Phase 12 — Cleanup and final verification
+
+- [ ] 12. Phase 12 — Cleanup and final verification
+  - [ ] 12.1 Remove any remaining empty old directories
+    - Verify `backend/`, `frontend/`, `static/` are fully removed
+    - Remove any leftover `__pycache__`, `.pyc`, or temp files from old locations
+    - _Requirements: 13.11_
+  - [ ] 12.2 Verify no broken references remain
+    - Search all Python files for imports referencing old `backend.` module paths
+    - Search all HTML files for `<script src>` and `<link href>` referencing old `frontend/` paths
+    - Search all JS files for `window.location.href` or `fetch()` referencing old page paths
+    - Search backend for `FileResponse` or `StaticFiles` referencing old directory paths
+    - _Requirements: 7.1–7.12_
+  - [ ] 12.3 Full end-to-end verification
+    - Start server with `uvicorn src.backend.main:app --port 3333`
+    - Dashboard: all 6 C CAPTN tabs render, all 7 calendar views work, sidebar filters work, hotkeys work
+    - Editor: all zones work, save/load works, date modes work, recurrence works
+    - Settings: tag editor works, save persists, all settings functional
+    - People: contact list renders, search works, import/export works
+    - Contact editor: all fields populate, image upload works, QR sharing works
+    - Trash: deleted chits appear, restore works, purge works
+    - Audit log: entries display, export works
+    - Weather: page loads, data displays
+    - Help: page renders with header/footer injection
+    - All profile images display from `data/contacts/profile_pictures/`
+    - All static assets load from `src/static/`
+    - No console errors on any page
+    - _Requirements: 7.1–7.12, 14.5_
+  - [ ] 12.4 Run existing test files
+    - Run `src/backend/test_audit.py` — confirm all tests pass
+    - Run `src/backend/test_vcard.py` — confirm all tests pass
+    - _Requirements: 2.6_
+  - [ ] 12.5 Final update to `mega_restructure_plan.md`
+    - Mark Phase 12 complete
+    - Mark overall restructuring as complete in the summary table
+    - Record completion date
+    - _Requirements: 14.6, 14.8_

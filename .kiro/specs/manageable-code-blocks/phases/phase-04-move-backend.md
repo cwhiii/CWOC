@@ -1,0 +1,49 @@
+# Phase 4 — Move backend to src/backend/
+
+- [ ] 4. Phase 4 — Move backend to src/backend/
+  - [ ] 4.1 Move all backend Python files into `src/backend/`
+    - Move `backend/main.py`, `backend/models.py`, `backend/db.py`, `backend/migrations.py`, `backend/serializers.py`, `backend/weather.py` to `src/backend/`
+    - Move `backend/routes/chits.py`, `backend/routes/trash.py`, `backend/routes/settings.py`, `backend/routes/contacts.py`, `backend/routes/audit.py`, `backend/routes/health.py` to `src/backend/routes/`
+    - Ensure `src/backend/__init__.py` and `src/backend/routes/__init__.py` exist (created in Phase 1)
+    - _Requirements: 1.1, 1.9_
+  - [ ] 4.2 Update all intra-backend Python imports
+    - Update imports in all route files from `from db import ...` to `from src.backend.db import ...` (or relative imports)
+    - Update imports in `migrations.py`, `serializers.py`, `weather.py` similarly
+    - Update `main.py` imports to reference the new `src.backend.*` module paths
+    - _Requirements: 2.5_
+  - [ ] 4.3 Update `DB_PATH` to reference the flattened data directory
+    - Change `DB_PATH` in `src/backend/db.py` to point to the top-level `data/app.db` (not `data/data/app.db`)
+    - Ensure the `data/` directory exists and contains `app.db`
+    - _Requirements: 1.2, 1.3_
+  - [ ] 4.4 Update `StaticFiles` mounts in `src/backend/main.py`
+    - Update mount for frontend files to serve from `src/frontend/` paths (prep for Phase 9, but keep current frontend paths working for now)
+    - Update mount for static assets to serve from current `static/` path (moved in Phase 10)
+    - Update mount for data/contacts to reference the correct path
+    - _Requirements: 1.4, 1.6_
+  - [ ] 4.5 Update `FileResponse` paths for HTML page serving
+    - Update `root()` and `editor()` in `src/backend/routes/health.py` to reference current HTML file locations
+    - These will be updated again in Phase 9 when frontend moves to `src/frontend/html/`
+    - _Requirements: 1.6_
+  - [ ] 4.6 Update `start.sh` with new uvicorn module path
+    - Change `uvicorn backend.main:app` to `uvicorn src.backend.main:app`
+    - _Requirements: 1.5, 12.2_
+  - [ ] 4.7 Update `cwoc.service` with new uvicorn module path
+    - Change the ExecStart line to use `src.backend.main:app`
+    - _Requirements: 1.5, 12.3_
+  - [ ] 4.8 Update `install/configurinator.sh` if it references backend paths
+    - Update any paths that reference the old `backend/` directory to `src/backend/`
+    - _Requirements: 1.10, 12.4_
+  - [ ] 4.9 Move existing test files and update their imports
+    - Move `backend/test_audit.py` and `backend/test_vcard.py` to `src/backend/` (or leave in place and update imports)
+    - Update imports in test files to reference `src.backend.*` module paths
+    - _Requirements: 2.5_
+  - [ ] 4.10 Remove old `backend/` directory
+    - After all files are moved and verified, remove the now-empty `backend/` directory and `backend/routes/`
+    - _Requirements: 1.1_
+  - [ ] 4.11 Verify backend runs from new location
+    - Confirm `uvicorn src.backend.main:app` starts without errors
+    - Verify all 24+ API endpoints return correct responses
+    - Run test files and confirm they pass with updated imports
+    - _Requirements: 2.3, 2.6, 7.1, 7.10_
+  - [ ] 4.12 Update `mega_restructure_plan.md` — mark Phase 4 complete
+    - _Requirements: 14.6_

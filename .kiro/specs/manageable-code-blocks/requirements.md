@@ -2,10 +2,13 @@
 
 ## Introduction
 
-This spec defines two coordinated changes to the CWOC codebase:
+This spec defines three coordinated changes to the CWOC codebase, executed in isolated phases so each step can be verified independently:
 
 1. **Directory restructuring** — Organize all source code under a single `src/` top-level directory with logical subdirectories, and flatten the data directory to a top-level `data/` path.
 2. **File decomposition** — Split the five largest monolithic files into smaller, focused files so that when something breaks, the relevant code is easy to find.
+3. **Data directory reorganization** — Move contact profile images from `/app/static/contact_images/` into a well-organized `data/contacts/` directory structure, and establish a `data/` layout that accommodates future data types cleanly.
+
+All changes are tracked in a `mega_restructure_plan.md` master plan with 12 sequential phases, each leaving the application in a fully working state.
 
 The five target files for decomposition are `backend/main.py` (~4,500 lines), `frontend/main.js` (~7,300 lines), `frontend/editor.js` (~4,600 lines), `frontend/shared.js` (~5,000 lines), and `frontend/styles.css` (~3,081 lines).
 
@@ -26,6 +29,9 @@ This spec builds on the completed codebase-refactor spec (`.kiro/specs/codebase-
 - **Sub_Stylesheet**: A CSS file extracted from a larger stylesheet, loaded via an additional `<link>` tag in the correct position.
 - **System_Tag**: Auto-assigned tags (Calendar, Checklists, Alarms, Projects, Tasks, Notes) based on chit properties.
 - **C_CAPTN**: The six dashboard views — Calendar, Checklists, Alarms, Projects, Tasks, Notes.
+- **Data_Directory**: The top-level `data/` directory that stores the SQLite database and all user-generated data files, organized by data type (e.g., `data/contacts/profile_pictures/`, `data/contacts/pgp_keys/`).
+- **Profile_Picture**: A contact's uploaded image file (JPEG, PNG, GIF, or WebP), currently stored in `/app/static/contact_images/` and referenced by the `image_url` column in the contacts table.
+- **Mega_Restructure_Plan**: The `mega_restructure_plan.md` master tracking document at the project root that defines all restructuring phases, their task lists, verification steps, and completion status.
 
 ## Requirements
 
@@ -363,3 +369,56 @@ This spec builds on the completed codebase-refactor spec (`.kiro/specs/codebase-
 6. THE Decomposition_Engine SHALL update any steering files (`.kiro/steering/`) that reference the old directory paths.
 7. WHEN the backend references `/app/VERSION`, THE Decomposition_Engine SHALL preserve that path since it is an absolute production path independent of the source code structure.
 8. THE Decomposition_Engine SHALL update all `window.location.href` assignments and `fetch()` URL references in JavaScript that navigate to frontend pages to use the new paths (e.g., `/frontend/html/editor.html`).
+
+### Requirement 13: Reorganize Data Directory for Contact Assets and Future Data Types
+
+**User Story:** As a developer, I want contact profile images and key files stored in a well-organized `data/contacts/` directory structure instead of scattered under `static/`, so that user-generated data is separated from application assets and the layout scales cleanly for future data types like email attachments.
+
+#### Acceptance Criteria
+
+1. THE Decomposition_Engine SHALL create the following subdirectories within the top-level `data/` directory (the same directory referenced in Requirement 1 AC2):
+   ```
+   data/
+     app.db                        (existing — SQLite database)
+     contacts/
+       profile_pictures/            (contact profile images, moved from /app/static/contact_images/)
+       pgp_keys/                    (PGP key files for contacts)
+   ```
+2. THE Decomposition_Engine SHALL move all existing contact profile image files from `/app/static/contact_images/` into `data/contacts/profile_pictures/`, preserving filenames.
+3. THE Decomposition_Engine SHALL update `CONTACT_IMAGES_DIR` in the backend from `/app/static/contact_images/` to the new `data/contacts/profile_pictures/` path.
+4. THE Decomposition_Engine SHALL update the `upload_contact_image` route handler to save uploaded images to `data/contacts/profile_pictures/` and store the updated URL path in the `image_url` database column.
+5. THE Decomposition_Engine SHALL update the `delete_contact_image` route handler to resolve and delete image files from `data/contacts/profile_pictures/`.
+6. THE Decomposition_Engine SHALL add a FastAPI `StaticFiles` mount (or equivalent serving mechanism) so that profile images in `data/contacts/profile_pictures/` are accessible via HTTP at a stable URL path.
+7. THE Decomposition_Engine SHALL write a data migration that updates all existing `image_url` values in the contacts table from the old path prefix (`/static/contact_images/`) to the new serving path.
+8. WHEN the migration encounters a contact with a NULL or empty `image_url`, THE Decomposition_Engine SHALL skip that row without error.
+9. THE Decomposition_Engine SHALL organize the `data/` directory so that future data types (e.g., `data/email/attachments/`) can be added as sibling directories without restructuring existing paths.
+10. THE Decomposition_Engine SHALL create the `data/contacts/pgp_keys/` directory as an empty placeholder for future PGP key file storage.
+11. THE Decomposition_Engine SHALL remove the old `/app/static/contact_images/` directory after all images have been moved and the migration has completed.
+12. THE Decomposition_Engine SHALL ensure the frontend contact pages (people.html, contact-editor.html) continue to display profile images correctly using the new URL path.
+
+### Requirement 14: Execute Restructuring in Isolated Phases with a Master Plan
+
+**User Story:** As a developer, I want the restructuring executed in isolated, sequential phases — each completing one logical unit of work — so that I can verify each phase independently, catch problems early, and never have the entire codebase in a broken state.
+
+#### Acceptance Criteria
+
+1. THE Decomposition_Engine SHALL create a `mega_restructure_plan.md` file at the project root that serves as the master tracking document for all restructuring phases.
+2. THE mega_restructure_plan.md SHALL define each phase with a clear name, description, list of files affected, verification steps, and a completion checkbox.
+3. THE Decomposition_Engine SHALL organize the restructuring into the following phases (executed in order):
+   - **Phase 1: Create directory structure** — Create all new directories (`src/backend/`, `src/backend/routes/`, `src/frontend/html/`, `src/frontend/js/`, `src/frontend/css/`, `data/contacts/`, etc.) without moving or modifying any existing files.
+   - **Phase 2: Reorganize data directory** — Move contact images to `data/contacts/profile_pictures/`, create `data/contacts/pgp_keys/`, update backend paths and DB migration (Requirement 13).
+   - **Phase 3: Split backend/main.py** — Extract Python modules (`models.py`, `db.py`, `migrations.py`, `serializers.py`, `weather.py`, route files) and verify the backend starts and all API endpoints respond correctly (Requirement 2).
+   - **Phase 4: Move backend to src/backend/** — Relocate the split backend files into `src/backend/`, update `DB_PATH`, `StaticFiles` mounts, uvicorn startup, and deployment configs (Requirement 1 backend portions, Requirement 12).
+   - **Phase 5: Split frontend/shared.js** — Extract shared Sub_Scripts, update all HTML files to load them in the correct order, verify all pages load without errors (Requirement 5).
+   - **Phase 6: Split frontend/main.js** — Extract dashboard Sub_Scripts, update `index.html` script tags, verify all dashboard views and interactions work (Requirement 3).
+   - **Phase 7: Split frontend/editor.js** — Extract editor Sub_Scripts, update `editor.html` script tags, verify all editor zones and save behavior work (Requirement 4).
+   - **Phase 8: Split frontend/styles.css** — Extract dashboard Sub_Stylesheets, update `index.html` link tags, verify visual rendering matches pre-split state (Requirement 6).
+   - **Phase 9: Move frontend to src/frontend/** — Relocate all frontend files into `src/frontend/html/`, `src/frontend/js/`, `src/frontend/css/`, update all paths in HTML, JS, and backend (Requirement 1 frontend portions).
+   - **Phase 10: Move static assets to src/static/** — Relocate static assets, update `StaticFiles` mount and all references (Requirement 1 static portions).
+   - **Phase 11: Create INDEX.md and finalize documentation** — Generate the function/file index, update all documentation, templates, and steering files (Requirements 11, 12).
+   - **Phase 12: Cleanup** — Remove old empty directories, verify no broken references remain, final end-to-end verification.
+4. EACH phase SHALL have its own task list (either inline in `mega_restructure_plan.md` or as a linked spec task file) with granular checkboxes for each step.
+5. EACH phase SHALL include a verification section listing specific checks to confirm the phase completed successfully (e.g., "all API endpoints return 200", "all pages load without console errors", "no broken image references").
+6. THE Decomposition_Engine SHALL ensure each phase leaves the application in a fully working state — no phase SHALL introduce changes that require a subsequent phase to restore functionality.
+7. IF a phase fails verification, THE developer SHALL be able to revert that single phase without affecting prior completed phases.
+8. THE mega_restructure_plan.md SHALL track overall progress with a summary table showing phase name, status (Not Started / In Progress / Complete), and completion date.
