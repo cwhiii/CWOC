@@ -1,53 +1,53 @@
 # Phase 8 — Split frontend/styles.css into focused sub-stylesheets
 
-- [ ] 8. Phase 8 — Split frontend/styles.css into focused sub-stylesheets
-  - [ ] 8.1 Extract `frontend/styles-variables.css`
+- [x] 8. Phase 8 — Split frontend/styles.css into focused sub-stylesheets
+  - [x] 8.1 Extract `frontend/styles-variables.css`
     - Move the entire `:root` block with all CSS custom properties
     - Add file-level comment block
     - This file must load first among dashboard stylesheets
     - _Requirements: 6.1, 10.1_
-  - [ ] 8.2 Extract `frontend/styles-layout.css`
+  - [x] 8.2 Extract `frontend/styles-layout.css`
     - Move body, main content wrapper, header, top bar, logo, responsive layout container rules
     - Add file-level comment block
     - _Requirements: 6.1, 10.1_
-  - [ ] 8.3 Extract `frontend/styles-sidebar.css`
+  - [x] 8.3 Extract `frontend/styles-sidebar.css`
     - Move sidebar positioning, sections, buttons, scroll, sidebar bottom, filter groups, multi-select controls, order controls, clear filters button rules
     - Add file-level comment block
     - _Requirements: 6.1, 10.1_
-  - [ ] 8.4 Extract `frontend/styles-tabs.css`
+  - [x] 8.4 Extract `frontend/styles-tabs.css`
     - Move tab bar, tab styling, active/hover states, icon-only mode, tab count rules
     - Add file-level comment block
     - _Requirements: 6.1, 10.1_
-  - [ ] 8.5 Extract `frontend/styles-calendar.css`
+  - [x] 8.5 Extract `frontend/styles-calendar.css`
     - Move all calendar view styles: week grid, day columns, hour blocks, month grid, year view, timed/all-day events, multi-day spans, day headers, drag resize handles
     - Add file-level comment block
     - _Requirements: 6.1, 10.1, 10.5_
-  - [ ] 8.6 Extract `frontend/styles-cards.css`
+  - [x] 8.6 Extract `frontend/styles-cards.css`
     - Move chit card styling, header row, meta, completed/archived states, drag feedback, notes masonry layout, markdown styling rules
     - Add file-level comment block
     - _Requirements: 6.1, 10.1_
-  - [ ] 8.7 Extract `frontend/styles-hotkeys.css`
+  - [x] 8.7 Extract `frontend/styles-hotkeys.css`
     - Move hotkey overlay, panels, options, reference overlay, reference column rules
     - Add file-level comment block
     - _Requirements: 6.1, 10.1_
-  - [ ] 8.8 Extract `frontend/styles-modals.css`
+  - [x] 8.8 Extract `frontend/styles-modals.css`
     - Move delete modal, clock modal, weather modal, quick-edit modal, all overlay and content box rules
     - Add file-level comment block
     - _Requirements: 6.1, 10.1_
-  - [ ] 8.9 Extract `frontend/styles-responsive.css`
+  - [x] 8.9 Extract `frontend/styles-responsive.css`
     - Move all `@media` breakpoint rules (768px, 480px, 400px)
     - Preserve the order of media queries as they appear in the original file
     - Add file-level comment block
     - _Requirements: 6.1, 10.1_
-  - [ ] 8.10 Reduce `frontend/styles.css` to a minimal coordinator
+  - [x] 8.10 Reduce `frontend/styles.css` to a minimal coordinator
     - Keep only an organizational comment and any rules that don't fit cleanly into the sub-stylesheets
     - Remove all rules that were extracted
     - _Requirements: 6.2, 10.1_
-  - [ ] 8.11 Update `index.html` with new stylesheet load order
+  - [x] 8.11 Update `index.html` with new stylesheet load order
     - Add `<link>` tags for all dashboard sub-stylesheets
     - Load order: `styles-variables.css` first → remaining sub-stylesheets in any order → `styles.css` last
     - _Requirements: 6.3, 8.4, 8.5_
-  - [ ] 8.12 Verify dashboard renders identically
+  - [x] 8.12 Verify dashboard renders identically
     - Visual comparison: no pixel-level changes to any rendered view
     - All CSS variables resolve (`:root` block loads first)
     - Responsive breakpoints trigger at correct widths (768px, 480px, 400px)
@@ -56,5 +56,5 @@
     - Confirm CSS specificity is preserved — override rules in same relative order
     - Confirm each sub-stylesheet is under 500 lines
     - _Requirements: 6.4, 6.5, 7.9, 9.2_
-  - [ ] 8.13 Update `mega_restructure_plan.md` — mark Phase 8 complete
+  - [x] 8.13 Update `mega_restructure_plan.md` — mark Phase 8 complete
     - _Requirements: 14.6_

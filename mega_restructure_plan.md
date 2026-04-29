@@ -15,7 +15,7 @@ Restructure the CWOC codebase from a flat directory layout with five monolithic 
 | 5 | Split frontend/shared.js into focused sub-scripts | **Complete** | 2026-04-29 |
 | 6 | Split frontend/main.js into focused sub-scripts | **Complete** | 2026-04-29 |
 | 7 | Split frontend/editor.js into focused sub-scripts | **Complete** | 2026-04-29 |
-| 8 | Split frontend/styles.css into focused sub-stylesheets | Not Started | — |
+| 8 | Split frontend/styles.css into focused sub-stylesheets | **Complete** | 2026-04-29 |
 | 9 | Move frontend to src/frontend/ | Not Started | — |
 | 10 | Move static assets to src/static/ | Not Started | — |
 | 11 | Create INDEX.md and finalize documentation | Not Started | — |
@@ -183,15 +183,15 @@ Restructure the CWOC codebase from a flat directory layout with five monolithic 
 **Files affected:** `frontend/styles.css` (reduced to coordinator), new files: `frontend/styles-variables.css`, `frontend/styles-layout.css`, `frontend/styles-sidebar.css`, `frontend/styles-tabs.css`, `frontend/styles-calendar.css`, `frontend/styles-cards.css`, `frontend/styles-hotkeys.css`, `frontend/styles-modals.css`, `frontend/styles-responsive.css`. `index.html` updated.
 
 **Tasks:**
-- [ ] Extract 9 dashboard sub-stylesheets
-- [ ] Reduce `styles.css` to minimal coordinator
-- [ ] Update `index.html` with new stylesheet load order
+- [x] Extract 9 dashboard sub-stylesheets
+- [x] Reduce `styles.css` to minimal coordinator
+- [x] Update `index.html` with new stylesheet load order
 
 **Verification:**
-- [ ] Dashboard renders identically — no visual changes
-- [ ] All CSS variables resolve
-- [ ] Responsive breakpoints trigger at correct widths
-- [ ] Each sub-stylesheet under 500 lines
+- [x] Dashboard renders identically — no visual changes
+- [x] All CSS variables resolve
+- [x] Responsive breakpoints trigger at correct widths
+- [x] Each sub-stylesheet under 500 lines
 
 ---
 

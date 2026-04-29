@@ -1,0 +1,80 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   CWOC Dashboard — Tabs
+   Extracted from styles.css (Phase 8.4)
+
+   Tab bar, tab styling, active/hover states, icon-only mode, tab count,
+   and tab image rules.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Tab bar ────────────────────────────────────────────────────────────── */
+.tabs {
+    display: flex;
+    margin-bottom: 0;
+    white-space: nowrap;
+    padding: 3px;
+    flex-wrap: nowrap;
+    overflow: hidden;
+    flex: 1;
+    min-width: 0;
+}
+
+/* ── Tab styling ────────────────────────────────────────────────────────── */
+.tab {
+    padding: 10px 10px;
+    background-color: var(--btn-bg);
+    border: 1px solid #5a3f2a;
+    cursor: pointer;
+    margin-right: 3px;
+    font-family: "Courier New", Courier, monospace;
+    font-weight: bold;
+    border-radius: 3px;
+    font-size: 1em;
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: padding 0.15s ease;
+}
+
+.tab > img {
+    height: 2em;
+    flex-shrink: 0;
+}
+
+.tab-label {
+    white-space: nowrap;
+}
+
+/* ── Icon-only mode ─────────────────────────────────────────────────────── */
+.tabs.icon-only .tab-label,
+.tabs.icon-only .tab-count {
+    display: none;
+}
+.tabs.icon-only .tab {
+    padding: 10px 6px;
+}
+.tabs.icon-only .tab > img {
+    margin-right: 0;
+}
+
+/* ── Active / hover states ──────────────────────────────────────────────── */
+.tab.active {
+    background-color: ivory; /* Match action-button hover */
+}
+
+.tab:hover {
+    background-color: #6b4e31; /* Slightly darker hover */
+    color: #d2b48c;
+}
+
+/* ── Tab image in action-button and sidebar ─────────────────────────────── */
+.tab > img {
+    height: 1.6em;
+    margin-right: 0.3em;
+    vertical-align: middle;
+    flex-shrink: 0;
+}
