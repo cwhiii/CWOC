@@ -1712,35 +1712,27 @@ function _showImportModeDialog(type, fileData) {
  * @param {function} onConfirm - Callback to execute if user confirms
  */
 function _showReplaceConfirmDialog(type, onConfirm) {
-  var modal = document.getElementById('replace-confirm-modal');
-  var textEl = document.getElementById('replace-confirm-text');
-  var confirmBtn = document.getElementById('replace-confirm-btn');
-  var cancelBtn = document.getElementById('replace-cancel-btn');
+  var typeLabels = { chits: 'CHIT', userdata: 'USER', all: 'ALL' };
+  var typeLabel = typeLabels[type] || type.toUpperCase();
 
-  if (type === 'chits') {
-    textEl.textContent = 'This will override and replace all chit data. Are you sure?';
-  } else {
-    textEl.textContent = 'This will override and replace all user data. Are you sure?';
-  }
-
-  function cleanup() {
-    modal.style.display = 'none';
-    confirmBtn.removeEventListener('click', onConfirmClick);
-    cancelBtn.removeEventListener('click', onCancelClick);
-  }
-
-  function onConfirmClick() {
-    cleanup();
-    onConfirm();
-  }
-
-  function onCancelClick() {
-    cleanup();
-  }
-
-  confirmBtn.addEventListener('click', onConfirmClick);
-  cancelBtn.addEventListener('click', onCancelClick);
-  modal.style.display = 'flex';
+  // First confirm
+  cwocConfirm('This will permanently replace all ' + typeLabel + ' data with the imported file. This cannot be undone.', {
+    title: '⚠️ Replace ' + typeLabel + ' Data?',
+    confirmLabel: '🔄 Replace',
+    cancelLabel: 'Cancel',
+    danger: true,
+  }).then(function(first) {
+    if (!first) return;
+    // Second confirm — make them really sure
+    cwocConfirm('Are you REALLY sure you want to nuke ALL ' + typeLabel + ' data and replace it?', {
+      title: '🚨 Final Confirmation',
+      confirmLabel: '🗑️ Yes, Replace Everything',
+      cancelLabel: 'No, Cancel',
+      danger: true,
+    }).then(function(second) {
+      if (second) onConfirm();
+    });
+  });
 }
 
 /**
@@ -1750,7 +1742,7 @@ function _showReplaceConfirmDialog(type, onConfirm) {
  * @param {object} fileData - The parsed JSON envelope
  */
 async function _doImport(type, mode, fileData) {
-  var endpoint = '/api/import/' + (type === 'chits' ? 'chits' : 'userdata');
+  var endpoint = '/api/import/' + (type === 'chits' ? 'chits' : type === 'userdata' ? 'userdata' : 'all');
   try {
     var response = await fetch(endpoint, {
       method: 'POST',
@@ -1768,6 +1760,11 @@ async function _doImport(type, mode, fileData) {
     var msg;
     if (type === 'chits') {
       msg = 'Imported ' + (summary.imported || 0) + ' chits';
+    } else if (type === 'all') {
+      msg = 'Imported ' + (summary.chits_imported || 0) + ' chits, ' +
+            (summary.settings_imported || 0) + ' settings, ' +
+            (summary.contacts_imported || 0) + ' contacts, ' +
+            (summary.alerts_imported || 0) + ' alerts';
     } else {
       if (mode === 'add') {
         msg = 'Added ' + (summary.contacts_added || 0) + ' contacts, merged ' + (summary.settings_merged || 0) + ' settings';
@@ -1777,8 +1774,8 @@ async function _doImport(type, mode, fileData) {
     }
     alert(msg);
 
-    // Reload settings after replace import of user data
-    if (type === 'userdata' && mode === 'replace') {
+    // Reload settings after replace import
+    if ((type === 'userdata' || type === 'all') && mode === 'replace') {
       _invalidateSettingsCache();
       if (window.settingsManager) {
         window.settingsManager.initialize();
@@ -1851,6 +1848,60 @@ function importUserData() {
         return;
       }
       _showImportModeDialog('userdata', parsed);
+    };
+    reader.readAsText(file);
+    fileInput.value = '';
+  }
+
+  fileInput.addEventListener('change', onChange);
+  fileInput.click();
+}
+
+/**
+ * Export ALL data (chits + settings + contacts + alerts) as a single JSON file.
+ */
+async function exportAllData() {
+  try {
+    var response = await fetch('/api/export/all');
+    if (!response.ok) {
+      var err = await response.json();
+      throw new Error(err.detail || response.statusText);
+    }
+    var text = await response.text();
+    var date = new Date().toISOString().slice(0, 10);
+    _triggerJsonDownload(text, 'cwoc-all-' + date + '.json');
+  } catch (error) {
+    console.error('Export all data failed:', error);
+    alert('Export failed: ' + error.message);
+  }
+}
+
+/**
+ * Import ALL data: open file picker, read JSON, validate, show mode dialog.
+ */
+function importAllData() {
+  var fileInput = document.getElementById('importAllFile');
+  fileInput.value = '';
+
+  function onChange() {
+    fileInput.removeEventListener('change', onChange);
+    var file = fileInput.files[0];
+    if (!file) return;
+
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      var parsed;
+      try {
+        parsed = JSON.parse(e.target.result);
+      } catch (err) {
+        alert('Invalid file: could not parse JSON');
+        return;
+      }
+      if (!parsed || parsed.type !== 'all') {
+        alert('Invalid file: expected a CWOC combined data export (type "all"). For chit-only or user-only exports, use the specific import buttons.');
+        return;
+      }
+      _showImportModeDialog('all', parsed);
     };
     reader.readAsText(file);
     fileInput.value = '';

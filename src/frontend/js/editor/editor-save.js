@@ -241,8 +241,9 @@ async function buildChitObject() {
     ? JSON.stringify(window._currentChitWeatherData)
     : null;
 
-  // Include health_data in save payload
-  chit.health_data = _gatherHealthData();
+  // Include health_data in save payload (JSON string like weather_data)
+  const healthObj = _gatherHealthData();
+  chit.health_data = healthObj ? JSON.stringify(healthObj) : null;
 
   return chit;
 }

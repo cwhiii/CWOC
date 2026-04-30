@@ -349,77 +349,153 @@
         <!-- Reference overlay (R) -->
         <div class="reference-overlay" id="reference-overlay" onclick="if(event.target===this)_closeReference()">
             <div class="reference-content">
-                <h3>⌨ Hotkey Reference</h3>
-                <div class="ref-columns">
-                    <div class="ref-col">
-                        <h4>Tabs</h4>
-                        <div><span class="ref-key">C</span> Calendar</div>
-                        <div><span class="ref-key">H</span> Checklists</div>
-                        <div><span class="ref-key">A</span> Alerts</div>
-                        <div><span class="ref-key">P</span> Projects</div>
-                        <div><span class="ref-key">T</span> Tasks</div>
-                        <div><span class="ref-key">N</span> Notes</div>
-                        <div><span class="ref-key">I</span> Indicators</div>
-                        <h4>General</h4>
-                        <div><span class="ref-key">K</span> Create Chit</div>
-                        <div><span class="ref-key">S</span> Settings</div>
-                        <div><span class="ref-key">W</span> Weather Modal</div>
-                        <div><span class="ref-key">⇧W</span> Weather Page</div>
-                        <div><span class="ref-key">L</span> Clock Modal</div>
-                        <div><span class="ref-key">R</span> Reference</div>
-                        <div><span class="ref-key">⇧R</span> Help Guide</div>
-                        <div><span class="ref-key">V</span> Navigate</div>
-                        <div><span class="ref-key">G</span> Global Search</div>
-                        <div><span class="ref-key">!</span> Quick Alert</div>
-                        <div><span class="ref-key">`</span> Toggle Sidebar</div>
-                        <div><span class="ref-key">~</span> Toggle Topbar</div>
-                        <div><span class="ref-key">ESC</span> Close / Exit</div>
-                        <div><span class="ref-key">⌫</span> Clear filters</div>
+                <h3>⌨ Keyboard &amp; Mouse Reference</h3>
+                <div class="ref-tree-columns">
+
+                    <!-- Column 1: Direct keys (Tabs, Actions, Toggles) -->
+                    <div class="ref-tree-col">
+                        <div class="ref-tree-section">
+                            <div class="ref-tree-group">
+                                <div class="ref-tree-label">Tabs</div>
+                                <div class="ref-item"><span class="ref-key">C</span> Calendar</div>
+                                <div class="ref-item"><span class="ref-key">H</span> Checklists</div>
+                                <div class="ref-item"><span class="ref-key">A</span> Alerts</div>
+                                <div class="ref-item"><span class="ref-key">P</span> Projects</div>
+                                <div class="ref-item"><span class="ref-key">T</span> Tasks</div>
+                                <div class="ref-item"><span class="ref-key">N</span> Notes</div>
+                                <div class="ref-item"><span class="ref-key">I</span> Indicators</div>
+                                <div class="ref-item"><span class="ref-key">G</span> Global Search</div>
+                            </div>
+                            <div class="ref-tree-group">
+                                <div class="ref-tree-label">Actions</div>
+                                <div class="ref-item"><span class="ref-key">K</span> Create Chit</div>
+                                <div class="ref-item"><span class="ref-key">S</span> <a href="/frontend/html/settings.html" class="ref-link">Settings</a></div>
+                                <div class="ref-item"><span class="ref-key">W</span> Weather Modal</div>
+                                <div class="ref-item"><span class="ref-key">Shift+W</span> <a href="/frontend/html/weather.html" class="ref-link">Weather Page</a></div>
+                                <div class="ref-item"><span class="ref-key">L</span> Clock Modal</div>
+                                <div class="ref-item"><span class="ref-key">R</span> Reference</div>
+                                <div class="ref-item"><span class="ref-key">Shift+R</span> <a href="/frontend/html/help.html" class="ref-link">Help Guide</a></div>
+                            </div>
+                            <div class="ref-tree-group">
+                                <div class="ref-tree-label">Toggles</div>
+                                <div class="ref-item"><span class="ref-key">`</span> Toggle Sidebar</div>
+                                <div class="ref-item"><span class="ref-key">~</span> Toggle Topbar</div>
+                                <div class="ref-item"><span class="ref-key">Backspace</span> Clear Filters</div>
+                                <div class="ref-item"><span class="ref-key">ESC</span> Close / Exit</div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="ref-col">
-                        <h4>Period <span class="ref-key">.</span></h4>
-                        <div><span class="ref-key">I</span> Itinerary</div>
-                        <div><span class="ref-key">D</span> Day</div>
-                        <div><span class="ref-key">W</span> Week</div>
-                        <div><span class="ref-key">K</span> Work Hours</div>
-                        <div><span class="ref-key">S</span> X Days</div>
-                        <div><span class="ref-key">M</span> Month</div>
-                        <div><span class="ref-key">Y</span> Year</div>
+
+                    <!-- Column 2: Submenus (root key ▸ indented children) -->
+                    <div class="ref-tree-col">
+                        <div class="ref-tree-section">
+                            <div class="ref-tree-group">
+                                <div class="ref-tree-label">Submenus <span class="ref-hint">(press key, then pick)</span></div>
+
+                                <div class="ref-submenu">
+                                    <div class="ref-tree-root"><span class="ref-key">V</span> Navigate ▸</div>
+                                    <div class="ref-tree-children">
+                                        <div class="ref-item"><span class="ref-key">1</span> Dashboard</div>
+                                        <div class="ref-item"><span class="ref-key">2</span> <a href="/frontend/html/weather.html" class="ref-link">Weather</a></div>
+                                        <div class="ref-item"><span class="ref-key">3</span> <a href="/frontend/html/people.html" class="ref-link">People</a></div>
+                                        <div class="ref-item"><span class="ref-key">4</span> <a href="/frontend/html/help.html" class="ref-link">Help</a></div>
+                                        <div class="ref-item"><span class="ref-key">5</span> <a href="/frontend/html/settings.html" class="ref-link">Settings</a></div>
+                                        <div class="ref-item"><span class="ref-key">6</span> <a href="/frontend/html/audit-log.html" class="ref-link">Audit Log</a></div>
+                                        <div class="ref-item"><span class="ref-key">7</span> <a href="/frontend/html/trash.html" class="ref-link">Trash</a></div>
+                                    </div>
+                                </div>
+
+                                <div class="ref-submenu">
+                                    <div class="ref-tree-root"><span class="ref-key">.</span> Period ▸</div>
+                                    <div class="ref-tree-children">
+                                        <div class="ref-item"><span class="ref-key">I</span> Itinerary</div>
+                                        <div class="ref-item"><span class="ref-key">D</span> Day</div>
+                                        <div class="ref-item"><span class="ref-key">W</span> Week</div>
+                                        <div class="ref-item"><span class="ref-key">K</span> Work Hours</div>
+                                        <div class="ref-item"><span class="ref-key">S</span> X Days</div>
+                                        <div class="ref-item"><span class="ref-key">M</span> Month</div>
+                                        <div class="ref-item"><span class="ref-key">Y</span> Year</div>
+                                    </div>
+                                </div>
+
+                                <div class="ref-submenu">
+                                    <div class="ref-tree-root"><span class="ref-key">!</span> Quick Alert ▸</div>
+                                    <div class="ref-tree-children">
+                                        <div class="ref-item"><span class="ref-key">A</span> Alarm</div>
+                                        <div class="ref-item"><span class="ref-key">T</span> Timer</div>
+                                        <div class="ref-item"><span class="ref-key">S</span> Stopwatch</div>
+                                    </div>
+                                </div>
+
+                                <div class="ref-submenu">
+                                    <div class="ref-tree-root"><span class="ref-key">F</span> Filter ▸</div>
+                                    <div class="ref-tree-children">
+                                        <div class="ref-item"><span class="ref-key">S</span> Status</div>
+                                        <div class="ref-item"><span class="ref-key">T</span> Tags</div>
+                                        <div class="ref-item"><span class="ref-key">P</span> Priority</div>
+                                        <div class="ref-item"><span class="ref-key">E</span> People</div>
+                                        <div class="ref-item"><span class="ref-key">A</span> Archived</div>
+                                        <div class="ref-item"><span class="ref-key">I</span> Pinned</div>
+                                        <div class="ref-item"><span class="ref-key">D</span> Filter Text</div>
+                                        <div class="ref-item"><span class="ref-key">Backspace</span> Clear</div>
+                                    </div>
+                                </div>
+
+                                <div class="ref-submenu">
+                                    <div class="ref-tree-root"><span class="ref-key">O</span> Order ▸</div>
+                                    <div class="ref-tree-children">
+                                        <div class="ref-item"><span class="ref-key">T</span> Title</div>
+                                        <div class="ref-item"><span class="ref-key">S</span> Start</div>
+                                        <div class="ref-item"><span class="ref-key">D</span> Due</div>
+                                        <div class="ref-item"><span class="ref-key">U</span> Updated</div>
+                                        <div class="ref-item"><span class="ref-key">C</span> Created</div>
+                                        <div class="ref-item"><span class="ref-key">X</span> Status</div>
+                                        <div class="ref-item"><span class="ref-key">M</span> Manual</div>
+                                        <div class="ref-item"><span class="ref-key">R</span> Random</div>
+                                        <div class="ref-item"><span class="ref-key">G</span> Upcoming</div>
+                                        <div class="ref-item"><span class="ref-key">Up/Down</span> Ascending / Descending</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="ref-col">
-                        <h4>Filter <span class="ref-key">F</span></h4>
-                        <div><span class="ref-key">S</span> Status</div>
-                        <div><span class="ref-key">T</span> Tags</div>
-                        <div><span class="ref-key">P</span> Priority</div>
-                        <div><span class="ref-key">A</span> Archived</div>
-                        <div><span class="ref-key">I</span> Pinned</div>
-                        <div><span class="ref-key">D</span> Filter Text</div>
-                        <div><span class="ref-key">⌫</span> Clear filter / all</div>
-                        <h4>Order <span class="ref-key">O</span></h4>
-                        <div><span class="ref-key">T</span> Title</div>
-                        <div><span class="ref-key">S</span> Start</div>
-                        <div><span class="ref-key">D</span> Due</div>
-                        <div><span class="ref-key">U</span> Updated</div>
-                        <div><span class="ref-key">C</span> Created</div>
-                        <div><span class="ref-key">X</span> Status</div>
-                        <div><span class="ref-key">M</span> Manual (drag)</div>
-                        <div><span class="ref-key">R</span> Random / Shuffle</div>
-                        <div><span class="ref-key">G</span> Upcoming (Due Soon)</div>
-                        <div><span class="ref-key">↑↓</span> Asc / Desc</div>
+
+                    <!-- Column 3: Mouse interactions + Editor shortcuts -->
+                    <div class="ref-tree-col">
+                        <div class="ref-tree-section">
+                            <div class="ref-tree-group">
+                                <div class="ref-tree-label">Mouse · Calendar</div>
+                                <div class="ref-item"><span class="ref-key">Double-click</span> Open in editor</div>
+                                <div class="ref-item"><span class="ref-key">Shift+click</span> Quick Edit</div>
+                                <div class="ref-item"><span class="ref-key">Drag up/down</span> Move time</div>
+                                <div class="ref-item"><span class="ref-key">Drag left/right</span> Move day</div>
+                                <div class="ref-item"><span class="ref-key">Drag bottom edge</span> Resize</div>
+                                <div class="ref-item"><span class="ref-key">Double-click empty</span> New chit at time</div>
+                            </div>
+                            <div class="ref-tree-group">
+                                <div class="ref-tree-label">Mouse · Notes View</div>
+                                <div class="ref-item"><span class="ref-key">Double-click</span> Open in editor</div>
+                                <div class="ref-item"><span class="ref-key">Shift+click</span> Edit in place</div>
+                            </div>
+                            <div class="ref-tree-group">
+                                <div class="ref-tree-label">Mouse · Quick Edit Modal</div>
+                                <div class="ref-item"><span class="ref-key">Double-click title</span> Edit title</div>
+                                <div class="ref-item"><span class="ref-key">QR button</span> Show QR code</div>
+                            </div>
+                            <div class="ref-tree-group">
+                                <div class="ref-tree-label">Editor Shortcuts</div>
+                                <div class="ref-item"><span class="ref-key">Alt+1</span> through <span class="ref-key">Alt+0</span> Toggle zones</div>
+                                <div class="ref-item"><span class="ref-key">Ctrl+Shift+S</span> Save and Stay</div>
+                                <div class="ref-item"><span class="ref-key">ESC</span> Exit editor</div>
+                                <div class="ref-item"><span class="ref-key">!</span> Quick Alert</div>
+                                <div class="ref-item"><span class="ref-key">[[</span> Link chit in Notes</div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="ref-col">
-                        <h4>🖱 Mouse (Calendar)</h4>
-                        <div><span class="ref-key">Double-click</span> Open in editor</div>
-                        <div><span class="ref-key">Shift+click</span> Quick Edit modal</div>
-                        <div><span class="ref-key">Dbl-click empty</span> New chit at time</div>
-                        <div><span class="ref-key">Drag</span> Move / resize</div>
-                        <h4>🖱 Quick Edit Modal</h4>
-                        <div><span class="ref-key">Dbl-click title</span> Edit title</div>
-                        <div><span class="ref-key">📱 QR</span> Show QR code</div>
-                        <h4>🖱 Notes View</h4>
-                        <div><span class="ref-key">Double-click</span> Open in editor</div>
-                        <div><span class="ref-key">Shift+click</span> Edit note in place</div>
-                    </div>
+
+                </div>
+                <div class="ref-footer">
+                    <a href="/frontend/html/help.html" class="ref-link">Help Guide</a> · <a href="/frontend/html/settings.html" class="ref-link">Settings</a> · Press <span class="ref-key">R</span> or <span class="ref-key">ESC</span> to close
                 </div>
             </div>
         </div>

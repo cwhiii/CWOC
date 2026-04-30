@@ -149,6 +149,47 @@ function _showGlobalToast(emoji, label, chitTitle, chitId, onDismiss) {
   return toast;
 }
 
+/**
+ * Show a persistent looping notification toast that stays until acknowledged.
+ * Acknowledging stops the loop from re-firing.
+ */
+function _showGlobalLoopingToast(emoji, label, chitTitle, chitId, loopKey) {
+  const toast = document.createElement("div");
+  toast.style.cssText = "position:fixed;top:16px;right:16px;z-index:99999;background:#fff5e6;border:2px solid #8b5a2b;border-radius:8px;padding:0.75em 1em;box-shadow:0 4px 20px rgba(0,0,0,0.35);min-width:240px;max-width:320px;font-family:'Courier New',monospace;display:flex;flex-direction:column;gap:0.4em;";
+  const titleRow = document.createElement("div");
+  titleRow.style.cssText = "font-weight:bold;font-size:1em;";
+  titleRow.textContent = `${emoji} ${chitTitle || "Alert"} 🔁`;
+  const labelRow = document.createElement("div");
+  labelRow.style.cssText = "font-size:0.85em;opacity:0.8;";
+  labelRow.textContent = label;
+  const btnRow = document.createElement("div");
+  btnRow.style.cssText = "display:flex;gap:0.5em;margin-top:0.2em;";
+  if (chitId) {
+    const openBtn = document.createElement("button");
+    openBtn.textContent = "Open Chit";
+    openBtn.style.cssText = "flex:1;padding:3px 8px;cursor:pointer;font-weight:bold;";
+    openBtn.onclick = () => { toast.remove(); window.location.href = `/editor?id=${chitId}`; };
+    btnRow.appendChild(openBtn);
+  }
+  const ackBtn = document.createElement("button");
+  ackBtn.textContent = "✓ Acknowledge";
+  ackBtn.style.cssText = "padding:3px 8px;cursor:pointer;font-weight:bold;";
+  ackBtn.onclick = () => {
+    toast.remove();
+    if (loopKey) {
+      if (!window._globalNotifLoopAcknowledged) window._globalNotifLoopAcknowledged = {};
+      window._globalNotifLoopAcknowledged[loopKey] = true;
+    }
+  };
+  btnRow.appendChild(ackBtn);
+  toast.appendChild(titleRow);
+  toast.appendChild(labelRow);
+  toast.appendChild(btnRow);
+  document.body.appendChild(toast);
+  // No auto-dismiss for looping notifications
+  return toast;
+}
+
 // ── Bold full-screen alert modal for alarms & timers ─────────────────────────
 function _showAlertModal(opts) {
   // opts: { icon, title, subtitle, chitId, onDismiss, showSnooze, snoozeKey, triggerKey }
@@ -221,6 +262,8 @@ function _showAlertModal(opts) {
     // Stop ALL sounds immediately
     _globalStopAlarm();
     if (typeof _globalStopTimer === 'function') _globalStopTimer();
+    if (typeof _sharedStopAlarm === 'function') _sharedStopAlarm();
+    if (typeof _sharedStopTimer === 'function') _sharedStopTimer();
     _dismissAlertModal(overlay, opts.onDismiss);
     // Persist dismiss and sync
     if (opts.triggerKey) _persistDismiss(opts.triggerKey);
@@ -236,6 +279,8 @@ function _showAlertModal(opts) {
     snoozeBtn.onclick = () => {
       _globalStopAlarm();
       if (typeof _globalStopTimer === 'function') _globalStopTimer();
+      if (typeof _sharedStopAlarm === 'function') _sharedStopAlarm();
+      if (typeof _sharedStopTimer === 'function') _sharedStopTimer();
       _dismissAlertModal(overlay, opts.onDismiss);
       if (opts.snoozeKey) {
         const snoozeMs = _getSnoozeMs();
@@ -263,10 +308,22 @@ function _showAlertModal(opts) {
   void overlay.offsetWidth;
   overlay.classList.add("active");
 
-  // Block keyboard shortcuts but allow clicks (needed for audio retry)
+  // Block keyboard shortcuts but allow ESC to dismiss and Tab for accessibility
   function _blockKeys(e) {
-    // Allow Tab for accessibility
     if (e.key === 'Tab') return;
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      _globalStopAlarm();
+      if (typeof _globalStopTimer === 'function') _globalStopTimer();
+      if (typeof _sharedStopAlarm === 'function') _sharedStopAlarm();
+      if (typeof _sharedStopTimer === 'function') _sharedStopTimer();
+      _dismissAlertModal(overlay, opts.onDismiss);
+      if (opts.triggerKey) _persistDismiss(opts.triggerKey);
+      if (opts.snoozeKey) _persistDismiss(opts.snoozeKey);
+      syncSend('alert_dismissed', { snoozeKey: opts.snoozeKey, triggerKey: opts.triggerKey });
+      return;
+    }
     e.preventDefault();
     e.stopImmediatePropagation();
   }
@@ -523,8 +580,9 @@ function _globalCheckNotifications() {
       const unitMs = { minutes: 60000, hours: 3600000, days: 86400000, weeks: 604800000 };
       const offsetMs = alert.value * (unitMs[alert.unit] || 60000);
 
-      // Determine target — use due if present, otherwise start
-      const targetStr = chit.due_datetime || chit.start_datetime;
+      // Determine target based on targetType field
+      const targetType = alert.targetType || (chit.due_datetime && !chit.start_datetime ? "due" : "start");
+      const targetStr = targetType === "due" ? (chit.due_datetime || chit.start_datetime) : (chit.start_datetime || chit.due_datetime);
       if (!targetStr) return;
 
       const targetDate = new Date(targetStr);
@@ -537,18 +595,34 @@ function _globalCheckNotifications() {
       const diff = now - fireAt;
 
       // Fire if within 60 seconds past the fire time
-      if (diff < 0 || diff > 60000) return;
+      if (diff >= 0 && diff < 60000) {
+        const key = `${chit.id}-notif-${alertIdx}-${fireAt.toISOString()}`;
+        if (_globalFiredNotifications.has(key)) return;
+        if (!alert.loop) _globalFiredNotifications.add(key);
 
-      const key = `${chit.id}-notif-${alertIdx}-${fireAt.toISOString()}`;
-      if (_globalFiredNotifications.has(key)) return;
-      _globalFiredNotifications.add(key);
+        const dir = alert.afterTarget ? "after" : "before";
+        const label = `${alert.value} ${alert.unit} ${dir} ${targetType}`;
+        const toastTitle = alert.message ? `${chit.title} — ${alert.message}` : chit.title;
+        _showGlobalToast("📢", label, toastTitle, chit.id, null);
+        _sendBrowserNotification(`📢 Reminder: ${toastTitle}`, label, chit.id);
+      }
 
-      const targetName = chit.due_datetime ? "due" : "start";
-      const dir = alert.afterTarget ? "after" : "before";
-      const label = `${alert.value} ${alert.unit} ${dir} ${targetName}`;
-      const toastTitle = alert.message ? `${chit.title} — ${alert.message}` : chit.title;
-      _showGlobalToast("📢", label, toastTitle, chit.id, null);
-      _sendBrowserNotification(`📢 Reminder: ${toastTitle}`, label, chit.id);
+      // Loop support: re-fire every 60 seconds if loop is enabled and not acknowledged
+      if (alert.loop && diff >= 60000) {
+        const loopKey = `${chit.id}-notif-loop-${alertIdx}`;
+        if (!window._globalNotifLoopAcknowledged) window._globalNotifLoopAcknowledged = {};
+        if (window._globalNotifLoopAcknowledged[loopKey]) return;
+        if (!window._globalNotifLoopLastFire) window._globalNotifLoopLastFire = {};
+        const lastFire = window._globalNotifLoopLastFire[loopKey];
+        if (!lastFire || (now.getTime() - lastFire) >= 60000) {
+          window._globalNotifLoopLastFire[loopKey] = now.getTime();
+          const dir = alert.afterTarget ? "after" : "before";
+          const label = `${alert.value} ${alert.unit} ${dir} ${targetType} 🔁`;
+          const toastTitle = alert.message ? `${chit.title} — ${alert.message}` : chit.title;
+          _showGlobalLoopingToast("📢", label, toastTitle, chit.id, loopKey);
+          _sendBrowserNotification(`📢 Reminder (repeating): ${toastTitle}`, label, chit.id);
+        }
+      }
     });
   });
 }

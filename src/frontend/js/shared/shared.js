@@ -2333,8 +2333,23 @@ function _sharedShowAlertModal(opts) {
   void overlay.offsetWidth;
   overlay.style.opacity = '1';
 
-  // Block keyboard
-  function _block(e) { if (e.key !== 'Tab') { e.preventDefault(); e.stopImmediatePropagation(); } }
+  // Block keyboard but allow ESC to dismiss and Tab for accessibility
+  function _block(e) {
+    if (e.key === 'Tab') return;
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      _sharedStopAlarm(); _sharedStopTimer();
+      if (typeof _timerAudio !== 'undefined' && _timerAudio) { _timerAudio.pause(); _timerAudio.currentTime = 0; }
+      if (typeof _alarmAudio !== 'undefined' && _alarmAudio) { _alarmAudio.pause(); _alarmAudio.currentTime = 0; }
+      _sharedDismissModal(overlay, opts);
+      if (opts.triggerKey) _sharedPersistDismiss(opts.triggerKey);
+      if (opts.snoozeKey) _sharedPersistDismiss(opts.snoozeKey);
+      syncSend('alert_dismissed', { snoozeKey: opts.snoozeKey, triggerKey: opts.triggerKey });
+      return;
+    }
+    e.preventDefault(); e.stopImmediatePropagation();
+  }
   document.addEventListener('keydown', _block, true);
   overlay._blockKeys = _block;
 
@@ -2547,44 +2562,46 @@ function _initSharedAlarmSystem() {
 }
 
 // ── Quick Alert Modal (! hotkey) ─────────────────────────────────────────────
-// Opens a small modal with A/T/S options. Context-aware:
-//   - On dashboard: creates an independent alert via the API
-//   - On editor: adds to the chit's _alertsData without saving
-//   - On other pages: creates an independent alert via direct fetch
+// Opens a modal with A/T/S type picker, then shows a full inline editor
+// for the selected alert type. Works on all pages.
 
 function _openQuickAlertModal() {
-  // Don't open if already open
   if (document.getElementById('cwoc-quick-alert-overlay')) return;
 
   var overlay = document.createElement('div');
   overlay.id = 'cwoc-quick-alert-overlay';
-  overlay.className = 'cwoc-quick-alert-overlay';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:99999;display:flex;align-items:center;justify-content:center;';
   overlay.addEventListener('click', function(e) {
     if (e.target === overlay) _closeQuickAlertModal();
   });
 
   var box = document.createElement('div');
+  box.style.cssText = 'background:#fff8e1;border:2px solid #8b4513;border-radius:10px;padding:24px 32px;box-shadow:0 8px 32px rgba(0,0,0,0.4);font-family:"Courier New",Courier,monospace;min-width:260px;max-width:340px;text-align:center;color:#2b1e0f;';
   box.className = 'cwoc-quick-alert-box';
+
+  var _optStyle = 'display:flex;align-items:center;gap:12px;padding:10px 14px;margin:4px 0;border:1px solid #e0d4b5;border-radius:6px;cursor:pointer;transition:background 0.15s;font-size:1.05em;';
+  var _keyStyle = 'display:inline-flex;align-items:center;justify-content:center;min-width:2em;height:2em;background:#8b5a2b;color:#fff8e1;font-weight:bold;font-size:0.95em;border-radius:4px;border:1px solid #5a3f2a;flex-shrink:0;';
+  var _btnStyle = 'padding:8px 24px;font-family:"Courier New",Courier,monospace;font-size:1em;background:#8b5a2b;color:#fff8e1;border:1px solid #5a3f2a;border-radius:4px;cursor:pointer;';
 
   box.innerHTML =
     '<h3 style="margin:0 0 12px;font-size:1.15em;color:#4a2c2a;">⚡ Quick Alert</h3>' +
     '<p style="margin:0 0 14px;font-size:0.9em;opacity:0.7;">Press a key or click to add:</p>' +
-    '<div class="cwoc-quick-alert-options">' +
-      '<div class="cwoc-quick-alert-option" data-type="alarm" tabindex="0">' +
-        '<span class="cwoc-quick-alert-key">A</span>' +
+    '<div style="display:flex;flex-direction:column;gap:6px;">' +
+      '<div class="cwoc-qa-opt" data-type="alarm" tabindex="0" style="' + _optStyle + '">' +
+        '<span style="' + _keyStyle + '">A</span>' +
         '<span>🔔 Alarm</span>' +
       '</div>' +
-      '<div class="cwoc-quick-alert-option" data-type="timer" tabindex="0">' +
-        '<span class="cwoc-quick-alert-key">T</span>' +
+      '<div class="cwoc-qa-opt" data-type="timer" tabindex="0" style="' + _optStyle + '">' +
+        '<span style="' + _keyStyle + '">T</span>' +
         '<span>⏱️ Timer</span>' +
       '</div>' +
-      '<div class="cwoc-quick-alert-option" data-type="stopwatch" tabindex="0">' +
-        '<span class="cwoc-quick-alert-key">S</span>' +
+      '<div class="cwoc-qa-opt" data-type="stopwatch" tabindex="0" style="' + _optStyle + '">' +
+        '<span style="' + _keyStyle + '">S</span>' +
         '<span>⏲️ Stopwatch</span>' +
       '</div>' +
     '</div>' +
     '<div style="margin-top:14px;text-align:center;">' +
-      '<button class="cwoc-quick-alert-done">Done</button>' +
+      '<button style="' + _btnStyle + '">Cancel</button>' +
     '</div>' +
     '<div style="margin-top:8px;font-size:0.75em;opacity:0.45;text-align:center;">ESC or click outside to close</div>';
 
@@ -2592,16 +2609,18 @@ function _openQuickAlertModal() {
   document.body.appendChild(overlay);
 
   // Done button handler
-  box.querySelector('.cwoc-quick-alert-done').addEventListener('click', function() {
+  box.querySelector('button').addEventListener('click', function() {
     _closeQuickAlertModal();
   });
 
-  // Click handlers on options
-  var opts = box.querySelectorAll('.cwoc-quick-alert-option');
+  // Hover effect for options
+  var opts = box.querySelectorAll('.cwoc-qa-opt');
   for (var i = 0; i < opts.length; i++) {
     (function(opt) {
+      opt.addEventListener('mouseenter', function() { opt.style.background = 'rgba(139,69,19,0.12)'; });
+      opt.addEventListener('mouseleave', function() { opt.style.background = ''; });
       opt.addEventListener('click', function() {
-        _quickAlertCreate(opt.getAttribute('data-type'));
+        _quickAlertShowEditor(opt.getAttribute('data-type'));
       });
     })(opts[i]);
   }
@@ -2615,9 +2634,9 @@ function _openQuickAlertModal() {
       return;
     }
     var k = e.key.toLowerCase();
-    if (k === 'a') { e.preventDefault(); e.stopPropagation(); _quickAlertCreate('alarm'); }
-    else if (k === 't') { e.preventDefault(); e.stopPropagation(); _quickAlertCreate('timer'); }
-    else if (k === 's') { e.preventDefault(); e.stopPropagation(); _quickAlertCreate('stopwatch'); }
+    if (k === 'a') { e.preventDefault(); e.stopPropagation(); _quickAlertShowEditor('alarm'); }
+    else if (k === 't') { e.preventDefault(); e.stopPropagation(); _quickAlertShowEditor('timer'); }
+    else if (k === 's') { e.preventDefault(); e.stopPropagation(); _quickAlertShowEditor('stopwatch'); }
   }
   overlay._keyHandler = _qaKeyHandler;
   document.addEventListener('keydown', _qaKeyHandler, true);
@@ -2632,156 +2651,210 @@ function _closeQuickAlertModal() {
   overlay.remove();
 }
 
-function _quickAlertCreate(type) {
-  var isEditor = !!document.getElementById('chit-form');
-
-  if (isEditor) {
-    _quickAlertAddToChit(type);
-  } else {
-    _quickAlertAddIndependent(type);
-  }
-
-  // Flash the selected option briefly
+/** Show the inline editor for the selected alert type inside the quick alert modal */
+function _quickAlertShowEditor(type) {
   var overlay = document.getElementById('cwoc-quick-alert-overlay');
-  if (overlay) {
-    var opt = overlay.querySelector('.cwoc-quick-alert-option[data-type="' + type + '"]');
-    if (opt) {
-      opt.classList.add('flash');
-      setTimeout(function() { opt.classList.remove('flash'); }, 300);
-    }
-  }
-}
-
-function _quickAlertAddToChit(type) {
-  if (!window._alertsData) {
-    window._alertsData = { alarms: [], timers: [], stopwatches: [], notifications: [] };
-  }
-
-  // Expand the alerts zone if collapsed
-  var alertsContent = document.getElementById('alertsContent');
-  if (alertsContent && alertsContent.classList.contains('collapsed')) {
-    if (typeof cwocToggleZone === 'function') {
-      cwocToggleZone(new MouseEvent('click'), 'alertsSection', 'alertsContent');
-    }
-  }
-
+  if (!overlay) return;
+  var box = overlay.querySelector('.cwoc-quick-alert-box');
+  if (!box) return;
+  if (overlay._keyHandler) { document.removeEventListener('keydown', overlay._keyHandler, true); overlay._keyHandler = null; }
+  box.innerHTML = '';
+  var labels = { alarm: '🔔 Alarm', timer: '⏱️ Timer', stopwatch: '⏲️ Stopwatch' };
+  var heading = document.createElement('h3');
+  heading.style.cssText = 'margin:0 0 12px;font-size:1.15em;color:#4a2c2a;';
+  heading.textContent = labels[type] || 'Alert';
+  box.appendChild(heading);
+  var formDiv = document.createElement('div');
+  formDiv.style.cssText = 'display:flex;flex-direction:column;gap:8px;';
   if (type === 'alarm') {
-    var now = new Date();
-    now.setMinutes(now.getMinutes() + 1);
-    var defaultTime = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
-    var dayAbbrs = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    window._alertsData.alarms.push({
-      _type: 'alarm', name: '', time: defaultTime,
-      recurrence: 'none', days: [dayAbbrs[new Date().getDay()]], enabled: true
+    var nameInput = document.createElement('input');
+    nameInput.type = 'text'; nameInput.placeholder = 'Alarm name (optional)';
+    nameInput.style.cssText = 'width:100%;padding:6px 8px;font-family:inherit;font-size:0.95em;border:1px solid #8b5a2b;border-radius:4px;box-sizing:border-box;background:#f5e6cc;';
+    formDiv.appendChild(nameInput);
+    var now = new Date(); now.setMinutes(now.getMinutes() + 1);
+    var defTime = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
+    var timeInput = document.createElement('input');
+    timeInput.type = 'time'; timeInput.value = defTime;
+    timeInput.style.cssText = 'width:100%;padding:6px 8px;font-family:inherit;font-size:1.1em;font-weight:bold;border:1px solid #8b5a2b;border-radius:4px;box-sizing:border-box;background:#f5e6cc;';
+    formDiv.appendChild(timeInput);
+    var daysDiv = document.createElement('div');
+    daysDiv.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;font-size:0.9em;';
+    var allDays = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    var today = allDays[new Date().getDay()];
+    allDays.forEach(function(day) {
+      var lbl = document.createElement('label');
+      lbl.style.cssText = 'display:flex;align-items:center;gap:2px;cursor:pointer;';
+      var cb = document.createElement('input'); cb.type = 'checkbox'; cb.value = day; cb.checked = (day === today);
+      lbl.appendChild(cb); lbl.appendChild(document.createTextNode(day)); daysDiv.appendChild(lbl);
     });
-    if (typeof renderAlarmsContainer === 'function') renderAlarmsContainer();
+    formDiv.appendChild(daysDiv);
+    formDiv._getData = function() {
+      var days = []; daysDiv.querySelectorAll('input:checked').forEach(function(cb) { days.push(cb.value); });
+      return { _type: 'alarm', name: nameInput.value.trim(), time: timeInput.value, days: days, enabled: true };
+    };
+    setTimeout(function() { timeInput.focus(); timeInput.select(); }, 50);
   } else if (type === 'timer') {
-    window._alertsData.timers.push({ _type: 'timer', name: '', totalSeconds: 0, loop: false });
-    var tIdx = window._alertsData.timers.length - 1;
-    if (!window._timerRuntime) window._timerRuntime = {};
-    window._timerRuntime[tIdx] = { remaining: 0, intervalId: null, running: false };
-    if (typeof renderTimersContainer === 'function') renderTimersContainer();
+    var nameInput = document.createElement('input');
+    nameInput.type = 'text'; nameInput.placeholder = 'Timer name (optional)';
+    nameInput.style.cssText = 'width:100%;padding:6px 8px;font-family:inherit;font-size:0.95em;border:1px solid #8b5a2b;border-radius:4px;box-sizing:border-box;background:#f5e6cc;';
+    formDiv.appendChild(nameInput);
+    var durRow = document.createElement('div');
+    durRow.style.cssText = 'display:flex;align-items:center;gap:4px;justify-content:center;';
+    var hInput = document.createElement('input'); hInput.type = 'number'; hInput.min = '0'; hInput.placeholder = 'HH'; hInput.value = '0';
+    hInput.style.cssText = 'width:55px;padding:6px 4px;font-family:inherit;font-size:1.1em;text-align:center;border:1px solid #8b5a2b;border-radius:4px;background:#f5e6cc;';
+    var mInput = document.createElement('input'); mInput.type = 'number'; mInput.min = '0'; mInput.max = '59'; mInput.placeholder = 'MM'; mInput.value = '5';
+    mInput.style.cssText = hInput.style.cssText;
+    var sInput = document.createElement('input'); sInput.type = 'number'; sInput.min = '0'; sInput.max = '59'; sInput.placeholder = 'SS'; sInput.value = '0';
+    sInput.style.cssText = hInput.style.cssText;
+    durRow.appendChild(hInput); durRow.appendChild(document.createTextNode(':')); durRow.appendChild(mInput);
+    durRow.appendChild(document.createTextNode(':')); durRow.appendChild(sInput); formDiv.appendChild(durRow);
+    var loopLbl = document.createElement('label');
+    loopLbl.style.cssText = 'display:flex;align-items:center;gap:4px;font-size:0.9em;cursor:pointer;';
+    var loopCb = document.createElement('input'); loopCb.type = 'checkbox';
+    loopLbl.appendChild(loopCb); loopLbl.appendChild(document.createTextNode('🔁 Loop when done')); formDiv.appendChild(loopLbl);
+    formDiv._getData = function() {
+      var total = (parseInt(hInput.value)||0)*3600 + (parseInt(mInput.value)||0)*60 + (parseInt(sInput.value)||0);
+      return { _type: 'timer', name: nameInput.value.trim(), totalSeconds: total, loop: loopCb.checked };
+    };
+    setTimeout(function() { mInput.focus(); mInput.select(); }, 50);
   } else if (type === 'stopwatch') {
-    var swIdx = window._alertsData.stopwatches.length;
-    window._alertsData.stopwatches.push({ _type: 'stopwatch', name: '' });
-    if (!window._swRuntime) window._swRuntime = {};
-    window._swRuntime[swIdx] = { running: false, elapsed: 0, intervalId: null, laps: [] };
-    // Auto-start the stopwatch
-    var rt = window._swRuntime[swIdx];
-    var startMs = Date.now();
-    rt.intervalId = setInterval(function() {
-      rt.elapsed = Date.now() - startMs;
-      var d = document.getElementById('sw-display-' + swIdx);
-      if (d && typeof _swFmt === 'function') d.textContent = _swFmt(rt.elapsed);
-    }, 50);
-    rt.running = true;
-    if (typeof renderStopwatchesContainer === 'function') renderStopwatchesContainer();
-    setTimeout(function() {
-      var btn = document.getElementById('sw-startstop-' + swIdx);
-      if (btn) btn.textContent = '⏸ Pause';
-    }, 50);
+    var nameInput = document.createElement('input');
+    nameInput.type = 'text'; nameInput.placeholder = 'Stopwatch name (optional)';
+    nameInput.style.cssText = 'width:100%;padding:6px 8px;font-family:inherit;font-size:0.95em;border:1px solid #8b5a2b;border-radius:4px;box-sizing:border-box;background:#f5e6cc;';
+    formDiv.appendChild(nameInput);
+    var note = document.createElement('div'); note.style.cssText = 'font-size:0.85em;opacity:0.6;text-align:center;';
+    note.textContent = 'Stopwatch will start automatically'; formDiv.appendChild(note);
+    formDiv._getData = function() { return { _type: 'stopwatch', name: nameInput.value.trim() }; };
+    setTimeout(function() { nameInput.focus(); }, 50);
   }
+  box.appendChild(formDiv);
+  var btnRow = document.createElement('div');
+  btnRow.style.cssText = 'display:flex;gap:8px;justify-content:center;margin-top:14px;';
+  var _qaBtnPrimary = 'padding:8px 14px;cursor:pointer;font-size:0.95em;font-weight:bold;font-family:"Courier New",Courier,monospace;background:#8b5a2b;color:#fff8e1;border:1px solid #5a3f2a;border-radius:4px;white-space:nowrap;';
+  var _qaBtnSecondary = 'padding:8px 14px;cursor:pointer;font-size:0.95em;font-family:"Courier New",Courier,monospace;background:#fdf5e6;color:#4a2c2a;border:1px solid #8b5a2b;border-radius:4px;white-space:nowrap;';
 
-  // Mark unsaved (but do NOT save the chit)
-  if (typeof setSaveButtonUnsaved === 'function') setSaveButtonUnsaved();
+  var saveBtn = document.createElement('button');
+  saveBtn.textContent = '✓ Create'; saveBtn.title = 'Enter'; saveBtn.style.cssText = _qaBtnPrimary;
+  saveBtn.onclick = function() { _quickAlertSave(type, formDiv._getData(), false); };
+  btnRow.appendChild(saveBtn);
+
+  var saveViewBtn = document.createElement('button');
+  saveViewBtn.textContent = '✓ Create & View'; saveViewBtn.title = 'Shift+Enter'; saveViewBtn.style.cssText = _qaBtnSecondary + 'font-weight:bold;';
+  saveViewBtn.onclick = function() { _quickAlertSave(type, formDiv._getData(), true); };
+  btnRow.appendChild(saveViewBtn);
+
+  var cancelBtn = document.createElement('button');
+  cancelBtn.textContent = 'Cancel'; cancelBtn.title = 'Escape'; cancelBtn.style.cssText = _qaBtnSecondary;
+  cancelBtn.onclick = function() { _closeQuickAlertModal(); };
+  btnRow.appendChild(cancelBtn);
+  box.appendChild(btnRow);
+  function _editorKeyHandler(e) {
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); _closeQuickAlertModal(); }
+    else if (e.key === 'Enter') {
+      var tag = (document.activeElement?.tagName || '').toLowerCase();
+      if (tag !== 'textarea') {
+        e.preventDefault(); e.stopPropagation();
+        _quickAlertSave(type, formDiv._getData(), e.shiftKey);
+      }
+    }
+  }
+  overlay._keyHandler = _editorKeyHandler;
+  document.addEventListener('keydown', _editorKeyHandler, true);
 }
 
-function _quickAlertAddIndependent(type) {
-  // If the dashboard's _createIndependentAlert is available, use it (handles UI refresh)
-  if (typeof _createIndependentAlert === 'function') {
-    _quickAlertAddIndependentDashboard(type);
-    return;
-  }
+function _quickAlertAddToChit() { /* deprecated — now handled by _quickAlertSave */ }
+function _quickAlertAddIndependent() { /* deprecated */ }
+function _quickAlertAddIndependentDashboard() { /* deprecated */ }
 
-  // Otherwise (settings, people, weather, etc.) — create via direct fetch
-  var alertData;
-  var now = new Date();
-  if (type === 'alarm') {
-    now.setMinutes(now.getMinutes() + 1);
-    var defaultTime = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
-    var dayAbbrs = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    alertData = { _type: 'alarm', name: '', time: defaultTime, days: [dayAbbrs[now.getDay()]], enabled: true };
-  } else if (type === 'timer') {
-    alertData = { _type: 'timer', name: '', totalSeconds: 0, loop: false };
-  } else if (type === 'stopwatch') {
-    alertData = { _type: 'stopwatch', name: '' };
-  }
-
-  fetch('/api/standalone-alerts', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(alertData),
-  }).then(function(resp) {
-    if (!resp.ok) throw new Error('Failed to create alert');
-    return resp.json();
-  }).then(function(created) {
-    _showQuickAlertToast(type);
-    if (typeof syncSend === 'function') syncSend('alerts_changed', {});
-  }).catch(function(e) {
-    console.error('Quick alert creation failed:', e);
-  });
-}
-
-function _quickAlertAddIndependentDashboard(type) {
-  if (type === 'alarm') {
-    var now = new Date();
-    now.setMinutes(now.getMinutes() + 1);
-    var defaultTime = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
-    var dayAbbrs = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    _createIndependentAlert({ _type: 'alarm', name: '', time: defaultTime, days: [dayAbbrs[now.getDay()]], enabled: true });
-  } else if (type === 'timer') {
-    _createIndependentAlert({ _type: 'timer', name: '', totalSeconds: 0, loop: false });
-  } else if (type === 'stopwatch') {
-    _createIndependentAlert({ _type: 'stopwatch', name: '' }).then(function(created) {
-      if (created && created.id && typeof _saSwRuntime !== 'undefined') {
-        var id = created.id;
-        if (!_saSwRuntime[id]) {
-          _saSwRuntime[id] = { running: false, elapsed: 0, intervalId: null, laps: [] };
-        }
-        var rt = _saSwRuntime[id];
-        var startMs = Date.now();
-        rt.intervalId = setInterval(function() {
-          rt.elapsed = Date.now() - startMs;
-          var d = document.getElementById('sa-sw-display-' + id);
-          if (d) d.textContent = _saSwFmt(rt.elapsed);
-        }, 50);
-        rt.running = true;
-        var btn = document.getElementById('sa-sw-startstop-' + id);
-        if (btn) btn.textContent = '⏸ Pause';
+/** Save the alert from the quick alert editor — context-aware */
+function _quickAlertSave(type, data, andView) {
+  var isEditor = !!document.getElementById('mainEditor');
+  if (isEditor) {
+    if (!window._alertsData) window._alertsData = { alarms: [], timers: [], stopwatches: [], notifications: [] };
+    var alertsSection = document.getElementById('alertsSection');
+    var alertsContent = document.getElementById('alertsContent');
+    if (alertsSection && alertsSection.classList.contains('collapsed')) {
+      alertsSection.classList.remove('collapsed');
+      if (alertsContent) alertsContent.style.display = '';
+      var zIcon = alertsSection.querySelector('.zone-toggle-icon');
+      if (zIcon) zIcon.textContent = '🔼';
+      alertsSection.querySelectorAll('.zone-button').forEach(function(b) { b.style.display = ''; });
+    }
+    if (type === 'alarm') {
+      window._alertsData.alarms.push(data);
+      if (typeof renderAlarmsContainer === 'function') renderAlarmsContainer();
+    } else if (type === 'timer') {
+      window._alertsData.timers.push(data);
+      var tIdx = window._alertsData.timers.length - 1;
+      if (!window._timerRuntime) window._timerRuntime = {};
+      window._timerRuntime[tIdx] = { remaining: data.totalSeconds, intervalId: null, running: false };
+      if (typeof renderTimersContainer === 'function') renderTimersContainer();
+    } else if (type === 'stopwatch') {
+      var swIdx = window._alertsData.stopwatches.length;
+      window._alertsData.stopwatches.push(data);
+      if (!window._swRuntime) window._swRuntime = {};
+      window._swRuntime[swIdx] = { running: false, elapsed: 0, intervalId: null, laps: [] };
+      var swRt = window._swRuntime[swIdx]; var swStart = Date.now();
+      swRt.intervalId = setInterval(function() { swRt.elapsed = Date.now() - swStart; var swD = document.getElementById('sw-display-' + swIdx); if (swD && typeof _swFmt === 'function') swD.textContent = _swFmt(swRt.elapsed); }, 50);
+      swRt.running = true;
+      if (typeof renderStopwatchesContainer === 'function') renderStopwatchesContainer();
+      setTimeout(function() { var swBtn = document.getElementById('sw-startstop-' + swIdx); if (swBtn) swBtn.textContent = '⏸ Pause'; }, 50);
+    }
+    if (typeof setSaveButtonUnsaved === 'function') setSaveButtonUnsaved();
+    _closeQuickAlertModal();
+    if (alertsSection) alertsSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  } else if (typeof _createIndependentAlert === 'function') {
+    _createIndependentAlert(data).then(function(created) {
+      if (type === 'stopwatch' && created && created.id && typeof _saSwRuntime !== 'undefined') {
+        if (!_saSwRuntime[created.id]) _saSwRuntime[created.id] = { running: false, elapsed: 0, intervalId: null, laps: [] };
+        var saRt = _saSwRuntime[created.id]; var saMs = Date.now();
+        saRt.intervalId = setInterval(function() { saRt.elapsed = Date.now() - saMs; var saD = document.getElementById('sa-sw-display-' + created.id); if (saD) saD.textContent = _saSwFmt(saRt.elapsed); }, 50);
+        saRt.running = true;
+      }
+      if (andView) {
+        _quickAlertJumpToIndependent();
+      } else {
+        _closeQuickAlertModal();
       }
     });
+  } else {
+    fetch('/api/standalone-alerts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) })
+    .then(function(r) { if (!r.ok) throw new Error('Failed'); return r.json(); })
+    .then(function() {
+      _closeQuickAlertModal();
+      if (andView) {
+        // Store desired tab in localStorage so dashboard picks it up on load
+        try { localStorage.setItem('cwoc_jump_tab', 'Alarms'); localStorage.setItem('cwoc_jump_alarms_mode', 'independent'); } catch(e) {}
+        window.location.href = '/';
+      } else {
+        _showQuickAlertToast(type);
+      }
+      if (typeof syncSend === 'function') syncSend('alerts_changed', {});
+    })
+    .catch(function(e) { console.error('Quick alert creation failed:', e); });
   }
 }
 
-/** Show a brief toast confirming the alert was created (for non-dashboard pages). */
+function _quickAlertJumpToIndependent() {
+  _closeQuickAlertModal();
+  if (typeof _alarmsViewMode !== 'undefined') {
+    _alarmsViewMode = 'independent';
+    var toggle = document.getElementById('alerts-view-toggle');
+    if (toggle) toggle.value = 'independent';
+  }
+  if (typeof filterChits === 'function') filterChits('Alarms');
+}
+
 function _showQuickAlertToast(type) {
   var labels = { alarm: '🔔 Alarm', timer: '⏱️ Timer', stopwatch: '⏲️ Stopwatch' };
   var toast = document.createElement('div');
-  toast.style.cssText = 'position:fixed;bottom:20px;right:20px;z-index:99999;background:#fff8e1;border:2px solid #8b4513;border-radius:8px;padding:10px 18px;box-shadow:0 4px 16px rgba(0,0,0,0.3);font-family:"Courier New",monospace;font-size:0.95em;color:#4a2c2a;opacity:1;transition:opacity 0.3s;';
-  toast.textContent = (labels[type] || 'Alert') + ' created as independent alert';
+  toast.style.cssText = 'position:fixed;bottom:20px;right:20px;z-index:99999;background:#fff8e1;border:2px solid #8b4513;border-radius:8px;padding:10px 18px;box-shadow:0 4px 16px rgba(0,0,0,0.3);font-family:"Courier New",monospace;font-size:0.95em;color:#4a2c2a;display:flex;align-items:center;gap:10px;';
+  toast.appendChild(document.createTextNode((labels[type] || 'Alert') + ' created '));
+  var viewLink = document.createElement('a'); viewLink.textContent = 'View →'; viewLink.href = '/?tab=Alarms&view=independent';
+  viewLink.style.cssText = 'color:#6b4226;font-weight:bold;text-decoration:underline;'; toast.appendChild(viewLink);
   document.body.appendChild(toast);
-  setTimeout(function() { toast.style.opacity = '0'; }, 1500);
-  setTimeout(function() { toast.remove(); }, 1800);
+  setTimeout(function() { toast.style.opacity = '0'; toast.style.transition = 'opacity 0.3s'; }, 3000);
+  setTimeout(function() { toast.remove(); }, 3300);
 }
 
 // ── Global Hotkey Listener (shared across ALL pages) ─────────────────────────
@@ -2837,14 +2910,23 @@ function _initSharedHotkeys() {
   });
 }
 
+// Log version on every page load
+function _logCwocVersion() {
+  fetch('/api/version').then(function(r) { return r.ok ? r.json() : null; }).then(function(d) {
+    if (d && d.version) console.info('[CWOC] Version ' + d.version + ' — ' + window.location.pathname);
+  }).catch(function() {});
+}
+
 // Auto-init on page load
 if (typeof document !== 'undefined') {
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', function() {
+      _logCwocVersion();
       _initSharedAlarmSystem();
       _initSharedHotkeys();
     });
   } else {
+    _logCwocVersion();
     _initSharedAlarmSystem();
     _initSharedHotkeys();
   }

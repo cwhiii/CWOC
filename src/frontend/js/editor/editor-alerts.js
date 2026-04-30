@@ -175,8 +175,9 @@ function _checkNotificationAlerts() {
     const unitMs = { minutes: 60000, hours: 3600000, days: 86400000, weeks: 604800000 };
     const offsetMs = n.value * (unitMs[n.unit] || 60000);
 
-    // Determine target datetime — use due if present, otherwise start
-    const targetStr = dueVal || startVal;
+    // Determine target datetime based on targetType
+    const targetType = n.targetType || (dueVal && !startVal ? "due" : "start");
+    const targetStr = targetType === "due" ? (dueVal || startVal) : (startVal || dueVal);
     if (!targetStr) return;
 
     const targetDate = new Date(targetStr);
@@ -193,22 +194,39 @@ function _checkNotificationAlerts() {
     if (diff >= 0 && diff < 30000) {
       const key = `notif-${idx}-${fireAt.toISOString()}`;
       if (_firedNotifications.has(key)) return;
-      _firedNotifications.add(key);
+      if (!n.loop) _firedNotifications.add(key);
 
       const timingLabel = _notifTimingLabel(n);
       const msg = `${n.value} ${n.unit} ${timingLabel}: "${title}"`;
-      _fireNotificationAlert(msg);
+      _fireNotificationAlert(msg, n, idx);
+    }
+
+    // Loop support: re-fire every 60 seconds if loop is enabled and not acknowledged
+    if (n.loop && diff >= 30000) {
+      const loopKey = `notif-loop-${idx}`;
+      const lastFire = window._notifLoopLastFire && window._notifLoopLastFire[loopKey];
+      if (!lastFire || (now.getTime() - lastFire) >= 60000) {
+        if (!window._notifLoopAcknowledged) window._notifLoopAcknowledged = {};
+        if (window._notifLoopAcknowledged[loopKey]) return;
+        if (!window._notifLoopLastFire) window._notifLoopLastFire = {};
+        window._notifLoopLastFire[loopKey] = now.getTime();
+        const timingLabel = _notifTimingLabel(n);
+        const msg = `${n.value} ${n.unit} ${timingLabel}: "${title}"`;
+        _fireNotificationAlert(msg, n, idx);
+      }
     }
   });
 }
 
 function _notifTimingLabel(n) {
-  const target = _notifTargetLabel();
+  const hasStart = !!document.getElementById("start_datetime")?.value;
+  const hasDue = !!document.getElementById("due_datetime")?.value;
+  const targetType = n.targetType || (hasDue && !hasStart ? "due" : "start");
   const dir = n.afterTarget ? "after" : "before";
-  return `${dir} ${target}`;
+  return `${dir} ${targetType}`;
 }
 
-function _fireNotificationAlert(msg) {
+function _fireNotificationAlert(msg, notif, notifIdx) {
   if (Notification.permission === "granted") {
     new Notification("📢 Reminder", { body: msg });
   }
@@ -216,13 +234,26 @@ function _fireNotificationAlert(msg) {
   const toast = document.createElement("div");
   toast.style.cssText = "position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:9999;background:#fff5e6;border:2px solid #8b5a2b;border-radius:8px;padding:0.75em 1.5em;box-shadow:0 4px 16px rgba(0,0,0,0.3);display:flex;align-items:center;gap:0.5em;";
   toast.innerHTML = `<span>📢 ${msg}</span>`;
+  if (notif && notif.loop) {
+    toast.innerHTML += `<span style="font-size:0.75em;opacity:0.6;">🔁 looping</span>`;
+  }
   const dismissBtn = document.createElement("button");
-  dismissBtn.textContent = "Dismiss";
+  dismissBtn.textContent = (notif && notif.loop) ? "Acknowledge" : "Dismiss";
   dismissBtn.style.cssText = "padding:3px 8px;cursor:pointer;margin-left:0.5em;";
-  dismissBtn.onclick = () => toast.remove();
+  dismissBtn.onclick = () => {
+    toast.remove();
+    // If looping, mark as acknowledged to stop re-firing
+    if (notif && notif.loop && notifIdx !== undefined) {
+      if (!window._notifLoopAcknowledged) window._notifLoopAcknowledged = {};
+      window._notifLoopAcknowledged[`notif-loop-${notifIdx}`] = true;
+    }
+  };
   toast.appendChild(dismissBtn);
   document.body.appendChild(toast);
-  setTimeout(() => toast.remove(), 8000);
+  // Don't auto-dismiss looping notifications
+  if (!notif || !notif.loop) {
+    setTimeout(() => toast.remove(), 8000);
+  }
 }
 
 function _alertsFromChit(chit) {
@@ -516,27 +547,36 @@ function renderNotificationsContainer() {
     });
     unitSel.addEventListener("change", () => { window._alertsData.notifications[idx].unit = unitSel.value; setSaveButtonUnsaved(); });
 
-    // Timing dropdown: before/after — label shows start or due based on chit dates
+    // Combined timing dropdown: before/after + start/due in one control
     const timingSel = document.createElement("select");
     timingSel.style.cssText = "font-size:0.85em;padding:2px 4px;";
-    [
-      { value: "before", label: "before" },
-      { value: "after",  label: "after" },
-    ].forEach((t) => {
+    const hasStart = !!document.getElementById("start_datetime")?.value;
+    const hasDue = !!document.getElementById("due_datetime")?.value;
+    const timingOptions = [];
+    if (hasStart || (!hasStart && !hasDue)) {
+      timingOptions.push({ value: "before-start", label: "before start" });
+      timingOptions.push({ value: "after-start",  label: "after start" });
+    }
+    if (hasDue) {
+      timingOptions.push({ value: "before-due", label: "before due" });
+      timingOptions.push({ value: "after-due",  label: "after due" });
+    }
+    // Determine current selection from stored data
+    const curDir = n.afterTarget ? "after" : "before";
+    const curTarget = n.targetType || (hasDue && !hasStart ? "due" : "start");
+    const curVal = curDir + "-" + curTarget;
+    timingOptions.forEach((t) => {
       const opt = document.createElement("option");
       opt.value = t.value; opt.textContent = t.label;
-      if ((!!n.afterTarget ? "after" : "before") === t.value) opt.selected = true;
+      if (t.value === curVal) opt.selected = true;
       timingSel.appendChild(opt);
     });
     timingSel.addEventListener("change", () => {
-      window._alertsData.notifications[idx].afterTarget = (timingSel.value === "after");
+      const parts = timingSel.value.split("-");
+      window._alertsData.notifications[idx].afterTarget = (parts[0] === "after");
+      window._alertsData.notifications[idx].targetType = parts[1];
       setSaveButtonUnsaved();
     });
-
-    // Dynamic label: shows "start" or "due" based on which dates the chit has
-    const targetLabel = document.createElement("span");
-    targetLabel.style.cssText = "font-size:0.85em;white-space:nowrap;";
-    targetLabel.textContent = _notifTargetLabel();
 
     const delBtn = document.createElement("button");
     delBtn.type = "button"; delBtn.textContent = "❌"; delBtn.style.cssText = "padding:1px 5px;";
@@ -546,7 +586,22 @@ function renderNotificationsContainer() {
     row.appendChild(valInput);
     row.appendChild(unitSel);
     row.appendChild(timingSel);
-    row.appendChild(targetLabel);
+
+    // Loop until acknowledged checkbox
+    const loopLbl = document.createElement("label");
+    loopLbl.style.cssText = "display:flex;align-items:center;gap:2px;font-size:0.8em;cursor:pointer;white-space:nowrap;";
+    loopLbl.title = "Repeat notification until acknowledged";
+    const loopCb = document.createElement("input");
+    loopCb.type = "checkbox";
+    loopCb.checked = !!n.loop;
+    loopCb.addEventListener("change", () => {
+      window._alertsData.notifications[idx].loop = loopCb.checked;
+      setSaveButtonUnsaved();
+    });
+    loopLbl.appendChild(loopCb);
+    loopLbl.appendChild(document.createTextNode("🔁"));
+    row.appendChild(loopLbl);
+
     row.appendChild(delBtn);
     c.appendChild(row);
   });
@@ -959,7 +1014,7 @@ function renderTimersContainer() {
     const barText = document.createElement("div");
     barText.style.cssText = "position:relative;width:100%;text-align:center;font-family:monospace;font-size:1.3em;font-weight:bold;color:#4a2c2a;line-height:2.2em;letter-spacing:2px;text-shadow:0 0 4px #fff8e1,0 0 8px #fff8e1,0 0 2px #fff8e1;z-index:1;";
     const fmtTimer = (s) => {
-      const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+      const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = Math.floor(s % 60);
       return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:${String(sec).padStart(2,"0")}`;
     };
     barText.textContent = fmtTimer(rt.remaining);
@@ -1099,14 +1154,7 @@ function deleteTimerItem(idx) {
 
 // ── Notification CRUD ────────────────────────────────────────────────────────
 
-function _updateNotificationBtnVisibility() {
-  const btn = document.getElementById("addNewNotificationButton");
-  if (!btn) return;
-  const hasStart = !!document.getElementById("start_datetime")?.value;
-  const hasDue = !!document.getElementById("due_datetime")?.value;
-  const mode = document.querySelector('input[name="dateMode"]:checked')?.value;
-  btn.style.display = (mode === 'due' || mode === 'startend' || hasStart || hasDue) ? '' : 'none';
-}
+// Notification add button is always visible (no date-mode filtering)
 
 function openNotificationModal(event) {
   if (event) event.stopPropagation();

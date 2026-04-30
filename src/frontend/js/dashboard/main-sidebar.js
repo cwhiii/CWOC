@@ -539,6 +539,19 @@ function _toggleTopbar() {
   var isHidden = header.style.display === 'none';
   header.style.display = isHidden ? '' : 'none';
   localStorage.setItem('cwoc_topbar_hidden', isHidden ? 'false' : 'true');
+  // Adjust chit-list to fill the space freed by hiding the header
+  var chitList = document.getElementById('chit-list');
+  if (chitList) {
+    if (!isHidden) {
+      // Hiding header — expand chit-list to fill
+      chitList.style.marginTop = '0';
+      chitList.style.height = '100vh';
+    } else {
+      // Showing header — restore original offset
+      chitList.style.marginTop = '';
+      chitList.style.height = '';
+    }
+  }
   window.dispatchEvent(new Event("resize"));
 }
 
@@ -548,6 +561,11 @@ function _restoreTopbarState() {
   if (hidden) {
     var header = document.querySelector('.main-content > .header');
     if (header) header.style.display = 'none';
+    var chitList = document.getElementById('chit-list');
+    if (chitList) {
+      chitList.style.marginTop = '0';
+      chitList.style.height = '100vh';
+    }
   }
 }
 

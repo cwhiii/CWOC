@@ -60,9 +60,6 @@ function onDateModeChange() {
   // Update recurrence labels when date context changes
   _updateRecurrenceLabels();
 
-  // Show/hide Add Notification button based on whether dates are set
-  _updateNotificationBtnVisibility();
-
   // Auto-populate default notifications for NEW chits when a date mode is first activated
   if (!_dateModeSuppressUnsaved && window.isNewChit && mode !== 'none') {
     _applyDefaultNotifications(mode);

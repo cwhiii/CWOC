@@ -952,3 +952,237 @@ def import_userdata(req: ImportRequest):
     finally:
         if conn:
             conn.close()
+
+
+@router.get("/api/export/all")
+def export_all():
+    """Export ALL data (chits + settings + contacts) as a single combined JSON envelope."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        # ── Chits ──
+        cursor.execute("SELECT * FROM chits")
+        chits = []
+        for row in cursor.fetchall():
+            chit = dict(row)
+            for f in ("tags", "checklist", "people", "child_chits", "alerts",
+                       "recurrence_rule", "recurrence_exceptions", "weather_data", "health_data"):
+                chit[f] = deserialize_json_field(chit.get(f))
+            for f in ("alarm", "notification", "pinned", "archived", "deleted", "is_project_master", "all_day"):
+                chit[f] = bool(chit.get(f))
+            chits.append(chit)
+
+        # ── Settings ──
+        cursor.execute("SELECT * FROM settings")
+        settings = []
+        for row in cursor.fetchall():
+            s = dict(row)
+            for f in ("tags", "default_filters", "custom_colors", "visual_indicators",
+                       "chit_options", "saved_locations", "default_notifications"):
+                s[f] = deserialize_json_field(s.get(f))
+            settings.append(s)
+
+        # ── Contacts ──
+        cursor.execute("SELECT * FROM contacts")
+        contacts = []
+        for row in cursor.fetchall():
+            c = dict(row)
+            for f in ("phones", "emails", "addresses", "call_signs", "x_handles", "websites", "tags"):
+                c[f] = deserialize_json_field(c.get(f))
+            for f in ("has_signal", "favorite"):
+                c[f] = bool(c.get(f))
+            contacts.append(c)
+
+        # ── Standalone alerts ──
+        sa_alerts = []
+        try:
+            cursor.execute("SELECT * FROM standalone_alerts")
+            for row in cursor.fetchall():
+                a = dict(row)
+                a["data"] = deserialize_json_field(a.get("data"))
+                sa_alerts.append(a)
+        except Exception:
+            pass  # table may not exist
+
+        envelope = _build_export_envelope("all", {
+            "chits": chits,
+            "settings": settings,
+            "contacts": contacts,
+            "standalone_alerts": sa_alerts,
+        })
+        return Response(content=json.dumps(envelope, indent=2), media_type="application/json")
+    except Exception as e:
+        logger.error(f"Export all failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
+@router.post("/api/import/all")
+def import_all(req: ImportRequest):
+    """Import ALL data (chits + settings + contacts + standalone alerts) from a combined envelope."""
+    if req.mode not in ("add", "replace"):
+        raise HTTPException(status_code=400, detail="Invalid mode: must be 'add' or 'replace'")
+
+    envelope = req.data
+    for field in ("type", "version", "exported_at", "data"):
+        if field not in envelope:
+            raise HTTPException(status_code=400, detail="Invalid export envelope: missing required fields")
+
+    if envelope.get("type") != "all":
+        raise HTTPException(status_code=400, detail="Invalid data: expected type 'all'")
+
+    payload = envelope.get("data", {})
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="Invalid data: expected 'data' to be an object")
+
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.execute("BEGIN")
+
+        summary = {}
+
+        if req.mode == "replace":
+            conn.execute("DELETE FROM chits")
+            conn.execute("DELETE FROM settings")
+            conn.execute("DELETE FROM contacts")
+            try:
+                conn.execute("DELETE FROM standalone_alerts")
+            except Exception:
+                pass
+
+        # ── Import chits ──
+        chit_count = 0
+        for chit in payload.get("chits", []):
+            new_id = str(uuid4()) if req.mode == "add" else (chit.get("id") or str(uuid4()))
+            conn.execute(
+                """INSERT OR REPLACE INTO chits (
+                    id, title, note, tags, start_datetime, end_datetime,
+                    due_datetime, completed_datetime, status, priority, severity,
+                    checklist, alarm, notification, recurrence, recurrence_id,
+                    location, color, people, pinned, archived, deleted,
+                    created_datetime, modified_datetime, is_project_master,
+                    child_chits, all_day, alerts, recurrence_rule,
+                    recurrence_exceptions, progress_percent, time_estimate,
+                    weather_data, health_data
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    new_id, chit.get("title"), chit.get("note"),
+                    serialize_json_field(chit.get("tags")),
+                    chit.get("start_datetime"), chit.get("end_datetime"),
+                    chit.get("due_datetime"), chit.get("completed_datetime"),
+                    chit.get("status"), chit.get("priority"), chit.get("severity"),
+                    serialize_json_field(chit.get("checklist")),
+                    1 if chit.get("alarm") else 0, 1 if chit.get("notification") else 0,
+                    chit.get("recurrence"), chit.get("recurrence_id"),
+                    chit.get("location"), chit.get("color"),
+                    serialize_json_field(chit.get("people")),
+                    1 if chit.get("pinned") else 0, 1 if chit.get("archived") else 0,
+                    1 if chit.get("deleted") else 0,
+                    chit.get("created_datetime"), chit.get("modified_datetime"),
+                    1 if chit.get("is_project_master") else 0,
+                    serialize_json_field(chit.get("child_chits")),
+                    1 if chit.get("all_day") else 0,
+                    serialize_json_field(chit.get("alerts")),
+                    serialize_json_field(chit.get("recurrence_rule")),
+                    serialize_json_field(chit.get("recurrence_exceptions")),
+                    chit.get("progress_percent"), chit.get("time_estimate"),
+                    serialize_json_field(chit.get("weather_data")),
+                    serialize_json_field(chit.get("health_data")),
+                ),
+            )
+            chit_count += 1
+        summary["chits_imported"] = chit_count
+
+        # ── Import settings ──
+        settings_count = 0
+        for s in payload.get("settings", []):
+            conn.execute(
+                """INSERT OR REPLACE INTO settings (
+                    user_id, time_format, sex, snooze_length, default_filters,
+                    alarm_orientation, active_clocks, saved_locations, tags, custom_colors,
+                    visual_indicators, chit_options, calendar_snap, week_start_day,
+                    work_start_hour, work_end_hour, work_days, enabled_periods,
+                    custom_days_count, all_view_start_hour, all_view_end_hour,
+                    day_scroll_to_hour, username, audit_log_max_days, audit_log_max_mb,
+                    default_notifications, unit_system
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    s.get("user_id"), s.get("time_format"), s.get("sex"), s.get("snooze_length"),
+                    serialize_json_field(s.get("default_filters")),
+                    s.get("alarm_orientation"), s.get("active_clocks"),
+                    serialize_json_field(s.get("saved_locations")),
+                    serialize_json_field(s.get("tags")),
+                    serialize_json_field(s.get("custom_colors")),
+                    serialize_json_field(s.get("visual_indicators")),
+                    serialize_json_field(s.get("chit_options")),
+                    s.get("calendar_snap"), s.get("week_start_day"),
+                    s.get("work_start_hour"), s.get("work_end_hour"),
+                    s.get("work_days"), s.get("enabled_periods"),
+                    s.get("custom_days_count"), s.get("all_view_start_hour"),
+                    s.get("all_view_end_hour"), s.get("day_scroll_to_hour"),
+                    s.get("username"), s.get("audit_log_max_days"), s.get("audit_log_max_mb"),
+                    serialize_json_field(s.get("default_notifications")),
+                    s.get("unit_system"),
+                ),
+            )
+            settings_count += 1
+        summary["settings_imported"] = settings_count
+
+        # ── Import contacts ──
+        contacts_count = 0
+        for c in payload.get("contacts", []):
+            new_id = str(uuid4()) if req.mode == "add" else (c.get("id") or str(uuid4()))
+            conn.execute(
+                """INSERT OR REPLACE INTO contacts (
+                    id, given_name, surname, middle_names, prefix, suffix, nickname,
+                    display_name, phones, emails, addresses, call_signs, x_handles,
+                    websites, notes, color, image_url, tags, has_signal, favorite,
+                    created_datetime, modified_datetime
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    new_id, c.get("given_name"), c.get("surname"), c.get("middle_names"),
+                    c.get("prefix"), c.get("suffix"), c.get("nickname"), c.get("display_name"),
+                    serialize_json_field(c.get("phones")),
+                    serialize_json_field(c.get("emails")),
+                    serialize_json_field(c.get("addresses")),
+                    serialize_json_field(c.get("call_signs")),
+                    serialize_json_field(c.get("x_handles")),
+                    serialize_json_field(c.get("websites")),
+                    c.get("notes"), c.get("color"), c.get("image_url"),
+                    serialize_json_field(c.get("tags")),
+                    1 if c.get("has_signal") else 0, 1 if c.get("favorite") else 0,
+                    c.get("created_datetime"), c.get("modified_datetime"),
+                ),
+            )
+            contacts_count += 1
+        summary["contacts_imported"] = contacts_count
+
+        # ── Import standalone alerts ──
+        alerts_count = 0
+        for a in payload.get("standalone_alerts", []):
+            new_id = str(uuid4()) if req.mode == "add" else (a.get("id") or str(uuid4()))
+            conn.execute(
+                "INSERT OR REPLACE INTO standalone_alerts (id, data, created_at) VALUES (?,?,?)",
+                (new_id, serialize_json_field(a.get("data")), a.get("created_at")),
+            )
+            alerts_count += 1
+        summary["alerts_imported"] = alerts_count
+
+        conn.commit()
+        return {"summary": summary}
+    except HTTPException:
+        raise
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logger.error(f"Import all failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Import failed: {str(e)}")
+    finally:
+        if conn:
+            conn.close()

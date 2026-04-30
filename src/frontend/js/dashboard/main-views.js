@@ -1050,26 +1050,61 @@ function _displayProjectsKanban(chitsToDisplay) {
         e.preventDefault();
         col.style.background = "";
 
-        // Handle card drops (child chit status change)
+        // Handle card drops (child chit status change or cross-project move)
         const cardData = e.dataTransfer.getData("application/x-kanban-card");
         if (cardData) {
           try {
             const data = JSON.parse(cardData);
             const newStatus = col.dataset.status;
-            if (data.fromStatus === newStatus) return;
-            // Update the chit's status via API
-            const resp = await fetch(`/api/chit/${data.chitId}`);
-            if (!resp.ok) return;
-            const fullChit = await resp.json();
-            fullChit.status = newStatus;
-            if (newStatus === "Complete" && !fullChit.completed_datetime) {
-              fullChit.completed_datetime = new Date().toISOString();
+            const targetProjectId = col.dataset.projectId;
+            const isCrossProject = data.projectId !== targetProjectId;
+
+            if (!isCrossProject && data.fromStatus === newStatus) return;
+
+            // Cross-project move: remove from old project, add to new project
+            if (isCrossProject) {
+              // Remove from old project's child_chits
+              const oldProjResp = await fetch(`/api/chit/${data.projectId}`);
+              if (!oldProjResp.ok) return;
+              const oldProj = await oldProjResp.json();
+              oldProj.child_chits = (oldProj.child_chits || []).filter(id => id !== data.chitId);
+              await fetch(`/api/chits/${data.projectId}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(oldProj),
+              });
+
+              // Add to new project's child_chits
+              const newProjResp = await fetch(`/api/chit/${targetProjectId}`);
+              if (!newProjResp.ok) return;
+              const newProj = await newProjResp.json();
+              if (!Array.isArray(newProj.child_chits)) newProj.child_chits = [];
+              if (!newProj.child_chits.includes(data.chitId)) {
+                newProj.child_chits.push(data.chitId);
+              }
+              await fetch(`/api/chits/${targetProjectId}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(newProj),
+              });
             }
-            await fetch(`/api/chits/${data.chitId}`, {
-              method: "PUT",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(fullChit),
-            });
+
+            // Update the chit's status
+            if (data.fromStatus !== newStatus || isCrossProject) {
+              const resp = await fetch(`/api/chit/${data.chitId}`);
+              if (!resp.ok) return;
+              const fullChit = await resp.json();
+              fullChit.status = newStatus;
+              if (newStatus === "Complete" && !fullChit.completed_datetime) {
+                fullChit.completed_datetime = new Date().toISOString();
+              }
+              await fetch(`/api/chits/${data.chitId}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(fullChit),
+              });
+            }
+
             fetchChits();
           } catch (err) { console.error("Kanban card drop error:", err); }
           return;
@@ -1888,9 +1923,9 @@ async function displayIndicatorsView() {
   var chitList = document.getElementById('chit-list');
   if (!chitList) return;
 
-  chitList.innerHTML = '<div style="padding:1em;overflow-y:auto;height:100%;">' +
+  chitList.innerHTML = '<div style="padding:1em;overflow-y:auto;height:100%;box-sizing:border-box;">' +
     '<div id="indicators-latest" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;"></div>' +
-    '<div id="indicators-charts" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:10px;"></div>' +
+    '<div id="indicators-charts" style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;"></div>' +
   '</div>';
 
   var now = new Date();
@@ -2012,10 +2047,11 @@ async function _indicatorsLoad() {
     });
     _indSaveSelection();
 
-    // Build latest values header
+    // Build latest values header — cards fill the row evenly
     var latestDiv = document.getElementById('indicators-latest');
     if (latestDiv) {
       latestDiv.innerHTML = '';
+      latestDiv.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fit,minmax(0,1fr));gap:8px;margin-bottom:12px;';
       charts.forEach(function(ch) {
         var latest = null;
         if (data && data.length > 0) {
@@ -2025,8 +2061,19 @@ async function _indicatorsLoad() {
         }
         var val = latest ? latest[ch.key] : '—';
         var card = document.createElement('div');
-        card.style.cssText = 'background:#fff8e1;border:1px solid #8b5a2b;border-radius:5px;padding:6px 10px;text-align:center;min-width:70px;';
-        card.innerHTML = '<div style="font-size:0.7em;color:#6b4e31;">' + ch.label.split(' ').slice(1).join(' ') + '</div>' +
+        var isClickable = latest && latest.chit_id;
+        card.style.cssText = 'background:#fff8e1;border:1px solid #8b5a2b;border-radius:5px;padding:6px 10px;text-align:center;' + (isClickable ? 'cursor:pointer;' : '');
+        card.title = latest ? (latest.chit_title || '') + ' — ' + (latest.date || '') : '';
+        if (isClickable) {
+          (function(chitId) {
+            card.addEventListener('click', function() {
+              storePreviousState();
+              window.location.href = '/editor?id=' + chitId;
+            });
+          })(latest.chit_id);
+        }
+        var labelText = ch.label.split(' ').slice(1).join(' ');
+        card.innerHTML = '<div style="font-size:0.7em;color:#6b4e31;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + labelText + '</div>' +
           '<div style="font-size:1.2em;font-weight:bold;color:' + ch.color + ';">' + (val !== '—' ? (Math.round(val * 10) / 10) : '—') + '</div>' +
           '<div style="font-size:0.65em;color:#8b7355;">' + ch.unit + '</div>';
         latestDiv.appendChild(card);
@@ -2038,7 +2085,6 @@ async function _indicatorsLoad() {
     charts.forEach(function(chart) {
       if (selectedKeys.indexOf(chart.key) === -1) return;
 
-      var points = [];
       var points = [];
       if (data && data.length > 0) {
         data.forEach(function(d) {
@@ -2064,10 +2110,15 @@ async function _indicatorsLoad() {
       title.textContent = chart.label + ' (' + chart.unit + ')' + (chart.paired ? ' / ' + chart.pairedLabel : '');
       header.appendChild(title);
       var expandBtn = document.createElement('button');
-      expandBtn.textContent = '⛶';
-      expandBtn.title = 'Expand this chart';
-      expandBtn.style.cssText = 'background:none;border:1px solid #8b5a2b;border-radius:3px;cursor:pointer;font-size:1em;padding:1px 6px;color:#6b4e31;';
-      expandBtn.addEventListener('click', function() { _indToggleExpand(chart.key); });
+      expandBtn.innerHTML = '<i class="fas fa-expand"></i>';
+      expandBtn.title = 'Expand / collapse this chart';
+      expandBtn.style.cssText = 'background:none;border:1px solid #8b5a2b;border-radius:3px;cursor:pointer;font-size:0.85em;padding:2px 7px;color:#6b4e31;';
+      (function(chartKey) {
+        expandBtn.addEventListener('click', function(e) {
+          e.stopPropagation();
+          _indToggleExpand(chartKey);
+        });
+      })(chart.key);
       header.appendChild(expandBtn);
       chartDiv.appendChild(header);
 
@@ -2098,7 +2149,7 @@ async function _indicatorsLoad() {
       function xPos(ts) { return padL + ((ts - minDate) / dateRange) * plotW; }
       function yPos(v) { return padT + plotH - ((v - minVal) / valRange) * plotH; }
 
-      var svg = '<svg viewBox="0 0 ' + svgWidth + ' ' + svgHeight + '" style="width:100%;height:auto;" xmlns="http://www.w3.org/2000/svg">';
+      var svg = '<svg viewBox="0 0 ' + svgWidth + ' ' + svgHeight + '" style="width:100%;height:100%;display:block;" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">';
       for (var gi = 0; gi <= 3; gi++) {
         var gy = padT + (plotH / 3) * gi, gv = maxVal - (valRange / 3) * gi;
         svg += '<line x1="' + padL + '" y1="' + gy + '" x2="' + (svgWidth - padR) + '" y2="' + gy + '" stroke="#e0d4b5" stroke-width="0.5"/>';
@@ -2126,7 +2177,11 @@ async function _indicatorsLoad() {
           '<title>' + p.date + ': ' + p.value + ' ' + chart.unit + '\n' + p.title + '</title></circle>';
       });
       svg += '</svg>';
-      chartDiv.innerHTML += svg;
+      var svgWrap = document.createElement('div');
+      svgWrap.className = 'ind-chart-svg-wrap';
+      svgWrap.style.cssText = 'width:100%;aspect-ratio:500/180;min-height:120px;';
+      svgWrap.innerHTML = svg;
+      chartDiv.appendChild(svgWrap);
       container.appendChild(chartDiv);
     });
 
@@ -2147,16 +2202,70 @@ function _indToggleExpand(key) {
   if (expanded === key) {
     // Collapse — show all again
     delete container.dataset.expanded;
-    container.style.gridTemplateColumns = 'repeat(auto-fill,minmax(380px,1fr))';
-    Array.from(container.children).forEach(function(c) { c.style.display = ''; });
+    container.style.gridTemplateColumns = 'repeat(2,1fr)';
+    Array.from(container.children).forEach(function(c) {
+      c.style.display = '';
+      // Reset SVG wrapper to normal size
+      var wrap = c.querySelector('.ind-chart-svg-wrap');
+      if (wrap) {
+        wrap.style.aspectRatio = '500/180';
+        wrap.style.minHeight = '120px';
+        wrap.style.maxHeight = '';
+        wrap.style.height = '';
+      }
+      // Reset expand button icon
+      var btn = c.querySelector('button i.fas');
+      if (btn) btn.className = 'fas fa-expand';
+    });
   } else {
-    // Expand — hide all except this one
+    // Expand — hide all except this one, make it fill available space
     container.dataset.expanded = key;
     container.style.gridTemplateColumns = '1fr';
     Array.from(container.children).forEach(function(c) {
-      c.style.display = (c.dataset.indKey === key) ? '' : 'none';
+      if (c.dataset.indKey === key) {
+        c.style.display = '';
+        // Make SVG wrapper fill available height
+        var wrap = c.querySelector('.ind-chart-svg-wrap');
+        if (wrap) {
+          wrap.style.aspectRatio = 'auto';
+          wrap.style.minHeight = '300px';
+          // Calculate available height: viewport minus header, latest cards, chart header, padding
+          var rect = container.getBoundingClientRect();
+          var availH = window.innerHeight - rect.top - 40;
+          wrap.style.maxHeight = Math.max(300, availH) + 'px';
+          wrap.style.height = Math.max(300, availH) + 'px';
+        }
+        // Update expand button icon to compress
+        var btn = c.querySelector('button i.fas');
+        if (btn) btn.className = 'fas fa-compress';
+      } else {
+        c.style.display = 'none';
+      }
     });
   }
 }
+
+// Resize handler — update expanded chart height on window resize/zoom
+var _indResizeTimer = null;
+window.addEventListener('resize', function() {
+  clearTimeout(_indResizeTimer);
+  _indResizeTimer = setTimeout(function() {
+    var container = document.getElementById('indicators-charts');
+    if (!container || !container.dataset.expanded) return;
+    var key = container.dataset.expanded;
+    // Recalculate the expanded chart height
+    Array.from(container.children).forEach(function(c) {
+      if (c.dataset.indKey === key) {
+        var wrap = c.querySelector('.ind-chart-svg-wrap');
+        if (wrap) {
+          var rect = container.getBoundingClientRect();
+          var availH = window.innerHeight - rect.top - 40;
+          wrap.style.height = Math.max(300, availH) + 'px';
+          wrap.style.maxHeight = Math.max(300, availH) + 'px';
+        }
+      }
+    });
+  }, 150);
+});
 
 

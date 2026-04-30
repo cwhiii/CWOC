@@ -156,8 +156,10 @@ Package marker. No public exports.
 | `PATCH /api/chits/{chit_id}/recurrence-exceptions` | `patch_recurrence_exceptions(chit_id, body)` | Add or update a recurrence exception |
 | `GET /api/export/chits` | `export_chits()` | Export all chits as JSON envelope |
 | `GET /api/export/userdata` | `export_userdata()` | Export settings + contacts as JSON envelope |
+| `GET /api/export/all` | `export_all()` | Export all data (chits + settings + contacts + standalone alerts) as combined JSON envelope |
 | `POST /api/import/chits` | `import_chits(req)` | Import chits from JSON envelope |
 | `POST /api/import/userdata` | `import_userdata(req)` | Import user data from JSON envelope |
+| `POST /api/import/all` | `import_all(req)` | Import all data from combined JSON envelope |
 
 ### 1.12 `src/backend/routes/trash.py` — Trash
 
@@ -336,7 +338,7 @@ Calendar display helpers, drag interactions, multi-day rendering, and pinch zoom
 | `_calSnapMinutes` | Current snap grid interval in minutes (loaded from settings) |
 | `_loadCalSnapSetting()` | Load the calendar snap setting from user settings |
 | `_snapToGrid(minutes)` | Snap a minute value to the nearest grid interval |
-| `_showSnapGrid(container)` | Show a visual snap grid overlay on a calendar container |
+| `_showSnapGrid(container)` | Show a visual snap grid overlay on a calendar container (deferred until first drag movement) |
 | `_hideSnapGrid()` | Remove the snap grid overlay |
 | `enableCalendarDrag(scrollContainer, dayColumns, days, chitsMap)` | Make timed calendar events draggable (move) and resizable (bottom edge) |
 | `_onCalDragMove(e)` | Handle mouse/touch move during calendar drag operations |
@@ -463,10 +465,11 @@ Coordinator for shared code between dashboard and editor. Contains glue code for
 | `_initSharedAlarmSystem()` | Initialize the global alarm system (settings, state, data fetch, interval, sync) |
 | `_openQuickAlertModal()` | Open the Quick Alert modal (! hotkey) — context-aware for dashboard vs editor |
 | `_closeQuickAlertModal()` | Close the Quick Alert modal |
-| `_quickAlertCreate(type)` | Dispatch alert creation by type (alarm/timer/stopwatch) to the correct context |
-| `_quickAlertAddToChit(type)` | Add an alert to the current chit's _alertsData without saving (editor context) |
+| `_quickAlertCreate(type)` | Dispatch alert creation by type (alarm/timer/stopwatch) to the correct context (uses `mainEditor` for editor detection) |
+| `_quickAlertAddToChit(type)` | Add an alert to the current chit's _alertsData, expand alerts zone, scroll to it, and close modal (editor context) |
 | `_quickAlertAddIndependent(type)` | Create an independent alert — delegates to dashboard or direct fetch |
-| `_quickAlertAddIndependentDashboard(type)` | Create an independent alert using the dashboard's _createIndependentAlert |
+| `_quickAlertAddIndependentDashboard(type)` | Create an independent alert using the dashboard's _createIndependentAlert, then show Done/View buttons |
+| `_showQuickAlertCreatedActions(type)` | Replace quick alert modal content with Done and View buttons after creation |
 | `_showQuickAlertToast(type)` | Show a brief toast confirming alert creation (non-dashboard pages) |
 | `_initSharedHotkeys()` | Register the global keydown listener for !, \`, ~ hotkeys on all pages |
 
@@ -601,15 +604,15 @@ Coordinator for shared code between dashboard and editor. Contains glue code for
 | `filterChits(tab)` | Switch to a tab, update sidebar visibility, and re-render chits |
 | `searchChits()` | Trigger a re-render of chits (called from sidebar search input) |
 | `highlightMatch(text, query)` | HTML-escape text and wrap query matches in `<mark>` tags |
-| `displayIndicatorsView()` | Render the Indicators tab — health trend charts with SVG |
+| `displayIndicatorsView()` | Render the Indicators tab — health trend charts with responsive SVG, grid-based latest cards |
 | `_indSaveSelection()` | Persist selected indicator checkboxes to localStorage |
 | `_indRestoreSelection()` | Restore indicator checkbox selection from localStorage |
 | `_indFmtDate(d)` | Format a Date as YYYY-MM-DD string for indicator date inputs |
 | `_indicatorsSetRange(range)` | Set the indicator time range (day/week/month/year/all) and reload |
 | `_indicatorsHighlightBtn(range)` | Highlight the active time range button in the Indicators sidebar |
 | `_indicatorsLoadCustomRange()` | Load indicators with custom date range from inputs |
-| `_indicatorsLoad()` | Fetch health data from API and render SVG trend charts |
-| `_indToggleExpand(key)` | Expand/collapse a single indicator chart to fill the view |
+| `_indicatorsLoad()` | Fetch health data from API and render SVG trend charts with expand buttons |
+| `_indToggleExpand(key)` | Expand/collapse a single indicator chart — fills available viewport height when expanded, updates on resize |
 
 #### main-alerts.js
 
@@ -630,7 +633,8 @@ Coordinator for shared code between dashboard and editor. Contains glue code for
 | `_showTimerDoneModal(timerName, onDismiss)` | Show a "Time's up!" alert modal for a completed timer |
 | `_sendBrowserNotification(title, body, chitId, playSound)` | Send a browser notification with vibration and click-to-open |
 | `_globalCheckAlarms()` | Check all chit-based and independent alarms against the current time |
-| `_globalCheckNotifications()` | Check all chit notification alerts against their fire times |
+| `_globalCheckNotifications()` | Check all chit notification alerts against their fire times; supports targetType and loop re-firing |
+| `_showGlobalLoopingToast(emoji, label, chitTitle, chitId, loopKey)` | Show a persistent looping notification toast that stays until acknowledged |
 | `_getSnoozeMs()` | Get the snooze duration in milliseconds from settings |
 | `_startGlobalAlertSystem()` | Initialize the global alert system — permissions, intervals, sync listeners |
 
@@ -884,17 +888,17 @@ Alerts zone: alarms, timers, stopwatches, notifications.
 | `_firedNotifications` | Set of notification keys already fired (prevents re-firing) |
 | `_startNotificationChecker()` | Start the 30-second notification checker interval |
 | `_stopNotificationChecker()` | Stop the notification checker interval |
-| `_checkNotificationAlerts()` | Check all notifications against chit dates and fire when due |
-| `_notifTimingLabel(n)` | Build a human-readable timing label for a notification (e.g., "before start") |
-| `_fireNotificationAlert(msg)` | Fire a browser notification and inline toast for a reminder |
+| `_checkNotificationAlerts()` | Check all notifications against chit dates (using targetType) and fire when due; supports loop re-firing |
+| `_notifTimingLabel(n)` | Build a human-readable timing label for a notification using targetType (e.g., "before start", "after due") |
+| `_fireNotificationAlert(msg, notif, notifIdx)` | Fire a browser notification and inline toast; looping notifications show "Acknowledge" button |
 | `_alertsFromChit(chit)` | Parse a chit's alerts array into the `_alertsData` structure and render |
 | `_alertsToArray()` | Flatten `_alertsData` back into a single array for saving |
 | `renderAllAlerts()` | Render all four alert containers (notifications, alarms, timers, stopwatches) |
 | `renderAlarmsContainer()` | Render the alarms list with name, time, days, toggle, delete, and snooze bar |
 | `_defaultNotifsApplied` | Tracks which date modes have had default notifications applied |
 | `_applyDefaultNotifications(mode)` | Auto-populate notifications from settings defaults when a date mode is first activated |
-| `renderNotificationsContainer()` | Render the notifications list with value, unit, timing, and delete controls |
-| `_notifTargetLabel()` | Return "start", "due", or "start/due" based on which date fields the chit has |
+| `renderNotificationsContainer()` | Render the notifications list with value, unit, combined timing dropdown (before/after start/due), loop toggle, and delete controls |
+| `_notifTargetLabel()` | Return "start", "due", or "start/due" based on which date fields the chit has (legacy helper) |
 | `_editingAlarmIdx` | Index of the alarm currently being edited (or null) |
 | `openAlarmModal(event)` | Add a new alarm inline with default time and today's day |
 | `editAlarmItem(idx)` | Open the alarm edit modal for a specific alarm index |
@@ -918,7 +922,6 @@ Alerts zone: alarms, timers, stopwatches, notifications.
 | `window._timerRuntime` | Runtime state for timers: `{ remaining, intervalId, running }` per index |
 | `renderTimersContainer()` | Render the timers list with input/countdown modes, start/pause, and reset controls |
 | `deleteTimerItem(idx)` | Delete a timer by index, stop its interval, and rebuild runtime map |
-| `_updateNotificationBtnVisibility()` | Show/hide the "Add Notification" button based on whether dates are set |
 | `openNotificationModal(event)` | Add a new notification inline with 15-minute default |
 | `addNotification()` | Save notification data from the modal |
 | `deleteNotificationItem(idx)` | Delete a notification by index and re-render |
@@ -1155,11 +1158,13 @@ Settings page logic: tags, colors, clocks, locations, indicators, import/export,
 | `_triggerJsonDownload(data, filename)` | Create a Blob from a data string and trigger a browser download |
 | `exportChitData()` | Export all chit data as a JSON file download via GET `/api/export/chits` |
 | `exportUserData()` | Export all user data (settings + contacts) as a JSON file download via GET `/api/export/userdata` |
-| `_showImportModeDialog(type, fileData)` | Show the Add/Replace import mode dialog for chit or user data |
-| `_showReplaceConfirmDialog(type, onConfirm)` | Show the replace confirmation dialog with type-specific warning text |
-| `_doImport(type, mode, fileData)` | Perform the actual import POST request to `/api/import/chits` or `/api/import/userdata` |
+| `exportAllData()` | Export all data (chits + settings + contacts + alerts) as a single JSON file via GET `/api/export/all` |
+| `_showImportModeDialog(type, fileData)` | Show the Add/Replace import mode dialog for chit, user, or all data |
+| `_showReplaceConfirmDialog(type, onConfirm)` | Double-confirm replace with two sequential `cwocConfirm` dialogs |
+| `_doImport(type, mode, fileData)` | Perform the actual import POST request to `/api/import/chits`, `/api/import/userdata`, or `/api/import/all` |
 | `importChitData()` | Import chit data: open file picker, read JSON, validate, show mode dialog |
 | `importUserData()` | Import user data: open file picker, read JSON, validate, show mode dialog |
+| `importAllData()` | Import all data: open file picker, read JSON, validate type "all", show mode dialog |
 | `loadVersionInfo()` | Fetch and display the current version and install date from `/api/version` |
 | `_closeUpdateModal()` | Close the update modal; show reopen button if upgrade is still running |
 | `startUpgrade()` | Open the upgrade modal and prepare the UI for an upgrade |
@@ -1426,8 +1431,8 @@ Hotkey overlay, panels, reference overlay, and sidebar dimming.
 | Sidebar Dimming (`.hotkey-overlay`) | Full-screen grey overlay for submenu mode |
 | Hotkey Panel (`.hotkey-panel`) | Floating submenu panel — centered, z-indexed |
 | Panel Options | Clickable option rows with key badges |
-| Reference Overlay | Full reference overlay with multi-column layout |
-| Reference Columns | Keyboard shortcut reference in columnar display |
+| Reference Overlay | Full reference overlay with tree-structured layout (direct actions, submenus, mouse/editor) |
+| Reference Tree | Tree-based columns with groups, submenu roots, indented children, clickable links |
 
 #### styles-modals.css
 Delete modal, clock modal, weather modal, quick-edit modal, alert modal.

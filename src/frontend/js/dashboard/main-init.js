@@ -732,6 +732,23 @@ document.addEventListener("DOMContentLoaded", function () {
     _applyEnabledPeriods();
     // Check for weather page nav intent BEFORE fetching — overrides view/date state
     _checkWeatherNavIntent();
+    // Check for jump-tab intent (from quick alert "Create & View" on other pages)
+    try {
+      var jumpTab = localStorage.getItem('cwoc_jump_tab');
+      if (jumpTab) {
+        localStorage.removeItem('cwoc_jump_tab');
+        currentTab = jumpTab;
+        if (jumpTab === 'Alarms') {
+          var jumpMode = localStorage.getItem('cwoc_jump_alarms_mode');
+          localStorage.removeItem('cwoc_jump_alarms_mode');
+          if (jumpMode === 'independent' && typeof _alarmsViewMode !== 'undefined') {
+            _alarmsViewMode = 'independent';
+            var toggle = document.getElementById('alerts-view-toggle');
+            if (toggle) toggle.value = 'independent';
+          }
+        }
+      }
+    } catch(e) {}
     fetchChits();
     updateDateRange();
     // Prefetch weather for all saved locations (async, non-blocking)

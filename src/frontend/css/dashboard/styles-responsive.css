@@ -212,8 +212,41 @@
     }
 
     /* ── Reference overlay: single-column within each section ─────────────── */
+    .ref-tree-col {
+        columns: 1;
+    }
     .ref-col {
         columns: 1;
+    }
+
+    /* ── Reference tree: stack vertically, comfortable touch targets ──────── */
+    .ref-tree-columns {
+        flex-direction: column;
+        gap: 12px;
+    }
+    .ref-item {
+        font-size: 1em;
+        line-height: 1.6;
+        margin: 4px 0;
+        padding: 2px 0;
+    }
+    .ref-tree-root {
+        font-size: 1.05em;
+        line-height: 1.6;
+    }
+    .ref-tree-label {
+        font-size: 0.9em;
+    }
+    .ref-tree-children {
+        padding-left: 16px;
+        margin-left: 6px;
+    }
+    .ref-key {
+        min-width: 2em;
+        font-size: 1em;
+    }
+    .ref-footer {
+        font-size: 1em;
     }
 
     /* ── Top bar: hidden on mobile (date range shown in sidebar) ──────────── */
@@ -290,6 +323,39 @@
         column-span: all;
     }
 
+    /* ── Reference tree: stack vertically, readable text ──────────────────── */
+    .ref-tree-columns {
+        flex-direction: column;
+        gap: 12px;
+    }
+    .ref-tree-col {
+        columns: 1;
+    }
+    .ref-item {
+        font-size: 1em;
+        line-height: 1.6;
+        margin: 4px 0;
+        padding: 2px 0;
+    }
+    .ref-tree-root {
+        font-size: 1.05em;
+        line-height: 1.6;
+    }
+    .ref-tree-label {
+        font-size: 0.9em;
+    }
+    .ref-tree-children {
+        padding-left: 16px;
+        margin-left: 6px;
+    }
+    .ref-key {
+        min-width: 2em;
+        font-size: 1em;
+    }
+    .ref-footer {
+        font-size: 1em;
+    }
+
     /* ── Hotkey panel: full viewport width with 8px margin ────────────────── */
     .hotkey-panel {
         width: calc(100% - 16px);
@@ -311,32 +377,28 @@
     .reference-content {
         width: 100%;
         max-width: 100%;
-        padding: 12px 10px;
+        padding: 14px 12px;
         box-sizing: border-box;
         border-radius: 0;
         border-left: none;
         border-right: none;
         max-height: none;
-        min-height: 100vh;
+        min-height: auto;
         overflow-y: visible;
         overflow-x: hidden;
-        font-size: 0.85em;
+        font-size: 0.95em;
     }
     .reference-content h3 {
-        font-size: 1.1em;
+        font-size: 1.2em;
         margin-bottom: 8px;
     }
     .reference-content h4 {
-        font-size: 0.9em;
-        margin: 8px 0 4px 0;
-    }
-    .ref-key {
-        min-width: 1.5em;
-        font-size: 0.85em;
+        font-size: 1em;
+        margin: 10px 0 5px 0;
     }
     .ref-col > div {
-        font-size: 0.85em;
-        margin: 2px 0;
+        font-size: 0.95em;
+        margin: 3px 0;
         break-inside: avoid;
     }
 

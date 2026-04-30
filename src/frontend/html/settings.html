@@ -669,6 +669,15 @@
                     </div>
                     <div class="setting-group">
                         <h3>📦 Data Management</h3>
+
+                        <label class="setting-subheader">🌐 All Data</label>
+                        <p class="setting-hint">Everything: chits, settings, tags, colors, contacts, alerts.</p>
+                        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+                            <button onclick="exportAllData()" class="standard-button" style="flex:1;">📄 Export All</button>
+                            <button onclick="importAllData()" class="standard-button" style="flex:1;">📥 Import All</button>
+                            <input type="file" id="importAllFile" accept=".json" style="display:none" />
+                        </div>
+
                         <label class="setting-subheader">Chit Data</label>
                         <p class="setting-hint">All chits including deleted chits.</p>
                         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
@@ -775,7 +784,7 @@
                     </div>
                 </div>
             </div>
-            <div class="author-info">&copy; 2026 C.W.'s Omni Chits &middot; <a href="https://www.cwholemaniii.com/pages/home.shtml" target="_blank">www.cwholemaniii.com</a></div>
+            <!-- Footer is auto-injected by shared-page.js -->
             <script src="/frontend/js/shared/shared-utils.js"></script>
             <script src="/frontend/js/shared/shared-touch.js"></script>
             <script src="/frontend/js/shared/shared-checklist.js"></script>

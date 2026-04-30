@@ -106,7 +106,7 @@
                 <li><kbd>W</kbd> — Weather modal (default location forecast) · <kbd>Shift+W</kbd> — Weather page (full forecast)</li>
                 <li><kbd>L</kbd> — Clock modal · <kbd>S</kbd> — Settings · <kbd>V</kbd> — Navigate menu</li>
                 <li><kbd>R</kbd> — Reference overlay · <kbd>Shift+R</kbd> — Help page</li>
-                <li><kbd>!</kbd> — Quick Alert menu (add Alarm, Timer, or Stopwatch). On the dashboard, creates an independent alert. In the editor, adds to the current chit without saving</li>
+                <li><kbd>!</kbd> — Quick Alert menu (add Alarm, Timer, or Stopwatch). On the dashboard, creates an independent alert and shows Done/View buttons. In the editor, adds to the current chit and expands the alerts zone. On other pages, creates an independent alert</li>
                 <li><kbd>`</kbd> — Toggle sidebar visibility (setting is retained)</li>
                 <li><kbd>~</kbd> (Shift+`) — Toggle topbar visibility (setting is retained)</li>
                 <li><kbd>ESC</kbd> — Close modal / exit · <kbd>Backspace</kbd> — Clear filters</li>
@@ -215,7 +215,7 @@
             <p>When creating a new chit, only the zone relevant to the current view is expanded (e.g., Notes zone when coming from the Notes tab). All other zones start collapsed. The title field is auto-focused. If you have a default saved location, it's auto-applied to new chits.</p>
             <h4>Alerts Zone</h4>
             <p>Add notifications, alarms, timers, and stopwatches. Each alarm has a time, days, and optional "Delete chit after dismissal" checkbox — when checked, dismissing the alarm soft-deletes the chit.</p>
-            <p>Notifications fire relative to a chit's start or due time. Each notification has a timing dropdown (before/after) and automatically targets the chit's due date if set, otherwise the start date.</p>
+            <p>Notifications fire relative to a chit's start or due time. Each notification has a combined timing dropdown (before start, after start, before due, after due) to precisely control when the notification fires. Enable the 🔁 loop toggle to repeat the notification every 60 seconds until acknowledged.</p>
             <p>Alarms trigger system notifications with sound on all platforms (macOS, Linux, Android) via the browser Notification API. On Android and Linux Firefox, the device will also vibrate. If sound cannot autoplay due to browser restrictions, a tap or keypress will unlock audio playback. Grant notification permission when prompted for full functionality.</p>
             <h4>Independent Alerts Board</h4>
             <p>Switch to the <strong>Independent</strong> view mode in the Alarms tab sidebar to access a 3-column board for quick alarms, timers, and stopwatches that aren't connected to any chit. Click the <strong>+</strong> button in each column header to add a new item. Edit names, times, and durations inline — changes save automatically on blur. Delete items with the ❌ button. Timers and stopwatches have Start/Pause, Reset, and Lap controls just like in the chit editor. Timers and stopwatches start immediately when created — no save step needed.</p>

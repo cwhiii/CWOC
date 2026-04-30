@@ -223,7 +223,6 @@ function enableCalendarDrag(scrollContainer, dayColumns, days, chitsMap) {
         dayCol: el.parentElement,
         hasMoved: false,
       };
-      _showSnapGrid(el.parentElement);
       document.addEventListener('mousemove', _onCalDragMove);
       document.addEventListener('mouseup', _onCalDragEnd);
     });
@@ -241,7 +240,6 @@ function enableCalendarDrag(scrollContainer, dayColumns, days, chitsMap) {
             dayCol: el.parentElement,
             hasMoved: false,
           };
-          _showSnapGrid(el.parentElement);
         },
         onMove: function (data) {
           _onCalDragMove({ clientX: data.clientX, clientY: data.clientY });
@@ -271,9 +269,6 @@ function enableCalendarDrag(scrollContainer, dayColumns, days, chitsMap) {
         dayCol: el.parentElement,
         hasMoved: false,
       };
-      el.style.opacity = '0.6';
-      el.style.zIndex = '50';
-      _showSnapGrid(el.parentElement);
       document.addEventListener('mousemove', _onCalDragMove);
       document.addEventListener('mouseup', _onCalDragEnd);
     });
@@ -296,9 +291,6 @@ function enableCalendarDrag(scrollContainer, dayColumns, days, chitsMap) {
           dayCol: el.parentElement,
           hasMoved: false,
         };
-        el.style.opacity = '0.6';
-        el.style.zIndex = '50';
-        _showSnapGrid(el.parentElement);
       },
       onMove: function (data) {
         _onCalDragMove({ clientX: data.clientX, clientY: data.clientY });
@@ -313,7 +305,15 @@ function enableCalendarDrag(scrollContainer, dayColumns, days, chitsMap) {
 function _onCalDragMove(e) {
   if (!_calDragState) return;
   const s = _calDragState;
-  s.hasMoved = true;
+
+  // Show snap grid on first actual movement (not on click)
+  if (!s.hasMoved) {
+    s.hasMoved = true;
+    s.el.style.opacity = '0.6';
+    s.el.style.zIndex = '50';
+    _showSnapGrid(s.el.parentElement);
+  }
+
   const dy = e.clientY - s.startY;
 
   if (s.mode === 'resize') {
