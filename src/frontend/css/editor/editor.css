@@ -3141,3 +3141,188 @@ input.location {
 .cwoc-switch-password-input { width: 100%; padding: 8px 10px; font-family: 'Lora', Georgia, serif; font-size: 1em; border: 1px solid #8b5a2b; border-radius: 5px; background: #f5e6cc; color: #1a1208; box-sizing: border-box; margin-top: 6px; }
 .cwoc-switch-password-input:focus { outline: none; border-color: #d4af37; box-shadow: 0 0 0 2px rgba(212,175,55,0.25); }
 .cwoc-switch-error { color: #c0392b; font-size: 0.9em; margin-top: 6px; min-height: 1.2em; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Sharing Panel — 🔗 Sharing zone in the chit editor (Requirements 1.6, 6.4)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Current shares list container ────────────────────────────────────────── */
+.sharing-current-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 10px;
+    min-height: 2em;
+}
+
+/* ── Individual share row (name + badge + remove button) ──────────────────── */
+.sharing-list-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    background: var(--parchment-light);
+    border: 1px solid var(--aged-brown-light);
+    border-radius: 4px;
+}
+
+/* ── User display name in share row ───────────────────────────────────────── */
+.sharing-user-name {
+    flex: 1;
+    font-size: 0.95em;
+    font-weight: 600;
+    color: #1a1208;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ── Role badges (manager / viewer) ───────────────────────────────────────── */
+.sharing-role-badge {
+    display: inline-block;
+    font-size: 0.8em;
+    padding: 2px 8px;
+    border-radius: 10px;
+    white-space: nowrap;
+    font-weight: 600;
+    line-height: 1.4;
+}
+
+.sharing-role-manager {
+    background: rgba(0, 128, 128, 0.15);
+    color: #006060;
+    border: 1px solid rgba(0, 128, 128, 0.3);
+}
+
+.sharing-role-viewer {
+    background: rgba(139, 90, 43, 0.12);
+    color: #6b4e31;
+    border: 1px solid rgba(139, 90, 43, 0.25);
+}
+
+/* ── Remove share button ──────────────────────────────────────────────────── */
+.sharing-remove-btn {
+    background: var(--danger-red);
+    color: var(--parchment-light);
+    border: 1px solid var(--aged-brown-dark);
+    border-radius: 3px;
+    padding: 2px 8px;
+    font-size: 0.85em;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background 0.2s;
+}
+
+.sharing-remove-btn:hover {
+    background: #a01c1c;
+}
+
+/* ── Add share controls row (user picker + role select + add button) ──────── */
+.sharing-add-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+}
+
+/* ── User picker dropdown ─────────────────────────────────────────────────── */
+.sharing-user-picker {
+    flex: 1;
+    min-width: 120px;
+    padding: 6px 8px;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.9em;
+    border: 1px solid var(--aged-brown-medium);
+    border-radius: 4px;
+    background: var(--input-bg);
+    color: #1a1208;
+}
+
+/* ── Role select dropdown ─────────────────────────────────────────────────── */
+.sharing-role-select {
+    padding: 6px 8px;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.9em;
+    border: 1px solid var(--aged-brown-medium);
+    border-radius: 4px;
+    background: linear-gradient(#d4a373, #c8965a);
+    color: #1a1208;
+    cursor: pointer;
+}
+
+/* ── Add share button ─────────────────────────────────────────────────────── */
+.sharing-add-btn {
+    flex-shrink: 0;
+}
+
+/* ── Stealth toggle row ───────────────────────────────────────────────────── */
+.sharing-stealth-row {
+    display: flex;
+    align-items: center;
+    padding: 8px 0;
+    border-top: 1px dashed var(--aged-brown-light);
+    margin-top: 4px;
+}
+
+.sharing-stealth-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.9em;
+    color: #1a1208;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+/* ── Assigned-to picker row ───────────────────────────────────────────────── */
+.sharing-assigned-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 0;
+    border-top: 1px dashed var(--aged-brown-light);
+}
+
+.sharing-assigned-label {
+    font-size: 0.9em;
+    font-weight: 600;
+    color: #1a1208;
+    white-space: nowrap;
+}
+
+.sharing-assigned-picker {
+    flex: 1;
+    min-width: 120px;
+    padding: 6px 8px;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.9em;
+    border: 1px solid var(--aged-brown-medium);
+    border-radius: 4px;
+    background: var(--input-bg);
+    color: #1a1208;
+}
+
+/* ── Empty state message ──────────────────────────────────────────────────── */
+.sharing-empty {
+    text-align: center;
+    padding: 0.8em;
+    font-size: 0.9em;
+    font-style: italic;
+    color: var(--aged-brown-medium);
+    opacity: 0.8;
+}
+
+/* ── Read-only banner for viewer-role shared chits (Requirement 4.3) ──────── */
+.cwoc-readonly-banner {
+    background-color: #fff3cd;
+    border: 1px solid #ffc107;
+    border-radius: 4px;
+    padding: 10px 16px;
+    margin-bottom: 12px;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.95em;
+    font-weight: 600;
+    color: #856404;
+    text-align: center;
+}

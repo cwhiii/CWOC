@@ -22,6 +22,18 @@
  *   _getAllIndicators, _shouldShow, _STATUS_ICONS, enableNotesDragReorder, applyNotesLayout
  */
 
+/* ── Shared chit helpers ──────────────────────────────────────────────────── */
+
+/** Check if a chit is shared with viewer-only access (no inline edits allowed). */
+function _isViewerRole(chit) {
+  return chit._shared && chit.effective_role === 'viewer';
+}
+
+/** Check if a chit is shared (has an effective_role from the sharing system). */
+function _isSharedChit(chit) {
+  return !!chit._shared;
+}
+
 /* ── Helper: empty state message ─────────────────────────────────────────── */
 
 /** Build a styled empty-state message with an optional Create Chit button. */
@@ -67,6 +79,19 @@ function _buildChitHeader(chit, titleHtml, settings, opts) {
     icon.textContent = '📦';
     icon.title = 'Archived';
     left.appendChild(icon);
+  }
+
+  // Stealth indicator — visible only to the owner (Requirement 6.5)
+  if (chit.stealth) {
+    var _stealthUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    var _isStealthOwner = _stealthUser && chit.owner_id === _stealthUser.user_id;
+    if (_isStealthOwner) {
+      var stealthIcon = document.createElement('span');
+      stealthIcon.textContent = '🥷';
+      stealthIcon.title = 'Stealth — hidden from other users';
+      stealthIcon.className = 'cwoc-stealth-indicator';
+      left.appendChild(stealthIcon);
+    }
   }
 
   // Sub-chit indicator (child of a project)
@@ -219,6 +244,29 @@ function _buildChitHeader(chit, titleHtml, settings, opts) {
     }
   }
 
+  // Role indicator for shared chits (Requirement 4.2)
+  if (chit._shared && chit.effective_role) {
+    var roleBadge = document.createElement('span');
+    roleBadge.className = 'cwoc-role-badge';
+    if (chit.effective_role === 'viewer') {
+      roleBadge.textContent = '👁 Viewer';
+      roleBadge.title = 'You have read-only access to this chit';
+    } else if (chit.effective_role === 'manager') {
+      roleBadge.textContent = '✏️ Manager';
+      roleBadge.title = 'You can edit this chit';
+    }
+    right.appendChild(roleBadge);
+  }
+
+  // Assignee display name (Requirement 7.4)
+  if (chit.assigned_to_display_name) {
+    var assigneeBadge = document.createElement('span');
+    assigneeBadge.className = 'cwoc-assignee-badge';
+    assigneeBadge.textContent = '📌 ' + chit.assigned_to_display_name;
+    assigneeBadge.title = 'Assigned to: ' + chit.assigned_to_display_name;
+    right.appendChild(assigneeBadge);
+  }
+
   row.appendChild(right);
   return row;
 }
@@ -277,8 +325,21 @@ function displayChecklistView(chitsToDisplay) {
       progressEl.textContent = `${checked}/${items.length} ✓`;
       chitElement.appendChild(progressEl);
 
-      // Interactive checklist from shared.js
-      renderInlineChecklist(chitElement, chit, () => fetchChits());
+      // Interactive checklist from shared.js (disabled for viewer-role shared chits)
+      if (!_isViewerRole(chit)) {
+        renderInlineChecklist(chitElement, chit, () => fetchChits());
+      } else {
+        // Read-only checklist display for viewers
+        var roList = document.createElement('div');
+        roList.style.cssText = 'opacity:0.8;font-size:0.9em;';
+        (chit.checklist || []).forEach(function(item) {
+          var row = document.createElement('div');
+          row.style.cssText = 'padding:2px 0;';
+          row.textContent = (item.checked || item.done ? '☑ ' : '☐ ') + (item.text || item.label || '');
+          roList.appendChild(row);
+        });
+        chitElement.appendChild(roList);
+      }
 
       chitElement.addEventListener("dblclick", () => {
         storePreviousState();
@@ -286,7 +347,7 @@ function displayChecklistView(chitsToDisplay) {
       });
       if (typeof enableLongPress === 'function') {
         enableLongPress(chitElement, function () {
-          showQuickEditModal(chit, () => displayChits());
+          if (!_isViewerRole(chit)) showQuickEditModal(chit, () => displayChits());
         });
       }
       checklistView.appendChild(chitElement);
@@ -300,6 +361,9 @@ function displayChecklistView(chitsToDisplay) {
 function displayTasksView(chitsToDisplay) {
   if (_tasksViewMode === 'habits') {
     return displayHabitsView(chitsToDisplay);
+  }
+  if (_tasksViewMode === 'assigned') {
+    return displayAssignedToMeView(chitsToDisplay);
   }
 
   const chitList = document.getElementById("chit-list");
@@ -389,6 +453,12 @@ function displayTasksView(chitsToDisplay) {
     }
     _styleStatusDropdown();
 
+    // Disable status dropdown for viewer-role shared chits
+    if (_isViewerRole(chit)) {
+      statusDropdown.disabled = true;
+      statusDropdown.title = 'Read-only — shared chit';
+    }
+
     statusDropdown.addEventListener("change", () => {
       _styleStatusDropdown();
       fetch(`/api/chits/${chit.id}`, {
@@ -420,7 +490,7 @@ function displayTasksView(chitsToDisplay) {
     });
     if (typeof enableLongPress === 'function') {
       enableLongPress(chitElement, function () {
-        showQuickEditModal(chit, () => displayChits());
+        if (!_isViewerRole(chit)) showQuickEditModal(chit, () => displayChits());
       });
     }
     tasksContainer.appendChild(chitElement);
@@ -635,6 +705,131 @@ function _renderHabitCards(container, habitData, showCompleted, windowDays) {
   });
 }
 
+/* ── Assigned to Me View (Requirement 7.3) ───────────────────────────────── */
+
+/**
+ * Render the "Assigned to Me" view — shows only chits where assigned_to
+ * matches the current user's ID.
+ */
+function displayAssignedToMeView(chitsToDisplay) {
+  var chitList = document.getElementById('chit-list');
+  chitList.innerHTML = '';
+  var _viSettings = (window._cwocSettings || {}).visual_indicators || {};
+
+  // Get current user ID
+  var currentUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+  var currentUserId = currentUser ? currentUser.user_id : null;
+
+  if (!currentUserId) {
+    chitList.innerHTML = _emptyState('Unable to determine current user.');
+    return;
+  }
+
+  // Filter to only chits assigned to the current user
+  var assignedChits = chitsToDisplay.filter(function(chit) {
+    return chit.assigned_to === currentUserId;
+  });
+
+  // Default sort: by status (ToDo → In Progress → Blocked → Complete at bottom)
+  if (!currentSortField) {
+    var statusOrder = { 'ToDo': 1, 'In Progress': 2, 'Blocked': 3, '': 4, 'Complete': 5 };
+    assignedChits.sort(function(a, b) {
+      return (statusOrder[a.status] || 4) - (statusOrder[b.status] || 4);
+    });
+  }
+
+  if (assignedChits.length === 0) {
+    chitList.innerHTML = _emptyState('No chits assigned to you.');
+    return;
+  }
+
+  var container = document.createElement('div');
+  container.className = 'checklist-view';
+
+  assignedChits.forEach(function(chit) {
+    var chitElement = document.createElement('div');
+    chitElement.className = 'chit-card';
+    chitElement.draggable = true;
+    chitElement.dataset.chitId = chit.id;
+    if (chit.archived) chitElement.classList.add('archived-chit');
+    applyChitColors(chitElement, typeof chitColor === 'function' ? chitColor(chit) : '#fdf6e3');
+    if (chit.status === 'Complete') chitElement.classList.add('completed-task');
+
+    chitElement.appendChild(_buildChitHeader(chit, '<a href="/editor?id=' + chit.id + '">' + (chit.title || '(Untitled)') + '</a>', _viSettings, { hideStatus: true }));
+
+    // Status + note preview in a row
+    var controls = document.createElement('div');
+    controls.style.cssText = 'margin-top:0.3em;display:flex;align-items:flex-start;gap:0.8em;';
+
+    // Status icon + dropdown (left)
+    var statusWrap = document.createElement('div');
+    statusWrap.style.cssText = 'display:flex;align-items:center;gap:0.5em;flex-shrink:0;';
+    if (chit.status && typeof _STATUS_ICONS !== 'undefined' && _STATUS_ICONS[chit.status]) {
+      var iconSpan = document.createElement('span');
+      iconSpan.innerHTML = _STATUS_ICONS[chit.status];
+      statusWrap.appendChild(iconSpan);
+    }
+    var label = document.createElement('span');
+    label.textContent = 'Status:';
+    statusWrap.appendChild(label);
+
+    var statusDropdown = document.createElement('select');
+    statusDropdown.style.cssText = 'font-family:inherit;font-size:inherit;';
+    ['ToDo', 'In Progress', 'Blocked', 'Complete'].forEach(function(status) {
+      var option = document.createElement('option');
+      option.value = status;
+      option.textContent = status;
+      if (chit.status === status) option.selected = true;
+      statusDropdown.appendChild(option);
+    });
+    if (!chit.status) statusDropdown.value = '';
+
+    // Disable status dropdown for viewer-role shared chits
+    if (_isViewerRole(chit)) {
+      statusDropdown.disabled = true;
+      statusDropdown.title = 'Read-only — shared chit';
+    }
+
+    statusDropdown.addEventListener('change', function() {
+      fetch('/api/chits/' + chit.id, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(Object.assign({}, chit, { status: statusDropdown.value || null })),
+      }).then(function(r) { if (r.ok) fetchChits(); });
+    });
+    statusWrap.appendChild(statusDropdown);
+    controls.appendChild(statusWrap);
+
+    // Note preview (right, rendered markdown)
+    if (chit.note && chit.note.trim()) {
+      var notePreview = document.createElement('div');
+      notePreview.style.cssText = 'flex:1;min-width:0;opacity:0.75;overflow:hidden;max-height:4.5em;line-height:1.4em;';
+      if (typeof marked !== 'undefined') {
+        notePreview.innerHTML = resolveChitLinks(marked.parse(chit.note.slice(0, 500)), chits);
+      } else {
+        notePreview.textContent = chit.note.slice(0, 300) + (chit.note.length > 300 ? '…' : '');
+      }
+      controls.appendChild(notePreview);
+    }
+
+    chitElement.appendChild(controls);
+
+    chitElement.addEventListener('dblclick', function() {
+      storePreviousState();
+      window.location.href = '/editor?id=' + chit.id;
+    });
+    if (typeof enableLongPress === 'function') {
+      enableLongPress(chitElement, function() {
+        if (!_isViewerRole(chit)) showQuickEditModal(chit, function() { displayChits(); });
+      });
+    }
+    container.appendChild(chitElement);
+  });
+
+  chitList.appendChild(container);
+  enableDragToReorder(container, 'AssignedToMe', function() { displayChits(); });
+}
+
 function displayNotesView(chitsToDisplay) {
   const chitList = document.getElementById("chit-list");
   chitList.innerHTML = "";
@@ -668,6 +863,13 @@ function displayNotesView(chitsToDisplay) {
       titleRow.style.cssText = "display:flex;align-items:center;gap:0.3em;font-weight:bold;margin-bottom:0.2em;";
       if (chit.pinned) { const i = document.createElement('i'); i.className = 'fas fa-bookmark'; i.title = 'Pinned'; i.style.fontSize = '0.85em'; titleRow.appendChild(i); }
       if (chit.archived) { const i = document.createElement('span'); i.textContent = '📦'; i.title = 'Archived'; titleRow.appendChild(i); }
+      // Stealth indicator — visible only to the owner (Requirement 6.5)
+      if (chit.stealth) {
+        var _notesStealth = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+        if (_notesStealth && chit.owner_id === _notesStealth.user_id) {
+          var _nsi = document.createElement('span'); _nsi.textContent = '🥷'; _nsi.title = 'Stealth — hidden from other users'; _nsi.className = 'cwoc-stealth-indicator'; titleRow.appendChild(_nsi);
+        }
+      }
       // Alert indicators
       if (typeof _getAllIndicators === 'function') {
         const indicators = _getAllIndicators(chit, _viSettings, 'card');
@@ -726,6 +928,15 @@ function displayNotesView(chitsToDisplay) {
         }
       }
 
+      // Assignee display name (Requirement 7.4)
+      if (chit.assigned_to_display_name) {
+        var _notesAssignee = document.createElement('span');
+        _notesAssignee.className = 'cwoc-assignee-badge';
+        _notesAssignee.textContent = '📌 ' + chit.assigned_to_display_name;
+        _notesAssignee.title = 'Assigned to: ' + chit.assigned_to_display_name;
+        titleRow.appendChild(_notesAssignee);
+      }
+
       chitElement.appendChild(titleRow);
 
       const noteEl = document.createElement("div");
@@ -747,6 +958,8 @@ function displayNotesView(chitsToDisplay) {
       chitElement.addEventListener("click", (e) => {
         if (!e.shiftKey) return;
         e.preventDefault();
+        // Prevent inline editing for viewer-role shared chits
+        if (_isViewerRole(chit)) return;
         // Toggle in-place editing
         if (noteEl.contentEditable === 'true') return;
         noteEl.contentEditable = 'true';
@@ -785,6 +998,8 @@ function displayNotesView(chitsToDisplay) {
       // Long-press on mobile: toggle in-place editing (same as shift-click)
       if (typeof enableLongPress === 'function') {
         enableLongPress(chitElement, function () {
+          // Prevent inline editing for viewer-role shared chits
+          if (_isViewerRole(chit)) return;
           if (noteEl.contentEditable === 'true') return;
           noteEl.contentEditable = 'true';
           noteEl.style.outline = '2px solid #8b4513';
@@ -890,11 +1105,13 @@ let _tasksViewMode = localStorage.getItem('cwoc_tasksViewMode') || 'tasks'; // '
 function _setTasksMode(mode) {
   _tasksViewMode = mode;
   localStorage.setItem('cwoc_tasksViewMode', mode);
-  const tasksBtn = document.getElementById('tasks-mode-tasks');
-  const habitsBtn = document.getElementById('tasks-mode-habits');
-  const habitsWindowWrap = document.getElementById('habits-window-wrap');
+  var tasksBtn = document.getElementById('tasks-mode-tasks');
+  var habitsBtn = document.getElementById('tasks-mode-habits');
+  var assignedBtn = document.getElementById('tasks-mode-assigned');
+  var habitsWindowWrap = document.getElementById('habits-window-wrap');
   if (tasksBtn) tasksBtn.style.background = mode === 'tasks' ? 'ivory' : '';
   if (habitsBtn) habitsBtn.style.background = mode === 'habits' ? 'ivory' : '';
+  if (assignedBtn) assignedBtn.style.background = mode === 'assigned' ? 'ivory' : '';
   if (habitsWindowWrap) habitsWindowWrap.style.display = mode === 'habits' ? '' : 'none';
   displayChits();
 }
@@ -949,8 +1166,10 @@ function _restoreViewModeButtons() {
   // Tasks
   const tTasksBtn = document.getElementById('tasks-mode-tasks');
   const tHabitsBtn = document.getElementById('tasks-mode-habits');
+  const tAssignedBtn = document.getElementById('tasks-mode-assigned');
   if (tTasksBtn) tTasksBtn.style.background = _tasksViewMode === 'tasks' ? 'ivory' : '';
   if (tHabitsBtn) tHabitsBtn.style.background = _tasksViewMode === 'habits' ? 'ivory' : '';
+  if (tAssignedBtn) tAssignedBtn.style.background = _tasksViewMode === 'assigned' ? 'ivory' : '';
 }
 let _independentAlerts = []; // cached independent alerts from API
 let _saTimerRuntime = {}; // independent timer runtime state
@@ -1280,6 +1499,13 @@ function _displayProjectsKanban(chitsToDisplay) {
           const ind = _getAllIndicators(child, _viSettings, 'card');
           if (ind) titleEl.textContent += ' ' + ind;
         }
+        // Stealth indicator — visible only to the owner (Requirement 6.5)
+        if (child.stealth) {
+          var _kanbanStealthUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+          if (_kanbanStealthUser && child.owner_id === _kanbanStealthUser.user_id) {
+            titleEl.textContent += ' 🥷';
+          }
+        }
         card.appendChild(titleEl);
 
         // Status / Priority / Severity meta row
@@ -1323,6 +1549,15 @@ function _displayProjectsKanban(chitsToDisplay) {
             _kanbanOwner.title = 'Owner: ' + child.owner_display_name;
             card.appendChild(_kanbanOwner);
           }
+        }
+
+        // Assignee display name (Requirement 7.4)
+        if (child.assigned_to_display_name) {
+          var _kanbanAssignee = document.createElement('div');
+          _kanbanAssignee.className = 'cwoc-assignee-badge';
+          _kanbanAssignee.textContent = '📌 ' + child.assigned_to_display_name;
+          _kanbanAssignee.title = 'Assigned to: ' + child.assigned_to_display_name;
+          card.appendChild(_kanbanAssignee);
         }
 
         // Grandchildren (children of this child) as sub-items

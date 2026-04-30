@@ -774,3 +774,51 @@ def migrate_add_instance_name():
     finally:
         if conn:
             conn.close()
+
+
+# ── Chit Sharing System: migration ──────────────────────────────────────
+
+def migrate_add_sharing():
+    """Add sharing columns to chits and settings tables.
+
+    Adds to chits: shares (TEXT), stealth (BOOLEAN DEFAULT 0), assigned_to (TEXT).
+    Adds to settings: shared_tags (TEXT).
+
+    Fully idempotent — safe to run multiple times. Each column is checked
+    for existence before being added.
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        # ── chits table ──────────────────────────────────────────────────
+        cursor.execute("PRAGMA table_info(chits)")
+        chit_cols = {row[1] for row in cursor.fetchall()}
+
+        if "shares" not in chit_cols:
+            cursor.execute("ALTER TABLE chits ADD COLUMN shares TEXT")
+            logger.info("Added shares column to chits table")
+        if "stealth" not in chit_cols:
+            cursor.execute("ALTER TABLE chits ADD COLUMN stealth BOOLEAN DEFAULT 0")
+            logger.info("Added stealth column to chits table")
+        if "assigned_to" not in chit_cols:
+            cursor.execute("ALTER TABLE chits ADD COLUMN assigned_to TEXT")
+            logger.info("Added assigned_to column to chits table")
+
+        # ── settings table ───────────────────────────────────────────────
+        cursor.execute("PRAGMA table_info(settings)")
+        settings_cols = {row[1] for row in cursor.fetchall()}
+
+        if "shared_tags" not in settings_cols:
+            cursor.execute("ALTER TABLE settings ADD COLUMN shared_tags TEXT")
+            logger.info("Added shared_tags column to settings table")
+
+        conn.commit()
+        logger.info("Sharing migration complete")
+    except Exception as e:
+        logger.error(f"Error in migrate_add_sharing: {str(e)}")
+        raise
+    finally:
+        if conn:
+            conn.close()

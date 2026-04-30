@@ -808,3 +808,55 @@ input[type="color"] {
     }
 }
 
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Shared Chit Card Badges — owner, role, stealth, assignee indicators
+   (Requirements 4.2, 6.5, 7.4)
+
+   These mirror the styles in dashboard/styles-cards.css for pages that
+   load shared-page.css instead of the dashboard CSS (e.g. wall station).
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Owner badge on shared chit cards ─────────────────────────────────────── */
+.cwoc-owner-badge {
+    display: inline-block;
+    font-size: 0.75em;
+    color: #6b4e31;
+    opacity: 0.8;
+    white-space: nowrap;
+    font-style: italic;
+    padding: 0 4px;
+    line-height: 1.4;
+}
+
+/* ── Role indicator badge (viewer / manager) on shared chit cards ─────────── */
+.cwoc-role-badge {
+    display: inline-block;
+    font-size: 0.7em;
+    padding: 1px 6px;
+    border-radius: 3px;
+    white-space: nowrap;
+    line-height: 1.4;
+    background: #e8dcc8;
+    color: #4a2c2a;
+    opacity: 0.85;
+}
+
+/* ── Stealth indicator on chit cards (visible to owner only) ──────────────── */
+.cwoc-stealth-indicator {
+    font-size: 0.85em;
+    opacity: 0.8;
+    cursor: default;
+}
+
+/* ── Assignee display name on chit cards ──────────────────────────────────── */
+.cwoc-assignee-badge {
+    display: inline-block;
+    font-size: 0.75em;
+    color: #2b5e2b;
+    opacity: 0.8;
+    white-space: nowrap;
+    font-style: italic;
+    padding: 0 4px;
+    line-height: 1.4;
+}

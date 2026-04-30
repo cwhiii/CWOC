@@ -714,3 +714,35 @@
     padding: 0 4px;
     line-height: 1.4;
 }
+
+/* ── Stealth indicator on chit cards (Requirement 6.5) ────────────────────── */
+.cwoc-stealth-indicator {
+    font-size: 0.85em;
+    opacity: 0.8;
+    cursor: default;
+}
+
+/* ── Assignee display name on chit cards (Requirement 7.4) ────────────────── */
+.cwoc-assignee-badge {
+    display: inline-block;
+    font-size: 0.75em;
+    color: #2b5e2b;
+    opacity: 0.8;
+    white-space: nowrap;
+    font-style: italic;
+    padding: 0 4px;
+    line-height: 1.4;
+}
+
+/* ── Role indicator badge on shared chit cards (Requirement 4.2) ──────────── */
+.cwoc-role-badge {
+    display: inline-block;
+    font-size: 0.7em;
+    padding: 1px 6px;
+    border-radius: 3px;
+    white-space: nowrap;
+    line-height: 1.4;
+    background: #e8dcc8;
+    color: #4a2c2a;
+    opacity: 0.85;
+}

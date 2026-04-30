@@ -1011,6 +1011,9 @@ function openTagModal(tag) {
 
   _updateTagPreview();
   modal.style.display = "flex";
+
+  // Initialize tag sharing section
+  _initTagSharingSection(rawText);
 }
 
 function saveTag() {
@@ -1063,6 +1066,20 @@ function saveTag() {
   currentTag.style.color = newFontColor;
   const favStar = document.getElementById('tag-favorite-star');
   currentTag.dataset.favorite = favStar && favStar.textContent === '★' ? 'true' : 'false';
+
+  // Check if tag was renamed — update sharing config if so
+  const oldName = (currentTag.childNodes[0]?.textContent || '').trim();
+  if (oldName && oldName !== newName && _tagSharingConfig) {
+    for (var si = 0; si < _tagSharingConfig.length; si++) {
+      if (_tagSharingConfig[si].tag === oldName) {
+        _tagSharingConfig[si].tag = newName;
+        // Save the updated config to the server (pass null to save as-is)
+        _saveTagSharingConfig(null);
+        break;
+      }
+    }
+  }
+
   // Rebuild inner HTML safely
   currentTag.innerHTML = "";
   const nameNode = document.createTextNode(newName + " ");
@@ -1092,6 +1109,17 @@ function saveTag() {
 
 function deleteTag() {
   if (currentTag) {
+    // Remove sharing config for this tag
+    var deletedName = (currentTag.childNodes[0]?.textContent || '').trim();
+    if (deletedName && _tagSharingConfig) {
+      var hadSharing = false;
+      _tagSharingConfig = _tagSharingConfig.filter(function(entry) {
+        if (entry.tag === deletedName) { hadSharing = true; return false; }
+        return true;
+      });
+      if (hadSharing) _saveTagSharingConfig(null);
+    }
+
     currentTag.remove();
     closeTagModal();
     setSaveButtonUnsaved();
@@ -1126,7 +1154,7 @@ function _renderSettingsTagTree() {
     if (tagDiv) openTagModal(tagDiv);
   });
 
-  // Add "+" child-create buttons next to each tag row
+  // Add "+" child-create buttons and 🔗 sharing indicators next to each tag row
   treeContainer.querySelectorAll('[style*="display:flex"]').forEach(row => {
     const badge = row.querySelector('span[style*="border-radius"]');
     if (!badge) return;
@@ -1134,6 +1162,17 @@ function _renderSettingsTagTree() {
     // Find the full path by looking at the tag tree
     const fullPath = _findFullPathForBadge(tree, badge, row);
     if (!fullPath) return;
+
+    // Task 11.2: Add 🔗 sharing indicator if tag has active sharing
+    if (_tagHasSharing(fullPath)) {
+      var linkIcon = document.createElement('span');
+      linkIcon.className = 'tag-sharing-link-icon';
+      linkIcon.textContent = '🔗';
+      linkIcon.title = 'This tag is shared with other users';
+      // Insert after the badge
+      badge.parentNode.insertBefore(linkIcon, badge.nextSibling);
+    }
+
     const addBtn = document.createElement('span');
     addBtn.textContent = '+';
     addBtn.title = `Create child tag under "${fullPath}"`;
@@ -2129,6 +2168,315 @@ async function _loadLoginMessage() {
   }
 }
 
+// ── Tag Sharing Configuration ────────────────────────────────────────────────
+// Manages tag-level sharing: load/save shared_tags config, user picker,
+// role selector, add/remove shares per tag.
+// Requirements: 3.1, 3.2, 3.3, 3.4, 3.5
+
+/** Cached shared_tags config from the server: [{tag, shares: [{user_id, role, display_name}]}] */
+var _tagSharingConfig = [];
+
+/** Cached user list for the tag sharing user picker */
+var _tagSharingUserList = null;
+
+/** Current tag's shares being edited in the tag modal */
+var _currentTagShares = [];
+
+/**
+ * Load shared_tags config from GET /api/settings/shared-tags.
+ * Called on page init after auth is ready.
+ */
+async function _loadTagSharingData() {
+  if (typeof waitForAuth === 'function') {
+    await waitForAuth();
+  }
+  try {
+    var response = await fetch('/api/settings/shared-tags');
+    if (!response.ok) {
+      console.error('[TagSharing] Failed to load shared tags:', response.status);
+      _tagSharingConfig = [];
+      return;
+    }
+    var data = await response.json();
+    _tagSharingConfig = Array.isArray(data.shared_tags) ? data.shared_tags : [];
+  } catch (err) {
+    console.error('[TagSharing] Error loading shared tags:', err);
+    _tagSharingConfig = [];
+  }
+
+  // Re-render the tag tree to show sharing indicators
+  _renderSettingsTagTree();
+}
+
+/**
+ * Fetch the switchable user list for the tag sharing picker (cached).
+ */
+async function _loadTagSharingUserList() {
+  if (_tagSharingUserList !== null) return;
+  try {
+    var response = await fetch('/api/auth/switchable-users');
+    if (!response.ok) {
+      console.error('[TagSharing] Failed to load user list:', response.status);
+      _tagSharingUserList = [];
+      return;
+    }
+    _tagSharingUserList = await response.json();
+  } catch (err) {
+    console.error('[TagSharing] Error loading user list:', err);
+    _tagSharingUserList = [];
+  }
+}
+
+/**
+ * Get the shares array for a given tag name from the cached config.
+ * @param {string} tagName
+ * @returns {Array} shares array or empty array
+ */
+function _getTagShares(tagName) {
+  if (!tagName || !_tagSharingConfig) return [];
+  for (var i = 0; i < _tagSharingConfig.length; i++) {
+    if (_tagSharingConfig[i].tag === tagName) {
+      return _tagSharingConfig[i].shares || [];
+    }
+  }
+  return [];
+}
+
+/**
+ * Check if a tag has any active sharing configuration.
+ * @param {string} tagName
+ * @returns {boolean}
+ */
+function _tagHasSharing(tagName) {
+  return _getTagShares(tagName).length > 0;
+}
+
+/**
+ * Populate the tag sharing user picker dropdown, excluding the current user
+ * and users already shared with this tag.
+ */
+function _populateTagSharingUserPicker() {
+  var picker = document.getElementById('tag-sharing-user-picker');
+  if (!picker || !_tagSharingUserList) return;
+
+  var currentUser = (typeof getCurrentUser === 'function') ? getCurrentUser() : null;
+  var currentUserId = currentUser ? currentUser.user_id : null;
+
+  // Build set of already-shared user IDs
+  var sharedIds = new Set();
+  _currentTagShares.forEach(function(s) {
+    sharedIds.add(s.user_id);
+  });
+
+  picker.innerHTML = '<option value="">— Select User —</option>';
+
+  _tagSharingUserList.forEach(function(user) {
+    if (user.id === currentUserId) return;
+    if (sharedIds.has(user.id)) return;
+
+    var opt = document.createElement('option');
+    opt.value = user.id;
+    opt.textContent = user.display_name || user.username;
+    picker.appendChild(opt);
+  });
+}
+
+/**
+ * Render the current tag's shares list in the tag modal.
+ */
+function _renderTagSharesList() {
+  var container = document.getElementById('tag-sharing-list');
+  if (!container) return;
+
+  if (_currentTagShares.length === 0) {
+    container.innerHTML = '<div class="tag-sharing-empty">Not shared with anyone</div>';
+    return;
+  }
+
+  container.innerHTML = '';
+
+  _currentTagShares.forEach(function(share) {
+    var row = document.createElement('div');
+    row.className = 'tag-sharing-item';
+
+    // User display name
+    var nameSpan = document.createElement('span');
+    nameSpan.className = 'tag-share-name';
+    nameSpan.textContent = _getTagSharingUserName(share.user_id);
+    row.appendChild(nameSpan);
+
+    // Role badge
+    var badge = document.createElement('span');
+    badge.className = 'tag-share-role tag-share-role-' + share.role;
+    badge.textContent = share.role === 'manager' ? '✏️ Manager' : '👁️ Viewer';
+    row.appendChild(badge);
+
+    // Remove button
+    var removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'tag-share-remove';
+    removeBtn.textContent = '✕';
+    removeBtn.title = 'Remove share';
+    removeBtn.addEventListener('click', (function(uid) {
+      return function() { _removeTagShare(uid); };
+    })(share.user_id));
+    row.appendChild(removeBtn);
+
+    container.appendChild(row);
+  });
+}
+
+/**
+ * Look up a user's display name from the cached user list or share data.
+ * @param {string} userId
+ * @returns {string}
+ */
+function _getTagSharingUserName(userId) {
+  if (_tagSharingUserList) {
+    for (var i = 0; i < _tagSharingUserList.length; i++) {
+      if (_tagSharingUserList[i].id === userId) {
+        return _tagSharingUserList[i].display_name || _tagSharingUserList[i].username;
+      }
+    }
+  }
+  // Check display_name from enriched API response
+  for (var j = 0; j < _currentTagShares.length; j++) {
+    if (_currentTagShares[j].user_id === userId && _currentTagShares[j].display_name) {
+      return _currentTagShares[j].display_name;
+    }
+  }
+  return userId;
+}
+
+/**
+ * Add a user share to the current tag. Called by the "Share" button.
+ */
+function _addTagShare() {
+  var picker = document.getElementById('tag-sharing-user-picker');
+  var roleSelect = document.getElementById('tag-sharing-role-select');
+  if (!picker || !roleSelect) return;
+
+  var userId = picker.value;
+  var role = roleSelect.value;
+
+  if (!userId) {
+    alert('Please select a user to share with.');
+    return;
+  }
+
+  // Check if already shared
+  for (var i = 0; i < _currentTagShares.length; i++) {
+    if (_currentTagShares[i].user_id === userId) {
+      alert('This user already has access to this tag.');
+      return;
+    }
+  }
+
+  _currentTagShares.push({ user_id: userId, role: role });
+  _renderTagSharesList();
+  _populateTagSharingUserPicker();
+  _saveTagSharingConfig();
+}
+
+/**
+ * Remove a user from the current tag's shares.
+ * @param {string} userId
+ */
+function _removeTagShare(userId) {
+  _currentTagShares = _currentTagShares.filter(function(s) {
+    return s.user_id !== userId;
+  });
+  _renderTagSharesList();
+  _populateTagSharingUserPicker();
+  _saveTagSharingConfig();
+}
+
+/**
+ * Save the full shared_tags config to the server via PUT /api/settings/shared-tags.
+ * Updates the cached config and re-renders the tag tree.
+ * If tagName is provided, updates that tag's shares from _currentTagShares.
+ * If tagName is null, saves the config as-is (used for rename/delete).
+ * @param {string|null} [tagName] — tag name to update, or null to save as-is
+ */
+async function _saveTagSharingConfig(tagName) {
+  // If tagName provided, update the config from _currentTagShares
+  if (tagName === undefined) {
+    // Called from add/remove share — get tag name from modal
+    var tagNameInput = document.getElementById('tag-name');
+    if (!tagNameInput) return;
+    tagName = tagNameInput.value.trim();
+    if (!tagName) return;
+  }
+
+  if (tagName) {
+    // Update the cached config: find or create the entry for this tag
+    var found = false;
+    for (var i = 0; i < _tagSharingConfig.length; i++) {
+      if (_tagSharingConfig[i].tag === tagName) {
+        if (_currentTagShares.length === 0) {
+          // Remove the entry entirely if no shares
+          _tagSharingConfig.splice(i, 1);
+        } else {
+          _tagSharingConfig[i].shares = _currentTagShares.map(function(s) {
+            return { user_id: s.user_id, role: s.role };
+          });
+        }
+        found = true;
+        break;
+      }
+    }
+    if (!found && _currentTagShares.length > 0) {
+      _tagSharingConfig.push({
+        tag: tagName,
+        shares: _currentTagShares.map(function(s) {
+          return { user_id: s.user_id, role: s.role };
+        }),
+      });
+    }
+  }
+  // else: tagName is null — save config as-is (rename/delete already modified it)
+
+  // Save to server
+  try {
+    var response = await fetch('/api/settings/shared-tags', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ shared_tags: _tagSharingConfig }),
+    });
+    if (!response.ok) {
+      var errText = await response.text();
+      console.error('[TagSharing] Failed to save shared tags:', response.status, errText);
+      alert('Failed to save tag sharing: ' + errText);
+      return;
+    }
+    var data = await response.json();
+    _tagSharingConfig = Array.isArray(data.shared_tags) ? data.shared_tags : _tagSharingConfig;
+  } catch (err) {
+    console.error('[TagSharing] Error saving shared tags:', err);
+    alert('Failed to save tag sharing configuration.');
+  }
+
+  // Re-render the tag tree to update sharing indicators
+  _renderSettingsTagTree();
+}
+
+/**
+ * Initialize the tag sharing section when the tag modal opens.
+ * Called from openTagModal.
+ * @param {string} tagName — the tag name being edited
+ */
+async function _initTagSharingSection(tagName) {
+  await _loadTagSharingUserList();
+
+  // Load current shares for this tag
+  _currentTagShares = _getTagShares(tagName).map(function(s) {
+    return { user_id: s.user_id, role: s.role, display_name: s.display_name || '' };
+  });
+
+  _populateTagSharingUserPicker();
+  _renderTagSharesList();
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   // Initialize mobile actions modal (shared header button pattern)
   if (typeof initMobileActionsModal === 'function') initMobileActionsModal();
@@ -2146,6 +2494,9 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   window.settingsManager = new SettingsManager();
   loadVersionInfo();
+
+  // Load tag sharing data on page init
+  _loadTagSharingData();
 
   // Load login message for admins after auth resolves
   if (typeof waitForAuth === 'function') {

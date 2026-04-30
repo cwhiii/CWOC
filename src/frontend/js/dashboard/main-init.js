@@ -341,21 +341,41 @@ function fetchChits() {
   if (listEl && chits.length === 0) {
     listEl.innerHTML = '<div style="text-align:center;padding:3em;opacity:0.5;font-size:1.2em;">⏳ Loading chits…</div>';
   }
-  fetch("/api/chits")
-    .then((response) => {
-      if (!response.ok)
-        throw new Error(`HTTP error! Status: ${response.status}`);
-      return response.json();
-    })
-    .then((data) => {
-      chits = Array.isArray(data) ? data : [];
-      chits.forEach((chit) => {
+
+  // Fetch owned chits and shared chits in parallel
+  Promise.all([
+    fetch("/api/chits").then(function(r) {
+      if (!r.ok) throw new Error('HTTP error! Status: ' + r.status);
+      return r.json();
+    }),
+    fetch("/api/shared-chits").then(function(r) {
+      if (!r.ok) return []; // graceful degradation — show only owned chits
+      return r.json();
+    }).catch(function() { return []; })
+  ])
+    .then(function(results) {
+      var ownedChits = Array.isArray(results[0]) ? results[0] : [];
+      var sharedChits = Array.isArray(results[1]) ? results[1] : [];
+
+      // Mark shared chits with _shared flag and merge into the chits array
+      var ownedIds = new Set();
+      ownedChits.forEach(function(c) { ownedIds.add(c.id); });
+
+      sharedChits.forEach(function(sc) {
+        // Skip duplicates (chit already in owned list)
+        if (ownedIds.has(sc.id)) return;
+        sc._shared = true; // flag for shared chit identification
+        ownedChits.push(sc);
+      });
+
+      chits = ownedChits;
+      chits.forEach(function(chit) {
         if (chit.start_datetime)
           chit.start_datetime_obj = new Date(chit.start_datetime);
         if (chit.end_datetime)
           chit.end_datetime_obj = new Date(chit.end_datetime);
       });
-      console.debug("Fetched chits:", chits);
+      console.debug("Fetched chits:", chits.length, "(including", sharedChits.length, "shared)");
       if (!currentWeekStart) currentWeekStart = getWeekStart(new Date());
       updateDateRange();
       displayChits();
@@ -367,15 +387,14 @@ function fetchChits() {
       // Execute weather flash if navigating from weather page
       _executeWeatherFlash();
     })
-    .catch((err) => {
+    .catch(function(err) {
       console.error("Error fetching chits:", err);
-      document.getElementById("chit-list").innerHTML = `
-      <div class="error-message">
-      <h3>Error loading chits</h3>
-      <p>${err.message}</p>
-      <button onclick="fetchChits()">Try Again</button>
-      </div>
-      `;
+      document.getElementById("chit-list").innerHTML =
+        '<div class="error-message">' +
+        '<h3>Error loading chits</h3>' +
+        '<p>' + err.message + '</p>' +
+        '<button onclick="fetchChits()">Try Again</button>' +
+        '</div>';
       restoreSidebarState();
     });
 }

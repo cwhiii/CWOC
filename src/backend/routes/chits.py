@@ -19,10 +19,36 @@ from src.backend.db import (
 )
 from src.backend.models import Chit, ImportRequest
 from src.backend.routes.audit import insert_audit_entry, compute_audit_diff, get_actor_from_request
+from src.backend.sharing import resolve_effective_role, can_edit_chit, can_delete_chit
 
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+def _enrich_assigned_to_display_names(cursor, chits):
+    """Batch-lookup display names for assigned_to user IDs and add as assigned_to_display_name."""
+    assigned_ids = set()
+    for chit in chits:
+        aid = chit.get("assigned_to")
+        if aid:
+            assigned_ids.add(aid)
+    if not assigned_ids:
+        for chit in chits:
+            chit["assigned_to_display_name"] = None
+        return
+    # Fetch display names for all assigned user IDs
+    placeholders = ",".join("?" for _ in assigned_ids)
+    cursor.execute(
+        f"SELECT id, display_name, username FROM users WHERE id IN ({placeholders})",
+        list(assigned_ids),
+    )
+    name_map = {}
+    for row in cursor.fetchall():
+        name_map[row[0]] = row[1] or row[2] or row[0]
+    for chit in chits:
+        aid = chit.get("assigned_to")
+        chit["assigned_to_display_name"] = name_map.get(aid) if aid else None
 
 @router.get("/api/chits")
 def get_all_chits(request: Request):
@@ -47,7 +73,14 @@ def get_all_chits(request: Request):
             chit["weather_data"] = deserialize_json_field(chit.get("weather_data"))
             chit["health_data"] = deserialize_json_field(chit.get("health_data"))
             chit["hide_when_instance_done"] = bool(chit.get("hide_when_instance_done"))
+            chit["shares"] = deserialize_json_field(chit.get("shares"))
+            chit["stealth"] = bool(chit.get("stealth"))
+            chit["assigned_to"] = chit.get("assigned_to")
             chits.append(chit)
+
+        # Enrich chits with assigned_to_display_name (batch lookup)
+        _enrich_assigned_to_display_names(cursor, chits)
+
         return chits
     except Exception as e:
         logger.error(f"Error fetching chits: {str(e)}")
@@ -87,6 +120,9 @@ def search_chits(request: Request, q: Optional[str] = Query(None)):
             chit["weather_data"] = deserialize_json_field(chit.get("weather_data"))
             chit["health_data"] = deserialize_json_field(chit.get("health_data"))
             chit["hide_when_instance_done"] = bool(chit.get("hide_when_instance_done"))
+            chit["shares"] = deserialize_json_field(chit.get("shares"))
+            chit["stealth"] = bool(chit.get("stealth"))
+            chit["assigned_to"] = chit.get("assigned_to")
 
             matched_fields = []
 
@@ -143,6 +179,9 @@ def search_chits(request: Request, q: Optional[str] = Query(None)):
             if matched_fields:
                 results.append({"chit": chit, "matched_fields": matched_fields})
 
+        # Enrich with assigned_to_display_name
+        _enrich_assigned_to_display_names(cursor, [r["chit"] for r in results])
+
         return results
     except Exception as e:
         logger.error(f"Error searching chits: {str(e)}")
@@ -177,8 +216,9 @@ def create_chit(chit: Chit, request: Request):
                 recurrence, recurrence_id, location, color, people, pinned, archived,
                 deleted, created_datetime, modified_datetime, is_project_master, child_chits, all_day, alerts,
                 recurrence_rule, recurrence_exceptions, weather_data, health_data, hide_when_instance_done,
-                owner_id, owner_display_name, owner_username
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                owner_id, owner_display_name, owner_username,
+                shares, stealth, assigned_to
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 chit_id,
@@ -217,6 +257,9 @@ def create_chit(chit: Chit, request: Request):
                 user_id,
                 owner_display_name,
                 owner_username,
+                serialize_json_field(chit.shares),
+                1 if chit.stealth else 0,
+                chit.assigned_to,
             )
         )
         conn.commit()
@@ -247,8 +290,17 @@ def get_chit(chit_id: str, request: Request):
             logger.info(f"Chit not found for ID: {chit_id}")
             raise HTTPException(status_code=404, detail="Chit not found")
         chit = dict(zip([col[0] for col in cursor.description], row))
-        # Verify ownership
-        if chit.get("owner_id") and chit["owner_id"] != user_id:
+        # Check access via permission resolution (owner, manager, viewer, or None)
+        owner_settings = None
+        chit_owner_id = chit.get("owner_id")
+        if chit_owner_id and chit_owner_id != user_id:
+            # Load owner's settings for tag-level share resolution
+            cursor.execute("SELECT shared_tags FROM settings WHERE user_id = ?", (chit_owner_id,))
+            settings_row = cursor.fetchone()
+            if settings_row and settings_row[0]:
+                owner_settings = {"shared_tags": settings_row[0]}
+        effective_role = resolve_effective_role(chit, user_id, owner_settings)
+        if effective_role is None:
             raise HTTPException(status_code=404, detail="Chit not found")
         chit["tags"] = deserialize_json_field(chit["tags"])
         chit["checklist"] = deserialize_json_field(chit["checklist"])
@@ -262,6 +314,14 @@ def get_chit(chit_id: str, request: Request):
         chit["weather_data"] = deserialize_json_field(chit.get("weather_data"))
         chit["health_data"] = deserialize_json_field(chit.get("health_data"))
         chit["hide_when_instance_done"] = bool(chit.get("hide_when_instance_done"))
+        chit["shares"] = deserialize_json_field(chit.get("shares"))
+        chit["stealth"] = bool(chit.get("stealth"))
+        chit["assigned_to"] = chit.get("assigned_to")
+        chit["effective_role"] = effective_role
+
+        # Enrich with assigned_to_display_name
+        _enrich_assigned_to_display_names(cursor, [chit])
+
         return chit
     except sqlite3.Error as e:
         logger.error(f"Database error fetching chit {chit_id}: {str(e)}")
@@ -288,10 +348,31 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
         current_time = datetime.utcnow().isoformat()
         chit_tags = compute_system_tags(chit)
         if existing:
-            # Verify ownership
             existing_dict_check = dict(zip([col[0] for col in cursor.description], existing))
-            if existing_dict_check.get("owner_id") and existing_dict_check["owner_id"] != user_id:
+
+            # Permission check: load owner settings for role resolution
+            owner_settings = None
+            chit_owner_id = existing_dict_check.get("owner_id")
+            if chit_owner_id and chit_owner_id != user_id:
+                cursor.execute("SELECT shared_tags FROM settings WHERE user_id = ?", (chit_owner_id,))
+                settings_row = cursor.fetchone()
+                if settings_row and settings_row[0]:
+                    owner_settings = {"shared_tags": settings_row[0]}
+
+            effective_role = resolve_effective_role(existing_dict_check, user_id, owner_settings)
+            if effective_role is None:
                 raise HTTPException(status_code=404, detail="Chit not found")
+            if effective_role == "viewer":
+                raise HTTPException(status_code=403, detail="You have read-only access to this chit")
+            if not can_edit_chit(existing_dict_check, user_id, owner_settings):
+                raise HTTPException(status_code=403, detail="You have read-only access to this chit")
+
+            # Managers cannot change shares, stealth, or assigned_to — preserve existing values
+            is_owner = (chit_owner_id == user_id)
+            if not is_owner:
+                chit.shares = deserialize_json_field(existing_dict_check.get("shares"))
+                chit.stealth = bool(existing_dict_check.get("stealth"))
+                chit.assigned_to = existing_dict_check.get("assigned_to")
 
             # Capture old state for audit diff
             old_chit_dict = existing_dict_check
@@ -305,7 +386,8 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                     recurrence = ?, recurrence_id = ?, location = ?, color = ?, people = ?, pinned = ?,
                     archived = ?, deleted = ?, modified_datetime = ?, is_project_master = ?, child_chits = ?, all_day = ?, alerts = ?,
                     recurrence_rule = ?, recurrence_exceptions = ?, weather_data = ?, health_data = ?,
-                    hide_when_instance_done = ?
+                    hide_when_instance_done = ?,
+                    shares = ?, stealth = ?, assigned_to = ?
                 WHERE id = ?
                 """,
                 (
@@ -340,6 +422,9 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                     serialize_json_field(chit.weather_data),
                     serialize_json_field(chit.health_data),
                     1 if chit.hide_when_instance_done else 0,
+                    serialize_json_field(chit.shares),
+                    1 if chit.stealth else 0,
+                    chit.assigned_to,
                     chit_id,
                 )
             )
@@ -364,6 +449,9 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                     "weather_data": serialize_json_field(chit.weather_data),
                     "health_data": serialize_json_field(chit.health_data),
                     "hide_when_instance_done": 1 if chit.hide_when_instance_done else 0,
+                    "shares": serialize_json_field(chit.shares),
+                    "stealth": 1 if chit.stealth else 0,
+                    "assigned_to": chit.assigned_to,
                 }
                 diff = compute_audit_diff(old_chit_dict, new_chit_dict, exclude_fields={"modified_datetime", "created_datetime"})
                 if diff:
@@ -386,8 +474,9 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                     recurrence, recurrence_id, location, color, people, pinned, archived,
                     deleted, created_datetime, modified_datetime, is_project_master, child_chits, all_day, alerts,
                     recurrence_rule, recurrence_exceptions, weather_data, health_data, hide_when_instance_done,
-                    owner_id, owner_display_name, owner_username
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    owner_id, owner_display_name, owner_username,
+                    shares, stealth, assigned_to
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     chit_id,
@@ -426,6 +515,9 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                     user_id,
                     owner_display_name,
                     owner_username,
+                    serialize_json_field(chit.shares),
+                    1 if chit.stealth else 0,
+                    chit.assigned_to,
                 )
             )
             # Audit logging for chit creation
@@ -458,8 +550,8 @@ def delete_chit(chit_id: str, request: Request):
         # Capture chit title for audit logging before soft-delete
         chit_columns = [col[0] for col in cursor.description]
         chit_dict = dict(zip(chit_columns, existing_chit))
-        # Verify ownership
-        if chit_dict.get("owner_id") and chit_dict["owner_id"] != user_id:
+        # Only owner can delete — non-owners get 404 to avoid revealing chit existence
+        if not can_delete_chit(chit_dict, user_id):
             raise HTTPException(status_code=404, detail="Chit not found")
         chit_title = chit_dict.get("title")
 
@@ -473,6 +565,8 @@ def delete_chit(chit_id: str, request: Request):
             logger.error(f"Audit logging failed for chit deletion (best-effort): {str(e)}")
         conn.commit()
         return {"message": "Chit deleted successfully"}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error deleting chit: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to delete chit: {str(e)}")
@@ -561,6 +655,9 @@ def export_chits(request: Request):
             chit["is_project_master"] = bool(chit.get("is_project_master"))
             chit["all_day"] = bool(chit.get("all_day"))
             chit["hide_when_instance_done"] = bool(chit.get("hide_when_instance_done"))
+            chit["shares"] = deserialize_json_field(chit.get("shares"))
+            chit["stealth"] = bool(chit.get("stealth"))
+            chit["assigned_to"] = chit.get("assigned_to")
             chits.append(chit)
 
         envelope = _build_export_envelope("chits", chits)
@@ -677,8 +774,9 @@ def import_chits(req: ImportRequest, request: Request):
                     child_chits, all_day, alerts, recurrence_rule,
                     recurrence_exceptions, progress_percent, time_estimate,
                     weather_data, health_data, hide_when_instance_done,
-                    owner_id, owner_display_name, owner_username
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    owner_id, owner_display_name, owner_username,
+                    shares, stealth, assigned_to
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     new_id,
                     chit.get("title"),
@@ -718,6 +816,9 @@ def import_chits(req: ImportRequest, request: Request):
                     user_id,
                     owner_display_name,
                     owner_username,
+                    serialize_json_field(chit.get("shares")),
+                    1 if chit.get("stealth") else 0,
+                    chit.get("assigned_to"),
                 ),
             )
             imported += 1
@@ -1042,9 +1143,9 @@ def export_all(request: Request):
         for row in cursor.fetchall():
             chit = dict(row)
             for f in ("tags", "checklist", "people", "child_chits", "alerts",
-                       "recurrence_rule", "recurrence_exceptions", "weather_data", "health_data"):
+                       "recurrence_rule", "recurrence_exceptions", "weather_data", "health_data", "shares"):
                 chit[f] = deserialize_json_field(chit.get(f))
-            for f in ("alarm", "notification", "pinned", "archived", "deleted", "is_project_master", "all_day", "hide_when_instance_done"):
+            for f in ("alarm", "notification", "pinned", "archived", "deleted", "is_project_master", "all_day", "hide_when_instance_done", "stealth"):
                 chit[f] = bool(chit.get(f))
             chits.append(chit)
 
@@ -1151,8 +1252,9 @@ def import_all(req: ImportRequest, request: Request):
                     child_chits, all_day, alerts, recurrence_rule,
                     recurrence_exceptions, progress_percent, time_estimate,
                     weather_data, health_data, hide_when_instance_done,
-                    owner_id, owner_display_name, owner_username
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    owner_id, owner_display_name, owner_username,
+                    shares, stealth, assigned_to
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     new_id, chit.get("title"), chit.get("note"),
                     serialize_json_field(chit.get("tags")),
@@ -1180,6 +1282,9 @@ def import_all(req: ImportRequest, request: Request):
                     user_id,
                     owner_display_name,
                     owner_username,
+                    serialize_json_field(chit.get("shares")),
+                    1 if chit.get("stealth") else 0,
+                    chit.get("assigned_to"),
                 ),
             )
             chit_count += 1

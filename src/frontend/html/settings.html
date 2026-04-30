@@ -260,6 +260,65 @@
                     pointer-events: none;
                 }
 
+                /* ── Tag Sharing UI ── */
+                .tag-sharing-item {
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                    padding: 4px 8px;
+                    background: #fff8e1;
+                    border: 1px solid rgba(139, 90, 43, 0.3);
+                    border-radius: 4px;
+                    margin-bottom: 4px;
+                    font-size: 0.9em;
+                }
+                .tag-sharing-item .tag-share-name {
+                    flex: 1;
+                    color: #1a1208;
+                    font-weight: 600;
+                }
+                .tag-sharing-item .tag-share-role {
+                    font-size: 0.85em;
+                    padding: 1px 6px;
+                    border-radius: 3px;
+                    flex-shrink: 0;
+                }
+                .tag-share-role-viewer {
+                    background: rgba(70, 130, 180, 0.15);
+                    color: #2e5a7e;
+                }
+                .tag-share-role-manager {
+                    background: rgba(139, 90, 43, 0.15);
+                    color: #6b4226;
+                }
+                .tag-sharing-item .tag-share-remove {
+                    background: #a0522d;
+                    color: #fdf5e6;
+                    border: 1px solid #5c4033;
+                    border-radius: 4px;
+                    padding: 1px 6px;
+                    cursor: pointer;
+                    font-size: 11px;
+                    font-family: inherit;
+                    flex-shrink: 0;
+                }
+                .tag-sharing-item .tag-share-remove:hover {
+                    background: #8b4513;
+                }
+                .tag-sharing-empty {
+                    opacity: 0.5;
+                    font-size: 0.85em;
+                    padding: 4px;
+                    font-style: italic;
+                }
+                .tag-sharing-link-icon {
+                    font-size: 0.75em;
+                    margin-left: 3px;
+                    opacity: 0.7;
+                    cursor: default;
+                    title: 'This tag has active sharing';
+                }
+
                 /* ── Sub-section header within a setting group ── */
                 .setting-subheader {
                     display: block;
@@ -764,6 +823,23 @@
                     <div id="tag-font-color-swatches" style="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;"></div>
                     <div id="tag-preview" style="display:inline-block;padding:4px 12px;border-radius:4px;font-size:1em;margin:8px 0;font-family:'Lora', Georgia, serif;">Preview</div>
                     <div class="color-options" id="tag-color-options"></div>
+
+                    <!-- ── Tag Sharing Configuration ── -->
+                    <div id="tag-sharing-section" style="margin-top:14px;padding-top:10px;border-top:1px solid rgba(139,90,43,0.3);">
+                        <label class="setting-subheader" style="margin-top:0;">🔗 Sharing</label>
+                        <div id="tag-sharing-list" style="margin-bottom:8px;"></div>
+                        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+                            <select id="tag-sharing-user-picker" style="flex:1;min-width:100px;width:auto !important;min-width:auto !important;max-width:none !important;flex:1 1 auto !important;">
+                                <option value="">— Select User —</option>
+                            </select>
+                            <select id="tag-sharing-role-select" style="width:auto !important;min-width:auto !important;max-width:none !important;flex:0 0 auto !important;">
+                                <option value="viewer">👁️ Viewer</option>
+                                <option value="manager">✏️ Manager</option>
+                            </select>
+                            <button type="button" onclick="_addTagShare()" class="standard-button" style="flex-shrink:0;">➕ Share</button>
+                        </div>
+                    </div>
+
                     <div style="display:flex;align-items:center;gap:8px;margin-top:12px;">
                         <button onclick="saveTag()" class="standard-button">
                             <i class="fas fa-check"></i> Done

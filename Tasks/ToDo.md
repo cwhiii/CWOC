@@ -3,6 +3,8 @@
 *Completed items are in `done.md`. Deferred items in `parking_lot.md`. Declined in `path_not_traveled.md`.*
 
 ---
+## Top Priorities
+- **New spec-driven feature.** need to have a new admin block in settings "Network Access**. in it is a A tailscale connection block. Also, need to build whatver is needed in the backend to configure & install it as part of the upgrade script. There will likely be other otion fo rnetwork hole punching/external access, so ensure theat you're naking the set up in such asway that this is not harder later.  But don't set up that other stuff yet.
 
 ---
 ## Manual Tasks

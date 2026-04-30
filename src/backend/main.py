@@ -86,6 +86,7 @@ from src.backend.migrations import (
     migrate_add_alerts_owner_id,
     migrate_add_login_message,
     migrate_add_instance_name,
+    migrate_add_sharing,
 )
 
 # Initialize database and run all migrations (same order as before)
@@ -115,6 +116,7 @@ migrate_add_user_profile_image()
 migrate_add_alerts_owner_id()
 migrate_add_login_message()
 migrate_add_instance_name()
+migrate_add_sharing()
 seed_version_info()
 
 
@@ -130,6 +132,7 @@ from src.backend.routes.settings import router as settings_router
 from src.backend.routes.contacts import router as contacts_router
 from src.backend.routes.audit import router as audit_router
 from src.backend.routes.health import router as health_router
+from src.backend.routes.sharing import sharing_router
 
 app.include_router(auth_router)
 app.include_router(users_router)
@@ -139,6 +142,7 @@ app.include_router(settings_router)
 app.include_router(contacts_router)
 app.include_router(audit_router)
 app.include_router(health_router)
+app.include_router(sharing_router)
 
 
 # ═══════════════════════════════════════════════════════════════════════════

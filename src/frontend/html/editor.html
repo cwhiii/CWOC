@@ -818,6 +818,53 @@
                         </div>
                     </div>
 
+                    <!-- Sharing (visible only to chit owner) -->
+                    <div id="sharingSection" class="zone-container" style="display:none;">
+                        <div
+                            class="zone-header"
+                            onclick="toggleZone(event, 'sharingSection', 'sharingContent')"
+                        >
+                            <h2 class="zone-title">🔗 Sharing</h2>
+                            <span class="zone-toggle-icon">🔽</span>
+                        </div>
+                        <div id="sharingContent" class="zone-body">
+                            <!-- Current shares list -->
+                            <div id="sharingCurrentList" class="sharing-current-list">
+                                <div class="sharing-empty">No users shared with this chit</div>
+                            </div>
+
+                            <!-- Add share controls -->
+                            <div class="sharing-add-row">
+                                <select id="sharingUserPicker" class="sharing-user-picker">
+                                    <option value="">— Select User —</option>
+                                </select>
+                                <select id="sharingRoleSelect" class="sharing-role-select">
+                                    <option value="viewer">Viewer</option>
+                                    <option value="manager">Manager</option>
+                                </select>
+                                <button type="button" class="zone-button sharing-add-btn" onclick="addShare()">
+                                    <i class="fas fa-plus"></i> Add
+                                </button>
+                            </div>
+
+                            <!-- Stealth toggle -->
+                            <div class="sharing-stealth-row">
+                                <label class="sharing-stealth-label">
+                                    <input type="checkbox" id="sharingStealthToggle" onchange="onStealthToggle()" />
+                                    🥷 Stealth — hide from all other users
+                                </label>
+                            </div>
+
+                            <!-- Assigned-to picker -->
+                            <div class="sharing-assigned-row">
+                                <label for="sharingAssignedTo" class="sharing-assigned-label">Assigned to:</label>
+                                <select id="sharingAssignedTo" class="sharing-assigned-picker" onchange="onAssignedToChange()">
+                                    <option value="">— None —</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
                 </div>
             </div>
         </div>
@@ -1234,6 +1281,7 @@
         <script src="/frontend/js/editor/editor-color.js"></script>
         <script src="/frontend/js/editor/editor-health.js"></script>
         <script src="/frontend/js/editor/editor-save.js"></script>
+        <script src="/frontend/js/editor/editor-sharing.js"></script>
         <script src="/frontend/js/editor/editor-init.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
         <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>

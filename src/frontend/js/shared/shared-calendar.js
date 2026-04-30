@@ -102,7 +102,15 @@ function calendarEventTitle(chit, isDueOnly, info, settings, context) {
       } catch (e) {}
     }
   }
-  return `<span style="font-weight:bold;font-size:1.1em;">${allIcons}${wxIcon}${pinnedIcon}${recurIcon}${dueIcon}${chit.title || '(Untitled)'}</span>`;
+  // Owner badge for shared calendar events (Requirement 4.2)
+  var ownerBadge = '';
+  if (chit._shared && chit.owner_display_name) {
+    var _calUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    if (!_calUser || chit.owner_display_name !== _calUser.display_name) {
+      ownerBadge = '<span class="cwoc-owner-badge" style="font-size:0.75em;opacity:0.8;font-style:italic;margin-left:4px;">👤 ' + chit.owner_display_name + '</span>';
+    }
+  }
+  return `<span style="font-weight:bold;font-size:1.1em;">${allIcons}${wxIcon}${pinnedIcon}${recurIcon}${dueIcon}${chit.title || '(Untitled)'}${ownerBadge}</span>`;
 }
 
 /**
@@ -136,6 +144,10 @@ function calendarEventTooltip(chit, info) {
         tooltip += ` — ${dateStr} ${fmtTime(info.start)} to ${fmtTime(info.end)}`;
       }
     }
+  }
+  // Owner attribution for shared calendar events
+  if (chit._shared && chit.owner_display_name) {
+    tooltip += ' — Owner: ' + chit.owner_display_name;
   }
   return tooltip;
 }
@@ -201,7 +213,10 @@ function enableCalendarDrag(scrollContainer, dayColumns, days, chitsMap) {
   if (!scrollContainer) return;
 
   // Add resize handle to each timed event (only for start/end chits, not due-only)
-  chitsMap.forEach(({ el, info }) => {
+  chitsMap.forEach(({ el, chit, info }) => {
+    // Skip drag/resize for viewer-role shared chits
+    if (chit && typeof _isViewerRole === 'function' && _isViewerRole(chit)) return;
+
     if (!info.isDueOnly) {
       const handle = document.createElement('div');
       handle.className = 'cal-resize-handle';
@@ -553,6 +568,9 @@ function enableMonthDrag(monthGrid, onDrop) {
   monthGrid.addEventListener('dragstart', (e) => {
     const ev = e.target.closest('.month-event');
     if (!ev || !ev.dataset.chitId) return;
+    // Prevent drag for viewer-role shared chits
+    var _mdChit = (typeof chits !== 'undefined') ? chits.find(function(c) { return c.id === ev.dataset.chitId; }) : null;
+    if (_mdChit && typeof _isViewerRole === 'function' && _isViewerRole(_mdChit)) { e.preventDefault(); return; }
     draggedChitId = ev.dataset.chitId;
     e.dataTransfer.setData('text/plain', draggedChitId);
     e.dataTransfer.effectAllowed = 'move';
@@ -631,6 +649,10 @@ function enableAllDayDrag(allDayEventsRow, days) {
   allDayEventsRow.addEventListener('dragstart', (e) => {
     const ev = e.target.closest('.all-day-event');
     if (!ev) return;
+    // Prevent drag for viewer-role shared chits
+    var _adChitId = ev.dataset ? ev.dataset.chitId : null;
+    var _adChit = _adChitId && (typeof chits !== 'undefined') ? chits.find(function(c) { return c.id === _adChitId; }) : null;
+    if (_adChit && typeof _isViewerRole === 'function' && _isViewerRole(_adChit)) { e.preventDefault(); return; }
     draggedEv = ev;
     draggedChitId = null; // will get from chit lookup
     e.dataTransfer.setData('text/plain', 'allday');

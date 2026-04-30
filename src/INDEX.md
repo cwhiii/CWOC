@@ -34,15 +34,17 @@ Package marker. No public exports.
 | `AuthMiddleware` | (imported from `middleware.py`) Session-based auth middleware — validates `cwoc_session` cookie, injects user identity into `request.state` |
 | `on_startup()` | Startup event — calls `start_weather_schedulers()` |
 
-Registers all route modules (including `auth_router` and `users_router`), runs all migrations (including `migrate_add_multi_user()`) and `init_db()` at import time, mounts `StaticFiles` for frontend, static, and data directories.
+Registers all route modules (including `auth_router`, `users_router`, and `sharing_router`), runs all migrations (including `migrate_add_multi_user()` and `migrate_add_sharing()`) and `init_db()` at import time, mounts `StaticFiles` for frontend, static, and data directories.
 
 ### 1.3 `src/backend/models.py` — Pydantic Models
 
 | Class | Description |
 |-------|-------------|
+| `ShareEntry` | Share entry with `user_id: str` and `role: str` (manager or viewer) |
+| `SharedTagEntry` | Tag-level share entry with `tag: str` and `shares: List[ShareEntry]` |
 | `Tag` | Tag with name, color, fontColor, favorite |
-| `Settings` | User settings — time format, tags, colors, indicators, calendar config, audit limits, habits success window, etc. |
-| `Chit` | Core chit model — title, note, dates, status, checklist, alerts, recurrence, location, color, people, hide_when_instance_done, etc. |
+| `Settings` | User settings — time format, tags, colors, indicators, calendar config, audit limits, habits success window, shared_tags, etc. |
+| `Chit` | Core chit model — title, note, dates, status, checklist, alerts, recurrence, location, color, people, hide_when_instance_done, shares, stealth, assigned_to, etc. |
 | `MultiValueEntry` | Label/value pair for contact multi-value fields (phone, email, etc.) |
 | `Contact` | Contact model — name fields, phones, emails, addresses, social, security, notes, tags, color |
 | `ImportRequest` | Import envelope — mode ("add"/"replace") + data dict |
@@ -97,6 +99,11 @@ All migrations run at startup. Each checks if the column/table already exists be
 | `migrate_add_habits_fields()` | Add `hide_when_instance_done` column to chits table and `habits_success_window` column to settings table |
 | `migrate_add_border_color_settings()` | Add `overdue_border_color` and `blocked_border_color` setting columns |
 | `migrate_add_multi_user()` | Create `users` and `sessions` tables, default admin account, add `owner_id`/`owner_display_name`/`owner_username` columns to chits, add `owner_id` to contacts, reassign existing data to admin user |
+| `migrate_add_user_profile_image()` | Add `profile_image_url` column to users table |
+| `migrate_add_alerts_owner_id()` | Add `owner_id` column to standalone_alerts and alert_state tables, assign existing rows to admin user |
+| `migrate_add_login_message()` | Create `login_message` table for instance login welcome message |
+| `migrate_add_instance_name()` | Add `instance_name` column to login_message table |
+| `migrate_add_sharing()` | Add `shares` (TEXT), `stealth` (BOOLEAN, default 0), `assigned_to` (TEXT) columns to chits table; add `shared_tags` (TEXT) column to settings table |
 
 ### 1.6 `src/backend/serializers.py` — vCard & CSV
 
@@ -165,7 +172,7 @@ Session-based authentication middleware for all CWOC requests.
 | `SESSION_COOKIE_NAME` | Cookie name constant: `"cwoc_session"` |
 | `_INACTIVITY_SECONDS` | Inactivity timeout: 24 hours (86,400 seconds) |
 | `_CLEANUP_INTERVAL` | Periodic cleanup interval: every 100 requests |
-| `_is_excluded(path, method)` | Return True if the request path/method should skip auth (static assets, login page, health check, login API) |
+| `_is_excluded(path, method)` | Return True if the request path/method should skip auth (static assets, login page, health check, login API, login-message API, wall station page and API) |
 | `_cleanup_expired_sessions()` | Delete sessions past their `expires_datetime` or inactive > 24h |
 | `AuthMiddleware` | Starlette `BaseHTTPMiddleware` subclass — validates `cwoc_session` cookie, injects `request.state.user_id` and `request.state.username`, returns 401 for API paths or redirects to `/login` for page paths |
 
@@ -205,23 +212,57 @@ Session-based authentication middleware for all CWOC requests.
 |------------------|-------------|
 | `TestProperty12MigrationIdempotency` | `migrate_add_multi_user()` is idempotent — running multiple times produces no errors and same result (100+ iterations) |
 
+### 1.16 `src/backend/sharing.py` — Permission Resolution Engine
+
+Provides functions to determine a user's effective role on a chit, check edit/delete/manage permissions, and query all chits shared with a given user. Role precedence (highest to lowest): owner > manager > viewer.
+
+| Function | Description |
+|----------|-------------|
+| `_higher_role(a, b)` | Return whichever role has higher precedence, or the non-None one |
+| `resolve_effective_role(chit_row, user_id, owner_settings)` | Determine the effective role for a user on a chit. Resolution order: owner_id match → 'owner'; stealth=True and not owner → None; chit-level shares → role; tag-level shares → role; assigned_to match → 'viewer'; else None |
+| `can_edit_chit(chit_row, user_id, owner_settings)` | Return True if the user has owner or manager role on the chit |
+| `can_delete_chit(chit_row, user_id)` | Return True only if the user is the chit owner |
+| `can_manage_sharing(chit_row, user_id)` | Return True only if the user is the chit owner |
+| `get_shared_chits_for_user(user_id)` | Query all non-deleted, non-stealth chits shared with user_id via chit-level shares, tag-level shares, or assignment; annotates each with `effective_role`, `share_source`, `owner_display_name`, and `assigned_to_display_name` |
+| `_parse_shares(shares_raw)` | Parse the shares column value into a list of dicts |
+| `_parse_shared_tags(shared_tags_raw)` | Parse the shared_tags column value into a list of dicts |
+| `_parse_chit_tags(tags_raw)` | Parse the chit tags column into a set of tag name strings |
+| `_determine_share_source(chit, user_id, owner_settings)` | Determine which sharing path(s) grant access to the user (chit-level, tag-level, assignment, or multiple) |
+| `_deserialize_chit_fields(chit)` | Deserialize JSON fields on a chit dict in place |
+
+### 1.17 `src/backend/test_sharing.py` — Sharing Permission Property Tests
+
+Property-based tests for the chit sharing permission resolution engine. Uses Python stdlib only (unittest + random) — no external libraries. Each property test runs 120+ iterations with randomly generated inputs. Inlines minimal production logic from `sharing.py` to avoid importing backend modules.
+
+| Class / Function | Description |
+|------------------|-------------|
+| `TestProperty1ViewerAccessIsReadOnly` | Viewer access is read-only — chit-level and tag-level viewer shares return 'viewer' role and `can_edit_chit` returns False (120+ iterations). **Validates: Requirements 1.2, 2.2** |
+| `TestProperty2ManagerAccessAllowsEditing` | Manager access allows editing — chit-level and tag-level manager shares return at least 'manager' role and `can_edit_chit` returns True (120+ iterations). **Validates: Requirements 1.3, 2.3** |
+| `TestProperty3OnlyOwnerCanDeleteAndManageSharing` | Only owner can delete and manage sharing — non-owners get False for `can_delete_chit` and `can_manage_sharing`; owners get True (120+ iterations). **Validates: Requirements 1.4, 2.6** |
+| `TestProperty4RemovingShareRevokesAccess` | Removing a share revokes access — users with no sharing path get None from `resolve_effective_role` (120+ iterations). **Validates: Requirements 1.5, 2.4, 2.5** |
+| `TestProperty5MultiplePathsResolveToHighestRole` | Multiple sharing paths resolve to highest role — highest role wins across chit-level, tag-level, and assignment paths (120+ iterations). **Validates: Requirements 5.1, 5.2** |
+| `TestProperty6OwnerAlwaysHasFullControl` | Owner always has full control — owner gets 'owner' role, can edit, delete, and manage sharing regardless of stealth/shares/assigned_to (120+ iterations). **Validates: Requirements 5.3, 6.3** |
+| `TestProperty7StealthOverridesAllSharingForNonOwners` | Stealth overrides all sharing for non-owners — stealth chits return None for all non-owners regardless of shares (120+ iterations). **Validates: Requirements 5.4, 6.2** |
+| `TestProperty8AssignmentGrantsAtLeastViewerAccess` | Assignment grants at least viewer access — assigned users get 'viewer' or higher; higher roles from other paths take precedence (120+ iterations). **Validates: Requirements 7.2** |
+| `TestProperty9MigrationIdempotentAndPreservesData` | Migration is idempotent and preserves data — running `migrate_add_sharing()` multiple times produces no errors, columns exist, pre-existing data unchanged (120+ iterations). **Validates: Requirements 9.1, 9.2, 9.4** |
+
 ---
 
-### 1.16 `src/backend/routes/__init__.py`
+### 1.18 `src/backend/routes/__init__.py`
 Package marker. No public exports.
 
-### 1.17 `src/backend/routes/chits.py` — Chit CRUD & Import/Export
+### 1.19 `src/backend/routes/chits.py` — Chit CRUD & Import/Export
 
-All chit endpoints are scoped by `owner_id` — users can only access their own chits. The `request.state.user_id` (set by `AuthMiddleware`) is used for ownership filtering and assignment.
+All chit endpoints are scoped by `owner_id` — users can only access their own chits, plus chits shared with them via the sharing system. The `request.state.user_id` (set by `AuthMiddleware`) is used for ownership filtering, sharing permission checks, and assignment. Uses `resolve_effective_role`, `can_edit_chit`, and `can_delete_chit` from `sharing.py` for access control.
 
 | Route | Handler | Description |
 |-------|---------|-------------|
 | `GET /api/chits` | `get_all_chits(request)` | Return all non-deleted chits owned by the authenticated user |
 | `GET /api/chits/search` | `search_chits(q, request)` | Global search across all chit fields, scoped to authenticated user |
 | `POST /api/chits` | `create_chit(chit, request)` | Create a new chit with `owner_id`, `owner_display_name`, `owner_username` from authenticated user |
-| `GET /api/chit/{chit_id}` | `get_chit(chit_id, request)` | Get a single chit by ID (verifies ownership) |
-| `PUT /api/chits/{chit_id}` | `update_chit(chit_id, chit, request)` | Update a chit (verifies ownership, upserts if not found) |
-| `DELETE /api/chits/{chit_id}` | `delete_chit(chit_id, request)` | Soft-delete a chit (verifies ownership) |
+| `GET /api/chit/{chit_id}` | `get_chit(chit_id, request)` | Get a single chit by ID (verifies ownership or shared access via `resolve_effective_role`); includes `effective_role` and `assigned_to_display_name` in response |
+| `PUT /api/chits/{chit_id}` | `update_chit(chit_id, chit, request)` | Update a chit (verifies ownership or manager access via `can_edit_chit`; managers cannot change shares/stealth/assigned_to; viewers get 403) |
+| `DELETE /api/chits/{chit_id}` | `delete_chit(chit_id, request)` | Soft-delete a chit (owner only via `can_delete_chit`) |
 | `PATCH /api/chits/{chit_id}/recurrence-exceptions` | `patch_recurrence_exceptions(chit_id, body, request)` | Add or update a recurrence exception (verifies ownership) |
 | `GET /api/export/chits` | `export_chits(request)` | Export authenticated user's chits as JSON envelope |
 | `GET /api/export/userdata` | `export_userdata(request)` | Export authenticated user's settings + contacts as JSON envelope |
@@ -230,7 +271,13 @@ All chit endpoints are scoped by `owner_id` — users can only access their own 
 | `POST /api/import/userdata` | `import_userdata(req, request)` | Import user data from JSON envelope (scoped to authenticated user) |
 | `POST /api/import/all` | `import_all(req, request)` | Import all data from combined JSON envelope (scoped to authenticated user) |
 
-### 1.18 `src/backend/routes/trash.py` — Trash
+**Internal helpers:**
+
+| Function | Description |
+|----------|-------------|
+| `_enrich_assigned_to_display_names(cursor, chits)` | Batch-lookup display names for `assigned_to` user IDs and add as `assigned_to_display_name` on each chit dict |
+
+### 1.20 `src/backend/routes/trash.py` — Trash
 
 | Route | Handler | Description |
 |-------|---------|-------------|
@@ -238,9 +285,9 @@ All chit endpoints are scoped by `owner_id` — users can only access their own 
 | `POST /api/trash/{chit_id}/restore` | `restore_chit(chit_id)` | Restore a soft-deleted chit |
 | `DELETE /api/trash/{chit_id}/purge` | `purge_chit(chit_id)` | Permanently delete a chit |
 
-### 1.19 `src/backend/routes/settings.py` — Settings & Alerts
+### 1.21 `src/backend/routes/settings.py` — Settings & Alerts
 
-Settings endpoints use `request.state.user_id` from `AuthMiddleware` to scope data to the authenticated user.
+Settings endpoints use `request.state.user_id` from `AuthMiddleware` to scope data to the authenticated user. Includes `shared_tags` serialization in settings read/save paths.
 
 | Route | Handler | Description |
 |-------|---------|-------------|
@@ -254,7 +301,7 @@ Settings endpoints use `request.state.user_id` from `AuthMiddleware` to scope da
 | `POST /api/alert-state` | `set_alert_state(body)` | Set dismiss/snooze state for an alert |
 | `DELETE /api/alert-state/cleanup` | `cleanup_alert_states()` | Remove expired snooze/dismiss states |
 
-### 1.20 `src/backend/routes/contacts.py` — Contacts
+### 1.22 `src/backend/routes/contacts.py` — Contacts
 
 All contact endpoints are scoped by `owner_id` — users can only access their own contacts.
 
@@ -280,7 +327,7 @@ All contact endpoints are scoped by `owner_id` — users can only access their o
 | `_row_to_contact(row)` | Convert a DB row dict to an API-ready contact dict |
 | `_write_vcf_file(contact_id, contact)` | Write a .vcf file for a contact |
 
-### 1.21 `src/backend/routes/audit.py` — Audit Log
+### 1.23 `src/backend/routes/audit.py` — Audit Log
 
 | Route | Handler | Description |
 |-------|---------|-------------|
@@ -300,7 +347,7 @@ All contact endpoints are scoped by `owner_id` — users can only access their o
 | `insert_audit_entry(conn, entity_type, entity_id, action, actor, changes, entity_summary)` | Insert an audit log row |
 | `_run_auto_prune()` | Internal auto-prune logic |
 
-### 1.22 `src/backend/routes/health.py` — Health, Version, Sync & Pages
+### 1.24 `src/backend/routes/health.py` — Health, Version, Sync, Pages & Wall Station
 
 | Route | Handler | Description |
 |-------|---------|-------------|
@@ -319,6 +366,8 @@ All contact endpoints are scoped by `owner_id` — users can only access their o
 | `GET /health` | `health_check()` | Health check endpoint |
 | `GET /api/update/log` | `get_update_log()` | Get the last update log |
 | `GET /api/update/run` | `run_update()` | Run upgrade (SSE stream) |
+| `GET /api/wall-station` | `get_wall_station(user_ids)` | Return combined non-deleted, non-stealth chits from specified users (comma-separated UUIDs) with `owner_display_name` attribution; also returns user display names. Unauthenticated endpoint |
+| `GET /wall-station` | `wall_station_page()` | Serve `wall-station.html` page (unauthenticated) |
 
 **Internal helpers:**
 
@@ -327,7 +376,7 @@ All contact endpoints are scoped by `owner_id` — users can only access their o
 | `_SyncHub` | Class managing WebSocket connections and message broadcasting |
 | `_sync_geocode_fetch(url)` | Synchronous HTTP GET for geocoding |
 
-### 1.23 `src/backend/routes/auth.py` — Authentication Routes
+### 1.25 `src/backend/routes/auth.py` — Authentication Routes
 
 Provides login, logout, session management, profile updates, password changes, and user switching. Rate limiting is enforced on login attempts using an in-memory dictionary keyed by username.
 
@@ -351,7 +400,7 @@ Provides login, logout, session management, profile updates, password changes, a
 | `_set_session_cookie(response, token)` | Set the `cwoc_session` HttpOnly cookie on a response |
 | `_clear_session_cookie(response)` | Clear the session cookie on a response |
 
-### 1.24 `src/backend/routes/users.py` — Admin-Only User Management
+### 1.26 `src/backend/routes/users.py` — Admin-Only User Management
 
 All endpoints require the requesting user to be an admin (`is_admin=True`); non-admins receive 403.
 
@@ -370,6 +419,27 @@ All endpoints require the requesting user to be an admin (`is_admin=True`); non-
 | `PasswordReset` | Pydantic model for password reset request body (`new_password: str`) |
 | `_require_admin(request)` | Check that the requesting user is an admin; return `user_id` if so, raise 403 otherwise |
 | `_user_row_to_response(row)` | Convert a user database row to a UserResponse-compatible dict |
+
+### 1.27 `src/backend/routes/sharing.py` — Sharing Management Endpoints
+
+Provides endpoints for managing chit-level shares, querying shared chits, and managing tag-level sharing configuration. All chit-level sharing endpoints are owner-only (verified via `can_manage_sharing`). Includes audit logging for all sharing changes.
+
+| Route | Handler | Description |
+|-------|---------|-------------|
+| `GET /api/chits/{chit_id}/shares` | `get_chit_shares(chit_id, request)` | Return shares list for a chit with display names (owner only) |
+| `PUT /api/chits/{chit_id}/shares` | `set_chit_shares(chit_id, body, request)` | Set entire shares list (owner only); validates role values, user_ids existence, rejects sharing with self |
+| `DELETE /api/chits/{chit_id}/shares/{target_user_id}` | `remove_chit_share(chit_id, target_user_id, request)` | Remove a specific user from shares (owner only) |
+| `GET /api/shared-chits` | `get_shared_chits(request)` | Return all chits shared with authenticated user, annotated with `effective_role`, `share_source`, and `owner_display_name` |
+| `GET /api/settings/shared-tags` | `get_shared_tags(request)` | Return authenticated user's `shared_tags` configuration with display names |
+| `PUT /api/settings/shared-tags` | `set_shared_tags(body, request)` | Set authenticated user's `shared_tags` configuration; validates role values and user_ids |
+
+**Internal helpers:**
+
+| Function | Description |
+|----------|-------------|
+| `_validate_role(role)` | Raise 400 if role is not 'manager' or 'viewer' |
+| `_validate_user_ids_exist(cursor, user_ids)` | Raise 400 if any user_id does not exist in the users table |
+| `_load_chit_row(cursor, chit_id)` | Load a chit by ID and return as dict; raises 404 if not found |
 
 ---
 
@@ -467,19 +537,19 @@ Calendar display helpers, drag interactions, multi-day rendering, and pinch zoom
 |--------|-------------|
 | `getCalendarDateInfo(chit)` | Normalize a chit's date info for calendar display; returns start, end, isAllDay, isDueOnly, hasDate |
 | `chitMatchesDay(chit, day)` | Check if a chit should appear on a given calendar day |
-| `calendarEventTitle(chit, isDueOnly, info, settings, context)` | Build the title HTML for a calendar event with indicator icons |
-| `calendarEventTooltip(chit, info)` | Build a tooltip string for a calendar event with time and recurrence info |
+| `calendarEventTitle(chit, isDueOnly, info, settings, context)` | Build the title HTML for a calendar event with indicator icons; includes owner badge (`👤 owner_display_name`) for shared events |
+| `calendarEventTooltip(chit, info)` | Build a tooltip string for a calendar event with time, recurrence info, and owner attribution for shared events |
 | `_calSnapMinutes` | Current snap grid interval in minutes (loaded from settings) |
 | `_loadCalSnapSetting()` | Load the calendar snap setting from user settings |
 | `_snapToGrid(minutes)` | Snap a minute value to the nearest grid interval |
 | `_showSnapGrid(container)` | Show a visual snap grid overlay on a calendar container (deferred until first drag movement) |
 | `_hideSnapGrid()` | Remove the snap grid overlay |
-| `enableCalendarDrag(scrollContainer, dayColumns, days, chitsMap)` | Make timed calendar events draggable (move) and resizable (bottom edge) |
+| `enableCalendarDrag(scrollContainer, dayColumns, days, chitsMap)` | Make timed calendar events draggable (move) and resizable (bottom edge); skips drag/resize for viewer-role shared chits |
 | `_onCalDragMove(e)` | Handle mouse/touch move during calendar drag operations |
 | `_onCalDragEnd(e)` | Handle mouse/touch end during calendar drag; save new times via API |
 | `_showRecurringDragModal(parentId, dateStr, newTimes, virtualChit)` | Show a modal after dragging a recurring instance with apply-scope options |
-| `enableMonthDrag(monthGrid, onDrop)` | Enable month view drag — move chits between day cells |
-| `enableAllDayDrag(allDayEventsRow, days)` | Enable drag for all-day events between day cells in the all-day row |
+| `enableMonthDrag(monthGrid, onDrop)` | Enable month view drag — move chits between day cells; prevents drag for viewer-role shared chits |
+| `enableAllDayDrag(allDayEventsRow, days)` | Enable drag for all-day events between day cells in the all-day row; prevents drag for viewer-role shared chits |
 | `renderAllDayEventsInCells(dayData, allDayEventsRow, settings, context)` | Render all-day events into a CSS Grid row with multi-day spanning and row packing |
 | `_calZoomScale` | Current vertical zoom scale for calendar time views |
 | `enableCalendarPinchZoom(scrollContainer)` | Enable pinch-to-zoom on a calendar scroll container (vertical axis only) |
@@ -717,7 +787,7 @@ Coordinator for shared code between dashboard and editor. Contains glue code for
 | `nextPeriod()` | Navigate to the next calendar period (day/week/month/year) |
 | `updateDateRange()` | Update the date range display in the sidebar header |
 | `openChitForEdit(chit)` | Open a chit in the editor (handles virtual recurring instances) |
-| `attachCalendarChitEvents(el, chit)` | Attach dblclick (edit) and shift+click (quick edit) to a calendar event element |
+| `attachCalendarChitEvents(el, chit)` | Attach dblclick (edit) and shift+click (quick edit) to a calendar event element; quick-edit is disabled for viewer-role shared chits |
 | `attachEmptySlotCreate(col, day, defaultDurationMin)` | Attach dblclick on empty calendar space to create a new chit at that time |
 | `_getResponsiveDayCount()` | Return the number of days to show in week view (always 7) |
 | `displayWeekView(chitsToDisplay, opts)` | Render the week calendar view with hour grid, all-day events, and timed events |
@@ -738,21 +808,24 @@ Coordinator for shared code between dashboard and editor. Contains glue code for
 
 | Function | Description |
 |----------|-------------|
+| `_isViewerRole(chit)` | Check if a chit is shared with viewer-only access (no inline edits allowed) |
+| `_isSharedChit(chit)` | Check if a chit is shared (has an `effective_role` from the sharing system) |
 | `_emptyState(message)` | Build a styled empty-state message with an optional Create Chit button |
 | `_getTagColor(tagName)` | Get tag color from cached settings tags, fallback to pastel |
 | `_getTagFontColor(tagName)` | Get tag font color from cached settings tags, fallback to dark brown |
-| `_buildChitHeader(chit, titleHtml, settings)` | Build a standard chit card header row with icons, indicators, title, and meta |
+| `_buildChitHeader(chit, titleHtml, settings, opts)` | Build a standard chit card header row with icons, indicators, title, meta, owner badge, role badge, stealth indicator, and assignee badge for shared chits |
 | `_renderChitMeta(chit, mode)` | Legacy compact meta builder — kept for backward compat |
 | `displayChecklistView(chitsToDisplay)` | Render the Checklists tab — chits with interactive checklist items |
 | `displayTasksView(chitsToDisplay)` | Render the Tasks tab — chits with status dropdowns and note previews; dispatches to `displayHabitsView` when in habits mode |
 | `displayHabitsView(chitsToDisplay)` | Render the Habits view — recurring chits as habit cards with completion toggles, success rate badges, and streak indicators |
 | `_renderHabitCards(container, habitData, showCompleted, windowDays)` | Render habit cards into a container with completion-based sorting and hide-when-done filtering |
 | `displayNotesView(chitsToDisplay)` | Render the Notes tab — markdown notes in a masonry column layout |
+| `displayAssignedToMeView(chitsToDisplay)` | Render the "Assigned to Me" view — chits where `assigned_to` matches the current user's ID, with owner badges and role indicators |
 | `_setProjectsMode(mode)` | Set Projects view mode (list or kanban) and re-render |
 | `_restoreViewModeButtons()` | Restore view mode button highlights for Projects, Alarms, and Tasks tabs |
 | `_setAlarmsMode(mode)` | Set Alarms view mode (list or independent) and re-render |
-| `_setTasksMode(mode)` | Set Tasks view mode (tasks or habits), persist to localStorage, update button highlights, and re-render |
-| `_tasksViewMode` | Current Tasks view mode string (`'tasks'` or `'habits'`), loaded from localStorage |
+| `_setTasksMode(mode)` | Set Tasks view mode (tasks, habits, or assigned), persist to localStorage, update button highlights, and re-render |
+| `_tasksViewMode` | Current Tasks view mode string (`'tasks'`, `'habits'`, or `'assigned'`), loaded from localStorage |
 | `_fetchIndependentAlerts()` | Fetch independent alerts from the API and cache locally |
 | `_createIndependentAlert(alertData)` | Create a new independent alert via API and refresh the view |
 | `_updateIndependentAlert(id, alertData)` | Update an existing independent alert via API and refresh |
@@ -865,7 +938,7 @@ Coordinator for shared code between dashboard and editor. Contains glue code for
 | `_applySort(chitList)` | Sort chits by the current sort field and direction |
 | `storePreviousState()` | Save the current UI state to localStorage for restoration after editor |
 | `_restoreUIState()` | Restore UI state from localStorage (editor return or refresh recovery) |
-| `fetchChits()` | Fetch all chits from the API and trigger display rendering |
+| `fetchChits()` | Fetch owned chits from `/api/chits` and shared chits from `/api/shared-chits` in parallel; merges shared chits (marked with `_shared` flag) into the chits array, deduplicating by ID |
 | `displayChits()` | Main render dispatcher — filter, sort, expand recurrence, and render the active view |
 | `_updateTabCounts(filteredChits)` | Update tab labels with counts of displayed chits per tab |
 | `_applyChitDisplayOptions()` | Apply visual options — fade past events and highlight overdue chits |
@@ -1149,6 +1222,27 @@ Save system: build chit object, save, delete, pin, archive, QR.
 | `toggleArchived()` | Toggle the chit's archived state and update the archive button UI |
 | `_showQRCode(e)` | Show a QR code modal with data/link mode toggle for the current chit |
 
+#### editor-sharing.js
+
+Sharing panel zone for the chit editor. Provides the "🔗 Sharing" zone visible only to the chit owner. Handles loading/displaying current shares, user picker, role selector, stealth toggle, assigned-to picker, and saving shares via `PUT /api/chits/{chit_id}/shares`. Depends on: `shared-auth.js` (`getCurrentUser`), `shared-utils.js` (`setSaveButtonUnsaved`), `editor.js` (`chitId`), `editor-init.js` (`loadChitData`).
+
+| Function | Description |
+|----------|-------------|
+| `initSharingZone(chit)` | Initialize the sharing zone after chit data is loaded; shows zone only to chit owner; loads user list, populates pickers, renders shares list |
+| `initSharingZoneForNewChit()` | Initialize the sharing zone for a new chit (no shares yet); shows zone for owner |
+| `_loadSharingUserList()` | Fetch the list of switchable users from `/api/auth/switchable-users` (cached after first call) |
+| `_populateUserPicker()` | Populate the "Add user" dropdown with users not already in shares and not the current user |
+| `_populateAssignedToPicker(assignedTo)` | Populate the assigned-to dropdown with all users except the owner |
+| `_renderSharesList()` | Render the current shares list with role badges and remove buttons |
+| `_getUserDisplayName(userId)` | Look up a user's display name from the cached user list |
+| `addShare()` | Add a share from the user picker and role selector; called by the "Add" button |
+| `_removeShare(userId)` | Remove a user from the shares list |
+| `onStealthToggle()` | Handle stealth toggle change; marks editor as unsaved |
+| `onAssignedToChange()` | Handle assigned-to dropdown change; marks editor as unsaved |
+| `getSharingData()` | Return sharing fields (shares, stealth, assigned_to) to merge into the chit save payload |
+| `saveSharingData(chitIdToSave)` | Save shares to the dedicated sharing endpoint after the main chit save via `PUT /api/chits/{id}/shares` |
+| `hasSharingData(chit)` | Returns true if the chit has sharing data (shares, stealth, or assigned_to); used by `applyZoneStates` |
+
 #### editor-init.js
 
 Editor initialization, zone management, and DOMContentLoaded handler.
@@ -1349,6 +1443,17 @@ Settings page logic: tags, colors, clocks, locations, indicators, import/export,
 | `_renderDefaultNotifList(type, items)` | Render default notification rows for a given type ('start' or 'due') |
 | `_addDefaultNotifRow(type)` | Add a new default notification row for a given type |
 | `_gatherDefaultNotifList(type)` | Gather default notification rows from the DOM for a given type |
+| `_loadTagSharingData()` | Load shared_tags config from `GET /api/settings/shared-tags` on page init after auth is ready |
+| `_loadTagSharingUserList()` | Fetch the switchable user list for the tag sharing picker (cached after first call) |
+| `_getTagShares(tagName)` | Get the shares array for a specific tag from the cached config |
+| `_tagHasSharing(tagName)` | Return true if a tag has any active sharing configuration |
+| `_populateTagSharingUserPicker()` | Populate the tag sharing user picker dropdown, excluding current user and already-shared users |
+| `_renderTagSharesList()` | Render the current tag's shares list in the tag modal with role badges and remove buttons |
+| `_getTagSharingUserName(userId)` | Look up a user's display name from the cached tag sharing user list |
+| `_addTagShare()` | Add a user share to the current tag; called by the "Share" button in the tag modal |
+| `_removeTagShare(userId)` | Remove a user from the current tag's shares list |
+| `_saveTagSharingConfig(tagName)` | Save the full shared_tags config to the server via `PUT /api/settings/shared-tags` |
+| `_initTagSharingSection(tagName)` | Initialize the tag sharing section when the tag modal opens; loads user list and populates pickers |
 
 #### people.js
 
@@ -1529,6 +1634,7 @@ Shared styles for ALL secondary pages (settings, help, trash, people, contacts, 
 | Tablet Responsive (≤768px) | Settings grid single-column |
 | Mobile Responsive (≤480px) | Stacked header, full-width modals |
 | Bold Alert Modal (`.cwoc-alert-overlay`) | Full-screen alarm/timer alert shared across all pages |
+| Shared Chit Card Badges | `.cwoc-owner-badge` — owner attribution badge on shared chit cards; `.cwoc-role-badge` — role indicator (viewer/manager) on shared chit cards; `.cwoc-stealth-indicator` — stealth icon on chit cards (visible to owner only) |
 
 #### shared-editor.css
 Reusable editor patterns shared by the Chit Editor and Contact Editor. Self-contained `:root` variables (must match shared-page.css).
@@ -1630,6 +1736,10 @@ Chit card styling, notes masonry layout, markdown, people chips, view-specific l
 | People Chips | People name chips on cards |
 | View-specific Layouts | Card variations per tab view |
 | Notes Drop Indicator | Drop target indicator for notes reorder |
+| Owner Badge (`.cwoc-owner-badge`) | Owner attribution badge on chit cards (multi-user) |
+| Stealth Indicator (`.cwoc-stealth-indicator`) | 🥷 stealth icon on chit cards, visible to owner only |
+| Assignee Badge (`.cwoc-assignee-badge`) | Assigned-to display name badge on chit cards |
+| Role Badge (`.cwoc-role-badge`) | Role indicator badge (viewer/manager) on shared chit cards |
 
 #### styles-hotkeys.css
 Hotkey overlay, panels, reference overlay, and sidebar dimming.
@@ -1686,6 +1796,8 @@ Chit-specific styles. Base editor styles (header-row, zones, fields, buttons) co
 | Date Mode Layout | Radio-based date mode selector (Start/End, Due, None) |
 | Projects Zone | Kanban-style project container, status sections, drag handles, status dropdowns |
 | Archive/Audit Buttons | Header button styling for archive and audit log |
+| Sharing Panel | 🔗 Sharing zone styles — current shares list, share list items, user name, role badges (manager/viewer), remove button, add share controls row, user picker, role select, add button, stealth toggle row, assigned-to picker row, empty state message |
+| Read-Only Banner | `.cwoc-readonly-banner` — banner for viewer-role shared chits with warning background and border |
 | Responsive (≤400px) | Compact chit-specific overrides |
 | Responsive (≤480px) | Mobile chit-specific overrides |
 
@@ -1810,6 +1922,7 @@ All JS is loaded via `<script>` tags — no ES modules. Load order matters becau
 <script src="/frontend/js/editor/editor-color.js"></script>
 <script src="/frontend/js/editor/editor-health.js"></script>
 <script src="/frontend/js/editor/editor-save.js"></script>
+<script src="/frontend/js/editor/editor-sharing.js"></script>
 <script src="/frontend/js/editor/editor-init.js"></script>
 
 <!-- 5. CDN (loaded last) -->
@@ -1862,6 +1975,9 @@ New frontend pages added for multi-user system:
 - `profile.html` — User profile page. Uses `shared-page.css`, `shared-page.js`, `CwocSaveSystem`. Loads `profile.js`.
 - `user-admin.html` — Admin-only user management page. Uses `shared-page.css`, `shared-page.js`. Loads `user-admin.js`. Redirects non-admins to `/`.
 
+New frontend pages added for chit sharing system:
+- `wall-station.html` — Standalone unauthenticated wall station page. Reads `users` query parameter from the URL, fetches combined data from `/api/wall-station?user_ids=...`, renders a combined calendar view and task list with `owner_display_name` attribution. Auto-refreshes every 60 seconds. Does not require authentication — no `shared-auth.js` dependency. Uses `shared-page.css` for parchment theme plus inline `<style>` for wall-specific layout. All JS is inline in a single IIFE.
+
 
 ---
 
@@ -1872,14 +1988,15 @@ New frontend pages added for multi-user system:
 ```
 src/backend/main.py
   ├── src.backend.db          (init_db, seed_version_info)
-  ├── src.backend.migrations  (all migrate_* functions, including migrate_add_multi_user)
+  ├── src.backend.migrations  (all migrate_* functions, including migrate_add_multi_user, migrate_add_sharing)
   ├── src.backend.middleware   (AuthMiddleware)
   ├── src.backend.weather     (start_weather_schedulers)
-  └── src.backend.routes.*    (all 8 route modules, including auth_router and users_router)
+  └── src.backend.routes.*    (all 9 route modules, including auth_router, users_router, and sharing_router)
 
 src/backend/routes/chits.py
   ├── src.backend.db           (DB_PATH, serialize/deserialize, compute_system_tags, _build_export_envelope)
   ├── src.backend.models       (Chit, ImportRequest)
+  ├── src.backend.sharing      (resolve_effective_role, can_edit_chit, can_delete_chit)
   └── src.backend.routes.audit (insert_audit_entry, compute_audit_diff, get_actor_from_request)
 
 src/backend/routes/trash.py
@@ -1902,6 +2019,14 @@ src/backend/routes/audit.py
 src/backend/routes/health.py
   ├── src.backend.db           (DB_PATH, _update_lock, deserialize_json_field, get_or_create_instance_id, get_version_info, update_version_info)
   └── src.backend.routes.audit (insert_audit_entry, get_current_actor)
+
+src/backend/routes/sharing.py
+  ├── src.backend.db           (DB_PATH, serialize_json_field, deserialize_json_field)
+  ├── src.backend.sharing      (can_manage_sharing, get_shared_chits_for_user)
+  └── src.backend.routes.audit (insert_audit_entry, get_actor_from_request)
+
+src/backend/sharing.py
+  └── src.backend.db           (DB_PATH, deserialize_json_field)
 
 src/backend/routes/auth.py
   ├── src.backend.auth_utils   (hash_password, verify_password)
@@ -1994,6 +2119,7 @@ shared-auth.js            ← MUST load first (getCurrentUser, isAdmin, waitForA
                     editor-color.js       (color zone)
                     editor-health.js      (health indicators zone)
                     editor-save.js        (save/exit logic)
+                    editor-sharing.js     (sharing panel — uses shared-auth, shared-utils)
                     editor-init.js        (entry point — calls init functions)
 ```
 

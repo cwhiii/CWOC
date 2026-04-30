@@ -8,6 +8,14 @@ from typing import Optional, List, Dict, Any
 from pydantic import BaseModel
 
 
+class ShareEntry(BaseModel):
+    user_id: str
+    role: str  # "manager" or "viewer"
+
+class SharedTagEntry(BaseModel):
+    tag: str
+    shares: List[ShareEntry]
+
 class Tag(BaseModel):
     name: str
     color: Optional[str] = None
@@ -45,6 +53,7 @@ class Settings(BaseModel):
     habits_success_window: Optional[str] = "30"  # "7", "30", "90", or "all"
     overdue_border_color: Optional[str] = "#b22222"  # Border color for overdue chits
     blocked_border_color: Optional[str] = "#DAA520"  # Border color for blocked chits
+    shared_tags: Optional[Any] = None  # JSON array: [{"tag": "TagName", "shares": [{"user_id": "uuid", "role": "manager"|"viewer"}]}]
 
 class Chit(BaseModel):
     id: Optional[str] = None
@@ -82,6 +91,9 @@ class Chit(BaseModel):
     weather_data: Optional[str] = None         # JSON string of weather forecast data
     health_data: Optional[str] = None          # JSON string of health indicator readings
     hide_when_instance_done: Optional[bool] = False  # Hide from Habits view when current period is done
+    shares: Optional[List[Any]] = None         # JSON array: [{"user_id": "uuid", "role": "manager"|"viewer"}]
+    stealth: Optional[bool] = False            # When true, hides chit from all non-owner users
+    assigned_to: Optional[str] = None          # UUID of the assigned user
 
 class MultiValueEntry(BaseModel):
     label: Optional[str] = None    # "Work", "Home", "Mobile", custom

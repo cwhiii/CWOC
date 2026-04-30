@@ -144,6 +144,11 @@ function resetEditorForNewChit() {
   });
 
   _collapseAllZonesForNewChit();
+
+  // Initialize sharing zone for new chit
+  if (typeof initSharingZoneForNewChit === 'function') {
+    initSharingZoneForNewChit();
+  }
 }
 
 /**
@@ -163,6 +168,7 @@ function _collapseAllZonesForNewChit() {
     ['healthIndicatorsSection', 'healthIndicatorsContent'],
     ['colorSection', 'colorContent'],
     ['projectsSection', 'projectsContent'],
+    ['sharingSection', 'sharingContent'],
   ];
 
   allZones.forEach(([sectionId, contentId]) => {
@@ -467,6 +473,16 @@ async function loadChitData(chitId) {
 
     applyZoneStates(chit);
 
+    // Initialize sharing zone (visible only to owner)
+    if (typeof initSharingZone === 'function') {
+      await initSharingZone(chit);
+    }
+
+    // Read-only mode for viewer-role chits (Requirement 4.3)
+    if (chit.effective_role === 'viewer') {
+      _applyViewerReadOnlyMode(chit);
+    }
+
     if (chit.is_project_master) {
       const pmInput = document.getElementById("isProjectMaster");
       if (pmInput) pmInput.value = "true";
@@ -488,6 +504,59 @@ async function loadChitData(chitId) {
 }
 
 /**
+ * Apply read-only mode when the current user has viewer role on a shared chit.
+ * Disables all form fields, hides save/delete buttons, hides sharing zone,
+ * and shows a read-only banner at the top of the editor.
+ *
+ * @param {Object} chit — the chit object with effective_role and owner_display_name
+ * Requirements: 4.3
+ */
+function _applyViewerReadOnlyMode(chit) {
+  // Add read-only banner at the top of the editor
+  var editor = document.getElementById('mainEditor');
+  if (editor) {
+    var banner = document.createElement('div');
+    banner.id = 'cwoc-readonly-banner';
+    banner.className = 'cwoc-readonly-banner';
+    var ownerName = chit.owner_display_name || 'another user';
+    banner.textContent = 'Read-only — shared by ' + ownerName;
+    editor.insertBefore(banner, editor.firstChild);
+  }
+
+  // Disable all form inputs, selects, textareas, and buttons inside the editor
+  var mainEditor = document.querySelector('.editor');
+  if (mainEditor) {
+    mainEditor.querySelectorAll('input, select, textarea').forEach(function (el) {
+      el.disabled = true;
+    });
+    // Disable contenteditable divs
+    mainEditor.querySelectorAll('[contenteditable="true"]').forEach(function (el) {
+      el.setAttribute('contenteditable', 'false');
+    });
+  }
+
+  // Hide save buttons (Save, Save & Stay, Save & Exit)
+  var saveBtn = document.getElementById('saveButton');
+  var saveStayBtn = document.getElementById('saveStayButton');
+  var saveExitBtn = document.getElementById('saveExitButton');
+  if (saveBtn) saveBtn.style.display = 'none';
+  if (saveStayBtn) saveStayBtn.style.display = 'none';
+  if (saveExitBtn) saveExitBtn.style.display = 'none';
+
+  // Hide delete button
+  var deleteBtn = document.getElementById('deleteButton');
+  if (deleteBtn) deleteBtn.style.display = 'none';
+
+  // Hide archive button (viewers can't change archive state)
+  var archiveBtn = document.getElementById('archivedButton');
+  if (archiveBtn) archiveBtn.style.display = 'none';
+
+  // Hide sharing zone entirely for viewers
+  var sharingSection = document.getElementById('sharingSection');
+  if (sharingSection) sharingSection.style.display = 'none';
+}
+
+/**
  * After loading a chit, collapse zones whose fields are all empty,
  * expand zones that have at least one value.
  */
@@ -504,6 +573,7 @@ function applyZoneStates(chit) {
     ["healthIndicatorsSection", "healthIndicatorsContent", () => false],
     ["colorSection", "colorContent", () => !!(chit.color && chit.color !== "#C66B6B")],
     ["projectsSection", "projectsContent", () => !!(chit.is_project_master || (Array.isArray(chit.child_chits) && chit.child_chits.length > 0))],
+    ["sharingSection", "sharingContent", () => typeof hasSharingData === 'function' && hasSharingData(chit)],
   ];
 
   zones.forEach(([sectionId, contentId, hasData]) => {

@@ -51,6 +51,7 @@ def get_settings(user_id: str, request: Request):
         settings["active_clocks"] = deserialize_json_field(settings.get("active_clocks"))
         settings["saved_locations"] = deserialize_json_field(settings.get("saved_locations"))
         settings["default_notifications"] = deserialize_json_field(settings.get("default_notifications"))
+        settings["shared_tags"] = deserialize_json_field(settings.get("shared_tags"))
         return settings
     except Exception as e:
         logger.error(f"Error fetching settings: {str(e)}")
@@ -112,6 +113,7 @@ def save_settings(settings: Settings, request: Request):
             "habits_success_window": settings.habits_success_window or "30",
             "overdue_border_color": settings.overdue_border_color or "#b22222",
             "blocked_border_color": settings.blocked_border_color or "#DAA520",
+            "shared_tags": serialize_json_field(settings.shared_tags),
         }
 
         cursor.execute(
@@ -122,8 +124,8 @@ def save_settings(settings: Settings, request: Request):
                 calendar_snap, week_start_day, work_start_hour, work_end_hour, work_days, enabled_periods, custom_days_count,
                 all_view_start_hour, all_view_end_hour, day_scroll_to_hour,
                 username, audit_log_max_days, audit_log_max_mb, default_notifications, unit_system,
-                habits_success_window, overdue_border_color, blocked_border_color
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                habits_success_window, overdue_border_color, blocked_border_color, shared_tags
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 new_settings_dict["user_id"],
@@ -156,6 +158,7 @@ def save_settings(settings: Settings, request: Request):
                 new_settings_dict["habits_success_window"],
                 new_settings_dict["overdue_border_color"],
                 new_settings_dict["blocked_border_color"],
+                new_settings_dict["shared_tags"],
             )
         )
 

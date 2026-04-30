@@ -246,6 +246,14 @@ async function buildChitObject() {
   const healthObj = _gatherHealthData();
   chit.health_data = healthObj ? JSON.stringify(healthObj) : null;
 
+  // Include sharing data (shares, stealth, assigned_to)
+  if (typeof getSharingData === 'function') {
+    var sharingData = getSharingData();
+    chit.shares = sharingData.shares;
+    chit.stealth = sharingData.stealth;
+    chit.assigned_to = sharingData.assigned_to;
+  }
+
   return chit;
 }
 

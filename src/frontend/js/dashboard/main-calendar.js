@@ -184,6 +184,8 @@ function openChitForEdit(chit) {
 
 /**
  * Attach dblclick (edit) and shift+click (quick edit modal) to a calendar event element.
+ * Viewer-role shared chits open in read-only mode (editor handles this via effective_role).
+ * Quick-edit modal is disabled for viewer-role chits.
  */
 function attachCalendarChitEvents(el, chit) {
   el.addEventListener("dblclick", function(e) {
@@ -195,11 +197,15 @@ function attachCalendarChitEvents(el, chit) {
     if (e.shiftKey) {
       e.preventDefault();
       e.stopPropagation();
+      // Prevent quick-edit for viewer-role shared chits
+      if (typeof _isViewerRole === 'function' && _isViewerRole(chit)) return;
       showQuickEditModal(chit, function() { displayChits(); });
     }
   });
   if (typeof enableLongPress === 'function') {
     enableLongPress(el, function() {
+      // Prevent quick-edit for viewer-role shared chits
+      if (typeof _isViewerRole === 'function' && _isViewerRole(chit)) return;
       showQuickEditModal(chit, function() { displayChits(); });
     });
   }

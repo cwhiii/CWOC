@@ -24,6 +24,7 @@ from src.backend.db import (
     get_or_create_instance_id, get_version_info, update_version_info,
 )
 from src.backend.routes.audit import insert_audit_entry, get_current_actor
+from src.backend.sharing import _deserialize_chit_fields
 
 
 logger = logging.getLogger(__name__)
@@ -272,6 +273,82 @@ async def editor(id: str = None):
         # Serve editor.html; data will be fetched via /api/chit/{id}
         return FileResponse("/app/src/frontend/html/editor.html")
     return FileResponse("/app/src/frontend/html/editor.html")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Wall Station
+# ═══════════════════════════════════════════════════════════════════════════
+
+@router.get("/api/wall-station")
+def get_wall_station(user_ids: str = Query("", description="Comma-separated user UUIDs")):
+    """Return combined non-deleted, non-stealth chits from the specified users.
+
+    Unauthenticated endpoint — no request.state.user_id available.
+    Validates user_ids against the users table; returns 400 for invalid IDs.
+
+    Response: {
+        "chits": [ ...chit objects with owner_display_name... ],
+        "users": [ {"id": "uuid", "display_name": "Name"}, ... ]
+    }
+    """
+    if not user_ids or not user_ids.strip():
+        raise HTTPException(status_code=400, detail="Invalid user IDs")
+
+    raw_ids = [uid.strip() for uid in user_ids.split(",") if uid.strip()]
+    if not raw_ids:
+        raise HTTPException(status_code=400, detail="Invalid user IDs")
+
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        # Validate all user_ids exist in the users table
+        placeholders = ",".join("?" for _ in raw_ids)
+        cursor.execute(
+            f"SELECT id, display_name FROM users WHERE id IN ({placeholders})",
+            raw_ids,
+        )
+        found_rows = cursor.fetchall()
+        found_ids = {row["id"] for row in found_rows}
+        if found_ids != set(raw_ids):
+            raise HTTPException(status_code=400, detail="Invalid user IDs")
+
+        users_list = [{"id": row["id"], "display_name": row["display_name"] or ""} for row in found_rows]
+
+        # Fetch non-deleted, non-stealth chits owned by those users
+        cursor.execute(
+            f"""SELECT * FROM chits
+                WHERE (deleted = 0 OR deleted IS NULL)
+                  AND (stealth = 0 OR stealth IS NULL)
+                  AND owner_id IN ({placeholders})""",
+            raw_ids,
+        )
+        rows = cursor.fetchall()
+
+        chits = []
+        for row in rows:
+            chit = dict(row)
+            _deserialize_chit_fields(chit)
+            chit["assigned_to"] = chit.get("assigned_to")
+            chit["owner_display_name"] = chit.get("owner_display_name", "")
+            chits.append(chit)
+
+        return {"chits": chits, "users": users_list}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching wall station data: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch wall station data: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
+@router.get("/wall-station")
+async def wall_station_page():
+    return FileResponse("/app/src/frontend/html/wall-station.html")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
