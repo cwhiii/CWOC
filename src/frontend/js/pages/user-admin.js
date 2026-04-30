@@ -86,6 +86,7 @@ function _renderUserTable() {
   var thead = document.createElement('thead');
   thead.innerHTML =
     '<tr>' +
+      '<th></th>' +
       '<th>Username</th>' +
       '<th>Display Name</th>' +
       '<th>Email</th>' +
@@ -100,6 +101,16 @@ function _renderUserTable() {
   for (var i = 0; i < _adminUsers.length; i++) {
     var user = _adminUsers[i];
     var tr = document.createElement('tr');
+
+    // Profile image
+    var tdImg = document.createElement('td');
+    tdImg.setAttribute('data-label', '');
+    var imgEl = document.createElement('img');
+    imgEl.src = user.profile_image_url || '/static/default-avatar.svg';
+    imgEl.alt = '';
+    imgEl.style.cssText = 'width:32px;height:32px;border-radius:50%;object-fit:cover;border:1px solid rgba(139,90,43,0.3);';
+    tdImg.appendChild(imgEl);
+    tr.appendChild(tdImg);
 
     // Username
     var tdUsername = document.createElement('td');

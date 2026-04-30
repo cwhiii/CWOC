@@ -511,7 +511,7 @@ window.CwocSaveSystem = CwocSaveSystem;
   var _navPages = [
     { key: '1', icon: '🏠', label: 'Chits',       href: '/' },
     { key: '2', icon: '🌤️', label: 'Weather',     href: '/frontend/html/weather.html' },
-    { key: '3', icon: '👥', label: 'People',      href: '/frontend/html/people.html' },
+    { key: '3', icon: '👥', label: 'Contacts',    href: '/frontend/html/people.html' },
     { key: '4', icon: '❓', label: 'Help',        href: '/frontend/html/help.html' },
     { key: '5', icon: '⚙️', label: 'Settings',    href: '/frontend/html/settings.html' },
     { key: '6', icon: '📋', label: 'Audit Log',   href: '/frontend/html/audit-log.html' },

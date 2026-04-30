@@ -75,6 +75,7 @@ def _user_row_to_response(row: sqlite3.Row) -> dict:
         "is_admin": bool(row["is_admin"]),
         "is_active": bool(row["is_active"]),
         "created_datetime": row["created_datetime"],
+        "profile_image_url": row["profile_image_url"] if "profile_image_url" in row.keys() else None,
     }
 
 
@@ -90,7 +91,7 @@ def list_users(request: Request):
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
-            "SELECT id, username, display_name, email, is_admin, is_active, created_datetime "
+            "SELECT id, username, display_name, email, is_admin, is_active, created_datetime, profile_image_url "
             "FROM users ORDER BY created_datetime ASC"
         ).fetchall()
 

@@ -522,7 +522,7 @@ async function saveColors(colors) {
 
     // Prepare the settings object with user_id and custom_colors
     const settingsToSave = {
-      user_id: "default_user",
+      user_id: (typeof getCurrentUser === 'function' && getCurrentUser()) ? getCurrentUser().user_id : 'default_user',
       custom_colors: colorsToSave,
     };
 
@@ -1392,10 +1392,6 @@ class SettingsManager {
     const timeFormat = document.getElementById("time-format");
     timeFormat.value = this.settings.time_format || "24hour";
 
-    // Username
-    const usernameInput = document.getElementById("username-input");
-    if (usernameInput) usernameInput.value = this.settings.username || "";
-
     // Audit log limits
     const auditMaxDaysInput = document.getElementById("audit-max-days");
     if (auditMaxDaysInput) auditMaxDaysInput.value = (this.settings.audit_log_max_days != null && this.settings.audit_log_max_days !== '') ? this.settings.audit_log_max_days : '';
@@ -1624,9 +1620,9 @@ class SettingsManager {
   }
 
   gatherSettings() {
+    var currentUserId = (typeof getCurrentUser === 'function' && getCurrentUser()) ? getCurrentUser().user_id : 'default_user';
     return {
-      user_id: "default_user",
-      username: (document.getElementById("username-input") || {}).value || null,
+      user_id: currentUserId,
       time_format: document.getElementById("time-format").value,
       sex: document.getElementById("gender-toggle").value || "Man",
       unit_system: document.getElementById("unit-system-toggle").value || "imperial",
