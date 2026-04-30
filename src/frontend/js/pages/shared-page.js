@@ -252,11 +252,15 @@ window.CwocSaveSystem = CwocSaveSystem;
 
     var currentUser = (typeof getCurrentUser === 'function') ? getCurrentUser() : null;
     var displayName = currentUser ? currentUser.display_name : 'User';
+    var username = currentUser ? currentUser.username : '';
 
-    // Header with user info
+    // Header with user info — show display name and username
     var header = document.createElement('div');
     header.className = 'cwoc-profile-dropdown-header';
-    header.textContent = displayName;
+    header.innerHTML = '<strong>' + _escHtml(displayName) + '</strong>';
+    if (username && username !== displayName) {
+      header.innerHTML += '<br><span style="font-size:0.85em;opacity:0.7;">@' + _escHtml(username) + '</span>';
+    }
     dropdown.appendChild(header);
 
     // Menu items

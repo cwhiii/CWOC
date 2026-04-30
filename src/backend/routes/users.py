@@ -306,3 +306,99 @@ def reset_password(user_id: str, body: PasswordReset, request: Request):
     finally:
         if conn:
             conn.close()
+
+
+# ── PUT /api/users/{user_id} ──────────────────────────────────────────────
+
+class UserUpdate(BaseModel):
+    username: str = None
+    display_name: str = None
+    email: str = None
+    is_admin: bool = None
+
+
+@users_router.put("/{user_id}")
+def update_user(user_id: str, body: UserUpdate, request: Request):
+    """Update a user's profile fields (admin only). Can change username, display_name, email, is_admin."""
+    _require_admin(request)
+
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+
+        target = conn.execute(
+            "SELECT id, username, display_name, email, is_admin, is_active, created_datetime FROM users WHERE id = ?",
+            (user_id,),
+        ).fetchone()
+
+        if target is None:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        # Build update fields
+        updates = []
+        params = []
+
+        if body.username is not None and body.username != target["username"]:
+            # Check uniqueness
+            existing = conn.execute(
+                "SELECT id FROM users WHERE username = ? AND id != ?",
+                (body.username, user_id),
+            ).fetchone()
+            if existing:
+                raise HTTPException(status_code=409, detail="Username already exists")
+            updates.append("username = ?")
+            params.append(body.username)
+
+        if body.display_name is not None:
+            updates.append("display_name = ?")
+            params.append(body.display_name)
+
+        if body.email is not None:
+            updates.append("email = ?")
+            params.append(body.email)
+
+        if body.is_admin is not None:
+            # Prevent removing admin from the last admin
+            if not body.is_admin and target["is_admin"]:
+                active_admin_count = conn.execute(
+                    "SELECT COUNT(*) as cnt FROM users WHERE is_admin = 1 AND is_active = 1"
+                ).fetchone()["cnt"]
+                if active_admin_count <= 1:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Cannot remove admin from the last admin account",
+                    )
+            updates.append("is_admin = ?")
+            params.append(1 if body.is_admin else 0)
+
+        if not updates:
+            return _user_row_to_response(target)
+
+        now = _utcnow_iso()
+        updates.append("modified_datetime = ?")
+        params.append(now)
+        params.append(user_id)
+
+        conn.execute(
+            f"UPDATE users SET {', '.join(updates)} WHERE id = ?",
+            params,
+        )
+        conn.commit()
+
+        # Re-fetch updated user
+        updated = conn.execute(
+            "SELECT id, username, display_name, email, is_admin, is_active, created_datetime FROM users WHERE id = ?",
+            (user_id,),
+        ).fetchone()
+
+        return _user_row_to_response(updated)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Update user error: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+    finally:
+        if conn:
+            conn.close()

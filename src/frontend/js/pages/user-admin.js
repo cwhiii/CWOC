@@ -165,6 +165,15 @@ function _renderUserTable() {
       actionsDiv.appendChild(reactivateBtn);
     }
 
+    // Edit button
+    var editBtn = document.createElement('button');
+    editBtn.className = 'action-btn';
+    editBtn.textContent = 'Edit';
+    editBtn.onclick = (function(u) {
+      return function() { openEditUserModal(u); };
+    })(user);
+    actionsDiv.appendChild(editBtn);
+
     // Reset Password button
     var resetBtn = document.createElement('button');
     resetBtn.className = 'action-btn';
@@ -400,6 +409,113 @@ async function submitResetPassword() {
     }
   }
 }
+
+
+// ── Edit User Modal ──────────────────────────────────────────────────────────
+
+var _editUserId = null;
+
+/**
+ * Open the edit user modal pre-filled with the user's current values.
+ */
+function openEditUserModal(user) {
+  _editUserId = user.id;
+  _clearAdminMessage();
+
+  // Remove any existing edit modal
+  var existing = document.getElementById('edit-user-modal');
+  if (existing) existing.remove();
+
+  var overlay = document.createElement('div');
+  overlay.id = 'edit-user-modal';
+  overlay.className = 'modal';
+  overlay.style.display = 'flex';
+
+  overlay.innerHTML =
+    '<div class="modal-content">' +
+      '<h3>✏️ Edit User</h3>' +
+      '<div class="modal-form">' +
+        '<label>Username</label>' +
+        '<input type="text" id="edit-user-username" value="' + _escHtml(user.username) + '" />' +
+        '<label>Display Name</label>' +
+        '<input type="text" id="edit-user-display-name" value="' + _escHtml(user.display_name) + '" />' +
+        '<label>Email</label>' +
+        '<input type="email" id="edit-user-email" value="' + _escHtml(user.email || '') + '" />' +
+        '<label><input type="checkbox" id="edit-user-is-admin" ' + (user.is_admin ? 'checked' : '') + ' /> Admin</label>' +
+      '</div>' +
+      '<div id="edit-user-error" class="modal-error" style="display:none;"></div>' +
+      '<div class="modal-buttons">' +
+        '<button class="standard-button" onclick="closeEditUserModal()">Cancel</button>' +
+        '<button class="standard-button" onclick="submitEditUser()">Save</button>' +
+      '</div>' +
+    '</div>';
+
+  document.body.appendChild(overlay);
+
+  // ESC closes
+  function _onKey(e) {
+    if (e.key === 'Escape') { closeEditUserModal(); document.removeEventListener('keydown', _onKey, true); }
+  }
+  document.addEventListener('keydown', _onKey, true);
+
+  // Focus first field
+  setTimeout(function() {
+    var el = document.getElementById('edit-user-username');
+    if (el) el.focus();
+  }, 50);
+}
+
+function closeEditUserModal() {
+  var modal = document.getElementById('edit-user-modal');
+  if (modal) modal.remove();
+  _editUserId = null;
+}
+
+/**
+ * Submit the edit user form via PUT /api/users/{id}.
+ */
+async function submitEditUser() {
+  if (!_editUserId) return;
+
+  var username = document.getElementById('edit-user-username').value.trim();
+  var displayName = document.getElementById('edit-user-display-name').value.trim();
+  var email = document.getElementById('edit-user-email').value.trim();
+  var isAdmin = document.getElementById('edit-user-is-admin').checked;
+  var errorDiv = document.getElementById('edit-user-error');
+
+  if (!username || !displayName) {
+    if (errorDiv) { errorDiv.textContent = 'Username and display name are required.'; errorDiv.style.display = 'block'; }
+    return;
+  }
+
+  try {
+    var response = await fetch('/api/users/' + _editUserId, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: username, display_name: displayName, email: email, is_admin: isAdmin })
+    });
+
+    if (!response.ok) {
+      var errData = await response.json().catch(function() { return {}; });
+      var errMsg = errData.detail || 'Failed to update user.';
+      if (errorDiv) { errorDiv.textContent = errMsg; errorDiv.style.display = 'block'; }
+      return;
+    }
+
+    closeEditUserModal();
+    _showAdminMessage('User updated successfully.', 'success');
+    _loadUsers();
+  } catch (err) {
+    console.error('[User Admin] Error updating user:', err);
+    if (errorDiv) { errorDiv.textContent = 'Failed to update user.'; errorDiv.style.display = 'block'; }
+  }
+}
+
+function _escHtml(str) {
+  if (!str) return '';
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 
 // ── Initialization ───────────────────────────────────────────────────────────
 
