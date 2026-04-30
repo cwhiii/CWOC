@@ -5,8 +5,25 @@ import os
 # Allow importing modules from the backend directory
 sys.path.insert(0, os.path.dirname(__file__))
 
+# ── Patch /app paths before importing backend modules ────────────────────
+# db.py runs os.makedirs(CONTACT_IMAGES_DIR) at import time, which fails
+# on dev machines where /app doesn't exist. Patch before any backend imports.
+
+_original_makedirs = os.makedirs
+
+def _safe_makedirs(name, *args, **kwargs):
+    """Skip makedirs for /app paths that don't exist on dev machines."""
+    if isinstance(name, str) and name.startswith("/app"):
+        return
+    return _original_makedirs(name, *args, **kwargs)
+
+os.makedirs = _safe_makedirs
+
 from serializers import vcard_parse, vcard_print
 from db import compute_display_name
+
+# Restore original makedirs after imports
+os.makedirs = _original_makedirs
 
 
 def test_basic_round_trip():

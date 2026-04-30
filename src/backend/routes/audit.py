@@ -1,7 +1,7 @@
 """Audit log API routes and helpers for the CWOC backend.
 
 Provides audit log CRUD endpoints, auto-prune, and shared helpers
-(get_current_actor, compute_audit_diff, insert_audit_entry) used by
+(get_actor_from_request, compute_audit_diff, insert_audit_entry) used by
 other route modules.
 """
 
@@ -14,7 +14,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 
 from src.backend.db import DB_PATH, deserialize_json_field
 
@@ -25,23 +25,32 @@ router = APIRouter()
 
 # ── Shared audit helpers (imported by other route modules) ────────────────
 
-def get_current_actor() -> str:
-    """Read the username from settings for default_user.
-    Returns 'Unknown Gremlin' if no username is configured or on any error."""
-    conn = None
+def get_actor_from_request(request: Request) -> str:
+    """Build an actor string from the authenticated user's request state.
+
+    Reads request.state.user_id and request.state.username (set by AuthMiddleware).
+    Returns a string in the format 'username (user_id)' for audit attribution.
+    Falls back to 'Unknown Gremlin' if request state is missing.
+    """
     try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute("SELECT username FROM settings WHERE user_id = 'default_user'")
-        row = cursor.fetchone()
-        if row and row[0]:
-            return row[0]
+        user_id = getattr(request.state, "user_id", None)
+        username = getattr(request.state, "username", None)
+        if user_id and username:
+            return f"{username} ({user_id})"
+        if username:
+            return username
+        if user_id:
+            return user_id
         return "Unknown Gremlin"
     except Exception:
         return "Unknown Gremlin"
-    finally:
-        if conn:
-            conn.close()
+
+
+def get_current_actor() -> str:
+    """Legacy fallback: read the username from the users table for system-level actions
+    (e.g., startup version tracking) where no request context is available.
+    Returns 'System' as the default actor."""
+    return "System"
 
 
 # Fields stored as JSON strings in SQLite that need deserialization before diff comparison
@@ -232,15 +241,31 @@ def export_audit_log_csv(
         cursor.execute(query, params)
         rows = cursor.fetchall()
 
+        # Build a cache of user_id -> display_name for actor display
+        actor_display_names = {}
+        try:
+            cursor.execute("SELECT id, display_name FROM users")
+            for urow in cursor.fetchall():
+                actor_display_names[urow["id"]] = urow["display_name"]
+        except Exception:
+            pass  # users table may not exist yet
+
         output = io.StringIO()
         writer = csv.writer(output)
-        columns = ["timestamp", "actor", "action", "entity_type", "entity_id", "entity_summary", "changes"]
+        columns = ["timestamp", "actor", "actor_display_name", "action", "entity_type", "entity_id", "entity_summary", "changes"]
         writer.writerow(columns)
 
         for row in rows:
+            actor_str = row["actor"] or ""
+            actor_display = actor_str
+            if "(" in actor_str and actor_str.endswith(")"):
+                uid = actor_str.rsplit("(", 1)[-1].rstrip(")")
+                if uid in actor_display_names:
+                    actor_display = actor_display_names[uid]
             writer.writerow([
                 row["timestamp"],
                 row["actor"],
+                actor_display,
                 row["action"],
                 row["entity_type"],
                 row["entity_id"],
@@ -326,6 +351,15 @@ def get_audit_log(
         rows = cursor.fetchall()
 
         entries = []
+        # Build a cache of user_id -> display_name for actor display
+        actor_display_names = {}
+        try:
+            cursor.execute("SELECT id, display_name FROM users")
+            for urow in cursor.fetchall():
+                actor_display_names[urow["id"]] = urow["display_name"]
+        except Exception:
+            pass  # users table may not exist yet
+
         for row in rows:
             entry = dict(row)
             # Deserialize changes from JSON
@@ -334,6 +368,14 @@ def get_audit_log(
                     entry["changes"] = json.loads(entry["changes"])
                 except (json.JSONDecodeError, TypeError):
                     pass  # Return raw string if invalid JSON
+            # Add actor_display_name by extracting user_id from actor string "username (user_id)"
+            actor_str = entry.get("actor", "")
+            actor_display = actor_str  # default to the raw actor string
+            if "(" in actor_str and actor_str.endswith(")"):
+                uid = actor_str.rsplit("(", 1)[-1].rstrip(")")
+                if uid in actor_display_names:
+                    actor_display = actor_display_names[uid]
+            entry["actor_display_name"] = actor_display
             entries.append(entry)
 
         return {"entries": entries, "total": total}

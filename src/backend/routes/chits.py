@@ -11,26 +11,27 @@ from datetime import datetime
 from typing import Optional
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException, Query, Response
+from fastapi import APIRouter, HTTPException, Query, Request, Response
 
 from src.backend.db import (
     DB_PATH, serialize_json_field, deserialize_json_field,
     compute_system_tags, _build_export_envelope,
 )
 from src.backend.models import Chit, ImportRequest
-from src.backend.routes.audit import insert_audit_entry, compute_audit_diff, get_current_actor
+from src.backend.routes.audit import insert_audit_entry, compute_audit_diff, get_actor_from_request
 
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 @router.get("/api/chits")
-def get_all_chits():
+def get_all_chits(request: Request):
     conn = None
     try:
+        user_id = request.state.user_id
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM chits WHERE deleted = 0 OR deleted IS NULL")
+        cursor.execute("SELECT * FROM chits WHERE (deleted = 0 OR deleted IS NULL) AND owner_id = ?", (user_id,))
         chits = []
         for row in cursor.fetchall():
             chit = dict(zip([col[0] for col in cursor.description], row))
@@ -57,7 +58,7 @@ def get_all_chits():
 
 
 @router.get("/api/chits/search")
-def search_chits(q: Optional[str] = Query(None)):
+def search_chits(request: Request, q: Optional[str] = Query(None)):
     """Global search across all chit fields. Returns matching chits with matched field names."""
     if not q or not q.strip():
         return []
@@ -65,9 +66,10 @@ def search_chits(q: Optional[str] = Query(None)):
     query_lower = q.strip().lower()
     conn = None
     try:
+        user_id = request.state.user_id
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM chits WHERE deleted = 0 OR deleted IS NULL")
+        cursor.execute("SELECT * FROM chits WHERE (deleted = 0 OR deleted IS NULL) AND owner_id = ?", (user_id,))
         results = []
 
         for row in cursor.fetchall():
@@ -151,12 +153,20 @@ def search_chits(q: Optional[str] = Query(None)):
 
 
 @router.post("/api/chits")
-def create_chit(chit: Chit):
+def create_chit(chit: Chit, request: Request):
     conn = None
     try:
         chit_id = str(uuid4())
+        user_id = request.state.user_id
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
+
+        # Look up the authenticated user's display_name and username for the owner record
+        cursor.execute("SELECT display_name, username FROM users WHERE id = ?", (user_id,))
+        user_row = cursor.fetchone()
+        owner_display_name = user_row[0] if user_row else ""
+        owner_username = user_row[1] if user_row else request.state.username
+
         current_time = datetime.utcnow().isoformat()
         chit_tags = compute_system_tags(chit)
         cursor.execute(
@@ -166,8 +176,9 @@ def create_chit(chit: Chit):
                 completed_datetime, status, priority, severity, checklist, alarm, notification,
                 recurrence, recurrence_id, location, color, people, pinned, archived,
                 deleted, created_datetime, modified_datetime, is_project_master, child_chits, all_day, alerts,
-                recurrence_rule, recurrence_exceptions, weather_data, health_data, hide_when_instance_done
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                recurrence_rule, recurrence_exceptions, weather_data, health_data, hide_when_instance_done,
+                owner_id, owner_display_name, owner_username
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 chit_id,
@@ -203,10 +214,17 @@ def create_chit(chit: Chit):
                 serialize_json_field(chit.weather_data),
                 serialize_json_field(chit.health_data),
                 1 if chit.hide_when_instance_done else 0,
+                user_id,
+                owner_display_name,
+                owner_username,
             )
         )
         conn.commit()
-        return {**chit.dict(), "id": chit_id, "tags": chit_tags, "created_datetime": current_time, "modified_datetime": current_time}
+        return {
+            **chit.dict(), "id": chit_id, "tags": chit_tags,
+            "created_datetime": current_time, "modified_datetime": current_time,
+            "owner_id": user_id, "owner_display_name": owner_display_name, "owner_username": owner_username,
+        }
     except Exception as e:
         logger.error(f"Error creating chit: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to create chit: {str(e)}")
@@ -217,9 +235,10 @@ def create_chit(chit: Chit):
 
 # API endpoint to get chit data
 @router.get("/api/chit/{chit_id}")
-def get_chit(chit_id: str):
+def get_chit(chit_id: str, request: Request):
     conn = None
     try:
+        user_id = request.state.user_id
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM chits WHERE id = ?", (chit_id,))
@@ -228,6 +247,9 @@ def get_chit(chit_id: str):
             logger.info(f"Chit not found for ID: {chit_id}")
             raise HTTPException(status_code=404, detail="Chit not found")
         chit = dict(zip([col[0] for col in cursor.description], row))
+        # Verify ownership
+        if chit.get("owner_id") and chit["owner_id"] != user_id:
+            raise HTTPException(status_code=404, detail="Chit not found")
         chit["tags"] = deserialize_json_field(chit["tags"])
         chit["checklist"] = deserialize_json_field(chit["checklist"])
         chit["people"] = deserialize_json_field(chit["people"])
@@ -255,9 +277,10 @@ def get_chit(chit_id: str):
 
 
 @router.put("/api/chits/{chit_id}")
-def update_chit(chit_id: str, chit: Chit):
+def update_chit(chit_id: str, chit: Chit, request: Request):
     conn = None
     try:
+        user_id = request.state.user_id
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM chits WHERE id = ?", (chit_id,))
@@ -265,8 +288,13 @@ def update_chit(chit_id: str, chit: Chit):
         current_time = datetime.utcnow().isoformat()
         chit_tags = compute_system_tags(chit)
         if existing:
+            # Verify ownership
+            existing_dict_check = dict(zip([col[0] for col in cursor.description], existing))
+            if existing_dict_check.get("owner_id") and existing_dict_check["owner_id"] != user_id:
+                raise HTTPException(status_code=404, detail="Chit not found")
+
             # Capture old state for audit diff
-            old_chit_dict = dict(zip([col[0] for col in cursor.description], existing))
+            old_chit_dict = existing_dict_check
 
             # Update existing chit
             cursor.execute(
@@ -339,12 +367,17 @@ def update_chit(chit_id: str, chit: Chit):
                 }
                 diff = compute_audit_diff(old_chit_dict, new_chit_dict, exclude_fields={"modified_datetime", "created_datetime"})
                 if diff:
-                    actor = get_current_actor()
+                    actor = get_actor_from_request(request)
                     insert_audit_entry(conn, "chit", chit_id, "updated", actor, changes=diff, entity_summary=chit.title)
             except Exception as e:
                 logger.error(f"Audit logging failed for chit update (best-effort): {str(e)}")
         else:
-            # Create new chit
+            # Create new chit — look up owner info
+            cursor.execute("SELECT display_name, username FROM users WHERE id = ?", (user_id,))
+            user_row = cursor.fetchone()
+            owner_display_name = user_row[0] if user_row else ""
+            owner_username = user_row[1] if user_row else request.state.username
+
             cursor.execute(
                 """
                 INSERT INTO chits (
@@ -352,8 +385,9 @@ def update_chit(chit_id: str, chit: Chit):
                     completed_datetime, status, priority, severity, checklist, alarm, notification,
                     recurrence, recurrence_id, location, color, people, pinned, archived,
                     deleted, created_datetime, modified_datetime, is_project_master, child_chits, all_day, alerts,
-                    recurrence_rule, recurrence_exceptions, weather_data, health_data, hide_when_instance_done
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    recurrence_rule, recurrence_exceptions, weather_data, health_data, hide_when_instance_done,
+                    owner_id, owner_display_name, owner_username
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     chit_id,
@@ -389,11 +423,14 @@ def update_chit(chit_id: str, chit: Chit):
                     serialize_json_field(chit.weather_data),
                     serialize_json_field(chit.health_data),
                     1 if chit.hide_when_instance_done else 0,
+                    user_id,
+                    owner_display_name,
+                    owner_username,
                 )
             )
             # Audit logging for chit creation
             try:
-                actor = get_current_actor()
+                actor = get_actor_from_request(request)
                 insert_audit_entry(conn, "chit", chit_id, "created", actor, entity_summary=chit.title)
             except Exception as e:
                 logger.error(f"Audit logging failed for chit creation (best-effort): {str(e)}")
@@ -408,9 +445,10 @@ def update_chit(chit_id: str, chit: Chit):
 
 
 @router.delete("/api/chits/{chit_id}")
-def delete_chit(chit_id: str):
+def delete_chit(chit_id: str, request: Request):
     conn = None
     try:
+        user_id = request.state.user_id
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM chits WHERE id = ?", (chit_id,))
@@ -420,13 +458,16 @@ def delete_chit(chit_id: str):
         # Capture chit title for audit logging before soft-delete
         chit_columns = [col[0] for col in cursor.description]
         chit_dict = dict(zip(chit_columns, existing_chit))
+        # Verify ownership
+        if chit_dict.get("owner_id") and chit_dict["owner_id"] != user_id:
+            raise HTTPException(status_code=404, detail="Chit not found")
         chit_title = chit_dict.get("title")
 
         cursor.execute("UPDATE chits SET deleted = 1, modified_datetime = ? WHERE id = ?",
                        (datetime.utcnow().isoformat(), chit_id))
         # Audit logging for chit deletion
         try:
-            actor = get_current_actor()
+            actor = get_actor_from_request(request)
             insert_audit_entry(conn, "chit", chit_id, "deleted", actor, entity_summary=chit_title)
         except Exception as e:
             logger.error(f"Audit logging failed for chit deletion (best-effort): {str(e)}")
@@ -441,18 +482,22 @@ def delete_chit(chit_id: str):
 
 
 @router.patch("/api/chits/{chit_id}/recurrence-exceptions")
-def patch_recurrence_exceptions(chit_id: str, body: dict):
+def patch_recurrence_exceptions(chit_id: str, body: dict, request: Request):
     """Add or update a recurrence exception on a parent chit.
     Body: { "exception": { "date": "YYYY-MM-DD", "completed": bool, "broken_off": bool, "title": str, ... } }
     """
     conn = None
     try:
+        user_id = request.state.user_id
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
-        cursor.execute("SELECT recurrence_exceptions FROM chits WHERE id = ?", (chit_id,))
+        # First verify ownership
+        cursor.execute("SELECT owner_id, recurrence_exceptions FROM chits WHERE id = ?", (chit_id,))
         row = cursor.fetchone()
         if not row:
+            raise HTTPException(status_code=404, detail="Chit not found")
+        if row["owner_id"] and row["owner_id"] != user_id:
             raise HTTPException(status_code=404, detail="Chit not found")
         exceptions = deserialize_json_field(row["recurrence_exceptions"]) or []
         new_exc = body.get("exception", {})
@@ -483,14 +528,15 @@ def patch_recurrence_exceptions(chit_id: str, body: dict):
 # ═══════════════════════════════════════════════════════════════════════════
 
 @router.get("/api/export/chits")
-def export_chits():
-    """Export ALL chit records (including soft-deleted) as a JSON export envelope."""
+def export_chits(request: Request):
+    """Export ALL chit records (including soft-deleted) for the authenticated user as a JSON export envelope."""
     conn = None
     try:
+        user_id = request.state.user_id
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM chits")
+        cursor.execute("SELECT * FROM chits WHERE owner_id = ?", (user_id,))
         rows = cursor.fetchall()
 
         chits = []
@@ -528,16 +574,17 @@ def export_chits():
 
 
 @router.get("/api/export/userdata")
-def export_userdata():
-    """Export ALL settings and contacts records as a JSON export envelope."""
+def export_userdata(request: Request):
+    """Export ALL settings and contacts records for the authenticated user as a JSON export envelope."""
     conn = None
     try:
+        user_id = request.state.user_id
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 
         # --- Settings ---
-        cursor.execute("SELECT * FROM settings")
+        cursor.execute("SELECT * FROM settings WHERE user_id = ?", (user_id,))
         settings_rows = cursor.fetchall()
         settings = []
         for row in settings_rows:
@@ -553,7 +600,7 @@ def export_userdata():
             settings.append(s)
 
         # --- Contacts ---
-        cursor.execute("SELECT * FROM contacts")
+        cursor.execute("SELECT * FROM contacts WHERE owner_id = ?", (user_id,))
         contact_rows = cursor.fetchall()
         contacts = []
         for row in contact_rows:
@@ -580,7 +627,7 @@ def export_userdata():
 
 
 @router.post("/api/import/chits")
-def import_chits(req: ImportRequest):
+def import_chits(req: ImportRequest, request: Request):
     """Import chit records from a JSON export envelope."""
     # Validate mode
     if req.mode not in ("add", "replace"):
@@ -603,11 +650,19 @@ def import_chits(req: ImportRequest):
 
     conn = None
     try:
+        user_id = request.state.user_id
         conn = sqlite3.connect(DB_PATH)
         conn.execute("BEGIN")
 
+        # Look up owner info for imported chits
+        cursor = conn.cursor()
+        cursor.execute("SELECT display_name, username FROM users WHERE id = ?", (user_id,))
+        user_row = cursor.fetchone()
+        owner_display_name = user_row[0] if user_row else ""
+        owner_username = user_row[1] if user_row else request.state.username
+
         if req.mode == "replace":
-            conn.execute("DELETE FROM chits")
+            conn.execute("DELETE FROM chits WHERE owner_id = ?", (user_id,))
 
         imported = 0
         for chit in records:
@@ -621,8 +676,9 @@ def import_chits(req: ImportRequest):
                     created_datetime, modified_datetime, is_project_master,
                     child_chits, all_day, alerts, recurrence_rule,
                     recurrence_exceptions, progress_percent, time_estimate,
-                    weather_data, health_data, hide_when_instance_done
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    weather_data, health_data, hide_when_instance_done,
+                    owner_id, owner_display_name, owner_username
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     new_id,
                     chit.get("title"),
@@ -659,6 +715,9 @@ def import_chits(req: ImportRequest):
                     serialize_json_field(chit.get("weather_data")),
                     serialize_json_field(chit.get("health_data")),
                     1 if chit.get("hide_when_instance_done") else 0,
+                    user_id,
+                    owner_display_name,
+                    owner_username,
                 ),
             )
             imported += 1
@@ -678,7 +737,7 @@ def import_chits(req: ImportRequest):
 
 
 @router.post("/api/import/userdata")
-def import_userdata(req: ImportRequest):
+def import_userdata(req: ImportRequest, request: Request):
     """Import user data (settings + contacts) from a JSON export envelope."""
     # Validate mode
     if req.mode not in ("add", "replace"):
@@ -704,13 +763,14 @@ def import_userdata(req: ImportRequest):
 
     conn = None
     try:
+        user_id = request.state.user_id
         conn = sqlite3.connect(DB_PATH)
         conn.execute("BEGIN")
 
         if req.mode == "replace":
-            # ── Replace mode: delete everything, then insert all ──
-            conn.execute("DELETE FROM settings")
-            conn.execute("DELETE FROM contacts")
+            # ── Replace mode: delete user's data, then insert all ──
+            conn.execute("DELETE FROM settings WHERE user_id = ?", (user_id,))
+            conn.execute("DELETE FROM contacts WHERE owner_id = ?", (user_id,))
 
             settings_replaced = 0
             for s in settings_records:
@@ -762,8 +822,8 @@ def import_userdata(req: ImportRequest):
                         nickname, display_name, phones, emails, addresses, call_signs,
                         x_handles, websites, has_signal, signal_username, pgp_key, favorite,
                         color, organization, social_context, image_url, notes, tags,
-                        created_datetime, modified_datetime
-                    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                        created_datetime, modified_datetime, owner_id
+                    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                     (
                         new_id,
                         c.get("given_name"),
@@ -791,6 +851,7 @@ def import_userdata(req: ImportRequest):
                         serialize_json_field(c.get("tags")),
                         c.get("created_datetime"),
                         c.get("modified_datetime"),
+                        user_id,
                     ),
                 )
                 contacts_replaced += 1
@@ -802,9 +863,9 @@ def import_userdata(req: ImportRequest):
             # ── Add mode: merge settings arrays, insert non-duplicate contacts ──
             settings_merged = 0
             for s in settings_records:
-                user_id = s.get("user_id", "default_user")
+                settings_user_id = s.get("user_id", user_id)
                 cursor = conn.cursor()
-                cursor.execute("SELECT * FROM settings WHERE user_id = ?", (user_id,))
+                cursor.execute("SELECT * FROM settings WHERE user_id = ?", (settings_user_id,))
                 existing_row = cursor.fetchone()
 
                 if existing_row:
@@ -850,7 +911,7 @@ def import_userdata(req: ImportRequest):
                             serialize_json_field(existing_tags),
                             serialize_json_field(existing_custom_colors),
                             serialize_json_field(existing_saved_locations),
-                            user_id,
+                            settings_user_id,
                         ),
                     )
                     settings_merged += 1
@@ -866,7 +927,7 @@ def import_userdata(req: ImportRequest):
                             day_scroll_to_hour, username, audit_log_max_days, audit_log_max_mb
                         ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                         (
-                            user_id,
+                            settings_user_id,
                             s.get("time_format"),
                             s.get("sex"),
                             s.get("snooze_length"),
@@ -897,7 +958,7 @@ def import_userdata(req: ImportRequest):
 
             # ── Add mode contacts: skip duplicates by display_name + given_name ──
             cursor = conn.cursor()
-            cursor.execute("SELECT display_name, given_name FROM contacts")
+            cursor.execute("SELECT display_name, given_name FROM contacts WHERE owner_id = ?", (user_id,))
             existing_contacts = {(row[0], row[1]) for row in cursor.fetchall()}
 
             contacts_added = 0
@@ -916,8 +977,8 @@ def import_userdata(req: ImportRequest):
                         nickname, display_name, phones, emails, addresses, call_signs,
                         x_handles, websites, has_signal, signal_username, pgp_key, favorite,
                         color, organization, social_context, image_url, notes, tags,
-                        created_datetime, modified_datetime
-                    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                        created_datetime, modified_datetime, owner_id
+                    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                     (
                         new_id,
                         c.get("given_name"),
@@ -945,6 +1006,7 @@ def import_userdata(req: ImportRequest):
                         serialize_json_field(c.get("tags")),
                         c.get("created_datetime"),
                         c.get("modified_datetime"),
+                        user_id,
                     ),
                 )
                 contacts_added += 1
@@ -965,16 +1027,17 @@ def import_userdata(req: ImportRequest):
 
 
 @router.get("/api/export/all")
-def export_all():
-    """Export ALL data (chits + settings + contacts) as a single combined JSON envelope."""
+def export_all(request: Request):
+    """Export ALL data (chits + settings + contacts) for the authenticated user as a single combined JSON envelope."""
     conn = None
     try:
+        user_id = request.state.user_id
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 
         # ── Chits ──
-        cursor.execute("SELECT * FROM chits")
+        cursor.execute("SELECT * FROM chits WHERE owner_id = ?", (user_id,))
         chits = []
         for row in cursor.fetchall():
             chit = dict(row)
@@ -986,7 +1049,7 @@ def export_all():
             chits.append(chit)
 
         # ── Settings ──
-        cursor.execute("SELECT * FROM settings")
+        cursor.execute("SELECT * FROM settings WHERE user_id = ?", (user_id,))
         settings = []
         for row in cursor.fetchall():
             s = dict(row)
@@ -996,7 +1059,7 @@ def export_all():
             settings.append(s)
 
         # ── Contacts ──
-        cursor.execute("SELECT * FROM contacts")
+        cursor.execute("SELECT * FROM contacts WHERE owner_id = ?", (user_id,))
         contacts = []
         for row in cursor.fetchall():
             c = dict(row)
@@ -1033,7 +1096,7 @@ def export_all():
 
 
 @router.post("/api/import/all")
-def import_all(req: ImportRequest):
+def import_all(req: ImportRequest, request: Request):
     """Import ALL data (chits + settings + contacts + standalone alerts) from a combined envelope."""
     if req.mode not in ("add", "replace"):
         raise HTTPException(status_code=400, detail="Invalid mode: must be 'add' or 'replace'")
@@ -1052,15 +1115,23 @@ def import_all(req: ImportRequest):
 
     conn = None
     try:
+        user_id = request.state.user_id
         conn = sqlite3.connect(DB_PATH)
         conn.execute("BEGIN")
+
+        # Look up owner info for imported data
+        cur = conn.cursor()
+        cur.execute("SELECT display_name, username FROM users WHERE id = ?", (user_id,))
+        user_row = cur.fetchone()
+        owner_display_name = user_row[0] if user_row else ""
+        owner_username = user_row[1] if user_row else request.state.username
 
         summary = {}
 
         if req.mode == "replace":
-            conn.execute("DELETE FROM chits")
-            conn.execute("DELETE FROM settings")
-            conn.execute("DELETE FROM contacts")
+            conn.execute("DELETE FROM chits WHERE owner_id = ?", (user_id,))
+            conn.execute("DELETE FROM settings WHERE user_id = ?", (user_id,))
+            conn.execute("DELETE FROM contacts WHERE owner_id = ?", (user_id,))
             try:
                 conn.execute("DELETE FROM standalone_alerts")
             except Exception:
@@ -1079,8 +1150,9 @@ def import_all(req: ImportRequest):
                     created_datetime, modified_datetime, is_project_master,
                     child_chits, all_day, alerts, recurrence_rule,
                     recurrence_exceptions, progress_percent, time_estimate,
-                    weather_data, health_data, hide_when_instance_done
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    weather_data, health_data, hide_when_instance_done,
+                    owner_id, owner_display_name, owner_username
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     new_id, chit.get("title"), chit.get("note"),
                     serialize_json_field(chit.get("tags")),
@@ -1105,6 +1177,9 @@ def import_all(req: ImportRequest):
                     serialize_json_field(chit.get("weather_data")),
                     serialize_json_field(chit.get("health_data")),
                     1 if chit.get("hide_when_instance_done") else 0,
+                    user_id,
+                    owner_display_name,
+                    owner_username,
                 ),
             )
             chit_count += 1
@@ -1154,8 +1229,8 @@ def import_all(req: ImportRequest):
                     id, given_name, surname, middle_names, prefix, suffix, nickname,
                     display_name, phones, emails, addresses, call_signs, x_handles,
                     websites, notes, color, image_url, tags, has_signal, favorite,
-                    created_datetime, modified_datetime
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    created_datetime, modified_datetime, owner_id
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     new_id, c.get("given_name"), c.get("surname"), c.get("middle_names"),
                     c.get("prefix"), c.get("suffix"), c.get("nickname"), c.get("display_name"),
@@ -1169,6 +1244,7 @@ def import_all(req: ImportRequest):
                     serialize_json_field(c.get("tags")),
                     1 if c.get("has_signal") else 0, 1 if c.get("favorite") else 0,
                     c.get("created_datetime"), c.get("modified_datetime"),
+                    user_id,
                 ),
             )
             contacts_count += 1

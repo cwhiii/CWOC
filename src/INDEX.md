@@ -31,9 +31,10 @@ Package marker. No public exports.
 |--------|-------------|
 | `app` | FastAPI application instance |
 | `NoCacheStaticMiddleware` | Middleware that adds no-cache headers to `/frontend/`, `/static/`, `/data/` responses |
+| `AuthMiddleware` | (imported from `middleware.py`) Session-based auth middleware — validates `cwoc_session` cookie, injects user identity into `request.state` |
 | `on_startup()` | Startup event — calls `start_weather_schedulers()` |
 
-Registers all route modules, runs all migrations and `init_db()` at import time, mounts `StaticFiles` for frontend, static, and data directories.
+Registers all route modules (including `auth_router` and `users_router`), runs all migrations (including `migrate_add_multi_user()`) and `init_db()` at import time, mounts `StaticFiles` for frontend, static, and data directories.
 
 ### 1.3 `src/backend/models.py` — Pydantic Models
 
@@ -45,6 +46,11 @@ Registers all route modules, runs all migrations and `init_db()` at import time,
 | `MultiValueEntry` | Label/value pair for contact multi-value fields (phone, email, etc.) |
 | `Contact` | Contact model — name fields, phones, emails, addresses, social, security, notes, tags, color |
 | `ImportRequest` | Import envelope — mode ("add"/"replace") + data dict |
+| `UserCreate` | Create user request — username, display_name, password, email (optional), is_admin (optional, default False) |
+| `UserResponse` | User response — id, username, display_name, email, is_admin, is_active, created_datetime |
+| `LoginRequest` | Login request — username, password |
+| `ProfileUpdate` | Profile update request — display_name (optional), email (optional) |
+| `PasswordChange` | Password change request — current_password, new_password |
 
 ### 1.4 `src/backend/db.py` — Database Helpers & Shared State
 
@@ -89,6 +95,8 @@ All migrations run at startup. Each checks if the column/table already exists be
 | `migrate_add_alert_state()` | Create the `alert_states` table |
 | `migrate_contact_images_to_data()` | Move contact images from `/static/contact_images/` to `data/contacts/profile_pictures/` |
 | `migrate_add_habits_fields()` | Add `hide_when_instance_done` column to chits table and `habits_success_window` column to settings table |
+| `migrate_add_border_color_settings()` | Add `overdue_border_color` and `blocked_border_color` setting columns |
+| `migrate_add_multi_user()` | Create `users` and `sessions` tables, default admin account, add `owner_id`/`owner_display_name`/`owner_username` columns to chits, add `owner_id` to contacts, reassign existing data to admin user |
 
 ### 1.6 `src/backend/serializers.py` — vCard & CSV
 
@@ -139,30 +147,90 @@ All migrations run at startup. Each checks if the column/table already exists be
 | `test_address_round_trip()` | Address formatting survives a round-trip |
 | `test_favorite_round_trip()` | Favorite flag survives a round-trip |
 
+### 1.10 `src/backend/auth_utils.py` — Password Hashing Utilities
+
+Uses Python stdlib only — `hashlib.pbkdf2_hmac` with SHA-256, `os.urandom` for salt generation. No external dependencies.
+
+| Function | Description |
+|----------|-------------|
+| `hash_password(password)` | Hash a password with PBKDF2-HMAC-SHA256 (600,000 iterations, 32-byte random salt). Returns `'salt_hex$hash_hex'` string |
+| `verify_password(password, stored_hash)` | Verify a password against a stored `'salt_hex$hash_hex'` string using constant-time comparison |
+
+### 1.11 `src/backend/middleware.py` — Authentication Middleware
+
+Session-based authentication middleware for all CWOC requests.
+
+| Symbol | Description |
+|--------|-------------|
+| `SESSION_COOKIE_NAME` | Cookie name constant: `"cwoc_session"` |
+| `_INACTIVITY_SECONDS` | Inactivity timeout: 24 hours (86,400 seconds) |
+| `_CLEANUP_INTERVAL` | Periodic cleanup interval: every 100 requests |
+| `_is_excluded(path, method)` | Return True if the request path/method should skip auth (static assets, login page, health check, login API) |
+| `_cleanup_expired_sessions()` | Delete sessions past their `expires_datetime` or inactive > 24h |
+| `AuthMiddleware` | Starlette `BaseHTTPMiddleware` subclass — validates `cwoc_session` cookie, injects `request.state.user_id` and `request.state.username`, returns 401 for API paths or redirects to `/login` for page paths |
+
+### 1.12 `src/backend/test_auth.py` — Auth Property Tests
+
+| Class / Function | Description |
+|------------------|-------------|
+| `TestProperty1PasswordHashRoundTrip` | Password hash round-trip: `verify_password(pw, hash_password(pw))` returns True, stored hash doesn't contain plaintext (100+ iterations) |
+| `TestProperty4LoginLogoutSessionLifecycle` | Login creates session, logout invalidates it (100+ iterations) |
+| `TestProperty5InvalidCredentialsGeneric401` | Invalid credentials return generic 401 — never reveal whether username or password was wrong (100+ iterations) |
+| `TestProperty6UnauthenticatedAPIRequestsReturn401` | Unauthenticated API requests to protected paths return 401 (100+ iterations) |
+| `TestProperty10PasswordChangeRequiresCurrentPassword` | Password change requires correct current password, rejects wrong password (100+ iterations) |
+| `TestProperty11UserSwitchInvalidatesOldSession` | User switch invalidates old session and creates new one (100+ iterations) |
+
+### 1.13 `src/backend/test_users.py` — User Management Property Tests
+
+| Class / Function | Description |
+|------------------|-------------|
+| `TestProperty2UserCreationPersistsAllFields` | User creation persists all required fields (100+ iterations) |
+| `TestProperty3UsernameUniqueness` | Username uniqueness enforced — duplicate usernames rejected (100+ iterations) |
+| `TestProperty13DeactivationReactivationLifecycle` | Deactivation sets `is_active=False` and invalidates sessions; reactivation restores `is_active=True` (100+ iterations) |
+| `TestProperty14LastAdminProtection` | Cannot deactivate the last active admin account (100+ iterations) |
+| `TestProperty15MultipleConcurrentSessions` | Multiple concurrent sessions per user are supported (100+ iterations) |
+
+### 1.14 `src/backend/test_isolation.py` — Data Isolation Property Tests
+
+| Class / Function | Description |
+|------------------|-------------|
+| `TestProperty7PerUserDataIsolation` | Per-user data isolation — users cannot see each other's chits or contacts (100+ iterations) |
+| `TestProperty8ChitOwnerRecordFromAuthenticatedUser` | Chit owner record populated from authenticated user on creation (100+ iterations) |
+| `TestProperty9ProfileUpdateRoundTrip` | Profile update round-trip — display_name and email persist correctly (100+ iterations) |
+| `TestProperty16AuditLogRecordsCorrectActor` | Audit log records correct actor from authenticated user (100+ iterations) |
+
+### 1.15 `src/backend/test_migration.py` — Migration Property Tests
+
+| Class / Function | Description |
+|------------------|-------------|
+| `TestProperty12MigrationIdempotency` | `migrate_add_multi_user()` is idempotent — running multiple times produces no errors and same result (100+ iterations) |
+
 ---
 
-### 1.10 `src/backend/routes/__init__.py`
+### 1.16 `src/backend/routes/__init__.py`
 Package marker. No public exports.
 
-### 1.11 `src/backend/routes/chits.py` — Chit CRUD & Import/Export
+### 1.17 `src/backend/routes/chits.py` — Chit CRUD & Import/Export
+
+All chit endpoints are scoped by `owner_id` — users can only access their own chits. The `request.state.user_id` (set by `AuthMiddleware`) is used for ownership filtering and assignment.
 
 | Route | Handler | Description |
 |-------|---------|-------------|
-| `GET /api/chits` | `get_all_chits()` | Return all non-deleted chits |
-| `GET /api/chits/search` | `search_chits(q)` | Global search across all chit fields |
-| `POST /api/chits` | `create_chit(chit)` | Create a new chit |
-| `GET /api/chit/{chit_id}` | `get_chit(chit_id)` | Get a single chit by ID |
-| `PUT /api/chits/{chit_id}` | `update_chit(chit_id, chit)` | Update a chit (upserts if not found) |
-| `DELETE /api/chits/{chit_id}` | `delete_chit(chit_id)` | Soft-delete a chit |
-| `PATCH /api/chits/{chit_id}/recurrence-exceptions` | `patch_recurrence_exceptions(chit_id, body)` | Add or update a recurrence exception |
-| `GET /api/export/chits` | `export_chits()` | Export all chits as JSON envelope |
-| `GET /api/export/userdata` | `export_userdata()` | Export settings + contacts as JSON envelope |
-| `GET /api/export/all` | `export_all()` | Export all data (chits + settings + contacts + standalone alerts) as combined JSON envelope |
-| `POST /api/import/chits` | `import_chits(req)` | Import chits from JSON envelope |
-| `POST /api/import/userdata` | `import_userdata(req)` | Import user data from JSON envelope |
-| `POST /api/import/all` | `import_all(req)` | Import all data from combined JSON envelope |
+| `GET /api/chits` | `get_all_chits(request)` | Return all non-deleted chits owned by the authenticated user |
+| `GET /api/chits/search` | `search_chits(q, request)` | Global search across all chit fields, scoped to authenticated user |
+| `POST /api/chits` | `create_chit(chit, request)` | Create a new chit with `owner_id`, `owner_display_name`, `owner_username` from authenticated user |
+| `GET /api/chit/{chit_id}` | `get_chit(chit_id, request)` | Get a single chit by ID (verifies ownership) |
+| `PUT /api/chits/{chit_id}` | `update_chit(chit_id, chit, request)` | Update a chit (verifies ownership, upserts if not found) |
+| `DELETE /api/chits/{chit_id}` | `delete_chit(chit_id, request)` | Soft-delete a chit (verifies ownership) |
+| `PATCH /api/chits/{chit_id}/recurrence-exceptions` | `patch_recurrence_exceptions(chit_id, body, request)` | Add or update a recurrence exception (verifies ownership) |
+| `GET /api/export/chits` | `export_chits(request)` | Export authenticated user's chits as JSON envelope |
+| `GET /api/export/userdata` | `export_userdata(request)` | Export authenticated user's settings + contacts as JSON envelope |
+| `GET /api/export/all` | `export_all(request)` | Export authenticated user's data (chits + settings + contacts + standalone alerts) as combined JSON envelope |
+| `POST /api/import/chits` | `import_chits(req, request)` | Import chits from JSON envelope (scoped to authenticated user) |
+| `POST /api/import/userdata` | `import_userdata(req, request)` | Import user data from JSON envelope (scoped to authenticated user) |
+| `POST /api/import/all` | `import_all(req, request)` | Import all data from combined JSON envelope (scoped to authenticated user) |
 
-### 1.12 `src/backend/routes/trash.py` — Trash
+### 1.18 `src/backend/routes/trash.py` — Trash
 
 | Route | Handler | Description |
 |-------|---------|-------------|
@@ -170,7 +238,9 @@ Package marker. No public exports.
 | `POST /api/trash/{chit_id}/restore` | `restore_chit(chit_id)` | Restore a soft-deleted chit |
 | `DELETE /api/trash/{chit_id}/purge` | `purge_chit(chit_id)` | Permanently delete a chit |
 
-### 1.13 `src/backend/routes/settings.py` — Settings & Alerts
+### 1.19 `src/backend/routes/settings.py` — Settings & Alerts
+
+Settings endpoints use `request.state.user_id` from `AuthMiddleware` to scope data to the authenticated user.
 
 | Route | Handler | Description |
 |-------|---------|-------------|
@@ -184,21 +254,23 @@ Package marker. No public exports.
 | `POST /api/alert-state` | `set_alert_state(body)` | Set dismiss/snooze state for an alert |
 | `DELETE /api/alert-state/cleanup` | `cleanup_alert_states()` | Remove expired snooze/dismiss states |
 
-### 1.14 `src/backend/routes/contacts.py` — Contacts
+### 1.20 `src/backend/routes/contacts.py` — Contacts
+
+All contact endpoints are scoped by `owner_id` — users can only access their own contacts.
 
 | Route | Handler | Description |
 |-------|---------|-------------|
-| `POST /api/contacts` | `create_contact(contact)` | Create a new contact |
-| `GET /api/contacts` | `get_contacts(q)` | List contacts (optional search) |
-| `GET /api/contacts/export` | `export_contacts(format)` | Export all contacts as .vcf or .csv |
-| `GET /api/contacts/{contact_id}/export` | `export_single_contact(contact_id, format)` | Export a single contact |
-| `GET /api/contacts/{contact_id}` | `get_contact(contact_id)` | Get a single contact |
-| `PUT /api/contacts/{contact_id}` | `update_contact(contact_id, contact)` | Update a contact |
-| `DELETE /api/contacts/{contact_id}` | `delete_contact(contact_id)` | Delete a contact |
+| `POST /api/contacts` | `create_contact(contact, request)` | Create a new contact (sets `owner_id` from authenticated user) |
+| `GET /api/contacts` | `get_contacts(q, request)` | List contacts owned by authenticated user (optional search) |
+| `GET /api/contacts/export` | `export_contacts(format, request)` | Export authenticated user's contacts as .vcf or .csv |
+| `GET /api/contacts/{contact_id}/export` | `export_single_contact(contact_id, format, request)` | Export a single contact (verifies ownership) |
+| `GET /api/contacts/{contact_id}` | `get_contact(contact_id, request)` | Get a single contact (verifies ownership) |
+| `PUT /api/contacts/{contact_id}` | `update_contact(contact_id, contact, request)` | Update a contact (verifies ownership) |
+| `DELETE /api/contacts/{contact_id}` | `delete_contact(contact_id, request)` | Delete a contact (verifies ownership) |
 | `POST /api/contacts/{contact_id}/image` | `upload_contact_image(contact_id, file)` | Upload a profile image |
 | `DELETE /api/contacts/{contact_id}/image` | `delete_contact_image(contact_id)` | Remove a profile image |
-| `PATCH /api/contacts/{contact_id}/favorite` | `toggle_contact_favorite(contact_id)` | Toggle favorite status |
-| `POST /api/contacts/import` | `import_contacts(file)` | Import contacts from .vcf or .csv file |
+| `PATCH /api/contacts/{contact_id}/favorite` | `toggle_contact_favorite(contact_id, request)` | Toggle favorite status (verifies ownership) |
+| `POST /api/contacts/import` | `import_contacts(file, request)` | Import contacts from .vcf or .csv file (scoped to authenticated user) |
 
 **Internal helpers:**
 
@@ -208,7 +280,7 @@ Package marker. No public exports.
 | `_row_to_contact(row)` | Convert a DB row dict to an API-ready contact dict |
 | `_write_vcf_file(contact_id, contact)` | Write a .vcf file for a contact |
 
-### 1.15 `src/backend/routes/audit.py` — Audit Log
+### 1.21 `src/backend/routes/audit.py` — Audit Log
 
 | Route | Handler | Description |
 |-------|---------|-------------|
@@ -222,16 +294,20 @@ Package marker. No public exports.
 
 | Function | Description |
 |----------|-------------|
-| `get_current_actor()` | Get the current username from settings for audit attribution |
+| `get_actor_from_request(request)` | Build an actor string from `request.state.user_id` and `request.state.username` (set by `AuthMiddleware`). Returns `'username (user_id)'` for audit attribution |
+| `get_current_actor()` | Legacy fallback for system-level actions (no request context). Returns `'System'` |
 | `compute_audit_diff(old_dict, new_dict, exclude_fields)` | Compute field-level diffs between two dicts |
 | `insert_audit_entry(conn, entity_type, entity_id, action, actor, changes, entity_summary)` | Insert an audit log row |
 | `_run_auto_prune()` | Internal auto-prune logic |
 
-### 1.16 `src/backend/routes/health.py` — Health, Version, Sync & Pages
+### 1.22 `src/backend/routes/health.py` — Health, Version, Sync & Pages
 
 | Route | Handler | Description |
 |-------|---------|-------------|
 | `GET /` | `root()` | Serve `index.html` as the main page |
+| `GET /login` | `login_page()` | Serve `login.html` (excluded from auth middleware) |
+| `GET /profile` | `profile_page()` | Serve `profile.html` |
+| `GET /user-admin` | `user_admin_page()` | Serve `user-admin.html` |
 | `GET /editor` | `editor(id)` | Serve `editor.html` (accepts `?id=` param) |
 | `GET /api/geocode` | `geocode_proxy(q)` | Geocoding proxy to OpenStreetMap Nominatim |
 | `POST /api/sync/send` | `sync_send_message(body)` | Post a sync message |
@@ -251,6 +327,50 @@ Package marker. No public exports.
 | `_SyncHub` | Class managing WebSocket connections and message broadcasting |
 | `_sync_geocode_fetch(url)` | Synchronous HTTP GET for geocoding |
 
+### 1.23 `src/backend/routes/auth.py` — Authentication Routes
+
+Provides login, logout, session management, profile updates, password changes, and user switching. Rate limiting is enforced on login attempts using an in-memory dictionary keyed by username.
+
+| Route | Handler | Description |
+|-------|---------|-------------|
+| `POST /api/auth/login` | `login(body)` | Validate credentials, enforce rate limit (10 attempts / 15 min), create session, set `cwoc_session` cookie |
+| `POST /api/auth/logout` | `logout(request)` | Read session token from cookie, delete session row, clear cookie |
+| `GET /api/auth/me` | `get_me(request)` | Return authenticated user's profile info (user_id, username, display_name, email, is_admin) |
+| `PUT /api/auth/profile` | `update_profile(body, request)` | Update display_name and/or email for authenticated user |
+| `PUT /api/auth/password` | `change_password(body, request)` | Require current_password verification, hash new_password, update user. Returns 403 if current password is wrong |
+| `POST /api/auth/switch` | `switch_user(body, request)` | Validate target user credentials, invalidate current session, create new session for target user |
+
+**Internal helpers:**
+
+| Function | Description |
+|----------|-------------|
+| `_check_rate_limit(username)` | Return True if the username is rate-limited (≥10 failed attempts in 15 min window) |
+| `_record_failed_attempt(username)` | Record a failed login attempt timestamp |
+| `_clear_attempts(username)` | Clear failed attempts on successful login |
+| `_create_session(conn, user_id)` | Create a new session row and return the token |
+| `_set_session_cookie(response, token)` | Set the `cwoc_session` HttpOnly cookie on a response |
+| `_clear_session_cookie(response)` | Clear the session cookie on a response |
+
+### 1.24 `src/backend/routes/users.py` — Admin-Only User Management
+
+All endpoints require the requesting user to be an admin (`is_admin=True`); non-admins receive 403.
+
+| Route | Handler | Description |
+|-------|---------|-------------|
+| `GET /api/users` | `list_users(request)` | List all users (admin only), returns UserResponse list |
+| `POST /api/users` | `create_user(body, request)` | Create a new user (admin only), enforce username uniqueness (409 on duplicate) |
+| `PUT /api/users/{user_id}/deactivate` | `deactivate_user(user_id, request)` | Deactivate a user (admin only), invalidate all sessions, prevent deactivation of last admin (400) |
+| `PUT /api/users/{user_id}/reactivate` | `reactivate_user(user_id, request)` | Reactivate a user (admin only) |
+| `PUT /api/users/{user_id}/reset-password` | `reset_password(user_id, body, request)` | Reset a user's password (admin only) |
+
+**Internal helpers:**
+
+| Function | Description |
+|----------|-------------|
+| `PasswordReset` | Pydantic model for password reset request body (`new_password: str`) |
+| `_require_admin(request)` | Check that the requesting user is an admin; return `user_id` if so, raise 403 otherwise |
+| `_user_row_to_response(row)` | Convert a user database row to a UserResponse-compatible dict |
+
 ---
 
 ## 2. Frontend JavaScript
@@ -260,13 +380,26 @@ All frontend JS lives under `src/frontend/js/`. No ES modules — all functions 
 ### 2.1 Shared (`src/frontend/js/shared/`)
 
 
-#### shared-utils.js
+#### shared-auth.js
 
-Core utility functions shared across all CWOC pages. Must load first among all shared sub-scripts.
+Frontend authentication guard for all CWOC pages. Loads BEFORE `shared-utils.js` in the script order. Runs on every page (except `login.html`) and checks auth status on page load.
 
 | Function | Description |
 |----------|-------------|
-| `getCachedSettings()` | Promise-based settings fetch with caching; returns cached settings or fetches from `/api/settings/default_user` |
+| `getCurrentUser()` | Returns the cached authenticated user object `{ user_id, username, display_name, email, is_admin }`, or null |
+| `isAdmin()` | Returns true if the cached user has admin privileges (`is_admin === true`) |
+| `waitForAuth()` | Returns a Promise that resolves to the user object once the auth check completes |
+
+On load: calls `GET /api/auth/me`. If 401: stores current URL in `localStorage` as `cwoc_auth_return`, redirects to `/login`.
+
+
+#### shared-utils.js
+
+Core utility functions shared across all CWOC pages. Must load after `shared-auth.js` (uses `waitForAuth()` for user-scoped settings).
+
+| Function | Description |
+|----------|-------------|
+| `getCachedSettings()` | Promise-based settings fetch with caching; waits for auth, then fetches from `/api/settings/{user_id}` using the authenticated user's ID |
 | `_invalidateSettingsCache()` | Clear the settings cache to force a fresh fetch on next call |
 | `cwocConfirm(message, opts)` | Show a parchment-styled confirm modal; returns a Promise resolving to boolean |
 | `generateUniqueId()` | Create a unique ID string from timestamp + random base-36 |
@@ -1098,7 +1231,7 @@ Projects zone: Kanban board for project master chits.
 
 #### shared-page.js
 
-Shared page components: save/cancel button system, auto header/footer injection, navigate panel (V hotkey).
+Shared page components: save/cancel button system, auto header/footer injection, user switcher, navigate panel (V hotkey).
 
 | Symbol | Description |
 |--------|-------------|
@@ -1107,8 +1240,12 @@ Shared page components: save/cancel button system, auto header/footer injection,
 | `CwocSaveSystem.markSaved()` | Mark as saved — show greyed-out "Saved" button, hide Save & Stay / Save & Exit |
 | `CwocSaveSystem.markUnsaved()` | Mark as unsaved — show Save & Stay / Save & Exit, change Cancel to "❌ Cancel" |
 | `CwocSaveSystem.cancelOrExit()` | Handle exit with unsaved-changes confirmation modal |
-| *(IIFE)* Auto-header/footer injection | Injects `.header-and-buttons` header and `.author-info` footer into `.settings-panel` when `body[data-page-title]` is set; wires ESC-to-go-back |
-| *(IIFE)* Navigate Panel | Creates the V-hotkey navigation overlay on secondary pages (not dashboard); exports `cwocOpenNavModal`, `cwocCloseNavModal`, `cwocIsNavModalOpen` globally |
+| *(IIFE)* Auto-header/footer injection | Injects `.header-and-buttons` header and `.author-info` footer into `.settings-panel` when `body[data-page-title]` is set; includes user switcher, profile link, logout button; wires ESC-to-go-back |
+| *(IIFE)* User Switcher | Dropdown + password prompt for switching accounts. Fetches `GET /api/users` to list active accounts, prompts for target user's password, calls `POST /api/auth/switch` |
+| `_cwocToggleUserDropdown(switcherWrap)` | Toggle the user dropdown on the switcher button |
+| `_cwocShowSwitchPasswordPrompt(targetUser)` | Show a parchment-styled password prompt modal for switching to a user |
+| `_cwocLogout()` | Logout: `POST /api/auth/logout`, then redirect to `/login` |
+| *(IIFE)* Navigate Panel | Creates the V-hotkey navigation overlay on secondary pages (not dashboard); includes Profile and User Admin (admin-only) entries; exports `cwocOpenNavModal`, `cwocCloseNavModal`, `cwocIsNavModalOpen` globally |
 
 #### shared-editor.js
 
@@ -1325,6 +1462,39 @@ Weather page: 16-day forecasts for all saved locations rendered as a scrollable 
 | `_wxBuildCityGroups(chits, savedLocations, forecastDates)` | Build city groups from chits at non-saved locations with date→title mapping |
 | `_wxAddCityRows(container, allChits, savedLocations, forecastDates, weekStartDay)` | Add city-based weather rows for chits at non-saved locations; fetch weather per city |
 
+#### profile.js
+
+Profile page: display and edit user profile (display name, email), change password.
+
+| Function | Description |
+|----------|-------------|
+| `_initProfileSaveSystem()` | Initialize `CwocSaveSystem` and wire up save/cancel buttons |
+| `_showMessage(el, text, type)` | Show a message in the specified message div ('success' or 'error') |
+| `_clearMessage(el)` | Clear a message div |
+| `_loadProfile()` | Fetch user data from `GET /api/auth/me` and populate form fields |
+| `_saveProfile(exitAfter)` | Save profile changes via `PUT /api/auth/profile` with `{ display_name, email }` |
+| `_handlePasswordChange()` | Handle password change via `PUT /api/auth/password`; validates new password matches confirmation |
+| `_monitorProfileChanges()` | Wire up input listeners on editable profile fields to track dirty state |
+
+#### user-admin.js
+
+Admin-only page for managing user accounts. Provides user table listing, create user modal, deactivate/reactivate, and reset password.
+
+| Function | Description |
+|----------|-------------|
+| `_showAdminMessage(text, type)` | Show an inline message in the admin message area |
+| `_clearAdminMessage()` | Clear the admin message area |
+| `_loadUsers()` | Fetch all users from `GET /api/users` and render the table |
+| `_renderUserTable()` | Render the user table into `#user-table-wrap` |
+| `openCreateUserModal()` | Open the create user modal and clear previous input |
+| `closeCreateUserModal()` | Close the create user modal |
+| `submitCreateUser()` | Submit the create user form via `POST /api/users` |
+| `deactivateUser(userId)` | Deactivate a user via `PUT /api/users/{id}/deactivate` |
+| `reactivateUser(userId)` | Reactivate a user via `PUT /api/users/{id}/reactivate` |
+| `openResetPasswordModal(userId, username)` | Open the reset password modal for a specific user |
+| `closeResetPasswordModal()` | Close the reset password modal |
+| `submitResetPassword()` | Submit the reset password form via `PUT /api/users/{id}/reset-password` |
+
 
 ## 3. Frontend CSS
 
@@ -1380,6 +1550,8 @@ Reusable editor patterns shared by the Chit Editor and Contact Editor. Self-cont
 | Tablet (≤768px) | Full-width editor, wrapped zone headers |
 | Mobile (≤480px) | Stacked header, mobile actions trigger/modal |
 | Mobile Actions Modal | Slide-up modal for mobile button access |
+| User Switcher (`.cwoc-user-switcher`) | User switcher button, dropdown, and password prompt modal styles |
+| Logout Button (`.cwoc-logout-btn`) | Logout button styling in the header |
 
 ### 3.2 Dashboard (`src/frontend/css/dashboard/`)
 
@@ -1556,7 +1728,8 @@ All JS is loaded via `<script>` tags — no ES modules. Load order matters becau
 
 **App scripts (at end of `<body>`):**
 ```html
-<!-- 1. Shared sub-scripts (order matters — utils first, coordinator last) -->
+<!-- 1. Shared sub-scripts (order matters — auth first, then utils, coordinator last) -->
+<script src="/frontend/js/shared/shared-auth.js"></script>
 <script src="/frontend/js/shared/shared-utils.js"></script>
 <script src="/frontend/js/shared/shared-touch.js"></script>
 <script src="/frontend/js/shared/shared-checklist.js"></script>
@@ -1608,7 +1781,8 @@ All JS is loaded via `<script>` tags — no ES modules. Load order matters becau
 <script src="/frontend/js/editor/editor_checklists.js"></script>
 <script src="/frontend/js/editor/editor_projects.js"></script>
 
-<!-- 2. Shared sub-scripts -->
+<!-- 2. Shared sub-scripts (auth first, then utils) -->
+<script src="/frontend/js/shared/shared-auth.js"></script>
 <script src="/frontend/js/shared/shared-utils.js"></script>
 <script src="/frontend/js/shared/shared-touch.js"></script>
 <script src="/frontend/js/shared/shared-checklist.js"></script>
@@ -1657,7 +1831,8 @@ All secondary pages follow the same shared pattern. Example from `settings.html`
 
 **App scripts (at end of `<body>`):**
 ```html
-<!-- 1. Shared sub-scripts (same order as dashboard) -->
+<!-- 1. Shared sub-scripts (same order as dashboard — auth first, then utils) -->
+<script src="/frontend/js/shared/shared-auth.js"></script>
 <script src="/frontend/js/shared/shared-utils.js"></script>
 <script src="/frontend/js/shared/shared-touch.js"></script>
 <script src="/frontend/js/shared/shared-checklist.js"></script>
@@ -1680,7 +1855,12 @@ All secondary pages follow the same shared pattern. Example from `settings.html`
 <script src="/frontend/js/pages/settings.js"></script>
 ```
 
-Pages using this pattern: `settings.html`, `people.html`, `contact-editor.html`, `weather.html`, `trash.html`, `audit-log.html`, `help.html`.
+Pages using this pattern: `settings.html`, `people.html`, `contact-editor.html`, `weather.html`, `trash.html`, `audit-log.html`, `help.html`, `profile.html`, `user-admin.html`.
+
+New frontend pages added for multi-user system:
+- `login.html` — Standalone login page (no shared header/footer, no `shared-auth.js`). Parchment-themed centered form with username/password inputs.
+- `profile.html` — User profile page. Uses `shared-page.css`, `shared-page.js`, `CwocSaveSystem`. Loads `profile.js`.
+- `user-admin.html` — Admin-only user management page. Uses `shared-page.css`, `shared-page.js`. Loads `user-admin.js`. Redirects non-admins to `/`.
 
 
 ---
@@ -1692,14 +1872,15 @@ Pages using this pattern: `settings.html`, `people.html`, `contact-editor.html`,
 ```
 src/backend/main.py
   ├── src.backend.db          (init_db, seed_version_info)
-  ├── src.backend.migrations  (all migrate_* functions)
+  ├── src.backend.migrations  (all migrate_* functions, including migrate_add_multi_user)
+  ├── src.backend.middleware   (AuthMiddleware)
   ├── src.backend.weather     (start_weather_schedulers)
-  └── src.backend.routes.*    (all 6 route modules)
+  └── src.backend.routes.*    (all 8 route modules, including auth_router and users_router)
 
 src/backend/routes/chits.py
   ├── src.backend.db           (DB_PATH, serialize/deserialize, compute_system_tags, _build_export_envelope)
   ├── src.backend.models       (Chit, ImportRequest)
-  └── src.backend.routes.audit (insert_audit_entry, compute_audit_diff, get_current_actor)
+  └── src.backend.routes.audit (insert_audit_entry, compute_audit_diff, get_actor_from_request)
 
 src/backend/routes/trash.py
   └── src.backend.db           (DB_PATH, deserialize_json_field)
@@ -1707,13 +1888,13 @@ src/backend/routes/trash.py
 src/backend/routes/settings.py
   ├── src.backend.db           (DB_PATH, serialize/deserialize)
   ├── src.backend.models       (Settings)
-  └── src.backend.routes.audit (insert_audit_entry, compute_audit_diff, get_current_actor, _run_auto_prune)
+  └── src.backend.routes.audit (insert_audit_entry, compute_audit_diff, get_actor_from_request, _run_auto_prune)
 
 src/backend/routes/contacts.py
   ├── src.backend.db           (DB_PATH, CONTACT_IMAGES_DIR, serialize/deserialize, compute_display_name)
   ├── src.backend.models       (Contact)
   ├── src.backend.serializers  (vcard_parse, vcard_print, csv_export, csv_import)
-  └── src.backend.routes.audit (insert_audit_entry, compute_audit_diff, get_current_actor)
+  └── src.backend.routes.audit (insert_audit_entry, compute_audit_diff, get_actor_from_request)
 
 src/backend/routes/audit.py
   └── src.backend.db           (DB_PATH, deserialize_json_field)
@@ -1722,11 +1903,28 @@ src/backend/routes/health.py
   ├── src.backend.db           (DB_PATH, _update_lock, deserialize_json_field, get_or_create_instance_id, get_version_info, update_version_info)
   └── src.backend.routes.audit (insert_audit_entry, get_current_actor)
 
+src/backend/routes/auth.py
+  ├── src.backend.auth_utils   (hash_password, verify_password)
+  ├── src.backend.db           (DB_PATH)
+  └── src.backend.models       (LoginRequest, PasswordChange, ProfileUpdate)
+
+src/backend/routes/users.py
+  ├── src.backend.auth_utils   (hash_password)
+  ├── src.backend.db           (DB_PATH)
+  └── src.backend.models       (UserCreate, UserResponse)
+
+src/backend/middleware.py
+  └── src.backend.db           (DB_PATH)
+
+src/backend/auth_utils.py
+  └── (no internal CWOC imports — leaf module)
+
 src/backend/weather.py
   └── src.backend.db           (DB_PATH, _update_lock, serialize_json_field)
 
 src/backend/migrations.py
-  └── src.backend.db           (DB_PATH, serialize_json_field)
+  ├── src.backend.db           (DB_PATH, serialize_json_field)
+  └── src.backend.auth_utils   (hash_password — used by migrate_add_multi_user)
 
 src/backend/serializers.py
   └── src.backend.db           (compute_display_name)
@@ -1738,38 +1936,40 @@ src/backend/models.py
   └── (no internal CWOC imports — leaf module)
 ```
 
-**Dependency summary:** `db.py` and `models.py` are leaf modules with no internal imports. `routes/audit.py` is imported by `chits.py`, `contacts.py`, `settings.py`, and `health.py` for audit logging. All route modules import from `db.py`.
+**Dependency summary:** `db.py`, `models.py`, and `auth_utils.py` are leaf modules with no internal imports. `routes/audit.py` is imported by `chits.py`, `contacts.py`, `settings.py`, and `health.py` for audit logging. `auth_utils.py` is imported by `routes/auth.py`, `routes/users.py`, and `migrations.py`. `middleware.py` is imported by `main.py`. All route modules import from `db.py`.
 
 ### 5.2 Frontend Script Load Dependencies
 
 Scripts are loaded via `<script>` tags. Later scripts depend on globals defined by earlier ones.
 
 ```
-shared-utils.js          ← MUST load first (getCachedSettings, cwocConfirm, generateUniqueId, etc.)
+shared-auth.js            ← MUST load first (getCurrentUser, isAdmin, waitForAuth — auth guard)
   │
-  ├── shared-touch.js         (standalone — enableTouchDrag)
-  ├── shared-checklist.js     (uses fetch, DOM — no shared-utils deps)
-  ├── shared-sort.js          (uses localStorage — no shared-utils deps)
-  ├── shared-indicators.js    (standalone — alert type detection)
-  ├── shared-calendar.js      (uses getCachedSettings from shared-utils)
-  ├── shared-tags.js          (uses getCachedSettings, fetch)
-  ├── shared-recurrence.js    (standalone — date math)
-  ├── shared-geocoding.js     (uses fetch)
-  └── shared-qr.js            (uses qrcode-generator CDN lib)
+  └── shared-utils.js      ← loads after shared-auth.js (getCachedSettings uses waitForAuth)
         │
-        └── shared.js          ← coordinator: depends on ALL above shared sub-scripts
-              │                   (uses shared-calendar, shared-tags, shared-recurrence,
-              │                    shared-indicators, shared-sort, shared-touch, shared-qr,
-              │                    shared-utils, shared-geocoding)
+        ├── shared-touch.js         (standalone — enableTouchDrag)
+        ├── shared-checklist.js     (uses fetch, DOM — no shared-utils deps)
+        ├── shared-sort.js          (uses localStorage — no shared-utils deps)
+        ├── shared-indicators.js    (standalone — alert type detection)
+        ├── shared-calendar.js      (uses getCachedSettings from shared-utils)
+        ├── shared-tags.js          (uses getCachedSettings, fetch)
+        ├── shared-recurrence.js    (standalone — date math)
+        ├── shared-geocoding.js     (uses fetch)
+        └── shared-qr.js            (uses qrcode-generator CDN lib)
               │
-              ├── shared-page.js    ← depends on shared.js (CwocSaveSystem, header/footer injection)
-              │     │
-              │     ├── shared-editor.js  ← depends on shared-page.js (zone toggle, dirty tracking)
-              │     │
-              │     └── [page-specific scripts]
-              │           settings.js, people.js, contact-editor.js,
-              │           contact-qr.js, weather.js
-              │
+              └── shared.js          ← coordinator: depends on ALL above shared sub-scripts
+                    │                   (uses shared-calendar, shared-tags, shared-recurrence,
+                    │                    shared-indicators, shared-sort, shared-touch, shared-qr,
+                    │                    shared-utils, shared-geocoding)
+                    │
+                    ├── shared-page.js    ← depends on shared.js + shared-auth.js (CwocSaveSystem, header/footer injection, user switcher, logout)
+                    │     │
+                    │     ├── shared-editor.js  ← depends on shared-page.js (zone toggle, dirty tracking)
+                    │     │
+                    │     └── [page-specific scripts]
+                    │           settings.js, people.js, contact-editor.js,
+                    │           contact-qr.js, weather.js, profile.js, user-admin.js
+                    │
               ├── [dashboard scripts] — all depend on shared.js + shared-page.js
               │     main-sidebar.js
               │     main-hotkeys.js
@@ -1798,10 +1998,12 @@ shared-utils.js          ← MUST load first (getCachedSettings, cwocConfirm, ge
 ```
 
 **Key rules:**
-- `shared-utils.js` must always load first among app scripts
+- `shared-auth.js` must always load first among app scripts (checks auth, provides `getCurrentUser`, `isAdmin`, `waitForAuth`)
+- `shared-utils.js` must load after `shared-auth.js` (uses `waitForAuth()` for user-scoped settings)
 - `shared.js` must load after all other `shared-*.js` sub-scripts
-- `shared-page.js` must load after `shared.js`
+- `shared-page.js` must load after `shared.js` (uses `getCurrentUser`, `isAdmin` for user switcher and nav)
 - `shared-editor.js` must load after `shared-page.js`
 - `editor_checklists.js` and `editor_projects.js` load BEFORE shared scripts in editor.html (they define classes used by shared code)
 - `main-init.js` and `main.js` must load last among dashboard scripts
 - `editor-init.js` must load last among editor scripts
+- `login.html` does NOT load `shared-auth.js` (login page doesn't need auth guard)

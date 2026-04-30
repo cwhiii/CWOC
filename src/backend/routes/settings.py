@@ -9,14 +9,14 @@ import sqlite3
 from datetime import datetime, timedelta
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 
 from src.backend.db import (
     DB_PATH, serialize_json_field, deserialize_json_field,
 )
 from src.backend.models import Settings
 from src.backend.routes.audit import (
-    insert_audit_entry, compute_audit_diff, get_current_actor, _run_auto_prune,
+    insert_audit_entry, compute_audit_diff, get_actor_from_request, _run_auto_prune,
 )
 
 
@@ -29,15 +29,19 @@ router = APIRouter()
 # ═══════════════════════════════════════════════════════════════════════════
 
 @router.get("/api/settings/{user_id}")
-def get_settings(user_id: str):
+def get_settings(user_id: str, request: Request):
+    # Validate that the requested user_id matches the authenticated user
+    authenticated_user_id = request.state.user_id
+    if user_id != authenticated_user_id:
+        raise HTTPException(status_code=403, detail="Cannot access another user's settings")
     conn = None
     try:
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM settings WHERE user_id = ?", (user_id,))
+        cursor.execute("SELECT * FROM settings WHERE user_id = ?", (authenticated_user_id,))
         row = cursor.fetchone()
         if not row:
-            return {"user_id": user_id}  # Return empty settings
+            return {"user_id": authenticated_user_id}  # Return empty settings
         settings = dict(zip([col[0] for col in cursor.description], row))
         settings["tags"] = deserialize_json_field(settings["tags"])
         settings["default_filters"] = deserialize_json_field(settings["default_filters"])
@@ -56,7 +60,11 @@ def get_settings(user_id: str):
             conn.close()
 
 @router.post("/api/settings")
-def save_settings(settings: Settings):
+def save_settings(settings: Settings, request: Request):
+    # Ensure the settings user_id matches the authenticated user
+    authenticated_user_id = request.state.user_id
+    if settings.user_id != authenticated_user_id:
+        raise HTTPException(status_code=403, detail="Cannot modify another user's settings")
     conn = None
     try:
         conn = sqlite3.connect(DB_PATH)
@@ -102,6 +110,8 @@ def save_settings(settings: Settings):
             "default_notifications": serialize_json_field(settings.default_notifications),
             "unit_system": settings.unit_system or "imperial",
             "habits_success_window": settings.habits_success_window or "30",
+            "overdue_border_color": settings.overdue_border_color or "#b22222",
+            "blocked_border_color": settings.blocked_border_color or "#DAA520",
         }
 
         cursor.execute(
@@ -112,8 +122,8 @@ def save_settings(settings: Settings):
                 calendar_snap, week_start_day, work_start_hour, work_end_hour, work_days, enabled_periods, custom_days_count,
                 all_view_start_hour, all_view_end_hour, day_scroll_to_hour,
                 username, audit_log_max_days, audit_log_max_mb, default_notifications, unit_system,
-                habits_success_window
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                habits_success_window, overdue_border_color, blocked_border_color
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 new_settings_dict["user_id"],
@@ -144,6 +154,8 @@ def save_settings(settings: Settings):
                 new_settings_dict["default_notifications"],
                 new_settings_dict["unit_system"],
                 new_settings_dict["habits_success_window"],
+                new_settings_dict["overdue_border_color"],
+                new_settings_dict["blocked_border_color"],
             )
         )
 
@@ -153,7 +165,7 @@ def save_settings(settings: Settings):
                 audit_exclude = {"modified_datetime", "created_datetime", "user_id"}
                 changes = compute_audit_diff(old_settings_dict, new_settings_dict, exclude_fields=audit_exclude)
                 if changes:
-                    actor = get_current_actor()
+                    actor = get_actor_from_request(request)
                     insert_audit_entry(conn, "settings", settings.user_id, "updated", actor, changes=changes)
         except Exception as e:
             logger.error(f"Audit: failed to log settings change: {str(e)}")
@@ -203,7 +215,7 @@ def get_standalone_alerts():
 
 
 @router.post("/api/standalone-alerts")
-def create_standalone_alert(body: dict):
+def create_standalone_alert(body: dict, request: Request):
     conn = None
     try:
         alert_id = str(uuid4())
@@ -219,7 +231,7 @@ def create_standalone_alert(body: dict):
         )
         # Audit logging
         try:
-            actor = get_current_actor()
+            actor = get_actor_from_request(request)
             insert_audit_entry(conn, "independent_alert", alert_id, "created", actor, entity_summary=f"{_type}: {name}" if name else _type)
         except Exception as e:
             logger.error(f"Audit logging failed for independent alert creation: {str(e)}")
@@ -237,7 +249,7 @@ def create_standalone_alert(body: dict):
 
 
 @router.put("/api/standalone-alerts/{alert_id}")
-def update_standalone_alert(alert_id: str, body: dict):
+def update_standalone_alert(alert_id: str, body: dict, request: Request):
     conn = None
     try:
         now = datetime.utcnow().isoformat()
@@ -266,7 +278,7 @@ def update_standalone_alert(alert_id: str, body: dict):
         try:
             if old_data_str != new_data_str:
                 changes = [{"field": "data", "old": old_data_str, "new": new_data_str}]
-                actor = get_current_actor()
+                actor = get_actor_from_request(request)
                 insert_audit_entry(conn, "independent_alert", alert_id, "updated", actor, changes=changes, entity_summary=f"{_type}: {name}" if name else _type)
         except Exception as e:
             logger.error(f"Audit logging failed for independent alert update: {str(e)}")
@@ -285,7 +297,7 @@ def update_standalone_alert(alert_id: str, body: dict):
 
 
 @router.delete("/api/standalone-alerts/{alert_id}")
-def delete_standalone_alert(alert_id: str):
+def delete_standalone_alert(alert_id: str, request: Request):
     conn = None
     try:
         conn = sqlite3.connect(DB_PATH)
@@ -301,7 +313,7 @@ def delete_standalone_alert(alert_id: str):
             raise HTTPException(status_code=404, detail="Standalone alert not found")
         # Audit logging
         try:
-            actor = get_current_actor()
+            actor = get_actor_from_request(request)
             insert_audit_entry(conn, "independent_alert", alert_id, "deleted", actor, entity_summary=summary)
         except Exception as e:
             logger.error(f"Audit logging failed for independent alert deletion: {str(e)}")

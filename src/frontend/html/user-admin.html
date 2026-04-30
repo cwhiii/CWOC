@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <link rel="icon" type="image/x-icon" href="/static/cwod_logo-favicon.png" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>User Admin — C.W.'s Omni Chits</title>
+    <link rel="stylesheet" href="/frontend/css/shared/shared-page.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" />
+    <style>
+        /* ══ USER ADMIN PAGE-SPECIFIC STYLES ══ */
+
+        /* ── Toolbar ── */
+        .admin-toolbar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 14px;
+            flex-wrap: wrap;
+        }
+        .admin-toolbar .toolbar-spacer { flex: 1; }
+
+        /* ── Status badges ── */
+        .status-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-size: 0.85em;
+            font-weight: bold;
+        }
+        .status-badge.active {
+            background: #c8e6c9;
+            color: #2e7d32;
+        }
+        .status-badge.inactive {
+            background: #f8d7da;
+            color: #b22222;
+        }
+        .status-badge.admin {
+            background: #fff3cd;
+            color: #856404;
+        }
+        .status-badge.user {
+            background: #e0d4b5;
+            color: #4a2c2a;
+        }
+
+        /* ── Action buttons in table rows ── */
+        .action-btn {
+            padding: 4px 10px;
+            font-size: 0.85em;
+            font-family: 'Lora', Georgia, serif;
+            border: 1px solid #8b5a2b;
+            border-radius: 4px;
+            cursor: pointer;
+            background: #f5e6cc;
+            color: #4a2c2a;
+            transition: background 0.2s;
+        }
+        .action-btn:hover {
+            background: #e8dcc8;
+        }
+        .action-btn.danger {
+            background: #f8d7da;
+            color: #b22222;
+            border-color: #b22222;
+        }
+        .action-btn.danger:hover {
+            background: #f1b0b7;
+        }
+        .action-btn.restore {
+            background: #c8e6c9;
+            color: #2e7d32;
+            border-color: #2e7d32;
+        }
+        .action-btn.restore:hover {
+            background: #a5d6a7;
+        }
+        .row-actions {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        /* ── Inline messages ── */
+        .admin-message {
+            padding: 8px 12px;
+            border-radius: 5px;
+            font-size: 14px;
+            display: none;
+            margin-bottom: 12px;
+        }
+        .admin-message.success {
+            background: rgba(34, 139, 34, 0.15);
+            border: 1px solid #228b22;
+            color: #1a5c1a;
+            display: block;
+        }
+        .admin-message.error {
+            background: rgba(178, 34, 34, 0.15);
+            border: 1px solid #b22222;
+            color: #8b1a1a;
+            display: block;
+        }
+
+        /* ── Modal form fields ── */
+        .modal-form {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .modal-form label {
+            display: block;
+            font-size: 14px;
+            margin-bottom: 2px;
+            color: #1a1208;
+            font-weight: bold;
+        }
+        .modal-form input[type="text"],
+        .modal-form input[type="email"],
+        .modal-form input[type="password"] {
+            width: 100%;
+            box-sizing: border-box;
+            border: 1px solid #8b5a2b;
+            border-radius: 5px;
+            padding: 8px 10px;
+            font-size: 16px;
+            color: #1a1208;
+            font-family: 'Lora', Georgia, serif;
+            background: #f5e6cc;
+        }
+        .modal-form .checkbox-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .modal-form .checkbox-row input[type="checkbox"] {
+            accent-color: #8b5a2b;
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+        .modal-form .checkbox-row label {
+            font-weight: normal;
+            margin-bottom: 0;
+            cursor: pointer;
+        }
+        .modal-error {
+            font-size: 13px;
+            color: #b22222;
+            display: none;
+        }
+
+        /* ── Mobile responsive ── */
+        @media (max-width: 768px) {
+            .cwoc-table thead { display: none; }
+            .cwoc-table tbody { display: block; }
+            .cwoc-table tr {
+                display: flex;
+                flex-wrap: wrap;
+                align-items: baseline;
+                gap: 4px 10px;
+                border: 1px solid #d4c5a9;
+                border-radius: 4px;
+                margin-bottom: 6px;
+                padding: 8px 10px;
+                background: rgba(253, 245, 230, 0.5);
+            }
+            .cwoc-table td {
+                display: inline;
+                padding: 0;
+                border: none;
+                font-size: 0.9em;
+                line-height: 1.6;
+            }
+            .cwoc-table td::before {
+                content: attr(data-label) ": ";
+                font-weight: bold;
+                font-size: 0.85em;
+                color: var(--aged-brown-dark);
+            }
+            .cwoc-table td.actions-cell::before {
+                content: "";
+            }
+            .row-actions {
+                width: 100%;
+                margin-top: 4px;
+            }
+        }
+    </style>
+</head>
+<body data-page-title="User Admin" data-page-icon="👥">
+
+    <div class="settings-panel">
+        <!-- Toolbar -->
+        <div class="admin-toolbar">
+            <button class="cwoc-btn" id="create-user-btn" onclick="openCreateUserModal()">
+                <i class="fas fa-user-plus"></i> Create User
+            </button>
+            <div class="toolbar-spacer"></div>
+        </div>
+
+        <!-- Inline message area -->
+        <div id="admin-message" class="admin-message"></div>
+
+        <!-- User table -->
+        <div id="user-table-wrap"></div>
+    </div>
+
+    <!-- ═══ CREATE USER MODAL ═══ -->
+    <div class="modal" id="create-user-modal">
+        <div class="modal-content" style="max-width:420px;">
+            <h3>👤 Create New User</h3>
+            <div class="modal-form">
+                <div>
+                    <label for="new-username">Username</label>
+                    <input type="text" id="new-username" placeholder="Username (login identifier)" />
+                </div>
+                <div>
+                    <label for="new-display-name">Display Name</label>
+                    <input type="text" id="new-display-name" placeholder="Friendly display name" />
+                </div>
+                <div>
+                    <label for="new-password">Password</label>
+                    <input type="password" id="new-password" placeholder="Initial password" />
+                </div>
+                <div>
+                    <label for="new-email">Email (optional)</label>
+                    <input type="email" id="new-email" placeholder="Email address" />
+                </div>
+                <div class="checkbox-row">
+                    <input type="checkbox" id="new-is-admin" />
+                    <label for="new-is-admin">Administrator</label>
+                </div>
+                <div id="create-user-error" class="modal-error"></div>
+            </div>
+            <div class="modal-buttons" style="margin-top:14px;">
+                <button class="standard-button" onclick="closeCreateUserModal()">Cancel</button>
+                <button class="cwoc-btn" onclick="submitCreateUser()">✅ Create</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ RESET PASSWORD MODAL ═══ -->
+    <div class="modal" id="reset-password-modal">
+        <div class="modal-content" style="max-width:380px;">
+            <h3>🔑 Reset Password</h3>
+            <p id="reset-pw-user-label" style="font-weight:bold;margin:0 0 10px;"></p>
+            <div class="modal-form">
+                <div>
+                    <label for="reset-new-password">New Password</label>
+                    <input type="password" id="reset-new-password" placeholder="Enter new password" />
+                </div>
+                <div id="reset-pw-error" class="modal-error"></div>
+            </div>
+            <div class="modal-buttons" style="margin-top:14px;">
+                <button class="standard-button" onclick="closeResetPasswordModal()">Cancel</button>
+                <button class="cwoc-btn" onclick="submitResetPassword()">🔑 Reset</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer is auto-injected by shared-page.js -->
+
+    <!-- ── 1. Shared sub-scripts (auth first, then utils, coordinator last) ── -->
+    <script src="/frontend/js/shared/shared-auth.js"></script>
+    <script src="/frontend/js/shared/shared-utils.js"></script>
+    <script src="/frontend/js/shared/shared-touch.js"></script>
+    <script src="/frontend/js/shared/shared-checklist.js"></script>
+    <script src="/frontend/js/shared/shared-sort.js"></script>
+    <script src="/frontend/js/shared/shared-indicators.js"></script>
+    <script src="/frontend/js/shared/shared-calendar.js"></script>
+    <script src="/frontend/js/shared/shared-tags.js"></script>
+    <script src="/frontend/js/shared/shared-recurrence.js"></script>
+    <script src="/frontend/js/shared/shared-geocoding.js"></script>
+    <script src="/frontend/js/shared/shared-qr.js"></script>
+    <script src="/frontend/js/shared/shared.js"></script>
+
+    <!-- ── 2. Shared page components ─────────────────────────────────────── -->
+    <script src="/frontend/js/pages/shared-page.js"></script>
+
+    <!-- ── 3. Page-specific script ───────────────────────────────────────── -->
+    <script src="/frontend/js/pages/user-admin.js"></script>
+</body>
+</html>

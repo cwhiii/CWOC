@@ -4,8 +4,8 @@
  * Contains: ID generation, date/time formatting, color contrast helpers,
  * settings cache, save button state, and the cwocConfirm modal.
  *
- * This file MUST load first among all shared sub-scripts.
- * No dependencies on other shared sub-scripts.
+ * This file MUST load after shared-auth.js (uses waitForAuth() for user-scoped settings).
+ * Dependencies: shared-auth.js (getCurrentUser, waitForAuth)
  *
  * Dependents: shared-checklist.js, shared-sort.js, shared-indicators.js,
  *             shared-calendar.js, shared-tags.js, shared-recurrence.js,
@@ -22,7 +22,11 @@ let _cwocSettingsPromise = null;
 
 function getCachedSettings() {
   if (!_cwocSettingsPromise) {
-    _cwocSettingsPromise = fetch('/api/settings/default_user')
+    _cwocSettingsPromise = waitForAuth()
+      .then(function (user) {
+        var userId = (user && user.user_id) ? user.user_id : 'default_user';
+        return fetch('/api/settings/' + encodeURIComponent(userId));
+      })
       .then(function (r) {
         if (!r.ok) throw new Error('Settings fetch failed: ' + r.status);
         return r.json();

@@ -612,28 +612,176 @@ async function deleteColor(hex, name) {
 }
 
 function renderColors(colors) {
-  const colorList = document.getElementById("color-list");
+  // ── Default Colors section ──
+  var defaultColorList = document.getElementById("default-color-list");
+  if (defaultColorList) {
+    defaultColorList.innerHTML = "";
+    // Fixed default palette — these never change color
+    var defaultPalette = [
+      { hex: "transparent", name: "Transparent" },
+      { hex: "#C66B6B", name: "Dusty Rose" },
+      { hex: "#D68A59", name: "Burnt Sienna" },
+      { hex: "#E3B23C", name: "Golden Ochre" },
+      { hex: "#8A9A5B", name: "Mossy Sage" },
+      { hex: "#6B8299", name: "Slate Teal" },
+      { hex: "#8B6B99", name: "Muted Lilac" },
+      { hex: "#b22222", name: "Firebrick" },
+      { hex: "#DAA520", name: "Goldenrod" },
+    ];
+    defaultPalette.forEach(function(c) {
+      var colorItem = document.createElement("div");
+      colorItem.className = "color-item";
+      colorItem.dataset.color = c.hex;
+      colorItem.dataset.name = c.name;
+      if (c.hex === "transparent") {
+        colorItem.style.background = "repeating-conic-gradient(#ccc 0% 25%, #fff 0% 50%) 50% / 12px 12px";
+      } else {
+        colorItem.style.backgroundColor = c.hex;
+      }
+      colorItem.title = c.name + " (" + c.hex + ")";
+      // No delete button for defaults
+      // Click handler for border assignment
+      colorItem.addEventListener("click", function(e) { _openBorderAssignPopup(e, c.hex); });
+      defaultColorList.appendChild(colorItem);
+    });
+  }
+
+  // ── Custom Colors section ──
+  var colorList = document.getElementById("color-list");
   if (!colorList) return;
   colorList.innerHTML = "";
-  colors.forEach(({ hex, name }) => {
-    const colorItem = document.createElement("div");
-    colorItem.className = "color-item";
-    colorItem.dataset.color = hex;
-    colorItem.dataset.name = name || colorMap[hex] || "Custom";
-    colorItem.style.backgroundColor = hex;
-    colorItem.title = `${colorItem.dataset.name} (${hex})`;
+  if (colors && colors.length > 0) {
+    colors.forEach(function(c) {
+      var hex = c.hex || c;
+      var name = c.name || colorMap[hex] || "Custom";
+      var colorItem = document.createElement("div");
+      colorItem.className = "color-item";
+      colorItem.dataset.color = hex;
+      colorItem.dataset.name = name;
+      colorItem.style.backgroundColor = hex;
+      colorItem.title = name + " (" + hex + ")";
 
-    // Add delete button
-    const deleteBtn = document.createElement("button");
-    deleteBtn.textContent = "✕";
-    deleteBtn.onclick = (e) => {
-      e.stopPropagation();
-      deleteColor(hex, name);
-    };
-    colorItem.appendChild(deleteBtn);
+      // Delete button for custom colors
+      var deleteBtn = document.createElement("button");
+      deleteBtn.textContent = "✕";
+      deleteBtn.onclick = function(e) {
+        e.stopPropagation();
+        deleteColor(hex, name);
+      };
+      colorItem.appendChild(deleteBtn);
 
-    colorList.appendChild(colorItem);
+      // Click handler for border assignment
+      colorItem.addEventListener("click", function(e) { _openBorderAssignPopup(e, hex); });
+
+      colorList.appendChild(colorItem);
+    });
+  }
+
+  // Apply ring indicators to all swatches
+  _applyBorderColorRings();
+}
+
+/** Track current border color values (loaded from settings) */
+var _borderColorOverdue = '#b22222';
+var _borderColorBlocked = '#DAA520';
+
+/** Apply ring indicator CSS classes to color swatches matching border colors */
+function _applyBorderColorRings() {
+  var overdueHex = (_borderColorOverdue || '#b22222').toLowerCase();
+  var blockedHex = (_borderColorBlocked || '#DAA520').toLowerCase();
+
+  // Update ring CSS custom values for dynamic colors
+  var styleEl = document.getElementById('border-ring-dynamic-style');
+  if (!styleEl) {
+    styleEl = document.createElement('style');
+    styleEl.id = 'border-ring-dynamic-style';
+    document.head.appendChild(styleEl);
+  }
+  styleEl.textContent =
+    '.color-item.ring-overdue { box-shadow: 0 0 0 2px #fff8e1, 0 0 0 4px ' + overdueHex + '; margin: 4px; }' +
+    '.color-item.ring-blocked { box-shadow: 0 0 0 2px #fff8e1, 0 0 0 4px ' + blockedHex + '; margin: 4px; }' +
+    '.color-item.ring-both { box-shadow: 0 0 0 2px #fff8e1, 0 0 0 4px ' + overdueHex + ', 0 0 0 6px #fff8e1, 0 0 0 8px ' + blockedHex + '; margin: 6px; }';
+
+  // Clear all rings first
+  document.querySelectorAll('#default-color-list .color-item, #color-list .color-item').forEach(function(el) {
+    el.classList.remove('ring-overdue', 'ring-blocked', 'ring-both');
+    var lbl = el.querySelector('.ring-label');
+    if (lbl) lbl.remove();
   });
+
+  // Apply rings
+  document.querySelectorAll('#default-color-list .color-item, #color-list .color-item').forEach(function(el) {
+    var hex = (el.dataset.color || '').toLowerCase();
+    var isOverdue = hex === overdueHex;
+    var isBlocked = hex === blockedHex;
+    if (isOverdue && isBlocked) {
+      el.classList.add('ring-both');
+      var lbl = document.createElement('span');
+      lbl.className = 'ring-label';
+      lbl.innerHTML = 'Overdue<br>Blocked';
+      el.appendChild(lbl);
+    } else if (isOverdue) {
+      el.classList.add('ring-overdue');
+      var lbl = document.createElement('span');
+      lbl.className = 'ring-label';
+      lbl.textContent = 'Overdue';
+      el.appendChild(lbl);
+    } else if (isBlocked) {
+      el.classList.add('ring-blocked');
+      var lbl = document.createElement('span');
+      lbl.className = 'ring-label';
+      lbl.textContent = 'Blocked';
+      el.appendChild(lbl);
+    }
+  });
+}
+
+/** Open the border color assignment popup near the clicked swatch */
+function _openBorderAssignPopup(e, hex) {
+  e.stopPropagation();
+  var popup = document.getElementById('border-assign-popup');
+  if (!popup) return;
+
+  // Position near the click
+  var rect = e.currentTarget.getBoundingClientRect();
+  popup.style.left = Math.min(rect.left, window.innerWidth - 200) + 'px';
+  popup.style.top = (rect.bottom + 6) + 'px';
+  popup.style.display = 'block';
+
+  // Wire up buttons
+  var overdueBtn = document.getElementById('assign-overdue-btn');
+  var blockedBtn = document.getElementById('assign-blocked-btn');
+  var cancelBtn = document.getElementById('assign-cancel-btn');
+
+  function cleanup() {
+    popup.style.display = 'none';
+    document.removeEventListener('click', outsideClick);
+  }
+  function outsideClick(ev) {
+    if (!popup.contains(ev.target)) cleanup();
+  }
+  // Delay adding outside-click listener so the current click doesn't close it
+  setTimeout(function() { document.addEventListener('click', outsideClick); }, 0);
+
+  overdueBtn.onclick = function() {
+    _borderColorOverdue = hex;
+    cleanup();
+    var customColors = Array.from(document.querySelectorAll('#color-list .color-item')).map(function(el) {
+      return { hex: el.dataset.color, name: el.dataset.name };
+    });
+    renderColors(customColors);
+    setSaveButtonUnsaved();
+  };
+  blockedBtn.onclick = function() {
+    _borderColorBlocked = hex;
+    cleanup();
+    var customColors = Array.from(document.querySelectorAll('#color-list .color-item')).map(function(el) {
+      return { hex: el.dataset.color, name: el.dataset.name };
+    });
+    renderColors(customColors);
+    setSaveButtonUnsaved();
+  };
+  cancelBtn.onclick = function() { cleanup(); };
 }
 
 function confirmDelete() {
@@ -1435,7 +1583,14 @@ class SettingsManager {
       : [];
     renderLocationsSection(savedLocations);
 
+    // Load border color settings BEFORE rendering colors (renderColors uses these for default swatches)
+    _borderColorOverdue = this.settings.overdue_border_color || '#b22222';
+    _borderColorBlocked = this.settings.blocked_border_color || '#DAA520';
+
     renderColors(this.settings.custom_colors);
+
+    // Apply ring indicators to the rendered swatches
+    _applyBorderColorRings();
 
     // Visual indicators — load saved values into dropdowns
     const vi = this.settings.visual_indicators || {};
@@ -1510,7 +1665,7 @@ class SettingsManager {
         fontColor: tag.dataset.fontColor || "#5c3317",
         favorite: tag.dataset.favorite === 'true',
       })).filter((t) => t.name),
-      custom_colors: Array.from(document.querySelectorAll(".color-item")).map(
+      custom_colors: Array.from(document.querySelectorAll("#color-list .color-item")).map(
         (item) => ({
           hex: item.dataset.color,
           name: item.dataset.name || colorMap[item.dataset.color] || "Custom",
@@ -1548,6 +1703,8 @@ class SettingsManager {
         due: _gatherDefaultNotifList('due'),
       },
       habits_success_window: document.getElementById('habits-success-window')?.value || '30',
+      overdue_border_color: _borderColorOverdue || '#b22222',
+      blocked_border_color: _borderColorBlocked || '#DAA520',
     };
   }
 

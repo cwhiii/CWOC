@@ -12,7 +12,7 @@ from datetime import datetime
 from typing import Optional, List, Dict, Any
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException, Query, UploadFile, File, Response
+from fastapi import APIRouter, HTTPException, Query, Request, UploadFile, File, Response
 
 from src.backend.db import (
     DB_PATH, CONTACT_IMAGES_DIR, serialize_json_field, deserialize_json_field,
@@ -20,7 +20,7 @@ from src.backend.db import (
 )
 from src.backend.models import Contact
 from src.backend.serializers import vcard_parse, vcard_print, csv_export, csv_import
-from src.backend.routes.audit import insert_audit_entry, compute_audit_diff, get_current_actor
+from src.backend.routes.audit import insert_audit_entry, compute_audit_diff, get_actor_from_request
 
 
 logger = logging.getLogger(__name__)
@@ -113,9 +113,10 @@ def _write_vcf_file(contact_id: str, contact) -> None:
 # ── Route handlers ────────────────────────────────────────────────────────
 
 @router.post("/api/contacts")
-def create_contact(contact: Contact):
+def create_contact(contact: Contact, request: Request):
     conn = None
     try:
+        user_id = request.state.user_id
         contact_id = str(uuid4())
         current_time = datetime.now().isoformat()
         display_name = compute_display_name(contact)
@@ -126,6 +127,7 @@ def create_contact(contact: Contact):
         contact_dict["display_name"] = display_name
         contact_dict["created_datetime"] = current_time
         contact_dict["modified_datetime"] = current_time
+        contact_dict["owner_id"] = user_id
 
         # Write .vcf file
         _write_vcf_file(contact_id, contact_dict)
@@ -141,8 +143,8 @@ def create_contact(contact: Contact):
                 nickname, display_name, phones, emails, addresses, call_signs,
                 x_handles, websites, has_signal, signal_username, pgp_key, favorite,
                 color, organization, social_context, image_url, notes, tags,
-                created_datetime, modified_datetime
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                created_datetime, modified_datetime, owner_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 contact_id,
@@ -171,11 +173,12 @@ def create_contact(contact: Contact):
                 db_fields["tags"],
                 current_time,
                 current_time,
+                user_id,
             ),
         )
         # Audit logging for contact creation
         try:
-            actor = get_current_actor()
+            actor = get_actor_from_request(request)
             insert_audit_entry(conn, "contact", contact_id, "created", actor, entity_summary=display_name)
         except Exception as e:
             logger.error(f"Audit logging failed for contact creation (best-effort): {str(e)}")
@@ -190,9 +193,10 @@ def create_contact(contact: Contact):
 
 
 @router.get("/api/contacts")
-def get_contacts(q: Optional[str] = Query(None)):
+def get_contacts(request: Request, q: Optional[str] = Query(None)):
     conn = None
     try:
+        user_id = request.state.user_id
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
 
@@ -201,17 +205,19 @@ def get_contacts(q: Optional[str] = Query(None)):
             cursor.execute(
                 """
                 SELECT * FROM contacts
-                WHERE display_name LIKE ? COLLATE NOCASE
+                WHERE owner_id = ?
+                  AND (display_name LIKE ? COLLATE NOCASE
                    OR emails LIKE ? COLLATE NOCASE
                    OR phones LIKE ? COLLATE NOCASE
-                   OR call_signs LIKE ? COLLATE NOCASE
+                   OR call_signs LIKE ? COLLATE NOCASE)
                 ORDER BY favorite DESC, display_name COLLATE NOCASE ASC
                 """,
-                (like_pattern, like_pattern, like_pattern, like_pattern),
+                (user_id, like_pattern, like_pattern, like_pattern, like_pattern),
             )
         else:
             cursor.execute(
-                "SELECT * FROM contacts ORDER BY favorite DESC, display_name COLLATE NOCASE ASC"
+                "SELECT * FROM contacts WHERE owner_id = ? ORDER BY favorite DESC, display_name COLLATE NOCASE ASC",
+                (user_id,),
             )
 
         columns = [col[0] for col in cursor.description]
@@ -229,16 +235,20 @@ def get_contacts(q: Optional[str] = Query(None)):
 
 
 @router.get("/api/contacts/export")
-def export_contacts(format: str = Query(...)):
+def export_contacts(request: Request, format: str = Query(...)):
     """Export all contacts as a .vcf or .csv file download."""
     if format not in ("vcf", "csv"):
         raise HTTPException(status_code=400, detail="Invalid format. Use 'vcf' or 'csv'")
 
     conn = None
     try:
+        user_id = request.state.user_id
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM contacts ORDER BY favorite DESC, display_name COLLATE NOCASE ASC")
+        cursor.execute(
+            "SELECT * FROM contacts WHERE owner_id = ? ORDER BY favorite DESC, display_name COLLATE NOCASE ASC",
+            (user_id,),
+        )
         columns = [col[0] for col in cursor.description]
         contacts = []
         for row in cursor.fetchall():
@@ -271,13 +281,14 @@ def export_contacts(format: str = Query(...)):
 
 
 @router.get("/api/contacts/{contact_id}/export")
-def export_single_contact(contact_id: str, format: str = Query(...)):
+def export_single_contact(contact_id: str, request: Request, format: str = Query(...)):
     """Export a single contact as a .vcf file download."""
     if format != "vcf":
         raise HTTPException(status_code=400, detail="Invalid format. Use 'vcf'")
 
     conn = None
     try:
+        user_id = request.state.user_id
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM contacts WHERE id = ?", (contact_id,))
@@ -285,7 +296,11 @@ def export_single_contact(contact_id: str, format: str = Query(...)):
         if not row:
             raise HTTPException(status_code=404, detail=f"Contact {contact_id} not found")
         columns = [col[0] for col in cursor.description]
-        contact = _row_to_contact(dict(zip(columns, row)))
+        contact_raw = dict(zip(columns, row))
+        # Verify ownership
+        if contact_raw.get("owner_id") and contact_raw["owner_id"] != user_id:
+            raise HTTPException(status_code=404, detail=f"Contact {contact_id} not found")
+        contact = _row_to_contact(contact_raw)
 
         vcf_content = vcard_print(contact)
         display = contact.get("display_name") or contact.get("given_name") or "contact"
@@ -306,9 +321,10 @@ def export_single_contact(contact_id: str, format: str = Query(...)):
 
 
 @router.get("/api/contacts/{contact_id}")
-def get_contact(contact_id: str):
+def get_contact(contact_id: str, request: Request):
     conn = None
     try:
+        user_id = request.state.user_id
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM contacts WHERE id = ?", (contact_id,))
@@ -317,6 +333,9 @@ def get_contact(contact_id: str):
             raise HTTPException(status_code=404, detail=f"Contact {contact_id} not found")
         columns = [col[0] for col in cursor.description]
         contact = dict(zip(columns, row))
+        # Verify ownership
+        if contact.get("owner_id") and contact["owner_id"] != user_id:
+            raise HTTPException(status_code=404, detail=f"Contact {contact_id} not found")
         return _row_to_contact(contact)
     except HTTPException:
         raise
@@ -329,14 +348,21 @@ def get_contact(contact_id: str):
 
 
 @router.put("/api/contacts/{contact_id}")
-def update_contact(contact_id: str, contact: Contact):
+def update_contact(contact_id: str, contact: Contact, request: Request):
     conn = None
     try:
+        user_id = request.state.user_id
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM contacts WHERE id = ?", (contact_id,))
         existing = cursor.fetchone()
         if not existing:
+            raise HTTPException(status_code=404, detail=f"Contact {contact_id} not found")
+
+        columns = [col[0] for col in cursor.description]
+        existing_row = dict(zip(columns, existing))
+        # Verify ownership
+        if existing_row.get("owner_id") and existing_row["owner_id"] != user_id:
             raise HTTPException(status_code=404, detail=f"Contact {contact_id} not found")
 
         current_time = datetime.now().isoformat()
@@ -346,8 +372,6 @@ def update_contact(contact_id: str, contact: Contact):
         contact_dict["id"] = contact_id
         contact_dict["display_name"] = display_name
         contact_dict["modified_datetime"] = current_time
-        columns = [col[0] for col in cursor.description]
-        existing_row = dict(zip(columns, existing))
         contact_dict["created_datetime"] = existing_row["created_datetime"]
         if contact_dict.get("image_url") is None and existing_row.get("image_url"):
             contact_dict["image_url"] = existing_row["image_url"]
@@ -389,7 +413,7 @@ def update_contact(contact_id: str, contact: Contact):
             new_contact_dict["created_datetime"] = existing_row["created_datetime"]
             diff = compute_audit_diff(old_contact_dict, new_contact_dict, exclude_fields={"modified_datetime", "created_datetime"})
             if diff:
-                actor = get_current_actor()
+                actor = get_actor_from_request(request)
                 insert_audit_entry(conn, "contact", contact_id, "updated", actor, changes=diff, entity_summary=display_name)
         except Exception as e:
             logger.error(f"Audit logging failed for contact update (best-effort): {str(e)}")
@@ -406,14 +430,18 @@ def update_contact(contact_id: str, contact: Contact):
 
 
 @router.delete("/api/contacts/{contact_id}")
-def delete_contact(contact_id: str):
+def delete_contact(contact_id: str, request: Request):
     conn = None
     try:
+        user_id = request.state.user_id
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
-        cursor.execute("SELECT id, display_name FROM contacts WHERE id = ?", (contact_id,))
+        cursor.execute("SELECT id, display_name, owner_id FROM contacts WHERE id = ?", (contact_id,))
         existing = cursor.fetchone()
         if not existing:
+            raise HTTPException(status_code=404, detail=f"Contact {contact_id} not found")
+        # Verify ownership
+        if existing[2] and existing[2] != user_id:
             raise HTTPException(status_code=404, detail=f"Contact {contact_id} not found")
         contact_display_name = existing[1]
 
@@ -423,7 +451,7 @@ def delete_contact(contact_id: str):
 
         cursor.execute("DELETE FROM contacts WHERE id = ?", (contact_id,))
         try:
-            actor = get_current_actor()
+            actor = get_actor_from_request(request)
             insert_audit_entry(conn, "contact", contact_id, "deleted", actor, entity_summary=contact_display_name)
         except Exception as e:
             logger.error(f"Audit logging failed for contact deletion (best-effort): {str(e)}")
@@ -440,14 +468,19 @@ def delete_contact(contact_id: str):
 
 
 @router.post("/api/contacts/{contact_id}/image")
-async def upload_contact_image(contact_id: str, file: UploadFile = File(...)):
+async def upload_contact_image(contact_id: str, request: Request, file: UploadFile = File(...)):
     """Upload a profile image for a contact. Stores in data/contacts/profile_pictures/."""
     conn = None
     try:
+        user_id = request.state.user_id
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
-        cursor.execute("SELECT id FROM contacts WHERE id = ?", (contact_id,))
-        if not cursor.fetchone():
+        cursor.execute("SELECT id, owner_id FROM contacts WHERE id = ?", (contact_id,))
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail=f"Contact {contact_id} not found")
+        # Verify ownership
+        if row[1] and row[1] != user_id:
             raise HTTPException(status_code=404, detail=f"Contact {contact_id} not found")
 
         allowed = {"image/jpeg", "image/png", "image/gif", "image/webp"}
@@ -485,15 +518,19 @@ async def upload_contact_image(contact_id: str, file: UploadFile = File(...)):
 
 
 @router.delete("/api/contacts/{contact_id}/image")
-def delete_contact_image(contact_id: str):
+def delete_contact_image(contact_id: str, request: Request):
     """Remove a contact's profile image."""
     conn = None
     try:
+        user_id = request.state.user_id
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
-        cursor.execute("SELECT image_url FROM contacts WHERE id = ?", (contact_id,))
+        cursor.execute("SELECT image_url, owner_id FROM contacts WHERE id = ?", (contact_id,))
         row = cursor.fetchone()
         if not row:
+            raise HTTPException(status_code=404, detail=f"Contact {contact_id} not found")
+        # Verify ownership
+        if row[1] and row[1] != user_id:
             raise HTTPException(status_code=404, detail=f"Contact {contact_id} not found")
 
         image_url = row[0]
@@ -517,9 +554,10 @@ def delete_contact_image(contact_id: str):
 
 
 @router.patch("/api/contacts/{contact_id}/favorite")
-def toggle_contact_favorite(contact_id: str):
+def toggle_contact_favorite(contact_id: str, request: Request):
     conn = None
     try:
+        user_id = request.state.user_id
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM contacts WHERE id = ?", (contact_id,))
@@ -529,6 +567,9 @@ def toggle_contact_favorite(contact_id: str):
 
         columns = [col[0] for col in cursor.description]
         contact = dict(zip(columns, row))
+        # Verify ownership
+        if contact.get("owner_id") and contact["owner_id"] != user_id:
+            raise HTTPException(status_code=404, detail=f"Contact {contact_id} not found")
         contact = _row_to_contact(contact)
 
         new_favorite = not contact["favorite"]
@@ -557,8 +598,9 @@ def toggle_contact_favorite(contact_id: str):
 
 
 @router.post("/api/contacts/import")
-async def import_contacts(file: UploadFile = File(...)):
+async def import_contacts(request: Request, file: UploadFile = File(...)):
     """Import contacts from a .vcf or .csv file upload."""
+    user_id = request.state.user_id
     filename = (file.filename or "").lower()
     if not (filename.endswith(".vcf") or filename.endswith(".csv")):
         raise HTTPException(status_code=400, detail="Unsupported file type. Use .vcf or .csv")
@@ -599,14 +641,14 @@ async def import_contacts(file: UploadFile = File(...)):
                         id, given_name, surname, middle_names, prefix, suffix,
                         display_name, phones, emails, addresses, call_signs,
                         x_handles, websites, has_signal, pgp_key, favorite,
-                        created_datetime, modified_datetime
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        created_datetime, modified_datetime, owner_id
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (contact_id, db_fields["given_name"], db_fields["surname"],
                      db_fields["middle_names"], db_fields["prefix"], db_fields["suffix"],
                      db_fields["display_name"], db_fields["phones"], db_fields["emails"],
                      db_fields["addresses"], db_fields["call_signs"], db_fields["x_handles"],
                      db_fields["websites"], db_fields["has_signal"], db_fields["pgp_key"],
-                     db_fields["favorite"], current_time, current_time),
+                     db_fields["favorite"], current_time, current_time, user_id),
                 )
                 conn.commit()
                 imported += 1
@@ -646,14 +688,14 @@ async def import_contacts(file: UploadFile = File(...)):
                         id, given_name, surname, middle_names, prefix, suffix,
                         display_name, phones, emails, addresses, call_signs,
                         x_handles, websites, has_signal, pgp_key, favorite,
-                        created_datetime, modified_datetime
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        created_datetime, modified_datetime, owner_id
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (contact_id, db_fields["given_name"], db_fields["surname"],
                      db_fields["middle_names"], db_fields["prefix"], db_fields["suffix"],
                      db_fields["display_name"], db_fields["phones"], db_fields["emails"],
                      db_fields["addresses"], db_fields["call_signs"], db_fields["x_handles"],
                      db_fields["websites"], db_fields["has_signal"], db_fields["pgp_key"],
-                     db_fields["favorite"], current_time, current_time),
+                     db_fields["favorite"], current_time, current_time, user_id),
                 )
                 conn.commit()
                 imported += 1

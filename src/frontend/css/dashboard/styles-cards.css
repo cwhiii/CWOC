@@ -702,3 +702,15 @@
     font-size: 0.9em;
     color: #1a1208;
 }
+
+/* ── Owner badge on chit cards (multi-user) ───────────────────────────────── */
+.cwoc-owner-badge {
+    display: inline-block;
+    font-size: 0.75em;
+    color: #6b4e31;
+    opacity: 0.8;
+    white-space: nowrap;
+    font-style: italic;
+    padding: 0 4px;
+    line-height: 1.4;
+}

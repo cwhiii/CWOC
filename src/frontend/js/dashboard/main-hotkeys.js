@@ -44,7 +44,7 @@ function _exitHotkeyMode() {
 
 /* ── Navigate panel handler ──────────────────────────────────────────────── */
 
-var _navTargets = ['/', '/frontend/html/weather.html', '/frontend/html/people.html', '/frontend/html/help.html', '/frontend/html/settings.html', '/frontend/html/audit-log.html', '/frontend/html/trash.html'];
+var _navTargets = ['/', '/frontend/html/weather.html', '/frontend/html/people.html', '/frontend/html/help.html', '/frontend/html/settings.html', '/frontend/html/audit-log.html', '/frontend/html/trash.html', '/profile', '/user-admin'];
 
 function _pickNav(href) {
   _exitHotkeyMode();

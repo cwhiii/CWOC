@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <link rel="icon" type="image/x-icon" href="/static/cwod_logo-favicon.png" />
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>CWOC Profile</title>
+        <link rel="stylesheet" href="/frontend/css/shared/shared-page.css" />
+        <link rel="stylesheet" href="/frontend/css/shared/shared-editor.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" />
+        <style>
+            /* ── Profile-specific styles (shared styles come from shared-page.css + shared-editor.css) ── */
+
+            /* Restore profile body styles (shared-editor.css overrides shared-page.css body) */
+            body {
+                font-family: 'Lora', Georgia, serif;
+                background-image: url("/static/parchment.jpg");
+                background-size: cover;
+                background-attachment: fixed;
+                padding: 1em;
+            }
+
+            /* Profile form layout */
+            .profile-form {
+                display: flex;
+                flex-direction: column;
+                gap: 12px;
+                max-width: 500px;
+            }
+
+            .profile-form label {
+                display: block;
+                font-size: 15px;
+                margin-bottom: 4px;
+                color: #1a1208;
+                font-weight: bold;
+            }
+
+            .profile-form input[type="text"],
+            .profile-form input[type="email"],
+            .profile-form input[type="password"] {
+                width: 100%;
+                box-sizing: border-box;
+                border: 1px solid #8b5a2b;
+                border-radius: 5px;
+                padding: 8px 10px;
+                font-size: 16px;
+                color: #1a1208;
+                font-family: 'Lora', Georgia, serif;
+                background: #f5e6cc;
+            }
+
+            .profile-form input[readonly] {
+                opacity: 0.6;
+                cursor: not-allowed;
+                background: #e8dcc8;
+            }
+
+            /* Password change section */
+            .password-section {
+                margin-top: 10px;
+                padding-top: 16px;
+                border-top: 2px solid rgba(139, 90, 43, 0.3);
+            }
+
+            .password-section h3 {
+                text-align: left;
+                font-size: 18px;
+                margin: 0 0 12px;
+                padding-bottom: 0;
+                border-bottom: none;
+                text-transform: none;
+                letter-spacing: 0;
+            }
+
+            #change-password-btn {
+                margin-top: 8px;
+            }
+
+            /* Inline messages */
+            .profile-message {
+                padding: 8px 12px;
+                border-radius: 5px;
+                font-size: 14px;
+                display: none;
+                margin-top: 8px;
+            }
+
+            .profile-message.success {
+                background: rgba(34, 139, 34, 0.15);
+                border: 1px solid #228b22;
+                color: #1a5c1a;
+                display: block;
+            }
+
+            .profile-message.error {
+                background: rgba(178, 34, 34, 0.15);
+                border: 1px solid #b22222;
+                color: #8b1a1a;
+                display: block;
+            }
+        </style>
+    </head>
+    <body data-page-title="Profile" data-page-icon="👤">
+
+        <div class="settings-panel">
+            <!-- Save/Cancel buttons (positioned after auto-injected header) -->
+            <div class="cwoc-toolbar" style="margin-bottom:16px;">
+                <button id="save-single-btn" class="standard-button" disabled style="opacity:0.6;pointer-events:none;">✅ Saved</button>
+                <button id="save-stay-btn" class="standard-button" style="display:none;"><i class="fas fa-save"></i> 📌 Save &amp; Stay</button>
+                <button id="save-exit-btn" class="standard-button" style="display:none;"><i class="fas fa-save"></i> 🚪 Save &amp; Exit</button>
+                <button id="cancel-btn" class="standard-button cancel-settings"><i class="fas fa-times"></i> Exit</button>
+            </div>
+
+            <div id="profile-message" class="profile-message"></div>
+
+            <div class="settings-grid">
+                <!-- Profile Info Section -->
+                <div class="setting-group">
+                    <h3>👤 Account Info</h3>
+
+                    <div class="profile-form">
+                        <div>
+                            <label for="profile-username">Username</label>
+                            <input type="text" id="profile-username" readonly placeholder="Username" />
+                        </div>
+                        <div>
+                            <label for="profile-display-name">Display Name</label>
+                            <input type="text" id="profile-display-name" placeholder="Display name" />
+                        </div>
+                        <div>
+                            <label for="profile-email">Email</label>
+                            <input type="email" id="profile-email" placeholder="Email address" />
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Password Change Section -->
+                <div class="setting-group">
+                    <h3>🔒 Change Password</h3>
+
+                    <div class="profile-form">
+                        <div>
+                            <label for="current-password">Current Password</label>
+                            <input type="password" id="current-password" placeholder="Enter current password" />
+                        </div>
+                        <div>
+                            <label for="new-password">New Password</label>
+                            <input type="password" id="new-password" placeholder="Enter new password" />
+                        </div>
+                        <div>
+                            <label for="confirm-new-password">Confirm New Password</label>
+                            <input type="password" id="confirm-new-password" placeholder="Confirm new password" />
+                        </div>
+                        <div id="password-message" class="profile-message"></div>
+                        <button id="change-password-btn" class="standard-button">🔑 Change Password</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer is auto-injected by shared-page.js -->
+
+        <!-- ── 1. Shared sub-scripts (auth first, then utils, coordinator last) ── -->
+        <script src="/frontend/js/shared/shared-auth.js"></script>
+        <script src="/frontend/js/shared/shared-utils.js"></script>
+        <script src="/frontend/js/shared/shared-touch.js"></script>
+        <script src="/frontend/js/shared/shared-checklist.js"></script>
+        <script src="/frontend/js/shared/shared-sort.js"></script>
+        <script src="/frontend/js/shared/shared-indicators.js"></script>
+        <script src="/frontend/js/shared/shared-calendar.js"></script>
+        <script src="/frontend/js/shared/shared-tags.js"></script>
+        <script src="/frontend/js/shared/shared-recurrence.js"></script>
+        <script src="/frontend/js/shared/shared-geocoding.js"></script>
+        <script src="/frontend/js/shared/shared-qr.js"></script>
+        <script src="/frontend/js/shared/shared.js"></script>
+
+        <!-- ── 2. Shared page components ─────────────────────────────────────── -->
+        <script src="/frontend/js/pages/shared-page.js"></script>
+
+        <!-- ── 3. Page-specific script ───────────────────────────────────────── -->
+        <script src="/frontend/js/pages/profile.js"></script>
+    </body>
+</html>

@@ -15,6 +15,9 @@
 #   src/backend/routes/contacts.py — Contact CRUD, image, import/export
 #   src/backend/routes/audit.py — Audit log + shared helpers
 #   src/backend/routes/health.py — Health, version, sync, geocode, pages
+#   src/backend/routes/auth.py  — Authentication, sessions, profile
+#   src/backend/routes/users.py — Admin-only user management
+#   src/backend/middleware.py   — Auth middleware (session validation)
 # ═══════════════════════════════════════════════════════════════════════════
 
 import asyncio
@@ -46,6 +49,10 @@ class NoCacheStaticMiddleware(BaseHTTPMiddleware):
 
 app.add_middleware(NoCacheStaticMiddleware)
 
+# ── Auth middleware — validates session cookie, injects user identity ─────
+from src.backend.middleware import AuthMiddleware
+app.add_middleware(AuthMiddleware)
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Database Initialization & Migrations
@@ -73,6 +80,8 @@ from src.backend.migrations import (
     migrate_add_alert_state,
     migrate_contact_images_to_data,
     migrate_add_habits_fields,
+    migrate_add_border_color_settings,
+    migrate_add_multi_user,
 )
 
 # Initialize database and run all migrations (same order as before)
@@ -96,6 +105,8 @@ migrate_add_standalone_alerts()
 migrate_add_alert_state()
 migrate_contact_images_to_data()
 migrate_add_habits_fields()
+migrate_add_border_color_settings()
+migrate_add_multi_user()
 seed_version_info()
 
 
@@ -103,6 +114,8 @@ seed_version_info()
 # Register Route Modules
 # ═══════════════════════════════════════════════════════════════════════════
 
+from src.backend.routes.auth import auth_router
+from src.backend.routes.users import users_router
 from src.backend.routes.chits import router as chits_router
 from src.backend.routes.trash import router as trash_router
 from src.backend.routes.settings import router as settings_router
@@ -110,6 +123,8 @@ from src.backend.routes.contacts import router as contacts_router
 from src.backend.routes.audit import router as audit_router
 from src.backend.routes.health import router as health_router
 
+app.include_router(auth_router)
+app.include_router(users_router)
 app.include_router(chits_router)
 app.include_router(trash_router)
 app.include_router(settings_router)

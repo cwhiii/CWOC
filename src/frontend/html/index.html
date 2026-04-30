@@ -259,8 +259,18 @@
             </div>
             </div><!-- /sidebar-scroll -->
 
-            <!-- Bottom pinned: Settings, Reference, Help -->
+            <!-- Bottom pinned: User Switcher, Settings, Reference, Help -->
             <div class="sidebar-bottom">
+                <!-- User Switcher -->
+                <div class="cwoc-user-switcher" id="sidebar-user-switcher" style="margin-bottom:6px;">
+                    <button class="action-button cwoc-user-switcher-btn" id="sidebar-user-switcher-btn" title="Switch user account" onclick="event.stopPropagation(); _cwocToggleUserDropdown(document.getElementById('sidebar-user-switcher'));">
+                        👤 <span id="sidebar-user-display-name">User</span>
+                    </button>
+                </div>
+                <!-- Logout -->
+                <button class="action-button cwoc-logout-btn" onclick="_cwocLogout()" title="Log out of your account" style="margin-bottom:6px;">
+                    🚪 Logout
+                </button>
                 <button class="action-button" onclick="storePreviousState(); localStorage.setItem('cwoc_settings_return', '/'); window.location.href='/frontend/html/settings.html'" style="margin-bottom:6px;">
                     <img src="/static/settings.png" alt="Settings" />
                     Settings
@@ -355,6 +365,8 @@
             <div class="hotkey-panel-option" onclick="_pickNav('/frontend/html/settings.html')"><span class="panel-key">5</span><span class="panel-label">⚙️ Settings</span></div>
             <div class="hotkey-panel-option" onclick="_pickNav('/frontend/html/audit-log.html')"><span class="panel-key">6</span><span class="panel-label">📋 Audit Log</span></div>
             <div class="hotkey-panel-option" onclick="_pickNav('/frontend/html/trash.html')"><span class="panel-key">7</span><span class="panel-label">🗑️ Trash</span></div>
+            <div class="hotkey-panel-option" onclick="_pickNav('/profile')"><span class="panel-key">8</span><span class="panel-label">👤 Profile</span></div>
+            <div class="hotkey-panel-option cwoc-admin-only" id="nav-user-admin" onclick="_pickNav('/user-admin')" style="display:none;"><span class="panel-key">9</span><span class="panel-label">👥 User Admin</span></div>
             <div class="hotkey-panel-footer">Number keys to jump · ESC to cancel</div>
         </div>
 
@@ -414,6 +426,8 @@
                                         <div class="ref-item"><span class="ref-key">5</span> <a href="/frontend/html/settings.html" class="ref-link">Settings</a></div>
                                         <div class="ref-item"><span class="ref-key">6</span> <a href="/frontend/html/audit-log.html" class="ref-link">Audit Log</a></div>
                                         <div class="ref-item"><span class="ref-key">7</span> <a href="/frontend/html/trash.html" class="ref-link">Trash</a></div>
+                                        <div class="ref-item"><span class="ref-key">8</span> <a href="/profile" class="ref-link">Profile</a></div>
+                                        <div class="ref-item"><span class="ref-key">9</span> <a href="/user-admin" class="ref-link">User Admin</a> (admin only)</div>
                                     </div>
                                 </div>
 
@@ -556,6 +570,7 @@
             </div>
         </div>
         <div class="author-info">&copy; 2026 C.W.'s Omni Chits &middot; <a href="https://www.cwholemaniii.com/pages/home.shtml" target="_blank">www.cwholemaniii.com</a></div>
+        <script src="/frontend/js/shared/shared-auth.js"></script>
         <script src="/frontend/js/shared/shared-utils.js"></script>
         <script src="/frontend/js/shared/shared-touch.js"></script>
         <script src="/frontend/js/shared/shared-checklist.js"></script>
@@ -577,5 +592,30 @@
         <script src="/frontend/js/dashboard/main-modals.js"></script>
         <script src="/frontend/js/dashboard/main-init.js"></script>
         <script src="/frontend/js/dashboard/main.js"></script>
+        <script>
+        /* Populate sidebar user switcher display name once auth is ready */
+        (function() {
+            var nameEl = document.getElementById('sidebar-user-display-name');
+            if (!nameEl) return;
+            var user = (typeof getCurrentUser === 'function') ? getCurrentUser() : null;
+            if (user) {
+                nameEl.textContent = user.display_name;
+                if (user.is_admin) _showAdminNavItems();
+            } else if (typeof waitForAuth === 'function') {
+                waitForAuth().then(function(u) {
+                    if (u) {
+                        nameEl.textContent = u.display_name;
+                        if (u.is_admin) _showAdminNavItems();
+                    }
+                });
+            }
+        })();
+
+        /* Show admin-only nav items (User Admin in navigate panel) */
+        function _showAdminNavItems() {
+            var el = document.getElementById('nav-user-admin');
+            if (el) el.style.display = '';
+        }
+        </script>
     </body>
 </html>

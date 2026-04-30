@@ -47,7 +47,8 @@ function _getTagFontColor(tagName) {
 }
 
 /* ── Chit header builder ─────────────────────────────────────────────────── */
-function _buildChitHeader(chit, titleHtml, settings) {
+function _buildChitHeader(chit, titleHtml, settings, opts) {
+  var _opts = opts || {};
   const row = document.createElement('div');
   row.className = 'chit-header-row';
 
@@ -160,16 +161,33 @@ function _buildChitHeader(chit, titleHtml, settings) {
     right.appendChild(s);
   }
 
-  if (chit.status) addMeta(chit.status, 'status');
+  if (chit.status && !_opts.hideStatus) {
+    const statusSpan = document.createElement('span');
+    statusSpan.textContent = chit.status;
+    if (chit.status === 'Blocked') {
+      var blockedCol = (window._cwocSettings && window._cwocSettings.blocked_border_color) || '#DAA520';
+      var blockedTextCol = contrastColorForBg(blockedCol);
+      statusSpan.style.cssText = 'background:' + blockedCol + ';color:' + blockedTextCol + ';font-weight:bold;padding:1px 6px;border-radius:3px;';
+    }
+    if (currentSortField === 'status') {
+      statusSpan.style.fontWeight = 'bold';
+      statusSpan.textContent = chit.status + sortIndicator;
+    }
+    right.appendChild(statusSpan);
+  }
   if (chit.priority) addMeta(chit.priority, null);
 
-  // Due date — red + bold if overdue
+  // Due date — colored + bold if overdue, using configurable color with contrast background
   if (chit.due_datetime) {
     const dueDate = new Date(chit.due_datetime);
     const isOverdue = dueDate < new Date() && chit.status !== 'Complete';
     const s = document.createElement('span');
     s.textContent = `Due: ${formatDate(dueDate)}`;
-    if (isOverdue) { s.style.color = '#b22222'; s.style.fontWeight = 'bold'; }
+    if (isOverdue) {
+      var overdueCol = (window._cwocSettings && window._cwocSettings.overdue_border_color) || '#b22222';
+      var overdueTextCol = contrastColorForBg(overdueCol);
+      s.style.cssText = 'background:' + overdueCol + ';color:' + overdueTextCol + ';font-weight:bold;padding:1px 6px;border-radius:3px;';
+    }
     if (currentSortField === 'due') { s.style.fontWeight = 'bold'; s.textContent += (currentSortDir === 'asc' ? ' ▲' : ' ▼'); }
     right.appendChild(s);
   }
@@ -187,6 +205,18 @@ function _buildChitHeader(chit, titleHtml, settings) {
       chip.textContent = tagName.split('/').pop();
       right.appendChild(chip);
     });
+  }
+
+  // Owner badge — show only when owner differs from current user
+  if (chit.owner_display_name) {
+    var currentUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    if (!currentUser || chit.owner_display_name !== currentUser.display_name) {
+      var ownerBadge = document.createElement('span');
+      ownerBadge.className = 'cwoc-owner-badge';
+      ownerBadge.textContent = '👤 ' + chit.owner_display_name;
+      ownerBadge.title = 'Owner: ' + chit.owner_display_name;
+      right.appendChild(ownerBadge);
+    }
   }
 
   row.appendChild(right);
@@ -303,7 +333,7 @@ function displayTasksView(chitsToDisplay) {
     applyChitColors(chitElement, typeof chitColor === 'function' ? chitColor(chit) : '#fdf6e3');
     if (chit.status === "Complete") chitElement.classList.add("completed-task");
 
-    chitElement.appendChild(_buildChitHeader(chit, `<a href="/editor?id=${chit.id}">${chit.title || '(Untitled)'}</a>`, _viSettings));
+    chitElement.appendChild(_buildChitHeader(chit, `<a href="/editor?id=${chit.id}">${chit.title || '(Untitled)'}</a>`, _viSettings, { hideStatus: true }));
 
     // Status + note preview in a row
     const controls = document.createElement("div");
@@ -332,7 +362,35 @@ function displayTasksView(chitsToDisplay) {
       statusDropdown.appendChild(option);
     });
     if (!chit.status) statusDropdown.value = "";
+
+    // Style dropdown based on current status
+    function _styleStatusDropdown() {
+      var val = statusDropdown.value;
+      var blockedCol = (window._cwocSettings && window._cwocSettings.blocked_border_color) || '#DAA520';
+      var overdueCol = (window._cwocSettings && window._cwocSettings.overdue_border_color) || '#b22222';
+      if (val === 'Blocked') {
+        statusDropdown.style.backgroundColor = blockedCol;
+        statusDropdown.style.color = contrastColorForBg(blockedCol);
+        statusDropdown.style.border = '2px solid ' + blockedCol;
+        statusDropdown.style.fontWeight = 'bold';
+      } else if (val === 'Complete') {
+        statusDropdown.style.backgroundColor = '';
+        statusDropdown.style.color = '';
+        statusDropdown.style.border = '';
+        statusDropdown.style.fontWeight = '';
+        statusDropdown.style.opacity = '0.6';
+      } else {
+        statusDropdown.style.backgroundColor = '';
+        statusDropdown.style.color = '';
+        statusDropdown.style.border = '';
+        statusDropdown.style.fontWeight = '';
+        statusDropdown.style.opacity = '';
+      }
+    }
+    _styleStatusDropdown();
+
     statusDropdown.addEventListener("change", () => {
+      _styleStatusDropdown();
       fetch(`/api/chits/${chit.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -651,6 +709,19 @@ function displayNotesView(chitsToDisplay) {
       const titleSpan = document.createElement('span');
       titleSpan.textContent = chit.title || '(Untitled)';
       titleRow.appendChild(titleSpan);
+
+      // Owner badge — show only when owner differs from current user
+      if (chit.owner_display_name) {
+        var _notesUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+        if (!_notesUser || chit.owner_display_name !== _notesUser.display_name) {
+          var _notesOwner = document.createElement('span');
+          _notesOwner.className = 'cwoc-owner-badge';
+          _notesOwner.textContent = '👤 ' + chit.owner_display_name;
+          _notesOwner.title = 'Owner: ' + chit.owner_display_name;
+          titleRow.appendChild(_notesOwner);
+        }
+      }
+
       chitElement.appendChild(titleRow);
 
       const noteEl = document.createElement("div");
@@ -1198,6 +1269,18 @@ function _displayProjectsKanban(chitsToDisplay) {
             notePreview.textContent = child.note.slice(0, 300) + (child.note.length > 300 ? '…' : '');
           }
           card.appendChild(notePreview);
+        }
+
+        // Owner badge — show only when owner differs from current user
+        if (child.owner_display_name) {
+          var _kanbanUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+          if (!_kanbanUser || child.owner_display_name !== _kanbanUser.display_name) {
+            var _kanbanOwner = document.createElement('div');
+            _kanbanOwner.className = 'cwoc-owner-badge';
+            _kanbanOwner.textContent = '👤 ' + child.owner_display_name;
+            _kanbanOwner.title = 'Owner: ' + child.owner_display_name;
+            card.appendChild(_kanbanOwner);
+          }
         }
 
         // Grandchildren (children of this child) as sub-items

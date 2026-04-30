@@ -43,6 +43,8 @@ class Settings(BaseModel):
     default_notifications: Optional[Dict[str, Any]] = None  # { start: [...], due: [...] }
     unit_system: Optional[str] = "imperial"  # "imperial" or "metric"
     habits_success_window: Optional[str] = "30"  # "7", "30", "90", or "all"
+    overdue_border_color: Optional[str] = "#b22222"  # Border color for overdue chits
+    blocked_border_color: Optional[str] = "#DAA520"  # Border color for blocked chits
 
 class Chit(BaseModel):
     id: Optional[str] = None
@@ -116,3 +118,34 @@ class Contact(BaseModel):
 class ImportRequest(BaseModel):
     mode: str   # "add" or "replace"
     data: dict  # The full ExportEnvelope
+
+
+# ── Multi-User Models ────────────────────────────────────────────────
+
+class UserCreate(BaseModel):
+    username: str
+    display_name: str
+    password: str
+    email: Optional[str] = None
+    is_admin: Optional[bool] = False
+
+class UserResponse(BaseModel):
+    id: str
+    username: str
+    display_name: str
+    email: Optional[str] = None
+    is_admin: bool
+    is_active: bool
+    created_datetime: str
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+class ProfileUpdate(BaseModel):
+    display_name: Optional[str] = None
+    email: Optional[str] = None
+
+class PasswordChange(BaseModel):
+    current_password: str
+    new_password: str

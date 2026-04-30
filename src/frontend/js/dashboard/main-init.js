@@ -621,18 +621,42 @@ function _applyChitDisplayOptions() {
     });
   }
 
-  // Highlight overdue chits — due date passed, not complete (all views including calendar)
-  if (_chitOptions.highlight_overdue_chits) {
+  // Highlight overdue and/or blocked chits — single pass handles both + combo
+  {
+    const overdueColor = (window._cwocSettings && window._cwocSettings.overdue_border_color) || '#b22222';
+    const blockedColor = (window._cwocSettings && window._cwocSettings.blocked_border_color) || '#DAA520';
+    const highlightOverdue = !!_chitOptions.highlight_overdue_chits;
+
     document.querySelectorAll('.chit-card[data-chit-id], .timed-event[data-chit-id], .all-day-event[data-chit-id], .month-event[data-chit-id]').forEach(el => {
       const chitId = el.dataset.chitId;
       const chit = chits.find(c => c.id === chitId);
       if (!chit) return;
+
       const dueTime = chit.due_datetime ? new Date(chit.due_datetime) : null;
-      if (dueTime && dueTime < now && chit.status !== 'Complete') {
-        el.style.border = '3px solid #b22222';
+      const isOverdue = highlightOverdue && dueTime && dueTime < now && chit.status !== 'Complete';
+      const isBlocked = chit.status === 'Blocked';
+
+      if (isOverdue && isBlocked) {
+        // Both: alternating dashed border using background-image gradient trick (longer 16px dashes)
+        el.style.border = 'none';
         el.style.borderRadius = '4px';
-        // Don't fade overdue chits — they should stand out
+        el.style.outline = 'none';
+        el.style.backgroundImage = 'repeating-linear-gradient(90deg, ' + overdueColor + ' 0, ' + overdueColor + ' 16px, ' + blockedColor + ' 16px, ' + blockedColor + ' 32px), ' +
+          'repeating-linear-gradient(180deg, ' + overdueColor + ' 0, ' + overdueColor + ' 16px, ' + blockedColor + ' 16px, ' + blockedColor + ' 32px), ' +
+          'repeating-linear-gradient(90deg, ' + overdueColor + ' 0, ' + overdueColor + ' 16px, ' + blockedColor + ' 16px, ' + blockedColor + ' 32px), ' +
+          'repeating-linear-gradient(180deg, ' + overdueColor + ' 0, ' + overdueColor + ' 16px, ' + blockedColor + ' 16px, ' + blockedColor + ' 32px)';
+        el.style.backgroundSize = '100% 3px, 3px 100%, 100% 3px, 3px 100%';
+        el.style.backgroundPosition = '0 0, 100% 0, 0 100%, 0 0';
+        el.style.backgroundRepeat = 'no-repeat';
+        el.style.padding = el.style.padding || '0.5em 0.7em';
         el.style.opacity = '';
+      } else if (isOverdue) {
+        el.style.border = '3px solid ' + overdueColor;
+        el.style.borderRadius = '4px';
+        el.style.opacity = '';
+      } else if (isBlocked) {
+        el.style.border = '3px solid ' + blockedColor;
+        el.style.borderRadius = '4px';
       }
     });
   }
@@ -735,6 +759,10 @@ document.addEventListener("DOMContentLoaded", function () {
     if (s.all_view_end_hour !== undefined) _allViewEndHour = parseInt(s.all_view_end_hour) || 24;
     if (s.day_scroll_to_hour !== undefined) _dayScrollToHour = parseInt(s.day_scroll_to_hour) || 5;
     if (s.chit_options) _chitOptions = { ..._chitOptions, ...s.chit_options };
+    // Load border color settings for overdue/blocked highlighting
+    window._cwocSettings = window._cwocSettings || {};
+    if (s.overdue_border_color) window._cwocSettings.overdue_border_color = s.overdue_border_color;
+    if (s.blocked_border_color) window._cwocSettings.blocked_border_color = s.blocked_border_color;
     // Load default filters per tab
     const df = s.default_filters;
     if (df && typeof df === 'object' && !Array.isArray(df)) {

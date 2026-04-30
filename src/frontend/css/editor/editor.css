@@ -3109,4 +3109,11 @@ input.location {
 .author-info a { color: #4a2c2a; text-decoration: underline; }
 .author-info a:hover { color: #1a1208; }
 
-
+/* ── Owner info display (multi-user) ───────────────────────────────────── */
+.cwoc-editor-owner-info {
+    font-size: 0.85em;
+    color: #6b4e31;
+    font-style: italic;
+    margin-top: 4px;
+    padding: 2px 0;
+}

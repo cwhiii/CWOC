@@ -16,21 +16,28 @@
 - in the indicators, on the graphs the date overlaps if they are close together,  have it use smarter, shorter lables, or oly day of the month or somehting better to previent this. 
 - in indicators vierw, use a plain red heart fo rhear rate chart & filter. 
 - in indicators view, let me drag & drop the charts to reorganize them just like is impliments in the notes view. 
+- On mobile, swiping the tip bar should cycle through views.
+- Combine alerts should be honored on all views, it's not in tasks.
+
 
 
 
 ## Medium Features
+## Calculator
+- CalcUlator popver/movable modal. Steal from pipeulator & add "insert result S value. Or CRTL+I if in a input field.
+¿Leave the calculator with wire to value? (persist checkbox)?
+
+
+
+
+
+
 ### External Access
 - I'll be using theis with potentilaly severla different extra-LAN accessmethods. 1st is tailscale. Udpdat ehe installer to get that configured, and add whatever's needd to the settings page to the "🔄 Version & Updates" block of settings. Also, rename it ot " Updates & access" (with applicable good logo.) DO NOT export any passwords for this in the full data export, but DO export all other configs & settigns needed for it. 
 
 ### MISC
 - `[ ]` Use consistent system for modals (same styling, same in/out function
 
-
-
-### Shared Task Assignment
-- Dependency: Users feature
-- Have chits assigned to a certain person
 
 ### Calendar Import (.ics)
 - `[ ]` Import calendar data from Google, Apple, and Windows/Outlook via .ics files
@@ -54,26 +61,17 @@
 - `[ ]` Declined events view
 - `[ ]` Time zones support on chits with dates
 
-### Alerts & Notifications
+### Location-based functionality
 - `[ ]` Proximity-based notifications (your location, someone else's)
 
 ### Editor & Chit Management
-- `[ ]` People zone: modal with autocomplete + multi-select roles (after Users)
 - `[ ]` Multi-line checklist items
-- `[ ]` Linked chits (bidirectional)
 - `[ ]` Dependencies (chits that must be completed first)
-- `[ ]` Visibility (Private/Shared/Public) (after Users)
 - `[ ]` Move checklist into note / note into checklist
 
 ### Notes
 - `[ ]` Side-by-side notes view (2 chits for copy/paste/reference)
 - `[ ]` Auto import/export notes as Markdown to sync with Obsidian
-
-### Self-Audit
-- `[ ]` Identify UI elements without associated functionality
-- `[ ]` Make a list to clean up — decide build or cut for each
-
----
 
 ## Major Features / Overhauls
 
@@ -89,24 +87,14 @@
 - `[ ]` Span options become 1,2,3,4,5,10 HST hours
 
 ### Multi-User System
-- `[ ]` Full user accounts with login/authentication
-- `[ ]` Each user has own chits, contacts, and settings
-- `[ ]` User switcher
-- `[ ]` Profile page with contact info + password
-- `[ ]` Sharing by chit — all users on instance can access
-- `[ ]` Sharing by tag — tag-based cross-user access
-- `[ ]` Shared calendars via tag-based sharing
-- `[ ]` Multi-owner view for wall stations/common areas
-- `[ ]` "Chits Assigned to Me" view
-- `[ ]` Option to hide/stealth a chit from all other users
-- `[ ]` Chit owner field (UUID + friendly name + username)
+1. User managemen tproject - underway
+2. Sharing chits project - waiting for #1.
 
 ### Event Invitations
-- `[ ]` Invite another user to a chit/event
 - `[ ]` Accept/reject invitations
 - `[ ]` Invitation status visible to inviter
 - `[ ]` Accepted invitations appear on invitee's calendar
-- `[ ]` Declined events view (per user)
+- `[ ]` Declined events toggle 
 
 ### Health Indicators (Enhancements)
 - `[ ]` Symptom tracker (multi-select)

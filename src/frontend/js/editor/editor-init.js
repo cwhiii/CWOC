@@ -257,6 +257,21 @@ async function loadChitData(chitId) {
       titleInput.value = chit.title || "";
     }
 
+    // Owner info — show below title when owner differs from current user
+    var ownerInfoEl = document.getElementById("cwoc-editor-owner-info");
+    if (ownerInfoEl) ownerInfoEl.remove();
+    if (chit.owner_display_name) {
+      var editorUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+      if (!editorUser || chit.owner_display_name !== editorUser.display_name) {
+        var ownerInfo = document.createElement('div');
+        ownerInfo.id = 'cwoc-editor-owner-info';
+        ownerInfo.className = 'cwoc-editor-owner-info';
+        ownerInfo.textContent = '👤 Owner: ' + chit.owner_display_name;
+        var titleField = document.getElementById('titleField');
+        if (titleField) titleField.appendChild(ownerInfo);
+      }
+    }
+
     const noteTextarea = document.getElementById("note");
     if (noteTextarea) {
       noteTextarea.value = chit.note || "";

@@ -633,3 +633,111 @@ input[type="color"] {
 .cwoc-quick-alert-done:hover {
     background: #6b4226;
 }
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   User Switcher — dropdown, password prompt, and current user display
+   Used by shared-page.js header injection and dashboard sidebar.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Switcher Wrapper (positioned relative for dropdown) ─────────────────── */
+.cwoc-user-switcher {
+    position: relative;
+    display: inline-block;
+}
+
+/* ── Switcher Button (subtle header element, not a big button) ───────────── */
+.cwoc-user-switcher-btn {
+    background: transparent;
+    border: 1px solid rgba(139, 90, 43, 0.3);
+    border-radius: 5px;
+    padding: 5px 12px;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.95em;
+    color: var(--aged-brown-dark);
+    cursor: pointer;
+    transition: background 0.2s, border-color 0.2s;
+    white-space: nowrap;
+}
+.cwoc-user-switcher-btn:hover {
+    background: rgba(139, 90, 43, 0.1);
+    border-color: var(--aged-brown-medium);
+}
+
+/* ── Dropdown Container ──────────────────────────────────────────────────── */
+.cwoc-user-dropdown {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 4px;
+    min-width: 200px;
+    background: #fff8e1;
+    border: 2px solid #8b5a2b;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+    z-index: 2000;
+    padding: 6px 0;
+    font-family: 'Lora', Georgia, serif;
+}
+
+/* ── Dropdown Items ──────────────────────────────────────────────────────── */
+.cwoc-user-dropdown-item {
+    padding: 8px 14px;
+    cursor: pointer;
+    font-size: 0.95em;
+    color: var(--aged-brown-dark);
+    transition: background 0.15s;
+}
+.cwoc-user-dropdown-item:hover {
+    background: rgba(139, 90, 43, 0.15);
+}
+
+/* ── Dropdown Loading / Empty States ─────────────────────────────────────── */
+.cwoc-user-dropdown-loading,
+.cwoc-user-dropdown-empty {
+    padding: 10px 14px;
+    font-size: 0.9em;
+    color: var(--aged-brown-light);
+    text-align: center;
+    font-style: italic;
+}
+
+/* ── Password Input in Switch Modal ──────────────────────────────────────── */
+.cwoc-switch-password-input {
+    width: 100%;
+    padding: 8px 10px;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 1em;
+    border: 1px solid #8b5a2b;
+    border-radius: 5px;
+    background: #f5e6cc;
+    color: #1a1208;
+    box-sizing: border-box;
+    margin-top: 6px;
+}
+.cwoc-switch-password-input:focus {
+    outline: none;
+    border-color: var(--accent-gold);
+    box-shadow: 0 0 0 2px rgba(212, 175, 55, 0.25);
+}
+
+/* ── Error Message in Switch Modal ───────────────────────────────────────── */
+.cwoc-switch-error {
+    color: var(--danger-red);
+    font-size: 0.9em;
+    margin-top: 6px;
+    min-height: 1.2em;
+}
+
+/* ── Mobile: full-width dropdown ─────────────────────────────────────────── */
+@media (max-width: 480px) {
+    .cwoc-user-dropdown {
+        right: auto;
+        left: 0;
+        min-width: 180px;
+    }
+    .cwoc-user-switcher-btn {
+        padding: 4px 8px;
+        font-size: 0.85em;
+    }
+}

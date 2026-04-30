@@ -153,8 +153,57 @@ window.CwocSaveSystem = CwocSaveSystem;
     navDiv.appendChild(btn);
   });
 
+  // ── User Switcher (shows current user, dropdown to switch accounts) ──
+  var switcherWrap = document.createElement('div');
+  switcherWrap.className = 'cwoc-user-switcher';
+
+  var switcherBtn = document.createElement('button');
+  switcherBtn.className = 'cwoc-user-switcher-btn';
+  switcherBtn.id = 'cwoc-user-switcher-btn';
+
+  // Get current user display name from shared-auth.js
+  var currentUser = (typeof getCurrentUser === 'function') ? getCurrentUser() : null;
+  switcherBtn.textContent = currentUser ? ('👤 ' + currentUser.display_name) : '👤 User';
+  switcherBtn.title = 'Switch user account';
+
+  switcherBtn.onclick = function(e) {
+    e.stopPropagation();
+    _cwocToggleUserDropdown(switcherWrap);
+  };
+  switcherWrap.appendChild(switcherBtn);
+
+  navDiv.appendChild(switcherWrap);
+
+  // ── Profile link ──
+  var profileBtn = document.createElement('button');
+  profileBtn.className = 'standard-button';
+  profileBtn.textContent = '👤 Profile';
+  profileBtn.title = 'View your profile';
+  profileBtn.onclick = function() { window.location.href = '/profile'; };
+  // Don't show on the profile page itself
+  if (window.location.pathname !== '/profile') {
+    navDiv.appendChild(profileBtn);
+  }
+
+  // ── Logout button ──
+  var logoutBtn = document.createElement('button');
+  logoutBtn.className = 'standard-button cwoc-logout-btn';
+  logoutBtn.textContent = '🚪 Logout';
+  logoutBtn.title = 'Log out of your account';
+  logoutBtn.onclick = function() { _cwocLogout(); };
+  navDiv.appendChild(logoutBtn);
+
   header.appendChild(navDiv);
   panel.insertBefore(header, panel.firstChild);
+
+  // If auth wasn't ready yet, update the button text once it is
+  if (!currentUser && typeof waitForAuth === 'function') {
+    waitForAuth().then(function(user) {
+      if (user) {
+        switcherBtn.textContent = '👤 ' + user.display_name;
+      }
+    });
+  }
 
   // ── Build footer (matches original .author-info structure) ──
   var footer = document.createElement('div');
@@ -188,6 +237,218 @@ window.CwocSaveSystem = CwocSaveSystem;
 
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   User Switcher — dropdown + password prompt for switching accounts
+
+   Used by the auto-header injection above. Fetches GET /api/users to list
+   active accounts, shows a dropdown, and prompts for the target user's
+   password before calling POST /api/auth/switch.
+   ═══════════════════════════════════════════════════════════════════════════ */
+(function() {
+
+  /**
+   * Toggle the user dropdown on the switcher button.
+   * Fetches active users from the API and builds a dropdown list.
+   */
+  function _toggleUserDropdown(switcherWrap) {
+    // If dropdown already open, close it
+    var existing = switcherWrap.querySelector('.cwoc-user-dropdown');
+    if (existing) {
+      existing.remove();
+      return;
+    }
+
+    // Create dropdown container
+    var dropdown = document.createElement('div');
+    dropdown.className = 'cwoc-user-dropdown';
+    dropdown.innerHTML = '<div class="cwoc-user-dropdown-loading">Loading…</div>';
+    switcherWrap.appendChild(dropdown);
+
+    // Close dropdown when clicking outside
+    function _onDocClick(e) {
+      if (!switcherWrap.contains(e.target)) {
+        dropdown.remove();
+        document.removeEventListener('click', _onDocClick, true);
+      }
+    }
+    setTimeout(function() {
+      document.addEventListener('click', _onDocClick, true);
+    }, 0);
+
+    // Fetch users
+    fetch('/api/users').then(function(r) {
+      if (!r.ok) {
+        dropdown.innerHTML = '<div class="cwoc-user-dropdown-empty">Unable to load users</div>';
+        return null;
+      }
+      return r.json();
+    }).then(function(users) {
+      if (!users) return;
+
+      var currentUser = (typeof getCurrentUser === 'function') ? getCurrentUser() : null;
+      var currentId = currentUser ? currentUser.user_id : null;
+
+      // Filter to active users, exclude current user
+      var activeOthers = users.filter(function(u) {
+        return u.is_active && u.id !== currentId;
+      });
+
+      dropdown.innerHTML = '';
+
+      if (activeOthers.length === 0) {
+        dropdown.innerHTML = '<div class="cwoc-user-dropdown-empty">No other users</div>';
+        return;
+      }
+
+      activeOthers.forEach(function(u) {
+        var item = document.createElement('div');
+        item.className = 'cwoc-user-dropdown-item';
+        item.textContent = u.display_name + ' (' + u.username + ')';
+        item.onclick = function(e) {
+          e.stopPropagation();
+          dropdown.remove();
+          document.removeEventListener('click', _onDocClick, true);
+          _showPasswordPrompt(u);
+        };
+        dropdown.appendChild(item);
+      });
+    }).catch(function() {
+      dropdown.innerHTML = '<div class="cwoc-user-dropdown-empty">Unable to load users</div>';
+    });
+  }
+
+  /**
+   * Show a parchment-styled password prompt modal for switching to a user.
+   */
+  function _showPasswordPrompt(targetUser) {
+    // Remove any existing prompt
+    var existingModal = document.getElementById('cwoc-switch-modal');
+    if (existingModal) existingModal.remove();
+
+    var overlay = document.createElement('div');
+    overlay.id = 'cwoc-switch-modal';
+    overlay.className = 'modal';
+    overlay.style.display = 'flex';
+
+    var content = document.createElement('div');
+    content.className = 'modal-content';
+
+    content.innerHTML =
+      '<h3>🔐 Switch to ' + _escHtml(targetUser.display_name) + '</h3>' +
+      '<p>Enter the password for <strong>' + _escHtml(targetUser.username) + '</strong>:</p>' +
+      '<input type="password" id="cwoc-switch-password" class="cwoc-switch-password-input" placeholder="Password" autocomplete="off" />' +
+      '<div id="cwoc-switch-error" class="cwoc-switch-error"></div>' +
+      '<div class="modal-buttons">' +
+        '<button class="standard-button" id="cwoc-switch-cancel">Cancel</button>' +
+        '<button class="standard-button" id="cwoc-switch-confirm">Switch</button>' +
+      '</div>';
+
+    overlay.appendChild(content);
+    document.body.appendChild(overlay);
+
+    var passwordInput = document.getElementById('cwoc-switch-password');
+    var errorDiv = document.getElementById('cwoc-switch-error');
+    var confirmBtn = document.getElementById('cwoc-switch-confirm');
+    var cancelBtn = document.getElementById('cwoc-switch-cancel');
+
+    // Focus the password input
+    setTimeout(function() { passwordInput.focus(); }, 50);
+
+    // Cancel
+    cancelBtn.onclick = function() { overlay.remove(); };
+
+    // ESC closes the modal
+    function _onKey(e) {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        overlay.remove();
+        document.removeEventListener('keydown', _onKey, true);
+      }
+    }
+    document.addEventListener('keydown', _onKey, true);
+
+    // Enter submits
+    passwordInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        _doSwitch();
+      }
+    });
+
+    // Confirm
+    confirmBtn.onclick = function() { _doSwitch(); };
+
+    function _doSwitch() {
+      var password = passwordInput.value.trim();
+      if (!password) {
+        errorDiv.textContent = 'Please enter a password.';
+        return;
+      }
+
+      errorDiv.textContent = '';
+      confirmBtn.disabled = true;
+      confirmBtn.textContent = 'Switching…';
+
+      fetch('/api/auth/switch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: targetUser.username, password: password })
+      }).then(function(r) {
+        if (r.ok) {
+          // Success — reload the page
+          window.location.reload();
+          return;
+        }
+        return r.json().then(function(data) {
+          if (r.status === 429) {
+            errorDiv.textContent = data.detail || 'Too many attempts. Please wait.';
+          } else {
+            errorDiv.textContent = data.detail || 'Invalid password.';
+          }
+          confirmBtn.disabled = false;
+          confirmBtn.textContent = 'Switch';
+        });
+      }).catch(function() {
+        errorDiv.textContent = 'Network error. Please try again.';
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = 'Switch';
+      });
+    }
+  }
+
+  /**
+   * Simple HTML escaping for user-provided strings.
+   */
+  function _escHtml(str) {
+    var div = document.createElement('div');
+    div.appendChild(document.createTextNode(str));
+    return div.innerHTML;
+  }
+
+  // Export for use by the header injection IIFE
+  window._cwocToggleUserDropdown = _toggleUserDropdown;
+  window._cwocShowSwitchPasswordPrompt = _showPasswordPrompt;
+
+  /**
+   * Logout: POST /api/auth/logout, then redirect to /login.
+   */
+  function _logout() {
+    fetch('/api/auth/logout', { method: 'POST' })
+      .then(function() {
+        window.location.href = '/login';
+      })
+      .catch(function() {
+        // Even on network error, redirect to login
+        window.location.href = '/login';
+      });
+  }
+
+  window._cwocLogout = _logout;
+
+})();
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
    Navigate Panel (V hotkey) — available on all pages that load shared-page.js
    On the dashboard, main.js uses the native hotkey-panel system instead.
    On special pages, this creates a matching overlay + panel.
@@ -201,7 +462,20 @@ window.CwocSaveSystem = CwocSaveSystem;
     { key: '5', icon: '⚙️', label: 'Settings',    href: '/frontend/html/settings.html' },
     { key: '6', icon: '📋', label: 'Audit Log',   href: '/frontend/html/audit-log.html' },
     { key: '7', icon: '🗑️', label: 'Trash',       href: '/frontend/html/trash.html' },
+    { key: '8', icon: '👤', label: 'Profile',     href: '/profile' },
   ];
+
+  // Conditionally add User Admin for admin users
+  if (typeof isAdmin === 'function' && isAdmin()) {
+    _navPages.push({ key: '9', icon: '👥', label: 'User Admin', href: '/user-admin' });
+  } else if (typeof waitForAuth === 'function') {
+    // Auth may not be ready yet — add it once we know
+    waitForAuth().then(function(user) {
+      if (user && user.is_admin) {
+        _navPages.push({ key: '9', icon: '👥', label: 'User Admin', href: '/user-admin' });
+      }
+    });
+  }
 
   // Skip on dashboard — main.js handles V with the native panel system
   var _isDashboard = (window.location.pathname === '/' || window.location.pathname === '/index.html' || window.location.pathname.endsWith('/index.html'));

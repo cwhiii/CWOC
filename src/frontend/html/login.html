@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <link rel="icon" type="image/x-icon" href="/static/cwod_logo-favicon.png" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Login — C.W.'s Omni Chits</title>
+    <style>
+        /* ── Lora Font (self-hosted variable font) ─────────────────────────── */
+        @font-face {
+            font-family: 'Lora';
+            src: url('/static/fonts/lora/Lora-VariableFont_wght.ttf') format('truetype');
+            font-weight: 400 700;
+            font-style: normal;
+            font-display: swap;
+        }
+        @font-face {
+            font-family: 'Lora';
+            src: url('/static/fonts/lora/Lora-Italic-VariableFont_wght.ttf') format('truetype');
+            font-weight: 400 700;
+            font-style: italic;
+            font-display: swap;
+        }
+
+        /* ── Reset & Base ──────────────────────────────────────────────────── */
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-image: url("/static/parchment.jpg");
+            background-size: cover;
+            background-attachment: fixed;
+            background-position: center;
+            font-family: 'Lora', Georgia, serif;
+            color: #1a1208;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 1em;
+        }
+
+        /* ── Login Card ────────────────────────────────────────────────────── */
+        .login-card {
+            background: linear-gradient(to bottom, #fff8e1, #f5e6cc);
+            border: 2px solid #8b5a2b;
+            border-radius: 10px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+            padding: 32px 36px;
+            width: 100%;
+            max-width: 380px;
+            position: relative;
+            overflow: hidden;
+        }
+        .login-card::before {
+            content: "";
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle, rgba(255, 215, 0, 0.1), transparent);
+            pointer-events: none;
+            border-radius: 10px;
+        }
+
+        /* ── Logo & Title ──────────────────────────────────────────────────── */
+        .login-header {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+        .login-header img {
+            width: 64px;
+            height: 64px;
+            margin-bottom: 10px;
+        }
+        .login-header h1 {
+            font-size: 22px;
+            color: #1a1208;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin: 0;
+            border-bottom: 1px solid #8b5a2b;
+            padding-bottom: 10px;
+        }
+
+        /* ── Form ──────────────────────────────────────────────────────────── */
+        .login-form {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .form-group label {
+            font-size: 15px;
+            font-weight: 600;
+            color: #1a1208;
+        }
+        .form-group input {
+            border: 1px solid #8b5a2b;
+            border-radius: 5px;
+            padding: 10px 12px;
+            font-size: 16px;
+            color: #1a1208;
+            font-family: 'Lora', Georgia, serif;
+            background: #f5e6cc;
+            transition: border-color 0.2s;
+        }
+        .form-group input:focus {
+            outline: none;
+            border-color: #4a2c2a;
+            box-shadow: 0 0 0 2px rgba(139, 90, 43, 0.25);
+        }
+
+        /* ── Submit Button ─────────────────────────────────────────────────── */
+        .login-btn {
+            background: linear-gradient(#d4a373, #c8965a);
+            color: #2b1e0f;
+            border: none;
+            border-radius: 5px;
+            padding: 12px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            font-family: 'Lora', Georgia, serif;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            transition: box-shadow 0.3s, transform 0.1s;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            margin-top: 4px;
+        }
+        .login-btn:hover {
+            box-shadow: 0 3px 6px rgba(0, 0, 0, 0.3);
+            transform: translateY(-1px);
+        }
+        .login-btn:active {
+            transform: translateY(0);
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+        }
+        .login-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* ── Error Message ─────────────────────────────────────────────────── */
+        .login-error {
+            display: none;
+            background: rgba(178, 34, 34, 0.1);
+            border: 1px solid #b22222;
+            border-radius: 5px;
+            padding: 10px 12px;
+            color: #8b1a1a;
+            font-size: 14px;
+            text-align: center;
+            line-height: 1.4;
+        }
+        .login-error.visible {
+            display: block;
+        }
+
+        /* ── Mobile ────────────────────────────────────────────────────────── */
+        @media (max-width: 480px) {
+            .login-card {
+                padding: 24px 20px;
+            }
+            .login-header h1 {
+                font-size: 18px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="login-card">
+        <div class="login-header">
+            <img src="/static/cwod_logo.png" alt="CWOC Logo" />
+            <h1>C.W.'s Omni Chits</h1>
+        </div>
+
+        <form class="login-form" id="loginForm" autocomplete="on">
+            <div class="form-group">
+                <label for="username">Username</label>
+                <input type="text" id="username" name="username" autocomplete="username" required autofocus />
+            </div>
+
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" autocomplete="current-password" required />
+            </div>
+
+            <div class="login-error" id="loginError" role="alert" aria-live="polite"></div>
+
+            <button type="submit" class="login-btn" id="loginBtn">Log In</button>
+        </form>
+    </div>
+
+    <script>
+        (function () {
+            const form = document.getElementById('loginForm');
+            const errorDiv = document.getElementById('loginError');
+            const loginBtn = document.getElementById('loginBtn');
+
+            function showError(message) {
+                errorDiv.textContent = message;
+                errorDiv.classList.add('visible');
+            }
+
+            function clearError() {
+                errorDiv.textContent = '';
+                errorDiv.classList.remove('visible');
+            }
+
+            form.addEventListener('submit', async function (e) {
+                e.preventDefault();
+                clearError();
+
+                const username = document.getElementById('username').value.trim();
+                const password = document.getElementById('password').value;
+
+                if (!username || !password) {
+                    showError('Please enter both username and password.');
+                    return;
+                }
+
+                loginBtn.disabled = true;
+                loginBtn.textContent = 'Logging in…';
+
+                try {
+                    const response = await fetch('/api/auth/login', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ username, password })
+                    });
+
+                    if (response.ok) {
+                        // Redirect to stored return URL or dashboard
+                        const returnUrl = localStorage.getItem('cwoc_auth_return');
+                        if (returnUrl) {
+                            localStorage.removeItem('cwoc_auth_return');
+                            window.location.href = returnUrl;
+                        } else {
+                            window.location.href = '/';
+                        }
+                        return;
+                    }
+
+                    if (response.status === 429) {
+                        showError('Too many login attempts. Please wait before retrying.');
+                    } else if (response.status === 401) {
+                        showError('Invalid username or password');
+                    } else {
+                        showError('An unexpected error occurred. Please try again.');
+                    }
+                } catch (err) {
+                    console.error('Login error:', err);
+                    showError('Unable to reach the server. Please check your connection.');
+                } finally {
+                    loginBtn.disabled = false;
+                    loginBtn.textContent = 'Log In';
+                }
+            });
+        })();
+    </script>
+</body>
+</html>

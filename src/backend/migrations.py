@@ -495,3 +495,171 @@ def migrate_contact_images_to_data():
     finally:
         if conn:
             conn.close()
+
+
+def migrate_add_border_color_settings():
+    """Add overdue_border_color and blocked_border_color columns to settings table."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(settings)")
+        existing = {row[1] for row in cursor.fetchall()}
+        if "overdue_border_color" not in existing:
+            cursor.execute("ALTER TABLE settings ADD COLUMN overdue_border_color TEXT DEFAULT '#b22222'")
+            logger.info("Added overdue_border_color column to settings table")
+        if "blocked_border_color" not in existing:
+            cursor.execute("ALTER TABLE settings ADD COLUMN blocked_border_color TEXT DEFAULT '#DAA520'")
+            logger.info("Added blocked_border_color column to settings table")
+        conn.commit()
+    except Exception as e:
+        logger.error(f"Error adding border color settings columns: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
+# ── Multi-User System: migration ─────────────────────────────────────────
+
+def migrate_add_multi_user():
+    """Create users/sessions tables, default admin account, and add ownership
+    columns to chits/contacts. Assigns all existing data to the admin user.
+
+    Fully idempotent — safe to run multiple times. Every step checks for
+    table/column existence before making changes.
+    """
+    import uuid
+    from datetime import datetime
+    from src.backend.auth_utils import hash_password
+
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        # ── 1. Create users table ────────────────────────────────────────
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id TEXT PRIMARY KEY,
+                username TEXT NOT NULL UNIQUE,
+                display_name TEXT NOT NULL,
+                email TEXT,
+                password_hash TEXT NOT NULL,
+                is_admin BOOLEAN DEFAULT 0,
+                is_active BOOLEAN DEFAULT 1,
+                created_datetime TEXT NOT NULL,
+                modified_datetime TEXT NOT NULL
+            )
+        """)
+
+        # ── 2. Create sessions table ─────────────────────────────────────
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS sessions (
+                token TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                created_datetime TEXT NOT NULL,
+                expires_datetime TEXT NOT NULL,
+                last_active_datetime TEXT NOT NULL
+            )
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_sessions_user
+            ON sessions (user_id)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_sessions_expires
+            ON sessions (expires_datetime)
+        """)
+
+        # ── 3. Create default admin user (if not already present) ────────
+        cursor.execute("SELECT id FROM users WHERE username = 'admin'")
+        admin_row = cursor.fetchone()
+
+        if admin_row:
+            admin_id = admin_row[0]
+        else:
+            admin_id = str(uuid.uuid4())
+            now = datetime.utcnow().isoformat() + "Z"
+
+            # Try to read display name from existing settings for default_user
+            display_name = "Admin"
+            try:
+                cursor.execute(
+                    "SELECT username FROM settings WHERE user_id = 'default_user'"
+                )
+                settings_row = cursor.fetchone()
+                if settings_row and settings_row[0] and settings_row[0].strip():
+                    display_name = settings_row[0].strip()
+            except Exception:
+                pass
+
+            password_hash = hash_password("cwoc")
+
+            cursor.execute(
+                """INSERT INTO users
+                   (id, username, display_name, email, password_hash,
+                    is_admin, is_active, created_datetime, modified_datetime)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (admin_id, "admin", display_name, None, password_hash,
+                 1, 1, now, now),
+            )
+            logger.info("Created default admin user (username='admin')")
+
+        # ── 4. Add owner columns to chits table ─────────────────────────
+        cursor.execute("PRAGMA table_info(chits)")
+        chit_columns = {row[1] for row in cursor.fetchall()}
+
+        if "owner_id" not in chit_columns:
+            cursor.execute("ALTER TABLE chits ADD COLUMN owner_id TEXT")
+            logger.info("Added owner_id column to chits table")
+        if "owner_display_name" not in chit_columns:
+            cursor.execute("ALTER TABLE chits ADD COLUMN owner_display_name TEXT")
+            logger.info("Added owner_display_name column to chits table")
+        if "owner_username" not in chit_columns:
+            cursor.execute("ALTER TABLE chits ADD COLUMN owner_username TEXT")
+            logger.info("Added owner_username column to chits table")
+
+        # ── 5. Assign existing chits to admin ────────────────────────────
+        # Read admin display_name and username for populating owner fields
+        cursor.execute(
+            "SELECT display_name, username FROM users WHERE id = ?", (admin_id,)
+        )
+        admin_info = cursor.fetchone()
+        admin_display = admin_info[0] if admin_info else "Admin"
+        admin_username = admin_info[1] if admin_info else "admin"
+
+        cursor.execute(
+            """UPDATE chits
+               SET owner_id = ?, owner_display_name = ?, owner_username = ?
+               WHERE owner_id IS NULL""",
+            (admin_id, admin_display, admin_username),
+        )
+
+        # ── 6. Add owner_id column to contacts table ────────────────────
+        cursor.execute("PRAGMA table_info(contacts)")
+        contact_columns = {row[1] for row in cursor.fetchall()}
+
+        if "owner_id" not in contact_columns:
+            cursor.execute("ALTER TABLE contacts ADD COLUMN owner_id TEXT")
+            logger.info("Added owner_id column to contacts table")
+
+        # ── 7. Assign existing contacts to admin ─────────────────────────
+        cursor.execute(
+            "UPDATE contacts SET owner_id = ? WHERE owner_id IS NULL",
+            (admin_id,),
+        )
+
+        # ── 8. Re-key settings from 'default_user' to admin UUID ────────
+        cursor.execute(
+            "UPDATE settings SET user_id = ? WHERE user_id = 'default_user'",
+            (admin_id,),
+        )
+
+        conn.commit()
+        logger.info("Multi-user migration complete")
+    except Exception as e:
+        logger.error(f"Error in migrate_add_multi_user: {str(e)}")
+        raise
+    finally:
+        if conn:
+            conn.close()

@@ -238,6 +238,28 @@
                     margin-top: 15px;
                 }
 
+                /* ── Border color ring indicators on color swatches ── */
+                .color-item.ring-overdue {
+                    box-shadow: 0 0 0 3px #b22222;
+                }
+                .color-item.ring-blocked {
+                    box-shadow: 0 0 0 3px #DAA520;
+                }
+                .color-item.ring-both {
+                    box-shadow: 0 0 0 3px #b22222, 0 0 0 6px #DAA520;
+                }
+                .color-item .ring-label {
+                    position: absolute;
+                    bottom: -16px;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    font-size: 9px;
+                    white-space: nowrap;
+                    color: #4a2c2a;
+                    font-weight: bold;
+                    pointer-events: none;
+                }
+
                 /* ── Sub-section header within a setting group ── */
                 .setting-subheader {
                     display: block;
@@ -606,9 +628,22 @@
                     </div>
                     <div class="setting-group">
                         <h3>🎨 Custom Colors</h3>
+
+                        <label class="setting-subheader">Default Colors</label>
+                        <ul id="default-color-list" class="color-list"></ul>
+
+                        <label class="setting-subheader">Custom Colors</label>
                         <ul id="color-list" class="color-list"></ul>
                         <button onclick="openColorPicker()">➕ Add Color</button>
                         <input type="color" id="color-picker" style="display:none" />
+
+                        <!-- Border color assignment popup -->
+                        <div id="border-assign-popup" style="display:none;position:fixed;z-index:1000;background:#fff8e1;border:2px solid #8b5a2b;border-radius:6px;padding:10px 14px;box-shadow:0 4px 12px rgba(0,0,0,0.25);font-size:0.9em;">
+                            <div style="margin-bottom:8px;font-weight:bold;color:#4a2c2a;">Set as:</div>
+                            <button id="assign-overdue-btn" class="standard-button" style="width:100%;margin-bottom:6px;font-size:0.85em;">🚨 Overdue Border</button>
+                            <button id="assign-blocked-btn" class="standard-button" style="width:100%;margin-bottom:6px;font-size:0.85em;">🚧 Blocked Border</button>
+                            <button id="assign-cancel-btn" class="standard-button" style="width:100%;font-size:0.85em;">Cancel</button>
+                        </div>
                     </div>
                     <div class="setting-group">
                         <h3>🕐 Clocks</h3>
@@ -797,6 +832,7 @@
                 </div>
             </div>
             <!-- Footer is auto-injected by shared-page.js -->
+            <script src="/frontend/js/shared/shared-auth.js"></script>
             <script src="/frontend/js/shared/shared-utils.js"></script>
             <script src="/frontend/js/shared/shared-touch.js"></script>
             <script src="/frontend/js/shared/shared-checklist.js"></script>

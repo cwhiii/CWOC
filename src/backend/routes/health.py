@@ -250,6 +250,21 @@ def get_health_data(since: Optional[str] = Query(None), until: Optional[str] = Q
 async def root():
     return FileResponse("/app/src/frontend/html/index.html")
 
+# Login route to serve login.html (excluded from auth middleware)
+@router.get("/login")
+async def login_page():
+    return FileResponse("/app/src/frontend/html/login.html")
+
+# Profile route to serve profile.html
+@router.get("/profile")
+async def profile_page():
+    return FileResponse("/app/src/frontend/html/profile.html")
+
+# User Admin route to serve user-admin.html
+@router.get("/user-admin")
+async def user_admin_page():
+    return FileResponse("/app/src/frontend/html/user-admin.html")
+
 # Editor route to serve editor.html and handle chit data
 @router.get("/editor")
 async def editor(id: str = None):
