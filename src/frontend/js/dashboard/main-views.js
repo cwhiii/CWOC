@@ -542,6 +542,10 @@ function _renderHabitCards(container, habitData, showCompleted, windowDays) {
     card.className = 'habit-card';
     card.dataset.chitId = chit.id;
     if (h.isCompleted) card.classList.add('habit-done');
+    // Apply chit color
+    if (typeof applyChitColors === 'function') {
+      applyChitColors(card, typeof chitColor === 'function' ? chitColor(chit) : '#fdf6e3');
+    }
 
     // ── Header row: checkbox + title + frequency ──
     var header = document.createElement('div');
@@ -888,9 +892,47 @@ function _setTasksMode(mode) {
   localStorage.setItem('cwoc_tasksViewMode', mode);
   const tasksBtn = document.getElementById('tasks-mode-tasks');
   const habitsBtn = document.getElementById('tasks-mode-habits');
+  const habitsWindowWrap = document.getElementById('habits-window-wrap');
   if (tasksBtn) tasksBtn.style.background = mode === 'tasks' ? 'ivory' : '';
   if (habitsBtn) habitsBtn.style.background = mode === 'habits' ? 'ivory' : '';
+  if (habitsWindowWrap) habitsWindowWrap.style.display = mode === 'habits' ? '' : 'none';
   displayChits();
+}
+
+/**
+ * Called when the sidebar habits success window dropdown changes.
+ * Saves the value to settings and re-renders the habits view.
+ */
+function _onHabitsWindowChange(newVal) {
+  // Update settings cache
+  if (window._cwocSettings) window._cwocSettings.habits_success_window = newVal;
+  // Persist to backend
+  var currentUserId = (typeof getCurrentUser === 'function' && getCurrentUser()) ? getCurrentUser().user_id : null;
+  if (currentUserId) {
+    var s = Object.assign({}, window._cwocSettings || {}, { user_id: currentUserId, habits_success_window: newVal });
+    fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(s) }).catch(function(e) { console.error('Failed to save habits window:', e); });
+  }
+  // Re-render if currently in habits mode
+  if (_tasksViewMode === 'habits') displayChits();
+}
+
+/**
+ * Initialize the sidebar habits success window dropdown from cached settings.
+ */
+function _initHabitsWindowDropdown() {
+  var sel = document.getElementById('habits-success-window-sidebar');
+  if (!sel) return;
+  var settings = window._cwocSettings || {};
+  var val = settings.habits_success_window || '30';
+  sel.value = val;
+  // Also show/hide based on current mode
+  var wrap = document.getElementById('habits-window-wrap');
+  if (wrap) wrap.style.display = _tasksViewMode === 'habits' ? '' : 'none';
+}
+
+// Run init after settings are loaded
+if (typeof getCachedSettings === 'function') {
+  getCachedSettings().then(_initHabitsWindowDropdown);
 }
 
 function _restoreViewModeButtons() {

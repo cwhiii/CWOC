@@ -428,13 +428,6 @@
                     <button onclick="cancelSettings()" class="standard-button cancel-settings"><i class="fas fa-times"></i> Exit</button>
                 </div>
 
-                <!-- Manage Users button (admin-only) -->
-                <div id="manage-users-wrap" style="margin-bottom:12px;">
-                    <button id="manage-users-btn" class="standard-button" onclick="window.location.href='/user-admin'" style="width:auto;">
-                        👥 Manage Users
-                    </button>
-                </div>
-
                 <div class="settings-grid">
                     <div class="setting-group">
                         <h3>General Settings</h3>
@@ -608,18 +601,6 @@
                         </div>
                     </div>
                     <div class="setting-group">
-                        <h3>🔁 Habits</h3>
-                        <div class="setting-inline">
-                            <label for="habits-success-window">Success rate window</label>
-                            <select id="habits-success-window">
-                                <option value="7">Last 7 days</option>
-                                <option value="30" selected>Last 30 days</option>
-                                <option value="90">Last 90 days</option>
-                                <option value="all">All time</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="setting-group">
                         <h3>🔔 Default Notifications</h3>
                         <p class="setting-hint">Auto-added to new chits when a date is set. Editable per-chit after creation.</p>
 
@@ -691,16 +672,6 @@
                         </div>
                     </div>
                     <div class="setting-group">
-                        <h3>🔄 Version &amp; Updates</h3>
-                        <div style="margin-bottom:12px;font-size:0.9em;">
-                            <div style="margin-bottom:4px;">Version: <span id="version-display">Loading...</span></div>
-                            <div>Updated: <span id="version-date">Loading...</span></div>
-                        </div>
-                        <button id="upgrade-btn" class="standard-button" style="width:100%;">⬆️ Upgrade</button>
-                        <button id="upgrade-reopen-btn" class="standard-button" style="width:100%;display:none;">🔄 Upgrade in progress</button>
-                        <button id="update-log-btn" class="standard-button" style="width:100%;margin-top:6px;" onclick="loadLastLog()">📄 Show Log</button>
-                    </div>
-                    <div class="setting-group">
                         <h3>🗄️ Data</h3>
                         <button onclick="window.location.href='/frontend/html/audit-log.html'" class="standard-button" style="width:100%;">📋 Audit Log →</button>
 
@@ -719,30 +690,51 @@
                         </div>
                         <p class="setting-hint">Uncheck to disable pruning. When either limit is reached, oldest entries are pruned first.</p>
                     </div>
-                    <div class="setting-group">
-                        <h3>📦 Data Management</h3>
+                </div>
 
-                        <label class="setting-subheader">🌐 All Data</label>
-                        <p class="setting-hint">Everything: chits, settings, tags, colors, contacts, alerts.</p>
-                        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
-                            <button onclick="exportAllData()" class="standard-button" style="flex:1;">📄 Export All</button>
-                            <button onclick="importAllData()" class="standard-button" style="flex:1;">📥 Import All</button>
-                            <input type="file" id="importAllFile" accept=".json" style="display:none" />
+                <!-- ═══ Administration (admin-only, hidden by default) ═══ -->
+                <div id="admin-section" style="display:none;">
+                    <h2 style="margin-top:24px;padding-top:16px;border-top:2px solid rgba(139,90,43,0.3);">🔒 Administration</h2>
+                    <div class="settings-grid">
+                        <div class="setting-group">
+                            <h3>Admin</h3>
+                            <button onclick="window.location.href='/user-admin'" class="standard-button" style="width:100%;">👥 Manage Users</button>
                         </div>
+                        <div class="setting-group">
+                            <h3>📦 Data Management</h3>
 
-                        <label class="setting-subheader">Chit Data</label>
-                        <p class="setting-hint">All chits including deleted chits.</p>
-                        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
-                            <button onclick="exportChitData()" class="standard-button" style="flex:1;">📄 Export</button>
-                            <button onclick="importChitData()" class="standard-button" style="flex:1;">📥 Import</button>
-                            <input type="file" id="importChitFile" accept=".json" style="display:none" />
+                            <label class="setting-subheader">🌐 All Data</label>
+                            <p class="setting-hint">Everything: chits, settings, tags, colors, contacts, alerts.</p>
+                            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+                                <button onclick="exportAllData()" class="standard-button" style="flex:1;">📄 Export All</button>
+                                <button onclick="importAllData()" class="standard-button" style="flex:1;">📥 Import All</button>
+                                <input type="file" id="importAllFile" accept=".json" style="display:none" />
+                            </div>
+
+                            <label class="setting-subheader">Chit Data</label>
+                            <p class="setting-hint">All chits including deleted chits.</p>
+                            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+                                <button onclick="exportChitData()" class="standard-button" style="flex:1;">📄 Export</button>
+                                <button onclick="importChitData()" class="standard-button" style="flex:1;">📥 Import</button>
+                                <input type="file" id="importChitFile" accept=".json" style="display:none" />
+                            </div>
+                            <label class="setting-subheader">User Data</label>
+                            <p class="setting-hint">Settings, tags, colors, locations, contacts.</p>
+                            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                                <button onclick="exportUserData()" class="standard-button" style="flex:1;">📄 Export</button>
+                                <button onclick="importUserData()" class="standard-button" style="flex:1;">📥 Import</button>
+                                <input type="file" id="importUserFile" accept=".json" style="display:none" />
+                            </div>
                         </div>
-                        <label class="setting-subheader">User Data</label>
-                        <p class="setting-hint">Settings, tags, colors, locations, contacts.</p>
-                        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                            <button onclick="exportUserData()" class="standard-button" style="flex:1;">📄 Export</button>
-                            <button onclick="importUserData()" class="standard-button" style="flex:1;">📥 Import</button>
-                            <input type="file" id="importUserFile" accept=".json" style="display:none" />
+                        <div class="setting-group">
+                            <h3>🔄 Version &amp; Updates</h3>
+                            <div style="margin-bottom:12px;font-size:0.9em;">
+                                <div style="margin-bottom:4px;">Version: <span id="version-display">Loading...</span></div>
+                                <div>Updated: <span id="version-date">Loading...</span></div>
+                            </div>
+                            <button id="upgrade-btn" class="standard-button" style="width:100%;">⬆️ Upgrade</button>
+                            <button id="upgrade-reopen-btn" class="standard-button" style="width:100%;display:none;">🔄 Upgrade in progress</button>
+                            <button id="update-log-btn" class="standard-button" style="width:100%;margin-top:6px;" onclick="loadLastLog()">📄 Show Log</button>
                         </div>
                     </div>
                 </div>
@@ -853,23 +845,19 @@
             <script src="/frontend/js/pages/shared-editor.js"></script>
             <script src="/frontend/js/pages/settings.js"></script>
             <script>
-            /* Grey out Manage Users button for non-admins */
+            /* Show admin-only section if user is admin */
             (function() {
-              function _checkAdmin() {
-                var btn = document.getElementById('manage-users-btn');
-                if (!btn) return;
-                if (typeof isAdmin === 'function' && isAdmin()) return; // admin — leave enabled
-                // Not admin or not yet known — disable
-                btn.disabled = true;
-                btn.style.opacity = '0.5';
-                btn.style.cursor = 'not-allowed';
-                btn.title = 'Admin access required';
-                btn.onclick = function(e) { e.preventDefault(); };
+              function _showAdminSection() {
+                var user = (typeof getCurrentUser === 'function') ? getCurrentUser() : null;
+                if (user && user.is_admin) {
+                  var sec = document.getElementById('admin-section');
+                  if (sec) sec.style.display = '';
+                }
               }
               if (typeof waitForAuth === 'function') {
-                waitForAuth().then(_checkAdmin);
+                waitForAuth().then(_showAdminSection);
               } else {
-                _checkAdmin();
+                _showAdminSection();
               }
             })();
             </script>

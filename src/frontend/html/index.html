@@ -111,6 +111,16 @@
                     <button class="action-button" id="tasks-mode-tasks" onclick="_setTasksMode('tasks')" style="flex:1;margin-bottom:0;font-size:0.8em;padding:6px;background:ivory;">📋 Tasks</button>
                     <button class="action-button" id="tasks-mode-habits" onclick="_setTasksMode('habits')" style="flex:1;margin-bottom:0;font-size:0.8em;padding:6px;">🔁 Habits</button>
                 </div>
+                <!-- Habits success window (only visible in habits mode) -->
+                <div id="habits-window-wrap" style="display:none;margin-top:8px;">
+                    <label class="sidebar-section-label">Success Window</label>
+                    <select id="habits-success-window-sidebar" onchange="_onHabitsWindowChange(this.value)" style="width:100%;padding:4px 6px;font-family:inherit;font-size:0.85em;border:1px solid #8b5a2b;border-radius:4px;background:#f5e6cc;">
+                        <option value="7">Last 7 days</option>
+                        <option value="30" selected>Last 30 days</option>
+                        <option value="90">Last 90 days</option>
+                        <option value="all">All time</option>
+                    </select>
+                </div>
             </div>
 
             <!-- 3d. Indicators time range (only visible on Indicators tab) -->

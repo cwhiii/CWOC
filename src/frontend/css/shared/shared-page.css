@@ -116,9 +116,12 @@ h2, h3 {
 }
 h3 { font-size: 22px; }
 h2 img {
+    width: 80px;
+    height: 80px;
     margin-right: 10px;
     vertical-align: middle;
-    max-width: 64px;
+    border-radius: 50%;
+    border: 1px solid rgba(139, 90, 43, 0.3);
 }
 
 /* ── Standard Button (gradient, used for nav and actions) ───────────────── */

@@ -1613,10 +1613,6 @@ class SettingsManager {
     var dn = this.settings.default_notifications || {};
     _renderDefaultNotifList('start', dn.start || []);
     _renderDefaultNotifList('due', dn.due || []);
-
-    // Habits — success rate window
-    var habitsWindowSel = document.getElementById('habits-success-window');
-    if (habitsWindowSel) habitsWindowSel.value = this.settings.habits_success_window || '30';
   }
 
   gatherSettings() {
@@ -1698,7 +1694,7 @@ class SettingsManager {
         start: _gatherDefaultNotifList('start'),
         due: _gatherDefaultNotifList('due'),
       },
-      habits_success_window: document.getElementById('habits-success-window')?.value || '30',
+      habits_success_window: (window._cwocSettings && window._cwocSettings.habits_success_window) || '30',
       overdue_border_color: _borderColorOverdue || '#b22222',
       blocked_border_color: _borderColorBlocked || '#DAA520',
     };
