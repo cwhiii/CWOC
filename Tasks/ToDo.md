@@ -103,8 +103,8 @@ users:
 - `[ ]` Span options become 1,2,3,4,5,10 HST hours
 
 ### Multi-User System
-1. User managemen tproject - underway
-2. Sharing chits project - waiting for #1.
+1. ~~User management project - COMPLETE~~
+2. Sharing chits project - requirements updated, ready for design & implementation.
 
 ### Event Invitations
 - `[ ]` Accept/reject invitations

@@ -482,6 +482,13 @@
                                 <option value="60">60 min</option>
                             </select>
                         </div>
+
+                        <label class="setting-subheader" style="margin-top:14px;">🕐 Clocks</label>
+                        <button onclick="toggleOrientation()" class="standard-button" style="margin-bottom:10px">🔄 Orientation</button>
+                        <div class="clocks-container" id="clocks-container">
+                            <div class="time-format-grid" id="time-format-grid"></div>
+                            <div class="inactive-zone" id="inactive-zone"></div>
+                        </div>
                     </div>
                     <div class="setting-group">
                         <h3>📅 Time Periods</h3>
@@ -577,14 +584,6 @@
                         </div>
                     </div>
                     <div class="setting-group">
-                        <h3>🕐 Clocks</h3>
-                        <button onclick="toggleOrientation()" class="standard-button" style="margin-bottom:10px">🔄 Orientation</button>
-                        <div class="clocks-container" id="clocks-container">
-                            <div class="time-format-grid" id="time-format-grid"></div>
-                            <div class="inactive-zone" id="inactive-zone"></div>
-                        </div>
-                    </div>
-                    <div class="setting-group">
                         <h3>Default Filters</h3>
                         <div class="filter-inputs">
                             <div class="filter-item"><span>📅 Calendar</span><input type="text" id="filter-calendar" placeholder="Filter text" class="filter-input" /></div>
@@ -594,52 +593,6 @@
                             <div class="filter-item"><span>📋 Tasks</span><input type="text" id="filter-tasks" placeholder="Filter text" class="filter-input" /></div>
                             <div class="filter-item"><span>⚕️ Indicators</span><input type="text" id="filter-indicators" placeholder="Filter text" class="filter-input" /></div>
                             <div class="filter-item"><span>📝 Notes</span><input type="text" id="filter-notes" placeholder="Filter text" class="filter-input" /></div>
-                        </div>
-                    </div>
-                    <div class="setting-group">
-                        <h3>🏷️ Tag Editor</h3>
-                        <div style="display:flex;gap:6px;align-items:center;margin-bottom:10px;">
-                            <input type="text" id="new-tag" placeholder="New tag name" onkeypress="handleTagInput(event)" style="flex:1;min-width:0;" />
-                            <button onclick="addTag()" class="standard-button" title="Add tag (Shift+Enter or Shift+Click for tag modal)">➕ Add</button>
-                        </div>
-                        <div id="settings-tag-tree" style="max-height:300px;overflow-y:auto;border:1px solid #8b5a2b;border-radius:4px;padding:8px;background:#fffaf0;box-sizing:border-box;"></div>
-                        <div id="tag-editor-hidden" style="display:none;"></div>
-                    </div>
-                    <div class="setting-group">
-                        <h3>📍 Saved Locations</h3>
-                        <div id="locations-list"></div>
-                        <button type="button" id="add-location-btn" class="standard-button" style="margin-top:8px;" onclick="addLocationRow()">➕ Add Location</button>
-                    </div>
-                    <!-- Chit Options merged into Display Options below -->
-                    <div class="setting-group">
-                        <h3>🔔 Default Notifications</h3>
-                        <p class="setting-hint">Auto-added to new chits when a date is set. Editable per-chit after creation.</p>
-
-                        <label class="setting-subheader">📅 Start Time Notifications</label>
-                        <div id="default-notif-start-list"></div>
-                        <button type="button" class="standard-button" style="margin-top:6px;width:100%;" onclick="_addDefaultNotifRow('start')">➕ Add</button>
-
-                        <label class="setting-subheader">⏰ Due Time Notifications</label>
-                        <div id="default-notif-due-list"></div>
-                        <button type="button" class="standard-button" style="margin-top:6px;width:100%;" onclick="_addDefaultNotifRow('due')">➕ Add</button>
-                    </div>
-                    <div class="setting-group">
-                        <h3>🎨 Custom Colors</h3>
-
-                        <label class="setting-subheader">Default Colors</label>
-                        <ul id="default-color-list" class="color-list"></ul>
-
-                        <label class="setting-subheader">Custom Colors</label>
-                        <ul id="color-list" class="color-list"></ul>
-                        <button onclick="openColorPicker()">➕ Add Color</button>
-                        <input type="color" id="color-picker" style="display:none" />
-
-                        <!-- Border color assignment popup -->
-                        <div id="border-assign-popup" style="display:none;position:fixed;z-index:1000;background:#fff8e1;border:2px solid #8b5a2b;border-radius:6px;padding:10px 14px;box-shadow:0 4px 12px rgba(0,0,0,0.25);font-size:0.9em;">
-                            <div style="margin-bottom:8px;font-weight:bold;color:#4a2c2a;">Set as:</div>
-                            <button id="assign-overdue-btn" class="standard-button" style="width:100%;margin-bottom:6px;font-size:0.85em;">🚨 Overdue Border</button>
-                            <button id="assign-blocked-btn" class="standard-button" style="width:100%;margin-bottom:6px;font-size:0.85em;">🚧 Blocked Border</button>
-                            <button id="assign-cancel-btn" class="standard-button" style="width:100%;font-size:0.85em;">Cancel</button>
                         </div>
                     </div>
                     <div class="setting-group">
@@ -672,6 +625,51 @@
                             <label><input type="checkbox" id="show-tab-counts" name="show_tab_counts" /> 🔢 Show Tab Counts</label>
                             <label><input type="checkbox" id="prefer-google-maps" name="prefer_google_maps" /> 🗺️ Prefer Google for Maps</label>
                         </div>
+                    </div>
+                    <div class="setting-group">
+                        <h3>📍 Saved Locations</h3>
+                        <div id="locations-list"></div>
+                        <button type="button" id="add-location-btn" class="standard-button" style="margin-top:8px;" onclick="addLocationRow()">➕ Add Location</button>
+                    </div>
+                    <div class="setting-group">
+                        <h3>🔔 Default Notifications</h3>
+                        <p class="setting-hint">Auto-added to new chits when a date is set. Editable per-chit after creation.</p>
+
+                        <label class="setting-subheader">📅 Start Time Notifications</label>
+                        <div id="default-notif-start-list"></div>
+                        <button type="button" class="standard-button" style="margin-top:6px;width:100%;" onclick="_addDefaultNotifRow('start')">➕ Add</button>
+
+                        <label class="setting-subheader">⏰ Due Time Notifications</label>
+                        <div id="default-notif-due-list"></div>
+                        <button type="button" class="standard-button" style="margin-top:6px;width:100%;" onclick="_addDefaultNotifRow('due')">➕ Add</button>
+                    </div>
+                    <div class="setting-group">
+                        <h3>🎨 Custom Colors</h3>
+
+                        <label class="setting-subheader">Default Colors</label>
+                        <ul id="default-color-list" class="color-list"></ul>
+
+                        <label class="setting-subheader">Custom Colors</label>
+                        <ul id="color-list" class="color-list"></ul>
+                        <button onclick="openColorPicker()">➕ Add Color</button>
+                        <input type="color" id="color-picker" style="display:none" />
+
+                        <!-- Border color assignment popup -->
+                        <div id="border-assign-popup" style="display:none;position:fixed;z-index:1000;background:#fff8e1;border:2px solid #8b5a2b;border-radius:6px;padding:10px 14px;box-shadow:0 4px 12px rgba(0,0,0,0.25);font-size:0.9em;">
+                            <div style="margin-bottom:8px;font-weight:bold;color:#4a2c2a;">Set as:</div>
+                            <button id="assign-overdue-btn" class="standard-button" style="width:100%;margin-bottom:6px;font-size:0.85em;">🚨 Overdue Border</button>
+                            <button id="assign-blocked-btn" class="standard-button" style="width:100%;margin-bottom:6px;font-size:0.85em;">🚧 Blocked Border</button>
+                            <button id="assign-cancel-btn" class="standard-button" style="width:100%;font-size:0.85em;">Cancel</button>
+                        </div>
+                    </div>
+                    <div class="setting-group">
+                        <h3>🏷️ Tag Editor</h3>
+                        <div style="display:flex;gap:6px;align-items:center;margin-bottom:10px;">
+                            <input type="text" id="new-tag" placeholder="New tag name" onkeypress="handleTagInput(event)" style="flex:1;min-width:0;" />
+                            <button onclick="addTag()" class="standard-button" title="Add tag (Shift+Enter or Shift+Click for tag modal)">➕ Add</button>
+                        </div>
+                        <div id="settings-tag-tree" style="max-height:300px;overflow-y:auto;border:1px solid #8b5a2b;border-radius:4px;padding:8px;background:#fffaf0;box-sizing:border-box;"></div>
+                        <div id="tag-editor-hidden" style="display:none;"></div>
                     </div>
                 </div>
 
