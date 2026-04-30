@@ -2917,6 +2917,398 @@ function _logCwocVersion() {
   }).catch(function() {});
 }
 
+// ── Habits Helpers ────────────────────────────────────────────────────────────
+
+/**
+ * Return the current period's date for a recurring chit as a YYYY-MM-DD string.
+ *
+ * The "current period" depends on the chit's recurrence frequency:
+ *   DAILY  (interval=1) → today
+ *   DAILY  (interval>1) → walk from start by interval days, find period containing today
+ *   WEEKLY (no byDay)   → start of current week per week_start_day setting
+ *   WEEKLY (with byDay) → most recent scheduled day ≤ today
+ *   MONTHLY             → 1st of current month
+ *   YEARLY              → Jan 1 of current year
+ *   Custom intervals    → walk from start by interval steps, find most recent ≤ today
+ *
+ * Fallback: if chit has no start_datetime, returns today's date.
+ *
+ * @param {object} chit - A chit object with recurrence_rule and start_datetime
+ * @returns {string} YYYY-MM-DD
+ */
+function getCurrentPeriodDate(chit) {
+  var today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  function _pad(n) { return n < 10 ? '0' + n : '' + n; }
+  function _fmt(d) { return d.getFullYear() + '-' + _pad(d.getMonth() + 1) + '-' + _pad(d.getDate()); }
+
+  var rule = chit.recurrence_rule;
+  if (!rule || !rule.freq) return _fmt(today);
+
+  var freq = rule.freq;
+  var interval = rule.interval || 1;
+  var byDay = rule.byDay || [];
+
+  // Parse start date — fallback to today if missing
+  var startDate;
+  if (chit.start_datetime) {
+    startDate = new Date(chit.start_datetime);
+    startDate.setHours(0, 0, 0, 0);
+  } else {
+    return _fmt(today);
+  }
+
+  // If start date is in the future, return start date
+  if (startDate > today) return _fmt(startDate);
+
+  var dayMap = { SU: 0, MO: 1, TU: 2, WE: 3, TH: 4, FR: 5, SA: 6 };
+
+  // ── DAILY ──
+  if (freq === 'DAILY') {
+    if (interval === 1) {
+      return _fmt(today);
+    }
+    // Walk from start by interval days, find the period containing today
+    var cur = new Date(startDate);
+    while (true) {
+      var next = new Date(cur);
+      next.setDate(next.getDate() + interval);
+      if (next > today) return _fmt(cur);
+      cur = next;
+    }
+  }
+
+  // ── WEEKLY ──
+  if (freq === 'WEEKLY') {
+    var byDayNums = byDay.map(function(d) { return dayMap[d]; }).filter(function(n) { return n !== undefined; });
+
+    if (byDayNums.length > 0) {
+      // WEEKLY with byDay: find the most recent scheduled day ≤ today
+      if (interval === 1) {
+        // Simple case: check each day going backward from today
+        var check = new Date(today);
+        for (var i = 0; i < 7; i++) {
+          if (byDayNums.indexOf(check.getDay()) !== -1 && check >= startDate) {
+            return _fmt(check);
+          }
+          check.setDate(check.getDate() - 1);
+        }
+        // Fallback — shouldn't happen with valid byDay
+        return _fmt(today);
+      } else {
+        // Multi-week interval with byDay: walk from start using _advanceRecurrence pattern
+        var cur = new Date(startDate);
+        var best = new Date(startDate);
+        var maxIter = 5000;
+        for (var i = 0; i < maxIter; i++) {
+          if (cur > today) break;
+          // Check if this day matches byDay
+          if (byDayNums.indexOf(cur.getDay()) !== -1) {
+            best = new Date(cur);
+          }
+          // Advance: step one day at a time, but when we wrap to the first byDay of a new week, skip (interval-1) weeks
+          var prevDay = cur.getDay();
+          cur.setDate(cur.getDate() + 1);
+          if (cur.getDay() === byDayNums[0] && prevDay !== byDayNums[0]) {
+            // We've wrapped to the start of a new cycle
+            if (interval > 1) {
+              cur.setDate(cur.getDate() + (interval - 1) * 7);
+            }
+          }
+        }
+        return _fmt(best);
+      }
+    } else {
+      // WEEKLY without byDay: return start of current week
+      var weekStartDay = 0; // default Sunday
+      if (window._cwocSettings && window._cwocSettings.week_start_day !== undefined) {
+        weekStartDay = parseInt(window._cwocSettings.week_start_day) || 0;
+      }
+      if (interval === 1) {
+        var d = new Date(today);
+        var diff = (d.getDay() - weekStartDay + 7) % 7;
+        d.setDate(d.getDate() - diff);
+        // Ensure we don't go before start date
+        if (d < startDate) return _fmt(startDate);
+        return _fmt(d);
+      } else {
+        // Multi-week interval: walk from start by interval weeks
+        var cur = new Date(startDate);
+        // Align start to week start day
+        var startDiff = (cur.getDay() - weekStartDay + 7) % 7;
+        cur.setDate(cur.getDate() - startDiff);
+        while (true) {
+          var next = new Date(cur);
+          next.setDate(next.getDate() + interval * 7);
+          if (next > today) return _fmt(cur);
+          cur = next;
+        }
+      }
+    }
+  }
+
+  // ── MONTHLY ──
+  if (freq === 'MONTHLY') {
+    if (interval === 1) {
+      return today.getFullYear() + '-' + _pad(today.getMonth() + 1) + '-01';
+    }
+    // Multi-month interval: walk from start month by interval
+    var cur = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+    while (true) {
+      var next = new Date(cur);
+      next.setMonth(next.getMonth() + interval);
+      if (next > today) return _fmt(cur);
+      cur = next;
+    }
+  }
+
+  // ── YEARLY ──
+  if (freq === 'YEARLY') {
+    if (interval === 1) {
+      return today.getFullYear() + '-01-01';
+    }
+    // Multi-year interval: walk from start year by interval
+    var curYear = startDate.getFullYear();
+    while (true) {
+      var nextYear = curYear + interval;
+      var nextDate = new Date(nextYear, 0, 1);
+      if (nextDate > today) return curYear + '-01-01';
+      curYear = nextYear;
+    }
+  }
+
+  // ── Fallback for unknown freq: walk from start using generic interval ──
+  return _fmt(today);
+}
+
+/**
+ * Calculate the success rate for a habit chit over a given window.
+ *
+ * Returns an integer 0–100 representing the percentage of scheduled
+ * occurrences that were completed within the window, excluding any
+ * broken-off dates from both numerator and denominator.
+ *
+ * @param {object} chit - A chit object with recurrence_rule, recurrence_exceptions, start_datetime
+ * @param {number|string} windowDays - Number of days to look back, or "all" for all time
+ * @returns {number} Integer 0–100
+ */
+function getHabitSuccessRate(chit, windowDays) {
+  var rule = chit.recurrence_rule;
+  if (!rule || !rule.freq) return 0;
+
+  function _pad(n) { return n < 10 ? '0' + n : '' + n; }
+  function _fmt(d) { return d.getFullYear() + '-' + _pad(d.getMonth() + 1) + '-' + _pad(d.getDate()); }
+
+  var today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  // Parse start date — fallback to today if missing
+  var startDate;
+  if (chit.start_datetime) {
+    startDate = new Date(chit.start_datetime);
+    startDate.setHours(0, 0, 0, 0);
+  } else {
+    return 0;
+  }
+
+  // Determine the date range
+  var rangeStart;
+  if (windowDays === 'all') {
+    rangeStart = new Date(startDate);
+  } else {
+    var days = parseInt(windowDays, 10) || 30;
+    rangeStart = new Date(today);
+    rangeStart.setDate(rangeStart.getDate() - days);
+  }
+  // Clamp rangeStart to not be before the chit start
+  if (rangeStart < startDate) {
+    rangeStart = new Date(startDate);
+  }
+
+  var freq = rule.freq;
+  var interval = rule.interval || 1;
+  var byDay = rule.byDay || [];
+  var until = rule.until ? new Date(rule.until) : null;
+
+  var dayMap = { SU: 0, MO: 1, TU: 2, WE: 3, TH: 4, FR: 5, SA: 6 };
+  var byDayNums = byDay.map(function(d) { return dayMap[d]; }).filter(function(n) { return n !== undefined; });
+
+  // Build lookup sets from recurrence_exceptions
+  var exceptions = chit.recurrence_exceptions || [];
+  var brokenOffDates = {};
+  var completedDates = {};
+  for (var i = 0; i < exceptions.length; i++) {
+    if (exceptions[i].broken_off) brokenOffDates[exceptions[i].date] = true;
+    if (exceptions[i].completed) completedDates[exceptions[i].date] = true;
+  }
+
+  // Walk recurrence from start date, collecting occurrences within range
+  var total = 0;
+  var completed = 0;
+  var current = new Date(startDate);
+  var maxIter = 10000; // safety limit
+
+  for (var iter = 0; iter < maxIter; iter++) {
+    // Stop if past today or past until date
+    if (current > today) break;
+    if (until && current > until) break;
+
+    var dateStr = _fmt(current);
+
+    // For WEEKLY with byDay, only count days that match
+    var dayMatches = true;
+    if (freq === 'WEEKLY' && byDayNums.length > 0) {
+      dayMatches = byDayNums.indexOf(current.getDay()) !== -1;
+    }
+
+    if (dayMatches && current >= rangeStart) {
+      // Skip broken-off dates from both counts
+      if (!brokenOffDates[dateStr]) {
+        total++;
+        if (completedDates[dateStr]) {
+          completed++;
+        }
+      }
+    }
+
+    // Advance to next occurrence using the same pattern as _advanceRecurrence
+    if (freq === 'DAILY') {
+      current.setDate(current.getDate() + interval);
+    } else if (freq === 'WEEKLY') {
+      if (byDayNums.length > 0) {
+        current.setDate(current.getDate() + 1);
+        // When we wrap to the first byDay of a new week cycle, skip (interval-1) weeks
+        if (current.getDay() === byDayNums[0] && interval > 1) {
+          current.setDate(current.getDate() + (interval - 1) * 7);
+        }
+      } else {
+        current.setDate(current.getDate() + interval * 7);
+      }
+    } else if (freq === 'MONTHLY') {
+      current.setMonth(current.getMonth() + interval);
+    } else if (freq === 'YEARLY') {
+      current.setFullYear(current.getFullYear() + interval);
+    } else {
+      break; // unknown frequency
+    }
+  }
+
+  if (total === 0) return 0;
+  return Math.round((completed / total) * 100);
+}
+
+/**
+ * Calculate the current streak for a habit chit.
+ *
+ * Returns the count of consecutive completed periods working backward
+ * from the most recent past non-broken-off occurrence.  Broken-off
+ * (skipped) dates are treated as neutral — they are skipped entirely
+ * and neither contribute to nor break the streak.  The streak stops
+ * at the first genuinely missed occurrence (not completed, not broken off).
+ *
+ * @param {object} chit - A chit object with recurrence_rule, recurrence_exceptions, start_datetime
+ * @returns {number} Integer ≥ 0
+ */
+function getHabitStreak(chit) {
+  var rule = chit.recurrence_rule;
+  if (!rule || !rule.freq) return 0;
+
+  function _pad(n) { return n < 10 ? '0' + n : '' + n; }
+  function _fmt(d) { return d.getFullYear() + '-' + _pad(d.getMonth() + 1) + '-' + _pad(d.getDate()); }
+
+  var today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  // Parse start date — return 0 if missing
+  var startDate;
+  if (chit.start_datetime) {
+    startDate = new Date(chit.start_datetime);
+    startDate.setHours(0, 0, 0, 0);
+  } else {
+    return 0;
+  }
+
+  var freq = rule.freq;
+  var interval = rule.interval || 1;
+  var byDay = rule.byDay || [];
+  var until = rule.until ? new Date(rule.until) : null;
+
+  var dayMap = { SU: 0, MO: 1, TU: 2, WE: 3, TH: 4, FR: 5, SA: 6 };
+  var byDayNums = byDay.map(function(d) { return dayMap[d]; }).filter(function(n) { return n !== undefined; });
+
+  // Build lookup sets from recurrence_exceptions
+  var exceptions = chit.recurrence_exceptions || [];
+  var brokenOffDates = {};
+  var completedDates = {};
+  for (var i = 0; i < exceptions.length; i++) {
+    if (exceptions[i].broken_off) brokenOffDates[exceptions[i].date] = true;
+    if (exceptions[i].completed) completedDates[exceptions[i].date] = true;
+  }
+
+  // Walk recurrence from start date forward, collecting all non-broken-off
+  // occurrence dates up to today
+  var occurrences = [];
+  var current = new Date(startDate);
+  var maxIter = 10000; // safety limit
+
+  for (var iter = 0; iter < maxIter; iter++) {
+    // Stop if past today or past until date
+    if (current > today) break;
+    if (until && current > until) break;
+
+    var dateStr = _fmt(current);
+
+    // For WEEKLY with byDay, only count days that match
+    var dayMatches = true;
+    if (freq === 'WEEKLY' && byDayNums.length > 0) {
+      dayMatches = byDayNums.indexOf(current.getDay()) !== -1;
+    }
+
+    if (dayMatches) {
+      // Skip broken-off dates entirely — they are neutral
+      if (!brokenOffDates[dateStr]) {
+        occurrences.push(dateStr);
+      }
+    }
+
+    // Advance to next occurrence using the same pattern as getHabitSuccessRate
+    if (freq === 'DAILY') {
+      current.setDate(current.getDate() + interval);
+    } else if (freq === 'WEEKLY') {
+      if (byDayNums.length > 0) {
+        current.setDate(current.getDate() + 1);
+        // When we wrap to the first byDay of a new week cycle, skip (interval-1) weeks
+        if (current.getDay() === byDayNums[0] && interval > 1) {
+          current.setDate(current.getDate() + (interval - 1) * 7);
+        }
+      } else {
+        current.setDate(current.getDate() + interval * 7);
+      }
+    } else if (freq === 'MONTHLY') {
+      current.setMonth(current.getMonth() + interval);
+    } else if (freq === 'YEARLY') {
+      current.setFullYear(current.getFullYear() + interval);
+    } else {
+      break; // unknown frequency
+    }
+  }
+
+  // Walk backward from the most recent non-broken-off occurrence,
+  // counting consecutive completed occurrences
+  var streak = 0;
+  for (var j = occurrences.length - 1; j >= 0; j--) {
+    if (completedDates[occurrences[j]]) {
+      streak++;
+    } else {
+      // Genuinely missed — stop counting
+      break;
+    }
+  }
+
+  return streak;
+}
+
 // Auto-init on page load
 if (typeof document !== 'undefined') {
   if (document.readyState === 'loading') {

@@ -104,6 +104,15 @@
                 </div>
             </div>
 
+            <!-- 3e. Tasks view mode toggle (only visible on Tasks tab) -->
+            <div class="sidebar-section" id="section-tasks-mode" style="display:none;">
+                <label class="sidebar-section-label">View Mode</label>
+                <div style="display:flex;gap:4px;">
+                    <button class="action-button" id="tasks-mode-tasks" onclick="_setTasksMode('tasks')" style="flex:1;margin-bottom:0;font-size:0.8em;padding:6px;background:ivory;">📋 Tasks</button>
+                    <button class="action-button" id="tasks-mode-habits" onclick="_setTasksMode('habits')" style="flex:1;margin-bottom:0;font-size:0.8em;padding:6px;">🔁 Habits</button>
+                </div>
+            </div>
+
             <!-- 3d. Indicators time range (only visible on Indicators tab) -->
             <div class="sidebar-section" id="section-indicators" style="display:none;">
                 <label class="sidebar-section-label">Time Range</label>

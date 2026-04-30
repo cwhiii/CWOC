@@ -4,6 +4,8 @@
 
 The Habits view is a new view mode within the Tasks tab of CWOC that surfaces recurring chits as trackable habits. Unlike the Calendar view which expands recurring tasks into individual instances, the Habits view shows one card per recurring chit and provides at-a-glance completion tracking, streak counting, and success rate metrics. Users can toggle the current period's occurrence as complete, see their consistency over a configurable rolling window, and optionally hide habits once the current period is done.
 
+Take inspiration from how the health indictors is built.
+
 ## Glossary
 
 - **Habits_View**: The new view mode within the Tasks tab that displays only chits with a `recurrence_rule`, rendered as habit cards with completion tracking

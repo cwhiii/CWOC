@@ -191,6 +191,7 @@ function onRepeatToggle() {
   const inlineOpts = document.getElementById('repeatOptionsInline');
   const block = document.getElementById('repeatOptionsBlock');
   const icon = document.getElementById('recurrenceIcon');
+  const hideRow = document.getElementById('hideWhenDoneRow');
   const isChecked = cb && cb.checked;
   // Show/hide the inline dropdown + ends-never
   if (inlineOpts) inlineOpts.style.display = isChecked ? 'inline' : 'none';
@@ -200,6 +201,8 @@ function onRepeatToggle() {
   const sel = document.getElementById('recurrence');
   if (block) block.style.display = (isChecked && sel && sel.value === 'CUSTOM') ? 'table-row-group' : 'none';
   if (icon) icon.style.display = isChecked ? '' : 'none';
+  // Show/hide the "Hide from Habits when done" checkbox
+  if (hideRow) hideRow.style.display = isChecked ? '' : 'none';
   setSaveButtonUnsaved();
 }
 

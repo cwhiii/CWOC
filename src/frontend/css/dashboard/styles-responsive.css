@@ -716,6 +716,28 @@
         flex-direction: column !important;
     }
 
+    /* ── Indicators View: single-column charts, 2-row latest cards ───────── */
+    #indicators-charts {
+        grid-template-columns: 1fr !important;
+        gap: 8px !important;
+    }
+
+    /* Most Recent cards: 4 per row → 2 rows of 4 */
+    #indicators-latest {
+        grid-template-columns: repeat(4, 1fr) !important;
+        gap: 6px !important;
+    }
+
+    /* Most Recent card text: slightly smaller for mobile fit */
+    #indicators-latest > div {
+        padding: 4px 6px !important;
+    }
+
+    /* Chart containers: full width, compact padding */
+    #indicators-charts > div {
+        padding: 6px 8px !important;
+    }
+
     /* ── Global Search: compact on mobile ─────────────────────────────────── */
     .global-search-bar {
         padding: 8px 4px;
@@ -744,6 +766,19 @@
 
     .sa-column:last-child {
         border-bottom: none;
+    }
+}
+
+/* ── Indicators View: Tablet ──────────────────────────────────────────────── */
+@media (max-width: 768px) {
+    /* Charts: single column on tablet */
+    #indicators-charts {
+        grid-template-columns: 1fr !important;
+    }
+
+    /* Most Recent cards: 4 per row on tablet */
+    #indicators-latest {
+        grid-template-columns: repeat(4, 1fr) !important;
     }
 }
 

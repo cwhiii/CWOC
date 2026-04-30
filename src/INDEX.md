@@ -40,8 +40,8 @@ Registers all route modules, runs all migrations and `init_db()` at import time,
 | Class | Description |
 |-------|-------------|
 | `Tag` | Tag with name, color, fontColor, favorite |
-| `Settings` | User settings — time format, tags, colors, indicators, calendar config, audit limits, etc. |
-| `Chit` | Core chit model — title, note, dates, status, checklist, alerts, recurrence, location, color, people, etc. |
+| `Settings` | User settings — time format, tags, colors, indicators, calendar config, audit limits, habits success window, etc. |
+| `Chit` | Core chit model — title, note, dates, status, checklist, alerts, recurrence, location, color, people, hide_when_instance_done, etc. |
 | `MultiValueEntry` | Label/value pair for contact multi-value fields (phone, email, etc.) |
 | `Contact` | Contact model — name fields, phones, emails, addresses, social, security, notes, tags, color |
 | `ImportRequest` | Import envelope — mode ("add"/"replace") + data dict |
@@ -88,6 +88,7 @@ All migrations run at startup. Each checks if the column/table already exists be
 | `migrate_add_standalone_alerts()` | Create the `standalone_alerts` table |
 | `migrate_add_alert_state()` | Create the `alert_states` table |
 | `migrate_contact_images_to_data()` | Move contact images from `/static/contact_images/` to `data/contacts/profile_pictures/` |
+| `migrate_add_habits_fields()` | Add `hide_when_instance_done` column to chits table and `habits_success_window` column to settings table |
 
 ### 1.6 `src/backend/serializers.py` — vCard & CSV
 
@@ -472,6 +473,37 @@ Coordinator for shared code between dashboard and editor. Contains glue code for
 | `_showQuickAlertCreatedActions(type)` | Replace quick alert modal content with Done and View buttons after creation |
 | `_showQuickAlertToast(type)` | Show a brief toast confirming alert creation (non-dashboard pages) |
 | `_initSharedHotkeys()` | Register the global keydown listener for !, \`, ~ hotkeys on all pages |
+| `getCurrentPeriodDate(chit)` | Return the current period's date as a `YYYY-MM-DD` string for a recurring chit based on its frequency (daily, weekly, monthly, yearly, custom interval) |
+| `getHabitSuccessRate(chit, windowDays)` | Calculate the percentage of completed occurrences within a rolling window (7, 30, 90 days, or "all"); excludes broken-off dates from both numerator and denominator |
+| `getHabitStreak(chit)` | Count consecutive completed periods working backward from the most recent past occurrence; broken-off dates are neutral and do not break the streak |
+
+#### test_habits_helpers.js — Property Test: getCurrentPeriodDate
+
+| Symbol | Description |
+|--------|-------------|
+| Property 3 | getCurrentPeriodDate returns a valid current-period date (150+ random iterations + edge cases) |
+| **Validates** | Requirements 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7 |
+
+#### test_habits_success_rate.js — Property Test: Success Rate Calculation
+
+| Symbol | Description |
+|--------|-------------|
+| Property 4 | Success rate calculation correctness (120+ random iterations + edge cases) |
+| **Validates** | Requirements 4.1, 4.6, 4.7 |
+
+#### test_habits_streak.js — Property Test: Streak Calculation
+
+| Symbol | Description |
+|--------|-------------|
+| Property 5 | Streak calculation correctness (120+ random iterations + edge cases) |
+| **Validates** | Requirements 5.1, 5.2, 5.3, 5.4 |
+
+#### test_habits_sort.js — Property Test: Completion-Based Sort Ordering
+
+| Symbol | Description |
+|--------|-------------|
+| Property 8 | Completion-based sort ordering (120+ random iterations + edge cases) |
+| **Validates** | Requirements 2.7, 2.8, 9.1, 9.2 |
 
 ### 2.2 Dashboard (`src/frontend/js/dashboard/`)
 
@@ -579,11 +611,15 @@ Coordinator for shared code between dashboard and editor. Contains glue code for
 | `_buildChitHeader(chit, titleHtml, settings)` | Build a standard chit card header row with icons, indicators, title, and meta |
 | `_renderChitMeta(chit, mode)` | Legacy compact meta builder — kept for backward compat |
 | `displayChecklistView(chitsToDisplay)` | Render the Checklists tab — chits with interactive checklist items |
-| `displayTasksView(chitsToDisplay)` | Render the Tasks tab — chits with status dropdowns and note previews |
+| `displayTasksView(chitsToDisplay)` | Render the Tasks tab — chits with status dropdowns and note previews; dispatches to `displayHabitsView` when in habits mode |
+| `displayHabitsView(chitsToDisplay)` | Render the Habits view — recurring chits as habit cards with completion toggles, success rate badges, and streak indicators |
+| `_renderHabitCards(container, habitData, showCompleted, windowDays)` | Render habit cards into a container with completion-based sorting and hide-when-done filtering |
 | `displayNotesView(chitsToDisplay)` | Render the Notes tab — markdown notes in a masonry column layout |
 | `_setProjectsMode(mode)` | Set Projects view mode (list or kanban) and re-render |
-| `_restoreViewModeButtons()` | Restore view mode button highlights for Projects and Alarms tabs |
+| `_restoreViewModeButtons()` | Restore view mode button highlights for Projects, Alarms, and Tasks tabs |
 | `_setAlarmsMode(mode)` | Set Alarms view mode (list or independent) and re-render |
+| `_setTasksMode(mode)` | Set Tasks view mode (tasks or habits), persist to localStorage, update button highlights, and re-render |
+| `_tasksViewMode` | Current Tasks view mode string (`'tasks'` or `'habits'`), loaded from localStorage |
 | `_fetchIndependentAlerts()` | Fetch independent alerts from the API and cache locally |
 | `_createIndependentAlert(alertData)` | Create a new independent alert via API and refresh the view |
 | `_updateIndependentAlert(id, alertData)` | Update an existing independent alert via API and refresh |

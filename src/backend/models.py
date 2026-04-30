@@ -42,6 +42,7 @@ class Settings(BaseModel):
     audit_log_max_mb: Optional[int] = 1
     default_notifications: Optional[Dict[str, Any]] = None  # { start: [...], due: [...] }
     unit_system: Optional[str] = "imperial"  # "imperial" or "metric"
+    habits_success_window: Optional[str] = "30"  # "7", "30", "90", or "all"
 
 class Chit(BaseModel):
     id: Optional[str] = None
@@ -78,6 +79,7 @@ class Chit(BaseModel):
     time_estimate: Optional[str] = None        # Free-text time estimate (e.g. "2h 30m")
     weather_data: Optional[str] = None         # JSON string of weather forecast data
     health_data: Optional[str] = None          # JSON string of health indicator readings
+    hide_when_instance_done: Optional[bool] = False  # Hide from Habits view when current period is done
 
 class MultiValueEntry(BaseModel):
     label: Optional[str] = None    # "Work", "Home", "Mobile", custom

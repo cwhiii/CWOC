@@ -117,6 +117,7 @@ async function buildChitObject() {
   chit.recurrence = repeatEnabled && repeatEnabled.checked ? (document.getElementById('recurrence')?.value || 'DAILY') : null;
   chit.recurrence_rule = _buildRecurrenceRule();
   chit.recurrence_exceptions = window._loadedRecurrenceExceptions || null;
+  chit.hide_when_instance_done = document.getElementById('hideWhenInstanceDone')?.checked || false;
 
   const colorInput = document.getElementById("color");
   chit.color = colorInput ? colorInput.value || null : null;

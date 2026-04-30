@@ -304,6 +304,8 @@ function _restoreUIState() {
     if (filtersSectionRestore && currentTab === 'Indicators') filtersSectionRestore.style.display = 'none';
     const alarmsSectionRestore = document.getElementById('section-alarms-mode');
     if (alarmsSectionRestore) alarmsSectionRestore.style.display = (currentTab === 'Alarms') ? '' : 'none';
+    const tasksSectionRestore = document.getElementById('section-tasks-mode');
+    if (tasksSectionRestore) tasksSectionRestore.style.display = (currentTab === 'Tasks') ? '' : 'none';
 
     // Restore label filters after they load
     if (state.labelFilters && state.labelFilters.length > 0) {
@@ -682,6 +684,8 @@ document.addEventListener("DOMContentLoaded", function () {
   if (kanbanSection) kanbanSection.style.display = (currentTab === 'Projects') ? '' : 'none';
   const alarmsSection = document.getElementById('section-alarms-mode');
   if (alarmsSection) alarmsSection.style.display = (currentTab === 'Alarms') ? '' : 'none';
+  const tasksSection = document.getElementById('section-tasks-mode');
+  if (tasksSection) tasksSection.style.display = (currentTab === 'Tasks') ? '' : 'none';
   const indSection = document.getElementById('section-indicators');
   if (indSection) indSection.style.display = (currentTab === 'Indicators') ? '' : 'none';
   if (currentTab === 'Indicators') {

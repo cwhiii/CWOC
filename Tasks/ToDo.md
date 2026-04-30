@@ -13,33 +13,20 @@
 
 ## Easy Fixes / Low-Hanging Fruit
 
+- in the indicators, on the graphs the date overlaps if they are close together,  have it use smarter, shorter lables, or oly day of the month or somehting better to previent this. 
+- in indicators vierw, use a plain red heart fo rhear rate chart & filter. 
+- in indicators view, let me drag & drop the charts to reorganize them just like is impliments in the notes view. 
 
 
-
----
-
-## Data Management
-
----
-
-## UI Audit — Non-Functional Elements
-
-*Elements that exist in the UI but have no working functionality. Each needs a decision: build it, or remove it.*
-
-- `[ ]` Use consistent system for modals (same styling, same in/out functions)
-
-### Editor — Stopwatch Modal
-- `closeStopwatchModal()` — empty function, modal Close button does nothing
-- `saveStopwatchDetails()` — empty function, modal Save button does nothing
-- **Decision needed**: Implement the modal functions, or remove the modal and use inline-only stopwatch UI
-
-### Editor — Project Kanban Delete Button
-- Delete button on child chit cards in the Kanban board shows `alert("not implemented")`
-- **Decision**: Wire up actual delete with confirmation
-
----
 
 ## Medium Features
+### External Access
+- I'll be using theis with potentilaly severla different extra-LAN accessmethods. 1st is tailscale. Udpdat ehe installer to get that configured, and add whatever's needd to the settings page to the "🔄 Version & Updates" block of settings. Also, rename it ot " Updates & access" (with applicable good logo.) DO NOT export any passwords for this in the full data export, but DO export all other configs & settigns needed for it. 
+
+### MISC
+- `[ ]` Use consistent system for modals (same styling, same in/out function
+
+
 
 ### Shared Task Assignment
 - Dependency: Users feature
@@ -54,8 +41,6 @@
 - Duplicate detection on title + start_datetime
 - Estimate: ~400–600 lines backend, ~50–100 lines frontend
 
-### Repeating Task Management
-- Better handling for visualization of completed vs pending, daily vs conditional, "hide when done but show otherwise"
 
 ### Templates
 - Save a chit as a template, auto-populate new chits from it

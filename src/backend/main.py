@@ -72,6 +72,7 @@ from src.backend.migrations import (
     migrate_add_standalone_alerts,
     migrate_add_alert_state,
     migrate_contact_images_to_data,
+    migrate_add_habits_fields,
 )
 
 # Initialize database and run all migrations (same order as before)
@@ -94,6 +95,7 @@ migrate_add_default_notifications()
 migrate_add_standalone_alerts()
 migrate_add_alert_state()
 migrate_contact_images_to_data()
+migrate_add_habits_fields()
 seed_version_info()
 
 

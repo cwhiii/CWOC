@@ -433,6 +433,30 @@ def migrate_add_alert_state():
             conn.close()
 
 
+def migrate_add_habits_fields():
+    """Add hide_when_instance_done column to chits and habits_success_window column to settings."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(chits)")
+        chit_columns = {row[1] for row in cursor.fetchall()}
+        if "hide_when_instance_done" not in chit_columns:
+            cursor.execute("ALTER TABLE chits ADD COLUMN hide_when_instance_done INTEGER DEFAULT 0")
+            logger.info("Added hide_when_instance_done column to chits table")
+        cursor.execute("PRAGMA table_info(settings)")
+        settings_columns = {row[1] for row in cursor.fetchall()}
+        if "habits_success_window" not in settings_columns:
+            cursor.execute("ALTER TABLE settings ADD COLUMN habits_success_window TEXT DEFAULT '30'")
+            logger.info("Added habits_success_window column to settings table")
+        conn.commit()
+    except Exception as e:
+        logger.error(f"Error adding habits fields: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
 def migrate_contact_images_to_data():
     """Move contact profile images from /app/static/contact_images/ to data/contacts/profile_pictures/
     and update image_url values in the contacts table."""

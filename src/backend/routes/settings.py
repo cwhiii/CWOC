@@ -101,6 +101,7 @@ def save_settings(settings: Settings):
             "audit_log_max_mb": settings.audit_log_max_mb,
             "default_notifications": serialize_json_field(settings.default_notifications),
             "unit_system": settings.unit_system or "imperial",
+            "habits_success_window": settings.habits_success_window or "30",
         }
 
         cursor.execute(
@@ -110,8 +111,9 @@ def save_settings(settings: Settings):
                 alarm_orientation, active_clocks, saved_locations, tags, custom_colors, visual_indicators, chit_options,
                 calendar_snap, week_start_day, work_start_hour, work_end_hour, work_days, enabled_periods, custom_days_count,
                 all_view_start_hour, all_view_end_hour, day_scroll_to_hour,
-                username, audit_log_max_days, audit_log_max_mb, default_notifications, unit_system
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                username, audit_log_max_days, audit_log_max_mb, default_notifications, unit_system,
+                habits_success_window
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 new_settings_dict["user_id"],
@@ -141,6 +143,7 @@ def save_settings(settings: Settings):
                 new_settings_dict["audit_log_max_mb"],
                 new_settings_dict["default_notifications"],
                 new_settings_dict["unit_system"],
+                new_settings_dict["habits_success_window"],
             )
         )
 

@@ -94,7 +94,7 @@ function cwocConfirm(message, opts) {
     var confirmBtn = document.createElement('button');
     confirmBtn.className = 'standard-button';
     confirmBtn.textContent = confirmLabel;
-    confirmBtn.style.cssText = 'padding:8px 18px;font-family:inherit;cursor:pointer;' + (danger ? 'background:#a0522d;color:#fdf5e6;' : '');
+    confirmBtn.style.cssText = 'padding:8px 18px;font-family:inherit;cursor:pointer;' + (danger ? 'background:#b22222;color:#fff;border-color:#8b1a1a;' : '');
     confirmBtn.onclick = function () { overlay.remove(); resolve(true); };
 
     btnRow.appendChild(cancelBtn);

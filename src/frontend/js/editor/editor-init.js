@@ -274,6 +274,10 @@ async function loadChitData(chitId) {
     }
     window._loadedRecurrenceExceptions = chit.recurrence_exceptions || null;
 
+    // Load hide_when_instance_done checkbox state
+    const hideWhenDoneCb = document.getElementById('hideWhenInstanceDone');
+    if (hideWhenDoneCb) hideWhenDoneCb.checked = !!chit.hide_when_instance_done;
+
     // Populate Audit Log zone for recurring chits
     const auditSection = document.getElementById('auditLogSection');
     const auditContainer = document.getElementById('auditLogContainer');

@@ -308,6 +308,19 @@
     color: #fff8e1 !important;
 }
 
+#indicators-charts {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+}
+
+#indicators-latest {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
 /* ── Global Search View ────────────────────────────────────────────────────── */
 .global-search-bar {
     display: flex;
@@ -596,4 +609,96 @@
     padding: 1.5em 0.5em;
     font-style: italic;
     color: #4a2c2a;
+}
+
+/* ── Habit Card Styles ─────────────────────────────────────────────────── */
+.habit-card {
+    border: 2px solid #8b5a2b;
+    border-radius: 6px;
+    padding: 0.5em 0.7em;
+    font-family: "Courier New", Courier, monospace;
+    color: #1a1208;
+    line-height: 1.5;
+    cursor: pointer;
+    -webkit-user-select: none;
+    user-select: none;
+    transition: opacity 0.2s ease;
+}
+.habit-card:hover {
+    border-color: #a0522d;
+    box-shadow: 0 2px 8px rgba(107, 66, 38, 0.15);
+}
+
+/* Completed habit: faded with strikethrough title */
+.habit-card.habit-done {
+    opacity: 0.6;
+}
+.habit-card.habit-done .habit-header a {
+    text-decoration: line-through;
+}
+
+/* ── Habit header: checkbox + title + frequency row ───────────────────── */
+.habit-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+    font-size: 1em;
+    font-weight: bold;
+    flex-wrap: nowrap;
+    overflow: hidden;
+}
+.habit-header a {
+    color: inherit;
+    text-decoration: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.habit-header a:hover {
+    text-decoration: underline;
+}
+.habit-header input[type="checkbox"] {
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+}
+
+/* ── Habit metrics: success badge + streak row ────────────────────────── */
+.habit-metrics {
+    display: flex;
+    align-items: center;
+    gap: 0.8em;
+    margin-top: 0.3em;
+    font-size: 0.9em;
+    color: #1a1208;
+}
+
+/* Success rate percentage badge */
+.habit-success-badge {
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 10px;
+    background: rgba(139, 90, 43, 0.15);
+    border: 1px solid #c4a882;
+    font-size: 0.9em;
+    font-weight: bold;
+    color: #4a2c2a;
+    white-space: nowrap;
+}
+
+/* Streak indicator with flame emoji */
+.habit-streak {
+    font-weight: bold;
+    color: #4a2c2a;
+    white-space: nowrap;
+}
+
+/* ── Show-completed toggle at top of habits view ─────────────────────── */
+.habit-show-completed {
+    padding: 0.4em 0.2em;
+    margin-bottom: 0.3em;
+    font-family: "Courier New", Courier, monospace;
+    font-size: 0.9em;
+    color: #1a1208;
 }

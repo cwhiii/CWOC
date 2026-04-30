@@ -268,6 +268,10 @@ function displayChecklistView(chitsToDisplay) {
 }
 
 function displayTasksView(chitsToDisplay) {
+  if (_tasksViewMode === 'habits') {
+    return displayHabitsView(chitsToDisplay);
+  }
+
   const chitList = document.getElementById("chit-list");
   chitList.innerHTML = "";
   const _viSettings = (window._cwocSettings || {}).visual_indicators || {};
@@ -365,6 +369,208 @@ function displayTasksView(chitsToDisplay) {
   });
   chitList.appendChild(tasksContainer);
   enableDragToReorder(tasksContainer, 'Tasks', () => displayChits());
+}
+
+/* ── Habits View ─────────────────────────────────────────────────────────── */
+
+/**
+ * Render the Habits view — one card per recurring chit with completion toggle,
+ * success rate badge, and streak indicator.
+ */
+function displayHabitsView(chitsToDisplay) {
+  var chitList = document.getElementById('chit-list');
+  chitList.innerHTML = '';
+
+  // Filter to only recurring chits with a valid frequency
+  var habitChits = chitsToDisplay.filter(function(chit) {
+    return chit.recurrence_rule && chit.recurrence_rule.freq;
+  });
+
+  if (habitChits.length === 0) {
+    chitList.innerHTML = _emptyState('No habits found. Create a recurring chit to see it here.');
+    return;
+  }
+
+  // Read success window setting
+  var settings = window._cwocSettings || {};
+  var windowDays = settings.habits_success_window || '30';
+
+  // Build habit data: compute period date, completion state, metrics
+  var habitData = habitChits.map(function(chit) {
+    var periodDate = getCurrentPeriodDate(chit);
+    var exceptions = chit.recurrence_exceptions || [];
+    var isCompleted = exceptions.some(function(ex) {
+      return ex.date === periodDate && ex.completed === true;
+    });
+    var successRate = getHabitSuccessRate(chit, windowDays === 'all' ? 'all' : parseInt(windowDays, 10));
+    var streak = getHabitStreak(chit);
+    return {
+      chit: chit,
+      periodDate: periodDate,
+      isCompleted: isCompleted,
+      successRate: successRate,
+      streak: streak,
+      hideWhenDone: !!chit.hide_when_instance_done
+    };
+  });
+
+  // Determine which habits should be hidden (hide_when_instance_done + completed)
+  var showCompleted = false;
+  var showCompletedCheckbox = null;
+  var hiddenCount = habitData.filter(function(h) {
+    return h.hideWhenDone && h.isCompleted;
+  }).length;
+
+  var habitsContainer = document.createElement('div');
+  habitsContainer.className = 'checklist-view'; // reuse consistent spacing
+
+  // Render "Show completed" toggle if any habits are hidden
+  if (hiddenCount > 0) {
+    var toggleRow = document.createElement('div');
+    toggleRow.className = 'habit-show-completed';
+    var toggleLabel = document.createElement('label');
+    toggleLabel.style.cssText = 'display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.9em;';
+    showCompletedCheckbox = document.createElement('input');
+    showCompletedCheckbox.type = 'checkbox';
+    showCompletedCheckbox.checked = false;
+    showCompletedCheckbox.addEventListener('change', function() {
+      showCompleted = showCompletedCheckbox.checked;
+      _renderHabitCards(habitsContainer, habitData, showCompleted, windowDays);
+    });
+    toggleLabel.appendChild(showCompletedCheckbox);
+    toggleLabel.appendChild(document.createTextNode('Show completed (' + hiddenCount + ' hidden)'));
+    toggleRow.appendChild(toggleLabel);
+    habitsContainer.appendChild(toggleRow);
+  }
+
+  // Render the habit cards
+  _renderHabitCards(habitsContainer, habitData, showCompleted, windowDays);
+
+  chitList.appendChild(habitsContainer);
+}
+
+/**
+ * Render habit cards into the container. Handles sorting and hide-when-done filtering.
+ */
+function _renderHabitCards(container, habitData, showCompleted, windowDays) {
+  // Remove existing cards (keep the show-completed toggle if present)
+  var toggleRow = container.querySelector('.habit-show-completed');
+  container.innerHTML = '';
+  if (toggleRow) container.appendChild(toggleRow);
+
+  // Filter out hidden habits unless showCompleted is checked
+  var visible = habitData.filter(function(h) {
+    if (h.hideWhenDone && h.isCompleted && !showCompleted) return false;
+    return true;
+  });
+
+  // Stable sort: incomplete first, completed last
+  var incomplete = visible.filter(function(h) { return !h.isCompleted; });
+  var completed = visible.filter(function(h) { return h.isCompleted; });
+  var sorted = incomplete.concat(completed);
+
+  if (sorted.length === 0) {
+    var emptyMsg = document.createElement('div');
+    emptyMsg.className = 'cwoc-empty';
+    emptyMsg.style.cssText = 'text-align:center;padding:2em 1em;opacity:0.7;';
+    emptyMsg.innerHTML = '<p>All habits completed! ✨</p>';
+    container.appendChild(emptyMsg);
+    return;
+  }
+
+  sorted.forEach(function(h) {
+    var chit = h.chit;
+    var card = document.createElement('div');
+    card.className = 'habit-card';
+    card.dataset.chitId = chit.id;
+    if (h.isCompleted) card.classList.add('habit-done');
+
+    // ── Header row: checkbox + title + frequency ──
+    var header = document.createElement('div');
+    header.className = 'habit-header';
+
+    // Completion checkbox
+    var checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.checked = h.isCompleted;
+    checkbox.title = h.isCompleted ? 'Mark as not done' : 'Mark as done';
+    checkbox.addEventListener('change', function(e) {
+      e.stopPropagation();
+      var newCompleted = checkbox.checked;
+      var exception = { date: h.periodDate, completed: newCompleted };
+      fetch('/api/chits/' + chit.id + '/recurrence-exceptions', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ exception: exception })
+      }).then(function(resp) {
+        if (resp.ok && typeof fetchChits === 'function') fetchChits();
+      }).catch(function(err) {
+        console.error('Failed to toggle habit completion:', err);
+      });
+    });
+    header.appendChild(checkbox);
+
+    // Title as clickable link
+    var titleLink = document.createElement('a');
+    titleLink.href = '/editor?id=' + chit.id;
+    titleLink.textContent = chit.title || '(Untitled)';
+    titleLink.className = 'habit-title';
+    titleLink.addEventListener('click', function(e) {
+      e.preventDefault();
+      if (typeof storePreviousState === 'function') storePreviousState();
+      window.location.href = '/editor?id=' + chit.id;
+    });
+    header.appendChild(titleLink);
+
+    // Middle dot separator + frequency label
+    var freqLabel = formatRecurrenceRule(chit.recurrence_rule);
+    if (freqLabel) {
+      var sep = document.createElement('span');
+      sep.className = 'habit-separator';
+      sep.textContent = ' · ';
+      header.appendChild(sep);
+
+      var freq = document.createElement('span');
+      freq.className = 'habit-frequency';
+      freq.textContent = freqLabel;
+      header.appendChild(freq);
+    }
+
+    card.appendChild(header);
+
+    // ── Metrics row: success rate badge + streak indicator ──
+    var metrics = document.createElement('div');
+    metrics.className = 'habit-metrics';
+
+    var badge = document.createElement('span');
+    badge.className = 'habit-success-badge';
+    badge.textContent = h.successRate + '%';
+    badge.title = 'Success rate (' + (windowDays === 'all' ? 'all time' : 'last ' + windowDays + ' days') + ')';
+    metrics.appendChild(badge);
+
+    if (h.streak > 0) {
+      var streakEl = document.createElement('span');
+      streakEl.className = 'habit-streak';
+      streakEl.textContent = '🔥 ' + h.streak;
+      streakEl.title = h.streak + ' consecutive period' + (h.streak !== 1 ? 's' : '') + ' completed';
+      metrics.appendChild(streakEl);
+    }
+
+    card.appendChild(metrics);
+
+    // ── Interaction: double-click to editor, long-press for quick edit ──
+    card.addEventListener('dblclick', function() {
+      if (typeof storePreviousState === 'function') storePreviousState();
+      window.location.href = '/editor?id=' + chit.id;
+    });
+    if (typeof enableLongPress === 'function') {
+      enableLongPress(card, function() {
+        showQuickEditModal(chit, function() { displayChits(); });
+      });
+    }
+
+    container.appendChild(card);
+  });
 }
 
 function displayNotesView(chitsToDisplay) {
@@ -603,6 +809,19 @@ function _setProjectsMode(mode) {
 // ── Alarms View Mode (Chits list vs Independent board) ───────────────────────
 let _alarmsViewMode = localStorage.getItem('cwoc_alarmsViewMode') || 'list'; // 'list' | 'independent'
 
+// ── Tasks View Mode (Tasks list vs Habits view) ─────────────────────────────
+let _tasksViewMode = localStorage.getItem('cwoc_tasksViewMode') || 'tasks'; // 'tasks' | 'habits'
+
+function _setTasksMode(mode) {
+  _tasksViewMode = mode;
+  localStorage.setItem('cwoc_tasksViewMode', mode);
+  const tasksBtn = document.getElementById('tasks-mode-tasks');
+  const habitsBtn = document.getElementById('tasks-mode-habits');
+  if (tasksBtn) tasksBtn.style.background = mode === 'tasks' ? 'ivory' : '';
+  if (habitsBtn) habitsBtn.style.background = mode === 'habits' ? 'ivory' : '';
+  displayChits();
+}
+
 function _restoreViewModeButtons() {
   // Projects
   const pListBtn = document.getElementById('projects-mode-list');
@@ -614,6 +833,11 @@ function _restoreViewModeButtons() {
   const aIndBtn = document.getElementById('alarms-mode-independent');
   if (aListBtn) aListBtn.style.background = _alarmsViewMode === 'list' ? 'ivory' : '';
   if (aIndBtn) aIndBtn.style.background = _alarmsViewMode === 'independent' ? 'ivory' : '';
+  // Tasks
+  const tTasksBtn = document.getElementById('tasks-mode-tasks');
+  const tHabitsBtn = document.getElementById('tasks-mode-habits');
+  if (tTasksBtn) tTasksBtn.style.background = _tasksViewMode === 'tasks' ? 'ivory' : '';
+  if (tHabitsBtn) tHabitsBtn.style.background = _tasksViewMode === 'habits' ? 'ivory' : '';
 }
 let _independentAlerts = []; // cached independent alerts from API
 let _saTimerRuntime = {}; // independent timer runtime state
@@ -1854,6 +2078,12 @@ function filterChits(tab) {
     alarmsSection.style.display = (tab === 'Alarms') ? '' : 'none';
   }
 
+  // Show/hide Tasks view mode toggle (Tasks vs Habits)
+  const tasksSection = document.getElementById('section-tasks-mode');
+  if (tasksSection) {
+    tasksSection.style.display = (tab === 'Tasks') ? '' : 'none';
+  }
+
   // Show/hide Filters for Indicators tab (hide them)
   const filtersSection = document.getElementById('section-filters');
   if (filtersSection) {
@@ -1924,8 +2154,8 @@ async function displayIndicatorsView() {
   if (!chitList) return;
 
   chitList.innerHTML = '<div style="padding:1em;overflow-y:auto;height:100%;box-sizing:border-box;">' +
-    '<div id="indicators-latest" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;"></div>' +
-    '<div id="indicators-charts" style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;"></div>' +
+    '<div id="indicators-latest"></div>' +
+    '<div id="indicators-charts"></div>' +
   '</div>';
 
   var now = new Date();
@@ -2051,7 +2281,6 @@ async function _indicatorsLoad() {
     var latestDiv = document.getElementById('indicators-latest');
     if (latestDiv) {
       latestDiv.innerHTML = '';
-      latestDiv.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fit,minmax(0,1fr));gap:8px;margin-bottom:12px;';
       charts.forEach(function(ch) {
         var latest = null;
         if (data && data.length > 0) {
@@ -2202,7 +2431,7 @@ function _indToggleExpand(key) {
   if (expanded === key) {
     // Collapse — show all again
     delete container.dataset.expanded;
-    container.style.gridTemplateColumns = 'repeat(2,1fr)';
+    container.style.gridTemplateColumns = '';
     Array.from(container.children).forEach(function(c) {
       c.style.display = '';
       // Reset SVG wrapper to normal size

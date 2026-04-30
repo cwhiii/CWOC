@@ -45,6 +45,7 @@ def get_all_chits():
             chit["recurrence_exceptions"] = deserialize_json_field(chit.get("recurrence_exceptions"))
             chit["weather_data"] = deserialize_json_field(chit.get("weather_data"))
             chit["health_data"] = deserialize_json_field(chit.get("health_data"))
+            chit["hide_when_instance_done"] = bool(chit.get("hide_when_instance_done"))
             chits.append(chit)
         return chits
     except Exception as e:
@@ -83,6 +84,7 @@ def search_chits(q: Optional[str] = Query(None)):
             chit["recurrence_exceptions"] = deserialize_json_field(chit.get("recurrence_exceptions"))
             chit["weather_data"] = deserialize_json_field(chit.get("weather_data"))
             chit["health_data"] = deserialize_json_field(chit.get("health_data"))
+            chit["hide_when_instance_done"] = bool(chit.get("hide_when_instance_done"))
 
             matched_fields = []
 
@@ -164,8 +166,8 @@ def create_chit(chit: Chit):
                 completed_datetime, status, priority, severity, checklist, alarm, notification,
                 recurrence, recurrence_id, location, color, people, pinned, archived,
                 deleted, created_datetime, modified_datetime, is_project_master, child_chits, all_day, alerts,
-                recurrence_rule, recurrence_exceptions, weather_data, health_data
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                recurrence_rule, recurrence_exceptions, weather_data, health_data, hide_when_instance_done
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 chit_id,
@@ -200,6 +202,7 @@ def create_chit(chit: Chit):
                 serialize_json_field(chit.recurrence_exceptions),
                 serialize_json_field(chit.weather_data),
                 serialize_json_field(chit.health_data),
+                1 if chit.hide_when_instance_done else 0,
             )
         )
         conn.commit()
@@ -236,6 +239,7 @@ def get_chit(chit_id: str):
         chit["recurrence_exceptions"] = deserialize_json_field(chit.get("recurrence_exceptions"))
         chit["weather_data"] = deserialize_json_field(chit.get("weather_data"))
         chit["health_data"] = deserialize_json_field(chit.get("health_data"))
+        chit["hide_when_instance_done"] = bool(chit.get("hide_when_instance_done"))
         return chit
     except sqlite3.Error as e:
         logger.error(f"Database error fetching chit {chit_id}: {str(e)}")
@@ -272,7 +276,8 @@ def update_chit(chit_id: str, chit: Chit):
                     completed_datetime = ?, status = ?, priority = ?, severity = ?, checklist = ?, alarm = ?, notification = ?,
                     recurrence = ?, recurrence_id = ?, location = ?, color = ?, people = ?, pinned = ?,
                     archived = ?, deleted = ?, modified_datetime = ?, is_project_master = ?, child_chits = ?, all_day = ?, alerts = ?,
-                    recurrence_rule = ?, recurrence_exceptions = ?, weather_data = ?, health_data = ?
+                    recurrence_rule = ?, recurrence_exceptions = ?, weather_data = ?, health_data = ?,
+                    hide_when_instance_done = ?
                 WHERE id = ?
                 """,
                 (
@@ -306,6 +311,7 @@ def update_chit(chit_id: str, chit: Chit):
                     serialize_json_field(chit.recurrence_exceptions),
                     serialize_json_field(chit.weather_data),
                     serialize_json_field(chit.health_data),
+                    1 if chit.hide_when_instance_done else 0,
                     chit_id,
                 )
             )
@@ -329,6 +335,7 @@ def update_chit(chit_id: str, chit: Chit):
                     "recurrence_exceptions": serialize_json_field(chit.recurrence_exceptions),
                     "weather_data": serialize_json_field(chit.weather_data),
                     "health_data": serialize_json_field(chit.health_data),
+                    "hide_when_instance_done": 1 if chit.hide_when_instance_done else 0,
                 }
                 diff = compute_audit_diff(old_chit_dict, new_chit_dict, exclude_fields={"modified_datetime", "created_datetime"})
                 if diff:
@@ -345,8 +352,8 @@ def update_chit(chit_id: str, chit: Chit):
                     completed_datetime, status, priority, severity, checklist, alarm, notification,
                     recurrence, recurrence_id, location, color, people, pinned, archived,
                     deleted, created_datetime, modified_datetime, is_project_master, child_chits, all_day, alerts,
-                    recurrence_rule, recurrence_exceptions, weather_data, health_data
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    recurrence_rule, recurrence_exceptions, weather_data, health_data, hide_when_instance_done
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     chit_id,
@@ -381,6 +388,7 @@ def update_chit(chit_id: str, chit: Chit):
                     serialize_json_field(chit.recurrence_exceptions),
                     serialize_json_field(chit.weather_data),
                     serialize_json_field(chit.health_data),
+                    1 if chit.hide_when_instance_done else 0,
                 )
             )
             # Audit logging for chit creation
@@ -506,6 +514,7 @@ def export_chits():
             chit["deleted"] = bool(chit.get("deleted"))
             chit["is_project_master"] = bool(chit.get("is_project_master"))
             chit["all_day"] = bool(chit.get("all_day"))
+            chit["hide_when_instance_done"] = bool(chit.get("hide_when_instance_done"))
             chits.append(chit)
 
         envelope = _build_export_envelope("chits", chits)
@@ -612,8 +621,8 @@ def import_chits(req: ImportRequest):
                     created_datetime, modified_datetime, is_project_master,
                     child_chits, all_day, alerts, recurrence_rule,
                     recurrence_exceptions, progress_percent, time_estimate,
-                    weather_data, health_data
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    weather_data, health_data, hide_when_instance_done
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     new_id,
                     chit.get("title"),
@@ -649,6 +658,7 @@ def import_chits(req: ImportRequest):
                     chit.get("time_estimate"),
                     serialize_json_field(chit.get("weather_data")),
                     serialize_json_field(chit.get("health_data")),
+                    1 if chit.get("hide_when_instance_done") else 0,
                 ),
             )
             imported += 1
@@ -971,7 +981,7 @@ def export_all():
             for f in ("tags", "checklist", "people", "child_chits", "alerts",
                        "recurrence_rule", "recurrence_exceptions", "weather_data", "health_data"):
                 chit[f] = deserialize_json_field(chit.get(f))
-            for f in ("alarm", "notification", "pinned", "archived", "deleted", "is_project_master", "all_day"):
+            for f in ("alarm", "notification", "pinned", "archived", "deleted", "is_project_master", "all_day", "hide_when_instance_done"):
                 chit[f] = bool(chit.get(f))
             chits.append(chit)
 
@@ -1069,8 +1079,8 @@ def import_all(req: ImportRequest):
                     created_datetime, modified_datetime, is_project_master,
                     child_chits, all_day, alerts, recurrence_rule,
                     recurrence_exceptions, progress_percent, time_estimate,
-                    weather_data, health_data
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    weather_data, health_data, hide_when_instance_done
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     new_id, chit.get("title"), chit.get("note"),
                     serialize_json_field(chit.get("tags")),
@@ -1094,6 +1104,7 @@ def import_all(req: ImportRequest):
                     chit.get("progress_percent"), chit.get("time_estimate"),
                     serialize_json_field(chit.get("weather_data")),
                     serialize_json_field(chit.get("health_data")),
+                    1 if chit.get("hide_when_instance_done") else 0,
                 ),
             )
             chit_count += 1
