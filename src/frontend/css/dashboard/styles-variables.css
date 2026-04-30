@@ -12,6 +12,22 @@
    This file MUST load first among dashboard stylesheets.
    ═══════════════════════════════════════════════════════════════════════════ */
 
+/* ── Lora Font (self-hosted variable font) ─────────────────────────────── */
+@font-face {
+    font-family: 'Lora';
+    src: url('/static/fonts/lora/Lora-VariableFont_wght.ttf') format('truetype');
+    font-weight: 400 700;
+    font-style: normal;
+    font-display: swap;
+}
+@font-face {
+    font-family: 'Lora';
+    src: url('/static/fonts/lora/Lora-Italic-VariableFont_wght.ttf') format('truetype');
+    font-weight: 400 700;
+    font-style: italic;
+    font-display: swap;
+}
+
 /* ── CSS Variables ──────────────────────────────────────────────────────── */
 /* Shared variables — must match shared-page.css exactly */
 :root {

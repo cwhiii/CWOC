@@ -10,7 +10,7 @@
 body {
     background-image: url("/static/parchment.jpg");
     background-size: cover;
-    font-family: "Courier New", Courier, monospace;
+    font-family: 'Lora', Georgia, serif;
     color: #333;
     margin: 0;
     padding: 0;
@@ -182,7 +182,7 @@ input[type="text"],
 textarea,
 select {
     padding: 5px;
-    font-family: "Courier New", Courier, monospace;
+    font-family: 'Lora', Georgia, serif;
     border: 1px solid #6b4e31;
     background-color: #ffff0;
     box-sizing: border-box;
@@ -250,7 +250,7 @@ button {
     background-color: var(--header-bg);
     border: 1px solid #6b4e31;
     cursor: pointer;
-    font-family: "Courier New", Courier, monospace;
+    font-family: 'Lora', Georgia, serif;
     font-weight: bold;
     border-radius: 3px;
 }
@@ -262,7 +262,7 @@ button:hover {
 button.delete {
     background-color: #a0522d;
     color: white;
-    font-family: "Courier New", Courier, monospace;
+    font-family: 'Lora', Georgia, serif;
     font-weight: bold;
     border-radius: 3px;
 }
@@ -355,7 +355,7 @@ button.delete:hover {
     background-color: var(--btn-bg);
     border: 1px solid var(--btn-border);
     cursor: pointer;
-    font-family: "Courier New", Courier, monospace;
+    font-family: 'Lora', Georgia, serif;
     font-weight: bold;
     font-size: larger;
     border-radius: 3px;
@@ -403,7 +403,7 @@ button.delete:hover {
 .status-filter select {
     width: 100%;
     padding: 5px;
-    font-family: "Courier New", Courier, monospace;
+    font-family: 'Lora', Georgia, serif;
     border: 1px solid #6b4e31;
     background-color: #ffff0;
     border-radius: 3px;
@@ -433,7 +433,7 @@ button.delete:hover {
     color: #fff8e1;
     border: 1px solid var(--btn-border, #5a3f2a);
     border-radius: 3px;
-    font-family: "Courier New", Courier, monospace;
+    font-family: 'Lora', Georgia, serif;
     font-weight: bold;
     font-size: 0.9em;
     cursor: pointer;
@@ -494,7 +494,7 @@ button.delete:hover {
     margin: 4px 0;
     border-radius: 4px;
     cursor: pointer;
-    font-family: "Courier New", Courier, monospace;
+    font-family: 'Lora', Georgia, serif;
     font-weight: bold;
     font-size: 1em;
     color: var(--aged-brown-dark, #4a2c2a);
@@ -526,7 +526,7 @@ button.delete:hover {
     border-radius: 4px;
     cursor: pointer;
     min-height: 44px;
-    font-family: "Courier New", Courier, monospace;
+    font-family: 'Lora', Georgia, serif;
 }
 
 

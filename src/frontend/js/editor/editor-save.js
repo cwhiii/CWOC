@@ -259,7 +259,7 @@ function _showInstanceBanner(dateStr) {
 
   const banner = document.createElement('div');
   banner.id = 'instance-banner';
-  banner.style.cssText = 'background:#fff3cd;border:1px solid #ffc107;border-radius:4px;padding:8px 14px;margin:8px 0;font-family:"Courier New",monospace;font-size:0.9em;display:flex;align-items:center;gap:8px;';
+  banner.style.cssText = 'background:#fff3cd;border:1px solid #ffc107;border-radius:4px;padding:8px 14px;margin:8px 0;font-family:Lora, Georgia, serif;font-size:0.9em;display:flex;align-items:center;gap:8px;';
   banner.innerHTML = `<span style="font-size:1.2em;">✏️🔁</span> <span>Editing instance for <strong>${dateStr}</strong>. Changes will only apply to this date.</span>`;
 
   const form = document.querySelector('.editor-form') || document.querySelector('.editor-content') || document.body;

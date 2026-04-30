@@ -17,7 +17,7 @@
     height: 100%;
     overflow: auto;
     background-color: rgba(0, 0, 0, 0.5);
-    font-family: "Courier New", Courier, monospace;
+    font-family: 'Lora', Georgia, serif;
 }
 
 #deleteChitModal > div {
@@ -55,7 +55,7 @@
     cursor: pointer;
     transition: background-color 0.3s ease;
     min-width: 140px;
-    font-family: "Courier New", Courier, monospace;
+    font-family: 'Lora', Georgia, serif;
     font-weight: bold;
 }
 
@@ -97,7 +97,7 @@
     border-radius: 10px;
     padding: 24px 32px;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-    font-family: "Courier New", monospace;
+    font-family: 'Lora', Georgia, serif;
     min-width: 300px;
     max-width: 420px;
     text-align: center;
@@ -119,7 +119,7 @@
 .weather-modal-location-selector select {
     width: 100%;
     padding: 8px 10px;
-    font-family: "Courier New", monospace;
+    font-family: 'Lora', Georgia, serif;
     font-size: 0.9em;
     border: 1px solid #8b5a2b;
     border-radius: 5px;
@@ -136,7 +136,7 @@
 
 .weather-modal-location-selector input[type="text"] {
     padding: 6px 8px;
-    font-family: "Courier New", monospace;
+    font-family: 'Lora', Georgia, serif;
     font-size: 0.85em;
     border: 1px solid #8b5a2b;
     border-radius: 5px;
@@ -146,7 +146,7 @@
 
 .weather-modal-location-selector button {
     padding: 6px 10px;
-    font-family: "Courier New", monospace;
+    font-family: 'Lora', Georgia, serif;
     font-size: 0.85em;
     border: 1px solid #5c4033;
     border-radius: 5px;
@@ -226,7 +226,7 @@
 
 .weather-modal-forecast-btn {
     padding: 8px 16px;
-    font-family: "Courier New", Courier, monospace;
+    font-family: 'Lora', Georgia, serif;
     font-weight: bold;
     font-size: 0.95em;
     background-color: var(--header-bg);
@@ -280,7 +280,7 @@
     width: 90%;
     max-width: 420px;
     box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5), 0 0 60px rgba(212, 175, 55, 0.3);
-    font-family: 'Courier New', monospace;
+    font-family: 'Lora', Georgia, serif;
     color: #3c2f2f;
     text-align: center;
     overflow: hidden;
@@ -346,7 +346,7 @@
     padding: 10px 16px;
     font-size: 1em;
     font-weight: bold;
-    font-family: 'Courier New', monospace;
+    font-family: 'Lora', Georgia, serif;
     border: 2px solid #8b5a2b;
     border-radius: 6px;
     background: #fdf5e6;

@@ -35,7 +35,7 @@
     border-radius: 12px;
     padding: 20px 28px;
     z-index: 1600;
-    font-family: "Courier New", Courier, monospace;
+    font-family: 'Lora', Georgia, serif;
     color: #3c2f2f;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
     min-width: 260px;
@@ -134,7 +134,7 @@
     width: 94%;
     max-height: 90vh;
     overflow-y: auto;
-    font-family: "Courier New", Courier, monospace;
+    font-family: 'Lora', Georgia, serif;
     color: #1a1208;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
 }

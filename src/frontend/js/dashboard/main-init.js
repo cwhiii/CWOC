@@ -658,6 +658,14 @@ document.addEventListener("DOMContentLoaded", function () {
   // Restore persisted view mode button highlights
   _restoreViewModeButtons();
 
+  // Fetch version for sidebar footer
+  fetch('/api/version').then(function(r) { return r.ok ? r.json() : {}; }).then(function(d) {
+    var link = document.getElementById('sidebar-version-link');
+    if (link && d.version) {
+      link.title = '\u00A9 2026 C.W.\'s Omni Chits \u00B7 v' + d.version + ' \u00B7 www.cwholemaniii.com';
+    }
+  }).catch(function() {});
+
   // Always fetch independent alerts — needed for the alarm checker regardless of view mode
   _fetchIndependentAlerts();
 

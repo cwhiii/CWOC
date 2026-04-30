@@ -104,7 +104,7 @@ async function _fetchWeatherData(address) {
         : error.message === "No address provided."
           ? "No address provided"
           : `Weather data unavailable for ${address}`;
-      compactWeatherSection.innerHTML = `<div style="padding:8px;font-family:'Courier New',monospace;color:#a33;font-size:0.85em;">⚠️ ${msg}</div>`;
+      compactWeatherSection.innerHTML = `<div style="padding:8px;font-family:Lora, Georgia, serif;color:#a33;font-size:0.85em;">⚠️ ${msg}</div>`;
     }
     throw error;
   }
@@ -202,7 +202,7 @@ function _displayWeatherInCompactSection(weatherData, address) {
     compactWeatherSection.appendChild(refreshBtn);
   } else {
     compactWeatherSection.innerHTML = `
-    <div style="padding: 10px; font-family: 'Courier New', Courier, monospace; color: #3e2b2b;">
+    <div style="padding: 10px; font-family: 'Lora', Georgia, serif; color: #3e2b2b;">
     <strong>Weather data unavailable for ${address}</strong>
     </div>
     `;
@@ -432,7 +432,7 @@ function searchLocationMap(event) {
     const cws = document.getElementById("compactWeatherSection");
     if (cws) {
       cws.classList.add('weather-placeholder');
-      cws.innerHTML = `<div style="padding:8px;font-family:'Courier New',monospace;color:#8b5a2b;font-size:0.85em;opacity:0.7;">📅 Add a date for weather</div>`;
+      cws.innerHTML = `<div style="padding:8px;font-family:Lora, Georgia, serif;color:#8b5a2b;font-size:0.85em;opacity:0.7;">📅 Add a date for weather</div>`;
     }
     // Still show the map
     _getCoordinates(address).then((coords) => {

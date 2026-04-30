@@ -122,7 +122,7 @@ function _showGlobalToast(emoji, label, chitTitle, chitId, onDismiss) {
   }
   // Notifications still use a compact toast
   const toast = document.createElement("div");
-  toast.style.cssText = "position:fixed;top:16px;right:16px;z-index:99999;background:#fff5e6;border:2px solid #8b5a2b;border-radius:8px;padding:0.75em 1em;box-shadow:0 4px 20px rgba(0,0,0,0.35);min-width:240px;max-width:320px;font-family:'Courier New',monospace;display:flex;flex-direction:column;gap:0.4em;";
+  toast.style.cssText = "position:fixed;top:16px;right:16px;z-index:99999;background:#fff5e6;border:2px solid #8b5a2b;border-radius:8px;padding:0.75em 1em;box-shadow:0 4px 20px rgba(0,0,0,0.35);min-width:240px;max-width:320px;font-family:Lora, Georgia, serif;display:flex;flex-direction:column;gap:0.4em;";
   const titleRow = document.createElement("div");
   titleRow.style.cssText = "font-weight:bold;font-size:1em;";
   titleRow.textContent = `${emoji} ${chitTitle || "Alert"}`;
@@ -155,7 +155,7 @@ function _showGlobalToast(emoji, label, chitTitle, chitId, onDismiss) {
  */
 function _showGlobalLoopingToast(emoji, label, chitTitle, chitId, loopKey) {
   const toast = document.createElement("div");
-  toast.style.cssText = "position:fixed;top:16px;right:16px;z-index:99999;background:#fff5e6;border:2px solid #8b5a2b;border-radius:8px;padding:0.75em 1em;box-shadow:0 4px 20px rgba(0,0,0,0.35);min-width:240px;max-width:320px;font-family:'Courier New',monospace;display:flex;flex-direction:column;gap:0.4em;";
+  toast.style.cssText = "position:fixed;top:16px;right:16px;z-index:99999;background:#fff5e6;border:2px solid #8b5a2b;border-radius:8px;padding:0.75em 1em;box-shadow:0 4px 20px rgba(0,0,0,0.35);min-width:240px;max-width:320px;font-family:Lora, Georgia, serif;display:flex;flex-direction:column;gap:0.4em;";
   const titleRow = document.createElement("div");
   titleRow.style.cssText = "font-weight:bold;font-size:1em;";
   titleRow.textContent = `${emoji} ${chitTitle || "Alert"} 🔁`;

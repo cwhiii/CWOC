@@ -42,7 +42,7 @@ async function _openClockModal() {
   overlay.addEventListener('click', (e) => { if (e.target === overlay) _closeClockModal(); });
 
   const modal = document.createElement('div');
-  modal.style.cssText = 'background:#fff8e1;border:2px solid #8b4513;border-radius:10px;padding:24px 32px;box-shadow:0 8px 32px rgba(0,0,0,0.4);font-family:"Courier New",monospace;min-width:280px;text-align:center;';
+  modal.style.cssText = 'background:#fff8e1;border:2px solid #8b4513;border-radius:10px;padding:24px 32px;box-shadow:0 8px 32px rgba(0,0,0,0.4);font-family:Lora, Georgia, serif;min-width:280px;text-align:center;';
 
   const title = document.createElement('div');
   title.style.cssText = 'font-size:1.1em;font-weight:bold;color:#4a2c2a;margin-bottom:16px;';
@@ -164,7 +164,7 @@ function _renderAnalogClock(h24, min, sec) {
   nums.forEach((n, i) => {
     const a = (i * 30 - 90) * Math.PI / 180;
     const nr = r - 30;
-    numerals += `<text x="${cx + nr * Math.cos(a)}" y="${cy + nr * Math.sin(a)}" text-anchor="middle" dominant-baseline="central" fill="#4a2c2a" font-size="20" font-family="'Courier New',monospace" font-weight="bold">${n}</text>`;
+    numerals += `<text x="${cx + nr * Math.cos(a)}" y="${cy + nr * Math.sin(a)}" text-anchor="middle" dominant-baseline="central" fill="#4a2c2a" font-size="20" font-family="'Lora', Georgia, serif" font-weight="bold">${n}</text>`;
   });
 
   return `<div style="display:inline-block;margin:2px auto;">

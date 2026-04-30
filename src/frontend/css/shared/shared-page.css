@@ -7,6 +7,22 @@
    The main dashboard (index.html) uses styles.css instead.
    ═══════════════════════════════════════════════════════════════════════════ */
 
+/* ── Lora Font (self-hosted variable font) ─────────────────────────────── */
+@font-face {
+    font-family: 'Lora';
+    src: url('/static/fonts/lora/Lora-VariableFont_wght.ttf') format('truetype');
+    font-weight: 400 700;
+    font-style: normal;
+    font-display: swap;
+}
+@font-face {
+    font-family: 'Lora';
+    src: url('/static/fonts/lora/Lora-Italic-VariableFont_wght.ttf') format('truetype');
+    font-weight: 400 700;
+    font-style: italic;
+    font-display: swap;
+}
+
 /* ── CSS Variables ──────────────────────────────────────────────────────── */
 /* CANONICAL SOURCE OF TRUTH for the common CWOC CSS variable set.
    All other stylesheets (styles.css, shared-editor.css) must mirror these
@@ -34,7 +50,7 @@ body {
     background-image: url("/static/parchment.jpg");
     background-size: cover;
     background-attachment: fixed;
-    font-family: "Courier New", Courier, monospace;
+    font-family: 'Lora', Georgia, serif;
     color: #1a1208;
     margin: 0;
     padding: 1em;
@@ -114,7 +130,7 @@ h2 img {
     padding: 6px 12px;
     cursor: pointer;
     font-size: 16px;
-    font-family: "Courier New", Courier, monospace;
+    font-family: 'Lora', Georgia, serif;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
     transition: box-shadow 0.3s, transform 0.1s;
 }
@@ -132,7 +148,7 @@ h2 img {
     border-radius: 3px;
     color: inherit;
     cursor: pointer;
-    font-family: "Courier New", Courier, monospace;
+    font-family: 'Lora', Georgia, serif;
     font-weight: bold;
     font-size: larger;
     display: inline-flex;
@@ -200,7 +216,7 @@ select {
     color: #1a1208;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
     cursor: pointer;
-    font-family: "Courier New", Courier, monospace;
+    font-family: 'Lora', Georgia, serif;
     transition: background 0.3s, transform 0.1s;
 }
 select:hover { background: linear-gradient(#c8965a, #a86b3e); transform: translateY(-1px); }
@@ -210,7 +226,7 @@ input[type="text"], input[type="number"] {
     padding: 5px 8px;
     font-size: 16px;
     color: #1a1208;
-    font-family: "Courier New", Courier, monospace;
+    font-family: 'Lora', Georgia, serif;
     background: #f5e6cc;
 }
 input[type="color"] {
@@ -261,16 +277,32 @@ input[type="color"] {
 .checkbox-list label { display: flex; align-items: center; padding: 4px 0; margin: 0; }
 
 /* ── Help Content ───────────────────────────────────────────────────────── */
-.help-content { line-height: 1.7; color: #1a1208; }
+.help-content { line-height: 1.7; color: #1a1208; font-size: 16px; }
+.help-content h2 {
+    font-weight: 700; font-size: 26px; color: #4a2c2a; text-transform: uppercase;
+    letter-spacing: 2px; margin-top: 3em; margin-bottom: 0.3em; padding-bottom: 8px;
+    border-bottom: 3px double #8b5a2b;
+}
+.help-content h2:first-of-type { margin-top: 0; }
 .help-content h3 {
+    display: flex; align-items: center;
+    font-weight: 700;
     font-size: 22px; color: #1a1208; text-transform: uppercase;
     letter-spacing: 1px; border-bottom: 1px solid #d4c5a9; padding-bottom: 6px; margin-top: 2em;
 }
-.help-content h4 { color: #4a2c2a; margin-top: 1.5em; font-size: 17px; text-align: left; text-transform: none; letter-spacing: 0; border: none; }
+.help-content h3 .back-to-top {
+    font-size: 1.4em; color: #8b5a2b; text-decoration: none; opacity: 0.5;
+    text-transform: none; letter-spacing: 0; flex-shrink: 0; margin-left: 1em;
+    font-weight: 900; transition: opacity 0.2s, background 0.2s;
+    background: rgba(139, 90, 43, 0.08); border: 1px solid rgba(139, 90, 43, 0.25);
+    border-radius: 4px; padding: 0 6px; line-height: 1.4;
+}
+.help-content h3 .back-to-top:hover { opacity: 1; background: rgba(139, 90, 43, 0.18); }
+.help-content h4 { font-weight: 600; color: #4a2c2a; margin-top: 1.5em; font-size: 17px; text-align: left; text-transform: none; letter-spacing: 0; border: none; }
 .help-content a { color: #4a2c2a; }
 .help-content a:hover { color: #1a1208; }
-.help-content kbd { background: #e0d4b5; border: 1px solid #6b4e31; border-radius: 3px; padding: 1px 5px; font-size: 0.9em; }
-.help-content code { background: #e0d4b5; padding: 1px 4px; border-radius: 3px; }
+.help-content kbd { background: #e0d4b5; border: 1px solid #6b4e31; border-radius: 3px; padding: 1px 5px; font-size: 0.85em; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+.help-content code { background: #e0d4b5; padding: 1px 4px; border-radius: 3px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 0.9em; }
 .help-content .index {
     background: #fff8e1; border: 1px solid #8b5a2b; border-radius: 5px;
     padding: 1em 1.5em; margin-bottom: 2em; box-shadow: 0 2px 4px rgba(0,0,0,0.1);
@@ -281,6 +313,7 @@ input[type="color"] {
 .help-content .index li a:hover { text-decoration: underline; }
 .help-content ul { margin: 0.5em 0; }
 .help-content li { margin: 3px 0; }
+.help-content strong { font-weight: 700; }
 
 /* ── Author Footer ──────────────────────────────────────────────────────── */
 .author-info {
@@ -344,7 +377,7 @@ input[type="color"] {
     min-width: 260px;
     max-width: 400px;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-    font-family: "Courier New", Courier, monospace;
+    font-family: 'Lora', Georgia, serif;
     color: #3c2f2f;
 }
 #cwoc-nav-panel h3 {
@@ -484,7 +517,7 @@ input[type="color"] {
     width: 90%;
     max-width: 420px;
     box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5), 0 0 60px rgba(212, 175, 55, 0.3);
-    font-family: 'Courier New', monospace;
+    font-family: 'Lora', Georgia, serif;
     color: #3c2f2f;
     text-align: center;
     overflow: hidden;
@@ -501,7 +534,7 @@ input[type="color"] {
 .cwoc-alert-title { font-size: 1.5em; font-weight: bold; color: #4a2c2a; margin: 0 16px 6px; word-break: break-word; }
 .cwoc-alert-subtitle { font-size: 1.1em; color: #6b4226; margin: 0 16px 16px; opacity: 0.85; }
 .cwoc-alert-buttons { display: flex; gap: 8px; padding: 12px 16px 16px; flex-wrap: wrap; justify-content: center; }
-.cwoc-alert-btn { flex: 1; min-width: 100px; padding: 10px 16px; font-size: 1em; font-weight: bold; font-family: 'Courier New', monospace; border: 2px solid #8b5a2b; border-radius: 6px; background: #fdf5e6; color: #4a2c2a; cursor: pointer; min-height: 44px; }
+.cwoc-alert-btn { flex: 1; min-width: 100px; padding: 10px 16px; font-size: 1em; font-weight: bold; font-family: 'Lora', Georgia, serif; border: 2px solid #8b5a2b; border-radius: 6px; background: #fdf5e6; color: #4a2c2a; cursor: pointer; min-height: 44px; }
 .cwoc-alert-btn:hover { background: #f0e6d3; }
 .cwoc-alert-btn-primary { background: #8b5a2b; color: #fff8e1; border-color: #5a3f2a; }
 .cwoc-alert-btn-primary:hover { background: #6b4226; }
@@ -533,7 +566,7 @@ input[type="color"] {
     border-radius: 10px;
     padding: 24px 32px;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-    font-family: "Courier New", Courier, monospace;
+    font-family: 'Lora', Georgia, serif;
     min-width: 260px;
     max-width: 340px;
     text-align: center;
@@ -586,7 +619,7 @@ input[type="color"] {
 
 .cwoc-quick-alert-done {
     padding: 8px 24px;
-    font-family: "Courier New", Courier, monospace;
+    font-family: 'Lora', Georgia, serif;
     font-size: 0.95em;
     font-weight: bold;
     background: #8b5a2b;

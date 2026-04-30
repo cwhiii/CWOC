@@ -46,7 +46,7 @@ function showQuickEditModal(chit, onRefresh) {
   overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;';
 
   const modal = document.createElement('div');
-  modal.style.cssText = 'background:#fffaf0;border:2px solid #6b4e31;border-radius:8px;padding:24px;min-width:320px;max-width:420px;font-family:"Courier New",monospace;box-shadow:0 8px 32px rgba(0,0,0,0.3);';
+  modal.style.cssText = 'background:#fffaf0;border:2px solid #6b4e31;border-radius:8px;padding:24px;min-width:320px;max-width:420px;font-family:Lora, Georgia, serif;box-shadow:0 8px 32px rgba(0,0,0,0.3);';
 
   const title = document.createElement('h3');
   title.style.cssText = 'margin:0 0 6px 0;color:#4a2c2a;font-size:1.1em;cursor:text;';
@@ -1674,7 +1674,7 @@ function initMobileReferenceClose() {
   btn.className = 'ref-close-btn';
   btn.textContent = '✕ Close';
   btn.style.cssText = 'display:block;width:100%;margin-top:12px;padding:10px;' +
-    'font-size:1em;font-weight:bold;font-family:"Courier New",monospace;' +
+    'font-size:1em;font-weight:bold;font-family:Lora, Georgia, serif;' +
     'background:#8b5a2b;color:#fff8e1;border:1px solid #5a3f2a;border-radius:4px;' +
     'cursor:pointer;min-height:44px;';
   btn.addEventListener('click', function () {
@@ -1832,7 +1832,7 @@ async function prefetchSavedLocationWeather() {
 function _showDeleteUndoToast(chitId, chitTitle, onExpire, onUndo) {
   var DURATION = 10000;
   var toast = document.createElement("div");
-  toast.style.cssText = "position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:9999;background:#fff5e6;border:2px solid #8b5a2b;border-radius:8px;padding:0.75em 1.2em 0.5em;box-shadow:0 4px 16px rgba(0,0,0,0.3);min-width:280px;max-width:420px;font-family:'Courier New',monospace;";
+  toast.style.cssText = "position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:9999;background:#fff5e6;border:2px solid #8b5a2b;border-radius:8px;padding:0.75em 1.2em 0.5em;box-shadow:0 4px 16px rgba(0,0,0,0.3);min-width:280px;max-width:420px;font-family:Lora, Georgia, serif;";
 
   var msgRow = document.createElement("div");
   msgRow.style.cssText = "display:flex;align-items:center;justify-content:space-between;gap:0.8em;margin-bottom:0.5em;";
@@ -2235,7 +2235,7 @@ function _sharedShowAlertModal(opts) {
   overlay.addEventListener('wheel', function(e) { e.preventDefault(); }, { passive: false });
 
   var modal = document.createElement('div');
-  modal.style.cssText = "background:url('/static/parchment.jpg') center/cover;background-color:#fff8e1;border:3px solid #8b4513;border-radius:12px;padding:0;width:90%;max-width:420px;box-shadow:0 8px 40px rgba(0,0,0,0.5),0 0 60px rgba(212,175,55,0.3);font-family:'Courier New',monospace;color:#3c2f2f;text-align:center;overflow:hidden;";
+  modal.style.cssText = "background:url('/static/parchment.jpg') center/cover;background-color:#fff8e1;border:3px solid #8b4513;border-radius:12px;padding:0;width:90%;max-width:420px;box-shadow:0 8px 40px rgba(0,0,0,0.5),0 0 60px rgba(212,175,55,0.3);font-family:Lora, Georgia, serif;color:#3c2f2f;text-align:center;overflow:hidden;";
   var bar = document.createElement('div'); bar.style.cssText = 'width:100%;height:6px;background:#e8dcc8;overflow:hidden;';
   var barFill = document.createElement('div'); barFill.style.cssText = 'height:100%;width:100%;background:linear-gradient(90deg,#d4af37 0%,#c8965a 60%,#8b4513 100%);';
   bar.appendChild(barFill); modal.appendChild(bar);
@@ -2244,7 +2244,7 @@ function _sharedShowAlertModal(opts) {
   if (opts.subtitle) { var subEl = document.createElement('div'); subEl.style.cssText = 'font-size:1.1em;color:#6b4226;margin:0 16px 16px;opacity:0.85;'; subEl.textContent = opts.subtitle; modal.appendChild(subEl); }
 
   var btnRow = document.createElement('div'); btnRow.style.cssText = 'display:flex;gap:8px;padding:12px 16px 16px;flex-wrap:wrap;justify-content:center;';
-  var btnStyle = "flex:1;min-width:100px;padding:10px 16px;font-size:1em;font-weight:bold;font-family:'Courier New',monospace;border:2px solid #8b5a2b;border-radius:6px;background:#fdf5e6;color:#4a2c2a;cursor:pointer;min-height:44px;";
+  var btnStyle = "flex:1;min-width:100px;padding:10px 16px;font-size:1em;font-weight:bold;font-family:Lora, Georgia, serif;border:2px solid #8b5a2b;border-radius:6px;background:#fdf5e6;color:#4a2c2a;cursor:pointer;min-height:44px;";
   var btnPrimaryStyle = btnStyle + "background:#8b5a2b;color:#fff8e1;border-color:#5a3f2a;";
 
   // Navigation button — "Go to Chit" or "Go to Alerts"
@@ -2576,12 +2576,12 @@ function _openQuickAlertModal() {
   });
 
   var box = document.createElement('div');
-  box.style.cssText = 'background:#fff8e1;border:2px solid #8b4513;border-radius:10px;padding:24px 32px;box-shadow:0 8px 32px rgba(0,0,0,0.4);font-family:"Courier New",Courier,monospace;min-width:260px;max-width:340px;text-align:center;color:#2b1e0f;';
+  box.style.cssText = 'background:#fff8e1;border:2px solid #8b4513;border-radius:10px;padding:24px 32px;box-shadow:0 8px 32px rgba(0,0,0,0.4);font-family:Lora, Georgia, serif;min-width:260px;max-width:340px;text-align:center;color:#2b1e0f;';
   box.className = 'cwoc-quick-alert-box';
 
   var _optStyle = 'display:flex;align-items:center;gap:12px;padding:10px 14px;margin:4px 0;border:1px solid #e0d4b5;border-radius:6px;cursor:pointer;transition:background 0.15s;font-size:1.05em;';
   var _keyStyle = 'display:inline-flex;align-items:center;justify-content:center;min-width:2em;height:2em;background:#8b5a2b;color:#fff8e1;font-weight:bold;font-size:0.95em;border-radius:4px;border:1px solid #5a3f2a;flex-shrink:0;';
-  var _btnStyle = 'padding:8px 24px;font-family:"Courier New",Courier,monospace;font-size:1em;background:#8b5a2b;color:#fff8e1;border:1px solid #5a3f2a;border-radius:4px;cursor:pointer;';
+  var _btnStyle = 'padding:8px 24px;font-family:Lora, Georgia, serif;font-size:1em;background:#8b5a2b;color:#fff8e1;border:1px solid #5a3f2a;border-radius:4px;cursor:pointer;';
 
   box.innerHTML =
     '<h3 style="margin:0 0 12px;font-size:1.15em;color:#4a2c2a;">⚡ Quick Alert</h3>' +
@@ -2730,8 +2730,8 @@ function _quickAlertShowEditor(type) {
   box.appendChild(formDiv);
   var btnRow = document.createElement('div');
   btnRow.style.cssText = 'display:flex;gap:8px;justify-content:center;margin-top:14px;';
-  var _qaBtnPrimary = 'padding:8px 14px;cursor:pointer;font-size:0.95em;font-weight:bold;font-family:"Courier New",Courier,monospace;background:#8b5a2b;color:#fff8e1;border:1px solid #5a3f2a;border-radius:4px;white-space:nowrap;';
-  var _qaBtnSecondary = 'padding:8px 14px;cursor:pointer;font-size:0.95em;font-family:"Courier New",Courier,monospace;background:#fdf5e6;color:#4a2c2a;border:1px solid #8b5a2b;border-radius:4px;white-space:nowrap;';
+  var _qaBtnPrimary = 'padding:8px 14px;cursor:pointer;font-size:0.95em;font-weight:bold;font-family:Lora, Georgia, serif;background:#8b5a2b;color:#fff8e1;border:1px solid #5a3f2a;border-radius:4px;white-space:nowrap;';
+  var _qaBtnSecondary = 'padding:8px 14px;cursor:pointer;font-size:0.95em;font-family:Lora, Georgia, serif;background:#fdf5e6;color:#4a2c2a;border:1px solid #8b5a2b;border-radius:4px;white-space:nowrap;';
 
   var saveBtn = document.createElement('button');
   saveBtn.textContent = '✓ Create'; saveBtn.title = 'Enter'; saveBtn.style.cssText = _qaBtnPrimary;
@@ -2848,7 +2848,7 @@ function _quickAlertJumpToIndependent() {
 function _showQuickAlertToast(type) {
   var labels = { alarm: '🔔 Alarm', timer: '⏱️ Timer', stopwatch: '⏲️ Stopwatch' };
   var toast = document.createElement('div');
-  toast.style.cssText = 'position:fixed;bottom:20px;right:20px;z-index:99999;background:#fff8e1;border:2px solid #8b4513;border-radius:8px;padding:10px 18px;box-shadow:0 4px 16px rgba(0,0,0,0.3);font-family:"Courier New",monospace;font-size:0.95em;color:#4a2c2a;display:flex;align-items:center;gap:10px;';
+  toast.style.cssText = 'position:fixed;bottom:20px;right:20px;z-index:99999;background:#fff8e1;border:2px solid #8b4513;border-radius:8px;padding:10px 18px;box-shadow:0 4px 16px rgba(0,0,0,0.3);font-family:Lora, Georgia, serif;font-size:0.95em;color:#4a2c2a;display:flex;align-items:center;gap:10px;';
   toast.appendChild(document.createTextNode((labels[type] || 'Alert') + ' created '));
   var viewLink = document.createElement('a'); viewLink.textContent = 'View →'; viewLink.href = '/?tab=Alarms&view=independent';
   viewLink.style.cssText = 'color:#6b4226;font-weight:bold;text-decoration:underline;'; toast.appendChild(viewLink);

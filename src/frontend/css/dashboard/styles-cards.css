@@ -14,7 +14,7 @@
     border-radius: 6px;
     padding: 0.5em 0.7em;
     overflow: hidden;
-    font-family: "Courier New", Courier, monospace;
+    font-family: 'Lora', Georgia, serif;
     cursor: pointer;
     color: #2b1e0f;
     line-height: 1.5;
@@ -231,7 +231,7 @@
     background: rgba(0,0,0,0.06);
     padding: 1px 4px;
     border-radius: 3px;
-    font-family: "Courier New", monospace;
+    font-family: 'Lora', Georgia, serif;
     font-size: 0.9em;
 }
 .notes-view .note-content pre {
@@ -278,7 +278,7 @@
     align-items: center;
     padding: 2px 8px 2px 2px;
     font-size: 0.78em;
-    font-family: "Courier New", Courier, monospace;
+    font-family: 'Lora', Georgia, serif;
     background: #e8dcc8;
     color: #4a2c2a;
     border: 1px solid #c4a882;
@@ -333,7 +333,7 @@
 #global-search-input {
     flex: 1;
     padding: 8px 12px;
-    font-family: "Courier New", Courier, monospace;
+    font-family: 'Lora', Georgia, serif;
     font-size: 1em;
     border: 2px solid #6b4e31;
     border-radius: 4px;
@@ -469,7 +469,7 @@
     border: 1px solid #d4c4a0;
     border-radius: 3px;
     background: rgba(255, 255, 255, 0.5);
-    font-family: 'Courier New', monospace;
+    font-family: 'Lora', Georgia, serif;
 }
 
 .sa-name-input {
@@ -484,7 +484,7 @@
     border: 1px solid #d4c4a0;
     border-radius: 3px;
     background: rgba(255, 255, 255, 0.5);
-    font-family: 'Courier New', monospace;
+    font-family: 'Lora', Georgia, serif;
 }
 
 .sa-dur-input {
@@ -495,7 +495,7 @@
     border: 1px solid #d4c4a0;
     border-radius: 3px;
     background: rgba(255, 255, 255, 0.5);
-    font-family: 'Courier New', monospace;
+    font-family: 'Lora', Georgia, serif;
 }
 
 .sa-btn {
@@ -616,7 +616,7 @@
     border: 2px solid #8b5a2b;
     border-radius: 6px;
     padding: 0.5em 0.7em;
-    font-family: "Courier New", Courier, monospace;
+    font-family: 'Lora', Georgia, serif;
     color: #1a1208;
     line-height: 1.5;
     cursor: pointer;
@@ -698,7 +698,7 @@
 .habit-show-completed {
     padding: 0.4em 0.2em;
     margin-bottom: 0.3em;
-    font-family: "Courier New", Courier, monospace;
+    font-family: 'Lora', Georgia, serif;
     font-size: 0.9em;
     color: #1a1208;
 }

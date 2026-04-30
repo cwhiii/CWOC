@@ -129,7 +129,7 @@ function resetEditorForNewChit() {
 
   // Show weather placeholder for new chits
   const cws = document.getElementById("compactWeatherSection");
-  if (cws) { cws.classList.add('weather-placeholder'); cws.innerHTML = `<div style="padding:8px;font-family:'Courier New',monospace;color:#8b5a2b;font-size:0.85em;opacity:0.7;">📍 Date &amp; location needed for weather</div>`; }
+  if (cws) { cws.classList.add('weather-placeholder'); cws.innerHTML = `<div style="padding:8px;font-family:Lora, Georgia, serif;color:#8b5a2b;font-size:0.85em;opacity:0.7;">📍 Date &amp; location needed for weather</div>`; }
 
   // Auto-apply default saved location to new chits
   loadSavedLocations().then(function () {
@@ -439,11 +439,11 @@ async function loadChitData(chitId) {
     } else if (compactWeatherSection) {
       compactWeatherSection.classList.add('weather-placeholder');
       if (chit.location && !hasDate) {
-        compactWeatherSection.innerHTML = `<div style="padding:8px;font-family:'Courier New',monospace;color:#8b5a2b;font-size:0.85em;opacity:0.7;">📅 Add a date for weather</div>`;
+        compactWeatherSection.innerHTML = `<div style="padding:8px;font-family:Lora, Georgia, serif;color:#8b5a2b;font-size:0.85em;opacity:0.7;">📅 Add a date for weather</div>`;
       } else if (!chit.location && hasDate) {
-        compactWeatherSection.innerHTML = `<div style="padding:8px;font-family:'Courier New',monospace;color:#8b5a2b;font-size:0.85em;opacity:0.7;">📍 Add a location for weather</div>`;
+        compactWeatherSection.innerHTML = `<div style="padding:8px;font-family:Lora, Georgia, serif;color:#8b5a2b;font-size:0.85em;opacity:0.7;">📍 Add a location for weather</div>`;
       } else {
-        compactWeatherSection.innerHTML = `<div style="padding:8px;font-family:'Courier New',monospace;color:#8b5a2b;font-size:0.85em;opacity:0.7;">📍 Date &amp; location needed for weather</div>`;
+        compactWeatherSection.innerHTML = `<div style="padding:8px;font-family:Lora, Georgia, serif;color:#8b5a2b;font-size:0.85em;opacity:0.7;">📍 Date &amp; location needed for weather</div>`;
       }
     }
 

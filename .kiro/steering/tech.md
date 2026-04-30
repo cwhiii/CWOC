@@ -17,7 +17,7 @@ inclusion: always
 - **External APIs**: OpenStreetMap Nominatim (geocoding), Open-Meteo (weather)
 
 ## Visual Theme
-- 1940s parchment/magic aesthetic with brown tones, Courier New font, parchment background textures
+- 1940s parchment/magic aesthetic with brown tones, Lora serif font (self-hosted variable font in `static/fonts/lora/`), parchment background textures
 - CSS variables defined in `frontend/css/shared/shared-page.css` for secondary pages, `frontend/css/dashboard/styles-variables.css` for the dashboard
 
 ## Key Dependencies

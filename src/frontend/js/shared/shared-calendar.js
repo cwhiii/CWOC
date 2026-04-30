@@ -455,7 +455,7 @@ function _showRecurringDragModal(parentId, dateStr, newTimes, virtualChit) {
   overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;';
 
   const modal = document.createElement('div');
-  modal.style.cssText = 'background:#fffaf0;border:2px solid #6b4e31;border-radius:8px;padding:24px;min-width:300px;max-width:380px;font-family:"Courier New",monospace;box-shadow:0 8px 32px rgba(0,0,0,0.3);';
+  modal.style.cssText = 'background:#fffaf0;border:2px solid #6b4e31;border-radius:8px;padding:24px;min-width:300px;max-width:380px;font-family:Lora, Georgia, serif;box-shadow:0 8px 32px rgba(0,0,0,0.3);';
 
   const title = document.createElement('h3');
   title.style.cssText = 'margin:0 0 16px 0;color:#4a2c2a;font-size:1.1em;';

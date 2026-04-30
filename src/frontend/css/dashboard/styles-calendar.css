@@ -309,7 +309,7 @@
     border: 1px solid #6b4e31;
     background: var(--header-bg, #d4c4a0);
     color: #4a2c2a;
-    font-family: 'Courier New', monospace;
+    font-family: 'Lora', Georgia, serif;
     font-size: 1em;
     cursor: pointer;
     flex-shrink: 0;

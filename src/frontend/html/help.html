@@ -389,5 +389,19 @@
     <script src="/frontend/js/shared/shared-qr.js"></script>
     <script src="/frontend/js/shared/shared.js"></script>
     <script src="/frontend/js/pages/shared-page.js"></script>
+    <script>
+    document.querySelectorAll('.help-content h3[id]').forEach(function(h3) {
+        var a = document.createElement('a');
+        a.href = '#';
+        a.className = 'back-to-top';
+        a.innerHTML = '⤴';
+        a.title = 'Back to top';
+        a.addEventListener('click', function(e) {
+            e.preventDefault();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+        h3.appendChild(a);
+    });
+    </script>
 </body>
 </html>

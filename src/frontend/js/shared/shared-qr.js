@@ -76,7 +76,7 @@ function showQRModal(opts) {
 
   // Close button
   var closeBtn = document.createElement('button');
-  closeBtn.style.cssText = 'margin-top:14px;padding:10px 24px;width:100%;min-height:44px;font-size:1em;font-weight:bold;font-family:"Courier New",monospace;background:#8b5a2b;color:#fff8e1;border:1px solid #5a3f2a;border-radius:4px;cursor:pointer;';
+  closeBtn.style.cssText = 'margin-top:14px;padding:10px 24px;width:100%;min-height:44px;font-size:1em;font-weight:bold;font-family:Lora, Georgia, serif;background:#8b5a2b;color:#fff8e1;border:1px solid #5a3f2a;border-radius:4px;cursor:pointer;';
   closeBtn.textContent = '✕ Close';
   closeBtn.addEventListener('click', function () { _closeQR(); });
   modal.appendChild(closeBtn);

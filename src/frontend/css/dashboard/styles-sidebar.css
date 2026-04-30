@@ -73,7 +73,7 @@
 .sidebar-search input {
     width: 100%;
     padding: 8px;
-    font-family: "Courier New", Courier, monospace;
+    font-family: 'Lora', Georgia, serif;
     border: 1px solid #6b4e31;
     background-color: #ffff0;
     border-radius: 3px;
@@ -94,7 +94,7 @@
     width: 100%;
     margin-bottom: 15px;
     padding: 5px;
-    font-family: "Courier New", Courier, monospace;
+    font-family: 'Lora', Georgia, serif;
     border: 1px solid #6b4e31;
     background-color: #ffff0;
     border-radius: 3px;
@@ -142,7 +142,7 @@
 .sidebar-section select {
     width: 100%;
     padding: 6px 8px;
-    font-family: "Courier New", Courier, monospace;
+    font-family: 'Lora', Georgia, serif;
     font-size: 0.9em;
     border: 1px solid #6b4e31;
     background: #f5e6cc;
@@ -199,7 +199,7 @@
 .filter-group input[type="text"] {
     width: 100%;
     padding: 6px 8px;
-    font-family: "Courier New", Courier, monospace;
+    font-family: 'Lora', Georgia, serif;
     border: 1px solid #6b4e31;
     border-radius: 3px;
     background: #f5e6cc;
@@ -227,7 +227,7 @@
     margin-top: 4px;
     padding: 3px 8px;
     font-size: 0.75em;
-    font-family: "Courier New", Courier, monospace;
+    font-family: 'Lora', Georgia, serif;
     background: transparent;
     border: 1px solid rgba(107, 78, 49, 0.3);
     border-radius: 3px;
@@ -266,7 +266,7 @@
 #order-controls select {
     width: 100%;
     padding: 5px;
-    font-family: "Courier New", Courier, monospace;
+    font-family: 'Lora', Georgia, serif;
     border: 1px solid #6b4e31;
     background-color: #fffff0;
     border-radius: 3px;
