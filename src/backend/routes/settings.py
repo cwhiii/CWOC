@@ -192,13 +192,14 @@ def save_settings(settings: Settings, request: Request):
 # ═══════════════════════════════════════════════════════════════════════════
 
 @router.get("/api/standalone-alerts")
-def get_standalone_alerts():
+def get_standalone_alerts(request: Request):
     conn = None
     try:
+        user_id = request.state.user_id
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM standalone_alerts ORDER BY created_datetime DESC")
+        cursor.execute("SELECT * FROM standalone_alerts WHERE owner_id = ? ORDER BY created_datetime DESC", (user_id,))
         rows = cursor.fetchall()
         results = []
         for row in rows:
@@ -218,6 +219,7 @@ def get_standalone_alerts():
 def create_standalone_alert(body: dict, request: Request):
     conn = None
     try:
+        user_id = request.state.user_id
         alert_id = str(uuid4())
         now = datetime.utcnow().isoformat()
         conn = sqlite3.connect(DB_PATH)
@@ -226,8 +228,8 @@ def create_standalone_alert(body: dict, request: Request):
         name = body.get("name", "")
         data = {k: v for k, v in body.items() if k not in ("id", "created_datetime", "modified_datetime")}
         cursor.execute(
-            "INSERT INTO standalone_alerts (id, _type, name, data, created_datetime, modified_datetime) VALUES (?,?,?,?,?,?)",
-            (alert_id, _type, name, serialize_json_field(data), now, now)
+            "INSERT INTO standalone_alerts (id, _type, name, data, created_datetime, modified_datetime, owner_id) VALUES (?,?,?,?,?,?,?)",
+            (alert_id, _type, name, serialize_json_field(data), now, now, user_id)
         )
         # Audit logging
         try:
@@ -252,11 +254,12 @@ def create_standalone_alert(body: dict, request: Request):
 def update_standalone_alert(alert_id: str, body: dict, request: Request):
     conn = None
     try:
+        user_id = request.state.user_id
         now = datetime.utcnow().isoformat()
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
-        # Capture old state for audit diff
-        cursor.execute("SELECT * FROM standalone_alerts WHERE id=?", (alert_id,))
+        # Capture old state for audit diff — verify ownership
+        cursor.execute("SELECT * FROM standalone_alerts WHERE id=? AND owner_id=?", (alert_id, user_id))
         old_row = cursor.fetchone()
         old_data_str = None
         if old_row:
@@ -269,8 +272,8 @@ def update_standalone_alert(alert_id: str, body: dict, request: Request):
         data = {k: v for k, v in body.items() if k not in ("id", "created_datetime", "modified_datetime")}
         new_data_str = serialize_json_field(data)
         cursor.execute(
-            "UPDATE standalone_alerts SET _type=?, name=?, data=?, modified_datetime=? WHERE id=?",
-            (_type, name, new_data_str, now, alert_id)
+            "UPDATE standalone_alerts SET _type=?, name=?, data=?, modified_datetime=? WHERE id=? AND owner_id=?",
+            (_type, name, new_data_str, now, alert_id, user_id)
         )
         if cursor.rowcount == 0:
             raise HTTPException(status_code=404, detail="Standalone alert not found")
@@ -300,15 +303,16 @@ def update_standalone_alert(alert_id: str, body: dict, request: Request):
 def delete_standalone_alert(alert_id: str, request: Request):
     conn = None
     try:
+        user_id = request.state.user_id
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
-        # Get name for audit summary before deleting
-        cursor.execute("SELECT _type, name FROM standalone_alerts WHERE id=?", (alert_id,))
+        # Get name for audit summary before deleting — verify ownership
+        cursor.execute("SELECT _type, name FROM standalone_alerts WHERE id=? AND owner_id=?", (alert_id, user_id))
         row = cursor.fetchone()
         summary = None
         if row:
             summary = f"{row[0]}: {row[1]}" if row[1] else row[0]
-        cursor.execute("DELETE FROM standalone_alerts WHERE id=?", (alert_id,))
+        cursor.execute("DELETE FROM standalone_alerts WHERE id=? AND owner_id=?", (alert_id, user_id))
         if cursor.rowcount == 0:
             raise HTTPException(status_code=404, detail="Standalone alert not found")
         # Audit logging
@@ -334,16 +338,20 @@ def delete_standalone_alert(alert_id: str, request: Request):
 # ═══════════════════════════════════════════════════════════════════════════
 
 @router.get("/api/alert-state")
-def get_alert_states():
-    """Get all non-expired alert states (dismissed/snoozed)."""
+def get_alert_states(request: Request):
+    """Get all non-expired alert states (dismissed/snoozed) for the authenticated user."""
     conn = None
     try:
+        user_id = request.state.user_id
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         now = datetime.utcnow().isoformat()
-        # Return dismissed (no expiry) and snoozed (not yet expired)
-        cursor.execute("SELECT * FROM alert_state WHERE state = 'dismissed' OR (state = 'snoozed' AND until_ts > ?)", (now,))
+        # Return dismissed (no expiry) and snoozed (not yet expired) for this user
+        cursor.execute(
+            "SELECT * FROM alert_state WHERE owner_id = ? AND (state = 'dismissed' OR (state = 'snoozed' AND until_ts > ?))",
+            (user_id, now)
+        )
         return [dict(row) for row in cursor.fetchall()]
     except Exception as e:
         logger.error(f"Error fetching alert states: {str(e)}")
@@ -354,10 +362,11 @@ def get_alert_states():
 
 
 @router.post("/api/alert-state")
-def set_alert_state(body: dict):
-    """Set dismiss/snooze state for an alert key."""
+def set_alert_state(body: dict, request: Request):
+    """Set dismiss/snooze state for an alert key, scoped to the authenticated user."""
     conn = None
     try:
+        user_id = request.state.user_id
         alert_key = body.get("alert_key")
         state = body.get("state", "dismissed")  # 'dismissed' or 'snoozed'
         until_ts = body.get("until_ts")
@@ -366,12 +375,13 @@ def set_alert_state(body: dict):
         now = datetime.utcnow().isoformat()
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
+        # Delete any existing state for this key+user, then insert
+        cursor.execute("DELETE FROM alert_state WHERE alert_key = ? AND owner_id = ?", (alert_key, user_id))
         cursor.execute(
-            "INSERT OR REPLACE INTO alert_state (alert_key, state, until_ts, updated_at) VALUES (?,?,?,?)",
-            (alert_key, state, until_ts, now)
+            "INSERT INTO alert_state (alert_key, state, until_ts, updated_at, owner_id) VALUES (?,?,?,?,?)",
+            (alert_key, state, until_ts, now, user_id)
         )
         conn.commit()
-        # Broadcast via WebSocket to all connected clients
         return {"alert_key": alert_key, "state": state, "until_ts": until_ts}
     except HTTPException:
         raise

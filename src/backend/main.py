@@ -83,6 +83,7 @@ from src.backend.migrations import (
     migrate_add_border_color_settings,
     migrate_add_multi_user,
     migrate_add_user_profile_image,
+    migrate_add_alerts_owner_id,
 )
 
 # Initialize database and run all migrations (same order as before)
@@ -109,6 +110,7 @@ migrate_add_habits_fields()
 migrate_add_border_color_settings()
 migrate_add_multi_user()
 migrate_add_user_profile_image()
+migrate_add_alerts_owner_id()
 seed_version_info()
 
 

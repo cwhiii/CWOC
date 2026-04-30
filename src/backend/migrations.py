@@ -687,3 +687,42 @@ def migrate_add_user_profile_image():
     finally:
         if conn:
             conn.close()
+
+
+# ── Standalone alerts & alert state: add owner_id ────────────────────────
+
+def migrate_add_alerts_owner_id():
+    """Add owner_id column to standalone_alerts and alert_state tables,
+    and assign existing rows to the default admin user."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        # ── standalone_alerts ──
+        cols = [row[1] for row in cursor.execute("PRAGMA table_info(standalone_alerts)").fetchall()]
+        if "owner_id" not in cols:
+            cursor.execute("ALTER TABLE standalone_alerts ADD COLUMN owner_id TEXT")
+            # Assign existing alerts to the first admin user
+            admin_row = cursor.execute(
+                "SELECT id FROM users WHERE is_admin = 1 AND is_active = 1 ORDER BY created_datetime ASC LIMIT 1"
+            ).fetchone()
+            if admin_row:
+                cursor.execute("UPDATE standalone_alerts SET owner_id = ? WHERE owner_id IS NULL", (admin_row[0],))
+            logger.info("Added owner_id column to standalone_alerts table")
+
+        # ── alert_state ──
+        cols2 = [row[1] for row in cursor.execute("PRAGMA table_info(alert_state)").fetchall()]
+        if "owner_id" not in cols2:
+            cursor.execute("ALTER TABLE alert_state ADD COLUMN owner_id TEXT")
+            if admin_row:
+                cursor.execute("UPDATE alert_state SET owner_id = ? WHERE owner_id IS NULL", (admin_row[0],))
+            logger.info("Added owner_id column to alert_state table")
+
+        conn.commit()
+    except Exception as e:
+        logger.error(f"Error in migrate_add_alerts_owner_id: {str(e)}")
+        raise
+    finally:
+        if conn:
+            conn.close()
