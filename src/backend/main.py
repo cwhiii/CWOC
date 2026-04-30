@@ -85,6 +85,7 @@ from src.backend.migrations import (
     migrate_add_user_profile_image,
     migrate_add_alerts_owner_id,
     migrate_add_login_message,
+    migrate_add_instance_name,
 )
 
 # Initialize database and run all migrations (same order as before)
@@ -113,6 +114,7 @@ migrate_add_multi_user()
 migrate_add_user_profile_image()
 migrate_add_alerts_owner_id()
 migrate_add_login_message()
+migrate_add_instance_name()
 seed_version_info()
 
 

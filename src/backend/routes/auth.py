@@ -505,12 +505,16 @@ def delete_profile_image(request: Request):
 
 @auth_router.get("/login-message")
 def get_login_message():
-    """Return the login welcome message. Public endpoint (no auth required)."""
+    """Return the login welcome message and instance name. Public endpoint (no auth required)."""
     conn = None
     try:
         conn = sqlite3.connect(DB_PATH)
-        row = conn.execute("SELECT message FROM login_message WHERE id = 1").fetchone()
-        return {"message": row[0] if row else ""}
+        conn.row_factory = sqlite3.Row
+        row = conn.execute("SELECT message, instance_name FROM login_message WHERE id = 1").fetchone()
+        return {
+            "message": row["message"] if row else "",
+            "instance_name": row["instance_name"] if row else ""
+        }
     except Exception as e:
         logger.error(f"Get login message error: {e}")
         return {"message": ""}
@@ -535,10 +539,11 @@ def save_login_message(body: dict, request: Request):
         if not user or not user["is_admin"]:
             raise HTTPException(status_code=403, detail="Admin access required")
         message = body.get("message", "")
+        instance_name = body.get("instance_name", "")
         now = datetime.utcnow().isoformat() + "Z"
-        conn.execute("UPDATE login_message SET message = ?, modified_datetime = ? WHERE id = 1", (message, now))
+        conn.execute("UPDATE login_message SET message = ?, instance_name = ?, modified_datetime = ? WHERE id = 1", (message, instance_name, now))
         conn.commit()
-        return {"message": message}
+        return {"message": message, "instance_name": instance_name}
     except HTTPException:
         raise
     except Exception as e:

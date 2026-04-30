@@ -38,9 +38,11 @@
             color: #1a1208;
             min-height: 100vh;
             display: flex;
+            flex-direction: column;
             justify-content: center;
             align-items: center;
             padding: 1em;
+            gap: 16px;
         }
 
         /* ── Login Card ────────────────────────────────────────────────────── */
@@ -70,9 +72,11 @@
             margin-bottom: 24px;
         }
         .login-header img {
-            width: 64px;
-            height: 64px;
+            width: 80px;
+            height: 80px;
             margin-bottom: 10px;
+            border-radius: 50%;
+            border: 1px solid #5a3f2a;
         }
         .login-header h1 {
             font-size: 22px;
@@ -164,19 +168,40 @@
             display: block;
         }
 
-        /* ── Welcome Message ──────────────────────────────────────────────── */
+        /* ── Instance Name ─────────────────────────────────────────────────── */
+        .login-instance-name {
+            text-align: center;
+            font-size: 22px;
+            color: #6b4e31;
+            margin-top: 12px;
+            padding-top: 10px;
+            border-top: 1px solid rgba(139, 90, 43, 0.2);
+            font-style: italic;
+        }
+
+        /* ── Welcome Message (styled like login card) ─────────────────────── */
         .login-welcome-message {
             background: linear-gradient(to bottom, #fff8e1, #f5e6cc);
-            border: 1px solid rgba(139, 90, 43, 0.3);
-            border-radius: 8px;
-            padding: 14px 18px;
+            border: 2px solid #8b5a2b;
+            border-radius: 10px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+            padding: 24px 28px;
             max-width: 380px;
             width: 100%;
-            margin: 0 auto 16px;
             font-size: 14px;
-            line-height: 1.5;
+            line-height: 1.6;
             color: #1a1208;
             box-sizing: border-box;
+            position: relative;
+            overflow: hidden;
+        }
+        .login-welcome-message::before {
+            content: "";
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle, rgba(255, 215, 0, 0.1), transparent);
+            pointer-events: none;
+            border-radius: 10px;
         }
         .login-welcome-message p { margin: 0 0 8px; }
         .login-welcome-message p:last-child { margin-bottom: 0; }
@@ -194,8 +219,6 @@
     </style>
 </head>
 <body>
-
-    <div id="login-welcome-message" class="login-welcome-message" style="display:none;"></div>
 
     <div class="login-card">
         <div class="login-header">
@@ -218,22 +241,30 @@
 
             <button type="submit" class="login-btn" id="loginBtn">Log In</button>
         </form>
+        <div id="login-instance-name" class="login-instance-name" style="display:none;"></div>
     </div>
+
+    <div id="login-welcome-message" class="login-welcome-message" style="display:none;"></div>
 
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script>
-        // ── Load welcome message ──
+        // ── Load welcome message and instance name ──
         (function () {
             fetch('/api/auth/login-message')
                 .then(function (r) { return r.json(); })
                 .then(function (data) {
-                    var div = document.getElementById('login-welcome-message');
                     if (data && data.message && data.message.trim()) {
+                        var div = document.getElementById('login-welcome-message');
                         div.innerHTML = marked.parse(data.message);
                         div.style.display = '';
                     }
+                    if (data && data.instance_name && data.instance_name.trim()) {
+                        var nameDiv = document.getElementById('login-instance-name');
+                        nameDiv.textContent = data.instance_name;
+                        nameDiv.style.display = '';
+                    }
                 })
-                .catch(function () { /* ignore — hide div */ });
+                .catch(function () { /* ignore */ });
         })();
     </script>
     <script>

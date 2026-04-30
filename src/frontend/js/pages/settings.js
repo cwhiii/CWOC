@@ -1705,6 +1705,25 @@ class SettingsManager {
     try {
       const settingsToSave = this.gatherSettings();
       await SettingsService.saveAll(settingsToSave);
+
+      // Also save login message and instance name if admin
+      var loginMsgInput = document.getElementById('login-message-input');
+      var instanceNameInput = document.getElementById('instance-name-input');
+      if (loginMsgInput && typeof isAdmin === 'function' && isAdmin()) {
+        try {
+          await fetch('/api/auth/login-message', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              message: loginMsgInput.value,
+              instance_name: instanceNameInput ? instanceNameInput.value : ''
+            })
+          });
+        } catch (e) {
+          console.error('Failed to save login message:', e);
+        }
+      }
+
       // Reload from API to get canonical saved state (avoids Pydantic serialization quirks)
       this.settings = await SettingsService.loadAll();
       if (Array.isArray(this.settings.custom_colors)) {
@@ -2515,4 +2534,59 @@ function _gatherDefaultNotifList(type) {
   });
   console.debug('_gatherDefaultNotifList(' + type + '): found ' + rows.length + ' rows, gathered ' + result.length + ' items', result);
   return result;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Login Message — load, preview, dirty tracking (admin only)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Load the current login message and instance name into the form fields.
+ * Called after auth resolves, only for admin users.
+ */
+function _loadLoginMessage() {
+  var textarea = document.getElementById('login-message-input');
+  var preview = document.getElementById('login-message-preview');
+  var instanceInput = document.getElementById('instance-name-input');
+  if (!textarea) return;
+
+  fetch('/api/auth/login-message')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data && data.message) {
+        textarea.value = data.message;
+        if (preview && typeof marked !== 'undefined') {
+          preview.innerHTML = marked.parse(data.message);
+        }
+      }
+      if (data && data.instance_name && instanceInput) {
+        instanceInput.value = data.instance_name;
+      }
+    })
+    .catch(function(e) { console.error('Failed to load login message:', e); });
+
+  // Live preview + dirty tracking on textarea input
+  textarea.addEventListener('input', function() {
+    if (preview && typeof marked !== 'undefined') {
+      preview.innerHTML = marked.parse(textarea.value);
+    }
+    setSaveButtonUnsaved();
+  });
+
+  // Dirty tracking on instance name input
+  if (instanceInput) {
+    instanceInput.addEventListener('input', function() {
+      setSaveButtonUnsaved();
+    });
+  }
+}
+
+// Initialize login message after auth resolves (admin only)
+if (typeof waitForAuth === 'function') {
+  waitForAuth().then(function(user) {
+    if (user && user.is_admin) {
+      _loadLoginMessage();
+    }
+  });
 }

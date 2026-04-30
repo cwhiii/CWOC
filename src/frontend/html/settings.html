@@ -484,7 +484,7 @@
                         </div>
                     </div>
                     <div class="setting-group">
-                        <h3>📅 Period Options</h3>
+                        <h3>📅 Time Periods</h3>
 
                         <div class="setting-inline">
                             <label for="week-start-day">Week Starts On</label>
@@ -577,6 +577,26 @@
                         </div>
                     </div>
                     <div class="setting-group">
+                        <h3>🕐 Clocks</h3>
+                        <button onclick="toggleOrientation()" class="standard-button" style="margin-bottom:10px">🔄 Orientation</button>
+                        <div class="clocks-container" id="clocks-container">
+                            <div class="time-format-grid" id="time-format-grid"></div>
+                            <div class="inactive-zone" id="inactive-zone"></div>
+                        </div>
+                    </div>
+                    <div class="setting-group">
+                        <h3>Default Filters</h3>
+                        <div class="filter-inputs">
+                            <div class="filter-item"><span>📅 Calendar</span><input type="text" id="filter-calendar" placeholder="Filter text" class="filter-input" /></div>
+                            <div class="filter-item"><span>✓ Checklists</span><input type="text" id="filter-checklists" placeholder="Filter text" class="filter-input" /></div>
+                            <div class="filter-item"><span>⏰ Alarms</span><input type="text" id="filter-alarms" placeholder="Filter text" class="filter-input" /></div>
+                            <div class="filter-item"><span>📊 Projects</span><input type="text" id="filter-projects" placeholder="Filter text" class="filter-input" /></div>
+                            <div class="filter-item"><span>📋 Tasks</span><input type="text" id="filter-tasks" placeholder="Filter text" class="filter-input" /></div>
+                            <div class="filter-item"><span>⚕️ Indicators</span><input type="text" id="filter-indicators" placeholder="Filter text" class="filter-input" /></div>
+                            <div class="filter-item"><span>📝 Notes</span><input type="text" id="filter-notes" placeholder="Filter text" class="filter-input" /></div>
+                        </div>
+                    </div>
+                    <div class="setting-group">
                         <h3>🏷️ Tag Editor</h3>
                         <div style="display:flex;gap:6px;align-items:center;margin-bottom:10px;">
                             <input type="text" id="new-tag" placeholder="New tag name" onkeypress="handleTagInput(event)" style="flex:1;min-width:0;" />
@@ -623,26 +643,6 @@
                         </div>
                     </div>
                     <div class="setting-group">
-                        <h3>🕐 Clocks</h3>
-                        <button onclick="toggleOrientation()" class="standard-button" style="margin-bottom:10px">🔄 Orientation</button>
-                        <div class="clocks-container" id="clocks-container">
-                            <div class="time-format-grid" id="time-format-grid"></div>
-                            <div class="inactive-zone" id="inactive-zone"></div>
-                        </div>
-                    </div>
-                    <div class="setting-group">
-                        <h3>Default Filters</h3>
-                        <div class="filter-inputs">
-                            <div class="filter-item"><span>📅 Calendar</span><input type="text" id="filter-calendar" placeholder="Filter text" class="filter-input" /></div>
-                            <div class="filter-item"><span>✓ Checklists</span><input type="text" id="filter-checklists" placeholder="Filter text" class="filter-input" /></div>
-                            <div class="filter-item"><span>⏰ Alarms</span><input type="text" id="filter-alarms" placeholder="Filter text" class="filter-input" /></div>
-                            <div class="filter-item"><span>📊 Projects</span><input type="text" id="filter-projects" placeholder="Filter text" class="filter-input" /></div>
-                            <div class="filter-item"><span>📋 Tasks</span><input type="text" id="filter-tasks" placeholder="Filter text" class="filter-input" /></div>
-                            <div class="filter-item"><span>⚕️ Indicators</span><input type="text" id="filter-indicators" placeholder="Filter text" class="filter-input" /></div>
-                            <div class="filter-item"><span>📝 Notes</span><input type="text" id="filter-notes" placeholder="Filter text" class="filter-input" /></div>
-                        </div>
-                    </div>
-                    <div class="setting-group">
                         <h3>🎯 Display Options</h3>
 
                         <label class="setting-subheader">Visual Indicators</label>
@@ -682,6 +682,14 @@
                         <div class="setting-group">
                             <h3>Admin</h3>
                             <button onclick="window.location.href='/user-admin'" class="standard-button" style="width:100%;">👥 Manage Users</button>
+
+                            <label class="setting-subheader" style="margin-top:14px;">Instance Name</label>
+                            <input type="text" id="instance-name-input" placeholder="e.g. The Holeman Household" style="width:100%;box-sizing:border-box;font-family:'Lora',Georgia,serif;font-size:0.95em;border:1px solid #8b5a2b;border-radius:5px;padding:8px;background:#f5e6cc;margin-bottom:10px;" />
+
+                            <label class="setting-subheader">Welcome Message</label>
+                            <p class="setting-hint">Supports Markdown formatting. Shown on the login page.</p>
+                            <textarea id="login-message-input" rows="4" placeholder="Welcome message (supports Markdown)..." style="width:100%;box-sizing:border-box;font-family:'Lora',Georgia,serif;font-size:0.95em;border:1px solid #8b5a2b;border-radius:5px;padding:8px;background:#f5e6cc;resize:vertical;"></textarea>
+                            <div id="login-message-preview" style="margin-top:8px;padding:10px;background:rgba(139,90,43,0.05);border:1px solid rgba(139,90,43,0.15);border-radius:6px;min-height:2em;"></div>
                         </div>
                         <div class="setting-group">
                             <h3>🗄️ Data</h3>
@@ -737,12 +745,6 @@
                             <button id="upgrade-btn" class="standard-button" style="width:100%;">⬆️ Upgrade</button>
                             <button id="upgrade-reopen-btn" class="standard-button" style="width:100%;display:none;">🔄 Upgrade in progress</button>
                             <button id="update-log-btn" class="standard-button" style="width:100%;margin-top:6px;" onclick="loadLastLog()">📄 Show Log</button>
-                        </div>
-                        <div class="setting-group">
-                            <h3>📝 Login Message</h3>
-                            <textarea id="login-message-input" rows="4" placeholder="Welcome message (supports Markdown)..." style="width:100%;box-sizing:border-box;font-family:'Lora',Georgia,serif;font-size:0.95em;border:1px solid #8b5a2b;border-radius:5px;padding:8px;background:#f5e6cc;resize:vertical;"></textarea>
-                            <div id="login-message-preview" style="margin-top:8px;padding:10px;background:rgba(139,90,43,0.05);border:1px solid rgba(139,90,43,0.15);border-radius:6px;min-height:2em;"></div>
-                            <button class="standard-button" style="margin-top:8px;" onclick="_saveLoginMessage()">💾 Save Message</button>
                         </div>
                     </div>
                 </div>

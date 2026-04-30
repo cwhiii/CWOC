@@ -753,3 +753,24 @@ def migrate_add_login_message():
     finally:
         if conn:
             conn.close()
+
+
+# ── Login message: add instance_name column ──────────────────────────────
+
+def migrate_add_instance_name():
+    """Add instance_name column to login_message table."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cols = [row[1] for row in cursor.execute("PRAGMA table_info(login_message)").fetchall()]
+        if "instance_name" not in cols:
+            cursor.execute("ALTER TABLE login_message ADD COLUMN instance_name TEXT DEFAULT ''")
+            logger.info("Added instance_name column to login_message table")
+        conn.commit()
+    except Exception as e:
+        logger.error(f"Error in migrate_add_instance_name: {str(e)}")
+        raise
+    finally:
+        if conn:
+            conn.close()
