@@ -1,0 +1,7 @@
+Archive/
+.DS_Store
+*.pyc
+__pycache__/
+.venv/
+.pytest_cache/
+*.rsls
