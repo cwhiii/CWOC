@@ -663,3 +663,27 @@ def migrate_add_multi_user():
     finally:
         if conn:
             conn.close()
+
+
+# ── User Profile Image: migration ────────────────────────────────────────
+
+def migrate_add_user_profile_image():
+    """Add profile_image_url column to users table if it doesn't exist."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        # Check if column already exists
+        cols = [row[1] for row in cursor.execute("PRAGMA table_info(users)").fetchall()]
+        if "profile_image_url" not in cols:
+            cursor.execute("ALTER TABLE users ADD COLUMN profile_image_url TEXT")
+            logger.info("Added profile_image_url column to users table")
+
+        conn.commit()
+    except Exception as e:
+        logger.error(f"Error in migrate_add_user_profile_image: {str(e)}")
+        raise
+    finally:
+        if conn:
+            conn.close()

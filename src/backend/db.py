@@ -28,6 +28,10 @@ _update_lock = asyncio.Lock()
 CONTACT_IMAGES_DIR = "/app/data/contacts/profile_pictures/"
 os.makedirs(CONTACT_IMAGES_DIR, exist_ok=True)
 
+# Create directory for user profile images
+USER_IMAGES_DIR = "/app/data/users/profile_pictures/"
+os.makedirs(USER_IMAGES_DIR, exist_ok=True)
+
 
 def compute_display_name(contact) -> str:
     """Concatenate prefix + given_name + middle_names + surname + suffix into a display name."""

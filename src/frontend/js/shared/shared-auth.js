@@ -26,7 +26,7 @@ var _cwocAuthReady = null; // Promise that resolves when auth check completes
  * Returns the cached authenticated user object, or null if not yet loaded
  * or if the auth check failed.
  *
- * Shape: { user_id, username, display_name, email, is_admin }
+ * Shape: { user_id, username, display_name, email, is_admin, profile_image_url }
  */
 function getCurrentUser() {
   return _cwocCurrentUser;

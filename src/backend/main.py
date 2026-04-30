@@ -82,6 +82,7 @@ from src.backend.migrations import (
     migrate_add_habits_fields,
     migrate_add_border_color_settings,
     migrate_add_multi_user,
+    migrate_add_user_profile_image,
 )
 
 # Initialize database and run all migrations (same order as before)
@@ -107,6 +108,7 @@ migrate_contact_images_to_data()
 migrate_add_habits_fields()
 migrate_add_border_color_settings()
 migrate_add_multi_user()
+migrate_add_user_profile_image()
 seed_version_info()
 
 
@@ -147,6 +149,9 @@ app.mount("/static", StaticFiles(directory="/app/src/static"), name="static")
 
 # Serve contact profile pictures from data/contacts/
 app.mount("/data/contacts", StaticFiles(directory="/app/data/contacts"), name="data_contacts")
+
+# Serve user profile pictures from data/users/
+app.mount("/data/users", StaticFiles(directory="/app/data/users"), name="data_users")
 
 
 # ═══════════════════════════════════════════════════════════════════════════

@@ -154,6 +154,8 @@ window.CwocSaveSystem = CwocSaveSystem;
   });
 
   // ── Profile Menu (rightmost element — profile image with dropdown) ──
+  var currentUser = (typeof getCurrentUser === 'function') ? getCurrentUser() : null;
+
   var profileMenuWrap = document.createElement('div');
   profileMenuWrap.className = 'cwoc-profile-menu';
   profileMenuWrap.id = 'cwoc-profile-menu';
@@ -357,7 +359,7 @@ window.CwocSaveSystem = CwocSaveSystem;
       activeOthers.forEach(function(u) {
         var item = document.createElement('div');
         item.className = 'cwoc-switch-user-item';
-        item.innerHTML = '<img src="/static/default-avatar.svg" class="cwoc-switch-user-avatar" alt="" />' +
+        item.innerHTML = '<img src="' + (u.profile_image_url ? _escHtml(u.profile_image_url) : '/static/default-avatar.svg') + '" class="cwoc-switch-user-avatar" alt="" />' +
           '<span class="cwoc-switch-user-name">' + _escHtml(u.display_name) + '</span>' +
           '<span class="cwoc-switch-user-username">(' + _escHtml(u.username) + ')</span>';
         item.onclick = function(e) {
@@ -470,16 +472,19 @@ window.CwocSaveSystem = CwocSaveSystem;
   window._cwocToggleProfileMenu = _toggleProfileMenu;
   window._cwocLogout = _logout;
 
-  // Auto-initialize profile button tooltip with username on any page
+  // Auto-initialize profile button tooltip and image on any page
   function _initProfileTooltip() {
     var btn = document.getElementById('cwoc-profile-btn');
+    var img = document.getElementById('cwoc-profile-img');
     if (!btn) return;
     var user = (typeof getCurrentUser === 'function') ? getCurrentUser() : null;
     if (user) {
       btn.title = user.username;
+      if (user.profile_image_url && img) img.src = user.profile_image_url;
     } else if (typeof waitForAuth === 'function') {
       waitForAuth().then(function(u) {
         if (u && btn) btn.title = u.username;
+        if (u && u.profile_image_url && img) img.src = u.profile_image_url;
       });
     }
   }

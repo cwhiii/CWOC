@@ -592,15 +592,18 @@
         /* Populate profile menu button tooltip with username once auth is ready */
         (function() {
             var profileBtn = document.getElementById('cwoc-profile-btn');
+            var profileImg = document.getElementById('cwoc-profile-img');
             if (!profileBtn) return;
             var user = (typeof getCurrentUser === 'function') ? getCurrentUser() : null;
             if (user) {
                 profileBtn.title = user.username;
+                if (user.profile_image_url && profileImg) profileImg.src = user.profile_image_url;
                 if (user.is_admin) _showAdminNavItems();
             } else if (typeof waitForAuth === 'function') {
                 waitForAuth().then(function(u) {
                     if (u) {
                         profileBtn.title = u.username;
+                        if (u.profile_image_url && profileImg) profileImg.src = u.profile_image_url;
                         if (u.is_admin) _showAdminNavItems();
                     }
                 });

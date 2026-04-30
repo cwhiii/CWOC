@@ -6,17 +6,18 @@ in-memory dictionary keyed by username.
 """
 
 import logging
+import os
 import sqlite3
 import time
 import uuid
 from datetime import datetime, timedelta
 from typing import Dict, List
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, UploadFile, File
 from fastapi.responses import JSONResponse
 
 from src.backend.auth_utils import hash_password, verify_password
-from src.backend.db import DB_PATH
+from src.backend.db import DB_PATH, USER_IMAGES_DIR
 from src.backend.models import LoginRequest, PasswordChange, ProfileUpdate
 
 
@@ -194,7 +195,7 @@ def get_me(request: Request):
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
         row = conn.execute(
-            "SELECT id, username, display_name, email, is_admin "
+            "SELECT id, username, display_name, email, is_admin, profile_image_url "
             "FROM users WHERE id = ?",
             (user_id,),
         ).fetchone()
@@ -208,6 +209,7 @@ def get_me(request: Request):
             "display_name": row["display_name"],
             "email": row["email"],
             "is_admin": bool(row["is_admin"]),
+            "profile_image_url": row["profile_image_url"],
         }
     except HTTPException:
         raise
@@ -398,16 +400,102 @@ def list_switchable_users(request: Request):
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
-            "SELECT id, username, display_name FROM users WHERE is_active = 1 ORDER BY display_name ASC"
+            "SELECT id, username, display_name, profile_image_url FROM users WHERE is_active = 1 ORDER BY display_name ASC"
         ).fetchall()
 
         return [
-            {"id": row["id"], "username": row["username"], "display_name": row["display_name"]}
+            {"id": row["id"], "username": row["username"], "display_name": row["display_name"], "profile_image_url": row["profile_image_url"]}
             for row in rows
         ]
     except Exception as e:
         logger.error(f"List switchable users error: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
+    finally:
+        if conn:
+            conn.close()
+
+
+# ── POST /api/auth/profile-image ──────────────────────────────────────────
+
+@auth_router.post("/profile-image")
+async def upload_profile_image(request: Request, file: UploadFile = File(...)):
+    """Upload a profile image for the authenticated user. Stores in data/users/profile_pictures/."""
+    user_id = getattr(request.state, "user_id", None)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    allowed = {"image/jpeg", "image/png", "image/gif", "image/webp"}
+    if file.content_type not in allowed:
+        raise HTTPException(status_code=400, detail="Only JPEG, PNG, GIF, and WebP images are allowed")
+
+    ext_map = {"image/jpeg": ".jpg", "image/png": ".png", "image/gif": ".gif", "image/webp": ".webp"}
+    ext = ext_map.get(file.content_type, ".jpg")
+    filename = f"{user_id}{ext}"
+    filepath = os.path.join(USER_IMAGES_DIR, filename)
+
+    # Remove old images with different extensions
+    for old_ext in ext_map.values():
+        old_path = os.path.join(USER_IMAGES_DIR, f"{user_id}{old_ext}")
+        if os.path.exists(old_path) and old_path != filepath:
+            os.remove(old_path)
+
+    conn = None
+    try:
+        contents = await file.read()
+        with open(filepath, "wb") as f:
+            f.write(contents)
+
+        image_url = f"/data/users/profile_pictures/{filename}"
+
+        conn = sqlite3.connect(DB_PATH)
+        conn.execute(
+            "UPDATE users SET profile_image_url = ?, modified_datetime = ? WHERE id = ?",
+            (image_url, datetime.utcnow().isoformat() + "Z", user_id),
+        )
+        conn.commit()
+
+        return {"profile_image_url": image_url}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Profile image upload error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to upload image")
+    finally:
+        if conn:
+            conn.close()
+
+
+# ── DELETE /api/auth/profile-image ────────────────────────────────────────
+
+@auth_router.delete("/profile-image")
+def delete_profile_image(request: Request):
+    """Remove the authenticated user's profile image."""
+    user_id = getattr(request.state, "user_id", None)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        row = conn.execute("SELECT profile_image_url FROM users WHERE id = ?", (user_id,)).fetchone()
+
+        if row and row["profile_image_url"]:
+            # Delete the file
+            filepath = "/app" + row["profile_image_url"]
+            if os.path.exists(filepath):
+                os.remove(filepath)
+
+        conn.execute(
+            "UPDATE users SET profile_image_url = NULL, modified_datetime = ? WHERE id = ?",
+            (datetime.utcnow().isoformat() + "Z", user_id),
+        )
+        conn.commit()
+
+        return {"message": "Profile image removed"}
+    except Exception as e:
+        logger.error(f"Profile image delete error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to remove image")
     finally:
         if conn:
             conn.close()

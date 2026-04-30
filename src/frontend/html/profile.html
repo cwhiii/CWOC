@@ -99,6 +99,58 @@
                 color: #8b1a1a;
                 display: block;
             }
+
+            /* Profile image section */
+            .profile-image-section {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 12px;
+            }
+
+            .profile-image-preview {
+                position: relative;
+                width: 120px;
+                height: 120px;
+                border-radius: 50%;
+                overflow: hidden;
+                cursor: pointer;
+                border: 3px solid rgba(139, 90, 43, 0.4);
+                transition: border-color 0.2s;
+            }
+
+            .profile-image-preview:hover {
+                border-color: #8b5a2b;
+            }
+
+            .profile-image-large {
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
+            }
+
+            .profile-image-overlay {
+                position: absolute;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                background: rgba(0, 0, 0, 0.5);
+                color: white;
+                text-align: center;
+                padding: 4px 0;
+                font-size: 0.8em;
+                opacity: 0;
+                transition: opacity 0.2s;
+            }
+
+            .profile-image-preview:hover .profile-image-overlay {
+                opacity: 1;
+            }
+
+            .profile-image-actions {
+                display: flex;
+                gap: 8px;
+            }
         </style>
     </head>
     <body data-page-title="Profile" data-page-icon="👤">
@@ -115,6 +167,23 @@
             <div id="profile-message" class="profile-message"></div>
 
             <div class="settings-grid">
+                <!-- Profile Image Section -->
+                <div class="setting-group">
+                    <h3>📷 Profile Image</h3>
+                    <div class="profile-image-section">
+                        <div class="profile-image-preview" id="profile-image-preview" onclick="document.getElementById('profile-image-input').click();" title="Click to change image">
+                            <img id="profile-image-display" src="/static/default-avatar.svg" alt="Profile" class="profile-image-large" />
+                            <div class="profile-image-overlay">📷 Change</div>
+                        </div>
+                        <input type="file" id="profile-image-input" accept="image/jpeg,image/png,image/gif,image/webp" style="display:none;" />
+                        <div class="profile-image-actions">
+                            <button class="standard-button" onclick="document.getElementById('profile-image-input').click();">📷 Upload Image</button>
+                            <button class="standard-button" id="remove-profile-image-btn" style="display:none;" onclick="_removeProfileImage();">🗑️ Remove</button>
+                        </div>
+                        <div id="profile-image-message" class="profile-message"></div>
+                    </div>
+                </div>
+
                 <!-- Profile Info Section -->
                 <div class="setting-group">
                     <h3>👤 Account Info</h3>

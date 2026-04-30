@@ -5,7 +5,6 @@
    and password change. Uses CwocSaveSystem for save/cancel button state.
    
    Depends on: shared-auth.js (getCurrentUser, waitForAuth),
-               shared-utils.js (setSaveButtonUnsaved, setSaveButtonSaved),
                shared-page.js (CwocSaveSystem)
    ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -110,8 +109,19 @@ async function _loadProfile() {
       _profileEmailInput.value = user.email || '';
     }
 
+    // Set profile image
+    var displayImg = document.getElementById('profile-image-display');
+    var removeBtn = document.getElementById('remove-profile-image-btn');
+    if (user.profile_image_url) {
+      if (displayImg) displayImg.src = user.profile_image_url + '?t=' + Date.now();
+      if (removeBtn) removeBtn.style.display = '';
+    } else {
+      if (displayImg) displayImg.src = '/static/default-avatar.svg';
+      if (removeBtn) removeBtn.style.display = 'none';
+    }
+
     // Mark as saved (clean state)
-    setSaveButtonSaved();
+    if (window._cwocSave) window._cwocSave.markSaved();
   } catch (err) {
     console.error('[Profile] Error loading profile:', err);
     _showMessage(_profileMessageDiv, 'Failed to load profile data.', 'error');
@@ -145,7 +155,7 @@ async function _saveProfile(exitAfter) {
     }
 
     _showMessage(_profileMessageDiv, 'Profile updated successfully.', 'success');
-    setSaveButtonSaved();
+    if (window._cwocSave) window._cwocSave.markSaved();
 
     if (exitAfter) {
       var returnUrl = localStorage.getItem('cwoc_settings_return');
@@ -228,13 +238,110 @@ function _monitorProfileChanges() {
   editableFields.forEach(function(el) {
     if (!el) return;
     el.addEventListener('input', function() {
-      setSaveButtonUnsaved();
+      if (window._cwocSave) window._cwocSave.markUnsaved();
     });
     el.addEventListener('change', function() {
-      setSaveButtonUnsaved();
+      if (window._cwocSave) window._cwocSave.markUnsaved();
     });
   });
 }
+
+// ── Profile Image ────────────────────────────────────────────────────────────
+
+var _MAX_PROFILE_IMAGE_SIZE = 512;
+
+/**
+ * Handle profile image file selection — resize and upload immediately.
+ */
+function _handleProfileImageSelect(file) {
+  if (!file) return;
+
+  var msgDiv = document.getElementById('profile-image-message');
+  if (msgDiv) { msgDiv.textContent = ''; msgDiv.className = 'profile-message'; }
+
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var img = new Image();
+    img.onload = function() {
+      var w = img.width, h = img.height;
+      if (w > _MAX_PROFILE_IMAGE_SIZE || h > _MAX_PROFILE_IMAGE_SIZE) {
+        if (w > h) { h = Math.round(h * _MAX_PROFILE_IMAGE_SIZE / w); w = _MAX_PROFILE_IMAGE_SIZE; }
+        else { w = Math.round(w * _MAX_PROFILE_IMAGE_SIZE / h); h = _MAX_PROFILE_IMAGE_SIZE; }
+      }
+      var canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      var ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+
+      canvas.toBlob(function(blob) {
+        if (!blob) { console.error('[Profile] Image resize failed'); return; }
+        var resizedFile = new File([blob], file.name || 'profile.jpg', { type: blob.type });
+        _uploadProfileImage(resizedFile, canvas.toDataURL());
+      }, file.type || 'image/jpeg', 0.85);
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+/**
+ * Upload the profile image to the server.
+ */
+async function _uploadProfileImage(file, previewDataUrl) {
+  var msgDiv = document.getElementById('profile-image-message');
+  try {
+    var formData = new FormData();
+    formData.append('file', file);
+    var resp = await fetch('/api/auth/profile-image', { method: 'POST', body: formData });
+    if (!resp.ok) {
+      var err = await resp.json().catch(function() { return {}; });
+      _showMessage(msgDiv, err.detail || 'Failed to upload image.', 'error');
+      return;
+    }
+    var result = await resp.json();
+    // Update the preview
+    var displayImg = document.getElementById('profile-image-display');
+    if (displayImg) displayImg.src = result.profile_image_url + '?t=' + Date.now();
+    // Show remove button
+    var removeBtn = document.getElementById('remove-profile-image-btn');
+    if (removeBtn) removeBtn.style.display = '';
+    // Update the top-right profile menu image
+    var topImg = document.getElementById('cwoc-profile-img');
+    if (topImg) topImg.src = result.profile_image_url + '?t=' + Date.now();
+    _showMessage(msgDiv, 'Profile image updated.', 'success');
+  } catch (err) {
+    console.error('[Profile] Image upload error:', err);
+    _showMessage(msgDiv, 'Failed to upload image.', 'error');
+  }
+}
+
+/**
+ * Remove the profile image.
+ */
+async function _removeProfileImage() {
+  var msgDiv = document.getElementById('profile-image-message');
+  try {
+    var resp = await fetch('/api/auth/profile-image', { method: 'DELETE' });
+    if (!resp.ok) {
+      _showMessage(msgDiv, 'Failed to remove image.', 'error');
+      return;
+    }
+    var displayImg = document.getElementById('profile-image-display');
+    if (displayImg) displayImg.src = '/static/default-avatar.svg';
+    var removeBtn = document.getElementById('remove-profile-image-btn');
+    if (removeBtn) removeBtn.style.display = 'none';
+    var topImg = document.getElementById('cwoc-profile-img');
+    if (topImg) topImg.src = '/static/default-avatar.svg';
+    _showMessage(msgDiv, 'Profile image removed.', 'success');
+  } catch (err) {
+    console.error('[Profile] Image remove error:', err);
+    _showMessage(msgDiv, 'Failed to remove image.', 'error');
+  }
+}
+
+// Export for inline onclick
+window._removeProfileImage = _removeProfileImage;
 
 // ── Initialization ───────────────────────────────────────────────────────────
 
@@ -257,6 +364,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Monitor editable fields for dirty state
   _monitorProfileChanges();
+
+  // Wire up profile image upload
+  var imageInput = document.getElementById('profile-image-input');
+  if (imageInput) {
+    imageInput.addEventListener('change', function() {
+      if (imageInput.files.length > 0) _handleProfileImageSelect(imageInput.files[0]);
+      imageInput.value = ''; // reset so same file can be re-selected
+    });
+  }
 
   // Load profile data (wait for auth to complete first)
   if (typeof waitForAuth === 'function') {
