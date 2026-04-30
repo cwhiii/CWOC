@@ -590,16 +590,7 @@
                         <div id="locations-list"></div>
                         <button type="button" id="add-location-btn" class="standard-button" style="margin-top:8px;" onclick="addLocationRow()">➕ Add Location</button>
                     </div>
-                    <div class="setting-group">
-                        <h3>Chit Options</h3>
-                        <div class="checkbox-list">
-                            <label><input type="checkbox" id="fade-past" name="fade_past_chits" checked /> 📜 Fade Past Chits</label>
-                            <label><input type="checkbox" id="highlight-overdue" name="highlight_overdue_chits" checked /> 🚨 Highlight Overdue</label>
-                            <label><input type="checkbox" id="delete-past" name="delete_past_alarm_chits" /> 🗑️ Delete Past Alarms</label>
-                            <label><input type="checkbox" id="show-tab-counts" name="show_tab_counts" /> 🔢 Show Tab Counts</label>
-                            <label><input type="checkbox" id="prefer-google-maps" name="prefer_google_maps" /> 🗺️ Prefer Google for Maps</label>
-                        </div>
-                    </div>
+                    <!-- Chit Options merged into Display Options below -->
                     <div class="setting-group">
                         <h3>🔔 Default Notifications</h3>
                         <p class="setting-hint">Auto-added to new chits when a date is set. Editable per-chit after creation.</p>
@@ -652,7 +643,9 @@
                         </div>
                     </div>
                     <div class="setting-group">
-                        <h3>Visual Indicators</h3>
+                        <h3>🎯 Display Options</h3>
+
+                        <label class="setting-subheader">Visual Indicators</label>
                         <div class="indicator-list">
                             <label class="cwoc-checkbox-label" style="margin-bottom:8px;">
                                 <input type="checkbox" id="combine-alerts-toggle" onchange="_toggleCombineAlerts()" /> Combine Alerts
@@ -670,25 +663,15 @@
                             <div class="indicator-item"><span>👥 People</span><select name="people_indicator"><option value="always">Always</option><option value="never">Never</option><option value="space">If Space</option></select></div>
                             <div class="indicator-item"><span>❤️ Health</span><select id="health-indicator" name="indicators_indicator"><option value="always">Always</option><option value="never">Never</option><option value="space">If Space</option></select></div>
                         </div>
-                    </div>
-                    <div class="setting-group">
-                        <h3>🗄️ Data</h3>
-                        <button onclick="window.location.href='/frontend/html/audit-log.html'" class="standard-button" style="width:100%;">📋 Audit Log →</button>
 
-                        <label class="setting-subheader" style="margin-top:14px;">🗑️ Trash</label>
-                        <button onclick="window.location.href='/frontend/html/trash.html'" class="standard-button" style="width:100%;">View Deleted Chits →</button>
-
-                        <label class="setting-subheader" style="margin-top:14px;">📜 Audit Log Limits</label>
-                        <label><input type="checkbox" id="audit-prune-enabled" checked onchange="toggleAuditPruneInputs(); setSaveButtonUnsaved();" /> Enable Pruning</label>
-                        <div class="setting-inline" style="margin-top:8px;">
-                            <label for="audit-max-days">Max Age (days)</label>
-                            <input type="number" id="audit-max-days" min="1" step="1" placeholder="1096" style="width:80px;" />
+                        <label class="setting-subheader">Chit Options</label>
+                        <div class="checkbox-list">
+                            <label><input type="checkbox" id="fade-past" name="fade_past_chits" checked /> 📜 Fade Past Chits</label>
+                            <label><input type="checkbox" id="highlight-overdue" name="highlight_overdue_chits" checked /> 🚨 Highlight Overdue</label>
+                            <label><input type="checkbox" id="delete-past" name="delete_past_alarm_chits" /> 🗑️ Delete Past Alarms</label>
+                            <label><input type="checkbox" id="show-tab-counts" name="show_tab_counts" /> 🔢 Show Tab Counts</label>
+                            <label><input type="checkbox" id="prefer-google-maps" name="prefer_google_maps" /> 🗺️ Prefer Google for Maps</label>
                         </div>
-                        <div class="setting-inline">
-                            <label for="audit-max-mb">Max Size (MB)</label>
-                            <input type="number" id="audit-max-mb" min="1" step="1" placeholder="1" style="width:80px;" />
-                        </div>
-                        <p class="setting-hint">Uncheck to disable pruning. When either limit is reached, oldest entries are pruned first.</p>
                     </div>
                 </div>
 
@@ -699,6 +682,25 @@
                         <div class="setting-group">
                             <h3>Admin</h3>
                             <button onclick="window.location.href='/user-admin'" class="standard-button" style="width:100%;">👥 Manage Users</button>
+                        </div>
+                        <div class="setting-group">
+                            <h3>🗄️ Data</h3>
+                            <button onclick="window.location.href='/frontend/html/audit-log.html'" class="standard-button" style="width:100%;">📋 Audit Log →</button>
+
+                            <label class="setting-subheader" style="margin-top:14px;">🗑️ Trash</label>
+                            <button onclick="window.location.href='/frontend/html/trash.html'" class="standard-button" style="width:100%;">View Deleted Chits →</button>
+
+                            <label class="setting-subheader" style="margin-top:14px;">📜 Audit Log Limits</label>
+                            <label><input type="checkbox" id="audit-prune-enabled" checked onchange="toggleAuditPruneInputs(); setSaveButtonUnsaved();" /> Enable Pruning</label>
+                            <div class="setting-inline" style="margin-top:8px;">
+                                <label for="audit-max-days">Max Age (days)</label>
+                                <input type="number" id="audit-max-days" min="1" step="1" placeholder="1096" style="width:80px;" />
+                            </div>
+                            <div class="setting-inline">
+                                <label for="audit-max-mb">Max Size (MB)</label>
+                                <input type="number" id="audit-max-mb" min="1" step="1" placeholder="1" style="width:80px;" />
+                            </div>
+                            <p class="setting-hint">Uncheck to disable pruning. When either limit is reached, oldest entries are pruned first.</p>
                         </div>
                         <div class="setting-group">
                             <h3>📦 Data Management</h3>
@@ -735,6 +737,12 @@
                             <button id="upgrade-btn" class="standard-button" style="width:100%;">⬆️ Upgrade</button>
                             <button id="upgrade-reopen-btn" class="standard-button" style="width:100%;display:none;">🔄 Upgrade in progress</button>
                             <button id="update-log-btn" class="standard-button" style="width:100%;margin-top:6px;" onclick="loadLastLog()">📄 Show Log</button>
+                        </div>
+                        <div class="setting-group">
+                            <h3>📝 Login Message</h3>
+                            <textarea id="login-message-input" rows="4" placeholder="Welcome message (supports Markdown)..." style="width:100%;box-sizing:border-box;font-family:'Lora',Georgia,serif;font-size:0.95em;border:1px solid #8b5a2b;border-radius:5px;padding:8px;background:#f5e6cc;resize:vertical;"></textarea>
+                            <div id="login-message-preview" style="margin-top:8px;padding:10px;background:rgba(139,90,43,0.05);border:1px solid rgba(139,90,43,0.15);border-radius:6px;min-height:2em;"></div>
+                            <button class="standard-button" style="margin-top:8px;" onclick="_saveLoginMessage()">💾 Save Message</button>
                         </div>
                     </div>
                 </div>
@@ -844,6 +852,7 @@
             <script src="/frontend/js/pages/shared-page.js"></script>
             <script src="/frontend/js/pages/shared-editor.js"></script>
             <script src="/frontend/js/pages/settings.js"></script>
+            <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
             <script>
             /* Show admin-only section if user is admin */
             (function() {

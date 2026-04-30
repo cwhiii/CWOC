@@ -499,3 +499,51 @@ def delete_profile_image(request: Request):
     finally:
         if conn:
             conn.close()
+
+
+# ── GET /api/auth/login-message ───────────────────────────────────────────
+
+@auth_router.get("/login-message")
+def get_login_message():
+    """Return the login welcome message. Public endpoint (no auth required)."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        row = conn.execute("SELECT message FROM login_message WHERE id = 1").fetchone()
+        return {"message": row[0] if row else ""}
+    except Exception as e:
+        logger.error(f"Get login message error: {e}")
+        return {"message": ""}
+    finally:
+        if conn:
+            conn.close()
+
+
+# ── POST /api/auth/login-message ──────────────────────────────────────────
+
+@auth_router.post("/login-message")
+def save_login_message(body: dict, request: Request):
+    """Save the login welcome message. Admin only."""
+    user_id = getattr(request.state, "user_id", None)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        user = conn.execute("SELECT is_admin FROM users WHERE id = ?", (user_id,)).fetchone()
+        if not user or not user["is_admin"]:
+            raise HTTPException(status_code=403, detail="Admin access required")
+        message = body.get("message", "")
+        now = datetime.utcnow().isoformat() + "Z"
+        conn.execute("UPDATE login_message SET message = ?, modified_datetime = ? WHERE id = 1", (message, now))
+        conn.commit()
+        return {"message": message}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Save login message error: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+    finally:
+        if conn:
+            conn.close()

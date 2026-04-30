@@ -164,6 +164,24 @@
             display: block;
         }
 
+        /* ── Welcome Message ──────────────────────────────────────────────── */
+        .login-welcome-message {
+            background: linear-gradient(to bottom, #fff8e1, #f5e6cc);
+            border: 1px solid rgba(139, 90, 43, 0.3);
+            border-radius: 8px;
+            padding: 14px 18px;
+            max-width: 380px;
+            width: 100%;
+            margin: 0 auto 16px;
+            font-size: 14px;
+            line-height: 1.5;
+            color: #1a1208;
+            box-sizing: border-box;
+        }
+        .login-welcome-message p { margin: 0 0 8px; }
+        .login-welcome-message p:last-child { margin-bottom: 0; }
+        .login-welcome-message a { color: #8b5a2b; }
+
         /* ── Mobile ────────────────────────────────────────────────────────── */
         @media (max-width: 480px) {
             .login-card {
@@ -176,6 +194,8 @@
     </style>
 </head>
 <body>
+
+    <div id="login-welcome-message" class="login-welcome-message" style="display:none;"></div>
 
     <div class="login-card">
         <div class="login-header">
@@ -200,6 +220,22 @@
         </form>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script>
+        // ── Load welcome message ──
+        (function () {
+            fetch('/api/auth/login-message')
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    var div = document.getElementById('login-welcome-message');
+                    if (data && data.message && data.message.trim()) {
+                        div.innerHTML = marked.parse(data.message);
+                        div.style.display = '';
+                    }
+                })
+                .catch(function () { /* ignore — hide div */ });
+        })();
+    </script>
     <script>
         (function () {
             const form = document.getElementById('loginForm');

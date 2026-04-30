@@ -726,3 +726,30 @@ def migrate_add_alerts_owner_id():
     finally:
         if conn:
             conn.close()
+
+
+# ── Login welcome message table ──────────────────────────────────────────
+
+def migrate_add_login_message():
+    """Create login_message table for storing the instance login welcome message."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS login_message (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                message TEXT DEFAULT '',
+                modified_datetime TEXT
+            )
+        """)
+        # Ensure the single row exists
+        cursor.execute("INSERT OR IGNORE INTO login_message (id, message) VALUES (1, '')")
+        conn.commit()
+        logger.info("login_message table ready")
+    except Exception as e:
+        logger.error(f"Error in migrate_add_login_message: {str(e)}")
+        raise
+    finally:
+        if conn:
+            conn.close()

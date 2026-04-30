@@ -2065,6 +2065,51 @@ function importAllData() {
   fileInput.click();
 }
 
+// ── Login Welcome Message (admin) ────────────────────────────────────────────
+
+/**
+ * Save the login welcome message to the server.
+ */
+async function _saveLoginMessage() {
+  var ta = document.getElementById('login-message-input');
+  if (!ta) return;
+  try {
+    var response = await fetch('/api/auth/login-message', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: ta.value })
+    });
+    if (!response.ok) {
+      var err = await response.json();
+      throw new Error(err.detail || response.statusText);
+    }
+    alert('Login message saved.');
+  } catch (error) {
+    console.error('Save login message failed:', error);
+    alert('Failed to save login message: ' + error.message);
+  }
+}
+
+/**
+ * Load the login welcome message from the server into the textarea and preview.
+ */
+async function _loadLoginMessage() {
+  var ta = document.getElementById('login-message-input');
+  var preview = document.getElementById('login-message-preview');
+  if (!ta) return;
+  try {
+    var response = await fetch('/api/auth/login-message');
+    if (!response.ok) return;
+    var data = await response.json();
+    ta.value = data.message || '';
+    if (preview && typeof marked !== 'undefined') {
+      preview.innerHTML = marked.parse(ta.value || '');
+    }
+  } catch (error) {
+    console.error('Load login message failed:', error);
+  }
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   // Initialize mobile actions modal (shared header button pattern)
   if (typeof initMobileActionsModal === 'function') initMobileActionsModal();
@@ -2082,6 +2127,26 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   window.settingsManager = new SettingsManager();
   loadVersionInfo();
+
+  // Load login message for admins after auth resolves
+  if (typeof waitForAuth === 'function') {
+    waitForAuth().then(function() {
+      var user = (typeof getCurrentUser === 'function') ? getCurrentUser() : null;
+      if (user && user.is_admin) {
+        _loadLoginMessage();
+        // Live preview on textarea input
+        var ta = document.getElementById('login-message-input');
+        if (ta) {
+          ta.addEventListener('input', function() {
+            var preview = document.getElementById('login-message-preview');
+            if (preview && typeof marked !== 'undefined') {
+              preview.innerHTML = marked.parse(ta.value || '');
+            }
+          });
+        }
+      }
+    });
+  }
 
   // Wire upgrade button and close button for update modal
   document.getElementById('upgrade-btn').addEventListener('click', startUpgrade);

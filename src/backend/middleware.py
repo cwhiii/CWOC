@@ -52,6 +52,10 @@ def _is_excluded(path: str, method: str) -> bool:
     if path == "/api/auth/login" and method == "POST":
         return True
 
+    # Login welcome message (public, read-only)
+    if path == "/api/auth/login-message" and method == "GET":
+        return True
+
     return False
 
 
