@@ -1,0 +1,418 @@
+{
+  "type": "userdata",
+  "version": "20260429.1655",
+  "exported_at": "2026-04-30T12:00:00.000000Z",
+  "instance_id": "demo-00000000-0000-0000-0000-000000000000",
+  "data": {
+    "settings": [
+      {
+        "user_id": "default_user",
+        "time_format": "12hour",
+        "sex": "Man",
+        "snooze_length": "5 minutes",
+        "default_filters": {},
+        "alarm_orientation": "Horizontal",
+        "active_clocks": "[\"24hour\",\"12hour\",\"hst\"]",
+        "tags": [
+          {
+            "name": "Demo",
+            "color": "#E3B23C",
+            "favorite": false
+          },
+          {
+            "name": "Demo/Getting Started",
+            "color": "#E3B23C",
+            "favorite": true
+          },
+          {
+            "name": "Demo/Features",
+            "color": "#D4A574",
+            "favorite": false
+          },
+          {
+            "name": "Work",
+            "color": "#6B8299",
+            "favorite": false
+          },
+          {
+            "name": "Work/Engineering",
+            "color": "#4682B4",
+            "favorite": true
+          },
+          {
+            "name": "Work/Meetings",
+            "color": "#6B8299",
+            "favorite": false
+          },
+          {
+            "name": "Work/Projects",
+            "color": "#8A9A5B",
+            "favorite": false
+          },
+          {
+            "name": "Work/Admin",
+            "color": "#C66B6B",
+            "favorite": false
+          },
+          {
+            "name": "Work/Productivity",
+            "color": "#6B8299",
+            "favorite": false
+          },
+          {
+            "name": "Work/Social",
+            "color": "#8A9A5B",
+            "favorite": false
+          },
+          {
+            "name": "Personal",
+            "color": "#8B6B99",
+            "favorite": false
+          },
+          {
+            "name": "Personal/Health",
+            "color": "#C66B6B",
+            "favorite": true
+          },
+          {
+            "name": "Personal/Social",
+            "color": "#E3B23C",
+            "favorite": false
+          },
+          {
+            "name": "Personal/Errands",
+            "color": "#8B6B99",
+            "favorite": false
+          },
+          {
+            "name": "Personal/Travel",
+            "color": "#4c58f4",
+            "favorite": false
+          },
+          {
+            "name": "Personal/Recipes",
+            "color": "#D4A574",
+            "favorite": false
+          }
+        ],
+        "custom_colors": [
+          "#C66B6B",
+          "#E3B23C",
+          "#8A9A5B",
+          "#6B8299",
+          "#8B6B99",
+          "#4c58f4",
+          "#D4A574",
+          "#2E8B57",
+          "#CD853F",
+          "#708090"
+        ],
+        "visual_indicators": {
+          "alarm": "always",
+          "notification": "always",
+          "timer": "always",
+          "stopwatch": "always",
+          "weather": "always",
+          "people": "always",
+          "indicators": "always"
+        },
+        "chit_options": {
+          "fade_past_chits": true,
+          "highlight_overdue_chits": true,
+          "delete_past_alarm_chits": false,
+          "show_tab_counts": true
+        },
+        "calendar_snap": "15",
+        "week_start_day": "0",
+        "work_start_hour": "8",
+        "work_end_hour": "17",
+        "work_days": "1,2,3,4,5",
+        "enabled_periods": "Itinerary,Day,Week,Work,SevenDay,Month,Year",
+        "custom_days_count": "7",
+        "saved_locations": [
+          {
+            "label": "Office",
+            "address": "New York, NY",
+            "is_default": true
+          },
+          {
+            "label": "Gym",
+            "address": "Downtown Gym",
+            "is_default": false
+          },
+          {
+            "label": "Home",
+            "address": "Springfield, IL",
+            "is_default": false
+          }
+        ],
+        "all_view_start_hour": "0",
+        "all_view_end_hour": "24",
+        "day_scroll_to_hour": "7",
+        "username": "Demo User",
+        "audit_log_max_days": 365,
+        "audit_log_max_mb": 1.0,
+        "default_notifications": null,
+        "unit_system": "imperial"
+      }
+    ],
+    "contacts": [
+      {
+        "id": "demo-contact-001",
+        "given_name": "Ada",
+        "surname": "Lovelace",
+        "middle_names": "",
+        "prefix": "",
+        "suffix": "",
+        "display_name": "Ada Lovelace",
+        "nickname": "",
+        "phones": [
+          {
+            "label": "Work",
+            "value": "555-0101"
+          }
+        ],
+        "emails": [
+          {
+            "label": "Work",
+            "value": "ada@example.com"
+          }
+        ],
+        "addresses": [
+          {
+            "label": "Office",
+            "value": "123 Innovation Blvd"
+          }
+        ],
+        "call_signs": null,
+        "x_handles": null,
+        "websites": [
+          {
+            "label": "Portfolio",
+            "value": "https://example.com/ada"
+          }
+        ],
+        "has_signal": true,
+        "pgp_key": null,
+        "favorite": true,
+        "created_datetime": "2026-04-30T08:00:00.000000",
+        "modified_datetime": "2026-04-30T08:00:00.000000",
+        "signal_username": null,
+        "color": "#4682B4",
+        "organization": "Engineering Lead",
+        "social_context": "Work colleague",
+        "image_url": null,
+        "notes": "Lead engineer on the website redesign project.",
+        "tags": [
+          "Work/Engineering"
+        ]
+      },
+      {
+        "id": "demo-contact-002",
+        "given_name": "Grace",
+        "surname": "Hopper",
+        "middle_names": "M.",
+        "prefix": "Rear Admiral",
+        "suffix": "",
+        "display_name": "Rear Admiral Grace M. Hopper",
+        "nickname": "Amazing Grace",
+        "phones": [
+          {
+            "label": "Mobile",
+            "value": "555-0102"
+          }
+        ],
+        "emails": [
+          {
+            "label": "Work",
+            "value": "grace@example.com"
+          }
+        ],
+        "addresses": null,
+        "call_signs": null,
+        "x_handles": null,
+        "websites": null,
+        "has_signal": false,
+        "pgp_key": null,
+        "favorite": true,
+        "created_datetime": "2026-04-30T08:00:00.000000",
+        "modified_datetime": "2026-04-30T08:00:00.000000",
+        "signal_username": null,
+        "color": "#8A9A5B",
+        "organization": "Documentation Team",
+        "social_context": "Work colleague",
+        "image_url": null,
+        "notes": "Handles all API documentation and technical writing.",
+        "tags": [
+          "Work/Engineering"
+        ]
+      },
+      {
+        "id": "demo-contact-003",
+        "given_name": "Alan",
+        "surname": "Turing",
+        "middle_names": "",
+        "prefix": "Dr.",
+        "suffix": "",
+        "display_name": "Dr. Alan Turing",
+        "nickname": "",
+        "phones": [
+          {
+            "label": "Mobile",
+            "value": "555-0103"
+          }
+        ],
+        "emails": [
+          {
+            "label": "Work",
+            "value": "alan@example.com"
+          }
+        ],
+        "addresses": null,
+        "call_signs": null,
+        "x_handles": null,
+        "websites": null,
+        "has_signal": true,
+        "pgp_key": "ABCD1234",
+        "favorite": false,
+        "created_datetime": "2026-04-30T08:00:00.000000",
+        "modified_datetime": "2026-04-30T08:00:00.000000",
+        "signal_username": "alan.t",
+        "color": "#E3B23C",
+        "organization": "Frontend Team",
+        "social_context": "Work colleague",
+        "image_url": null,
+        "notes": "Working on the settings page redesign.",
+        "tags": [
+          "Work/Engineering"
+        ]
+      },
+      {
+        "id": "demo-contact-004",
+        "given_name": "Nikola",
+        "surname": "Tesla",
+        "middle_names": "",
+        "prefix": "",
+        "suffix": "",
+        "display_name": "Nikola Tesla",
+        "nickname": "Nik",
+        "phones": [
+          {
+            "label": "Mobile",
+            "value": "555-0104"
+          }
+        ],
+        "emails": [
+          {
+            "label": "Work",
+            "value": "nikola@example.com"
+          }
+        ],
+        "addresses": null,
+        "call_signs": null,
+        "x_handles": null,
+        "websites": null,
+        "has_signal": false,
+        "pgp_key": null,
+        "favorite": false,
+        "created_datetime": "2026-04-30T08:00:00.000000",
+        "modified_datetime": "2026-04-30T08:00:00.000000",
+        "signal_username": null,
+        "color": "#C66B6B",
+        "organization": "DevOps",
+        "social_context": "Work colleague",
+        "image_url": null,
+        "notes": "Handles infrastructure and deployments.",
+        "tags": [
+          "Work/Engineering"
+        ]
+      },
+      {
+        "id": "demo-contact-005",
+        "given_name": "Marie",
+        "surname": "Curie",
+        "middle_names": "",
+        "prefix": "Dr.",
+        "suffix": "",
+        "display_name": "Dr. Marie Curie",
+        "nickname": "",
+        "phones": [
+          {
+            "label": "Personal",
+            "value": "555-0105"
+          }
+        ],
+        "emails": [
+          {
+            "label": "Personal",
+            "value": "marie@example.com"
+          }
+        ],
+        "addresses": [
+          {
+            "label": "Home",
+            "value": "42 Research Lane"
+          }
+        ],
+        "call_signs": null,
+        "x_handles": null,
+        "websites": null,
+        "has_signal": true,
+        "pgp_key": null,
+        "favorite": true,
+        "created_datetime": "2026-04-30T08:00:00.000000",
+        "modified_datetime": "2026-04-30T08:00:00.000000",
+        "signal_username": null,
+        "color": "#8B6B99",
+        "organization": "Research Institute",
+        "social_context": "Friend",
+        "image_url": null,
+        "notes": "Lunch buddy. Also in the book club.",
+        "tags": [
+          "Personal/Social"
+        ]
+      },
+      {
+        "id": "demo-contact-006",
+        "given_name": "Rosalind",
+        "surname": "Franklin",
+        "middle_names": "E.",
+        "prefix": "Dr.",
+        "suffix": "",
+        "display_name": "Dr. Rosalind E. Franklin",
+        "nickname": "Roz",
+        "phones": [
+          {
+            "label": "Mobile",
+            "value": "555-0106"
+          }
+        ],
+        "emails": [
+          {
+            "label": "Personal",
+            "value": "rosalind@example.com"
+          }
+        ],
+        "addresses": null,
+        "call_signs": null,
+        "x_handles": null,
+        "websites": null,
+        "has_signal": false,
+        "pgp_key": null,
+        "favorite": false,
+        "created_datetime": "2026-04-30T08:00:00.000000",
+        "modified_datetime": "2026-04-30T08:00:00.000000",
+        "signal_username": null,
+        "color": "#2E8B57",
+        "organization": null,
+        "social_context": "Hiking buddy, book club",
+        "image_url": null,
+        "notes": "Hiking partner and fellow book club member.",
+        "tags": [
+          "Personal/Social",
+          "Personal/Health"
+        ]
+      }
+    ]
+  }
+}

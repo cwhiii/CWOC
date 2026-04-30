@@ -1,0 +1,1691 @@
+{
+  "type": "chits",
+  "version": "20260429.1655",
+  "exported_at": "2026-04-30T12:00:00.000000Z",
+  "instance_id": "demo-00000000-0000-0000-0000-000000000000",
+  "data": [
+    {
+      "id": "demo-0001",
+      "title": "Welcome to Omni Chits!",
+      "note": "# What is a Chit?\n\nA **chit** is the universal unit. It can be a calendar event, task, note, checklist, alarm, or project \u2014 all at once.\n\n- Fill in dates \u2192 appears on the **Calendar**\n- Add a status \u2192 shows in **Tasks**\n- Write a note \u2192 it's in **Notes**\n- Add checklist items \u2192 it's in **Checklists**\n- Set an alarm \u2192 it's in **Alerts**\n- Mark as project \u2192 it's in **Projects**\n\nPress **R** for the hotkey reference. Press **Shift+R** for the full Help guide.\n\n## The C CAPTN Views\n| Key | View |\n|-----|------|\n| C | Calendar |\n| H | Checklists |\n| A | Alerts |\n| P | Projects |\n| T | Tasks |\n| N | Notes |",
+      "tags": [
+        "Notes",
+        "Demo/Getting Started"
+      ],
+      "start_datetime": null,
+      "end_datetime": null,
+      "due_datetime": null,
+      "completed_datetime": null,
+      "status": null,
+      "priority": null,
+      "severity": null,
+      "checklist": [],
+      "alarm": false,
+      "notification": false,
+      "recurrence": null,
+      "recurrence_id": null,
+      "location": "",
+      "color": "#E3B23C",
+      "people": [],
+      "pinned": true,
+      "archived": false,
+      "deleted": false,
+      "created_datetime": "2026-04-30T08:00:00.000000",
+      "modified_datetime": "2026-04-30T08:00:00.000000",
+      "is_project_master": false,
+      "child_chits": [],
+      "all_day": false,
+      "alerts": [
+        {
+          "_type": "_notify_flags",
+          "at_start": true,
+          "at_due": true
+        }
+      ],
+      "recurrence_rule": null,
+      "recurrence_exceptions": null,
+      "progress_percent": null,
+      "time_estimate": null,
+      "weather_data": null,
+      "health_data": null
+    },
+    {
+      "id": "demo-0002",
+      "title": "Team Standup",
+      "note": "",
+      "tags": [
+        "Calendar",
+        "Work/Meetings"
+      ],
+      "start_datetime": "2026-05-01T14:00:00.000Z",
+      "end_datetime": "2026-05-01T14:30:00.000Z",
+      "due_datetime": null,
+      "completed_datetime": null,
+      "status": null,
+      "priority": null,
+      "severity": null,
+      "checklist": [],
+      "alarm": false,
+      "notification": false,
+      "recurrence": "WEEKLY",
+      "recurrence_id": null,
+      "location": "Conference Room B",
+      "color": "#6B8299",
+      "people": [
+        "Ada Lovelace",
+        "Grace Hopper",
+        "Alan Turing"
+      ],
+      "pinned": false,
+      "archived": false,
+      "deleted": false,
+      "created_datetime": "2026-04-30T08:00:00.000000",
+      "modified_datetime": "2026-04-30T08:00:00.000000",
+      "is_project_master": false,
+      "child_chits": [],
+      "all_day": false,
+      "alerts": [
+        {
+          "_type": "_notify_flags",
+          "at_start": true,
+          "at_due": true
+        },
+        {
+          "_type": "notification",
+          "name": "Standup in 10",
+          "offset_minutes": -10,
+          "relative_to": "start",
+          "enabled": true
+        }
+      ],
+      "recurrence_rule": {
+        "freq": "WEEKLY",
+        "interval": 1,
+        "byDay": [
+          "MO",
+          "TU",
+          "WE",
+          "TH",
+          "FR"
+        ]
+      },
+      "recurrence_exceptions": null,
+      "progress_percent": null,
+      "time_estimate": null,
+      "weather_data": null,
+      "health_data": null
+    },
+    {
+      "id": "demo-0003",
+      "title": "Product Launch Week",
+      "note": "All hands on deck. Final QA Mon-Wed, marketing blitz Thu, launch party Fri.",
+      "tags": [
+        "Calendar",
+        "Work/Projects"
+      ],
+      "start_datetime": "2026-05-04T04:00:00.000Z",
+      "end_datetime": "2026-05-09T03:59:59.000Z",
+      "due_datetime": null,
+      "completed_datetime": null,
+      "status": "In Progress",
+      "priority": "High",
+      "severity": "Critical",
+      "checklist": [],
+      "alarm": false,
+      "notification": false,
+      "recurrence": null,
+      "recurrence_id": null,
+      "location": "Headquarters",
+      "color": "#C66B6B",
+      "people": [
+        "Ada Lovelace",
+        "Nikola Tesla"
+      ],
+      "pinned": true,
+      "archived": false,
+      "deleted": false,
+      "created_datetime": "2026-04-30T08:00:00.000000",
+      "modified_datetime": "2026-04-30T08:00:00.000000",
+      "is_project_master": false,
+      "child_chits": [],
+      "all_day": true,
+      "alerts": [
+        {
+          "_type": "_notify_flags",
+          "at_start": true,
+          "at_due": true
+        }
+      ],
+      "recurrence_rule": null,
+      "recurrence_exceptions": null,
+      "progress_percent": null,
+      "time_estimate": null,
+      "weather_data": null,
+      "health_data": null
+    },
+    {
+      "id": "demo-0004",
+      "title": "Write API documentation",
+      "note": "Cover all endpoints under /api/. Include request and response examples.",
+      "tags": [
+        "Tasks",
+        "Work/Engineering"
+      ],
+      "start_datetime": null,
+      "end_datetime": null,
+      "due_datetime": "2026-05-07T20:00:00.000Z",
+      "completed_datetime": null,
+      "status": "ToDo",
+      "priority": "High",
+      "severity": "Major",
+      "checklist": [],
+      "alarm": false,
+      "notification": false,
+      "recurrence": null,
+      "recurrence_id": null,
+      "location": "",
+      "color": "#8A9A5B",
+      "people": [
+        "Grace Hopper"
+      ],
+      "pinned": false,
+      "archived": false,
+      "deleted": false,
+      "created_datetime": "2026-04-30T08:00:00.000000",
+      "modified_datetime": "2026-04-30T08:00:00.000000",
+      "is_project_master": false,
+      "child_chits": [],
+      "all_day": false,
+      "alerts": [
+        {
+          "_type": "_notify_flags",
+          "at_start": true,
+          "at_due": true
+        }
+      ],
+      "recurrence_rule": null,
+      "recurrence_exceptions": null,
+      "progress_percent": null,
+      "time_estimate": null,
+      "weather_data": null,
+      "health_data": null
+    },
+    {
+      "id": "demo-0005",
+      "title": "Redesign the settings page",
+      "note": "Consolidate layout. Group related options. Add section headers.",
+      "tags": [
+        "Tasks",
+        "Work/Engineering"
+      ],
+      "start_datetime": null,
+      "end_datetime": null,
+      "due_datetime": "2026-05-05T20:00:00.000Z",
+      "completed_datetime": null,
+      "status": "In Progress",
+      "priority": "Medium",
+      "severity": "Minor",
+      "checklist": [],
+      "alarm": false,
+      "notification": false,
+      "recurrence": null,
+      "recurrence_id": null,
+      "location": "",
+      "color": "#E3B23C",
+      "people": [
+        "Alan Turing"
+      ],
+      "pinned": false,
+      "archived": false,
+      "deleted": false,
+      "created_datetime": "2026-04-30T08:00:00.000000",
+      "modified_datetime": "2026-04-30T08:00:00.000000",
+      "is_project_master": false,
+      "child_chits": [],
+      "all_day": false,
+      "alerts": [
+        {
+          "_type": "_notify_flags",
+          "at_start": true,
+          "at_due": true
+        }
+      ],
+      "recurrence_rule": null,
+      "recurrence_exceptions": null,
+      "progress_percent": null,
+      "time_estimate": null,
+      "weather_data": null,
+      "health_data": null
+    },
+    {
+      "id": "demo-0006",
+      "title": "Deploy to staging server",
+      "note": "Blocked: waiting on the new SSL certificate from IT.",
+      "tags": [
+        "Tasks",
+        "Work/Engineering"
+      ],
+      "start_datetime": null,
+      "end_datetime": null,
+      "due_datetime": "2026-05-06T20:00:00.000Z",
+      "completed_datetime": null,
+      "status": "Blocked",
+      "priority": "High",
+      "severity": "Critical",
+      "checklist": [],
+      "alarm": false,
+      "notification": false,
+      "recurrence": null,
+      "recurrence_id": null,
+      "location": "",
+      "color": "#C66B6B",
+      "people": [
+        "Nikola Tesla"
+      ],
+      "pinned": false,
+      "archived": false,
+      "deleted": false,
+      "created_datetime": "2026-04-30T08:00:00.000000",
+      "modified_datetime": "2026-04-30T08:00:00.000000",
+      "is_project_master": false,
+      "child_chits": [],
+      "all_day": false,
+      "alerts": [
+        {
+          "_type": "_notify_flags",
+          "at_start": true,
+          "at_due": true
+        }
+      ],
+      "recurrence_rule": null,
+      "recurrence_exceptions": null,
+      "progress_percent": null,
+      "time_estimate": null,
+      "weather_data": null,
+      "health_data": null
+    },
+    {
+      "id": "demo-0007",
+      "title": "Set up CI/CD pipeline",
+      "note": "GitHub Actions workflow for automated testing and deployment. Done!",
+      "tags": [
+        "Tasks",
+        "Work/Engineering"
+      ],
+      "start_datetime": null,
+      "end_datetime": null,
+      "due_datetime": "2026-04-28T20:00:00.000Z",
+      "completed_datetime": "2026-04-28T18:30:00.000Z",
+      "status": "Complete",
+      "priority": "High",
+      "severity": "Major",
+      "checklist": [],
+      "alarm": false,
+      "notification": false,
+      "recurrence": null,
+      "recurrence_id": null,
+      "location": "",
+      "color": "#8A9A5B",
+      "people": [
+        "Ada Lovelace"
+      ],
+      "pinned": false,
+      "archived": false,
+      "deleted": false,
+      "created_datetime": "2026-04-30T08:00:00.000000",
+      "modified_datetime": "2026-04-30T08:00:00.000000",
+      "is_project_master": false,
+      "child_chits": [],
+      "all_day": false,
+      "alerts": [
+        {
+          "_type": "_notify_flags",
+          "at_start": true,
+          "at_due": true
+        }
+      ],
+      "recurrence_rule": null,
+      "recurrence_exceptions": null,
+      "progress_percent": null,
+      "time_estimate": null,
+      "weather_data": null,
+      "health_data": null
+    },
+    {
+      "id": "demo-0008",
+      "title": "Grocery Run",
+      "note": "Nested checklists! Drag items between lists in the Checklists view.",
+      "tags": [
+        "Checklists",
+        "Personal/Errands"
+      ],
+      "start_datetime": null,
+      "end_datetime": null,
+      "due_datetime": null,
+      "completed_datetime": null,
+      "status": null,
+      "priority": null,
+      "severity": null,
+      "checklist": [
+        {
+          "id": "cl-01",
+          "text": "Dairy",
+          "level": 0,
+          "checked": false,
+          "parent": null
+        },
+        {
+          "id": "cl-02",
+          "text": "Milk (whole)",
+          "level": 1,
+          "checked": false,
+          "parent": "cl-01"
+        },
+        {
+          "id": "cl-03",
+          "text": "Eggs (dozen)",
+          "level": 1,
+          "checked": true,
+          "parent": "cl-01"
+        },
+        {
+          "id": "cl-04",
+          "text": "Butter",
+          "level": 1,
+          "checked": false,
+          "parent": "cl-01"
+        },
+        {
+          "id": "cl-05",
+          "text": "Produce",
+          "level": 0,
+          "checked": false,
+          "parent": null
+        },
+        {
+          "id": "cl-06",
+          "text": "Apples",
+          "level": 1,
+          "checked": false,
+          "parent": "cl-05"
+        },
+        {
+          "id": "cl-07",
+          "text": "Spinach",
+          "level": 1,
+          "checked": true,
+          "parent": "cl-05"
+        },
+        {
+          "id": "cl-08",
+          "text": "Carrots",
+          "level": 1,
+          "checked": false,
+          "parent": "cl-05"
+        },
+        {
+          "id": "cl-09",
+          "text": "Bakery",
+          "level": 0,
+          "checked": false,
+          "parent": null
+        },
+        {
+          "id": "cl-10",
+          "text": "Sourdough loaf",
+          "level": 1,
+          "checked": false,
+          "parent": "cl-09"
+        }
+      ],
+      "alarm": false,
+      "notification": false,
+      "recurrence": null,
+      "recurrence_id": null,
+      "location": "",
+      "color": "#8B6B99",
+      "people": [],
+      "pinned": false,
+      "archived": false,
+      "deleted": false,
+      "created_datetime": "2026-04-30T08:00:00.000000",
+      "modified_datetime": "2026-04-30T08:00:00.000000",
+      "is_project_master": false,
+      "child_chits": [],
+      "all_day": false,
+      "alerts": [
+        {
+          "_type": "_notify_flags",
+          "at_start": true,
+          "at_due": true
+        }
+      ],
+      "recurrence_rule": null,
+      "recurrence_exceptions": null,
+      "progress_percent": null,
+      "time_estimate": null,
+      "weather_data": null,
+      "health_data": null
+    },
+    {
+      "id": "demo-0009",
+      "title": "Trip Packing List",
+      "note": "A checklist with a due date shows up in both Checklists AND Calendar views!",
+      "tags": [
+        "Checklists",
+        "Calendar",
+        "Personal/Travel"
+      ],
+      "start_datetime": null,
+      "end_datetime": null,
+      "due_datetime": "2026-05-10T12:00:00.000Z",
+      "completed_datetime": null,
+      "status": "ToDo",
+      "priority": "Medium",
+      "severity": null,
+      "checklist": [
+        {
+          "id": "pk-01",
+          "text": "Clothes",
+          "level": 0,
+          "checked": false,
+          "parent": null
+        },
+        {
+          "id": "pk-02",
+          "text": "Shirts (5)",
+          "level": 1,
+          "checked": false,
+          "parent": "pk-01"
+        },
+        {
+          "id": "pk-03",
+          "text": "Pants (3)",
+          "level": 1,
+          "checked": false,
+          "parent": "pk-01"
+        },
+        {
+          "id": "pk-04",
+          "text": "Jacket",
+          "level": 1,
+          "checked": false,
+          "parent": "pk-01"
+        },
+        {
+          "id": "pk-05",
+          "text": "Electronics",
+          "level": 0,
+          "checked": false,
+          "parent": null
+        },
+        {
+          "id": "pk-06",
+          "text": "Laptop + charger",
+          "level": 1,
+          "checked": false,
+          "parent": "pk-05"
+        },
+        {
+          "id": "pk-07",
+          "text": "Phone charger",
+          "level": 1,
+          "checked": true,
+          "parent": "pk-05"
+        },
+        {
+          "id": "pk-08",
+          "text": "Headphones",
+          "level": 1,
+          "checked": false,
+          "parent": "pk-05"
+        },
+        {
+          "id": "pk-09",
+          "text": "Documents",
+          "level": 0,
+          "checked": false,
+          "parent": null
+        },
+        {
+          "id": "pk-10",
+          "text": "Passport",
+          "level": 1,
+          "checked": false,
+          "parent": "pk-09"
+        },
+        {
+          "id": "pk-11",
+          "text": "Boarding pass",
+          "level": 1,
+          "checked": false,
+          "parent": "pk-09"
+        }
+      ],
+      "alarm": false,
+      "notification": false,
+      "recurrence": null,
+      "recurrence_id": null,
+      "location": "",
+      "color": "#6B8299",
+      "people": [],
+      "pinned": false,
+      "archived": false,
+      "deleted": false,
+      "created_datetime": "2026-04-30T08:00:00.000000",
+      "modified_datetime": "2026-04-30T08:00:00.000000",
+      "is_project_master": false,
+      "child_chits": [],
+      "all_day": false,
+      "alerts": [
+        {
+          "_type": "_notify_flags",
+          "at_start": true,
+          "at_due": true
+        }
+      ],
+      "recurrence_rule": null,
+      "recurrence_exceptions": null,
+      "progress_percent": null,
+      "time_estimate": null,
+      "weather_data": null,
+      "health_data": null
+    },
+    {
+      "id": "demo-0010",
+      "title": "How Omni Chits Works",
+      "note": "# The Unified Chit Model\n\nEvery item is a **chit**. Unlike other tools with separate apps for calendar, tasks, notes, and lists, here everything is one entity.\n\n## Why?\nReal life doesn't fit neat categories. A meeting might have action items with a packing list and background notes. In Omni Chits, that's just one chit.\n\n## Views\nThe six **C CAPTN** tabs filter chits by what data they contain:\n- **Calendar** \u2014 has dates\n- **Checklists** \u2014 has list items\n- **Alerts** \u2014 has alarms or timers\n- **Projects** \u2014 is a project master\n- **Tasks** \u2014 has a status\n- **Notes** \u2014 has note content\n\n## Try It\n- Double-click empty calendar space to create a timed chit\n- Press **K** to create a new chit\n- Shift+click a calendar event for Quick Edit\n- Use `[[chit title]]` in notes to link to other chits",
+      "tags": [
+        "Notes",
+        "Demo/Getting Started"
+      ],
+      "start_datetime": null,
+      "end_datetime": null,
+      "due_datetime": null,
+      "completed_datetime": null,
+      "status": null,
+      "priority": null,
+      "severity": null,
+      "checklist": [],
+      "alarm": false,
+      "notification": false,
+      "recurrence": null,
+      "recurrence_id": null,
+      "location": "",
+      "color": "transparent",
+      "people": [],
+      "pinned": false,
+      "archived": false,
+      "deleted": false,
+      "created_datetime": "2026-04-30T08:00:00.000000",
+      "modified_datetime": "2026-04-30T08:00:00.000000",
+      "is_project_master": false,
+      "child_chits": [],
+      "all_day": false,
+      "alerts": [
+        {
+          "_type": "_notify_flags",
+          "at_start": true,
+          "at_due": true
+        }
+      ],
+      "recurrence_rule": null,
+      "recurrence_exceptions": null,
+      "progress_percent": null,
+      "time_estimate": null,
+      "weather_data": null,
+      "health_data": null
+    },
+    {
+      "id": "demo-0011",
+      "title": "Markdown Features",
+      "note": "# Markdown in Notes\n\nNotes support full **Markdown** rendering:\n\n## Formatting\n- **Bold** and *italic* and ~~strikethrough~~\n- `inline code` and code blocks\n- [Hyperlinks](https://example.com)\n\n## Lists\n1. Numbered lists\n2. Work great\n   - With nesting\n   - Like this\n\n## Tables\n| Feature | Status |\n|---------|--------|\n| Markdown | Done |\n| Links | Done |\n| Tables | Done |\n\n## Chit Links\nType `[[` in the notes editor to link to other chits. Try: [[Welcome to Omni Chits!]]\n\n> Blockquotes work too.",
+      "tags": [
+        "Notes",
+        "Demo/Features"
+      ],
+      "start_datetime": null,
+      "end_datetime": null,
+      "due_datetime": null,
+      "completed_datetime": null,
+      "status": null,
+      "priority": null,
+      "severity": null,
+      "checklist": [],
+      "alarm": false,
+      "notification": false,
+      "recurrence": null,
+      "recurrence_id": null,
+      "location": "",
+      "color": "#4c58f4",
+      "people": [],
+      "pinned": false,
+      "archived": false,
+      "deleted": false,
+      "created_datetime": "2026-04-30T08:00:00.000000",
+      "modified_datetime": "2026-04-30T08:00:00.000000",
+      "is_project_master": false,
+      "child_chits": [],
+      "all_day": false,
+      "alerts": [
+        {
+          "_type": "_notify_flags",
+          "at_start": true,
+          "at_due": true
+        }
+      ],
+      "recurrence_rule": null,
+      "recurrence_exceptions": null,
+      "progress_percent": null,
+      "time_estimate": null,
+      "weather_data": null,
+      "health_data": null
+    },
+    {
+      "id": "demo-0012",
+      "title": "Morning Workout",
+      "note": "Cardio + weights. Health indicators are logged on this chit.",
+      "tags": [
+        "Calendar",
+        "Personal/Health"
+      ],
+      "start_datetime": "2026-05-01T11:00:00.000Z",
+      "end_datetime": "2026-05-01T12:00:00.000Z",
+      "due_datetime": null,
+      "completed_datetime": null,
+      "status": null,
+      "priority": null,
+      "severity": null,
+      "checklist": [],
+      "alarm": false,
+      "notification": false,
+      "recurrence": "WEEKLY",
+      "recurrence_id": null,
+      "location": "Downtown Gym",
+      "color": "#8A9A5B",
+      "people": [],
+      "pinned": false,
+      "archived": false,
+      "deleted": false,
+      "created_datetime": "2026-04-30T08:00:00.000000",
+      "modified_datetime": "2026-04-30T08:00:00.000000",
+      "is_project_master": false,
+      "child_chits": [],
+      "all_day": false,
+      "alerts": [
+        {
+          "_type": "_notify_flags",
+          "at_start": true,
+          "at_due": true
+        }
+      ],
+      "recurrence_rule": {
+        "freq": "WEEKLY",
+        "interval": 1,
+        "byDay": [
+          "MO",
+          "WE",
+          "FR"
+        ]
+      },
+      "recurrence_exceptions": null,
+      "progress_percent": null,
+      "time_estimate": null,
+      "weather_data": null,
+      "health_data": {
+        "heart_rate": 145,
+        "bp": "120/78",
+        "weight": 175,
+        "distance": 3.2,
+        "spo2": 98,
+        "temperature": 98.6
+      }
+    },
+    {
+      "id": "demo-0013",
+      "title": "Annual Physical",
+      "note": "Annual checkup. Bring insurance card. Fasting blood work.",
+      "tags": [
+        "Calendar",
+        "Personal/Health"
+      ],
+      "start_datetime": "2026-05-08T15:00:00.000Z",
+      "end_datetime": "2026-05-08T16:00:00.000Z",
+      "due_datetime": null,
+      "completed_datetime": null,
+      "status": null,
+      "priority": null,
+      "severity": null,
+      "checklist": [],
+      "alarm": false,
+      "notification": false,
+      "recurrence": null,
+      "recurrence_id": null,
+      "location": "Springfield Medical Center",
+      "color": "#C66B6B",
+      "people": [
+        "Dr. Watson"
+      ],
+      "pinned": false,
+      "archived": false,
+      "deleted": false,
+      "created_datetime": "2026-04-30T08:00:00.000000",
+      "modified_datetime": "2026-04-30T08:00:00.000000",
+      "is_project_master": false,
+      "child_chits": [],
+      "all_day": false,
+      "alerts": [
+        {
+          "_type": "_notify_flags",
+          "at_start": true,
+          "at_due": true
+        }
+      ],
+      "recurrence_rule": null,
+      "recurrence_exceptions": null,
+      "progress_percent": null,
+      "time_estimate": null,
+      "weather_data": null,
+      "health_data": {
+        "heart_rate": 72,
+        "bp": "118/76",
+        "weight": 175,
+        "glucose": 95,
+        "spo2": 99,
+        "temperature": 98.4,
+        "height": 70
+      }
+    },
+    {
+      "id": "demo-0014",
+      "title": "Lunch with Marie",
+      "note": "Catch up over lunch. She wants to discuss the new research project.",
+      "tags": [
+        "Calendar",
+        "Personal/Social"
+      ],
+      "start_datetime": "2026-05-02T17:00:00.000Z",
+      "end_datetime": "2026-05-02T18:30:00.000Z",
+      "due_datetime": null,
+      "completed_datetime": null,
+      "status": null,
+      "priority": null,
+      "severity": null,
+      "checklist": [],
+      "alarm": false,
+      "notification": false,
+      "recurrence": null,
+      "recurrence_id": null,
+      "location": "The Rusty Anchor Cafe",
+      "color": "#E3B23C",
+      "people": [
+        "Marie Curie"
+      ],
+      "pinned": false,
+      "archived": false,
+      "deleted": false,
+      "created_datetime": "2026-04-30T08:00:00.000000",
+      "modified_datetime": "2026-04-30T08:00:00.000000",
+      "is_project_master": false,
+      "child_chits": [],
+      "all_day": false,
+      "alerts": [
+        {
+          "_type": "_notify_flags",
+          "at_start": true,
+          "at_due": true
+        }
+      ],
+      "recurrence_rule": null,
+      "recurrence_exceptions": null,
+      "progress_percent": null,
+      "time_estimate": null,
+      "weather_data": null,
+      "health_data": null
+    },
+    {
+      "id": "demo-0015",
+      "title": "Website Redesign Project",
+      "note": "Master project tracking the website redesign. Child chits show as a Kanban board with ToDo, In Progress, Blocked, and Complete columns.\n\nDrag chits between columns to update their status!",
+      "tags": [
+        "Notes"
+      ],
+      "start_datetime": null,
+      "end_datetime": null,
+      "due_datetime": null,
+      "completed_datetime": null,
+      "status": null,
+      "priority": null,
+      "severity": null,
+      "checklist": [],
+      "alarm": false,
+      "notification": false,
+      "recurrence": null,
+      "recurrence_id": null,
+      "location": "",
+      "color": "#8A9A5B",
+      "people": [],
+      "pinned": false,
+      "archived": false,
+      "deleted": false,
+      "created_datetime": "2026-04-30T08:00:00.000000",
+      "modified_datetime": "2026-04-30T08:00:00.000000",
+      "is_project_master": true,
+      "child_chits": [
+        "demo-0004",
+        "demo-0005",
+        "demo-0006",
+        "demo-0007"
+      ],
+      "all_day": false,
+      "alerts": [
+        {
+          "_type": "_notify_flags",
+          "at_start": true,
+          "at_due": true
+        }
+      ],
+      "recurrence_rule": null,
+      "recurrence_exceptions": null,
+      "progress_percent": null,
+      "time_estimate": null,
+      "weather_data": null,
+      "health_data": null
+    },
+    {
+      "id": "demo-0016",
+      "title": "Take Medication",
+      "note": "Alarms fire browser notifications with sound. Multiple alarms per chit, each with their own schedule.",
+      "tags": [
+        "Alarms",
+        "Personal/Health"
+      ],
+      "start_datetime": null,
+      "end_datetime": null,
+      "due_datetime": null,
+      "completed_datetime": null,
+      "status": null,
+      "priority": null,
+      "severity": null,
+      "checklist": [],
+      "alarm": false,
+      "notification": false,
+      "recurrence": null,
+      "recurrence_id": null,
+      "location": "",
+      "color": "#C66B6B",
+      "people": [],
+      "pinned": false,
+      "archived": false,
+      "deleted": false,
+      "created_datetime": "2026-04-30T08:00:00.000000",
+      "modified_datetime": "2026-04-30T08:00:00.000000",
+      "is_project_master": false,
+      "child_chits": [],
+      "all_day": false,
+      "alerts": [
+        {
+          "_type": "_notify_flags",
+          "at_start": true,
+          "at_due": true
+        },
+        {
+          "_type": "alarm",
+          "name": "Morning meds",
+          "time": "08:00",
+          "days": [
+            "Mon",
+            "Tue",
+            "Wed",
+            "Thu",
+            "Fri",
+            "Sat",
+            "Sun"
+          ],
+          "enabled": true,
+          "recurrence": "none"
+        },
+        {
+          "_type": "alarm",
+          "name": "Evening meds",
+          "time": "20:00",
+          "days": [
+            "Mon",
+            "Tue",
+            "Wed",
+            "Thu",
+            "Fri",
+            "Sat",
+            "Sun"
+          ],
+          "enabled": true,
+          "recurrence": "none"
+        }
+      ],
+      "recurrence_rule": null,
+      "recurrence_exceptions": null,
+      "progress_percent": null,
+      "time_estimate": null,
+      "weather_data": null,
+      "health_data": null
+    },
+    {
+      "id": "demo-0017",
+      "title": "Focus Session",
+      "note": "Timers count down and alert when done. The Alerts view also has an independent alerts board for quick timers not tied to any chit. Press **!** for the Quick Alert hotkey.",
+      "tags": [
+        "Alarms",
+        "Work/Productivity"
+      ],
+      "start_datetime": null,
+      "end_datetime": null,
+      "due_datetime": null,
+      "completed_datetime": null,
+      "status": null,
+      "priority": null,
+      "severity": null,
+      "checklist": [],
+      "alarm": false,
+      "notification": false,
+      "recurrence": null,
+      "recurrence_id": null,
+      "location": "",
+      "color": "#6B8299",
+      "people": [],
+      "pinned": false,
+      "archived": false,
+      "deleted": false,
+      "created_datetime": "2026-04-30T08:00:00.000000",
+      "modified_datetime": "2026-04-30T08:00:00.000000",
+      "is_project_master": false,
+      "child_chits": [],
+      "all_day": false,
+      "alerts": [
+        {
+          "_type": "_notify_flags",
+          "at_start": true,
+          "at_due": true
+        },
+        {
+          "_type": "timer",
+          "name": "Deep work block",
+          "totalSeconds": 1500,
+          "loop": false
+        },
+        {
+          "_type": "timer",
+          "name": "Break",
+          "totalSeconds": 300,
+          "loop": false
+        }
+      ],
+      "recurrence_rule": null,
+      "recurrence_exceptions": null,
+      "progress_percent": null,
+      "time_estimate": null,
+      "weather_data": null,
+      "health_data": null
+    },
+    {
+      "id": "demo-0018",
+      "title": "Book Club",
+      "note": "Monthly book club. Discussing \"The Midnight Library.\" Bring snacks.",
+      "tags": [
+        "Calendar",
+        "Personal/Social"
+      ],
+      "start_datetime": "2026-05-03T23:00:00.000Z",
+      "end_datetime": "2026-05-04T01:00:00.000Z",
+      "due_datetime": null,
+      "completed_datetime": null,
+      "status": null,
+      "priority": null,
+      "severity": null,
+      "checklist": [],
+      "alarm": false,
+      "notification": false,
+      "recurrence": "MONTHLY",
+      "recurrence_id": null,
+      "location": "Public Library, Room 204",
+      "color": "#8B6B99",
+      "people": [
+        "Marie Curie",
+        "Rosalind Franklin"
+      ],
+      "pinned": false,
+      "archived": false,
+      "deleted": false,
+      "created_datetime": "2026-04-30T08:00:00.000000",
+      "modified_datetime": "2026-04-30T08:00:00.000000",
+      "is_project_master": false,
+      "child_chits": [],
+      "all_day": false,
+      "alerts": [
+        {
+          "_type": "_notify_flags",
+          "at_start": true,
+          "at_due": true
+        }
+      ],
+      "recurrence_rule": {
+        "freq": "MONTHLY",
+        "interval": 1
+      },
+      "recurrence_exceptions": null,
+      "progress_percent": null,
+      "time_estimate": null,
+      "weather_data": null,
+      "health_data": null
+    },
+    {
+      "id": "demo-0019",
+      "title": "Submit quarterly report",
+      "note": "Due-date-only chits appear as a clock icon on the calendar. No start/end time, just a deadline.",
+      "tags": [
+        "Tasks",
+        "Calendar",
+        "Work/Admin"
+      ],
+      "start_datetime": null,
+      "end_datetime": null,
+      "due_datetime": "2026-05-09T16:00:00.000Z",
+      "completed_datetime": null,
+      "status": "ToDo",
+      "priority": "High",
+      "severity": null,
+      "checklist": [],
+      "alarm": false,
+      "notification": false,
+      "recurrence": null,
+      "recurrence_id": null,
+      "location": "",
+      "color": "#E3B23C",
+      "people": [],
+      "pinned": false,
+      "archived": false,
+      "deleted": false,
+      "created_datetime": "2026-04-30T08:00:00.000000",
+      "modified_datetime": "2026-04-30T08:00:00.000000",
+      "is_project_master": false,
+      "child_chits": [],
+      "all_day": false,
+      "alerts": [
+        {
+          "_type": "_notify_flags",
+          "at_start": true,
+          "at_due": true
+        }
+      ],
+      "recurrence_rule": null,
+      "recurrence_exceptions": null,
+      "progress_percent": null,
+      "time_estimate": null,
+      "weather_data": null,
+      "health_data": null
+    },
+    {
+      "id": "demo-0020",
+      "title": "Old project notes (archived)",
+      "note": "Archived chits are hidden by default. Toggle \"Show Archived\" in the sidebar filters to see them.",
+      "tags": [
+        "Notes",
+        "Work/Projects"
+      ],
+      "start_datetime": null,
+      "end_datetime": null,
+      "due_datetime": null,
+      "completed_datetime": null,
+      "status": null,
+      "priority": null,
+      "severity": null,
+      "checklist": [],
+      "alarm": false,
+      "notification": false,
+      "recurrence": null,
+      "recurrence_id": null,
+      "location": "",
+      "color": "#6B8299",
+      "people": [],
+      "pinned": false,
+      "archived": true,
+      "deleted": false,
+      "created_datetime": "2026-04-30T08:00:00.000000",
+      "modified_datetime": "2026-04-30T08:00:00.000000",
+      "is_project_master": false,
+      "child_chits": [],
+      "all_day": false,
+      "alerts": [
+        {
+          "_type": "_notify_flags",
+          "at_start": true,
+          "at_due": true
+        }
+      ],
+      "recurrence_rule": null,
+      "recurrence_exceptions": null,
+      "progress_percent": null,
+      "time_estimate": null,
+      "weather_data": null,
+      "health_data": null
+    },
+    {
+      "id": "demo-0021",
+      "title": "Outdoor Team Building",
+      "note": "Weather auto-loads when a chit has a location and a date. Press **W** for the weather modal.",
+      "tags": [
+        "Calendar",
+        "Work/Social"
+      ],
+      "start_datetime": "2026-05-06T16:00:00.000Z",
+      "end_datetime": "2026-05-06T19:00:00.000Z",
+      "due_datetime": null,
+      "completed_datetime": null,
+      "status": null,
+      "priority": null,
+      "severity": null,
+      "checklist": [],
+      "alarm": false,
+      "notification": false,
+      "recurrence": null,
+      "recurrence_id": null,
+      "location": "Central Park, New York",
+      "color": "#8A9A5B",
+      "people": [
+        "Ada Lovelace",
+        "Alan Turing",
+        "Nikola Tesla",
+        "Grace Hopper"
+      ],
+      "pinned": false,
+      "archived": false,
+      "deleted": false,
+      "created_datetime": "2026-04-30T08:00:00.000000",
+      "modified_datetime": "2026-04-30T08:00:00.000000",
+      "is_project_master": false,
+      "child_chits": [],
+      "all_day": false,
+      "alerts": [
+        {
+          "_type": "_notify_flags",
+          "at_start": true,
+          "at_due": true
+        }
+      ],
+      "recurrence_rule": null,
+      "recurrence_exceptions": null,
+      "progress_percent": null,
+      "time_estimate": null,
+      "weather_data": null,
+      "health_data": null
+    },
+    {
+      "id": "demo-0022",
+      "title": "Custom Colors",
+      "note": "# Chit Colors\n\nEvery chit can have its own color from the picker in the editor. Add custom colors in Settings.\n\nColors appear on calendar events, task cards, note cards, and checklist headers:\n- Red (#C66B6B) \u2014 urgent/important\n- Green (#8A9A5B) \u2014 complete/healthy\n- Blue (#6B8299) \u2014 informational\n- Gold (#E3B23C) \u2014 in progress\n- Purple (#8B6B99) \u2014 personal\n- Indigo (#4c58f4) \u2014 reference",
+      "tags": [
+        "Notes",
+        "Demo/Features"
+      ],
+      "start_datetime": null,
+      "end_datetime": null,
+      "due_datetime": null,
+      "completed_datetime": null,
+      "status": null,
+      "priority": null,
+      "severity": null,
+      "checklist": [],
+      "alarm": false,
+      "notification": false,
+      "recurrence": null,
+      "recurrence_id": null,
+      "location": "",
+      "color": "#D4A574",
+      "people": [],
+      "pinned": false,
+      "archived": false,
+      "deleted": false,
+      "created_datetime": "2026-04-30T08:00:00.000000",
+      "modified_datetime": "2026-04-30T08:00:00.000000",
+      "is_project_master": false,
+      "child_chits": [],
+      "all_day": false,
+      "alerts": [
+        {
+          "_type": "_notify_flags",
+          "at_start": true,
+          "at_due": true
+        }
+      ],
+      "recurrence_rule": null,
+      "recurrence_exceptions": null,
+      "progress_percent": null,
+      "time_estimate": null,
+      "weather_data": null,
+      "health_data": null
+    },
+    {
+      "id": "demo-0023",
+      "title": "Tags and Filtering",
+      "note": "# Hierarchical Tags\n\nTags use `/` for nesting: `Work/Engineering`, `Personal/Health`.\n\nChild tags inherit parent color. Favorites appear at top.\n\n## Filtering\nPress **F** for the filter submenu:\n- **S** \u2014 Status\n- **T** \u2014 Tags\n- **P** \u2014 Priority\n- **E** \u2014 People\n- **Backspace** \u2014 Clear all",
+      "tags": [
+        "Notes",
+        "Demo/Features"
+      ],
+      "start_datetime": null,
+      "end_datetime": null,
+      "due_datetime": null,
+      "completed_datetime": null,
+      "status": null,
+      "priority": null,
+      "severity": null,
+      "checklist": [],
+      "alarm": false,
+      "notification": false,
+      "recurrence": null,
+      "recurrence_id": null,
+      "location": "",
+      "color": "#4c58f4",
+      "people": [],
+      "pinned": false,
+      "archived": false,
+      "deleted": false,
+      "created_datetime": "2026-04-30T08:00:00.000000",
+      "modified_datetime": "2026-04-30T08:00:00.000000",
+      "is_project_master": false,
+      "child_chits": [],
+      "all_day": false,
+      "alerts": [
+        {
+          "_type": "_notify_flags",
+          "at_start": true,
+          "at_due": true
+        }
+      ],
+      "recurrence_rule": null,
+      "recurrence_exceptions": null,
+      "progress_percent": null,
+      "time_estimate": null,
+      "weather_data": null,
+      "health_data": null
+    },
+    {
+      "id": "demo-0024",
+      "title": "Keyboard Power User",
+      "note": "# Keyboard Shortcuts\n\n## Tab Switching\n**C** Calendar, **H** Checklists, **A** Alerts, **P** Projects, **T** Tasks, **N** Notes\n\n## Actions\n- **K** \u2014 Create new chit\n- **W** \u2014 Weather modal (Shift+W for full page)\n- **L** \u2014 Clock modal\n- **S** \u2014 Settings\n- **!** \u2014 Quick Alert\n- **`** \u2014 Toggle sidebar\n- **~** \u2014 Toggle top bar\n- **G** \u2014 Global search\n- **V** \u2014 Navigate menu\n\n## Submenus\n- **.** \u2014 Period (calendar view)\n- **F** \u2014 Filters\n- **O** \u2014 Sort order\n\nPress **R** anytime for the full reference overlay!",
+      "tags": [
+        "Notes",
+        "Demo/Getting Started"
+      ],
+      "start_datetime": null,
+      "end_datetime": null,
+      "due_datetime": null,
+      "completed_datetime": null,
+      "status": null,
+      "priority": null,
+      "severity": null,
+      "checklist": [],
+      "alarm": false,
+      "notification": false,
+      "recurrence": null,
+      "recurrence_id": null,
+      "location": "",
+      "color": "transparent",
+      "people": [],
+      "pinned": false,
+      "archived": false,
+      "deleted": false,
+      "created_datetime": "2026-04-30T08:00:00.000000",
+      "modified_datetime": "2026-04-30T08:00:00.000000",
+      "is_project_master": false,
+      "child_chits": [],
+      "all_day": false,
+      "alerts": [
+        {
+          "_type": "_notify_flags",
+          "at_start": true,
+          "at_due": true
+        }
+      ],
+      "recurrence_rule": null,
+      "recurrence_exceptions": null,
+      "progress_percent": null,
+      "time_estimate": null,
+      "weather_data": null,
+      "health_data": null
+    },
+    {
+      "id": "demo-0025",
+      "title": "Weekend Hike",
+      "note": "5-mile loop trail. Bring water and snacks.",
+      "tags": [
+        "Calendar",
+        "Personal/Health",
+        "Personal/Social"
+      ],
+      "start_datetime": "2026-05-03T14:00:00.000Z",
+      "end_datetime": "2026-05-03T18:00:00.000Z",
+      "due_datetime": null,
+      "completed_datetime": null,
+      "status": null,
+      "priority": null,
+      "severity": null,
+      "checklist": [],
+      "alarm": false,
+      "notification": false,
+      "recurrence": null,
+      "recurrence_id": null,
+      "location": "Blue Ridge Trail",
+      "color": "#8A9A5B",
+      "people": [
+        "Rosalind Franklin"
+      ],
+      "pinned": false,
+      "archived": false,
+      "deleted": false,
+      "created_datetime": "2026-04-30T08:00:00.000000",
+      "modified_datetime": "2026-04-30T08:00:00.000000",
+      "is_project_master": false,
+      "child_chits": [],
+      "all_day": false,
+      "alerts": [
+        {
+          "_type": "_notify_flags",
+          "at_start": true,
+          "at_due": true
+        }
+      ],
+      "recurrence_rule": null,
+      "recurrence_exceptions": null,
+      "progress_percent": null,
+      "time_estimate": null,
+      "weather_data": null,
+      "health_data": {
+        "distance": 5.2,
+        "heart_rate": 135
+      }
+    },
+    {
+      "id": "demo-0026",
+      "title": "Sprint Planning",
+      "note": "Plan the next two-week sprint.",
+      "tags": [
+        "Calendar",
+        "Work/Meetings",
+        "Checklists"
+      ],
+      "start_datetime": "2026-05-05T15:00:00.000Z",
+      "end_datetime": "2026-05-05T16:30:00.000Z",
+      "due_datetime": null,
+      "completed_datetime": null,
+      "status": null,
+      "priority": null,
+      "severity": null,
+      "checklist": [
+        {
+          "id": "sp-01",
+          "text": "Review completed stories",
+          "level": 0,
+          "checked": true,
+          "parent": null
+        },
+        {
+          "id": "sp-02",
+          "text": "Groom backlog",
+          "level": 0,
+          "checked": false,
+          "parent": null
+        },
+        {
+          "id": "sp-03",
+          "text": "Estimate new stories",
+          "level": 0,
+          "checked": false,
+          "parent": null
+        },
+        {
+          "id": "sp-04",
+          "text": "Assign owners",
+          "level": 0,
+          "checked": false,
+          "parent": null
+        },
+        {
+          "id": "sp-05",
+          "text": "Set sprint goal",
+          "level": 0,
+          "checked": false,
+          "parent": null
+        }
+      ],
+      "alarm": false,
+      "notification": false,
+      "recurrence": null,
+      "recurrence_id": null,
+      "location": "",
+      "color": "#6B8299",
+      "people": [
+        "Ada Lovelace",
+        "Grace Hopper",
+        "Alan Turing",
+        "Nikola Tesla"
+      ],
+      "pinned": false,
+      "archived": false,
+      "deleted": false,
+      "created_datetime": "2026-04-30T08:00:00.000000",
+      "modified_datetime": "2026-04-30T08:00:00.000000",
+      "is_project_master": false,
+      "child_chits": [],
+      "all_day": false,
+      "alerts": [
+        {
+          "_type": "_notify_flags",
+          "at_start": true,
+          "at_due": true
+        }
+      ],
+      "recurrence_rule": null,
+      "recurrence_exceptions": null,
+      "progress_percent": null,
+      "time_estimate": null,
+      "weather_data": null,
+      "health_data": null
+    },
+    {
+      "id": "demo-0027",
+      "title": "Recipe: Sourdough Bread",
+      "note": "# Sourdough Bread\n\n## Ingredients\n- 500g bread flour\n- 350g water\n- 100g active starter\n- 10g salt\n\n## Method\n1. Mix flour and water, rest 30 min (autolyse)\n2. Add starter and salt, fold to combine\n3. Bulk ferment 4-6 hours with stretch and folds\n4. Shape and place in banneton\n5. Cold retard 12-16 hours\n6. Bake in Dutch oven at 500F covered 20 min, 450F uncovered 20 min",
+      "tags": [
+        "Notes",
+        "Personal/Recipes"
+      ],
+      "start_datetime": null,
+      "end_datetime": null,
+      "due_datetime": null,
+      "completed_datetime": null,
+      "status": null,
+      "priority": null,
+      "severity": null,
+      "checklist": [],
+      "alarm": false,
+      "notification": false,
+      "recurrence": null,
+      "recurrence_id": null,
+      "location": "",
+      "color": "#D4A574",
+      "people": [],
+      "pinned": false,
+      "archived": false,
+      "deleted": false,
+      "created_datetime": "2026-04-30T08:00:00.000000",
+      "modified_datetime": "2026-04-30T08:00:00.000000",
+      "is_project_master": false,
+      "child_chits": [],
+      "all_day": false,
+      "alerts": [
+        {
+          "_type": "_notify_flags",
+          "at_start": true,
+          "at_due": true
+        }
+      ],
+      "recurrence_rule": null,
+      "recurrence_exceptions": null,
+      "progress_percent": null,
+      "time_estimate": null,
+      "weather_data": null,
+      "health_data": null
+    },
+    {
+      "id": "demo-0028",
+      "title": "Renew domain registration",
+      "note": "This task is overdue! With \"Highlight Overdue\" enabled in Settings, overdue chits get a red border.",
+      "tags": [
+        "Tasks",
+        "Work/Admin"
+      ],
+      "start_datetime": null,
+      "end_datetime": null,
+      "due_datetime": "2026-04-28T20:00:00.000Z",
+      "completed_datetime": null,
+      "status": "ToDo",
+      "priority": "High",
+      "severity": "Critical",
+      "checklist": [],
+      "alarm": false,
+      "notification": false,
+      "recurrence": null,
+      "recurrence_id": null,
+      "location": "",
+      "color": "#C66B6B",
+      "people": [],
+      "pinned": false,
+      "archived": false,
+      "deleted": false,
+      "created_datetime": "2026-04-30T08:00:00.000000",
+      "modified_datetime": "2026-04-30T08:00:00.000000",
+      "is_project_master": false,
+      "child_chits": [],
+      "all_day": false,
+      "alerts": [
+        {
+          "_type": "_notify_flags",
+          "at_start": true,
+          "at_due": true
+        }
+      ],
+      "recurrence_rule": null,
+      "recurrence_exceptions": null,
+      "progress_percent": null,
+      "time_estimate": null,
+      "weather_data": null,
+      "health_data": null
+    },
+    {
+      "id": "demo-0029",
+      "title": "Hackathon Ideas",
+      "note": "- Real-time collaborative whiteboard\n- AI-powered meeting summarizer\n- Smart home energy dashboard\n- Retro game emulator in the browser\n\nVote on Friday. Winner gets pizza.",
+      "tags": [
+        "Notes",
+        "Work/Projects"
+      ],
+      "start_datetime": null,
+      "end_datetime": null,
+      "due_datetime": null,
+      "completed_datetime": null,
+      "status": null,
+      "priority": null,
+      "severity": null,
+      "checklist": [],
+      "alarm": false,
+      "notification": false,
+      "recurrence": null,
+      "recurrence_id": null,
+      "location": "",
+      "color": "#8B6B99",
+      "people": [],
+      "pinned": false,
+      "archived": false,
+      "deleted": false,
+      "created_datetime": "2026-04-30T08:00:00.000000",
+      "modified_datetime": "2026-04-30T08:00:00.000000",
+      "is_project_master": false,
+      "child_chits": [],
+      "all_day": false,
+      "alerts": [
+        {
+          "_type": "_notify_flags",
+          "at_start": true,
+          "at_due": true
+        }
+      ],
+      "recurrence_rule": null,
+      "recurrence_exceptions": null,
+      "progress_percent": null,
+      "time_estimate": null,
+      "weather_data": null,
+      "health_data": null
+    },
+    {
+      "id": "demo-0030",
+      "title": "Dentist Appointment",
+      "note": "Notifications fire relative to start or due time. This has a 24-hour and 30-minute reminder.",
+      "tags": [
+        "Calendar",
+        "Personal/Health"
+      ],
+      "start_datetime": "2026-05-07T18:00:00.000Z",
+      "end_datetime": "2026-05-07T19:00:00.000Z",
+      "due_datetime": null,
+      "completed_datetime": null,
+      "status": null,
+      "priority": null,
+      "severity": null,
+      "checklist": [],
+      "alarm": false,
+      "notification": false,
+      "recurrence": null,
+      "recurrence_id": null,
+      "location": "Bright Smile Dental, Suite 300",
+      "color": "#6B8299",
+      "people": [
+        "Dr. Molar"
+      ],
+      "pinned": false,
+      "archived": false,
+      "deleted": false,
+      "created_datetime": "2026-04-30T08:00:00.000000",
+      "modified_datetime": "2026-04-30T08:00:00.000000",
+      "is_project_master": false,
+      "child_chits": [],
+      "all_day": false,
+      "alerts": [
+        {
+          "_type": "_notify_flags",
+          "at_start": true,
+          "at_due": true
+        },
+        {
+          "_type": "notification",
+          "name": "Dentist tomorrow",
+          "offset_minutes": -1440,
+          "relative_to": "start",
+          "enabled": true
+        },
+        {
+          "_type": "notification",
+          "name": "Leave in 30 min",
+          "offset_minutes": -30,
+          "relative_to": "start",
+          "enabled": true
+        }
+      ],
+      "recurrence_rule": null,
+      "recurrence_exceptions": null,
+      "progress_percent": null,
+      "time_estimate": null,
+      "weather_data": null,
+      "health_data": null
+    }
+  ]
+}

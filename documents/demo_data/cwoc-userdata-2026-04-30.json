@@ -1,0 +1,159 @@
+{
+  "type": "userdata",
+  "version": "20260429.1655",
+  "exported_at": "2026-04-30T00:02:00.286166Z",
+  "instance_id": "41a14520-7684-46aa-8c12-a07a9a47a6bc",
+  "data": {
+    "settings": [
+      {
+        "user_id": "default_user",
+        "time_format": "24hour",
+        "sex": "Man",
+        "snooze_length": "5 minutes",
+        "default_filters": {},
+        "alarm_orientation": "Vertical",
+        "active_clocks": "[\"24hour\",\"hst\",\"12hour\",\"12houranalog\"]",
+        "tags": [
+          {
+            "name": "This is a tag",
+            "color": "#3fe660",
+            "favorite": false
+          },
+          {
+            "name": "This is a tag/Sub-tag",
+            "color": "#e4e300",
+            "favorite": false
+          },
+          {
+            "name": "Groups",
+            "color": "#4c58f4",
+            "favorite": false
+          },
+          {
+            "name": "Use SHIFT+ENTER for more options",
+            "color": "#ff0000",
+            "favorite": false
+          },
+          {
+            "name": "Groups/Family Events",
+            "color": "#009d94",
+            "favorite": false
+          },
+          {
+            "name": "Groups/Children",
+            "color": "#00799c",
+            "favorite": false
+          }
+        ],
+        "custom_colors": [],
+        "visual_indicators": {
+          "alarm": "always",
+          "notification": "always",
+          "weather": "always",
+          "people": "always",
+          "indicators": "always"
+        },
+        "chit_options": {
+          "fade_past_chits": true,
+          "highlight_overdue_chits": true,
+          "delete_past_alarm_chits": false
+        },
+        "calendar_snap": "15",
+        "week_start_day": "6",
+        "work_start_hour": "8",
+        "work_end_hour": "17",
+        "work_days": "1,2,3,4,5",
+        "enabled_periods": "Itinerary,Day,Week,Work,SevenDay,Month,Year",
+        "custom_days_count": "7",
+        "saved_locations": [
+          {
+            "label": "Home",
+            "address": "Canton, MA",
+            "is_default": true
+          }
+        ],
+        "all_view_start_hour": "0",
+        "all_view_end_hour": "24",
+        "day_scroll_to_hour": "5",
+        "username": null,
+        "audit_log_max_days": 1096,
+        "audit_log_max_mb": 1.0,
+        "default_notifications": null,
+        "unit_system": "imperial"
+      }
+    ],
+    "contacts": [
+      {
+        "id": "35c49b8f-80f2-4425-b6db-80c88274308b",
+        "given_name": "C.",
+        "surname": "Holeman",
+        "middle_names": "W.",
+        "prefix": "Mr.",
+        "suffix": "III",
+        "display_name": "Mr. C. W. Holeman III",
+        "phones": null,
+        "emails": [
+          {
+            "label": "Creator",
+            "value": "CodeMonkey@cwholemaniii.com"
+          }
+        ],
+        "addresses": null,
+        "call_signs": [
+          {
+            "label": "Ham",
+            "value": "K7CWH"
+          }
+        ],
+        "x_handles": null,
+        "websites": null,
+        "has_signal": true,
+        "pgp_key": null,
+        "favorite": true,
+        "created_datetime": "2026-04-27T12:57:27.476889",
+        "modified_datetime": "2026-04-27T12:58:48.026885",
+        "nickname": "",
+        "signal_username": null,
+        "color": "#0097A7",
+        "organization": "The guy who made Omni Chits",
+        "social_context": null,
+        "image_url": "/data/contacts/profile_pictures/35c49b8f-80f2-4425-b6db-80c88274308b.jpg",
+        "notes": null,
+        "tags": null
+      },
+      {
+        "id": "21bc6aeb-3955-45c0-8cf0-4054b2749284",
+        "given_name": "Gifs supported!",
+        "surname": "",
+        "middle_names": "",
+        "prefix": "",
+        "suffix": "",
+        "display_name": "Gifs supported!",
+        "phones": null,
+        "emails": null,
+        "addresses": [
+          {
+            "label": "Home",
+            "value": "Nabu"
+          }
+        ],
+        "call_signs": null,
+        "x_handles": null,
+        "websites": null,
+        "has_signal": false,
+        "pgp_key": null,
+        "favorite": false,
+        "created_datetime": "2026-04-27T13:01:04.057001",
+        "modified_datetime": "2026-04-28T13:26:19.027864",
+        "nickname": "",
+        "signal_username": null,
+        "color": "#D84315",
+        "organization": null,
+        "social_context": null,
+        "image_url": "/data/contacts/profile_pictures/21bc6aeb-3955-45c0-8cf0-4054b2749284.gif",
+        "notes": null,
+        "tags": null
+      }
+    ]
+  }
+}

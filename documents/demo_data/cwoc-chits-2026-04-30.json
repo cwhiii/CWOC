@@ -1,0 +1,825 @@
+{
+  "type": "chits",
+  "version": "20260429.1655",
+  "exported_at": "2026-04-30T00:01:59.250546Z",
+  "instance_id": "41a14520-7684-46aa-8c12-a07a9a47a6bc",
+  "data": [
+    {
+      "id": "e34eaf13-c6f4-46f7-b673-14535351e1ab",
+      "title": "A chit. Press R for reference in th emain view  (Check out the Help in the main view with SHFT+R)",
+      "note": "",
+      "tags": [
+        "Calendar",
+        "Tasks"
+      ],
+      "start_datetime": "2026-04-25T06:00:00.000Z",
+      "end_datetime": "2026-06-14T05:59:59.000Z",
+      "due_datetime": null,
+      "completed_datetime": null,
+      "status": "ToDo",
+      "priority": null,
+      "severity": null,
+      "checklist": [],
+      "alarm": false,
+      "notification": false,
+      "recurrence": null,
+      "recurrence_id": null,
+      "location": "Canton, MA",
+      "color": "#C66B6B",
+      "people": [],
+      "pinned": false,
+      "archived": false,
+      "deleted": false,
+      "created_datetime": "2026-04-27T04:00:08.738080",
+      "modified_datetime": "2026-04-28T02:23:44.140331",
+      "is_project_master": false,
+      "child_chits": [],
+      "all_day": true,
+      "alerts": [
+        {
+          "_type": "_notify_flags",
+          "at_start": true,
+          "at_due": true
+        }
+      ],
+      "recurrence_rule": null,
+      "recurrence_exceptions": null,
+      "progress_percent": null,
+      "time_estimate": null,
+      "weather_data": "{\"focus_date\":\"2026-04-25\",\"updated_time\":\"2026-04-28T02:23:36.804Z\",\"high\":18.2,\"low\":2.3,\"precipitation\":0,\"weather_code\":1}",
+      "health_data": null
+    },
+    {
+      "id": "4eecc1fd-671c-47e9-99eb-3e6574ed43aa",
+      "title": "\u2196 Tap the logo for more menu options",
+      "note": "# Markdown Support for Notes:\n- It's supported. \n- **Not** _bad_, eh? \n- [Hyperlinks too](https://cwholemaniii.com/pages/home.shtml)",
+      "tags": [
+        "Calendar",
+        "Tasks"
+      ],
+      "start_datetime": "2026-04-27T16:00:00.000Z",
+      "end_datetime": "2026-04-27T18:00:00.000Z",
+      "due_datetime": null,
+      "completed_datetime": null,
+      "status": "In Progress",
+      "priority": "Medium",
+      "severity": null,
+      "checklist": [],
+      "alarm": false,
+      "notification": false,
+      "recurrence": "DAILY",
+      "recurrence_id": null,
+      "location": "San Diego, Ca",
+      "color": "#E3B23C",
+      "people": [],
+      "pinned": false,
+      "archived": false,
+      "deleted": false,
+      "created_datetime": "2026-04-27T12:34:49.765473",
+      "modified_datetime": "2026-04-28T13:35:32.093158",
+      "is_project_master": false,
+      "child_chits": [],
+      "all_day": false,
+      "alerts": [
+        {
+          "_type": "_notify_flags",
+          "at_start": true,
+          "at_due": true
+        }
+      ],
+      "recurrence_rule": {
+        "freq": "DAILY",
+        "interval": 1
+      },
+      "recurrence_exceptions": [
+        {
+          "date": "2026-04-30",
+          "broken_off": true
+        }
+      ],
+      "progress_percent": null,
+      "time_estimate": null,
+      "weather_data": null,
+      "health_data": null
+    },
+    {
+      "id": "62a8d073-58f5-4fdd-b74d-a97644a01499",
+      "title": "Double tap/click to create new Chit",
+      "note": "Any Chit with a note will show up here.And that's one of the underlying things that makes this tool great. The only things that show up in a view are the things that have content for that view. So notes show up under notes, things of dates show up on the calendar, things of statuses show up in Tasks, etc.",
+      "tags": [
+        "Calendar",
+        "Tasks"
+      ],
+      "start_datetime": "2026-04-27T18:00:00.000Z",
+      "end_datetime": "2026-04-27T19:45:00.000Z",
+      "due_datetime": null,
+      "completed_datetime": null,
+      "status": "ToDo",
+      "priority": null,
+      "severity": "Critical",
+      "checklist": [],
+      "alarm": false,
+      "notification": false,
+      "recurrence": "DAILY",
+      "recurrence_id": null,
+      "location": "",
+      "color": "#6B8299",
+      "people": [],
+      "pinned": false,
+      "archived": false,
+      "deleted": false,
+      "created_datetime": "2026-04-27T12:35:57.779922",
+      "modified_datetime": "2026-04-28T02:24:54.521911",
+      "is_project_master": false,
+      "child_chits": [],
+      "all_day": false,
+      "alerts": [
+        {
+          "_type": "_notify_flags",
+          "at_start": true,
+          "at_due": true
+        }
+      ],
+      "recurrence_rule": {
+        "freq": "DAILY",
+        "interval": 1
+      },
+      "recurrence_exceptions": null,
+      "progress_percent": null,
+      "time_estimate": null,
+      "weather_data": null,
+      "health_data": null
+    },
+    {
+      "id": "62fd3530-1976-4746-8626-56b0ca6298d5",
+      "title": "What's the Point?",
+      "note": "Omni Chits are a calendar, sticky notes, checklists, alarms, tasks, projects, etc. All as a single unified \"Chit\" entity type. Every item is all of those things. (Also has full vCard support for contacts)Its a calendar, sticky notes, checklists, alarms, timers, tasks, projects, etc. All as a single unified \"Chit\" entity type. Every item is all of those things. (Also has full vCard support for contacts).Basically, anything you'd want to track in terms of things to do or track or pay attention to, it does it all.Chits are The Thing. They aren't just event, but that, and notes, and checklists, and all those other  things all rolled into a single unified entity called a Chit.The Views let you see each of the Chits that have the applicable part in it. So on the calendar view you see any chit that has a time or a due date. On the checklist view you see any chit that has a checklist. Etc. Any chit van have any of the data types in it.",
+      "tags": [
+        "Notes"
+      ],
+      "start_datetime": null,
+      "end_datetime": null,
+      "due_datetime": null,
+      "completed_datetime": null,
+      "status": null,
+      "priority": null,
+      "severity": null,
+      "checklist": [],
+      "alarm": false,
+      "notification": false,
+      "recurrence": null,
+      "recurrence_id": null,
+      "location": "",
+      "color": "transparent",
+      "people": [
+        "Mr. C. W. Holeman III"
+      ],
+      "pinned": false,
+      "archived": false,
+      "deleted": false,
+      "created_datetime": "2026-04-27T13:08:06.357906",
+      "modified_datetime": "2026-04-27T13:08:58.655195",
+      "is_project_master": false,
+      "child_chits": [],
+      "all_day": false,
+      "alerts": [
+        {
+          "_type": "_notify_flags",
+          "at_start": true,
+          "at_due": true
+        }
+      ],
+      "recurrence_rule": null,
+      "recurrence_exceptions": null,
+      "progress_percent": null,
+      "time_estimate": null,
+      "weather_data": null,
+      "health_data": null
+    },
+    {
+      "id": "8c841074-ee5f-48ab-87f5-8b02214ce2da",
+      "title": "How do I run Omni Chits?",
+      "note": "# Steps\nIt's super easy! \n\n\n#tag",
+      "tags": [
+        "Notes"
+      ],
+      "start_datetime": null,
+      "end_datetime": null,
+      "due_datetime": null,
+      "completed_datetime": null,
+      "status": null,
+      "priority": null,
+      "severity": null,
+      "checklist": [],
+      "alarm": false,
+      "notification": false,
+      "recurrence": null,
+      "recurrence_id": null,
+      "location": "",
+      "color": "transparent",
+      "people": [],
+      "pinned": false,
+      "archived": false,
+      "deleted": false,
+      "created_datetime": "2026-04-27T13:19:43.818915",
+      "modified_datetime": "2026-04-28T02:47:50.722111",
+      "is_project_master": false,
+      "child_chits": [],
+      "all_day": false,
+      "alerts": [
+        {
+          "_type": "_notify_flags",
+          "at_start": true,
+          "at_due": true
+        }
+      ],
+      "recurrence_rule": null,
+      "recurrence_exceptions": null,
+      "progress_percent": null,
+      "time_estimate": null,
+      "weather_data": null,
+      "health_data": null
+    },
+    {
+      "id": "2019f498-6129-4a28-9a63-60d9fcbd04f5",
+      "title": "This is a project demo! You can add other Chits to this chit to track larger projects",
+      "note": "",
+      "tags": [
+        "Notes"
+      ],
+      "start_datetime": null,
+      "end_datetime": null,
+      "due_datetime": null,
+      "completed_datetime": null,
+      "status": null,
+      "priority": null,
+      "severity": null,
+      "checklist": [],
+      "alarm": false,
+      "notification": false,
+      "recurrence": null,
+      "recurrence_id": null,
+      "location": "",
+      "color": "#8A9A5B",
+      "people": [],
+      "pinned": false,
+      "archived": false,
+      "deleted": false,
+      "created_datetime": "2026-04-27T13:27:27.464359",
+      "modified_datetime": "2026-04-27T13:28:36.904597",
+      "is_project_master": false,
+      "child_chits": [
+        "4eecc1fd-671c-47e9-99eb-3e6574ed43aa",
+        "62a8d073-58f5-4fdd-b74d-a97644a01499",
+        "8c841074-ee5f-48ab-87f5-8b02214ce2da"
+      ],
+      "all_day": false,
+      "alerts": [
+        {
+          "_type": "_notify_flags",
+          "at_start": true,
+          "at_due": true
+        }
+      ],
+      "recurrence_rule": null,
+      "recurrence_exceptions": null,
+      "progress_percent": null,
+      "time_estimate": null,
+      "weather_data": null,
+      "health_data": null
+    },
+    {
+      "id": "6f227329-8c49-451d-86a7-fa51a01b3d75",
+      "title": "New Project",
+      "note": null,
+      "tags": [
+        "Notes"
+      ],
+      "start_datetime": null,
+      "end_datetime": null,
+      "due_datetime": null,
+      "completed_datetime": null,
+      "status": null,
+      "priority": null,
+      "severity": null,
+      "checklist": [],
+      "alarm": false,
+      "notification": false,
+      "recurrence": null,
+      "recurrence_id": null,
+      "location": null,
+      "color": null,
+      "people": null,
+      "pinned": false,
+      "archived": false,
+      "deleted": true,
+      "created_datetime": "2026-04-27T13:27:27.632247",
+      "modified_datetime": "2026-04-27T13:27:48.016372",
+      "is_project_master": true,
+      "child_chits": [
+        "4eecc1fd-671c-47e9-99eb-3e6574ed43aa",
+        "62a8d073-58f5-4fdd-b74d-a97644a01499",
+        "8c841074-ee5f-48ab-87f5-8b02214ce2da"
+      ],
+      "all_day": false,
+      "alerts": null,
+      "recurrence_rule": null,
+      "recurrence_exceptions": null,
+      "progress_percent": null,
+      "time_estimate": null,
+      "weather_data": null,
+      "health_data": null
+    },
+    {
+      "id": "ca9175c0-1937-4cc8-a022-a2e474d2a95e",
+      "title": "This is a project demo! Add other chits to it, track their statuses, etc, form this handy view.",
+      "note": "",
+      "tags": [
+        "Notes"
+      ],
+      "start_datetime": null,
+      "end_datetime": null,
+      "due_datetime": null,
+      "completed_datetime": null,
+      "status": null,
+      "priority": null,
+      "severity": null,
+      "checklist": [],
+      "alarm": false,
+      "notification": false,
+      "recurrence": null,
+      "recurrence_id": null,
+      "location": "",
+      "color": "#8A9A5B",
+      "people": [],
+      "pinned": false,
+      "archived": false,
+      "deleted": false,
+      "created_datetime": "2026-04-27T13:29:41.342263",
+      "modified_datetime": "2026-04-28T02:24:54.514809",
+      "is_project_master": true,
+      "child_chits": [
+        "4eecc1fd-671c-47e9-99eb-3e6574ed43aa",
+        "62a8d073-58f5-4fdd-b74d-a97644a01499",
+        "8c841074-ee5f-48ab-87f5-8b02214ce2da"
+      ],
+      "all_day": false,
+      "alerts": [
+        {
+          "_type": "_notify_flags",
+          "at_start": true,
+          "at_due": true
+        }
+      ],
+      "recurrence_rule": null,
+      "recurrence_exceptions": null,
+      "progress_percent": null,
+      "time_estimate": null,
+      "weather_data": null,
+      "health_data": null
+    },
+    {
+      "id": "83f3bdcc-3e0f-4f68-87c6-1dc96e54dfe5",
+      "title": "New Project",
+      "note": null,
+      "tags": [
+        "Notes"
+      ],
+      "start_datetime": null,
+      "end_datetime": null,
+      "due_datetime": null,
+      "completed_datetime": null,
+      "status": null,
+      "priority": null,
+      "severity": null,
+      "checklist": [],
+      "alarm": false,
+      "notification": false,
+      "recurrence": null,
+      "recurrence_id": null,
+      "location": null,
+      "color": null,
+      "people": null,
+      "pinned": false,
+      "archived": false,
+      "deleted": false,
+      "created_datetime": "2026-04-27T13:29:41.460288",
+      "modified_datetime": "2026-04-28T02:23:52.882797",
+      "is_project_master": true,
+      "child_chits": [
+        "4eecc1fd-671c-47e9-99eb-3e6574ed43aa",
+        "62a8d073-58f5-4fdd-b74d-a97644a01499",
+        "8c841074-ee5f-48ab-87f5-8b02214ce2da"
+      ],
+      "all_day": false,
+      "alerts": null,
+      "recurrence_rule": null,
+      "recurrence_exceptions": null,
+      "progress_percent": null,
+      "time_estimate": null,
+      "weather_data": null,
+      "health_data": null
+    },
+    {
+      "id": "ec2137fa-6ea1-4a45-af83-857851408162",
+      "title": "Walmart",
+      "note": "",
+      "tags": [
+        "Notes",
+        "Checklists"
+      ],
+      "start_datetime": null,
+      "end_datetime": null,
+      "due_datetime": null,
+      "completed_datetime": null,
+      "status": null,
+      "priority": null,
+      "severity": null,
+      "checklist": [
+        {
+          "id": "item-zqv30lxdr",
+          "text": "Eggs",
+          "level": 1,
+          "checked": false,
+          "parent": "item-k5xvhg28k"
+        },
+        {
+          "id": "item-gccuetihx",
+          "text": "Milk",
+          "level": 1,
+          "checked": false,
+          "parent": "item-k5xvhg28k"
+        },
+        {
+          "id": "item-t6c5trsf5",
+          "text": "Produce",
+          "level": 0,
+          "checked": false,
+          "parent": null
+        },
+        {
+          "id": "item-1xbz3ja6e",
+          "text": "Apples",
+          "level": 1,
+          "checked": false,
+          "parent": "item-t6c5trsf5"
+        },
+        {
+          "id": "item-nqgtvu4bw",
+          "text": "Carrots",
+          "level": 1,
+          "checked": false,
+          "parent": "item-t6c5trsf5"
+        },
+        {
+          "id": "item-89552sojs",
+          "text": "Other",
+          "level": 0,
+          "checked": false,
+          "parent": null
+        },
+        {
+          "id": "item-bzh3h6kpl",
+          "text": "Flour",
+          "level": 1,
+          "checked": false,
+          "parent": "item-89552sojs"
+        }
+      ],
+      "alarm": false,
+      "notification": false,
+      "recurrence": null,
+      "recurrence_id": null,
+      "location": "",
+      "color": "#8B6B99",
+      "people": [],
+      "pinned": false,
+      "archived": false,
+      "deleted": false,
+      "created_datetime": "2026-04-27T13:32:22.483396",
+      "modified_datetime": "2026-04-28T16:15:46.139592",
+      "is_project_master": false,
+      "child_chits": [],
+      "all_day": false,
+      "alerts": [
+        {
+          "_type": "_notify_flags",
+          "at_start": true,
+          "at_due": true
+        }
+      ],
+      "recurrence_rule": null,
+      "recurrence_exceptions": null,
+      "progress_percent": null,
+      "time_estimate": null,
+      "weather_data": null,
+      "health_data": null
+    },
+    {
+      "id": "51721426-5c6c-4869-a9cd-de60d0b22cee",
+      "title": "Checklists",
+      "note": "",
+      "tags": [
+        "Notes",
+        "Checklists"
+      ],
+      "start_datetime": null,
+      "end_datetime": null,
+      "due_datetime": null,
+      "completed_datetime": null,
+      "status": null,
+      "priority": null,
+      "severity": null,
+      "checklist": [
+        {
+          "id": "item-k5xvhg28k",
+          "text": "Dairy",
+          "level": 0,
+          "checked": false,
+          "parent": null
+        },
+        {
+          "id": "item-1byjd823v",
+          "text": "You can drag items from one list to another in the Checklist View",
+          "level": 0,
+          "checked": false,
+          "parent": null
+        },
+        {
+          "id": "item-66xctdhnb",
+          "text": "Add an item & hit enter to save it",
+          "level": 0,
+          "checked": false,
+          "parent": null
+        },
+        {
+          "id": "item-ks7oaq8m3",
+          "text": "You can check off items",
+          "level": 0,
+          "checked": true,
+          "parent": null
+        },
+        {
+          "id": "item-bugvic572",
+          "text": "You can have sub-items in lists",
+          "level": 0,
+          "checked": false,
+          "parent": null
+        },
+        {
+          "id": "item-50dnn2wjg",
+          "text": "Like this",
+          "level": 1,
+          "checked": false,
+          "parent": "item-bugvic572"
+        },
+        {
+          "id": "item-ifbaifaio",
+          "text": "If editing a list item, hit SHFT+Enter to make a new one right under that.",
+          "level": 1,
+          "checked": false,
+          "parent": "item-bugvic572"
+        },
+        {
+          "id": "item-djfw3u9aw",
+          "text": "You can check off sub items, and see the parent in the checked off items.",
+          "level": 1,
+          "checked": true,
+          "parent": "item-bugvic572"
+        },
+        {
+          "id": "item-cq111bbhg",
+          "text": "You can have lots of list items",
+          "level": 0,
+          "checked": false,
+          "parent": null
+        }
+      ],
+      "alarm": false,
+      "notification": false,
+      "recurrence": null,
+      "recurrence_id": null,
+      "location": "",
+      "color": "transparent",
+      "people": [],
+      "pinned": false,
+      "archived": false,
+      "deleted": false,
+      "created_datetime": "2026-04-27T13:35:53.428360",
+      "modified_datetime": "2026-04-28T16:15:46.126157",
+      "is_project_master": false,
+      "child_chits": [],
+      "all_day": false,
+      "alerts": [
+        {
+          "_type": "_notify_flags",
+          "at_start": true,
+          "at_due": true
+        }
+      ],
+      "recurrence_rule": null,
+      "recurrence_exceptions": null,
+      "progress_percent": null,
+      "time_estimate": null,
+      "weather_data": null,
+      "health_data": null
+    },
+    {
+      "id": "2b0f8592-c629-4926-9c0a-86159fe3bc49",
+      "title": "A completed task",
+      "note": "",
+      "tags": [
+        "Notes",
+        "Tasks"
+      ],
+      "start_datetime": null,
+      "end_datetime": null,
+      "due_datetime": null,
+      "completed_datetime": null,
+      "status": "Complete",
+      "priority": "High",
+      "severity": "Minor",
+      "checklist": [],
+      "alarm": false,
+      "notification": false,
+      "recurrence": null,
+      "recurrence_id": null,
+      "location": "",
+      "color": "#6B8299",
+      "people": [],
+      "pinned": false,
+      "archived": false,
+      "deleted": false,
+      "created_datetime": "2026-04-27T13:39:40.073569",
+      "modified_datetime": "2026-04-27T13:39:47.052306",
+      "is_project_master": false,
+      "child_chits": [],
+      "all_day": false,
+      "alerts": [
+        {
+          "_type": "_notify_flags",
+          "at_start": true,
+          "at_due": true
+        }
+      ],
+      "recurrence_rule": null,
+      "recurrence_exceptions": null,
+      "progress_percent": null,
+      "time_estimate": null,
+      "weather_data": null,
+      "health_data": null
+    },
+    {
+      "id": "70a64200-b1c0-499d-b87e-e63e7d76cc89",
+      "title": "People",
+      "note": "",
+      "tags": [
+        "Calendar"
+      ],
+      "start_datetime": "2026-04-28T21:00:00.000Z",
+      "end_datetime": "2026-04-28T22:00:00.000Z",
+      "due_datetime": null,
+      "completed_datetime": null,
+      "status": null,
+      "priority": null,
+      "severity": null,
+      "checklist": [],
+      "alarm": false,
+      "notification": false,
+      "recurrence": null,
+      "recurrence_id": null,
+      "location": "Canton, MA",
+      "color": "transparent",
+      "people": [
+        "Gifs supported!"
+      ],
+      "pinned": false,
+      "archived": false,
+      "deleted": false,
+      "created_datetime": "2026-04-28T13:26:36.401633",
+      "modified_datetime": "2026-04-28T23:58:21.994233",
+      "is_project_master": false,
+      "child_chits": [],
+      "all_day": false,
+      "alerts": [
+        {
+          "_type": "_notify_flags",
+          "at_start": true,
+          "at_due": true
+        }
+      ],
+      "recurrence_rule": null,
+      "recurrence_exceptions": null,
+      "progress_percent": null,
+      "time_estimate": null,
+      "weather_data": {
+        "focus_date": "2026-04-28",
+        "updated_time": "2026-04-28T23:58:21.993197Z",
+        "high": 14.8,
+        "low": 3.1,
+        "precipitation": 0.0,
+        "weather_code": 3
+      },
+      "health_data": null
+    },
+    {
+      "id": "46bc5d78-8484-4b65-98f1-a8c247ad5f9a",
+      "title": "\u2196 Tap the logo for more menu options",
+      "note": "# Markdown Support for Notes:\n- It's supported. \n- **Not** _bad_, eh? \n- [Hyperlinks too](https://cwholemaniii.com/pages/home.shtml)",
+      "tags": [
+        "Tasks",
+        "Calendar"
+      ],
+      "start_datetime": "2026-04-29T13:30:00.000Z",
+      "end_datetime": "2026-04-29T15:30:00.000Z",
+      "due_datetime": null,
+      "completed_datetime": null,
+      "status": "In Progress",
+      "priority": "Medium",
+      "severity": null,
+      "checklist": [],
+      "alarm": false,
+      "notification": false,
+      "recurrence": null,
+      "recurrence_id": null,
+      "location": "San Diego, Ca",
+      "color": "#E3B23C",
+      "people": [],
+      "pinned": false,
+      "archived": false,
+      "deleted": false,
+      "created_datetime": "2026-04-28T13:35:32.010856",
+      "modified_datetime": "2026-04-29T23:33:58.431576",
+      "is_project_master": false,
+      "child_chits": [],
+      "all_day": false,
+      "alerts": [
+        {
+          "_type": "_notify_flags",
+          "at_start": true,
+          "at_due": true
+        }
+      ],
+      "recurrence_rule": null,
+      "recurrence_exceptions": null,
+      "progress_percent": null,
+      "time_estimate": null,
+      "weather_data": {
+        "focus_date": "2026-04-29",
+        "updated_time": "2026-04-29T23:33:58.431467Z",
+        "high": 21.7,
+        "low": 12.2,
+        "precipitation": 0.0,
+        "weather_code": 45
+      },
+      "health_data": null
+    },
+    {
+      "id": "315658d5-24a1-428d-9a00-eb7782dc9c2e",
+      "title": "Matthew Griffin",
+      "note": "",
+      "tags": [
+        "This is a tag/Sub-tag",
+        "Notes",
+        "Groups/Children",
+        "This is a tag"
+      ],
+      "start_datetime": null,
+      "end_datetime": null,
+      "due_datetime": null,
+      "completed_datetime": null,
+      "status": null,
+      "priority": null,
+      "severity": null,
+      "checklist": [],
+      "alarm": false,
+      "notification": false,
+      "recurrence": null,
+      "recurrence_id": null,
+      "location": "Heron, Montana",
+      "color": "#4c58f4",
+      "people": [],
+      "pinned": false,
+      "archived": false,
+      "deleted": false,
+      "created_datetime": "2026-04-28T16:21:26.436260",
+      "modified_datetime": "2026-04-28T16:21:26.436260",
+      "is_project_master": false,
+      "child_chits": [],
+      "all_day": false,
+      "alerts": [
+        {
+          "_type": "_notify_flags",
+          "at_start": true,
+          "at_due": true
+        }
+      ],
+      "recurrence_rule": null,
+      "recurrence_exceptions": null,
+      "progress_percent": null,
+      "time_estimate": null,
+      "weather_data": "{\"focus_date\":\"2026-04-28\",\"updated_time\":\"2026-04-28T16:20:49.611Z\",\"high\":14.6,\"low\":3.9,\"precipitation\":0.7,\"weather_code\":53}",
+      "health_data": null
+    }
+  ]
+}
