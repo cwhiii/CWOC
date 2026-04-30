@@ -259,18 +259,8 @@
             </div>
             </div><!-- /sidebar-scroll -->
 
-            <!-- Bottom pinned: User Switcher, Settings, Reference, Help -->
+            <!-- Bottom pinned: Settings, Reference, Help -->
             <div class="sidebar-bottom">
-                <!-- User Switcher -->
-                <div class="cwoc-user-switcher" id="sidebar-user-switcher" style="margin-bottom:6px;">
-                    <button class="action-button cwoc-user-switcher-btn" id="sidebar-user-switcher-btn" title="Switch user account" onclick="event.stopPropagation(); _cwocToggleUserDropdown(document.getElementById('sidebar-user-switcher'));">
-                        👤 <span id="sidebar-user-display-name">User</span>
-                    </button>
-                </div>
-                <!-- Logout -->
-                <button class="action-button cwoc-logout-btn" onclick="_cwocLogout()" title="Log out of your account" style="margin-bottom:6px;">
-                    🚪 Logout
-                </button>
                 <button class="action-button" onclick="storePreviousState(); localStorage.setItem('cwoc_settings_return', '/'); window.location.href='/frontend/html/settings.html'" style="margin-bottom:6px;">
                     <img src="/static/settings.png" alt="Settings" />
                     Settings
@@ -564,6 +554,12 @@
                     </div>
                 </div>
                 <div class="top-bar-spacer"></div>
+                <!-- Profile menu (rightmost element in top bar) -->
+                <div class="cwoc-profile-menu" id="cwoc-profile-menu">
+                    <button class="cwoc-profile-btn" id="cwoc-profile-btn" title="User" onclick="event.stopPropagation(); _cwocToggleProfileMenu();">
+                        <img src="/static/default-avatar.svg" alt="Profile" class="cwoc-profile-img" id="cwoc-profile-img" />
+                    </button>
+                </div>
             </div>
             <div class="chit-list" id="chit-list">
                 <!-- Chits will be populated here -->
@@ -593,18 +589,18 @@
         <script src="/frontend/js/dashboard/main-init.js"></script>
         <script src="/frontend/js/dashboard/main.js"></script>
         <script>
-        /* Populate sidebar user switcher display name once auth is ready */
+        /* Populate profile menu button tooltip with username once auth is ready */
         (function() {
-            var nameEl = document.getElementById('sidebar-user-display-name');
-            if (!nameEl) return;
+            var profileBtn = document.getElementById('cwoc-profile-btn');
+            if (!profileBtn) return;
             var user = (typeof getCurrentUser === 'function') ? getCurrentUser() : null;
             if (user) {
-                nameEl.textContent = user.display_name;
+                profileBtn.title = user.username;
                 if (user.is_admin) _showAdminNavItems();
             } else if (typeof waitForAuth === 'function') {
                 waitForAuth().then(function(u) {
                     if (u) {
-                        nameEl.textContent = u.display_name;
+                        profileBtn.title = u.username;
                         if (u.is_admin) _showAdminNavItems();
                     }
                 });

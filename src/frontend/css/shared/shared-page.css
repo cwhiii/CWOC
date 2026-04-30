@@ -636,68 +636,132 @@ input[type="color"] {
 
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   User Switcher — dropdown, password prompt, and current user display
-   Used by shared-page.js header injection and dashboard sidebar.
+   Profile Menu — profile image button + dropdown (Switch User, Profile, Logout)
+   Used by shared-page.js header injection and dashboard top bar.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* ── Switcher Wrapper (positioned relative for dropdown) ─────────────────── */
-.cwoc-user-switcher {
+/* ── Profile Menu Wrapper ────────────────────────────────────────────────── */
+.cwoc-profile-menu {
     position: relative;
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
+    margin-left: auto;
 }
 
-/* ── Switcher Button (subtle header element, not a big button) ───────────── */
-.cwoc-user-switcher-btn {
+/* ── Profile Button (the clickable image) ────────────────────────────────── */
+.cwoc-profile-btn {
     background: transparent;
-    border: 1px solid rgba(139, 90, 43, 0.3);
-    border-radius: 5px;
-    padding: 5px 12px;
-    font-family: 'Lora', Georgia, serif;
-    font-size: 0.95em;
-    color: var(--aged-brown-dark);
+    border: 2px solid rgba(139, 90, 43, 0.4);
+    border-radius: 50%;
+    padding: 2px;
     cursor: pointer;
-    transition: background 0.2s, border-color 0.2s;
-    white-space: nowrap;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    line-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
-.cwoc-user-switcher-btn:hover {
-    background: rgba(139, 90, 43, 0.1);
-    border-color: var(--aged-brown-medium);
+.cwoc-profile-btn:hover {
+    border-color: #8b5a2b;
+    box-shadow: 0 0 0 2px rgba(139, 90, 43, 0.2);
 }
 
-/* ── Dropdown Container ──────────────────────────────────────────────────── */
-.cwoc-user-dropdown {
+/* ── Profile Image ───────────────────────────────────────────────────────── */
+.cwoc-profile-img {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+/* ── Profile Dropdown ────────────────────────────────────────────────────── */
+.cwoc-profile-dropdown {
     position: absolute;
     top: 100%;
     right: 0;
-    margin-top: 4px;
-    min-width: 200px;
+    margin-top: 6px;
+    min-width: 180px;
     background: #fff8e1;
     border: 2px solid #8b5a2b;
     border-radius: 8px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
     z-index: 2000;
-    padding: 6px 0;
+    padding: 0;
     font-family: 'Lora', Georgia, serif;
+    overflow: hidden;
 }
 
-/* ── Dropdown Items ──────────────────────────────────────────────────────── */
-.cwoc-user-dropdown-item {
-    padding: 8px 14px;
+/* ── Dropdown Header (current user name) ─────────────────────────────────── */
+.cwoc-profile-dropdown-header {
+    padding: 10px 14px;
+    font-weight: 600;
+    font-size: 0.95em;
+    color: #1a1208;
+    border-bottom: 1px solid rgba(139, 90, 43, 0.2);
+    background: rgba(139, 90, 43, 0.06);
+}
+
+/* ── Dropdown Menu Items ─────────────────────────────────────────────────── */
+.cwoc-profile-dropdown-item {
+    padding: 10px 14px;
     cursor: pointer;
     font-size: 0.95em;
-    color: var(--aged-brown-dark);
+    color: #1a1208;
     transition: background 0.15s;
 }
-.cwoc-user-dropdown-item:hover {
+.cwoc-profile-dropdown-item:hover {
     background: rgba(139, 90, 43, 0.15);
 }
+.cwoc-profile-dropdown-item:last-child {
+    border-top: 1px solid rgba(139, 90, 43, 0.15);
+}
 
-/* ── Dropdown Loading / Empty States ─────────────────────────────────────── */
+/* ── Switch User Modal — User List ───────────────────────────────────────── */
+.cwoc-switch-user-list {
+    max-height: 300px;
+    overflow-y: auto;
+    margin: 8px 0;
+}
+
+.cwoc-switch-user-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    cursor: pointer;
+    transition: background 0.15s;
+    border-radius: 4px;
+    margin: 2px 4px;
+}
+.cwoc-switch-user-item:hover {
+    background: rgba(139, 90, 43, 0.12);
+}
+
+.cwoc-switch-user-avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 1px solid rgba(139, 90, 43, 0.3);
+}
+
+.cwoc-switch-user-name {
+    font-weight: 600;
+    color: #1a1208;
+}
+
+.cwoc-switch-user-username {
+    font-size: 0.85em;
+    color: #6b4e31;
+    opacity: 0.7;
+}
+
+/* ── Loading / Empty States (reused from old switcher) ───────────────────── */
 .cwoc-user-dropdown-loading,
 .cwoc-user-dropdown-empty {
     padding: 10px 14px;
     font-size: 0.9em;
-    color: var(--aged-brown-light);
+    color: #6b4e31;
     text-align: center;
     font-style: italic;
 }
@@ -717,27 +781,27 @@ input[type="color"] {
 }
 .cwoc-switch-password-input:focus {
     outline: none;
-    border-color: var(--accent-gold);
+    border-color: #d4af37;
     box-shadow: 0 0 0 2px rgba(212, 175, 55, 0.25);
 }
 
 /* ── Error Message in Switch Modal ───────────────────────────────────────── */
 .cwoc-switch-error {
-    color: var(--danger-red);
+    color: #c0392b;
     font-size: 0.9em;
     margin-top: 6px;
     min-height: 1.2em;
 }
 
-/* ── Mobile: full-width dropdown ─────────────────────────────────────────── */
+/* ── Mobile adjustments ──────────────────────────────────────────────────── */
 @media (max-width: 480px) {
-    .cwoc-user-dropdown {
-        right: auto;
-        left: 0;
-        min-width: 180px;
+    .cwoc-profile-img {
+        width: 28px;
+        height: 28px;
     }
-    .cwoc-user-switcher-btn {
-        padding: 4px 8px;
-        font-size: 0.85em;
+    .cwoc-profile-dropdown {
+        right: 0;
+        min-width: 160px;
     }
 }
+

@@ -111,11 +111,13 @@ This is the first of two projects. The second project (Chit Sharing System) will
 
 #### Acceptance Criteria
 
-1. THE User_Switcher SHALL appear in the application header and display the currently logged-in user's display name
-2. WHEN a user clicks the User_Switcher, THE User_Switcher SHALL show a dropdown listing all active user accounts on the instance
-3. WHEN a user selects a different account from the dropdown, THE User_Switcher SHALL prompt for that account's password before switching
-4. WHEN valid credentials are provided, THE Session_Manager SHALL create a new session for the selected account and invalidate the previous session
-5. AFTER a successful switch, THE User_Switcher SHALL reload the dashboard to reflect the new user's data
+1. THE User_Switcher SHALL appear as the rightmost element in the top bar, displaying the current user's profile image (or a default avatar if no image is set)
+2. WHEN a user hovers over the User_Switcher, THE User_Switcher SHALL display the current user's username as a tooltip
+3. WHEN a user clicks the User_Switcher, THE User_Switcher SHALL open a modal listing all active user accounts on the instance, each showing their profile image (or default avatar) and display name
+4. WHEN a user selects a different account from the modal, THE User_Switcher SHALL require that account's password before switching — the switch SHALL NOT proceed without valid authentication
+5. WHEN valid credentials are provided, THE Session_Manager SHALL create a new session for the selected account and invalidate the previous session
+6. AFTER a successful switch, THE User_Switcher SHALL reload the page to reflect the new user's data
+7. THE User_Switcher SHALL allow switching back to any other active account using the same password-prompt flow
 
 ### Requirement 9: Data Migration for Multi-User
 
@@ -152,7 +154,19 @@ This is the first of two projects. The second project (Chit Sharing System) will
 2. THE Chit_Service SHALL replace the current `get_current_actor()` function (which reads from settings) with a function that reads the authenticated user from the request context
 3. WHEN viewing the audit log, THE Chit_Service SHALL display the actor's display name alongside each entry
 
-### Requirement 12: User Administration
+### Requirement 12: Settings Username Deprecation
+
+**User Story:** As a user, I want the settings page to no longer show a username field, so that my identity is managed through my user account rather than a free-text settings field.
+
+#### Acceptance Criteria
+
+1. THE Chit_Service SHALL remove the `username` field from the settings page UI
+2. THE migration SHALL preserve the existing `username` value from settings by using it as the default admin account's `display_name` during migration
+3. THE Chit_Service SHALL retain the `username` column in the `settings` database table for backward compatibility but SHALL NOT display it in the settings UI
+4. THE settings page SHALL include a "Manage Users" button that navigates to the User Admin page
+5. WHEN a non-admin user views the settings page, THE "Manage Users" button SHALL be greyed out (disabled) with a hover tooltip indicating admin access is required
+
+### Requirement 13: User Administration
 
 **User Story:** As an instance administrator, I want to create, deactivate, and manage user accounts, so that I can control who has access to the CWOC instance.
 

@@ -53,6 +53,12 @@
                     </button>
                 </div>
             </div>
+            <!-- Profile menu (rightmost element in header) -->
+            <div class="cwoc-profile-menu" id="cwoc-profile-menu" style="margin-left:auto;flex-shrink:0;">
+                <button class="cwoc-profile-btn" id="cwoc-profile-btn" title="User" onclick="event.stopPropagation(); _cwocToggleProfileMenu();">
+                    <img src="/static/default-avatar.svg" alt="Profile" class="cwoc-profile-img" id="cwoc-profile-img" />
+                </button>
+            </div>
         </div>
         <div class="editor" id="mainEditor">
             <div class="main-zones-grid">

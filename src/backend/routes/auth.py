@@ -380,3 +380,34 @@ def switch_user(body: LoginRequest, request: Request):
     finally:
         if conn:
             conn.close()
+
+
+# ── GET /api/auth/switchable-users ────────────────────────────────────────
+
+@auth_router.get("/switchable-users")
+def list_switchable_users(request: Request):
+    """Return a minimal list of active users for the user switcher.
+    Available to any authenticated user (not admin-only).
+    Returns only id, username, and display_name for each active user."""
+    user_id = getattr(request.state, "user_id", None)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            "SELECT id, username, display_name FROM users WHERE is_active = 1 ORDER BY display_name ASC"
+        ).fetchall()
+
+        return [
+            {"id": row["id"], "username": row["username"], "display_name": row["display_name"]}
+            for row in rows
+        ]
+    except Exception as e:
+        logger.error(f"List switchable users error: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+    finally:
+        if conn:
+            conn.close()

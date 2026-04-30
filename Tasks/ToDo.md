@@ -9,6 +9,22 @@
 - `[ ]` Screenshot and video walkthrough of the app
 
 ## Known Bugs
+users: 
+- the username inoput in settgins, remove it. and only use the one in the user admin page. 
+- add a button in teh settigns page to Manage Users. Grey it out whith hover for non-admin users. 
+- user switcher isn't functional? It switches, but doesn;ta ask for atuthentication, and then doesn' switch back.
+- the switchert button should be the very top right item in the top bar, and should be the user's proifile image.  clicking openes the change user tool, but as a modal.
+
+
+- the reset on teh admin tool for users doesnt actualy cahnge the password.
+- the admin shoul dbe ableo tto update usernsames for existing users.
+
+
+- the export all doesnt export user data.
+- pruning shiuld be enabled by default. 
+- tag colors not hononred. 
+
+
 ---
 
 ## Easy Fixes / Low-Hanging Fruit
@@ -16,7 +32,7 @@
 - in the indicators, on the graphs the date overlaps if they are close together,  have it use smarter, shorter lables, or oly day of the month or somehting better to previent this. 
 - in indicators vierw, use a plain red heart fo rhear rate chart & filter. 
 - in indicators view, let me drag & drop the charts to reorganize them just like is impliments in the notes view. 
-- On mobile, swiping the tip bar should cycle through views.
+- On mobile, swiping the top bar should cycle through views.
 - Combine alerts should be honored on all views, it's not in tasks.
 
 

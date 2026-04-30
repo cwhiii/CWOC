@@ -153,54 +153,38 @@ window.CwocSaveSystem = CwocSaveSystem;
     navDiv.appendChild(btn);
   });
 
-  // ── User Switcher (shows current user, dropdown to switch accounts) ──
-  var switcherWrap = document.createElement('div');
-  switcherWrap.className = 'cwoc-user-switcher';
+  // ── Profile Menu (rightmost element — profile image with dropdown) ──
+  var profileMenuWrap = document.createElement('div');
+  profileMenuWrap.className = 'cwoc-profile-menu';
+  profileMenuWrap.id = 'cwoc-profile-menu';
 
-  var switcherBtn = document.createElement('button');
-  switcherBtn.className = 'cwoc-user-switcher-btn';
-  switcherBtn.id = 'cwoc-user-switcher-btn';
-
-  // Get current user display name from shared-auth.js
-  var currentUser = (typeof getCurrentUser === 'function') ? getCurrentUser() : null;
-  switcherBtn.textContent = currentUser ? ('👤 ' + currentUser.display_name) : '👤 User';
-  switcherBtn.title = 'Switch user account';
-
-  switcherBtn.onclick = function(e) {
-    e.stopPropagation();
-    _cwocToggleUserDropdown(switcherWrap);
-  };
-  switcherWrap.appendChild(switcherBtn);
-
-  navDiv.appendChild(switcherWrap);
-
-  // ── Profile link ──
   var profileBtn = document.createElement('button');
-  profileBtn.className = 'standard-button';
-  profileBtn.textContent = '👤 Profile';
-  profileBtn.title = 'View your profile';
-  profileBtn.onclick = function() { window.location.href = '/profile'; };
-  // Don't show on the profile page itself
-  if (window.location.pathname !== '/profile') {
-    navDiv.appendChild(profileBtn);
-  }
+  profileBtn.className = 'cwoc-profile-btn';
+  profileBtn.id = 'cwoc-profile-btn';
+  profileBtn.title = currentUser ? currentUser.username : 'User';
+  profileBtn.onclick = function(e) {
+    e.stopPropagation();
+    _cwocToggleProfileMenu();
+  };
 
-  // ── Logout button ──
-  var logoutBtn = document.createElement('button');
-  logoutBtn.className = 'standard-button cwoc-logout-btn';
-  logoutBtn.textContent = '🚪 Logout';
-  logoutBtn.title = 'Log out of your account';
-  logoutBtn.onclick = function() { _cwocLogout(); };
-  navDiv.appendChild(logoutBtn);
+  var profileImg = document.createElement('img');
+  profileImg.src = '/static/default-avatar.svg';
+  profileImg.alt = 'Profile';
+  profileImg.className = 'cwoc-profile-img';
+  profileBtn.appendChild(profileImg);
+  profileMenuWrap.appendChild(profileBtn);
+
+  navDiv.appendChild(profileMenuWrap);
 
   header.appendChild(navDiv);
   panel.insertBefore(header, panel.firstChild);
 
-  // If auth wasn't ready yet, update the button text once it is
+  // If auth wasn't ready yet, update the profile button tooltip once it is
   if (!currentUser && typeof waitForAuth === 'function') {
     waitForAuth().then(function(user) {
       if (user) {
-        switcherBtn.textContent = '👤 ' + user.display_name;
+        var btn = document.getElementById('cwoc-profile-btn');
+        if (btn) btn.title = user.username;
       }
     });
   }
@@ -237,35 +221,65 @@ window.CwocSaveSystem = CwocSaveSystem;
 
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   User Switcher — dropdown + password prompt for switching accounts
+   Profile Menu — profile image dropdown with Switch User, View Profile, Logout
 
-   Used by the auto-header injection above. Fetches GET /api/users to list
-   active accounts, shows a dropdown, and prompts for the target user's
-   password before calling POST /api/auth/switch.
+   Used by the auto-header injection above and the dashboard top bar.
+   The profile image sits in the top-right corner of every page. Clicking it
+   opens a dropdown with three options. "Switch User" opens a user list modal
+   with password prompt. Available on all pages via shared-page.js and on the
+   dashboard via inline HTML.
    ═══════════════════════════════════════════════════════════════════════════ */
 (function() {
 
   /**
-   * Toggle the user dropdown on the switcher button.
-   * Fetches active users from the API and builds a dropdown list.
+   * Toggle the profile dropdown menu.
    */
-  function _toggleUserDropdown(switcherWrap) {
-    // If dropdown already open, close it
-    var existing = switcherWrap.querySelector('.cwoc-user-dropdown');
+  function _toggleProfileMenu() {
+    var existing = document.getElementById('cwoc-profile-dropdown');
     if (existing) {
       existing.remove();
       return;
     }
 
-    // Create dropdown container
+    var menuWrap = document.getElementById('cwoc-profile-menu');
+    if (!menuWrap) return;
+
     var dropdown = document.createElement('div');
-    dropdown.className = 'cwoc-user-dropdown';
-    dropdown.innerHTML = '<div class="cwoc-user-dropdown-loading">Loading…</div>';
-    switcherWrap.appendChild(dropdown);
+    dropdown.id = 'cwoc-profile-dropdown';
+    dropdown.className = 'cwoc-profile-dropdown';
+
+    var currentUser = (typeof getCurrentUser === 'function') ? getCurrentUser() : null;
+    var displayName = currentUser ? currentUser.display_name : 'User';
+
+    // Header with user info
+    var header = document.createElement('div');
+    header.className = 'cwoc-profile-dropdown-header';
+    header.textContent = displayName;
+    dropdown.appendChild(header);
+
+    // Menu items
+    var items = [
+      { icon: '🔄', label: 'Switch User', action: function() { dropdown.remove(); _showSwitchUserModal(); } },
+      { icon: '👤', label: 'View Profile', action: function() { dropdown.remove(); window.location.href = '/profile'; } },
+      { icon: '🚪', label: 'Logout', action: function() { dropdown.remove(); _logout(); } }
+    ];
+
+    items.forEach(function(item) {
+      var el = document.createElement('div');
+      el.className = 'cwoc-profile-dropdown-item';
+      el.textContent = item.icon + ' ' + item.label;
+      el.onclick = function(e) {
+        e.stopPropagation();
+        item.action();
+      };
+      dropdown.appendChild(el);
+    });
+
+    menuWrap.appendChild(dropdown);
 
     // Close dropdown when clicking outside
     function _onDocClick(e) {
-      if (!switcherWrap.contains(e.target)) {
+      if (!menuWrap.contains(e.target)) {
         dropdown.remove();
         document.removeEventListener('click', _onDocClick, true);
       }
@@ -273,54 +287,13 @@ window.CwocSaveSystem = CwocSaveSystem;
     setTimeout(function() {
       document.addEventListener('click', _onDocClick, true);
     }, 0);
-
-    // Fetch users
-    fetch('/api/users').then(function(r) {
-      if (!r.ok) {
-        dropdown.innerHTML = '<div class="cwoc-user-dropdown-empty">Unable to load users</div>';
-        return null;
-      }
-      return r.json();
-    }).then(function(users) {
-      if (!users) return;
-
-      var currentUser = (typeof getCurrentUser === 'function') ? getCurrentUser() : null;
-      var currentId = currentUser ? currentUser.user_id : null;
-
-      // Filter to active users, exclude current user
-      var activeOthers = users.filter(function(u) {
-        return u.is_active && u.id !== currentId;
-      });
-
-      dropdown.innerHTML = '';
-
-      if (activeOthers.length === 0) {
-        dropdown.innerHTML = '<div class="cwoc-user-dropdown-empty">No other users</div>';
-        return;
-      }
-
-      activeOthers.forEach(function(u) {
-        var item = document.createElement('div');
-        item.className = 'cwoc-user-dropdown-item';
-        item.textContent = u.display_name + ' (' + u.username + ')';
-        item.onclick = function(e) {
-          e.stopPropagation();
-          dropdown.remove();
-          document.removeEventListener('click', _onDocClick, true);
-          _showPasswordPrompt(u);
-        };
-        dropdown.appendChild(item);
-      });
-    }).catch(function() {
-      dropdown.innerHTML = '<div class="cwoc-user-dropdown-empty">Unable to load users</div>';
-    });
   }
 
   /**
-   * Show a parchment-styled password prompt modal for switching to a user.
+   * Show the switch user modal — lists all active users, prompts for password.
    */
-  function _showPasswordPrompt(targetUser) {
-    // Remove any existing prompt
+  function _showSwitchUserModal() {
+    // Remove any existing modal
     var existingModal = document.getElementById('cwoc-switch-modal');
     if (existingModal) existingModal.remove();
 
@@ -331,30 +304,18 @@ window.CwocSaveSystem = CwocSaveSystem;
 
     var content = document.createElement('div');
     content.className = 'modal-content';
+    content.innerHTML = '<h3>🔄 Switch User</h3><div id="cwoc-switch-user-list" class="cwoc-switch-user-list"><div class="cwoc-user-dropdown-loading">Loading users…</div></div>';
 
-    content.innerHTML =
-      '<h3>🔐 Switch to ' + _escHtml(targetUser.display_name) + '</h3>' +
-      '<p>Enter the password for <strong>' + _escHtml(targetUser.username) + '</strong>:</p>' +
-      '<input type="password" id="cwoc-switch-password" class="cwoc-switch-password-input" placeholder="Password" autocomplete="off" />' +
-      '<div id="cwoc-switch-error" class="cwoc-switch-error"></div>' +
-      '<div class="modal-buttons">' +
-        '<button class="standard-button" id="cwoc-switch-cancel">Cancel</button>' +
-        '<button class="standard-button" id="cwoc-switch-confirm">Switch</button>' +
-      '</div>';
+    // Cancel button
+    var cancelRow = document.createElement('div');
+    cancelRow.className = 'modal-buttons';
+    cancelRow.innerHTML = '<button class="standard-button" id="cwoc-switch-modal-cancel">Cancel</button>';
+    content.appendChild(cancelRow);
 
     overlay.appendChild(content);
     document.body.appendChild(overlay);
 
-    var passwordInput = document.getElementById('cwoc-switch-password');
-    var errorDiv = document.getElementById('cwoc-switch-error');
-    var confirmBtn = document.getElementById('cwoc-switch-confirm');
-    var cancelBtn = document.getElementById('cwoc-switch-cancel');
-
-    // Focus the password input
-    setTimeout(function() { passwordInput.focus(); }, 50);
-
-    // Cancel
-    cancelBtn.onclick = function() { overlay.remove(); };
+    document.getElementById('cwoc-switch-modal-cancel').onclick = function() { overlay.remove(); };
 
     // ESC closes the modal
     function _onKey(e) {
@@ -367,7 +328,76 @@ window.CwocSaveSystem = CwocSaveSystem;
     }
     document.addEventListener('keydown', _onKey, true);
 
-    // Enter submits
+    // Fetch users
+    var listDiv = document.getElementById('cwoc-switch-user-list');
+    fetch('/api/auth/switchable-users').then(function(r) {
+      if (!r.ok) {
+        listDiv.innerHTML = '<div class="cwoc-user-dropdown-empty">Unable to load users</div>';
+        return null;
+      }
+      return r.json();
+    }).then(function(users) {
+      if (!users) return;
+
+      var currentUser = (typeof getCurrentUser === 'function') ? getCurrentUser() : null;
+      var currentId = currentUser ? currentUser.user_id : null;
+
+      // Filter to active users, exclude current user
+      var activeOthers = users.filter(function(u) {
+        return u.id !== currentId;
+      });
+
+      listDiv.innerHTML = '';
+
+      if (activeOthers.length === 0) {
+        listDiv.innerHTML = '<div class="cwoc-user-dropdown-empty">No other users available</div>';
+        return;
+      }
+
+      activeOthers.forEach(function(u) {
+        var item = document.createElement('div');
+        item.className = 'cwoc-switch-user-item';
+        item.innerHTML = '<img src="/static/default-avatar.svg" class="cwoc-switch-user-avatar" alt="" />' +
+          '<span class="cwoc-switch-user-name">' + _escHtml(u.display_name) + '</span>' +
+          '<span class="cwoc-switch-user-username">(' + _escHtml(u.username) + ')</span>';
+        item.onclick = function(e) {
+          e.stopPropagation();
+          // Replace the user list with a password prompt for this user
+          _showPasswordPromptInModal(overlay, content, u);
+        };
+        listDiv.appendChild(item);
+      });
+    }).catch(function() {
+      listDiv.innerHTML = '<div class="cwoc-user-dropdown-empty">Unable to load users</div>';
+    });
+  }
+
+  /**
+   * Replace the modal content with a password prompt for the selected user.
+   */
+  function _showPasswordPromptInModal(overlay, content, targetUser) {
+    content.innerHTML =
+      '<h3>🔐 Switch to ' + _escHtml(targetUser.display_name) + '</h3>' +
+      '<p>Enter the password for <strong>' + _escHtml(targetUser.username) + '</strong>:</p>' +
+      '<input type="password" id="cwoc-switch-password" class="cwoc-switch-password-input" placeholder="Password" autocomplete="off" />' +
+      '<div id="cwoc-switch-error" class="cwoc-switch-error"></div>' +
+      '<div class="modal-buttons">' +
+        '<button class="standard-button" id="cwoc-switch-back">← Back</button>' +
+        '<button class="standard-button" id="cwoc-switch-confirm">Switch</button>' +
+      '</div>';
+
+    var passwordInput = document.getElementById('cwoc-switch-password');
+    var errorDiv = document.getElementById('cwoc-switch-error');
+    var confirmBtn = document.getElementById('cwoc-switch-confirm');
+    var backBtn = document.getElementById('cwoc-switch-back');
+
+    setTimeout(function() { passwordInput.focus(); }, 50);
+
+    backBtn.onclick = function() {
+      overlay.remove();
+      _showSwitchUserModal();
+    };
+
     passwordInput.addEventListener('keydown', function(e) {
       if (e.key === 'Enter') {
         e.preventDefault();
@@ -375,7 +405,6 @@ window.CwocSaveSystem = CwocSaveSystem;
       }
     });
 
-    // Confirm
     confirmBtn.onclick = function() { _doSwitch(); };
 
     function _doSwitch() {
@@ -395,7 +424,6 @@ window.CwocSaveSystem = CwocSaveSystem;
         body: JSON.stringify({ username: targetUser.username, password: password })
       }).then(function(r) {
         if (r.ok) {
-          // Success — reload the page
           window.location.reload();
           return;
         }
@@ -425,10 +453,6 @@ window.CwocSaveSystem = CwocSaveSystem;
     return div.innerHTML;
   }
 
-  // Export for use by the header injection IIFE
-  window._cwocToggleUserDropdown = _toggleUserDropdown;
-  window._cwocShowSwitchPasswordPrompt = _showPasswordPrompt;
-
   /**
    * Logout: POST /api/auth/logout, then redirect to /login.
    */
@@ -438,12 +462,33 @@ window.CwocSaveSystem = CwocSaveSystem;
         window.location.href = '/login';
       })
       .catch(function() {
-        // Even on network error, redirect to login
         window.location.href = '/login';
       });
   }
 
+  // Export globally
+  window._cwocToggleProfileMenu = _toggleProfileMenu;
   window._cwocLogout = _logout;
+
+  // Auto-initialize profile button tooltip with username on any page
+  function _initProfileTooltip() {
+    var btn = document.getElementById('cwoc-profile-btn');
+    if (!btn) return;
+    var user = (typeof getCurrentUser === 'function') ? getCurrentUser() : null;
+    if (user) {
+      btn.title = user.username;
+    } else if (typeof waitForAuth === 'function') {
+      waitForAuth().then(function(u) {
+        if (u && btn) btn.title = u.username;
+      });
+    }
+  }
+  // Run after DOM is ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _initProfileTooltip);
+  } else {
+    _initProfileTooltip();
+  }
 
 })();
 

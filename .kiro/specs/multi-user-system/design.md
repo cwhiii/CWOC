@@ -129,6 +129,10 @@ New route module handling authentication, sessions, and profile management.
 # Response: 200 + Set-Cookie (new session)
 #           { "user_id": str, "username": str, "display_name": str }
 # Errors: 401 (invalid credentials)
+
+# GET /api/auth/switchable-users
+# Response: [{ "id": str, "username": str, "display_name": str }]
+# Note: Available to any authenticated user (not admin-only). Used by the user switcher.
 ```
 
 ### 2. User Admin Module (`src/backend/routes/users.py`)
@@ -199,13 +203,20 @@ Secondary page using `shared-page.css`, `shared-page.js` with `data-page-title="
 
 Secondary page using `shared-page.css`, `shared-page.js` with `data-page-title="User Admin"`. Admin-only. Lists all users in a `cwoc-table`, with buttons to create, deactivate/reactivate users, and reset passwords.
 
-### 8. User Switcher (Header Component)
+### 8. User Switcher (Top Bar Profile Image + Modal)
 
-Added to the shared-page.js header injection and the dashboard sidebar. Shows the current user's display name. Clicking opens a dropdown of all active users. Selecting a different user prompts for that user's password, then switches sessions and reloads.
+Positioned as the rightmost element in the top bar on all pages (shared-page.js header and dashboard). Displays the current user's profile image (or a default avatar). On hover, shows the username as a tooltip. Clicking opens a parchment-styled modal listing all active users with their profile images and display names. Selecting a different user shows a password input field within the modal — the switch does not proceed without valid authentication. On successful auth, invalidates the old session, creates a new one, and reloads the page. Switching back to any account uses the same password-prompt flow.
 
 ### 9. Frontend Auth Guard (`src/frontend/js/shared/shared-auth.js`)
 
 New shared script that runs on every page. On load, calls `GET /api/auth/me`. If it returns 401, redirects to `/login`. Also exports `getCurrentUser()` for other scripts to use.
+
+### 10. Settings Page Updates
+
+- Remove the `username` input field from the settings page UI (the column remains in the DB for backward compatibility but is no longer displayed or editable)
+- Add a "Manage Users" button that navigates to `/user-admin`
+- For non-admin users, the "Manage Users" button is greyed out (disabled) with a hover tooltip: "Admin access required"
+- The `username` value from the old `default_user` settings record is preserved during migration as the admin account's `display_name`
 
 ---
 

@@ -83,7 +83,7 @@ All backend code uses Python 3 stdlib only (no pip installs). All frontend code 
     - Implement `PUT /api/users/{user_id}/reactivate`: set `is_active=True` (admin only)
     - Implement `PUT /api/users/{user_id}/reset-password`: hash new password and update (admin only)
     - All endpoints check `request.state.user_id` is an admin, return 403 if not
-    - _Requirements: 12.1, 12.2, 12.3, 12.4, 12.5, 12.6_
+    - _Requirements: 13.1, 13.2, 13.3, 13.4, 13.5, 13.6_
 
   - [x] 4.2 Write property tests for user management
     - **Property 2: User creation persists all required fields**
@@ -93,7 +93,7 @@ All backend code uses Python 3 stdlib only (no pip installs). All frontend code 
     - **Property 15: Multiple concurrent sessions per user**
     - Test file: `src/backend/test_users.py`
     - Use `unittest` + `random` for input generation (no Hypothesis), 100+ iterations per property
-    - **Validates: Requirements 1.1, 1.2, 1.3, 3.5, 12.4, 12.5, 12.6**
+    - **Validates: Requirements 1.1, 1.2, 1.3, 3.5, 13.4, 13.5, 13.6**
 
 - [x] 5. Auth middleware and route registration
   - [x] 5.1 Create `src/backend/middleware.py` with `AuthMiddleware`
@@ -146,14 +146,22 @@ All backend code uses Python 3 stdlib only (no pip installs). All frontend code 
     - Scope standalone alerts and alert state by user if applicable
     - _Requirements: 4.5_
 
-  - [x] 6.4 Update `src/backend/routes/audit.py` for multi-user actor attribution
+  - [x] 6.4 Remove `username` field from settings UI and add "Manage Users" button
+    - In `src/frontend/html/settings.html`: remove the username input field from the settings form
+    - In `src/frontend/js/pages/settings.js`: remove any JS logic that reads/writes the username settings field
+    - Add a "Manage Users" button to the settings page that navigates to `/user-admin`
+    - For non-admin users (check `isAdmin()` from `shared-auth.js`): grey out the button with `disabled` attribute and add a hover tooltip "Admin access required"
+    - The `username` column remains in the settings DB table for backward compatibility — just not shown in the UI
+    - _Requirements: 12.1, 12.2, 12.3, 12.4, 12.5_
+
+  - [x] 6.5 Update `src/backend/routes/audit.py` for multi-user actor attribution
     - Replace `get_current_actor()` implementation: instead of reading from settings, read `request.state.user_id` and `request.state.username` from the request context
     - Create a new `get_actor_from_request(request)` function that returns `{"user_id": str, "username": str}`
     - Update all callers of `get_current_actor()` across route modules to pass the request or use the new function
     - When displaying audit log entries, include the actor's display name
     - _Requirements: 11.1, 11.2, 11.3_
 
-  - [x] 6.5 Write property tests for data isolation and owner record
+  - [x] 6.6 Write property tests for data isolation and owner record
     - **Property 7: Per-user data isolation**
     - **Property 8: Chit owner record populated from authenticated user**
     - **Property 9: Profile update round-trip**
@@ -231,7 +239,7 @@ All backend code uses Python 3 stdlib only (no pip installs). All frontend code 
     - Each user row has action buttons: Deactivate/Reactivate, Reset Password
     - Admin-only page: check `isAdmin()` on load, redirect to `/` if not admin
     - Load shared scripts in correct order, including `shared-auth.js`
-    - _Requirements: 12.1, 12.2, 12.3, 12.4, 12.5, 12.6_
+    - _Requirements: 13.1, 13.2, 13.3, 13.4, 13.5, 13.6_
 
   - [x] 11.2 Create `src/frontend/js/pages/user-admin.js`
     - Fetch users from `GET /api/users` on load
@@ -240,30 +248,34 @@ All backend code uses Python 3 stdlib only (no pip installs). All frontend code 
     - Implement reactivate: `PUT /api/users/{id}/reactivate`
     - Implement reset password: `PUT /api/users/{id}/reset-password`
     - Show inline error messages (e.g., "Cannot deactivate the last admin account", "Username already exists")
-    - _Requirements: 12.2, 12.3, 12.4, 12.5, 12.6_
+    - _Requirements: 13.2, 13.3, 13.4, 13.5, 13.6_
 
   - [x] 11.3 Add user admin page route to `src/backend/routes/health.py`
     - Add `GET /user-admin` route that serves `user-admin.html` via `FileResponse`
-    - _Requirements: 12.2_
+    - _Requirements: 13.2_
 
-- [x] 12. User switcher (frontend header component)
+- [x] 12. User switcher (top bar profile image + modal)
   - [x] 12.1 Add user switcher to `src/frontend/js/pages/shared-page.js` header injection
-    - In the auto-header injection IIFE, add a user switcher element to the header
-    - Display current user's display name (from `getCurrentUser()`)
-    - On click: fetch `GET /api/users` to get all active users, show dropdown
-    - When a different user is selected: show password prompt modal (parchment-styled)
+    - In the auto-header injection IIFE, add a user switcher element as the rightmost item in the top bar
+    - Display current user's profile image (or a default avatar if no image is set)
+    - On hover: show the current user's username as a tooltip
+    - On click: open a parchment-styled modal listing all active users (fetch `GET /api/users`), each showing their profile image/avatar and display name
+    - When a different user is selected: show a password input field within the modal — the switch SHALL NOT proceed without valid authentication
     - On valid password: `POST /api/auth/switch` with `{ username, password }`
     - On success: reload the page to reflect new user's data
-    - On error: show inline error in the password prompt
-    - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5_
+    - On error: show inline error in the modal password field
+    - Switching back to any account uses the same password-prompt flow
+    - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7_
 
-  - [x] 12.2 Add user switcher to dashboard sidebar in `src/frontend/html/index.html`
-    - Add a user display/switcher element in the sidebar (near the bottom, above Settings)
+  - [x] 12.2 Add user switcher to dashboard top bar in `src/frontend/html/index.html`
+    - Add the same profile image switcher element as the rightmost item in the dashboard top bar
     - Reuse the same switcher logic from shared-page.js or call a shared function
     - _Requirements: 8.1, 8.2_
 
   - [x] 12.3 Add user switcher CSS to `src/frontend/css/shared/shared-page.css`
-    - Style the user switcher dropdown, password prompt modal, and current user display
+    - Style the user switcher: profile image circle (small, top-bar sized), default avatar fallback
+    - Style the switch-user modal: parchment background, user list with profile images, password input field, confirm/cancel buttons
+    - Style the hover tooltip for username display
     - Follow CWOC parchment theme (brown tones, Lora font, parchment backgrounds)
     - _Requirements: 8.1_
 
