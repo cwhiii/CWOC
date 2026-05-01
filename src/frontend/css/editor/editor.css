@@ -1620,11 +1620,54 @@ hr {
 #moveToProjectDropdown {
     padding: 5px 10px;
     border-radius: 4px;
-    border: 1px solid #ccc;
+    border: 1px outset var(--aged-brown-medium);
     font-size: 12px;
-    margin-left: 8px;
-    background-color: white;
+    margin-left: 0;
+    background-color: var(--aged-brown-light);
+    color: var(--parchment-light);
     cursor: pointer;
+    font-family: 'Lora', Georgia, serif;
+    max-width: 180px;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23f5f0e1'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 6px center;
+    padding-right: 20px;
+}
+
+#moveToProjectDropdown:hover {
+    background-color: #924525;
+}
+
+#moveToProjectDropdown:focus {
+    outline: 1px solid var(--accent-teal);
+}
+
+#moveToProjectDropdown option {
+    background-color: var(--parchment-light);
+    color: var(--text-color);
+    padding: 6px 10px;
+    font-family: 'Lora', Georgia, serif;
+}
+
+/* Remove-from-project button (✕ next to dropdown) */
+.project-remove-btn {
+    padding: 4px 8px;
+    font-size: 14px;
+    font-weight: bold;
+    background-color: var(--danger-red);
+    color: var(--parchment-light);
+    border: 1px outset var(--aged-brown-dark);
+    border-radius: 4px;
+    cursor: pointer;
+    line-height: 1;
+    min-width: 28px;
+    text-align: center;
+}
+
+.project-remove-btn:hover {
+    background-color: #c82333;
 }
 
 .status-filter-dropdown {
@@ -2466,27 +2509,36 @@ hr {
     position: absolute;
     top: 100%;
     right: 0;
-    background: var(--input-bg);
-    border: 1px solid var(--border-color);
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+    background: var(--parchment-light);
+    border: 1px solid var(--aged-brown-medium);
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.25);
     z-index: 1000;
     display: none;
-    min-width: 150px;
+    min-width: 160px;
+    max-width: 240px;
     max-height: 200px;
     overflow-y: auto;
-    font-size: 1rem;
-    border-radius: 4px;
+    font-size: 0.9rem;
+    border-radius: 6px;
+    font-family: 'Lora', Georgia, serif;
 }
 
 /* Move project dropdown options */
 .move-project-dropdown div {
-    padding: 6px 10px;
+    padding: 8px 12px;
     cursor: pointer;
     white-space: normal;
+    color: var(--text-color);
+    border-bottom: 1px solid var(--aged-brown-light);
+    transition: background-color 0.15s;
+}
+
+.move-project-dropdown div:last-child {
+    border-bottom: none;
 }
 
 .move-project-dropdown div:hover {
-    background-color: #eee;
+    background-color: var(--hover-bg-light);
 }
 
 /* Completed/checked state styling */

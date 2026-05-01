@@ -228,7 +228,7 @@ Provides functions to determine a user's effective role on a chit, check edit/de
 | `can_edit_chit(chit_row, user_id, owner_settings)` | Return True if the user has owner or manager role on the chit |
 | `can_delete_chit(chit_row, user_id, owner_settings)` | Return True if the user is the chit owner or has manager role (uses `resolve_effective_role()` internally) |
 | `can_manage_sharing(chit_row, user_id, owner_settings)` | Return True if the user is the chit owner or has manager role (uses `resolve_effective_role()` internally and checks for `role in ("owner", "manager")`) |
-| `get_shared_chits_for_user(user_id)` | Query all non-deleted, non-stealth chits shared with user_id via chit-level shares, tag-level shares, or assignment; annotates each with `effective_role`, `share_source`, `owner_display_name`, and `assigned_to_display_name` |
+| `get_shared_chits_for_user(user_id)` | Query all non-deleted, non-stealth chits shared with user_id via chit-level shares, tag-level shares, or assignment; annotates each with `effective_role`, `share_source`, `owner_display_name` (enriched from users table), and `assigned_to_display_name`; raises on error instead of silently returning empty list |
 | `_parse_shares(shares_raw)` | Parse the shares column value into a list of dicts |
 | `_parse_shared_tags(shared_tags_raw)` | Parse the shared_tags column value into a list of dicts |
 | `_parse_chit_tags(tags_raw)` | Parse the chit tags column into a set of tag name strings |
@@ -280,7 +280,7 @@ All chit endpoints are scoped by `owner_id` — users can only access their own 
 |-------|---------|-------------|
 | `GET /api/chits` | `get_all_chits(request)` | Return all non-deleted chits owned by the authenticated user |
 | `GET /api/chits/search` | `search_chits(q, request)` | Global search across all chit fields, scoped to authenticated user |
-| `POST /api/chits` | `create_chit(chit, request)` | Create a new chit with `owner_id`, `owner_display_name`, `owner_username` from authenticated user |
+| `POST /api/chits` | `create_chit(chit, request)` | Create a new chit with `owner_id`, `owner_display_name`, `owner_username` from authenticated user. Creates notifications for shared users via `_create_share_notifications()` |
 | `GET /api/chit/{chit_id}` | `get_chit(chit_id, request)` | Get a single chit by ID (verifies ownership or shared access via `resolve_effective_role`); includes `effective_role` and `assigned_to_display_name` in response |
 | `PUT /api/chits/{chit_id}` | `update_chit(chit_id, chit, request)` | Update a chit (verifies ownership or manager access via `can_edit_chit`; managers can persist shares/assigned_to via `can_manage_sharing` guard; stealth is always preserved for non-owners; viewers get 403). Creates notifications for newly shared users via `_create_share_notifications()` |
 | `DELETE /api/chits/{chit_id}` | `delete_chit(chit_id, request)` | Soft-delete a chit (owner or manager via `can_delete_chit`; loads owner_settings for role resolution) |

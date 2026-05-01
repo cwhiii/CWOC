@@ -761,18 +761,26 @@
                                     id="projectMasterToggleButton"
                                     class="zone-button"
                                     onclick="toggleProjectMaster(event)"
-                                    title="Make a project master"
+                                    title="Toggle project master status"
                                 >
-                                    <i class="fas fa-hammer"></i> Make A Project
-                                    Master
+                                    <i class="fas fa-hammer"></i> <span class="hideWhenNarrow">Project</span> Master
                                 </button>
                                 <select
                                     id="moveToProjectDropdown"
-                                    class="zone-button"
+                                    class="zone-button project-dropdown"
                                     style="display: none"
                                 >
-                                    <option value="">Move to Project →</option>
+                                    <option value="">Add to Project…</option>
                                 </select>
+                                <button
+                                    type="button"
+                                    id="removeFromProjectBtn"
+                                    class="zone-button project-remove-btn"
+                                    style="display: none"
+                                    title="Remove from project"
+                                >
+                                    ✕
+                                </button>
                             </div>
                             <span class="zone-toggle-icon">🔽</span>
                         </div>

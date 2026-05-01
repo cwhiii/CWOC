@@ -697,16 +697,97 @@ document.addEventListener("DOMContentLoaded", function () {
 
   _initializeChitId();
 
-  // Populate "Move to Project" dropdown with actual project master chits
+  // Populate "Add to Project" dropdown with actual project master chits
   fetch('/api/chits').then(r => r.ok ? r.json() : []).then(allChits => {
     const dd = document.getElementById('moveToProjectDropdown');
+    const removeBtn = document.getElementById('removeFromProjectBtn');
     if (!dd) return;
-    allChits.filter(c => c.is_project_master && c.id !== chitId).forEach(c => {
+    const masters = allChits.filter(c => c.is_project_master && c.id !== chitId);
+    masters.forEach(c => {
       const opt = document.createElement('option');
       opt.value = c.id;
       opt.textContent = c.title || '(Untitled Project)';
       dd.appendChild(opt);
     });
+
+    // Check if this chit already belongs to a project
+    const parentProject = masters.find(c =>
+      Array.isArray(c.child_chits) && c.child_chits.includes(chitId)
+    );
+
+    // Show dropdown for non-master chits when projects exist
+    const isMaster = document.getElementById('isProjectMaster');
+    if (masters.length > 0 && (!isMaster || isMaster.value !== 'true')) {
+      dd.style.display = '';
+      // If already in a project, pre-select it and show the remove button
+      if (parentProject) {
+        dd.value = parentProject.id;
+        if (removeBtn) removeBtn.style.display = '';
+      }
+    }
+
+    // Handle selection — add current chit to chosen project
+    dd.addEventListener('change', async () => {
+      const targetId = dd.value;
+      if (!targetId || !chitId) {
+        if (removeBtn) removeBtn.style.display = 'none';
+        return;
+      }
+      try {
+        const projRes = await fetch('/api/chit/' + encodeURIComponent(targetId));
+        if (!projRes.ok) throw new Error('Failed to load target project');
+        const proj = await projRes.json();
+        const children = Array.isArray(proj.child_chits) ? proj.child_chits : [];
+        if (!children.includes(chitId)) children.push(chitId);
+        proj.child_chits = children;
+        const saveRes = await fetch('/api/chits/' + encodeURIComponent(targetId), {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(proj),
+        });
+        if (!saveRes.ok) throw new Error('Failed to save project');
+        if (removeBtn) removeBtn.style.display = '';
+        alert('Added to project: ' + (proj.title || '(Untitled)'));
+      } catch (e) {
+        console.error('Error adding chit to project:', e);
+        alert('Failed to add to project. See console for details.');
+      }
+    });
+
+    // Handle remove — pull this chit out of its parent project
+    if (removeBtn) {
+      removeBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const parentId = dd.value;
+        if (!parentId || !chitId) return;
+        const parentMaster = masters.find(c => c.id === parentId);
+        const parentTitle = parentMaster ? (parentMaster.title || '(Untitled)') : 'this project';
+        if (typeof cwocConfirm === 'function') {
+          const ok = await cwocConfirm('Remove this chit from "' + parentTitle + '"?', {
+            title: 'Remove from Project', confirmLabel: '✕ Remove', danger: true
+          });
+          if (!ok) return;
+        }
+        try {
+          const projRes = await fetch('/api/chit/' + encodeURIComponent(parentId));
+          if (!projRes.ok) throw new Error('Failed to load project');
+          const proj = await projRes.json();
+          proj.child_chits = (Array.isArray(proj.child_chits) ? proj.child_chits : [])
+            .filter(id => id !== chitId);
+          const saveRes = await fetch('/api/chits/' + encodeURIComponent(parentId), {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(proj),
+          });
+          if (!saveRes.ok) throw new Error('Failed to save project');
+          dd.value = '';
+          removeBtn.style.display = 'none';
+        } catch (e) {
+          console.error('Error removing chit from project:', e);
+          alert('Failed to remove from project. See console for details.');
+        }
+      });
+    }
   }).catch(() => {});
 
   // Load snap setting

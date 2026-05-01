@@ -256,11 +256,11 @@ function createChildChitCard(chit) {
   });
   rightContainer.appendChild(openBtn);
 
-  // Move to project button (only if current chit is NOT a master)
+  // Add to project button (only if current chit is NOT a master)
   if (!projectState.projectChit.is_project_master) {
     const moveBtn = document.createElement("button");
     moveBtn.className = "status-icon-button move-project-btn";
-    moveBtn.title = "Move to project";
+    moveBtn.title = "Add to project";
     moveBtn.innerHTML = '<i class="fas fa-folder-open" aria-hidden="true"></i>';
     moveBtn.style.position = "relative";
 
@@ -271,20 +271,12 @@ function createChildChitCard(chit) {
       if (proj.id !== projectState.projectChit.id) {
         const option = document.createElement("div");
         option.textContent = proj.title || "(Untitled Project)";
-        option.style.padding = "6px 10px";
         option.style.cursor = "pointer";
-        option.style.whiteSpace = "normal";
         option.addEventListener("click", () => {
           moveChildChitToProject(chit.id, proj.id);
           dropdown.style.display = "none";
           // Trigger save chit on move
           saveCurrentChit();
-        });
-        option.addEventListener("mouseenter", () => {
-          option.style.backgroundColor = "#eee";
-        });
-        option.addEventListener("mouseleave", () => {
-          option.style.backgroundColor = "";
         });
         dropdown.appendChild(option);
       }
