@@ -703,7 +703,8 @@
                         <label class="setting-subheader">Chit Options</label>
                         <div class="checkbox-list">
                             <label><input type="checkbox" id="fade-past" name="fade_past_chits" checked /> 📜 Fade Past Chits</label>
-                            <label><input type="checkbox" id="highlight-overdue" name="highlight_overdue_chits" checked /> 🚨 Highlight Overdue</label>
+                            <label><input type="checkbox" id="highlight-overdue" name="highlight_overdue_chits" checked onchange="_onHighlightToggle()" /> 🚨 Highlight Overdue</label>
+                            <label><input type="checkbox" id="highlight-blocked" name="highlight_blocked_chits" checked onchange="_onHighlightToggle()" /> 🚧 Highlight Blocked</label>
                             <label><input type="checkbox" id="delete-past" name="delete_past_alarm_chits" /> 🗑️ Delete Past Alarms</label>
                             <label><input type="checkbox" id="show-tab-counts" name="show_tab_counts" /> 🔢 Show Tab Counts</label>
                             <label><input type="checkbox" id="prefer-google-maps" name="prefer_google_maps" /> 🗺️ Prefer Google for Maps</label>

@@ -1018,7 +1018,8 @@ Coordinator for shared code between dashboard and editor. Contains glue code for
 | `_applyMultiSelectFilters(chitList)` | Apply status, label, priority, people, and sharing ("Shared with me" / "Shared by me") multi-select filters |
 | `_applySort(chitList)` | Sort chits by the current sort field and direction |
 | `storePreviousState()` | Save the current UI state to localStorage for restoration after editor |
-| `_restoreUIState()` | Restore UI state from localStorage (editor return or refresh recovery) |
+| `_restoreUIState()` | Restore UI state: prefers sessionStorage (refresh) for tab/view/period, layers localStorage (editor return) for filters |
+| `_checkPendingDeleteUndo()` | Check sessionStorage for a pending delete-undo from the editor and show the undo toast on the dashboard |
 | `fetchChits()` | Fetch owned chits from `/api/chits` and shared chits from `/api/shared-chits` in parallel; merges shared chits (marked with `_shared` flag) into the chits array, deduplicating by ID |
 | `displayChits()` | Main render dispatcher — filter (including hide-declined RSVP filter), sort, expand recurrence, and render the active view |
 | `_updateTabCounts(filteredChits)` | Update tab labels with counts of displayed chits per tab |

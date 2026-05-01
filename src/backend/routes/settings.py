@@ -83,6 +83,13 @@ def save_settings(settings: Settings, request: Request):
             logger.error(f"Audit: failed to fetch old settings: {str(e)}")
 
         # Build the new settings dict using the same serialization as the INSERT
+        # Preserve shared_tags if not provided by the frontend (shared_tags are
+        # managed via the dedicated PUT /api/settings/shared-tags endpoint and
+        # the tag modal save flow — the main settings save should not overwrite them)
+        preserved_shared_tags = None
+        if settings.shared_tags is None and old_settings_dict:
+            preserved_shared_tags = old_settings_dict.get("shared_tags")
+
         new_settings_dict = {
             "user_id": settings.user_id,
             "time_format": settings.time_format,
@@ -114,7 +121,7 @@ def save_settings(settings: Settings, request: Request):
             "habits_success_window": settings.habits_success_window or "30",
             "overdue_border_color": settings.overdue_border_color or "#b22222",
             "blocked_border_color": settings.blocked_border_color or "#DAA520",
-            "shared_tags": serialize_json_field(settings.shared_tags),
+            "shared_tags": preserved_shared_tags if settings.shared_tags is None else serialize_json_field(settings.shared_tags),
             "kiosk_users": serialize_json_field(settings.kiosk_users),
             "hide_declined": settings.hide_declined or "0",
         }

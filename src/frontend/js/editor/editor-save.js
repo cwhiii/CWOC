@@ -473,13 +473,16 @@ function performDeleteChit() {
       return response.json();
     })
     .then(function () {
-      _showDeleteUndoToast(deletedId, title, function () {
-        window.location.href = "/";
-      }, function () {
-        fetch("/api/trash/" + deletedId + "/restore", { method: "POST" })
-          .then(function () { window.location.reload(); })
-          .catch(function (err) { console.error("Undo restore failed:", err); });
-      });
+      // Store undo info for the dashboard to pick up
+      try {
+        sessionStorage.setItem('cwoc_pending_undo', JSON.stringify({
+          id: deletedId,
+          title: title,
+          time: Date.now()
+        }));
+      } catch (e) { /* ignore */ }
+      // Exit immediately to dashboard
+      window.location.href = "/";
     })
     .catch(function (err) {
       console.error("Error deleting chit:", err);

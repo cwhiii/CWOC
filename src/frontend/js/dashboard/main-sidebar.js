@@ -117,6 +117,9 @@ function _clearAllFilters() {
   var su = document.getElementById('show-unmarked'); if (su) su.checked = true;
   var hpd = document.getElementById('hide-past-due'); if (hpd) hpd.checked = false;
   var hc = document.getElementById('hide-complete'); if (hc) hc.checked = false;
+  var hd = document.getElementById('hide-declined'); if (hd) hd.checked = false;
+  var hlO = document.getElementById('highlight-overdue'); if (hlO) hlO.checked = true;
+  var hlB = document.getElementById('highlight-blocked'); if (hlB) hlB.checked = true;
   var search = document.getElementById('search'); if (search) search.value = '';
   document.querySelectorAll('input[data-any="true"]').forEach(function(cb) { cb.checked = true; });
   if (window._sidebarPeopleSelection) window._sidebarPeopleSelection.length = 0;
@@ -156,10 +159,14 @@ function _updateClearFiltersButton() {
   var showUnmarked = document.getElementById('show-unmarked')?.checked ?? true;
   var hidePastDue = document.getElementById('hide-past-due')?.checked ?? false;
   var hideComplete = document.getElementById('hide-complete')?.checked ?? false;
+  var hideDeclined = document.getElementById('hide-declined')?.checked ?? false;
+  var highlightOverdue = document.getElementById('highlight-overdue')?.checked ?? true;
+  var highlightBlocked = document.getElementById('highlight-blocked')?.checked ?? true;
   var hasSharingFilter = (document.getElementById('filter-shared-with-me')?.checked ?? false)
     || (document.getElementById('filter-shared-by-me')?.checked ?? false);
   var isDefault = !hasStatusFilter && !hasLabelFilter && !hasPriorityFilter && !hasPeopleFilter
-    && !searchText && showPinned && !showArchived && showUnmarked && !hidePastDue && !hideComplete && !currentSortField && !hasSharingFilter;
+    && !searchText && showPinned && !showArchived && showUnmarked && !hidePastDue && !hideComplete && !hideDeclined
+    && highlightOverdue && highlightBlocked && !currentSortField && !hasSharingFilter;
   section.style.display = isDefault ? 'none' : '';
 
   var resetBtn = document.getElementById('reset-defaults-btn');

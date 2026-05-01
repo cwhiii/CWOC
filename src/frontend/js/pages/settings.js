@@ -685,8 +685,11 @@ function renderColors(colors) {
 var _borderColorOverdue = '#b22222';
 var _borderColorBlocked = '#DAA520';
 
-/** Apply ring indicator CSS classes to color swatches matching border colors */
+/** Apply ring indicator CSS classes to color swatches matching border colors.
+ *  Rings are hidden when the corresponding highlight toggle is unchecked. */
 function _applyBorderColorRings() {
+  var overdueEnabled = document.getElementById('highlight-overdue')?.checked ?? true;
+  var blockedEnabled = document.getElementById('highlight-blocked')?.checked ?? true;
   var overdueHex = (_borderColorOverdue || '#b22222').toLowerCase();
   var blockedHex = (_borderColorBlocked || '#DAA520').toLowerCase();
 
@@ -709,11 +712,11 @@ function _applyBorderColorRings() {
     if (lbl) lbl.remove();
   });
 
-  // Apply rings
+  // Apply rings only for enabled highlights
   document.querySelectorAll('#default-color-list .color-item, #color-list .color-item').forEach(function(el) {
     var hex = (el.dataset.color || '').toLowerCase();
-    var isOverdue = hex === overdueHex;
-    var isBlocked = hex === blockedHex;
+    var isOverdue = overdueEnabled && hex === overdueHex;
+    var isBlocked = blockedEnabled && hex === blockedHex;
     if (isOverdue && isBlocked) {
       el.classList.add('ring-both');
       var lbl = document.createElement('span');
@@ -734,6 +737,18 @@ function _applyBorderColorRings() {
       el.appendChild(lbl);
     }
   });
+
+  // Show/hide the border assignment buttons based on toggles
+  var overdueBtn = document.getElementById('assign-overdue-btn');
+  var blockedBtn = document.getElementById('assign-blocked-btn');
+  if (overdueBtn) overdueBtn.style.display = overdueEnabled ? '' : 'none';
+  if (blockedBtn) blockedBtn.style.display = blockedEnabled ? '' : 'none';
+}
+
+/** Called when highlight-overdue or highlight-blocked toggles change */
+function _onHighlightToggle() {
+  _applyBorderColorRings();
+  if (typeof setSaveButtonUnsaved === 'function') setSaveButtonUnsaved();
 }
 
 /** Open the border color assignment popup near the clicked swatch */
@@ -1079,12 +1094,14 @@ function saveTag() {
     for (var si = 0; si < _tagSharingConfig.length; si++) {
       if (_tagSharingConfig[si].tag === oldName) {
         _tagSharingConfig[si].tag = newName;
-        // Save the updated config to the server (pass null to save as-is)
-        _saveTagSharingConfig(null);
         break;
       }
     }
   }
+
+  // Always save the current tag's sharing config when closing the modal
+  // (handles new shares, role changes, and renames)
+  _saveTagSharingConfig(newName);
 
   // Rebuild inner HTML safely
   currentTag.innerHTML = "";
@@ -1474,6 +1491,7 @@ class SettingsManager {
     const co = this.settings.chit_options || {};
     document.getElementById("fade-past").checked = co.fade_past_chits !== false;
     document.getElementById("highlight-overdue").checked = co.highlight_overdue_chits !== false;
+    document.getElementById("highlight-blocked").checked = co.highlight_blocked_chits !== false;
     document.getElementById("delete-past").checked = !!co.delete_past_alarm_chits;
     document.getElementById("show-tab-counts").checked = !!co.show_tab_counts;
     document.getElementById("prefer-google-maps").checked = !!co.prefer_google_maps;
@@ -1751,6 +1769,8 @@ class SettingsManager {
         fade_past_chits: document.getElementById("fade-past").checked,
         highlight_overdue_chits:
           document.getElementById("highlight-overdue").checked,
+        highlight_blocked_chits:
+          document.getElementById("highlight-blocked").checked,
         delete_past_alarm_chits: document.getElementById("delete-past").checked,
         show_tab_counts: document.getElementById("show-tab-counts").checked,
         prefer_google_maps: document.getElementById("prefer-google-maps").checked,

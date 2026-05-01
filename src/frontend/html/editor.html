@@ -765,13 +765,20 @@
                                 >
                                     <i class="fas fa-hammer"></i> <span class="hideWhenNarrow">Project</span> Master
                                 </button>
-                                <select
-                                    id="moveToProjectDropdown"
-                                    class="zone-button project-dropdown"
-                                    style="display: none"
-                                >
-                                    <option value="">Add to Project…</option>
-                                </select>
+                                <div id="moveToProjectWrapper" class="project-dropdown-wrapper" style="display: none">
+                                    <button
+                                        type="button"
+                                        id="moveToProjectBtn"
+                                        class="zone-button project-dropdown-trigger"
+                                        title="Add to Project"
+                                    >
+                                        <span id="moveToProjectLabel">Add to Project…</span>
+                                        <i class="fas fa-caret-down" style="margin-left:4px;font-size:0.8em;"></i>
+                                    </button>
+                                    <div id="moveToProjectMenu" class="project-dropdown-menu">
+                                        <!-- populated by JS -->
+                                    </div>
+                                </div>
                                 <button
                                     type="button"
                                     id="removeFromProjectBtn"
@@ -792,13 +799,13 @@
                         />
                     </div>
 
-                    <!-- Audit Log (series summary for recurring chits) -->
+                    <!-- Habit Log (series summary for recurring chits) -->
                     <div id="auditLogSection" class="zone-container" style="display:none;">
                         <div
                             class="zone-header"
                             onclick="toggleZone(event, 'auditLogSection', 'auditLogContent')"
                         >
-                            <h2 class="zone-title">📜 Audit Log</h2>
+                            <h2 class="zone-title">🔁 Habit Log</h2>
                             <span class="zone-toggle-icon">🔽</span>
                         </div>
                         <div id="auditLogContent" class="zone-body" style="display:none;">

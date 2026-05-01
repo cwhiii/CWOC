@@ -697,18 +697,36 @@ document.addEventListener("DOMContentLoaded", function () {
 
   _initializeChitId();
 
-  // Populate "Add to Project" dropdown with actual project master chits
+  // Populate "Add to Project" custom dropdown with actual project master chits
   fetch('/api/chits').then(r => r.ok ? r.json() : []).then(allChits => {
-    const dd = document.getElementById('moveToProjectDropdown');
+    const wrapper = document.getElementById('moveToProjectWrapper');
+    const triggerBtn = document.getElementById('moveToProjectBtn');
+    const menu = document.getElementById('moveToProjectMenu');
+    const label = document.getElementById('moveToProjectLabel');
     const removeBtn = document.getElementById('removeFromProjectBtn');
-    if (!dd) return;
+    if (!wrapper || !triggerBtn || !menu) return;
+
     const masters = allChits.filter(c => c.is_project_master && c.id !== chitId);
-    masters.forEach(c => {
-      const opt = document.createElement('option');
-      opt.value = c.id;
-      opt.textContent = c.title || '(Untitled Project)';
-      dd.appendChild(opt);
-    });
+
+    // Track currently selected project ID
+    let _selectedProjectId = '';
+
+    // Build menu items
+    if (masters.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'project-dropdown-empty';
+      empty.textContent = 'No projects available';
+      menu.appendChild(empty);
+    } else {
+      masters.forEach(c => {
+        const item = document.createElement('div');
+        item.className = 'project-dropdown-item';
+        item.dataset.projectId = c.id;
+        item.textContent = c.title || '(Untitled Project)';
+        item.addEventListener('click', () => _selectProject(c.id, c.title || '(Untitled)'));
+        menu.appendChild(item);
+      });
+    }
 
     // Check if this chit already belongs to a project
     const parentProject = masters.find(c =>
@@ -718,17 +736,56 @@ document.addEventListener("DOMContentLoaded", function () {
     // Show dropdown for non-master chits when projects exist
     const isMaster = document.getElementById('isProjectMaster');
     if (masters.length > 0 && (!isMaster || isMaster.value !== 'true')) {
-      dd.style.display = '';
-      // If already in a project, pre-select it and show the remove button
+      wrapper.style.display = '';
       if (parentProject) {
-        dd.value = parentProject.id;
+        _selectedProjectId = parentProject.id;
+        label.textContent = parentProject.title || '(Untitled Project)';
+        _highlightSelected();
         if (removeBtn) removeBtn.style.display = '';
       }
     }
 
+    // Move menu to body so it's not clipped by zone-container overflow:hidden
+    document.body.appendChild(menu);
+
+    function _positionMenu() {
+      const rect = triggerBtn.getBoundingClientRect();
+      menu.style.top = (rect.bottom + window.scrollY) + 'px';
+      menu.style.left = '';
+      menu.style.right = '';
+      // Align right edge of menu with right edge of button
+      const menuWidth = menu.offsetWidth || 200;
+      let leftPos = rect.right + window.scrollX - menuWidth;
+      if (leftPos < 4) leftPos = 4;
+      menu.style.left = leftPos + 'px';
+    }
+
+    // Toggle menu open/close
+    triggerBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isOpen = menu.classList.toggle('open');
+      if (isOpen) _positionMenu();
+    });
+
+    // Close menu on outside click
+    document.addEventListener('click', () => {
+      menu.classList.remove('open');
+    });
+    menu.addEventListener('click', (e) => e.stopPropagation());
+
+    // Reposition on scroll/resize while open
+    window.addEventListener('scroll', () => { if (menu.classList.contains('open')) _positionMenu(); }, true);
+    window.addEventListener('resize', () => { if (menu.classList.contains('open')) _positionMenu(); });
+
+    function _highlightSelected() {
+      menu.querySelectorAll('.project-dropdown-item').forEach(el => {
+        el.classList.toggle('selected', el.dataset.projectId === _selectedProjectId);
+      });
+    }
+
     // Handle selection — add current chit to chosen project
-    dd.addEventListener('change', async () => {
-      const targetId = dd.value;
+    async function _selectProject(targetId, targetTitle) {
+      menu.classList.remove('open');
       if (!targetId || !chitId) {
         if (removeBtn) removeBtn.style.display = 'none';
         return;
@@ -746,21 +803,23 @@ document.addEventListener("DOMContentLoaded", function () {
           body: JSON.stringify(proj),
         });
         if (!saveRes.ok) throw new Error('Failed to save project');
+        _selectedProjectId = targetId;
+        label.textContent = targetTitle;
+        _highlightSelected();
         if (removeBtn) removeBtn.style.display = '';
-        alert('Added to project: ' + (proj.title || '(Untitled)'));
+        cwocToast('Added to project: ' + targetTitle, 'success');
       } catch (e) {
         console.error('Error adding chit to project:', e);
-        alert('Failed to add to project. See console for details.');
+        cwocToast('Failed to add to project.', 'error');
       }
-    });
+    }
 
     // Handle remove — pull this chit out of its parent project
     if (removeBtn) {
       removeBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
-        const parentId = dd.value;
-        if (!parentId || !chitId) return;
-        const parentMaster = masters.find(c => c.id === parentId);
+        if (!_selectedProjectId || !chitId) return;
+        const parentMaster = masters.find(c => c.id === _selectedProjectId);
         const parentTitle = parentMaster ? (parentMaster.title || '(Untitled)') : 'this project';
         if (typeof cwocConfirm === 'function') {
           const ok = await cwocConfirm('Remove this chit from "' + parentTitle + '"?', {
@@ -769,22 +828,25 @@ document.addEventListener("DOMContentLoaded", function () {
           if (!ok) return;
         }
         try {
-          const projRes = await fetch('/api/chit/' + encodeURIComponent(parentId));
+          const projRes = await fetch('/api/chit/' + encodeURIComponent(_selectedProjectId));
           if (!projRes.ok) throw new Error('Failed to load project');
           const proj = await projRes.json();
           proj.child_chits = (Array.isArray(proj.child_chits) ? proj.child_chits : [])
             .filter(id => id !== chitId);
-          const saveRes = await fetch('/api/chits/' + encodeURIComponent(parentId), {
+          const saveRes = await fetch('/api/chits/' + encodeURIComponent(_selectedProjectId), {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(proj),
           });
           if (!saveRes.ok) throw new Error('Failed to save project');
-          dd.value = '';
+          _selectedProjectId = '';
+          label.textContent = 'Add to Project…';
+          _highlightSelected();
           removeBtn.style.display = 'none';
+          cwocToast('Removed from project.', 'info');
         } catch (e) {
           console.error('Error removing chit from project:', e);
-          alert('Failed to remove from project. See console for details.');
+          cwocToast('Failed to remove from project.', 'error');
         }
       });
     }

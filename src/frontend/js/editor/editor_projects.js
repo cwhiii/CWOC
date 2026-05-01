@@ -435,14 +435,14 @@ async function saveProjectChanges() {
     }
   } catch (error) {
     console.error("Error saving project changes:", error);
-    alert("Failed to save project changes. See console for details.");
+    cwocToast("Failed to save project changes.", "error");
   }
 }
 
 // Opens a modal to select an existing chit to add as a child
 async function openAddChitModal() {
   if (!projectState.projectChit) {
-    alert("No project loaded to add a child chit.");
+    cwocToast("No project loaded to add a child chit.", "error");
     return;
   }
 
@@ -574,7 +574,7 @@ async function openAddChitModal() {
     chitList.querySelectorAll("tr").forEach((r) => r.classList.remove("selected"));
   } catch (error) {
     console.error("Error fetching chits for modal:", error);
-    alert("Failed to load chits. Please try again.");
+    cwocToast("Failed to load chits. Please try again.", "error");
     modal.style.display = "none";
   }
 }
@@ -616,13 +616,13 @@ function addProjectItem() {
 async function toggleProjectMaster() {
   const projectMasterInput = document.getElementById("isProjectMaster");
   if (!projectMasterInput) {
-    alert("Project master input element not found.");
+    cwocToast("Project master input element not found.", "error");
     return;
   }
 
   const chitId = window.currentChitId;
   if (!chitId) {
-    alert("No chit ID available.");
+    cwocToast("No chit ID available.", "error");
     return;
   }
 
@@ -650,7 +650,7 @@ async function toggleProjectMaster() {
     saveCurrentChit();
   } catch (error) {
     console.error("Error in toggleProjectMaster:", error);
-    alert("Failed to toggle project master status. Please try again.");
+    cwocToast("Failed to toggle project master status.", "error");
     projectMasterInput.value = "false"; // revert on failure
   }
 }

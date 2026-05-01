@@ -1617,38 +1617,66 @@ hr {
     white-space: nowrap;
 }
 
-#moveToProjectDropdown {
-    padding: 5px 10px;
-    border-radius: 4px;
-    border: 1px outset var(--aged-brown-medium);
-    font-size: 12px;
-    margin-left: 0;
-    background-color: var(--aged-brown-light);
-    color: var(--parchment-light);
+/* Custom "Add to Project" dropdown (replaces native <select>) */
+.project-dropdown-wrapper {
+    position: relative;
+    display: inline-block;
+}
+
+.project-dropdown-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.project-dropdown-menu {
+    display: none;
+    position: absolute;
+    min-width: 200px;
+    max-width: 280px;
+    max-height: 260px;
+    overflow-y: auto;
+    background: #fffaf0;
+    border: 2px solid #8b5a2b;
+    border-radius: 6px;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+    z-index: 100;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.85em;
+    padding: 4px 0;
+}
+
+.project-dropdown-menu.open {
+    display: block;
+}
+
+.project-dropdown-item {
+    padding: 7px 12px;
+    color: #2b1e0f;
     cursor: pointer;
-    font-family: 'Lora', Georgia, serif;
-    max-width: 180px;
-    appearance: none;
-    -webkit-appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23f5f0e1'/%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: right 6px center;
-    padding-right: 20px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: background-color 0.15s;
 }
 
-#moveToProjectDropdown:hover {
-    background-color: #924525;
+.project-dropdown-item:hover {
+    background-color: #e8d8c4;
 }
 
-#moveToProjectDropdown:focus {
-    outline: 1px solid var(--accent-teal);
+.project-dropdown-item.selected {
+    background-color: #d4c4a8;
+    font-weight: bold;
 }
 
-#moveToProjectDropdown option {
-    background-color: var(--parchment-light);
-    color: var(--text-color);
-    padding: 6px 10px;
-    font-family: 'Lora', Georgia, serif;
+.project-dropdown-empty {
+    padding: 7px 12px;
+    color: #8b7355;
+    font-style: italic;
 }
 
 /* Remove-from-project button (✕ next to dropdown) */
@@ -2297,7 +2325,8 @@ hr {
     width: 100%;
     box-sizing: border-box;
     position: relative;
-    overflow: hidden;
+    overflow-y: auto;
+    max-height: 60vh;
 }
 
 /* 🟫 Project status section (drop zone) */

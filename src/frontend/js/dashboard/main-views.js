@@ -1551,7 +1551,7 @@ function _displayProjectsKanban(chitsToDisplay) {
   const _viSettings = (window._cwocSettings || {}).visual_indicators || {};
 
   const seenIds = new Set();
-  const projects = chits.filter(c => {
+  let projects = chits.filter(c => {
     if (!c.is_project_master || c.deleted || c.archived) return false;
     if (seenIds.has(c.id)) return false;
     seenIds.add(c.id);
@@ -1563,6 +1563,9 @@ function _displayProjectsKanban(chitsToDisplay) {
     return;
   }
 
+  // Apply manual sort order for projects
+  projects = applyManualOrder('Projects', projects);
+
   const chitMap = {};
   chits.forEach(c => { chitMap[c.id] = c; });
 
@@ -1570,7 +1573,6 @@ function _displayProjectsKanban(chitsToDisplay) {
 
   const wrapper = document.createElement("div");
   wrapper.className = "projects-view";
-  wrapper.style.cssText = "overflow-y:auto;flex:1 1 auto;min-height:0;padding:0.5em;";
 
   projects.forEach(project => {
     const childIds = Array.isArray(project.child_chits) ? project.child_chits : [];
@@ -1579,20 +1581,52 @@ function _displayProjectsKanban(chitsToDisplay) {
 
     // Project header
     const projectBox = document.createElement("div");
-    projectBox.style.cssText = `margin-bottom:1.5em;border:2px solid #8b5a2b;border-radius:6px;overflow:hidden;background:${projectColor};color:${projectFont};`;
+    projectBox.className = "kanban-project-box";
+    projectBox.dataset.chitId = project.id;
+    projectBox.draggable = true;
+    projectBox.style.cssText = `margin-bottom:1.5em;border:2px solid #8b5a2b;border-radius:6px;background:${projectColor};color:${projectFont};`;
 
     const header = document.createElement("div");
-    header.style.cssText = `padding:0.5em 0.7em;background:${projectColor};color:${projectFont};cursor:pointer;font-weight:bold;font-size:1.05em;border-bottom:1px solid rgba(139,90,43,0.2);`;
-    header.textContent = project.title || "(Untitled Project)";
+    header.className = "kanban-project-header";
+    header.style.cssText = `padding:0.5em 0.7em;background:${projectColor};color:${projectFont};cursor:grab;font-weight:bold;font-size:1.05em;border-bottom:1px solid rgba(139,90,43,0.2);display:flex;align-items:center;gap:0.5em;`;
+
+    const dragGrip = document.createElement("span");
+    dragGrip.style.cssText = "opacity:0.5;font-size:0.9em;cursor:grab;flex-shrink:0;";
+    dragGrip.textContent = "≡";
+    dragGrip.title = "Drag to reorder project";
+    header.appendChild(dragGrip);
+
+    const headerTitle = document.createElement("span");
+    headerTitle.style.cssText = "flex:1;";
+    headerTitle.textContent = project.title || "(Untitled Project)";
+    header.appendChild(headerTitle);
+
     header.addEventListener("dblclick", () => {
       storePreviousState();
       window.location.href = `/editor?id=${project.id}`;
     });
+
+    // Project-level drag for reorder
+    projectBox.addEventListener("dragstart", e => {
+      // Only start project reorder drag from the header grip area
+      if (!e.target.closest('.kanban-project-header')) return;
+      e.dataTransfer.setData("application/x-project-reorder", project.id);
+      e.dataTransfer.effectAllowed = "move";
+      projectBox.style.opacity = "0.4";
+    });
+    projectBox.addEventListener("dragend", () => {
+      projectBox.style.opacity = "";
+      wrapper.querySelectorAll('.kanban-project-box').forEach(b => {
+        b.style.borderTop = '';
+        b.style.borderBottom = '';
+      });
+    });
+
     projectBox.appendChild(header);
 
     // Kanban columns row
     const columnsRow = document.createElement("div");
-    columnsRow.style.cssText = "display:flex;gap:0;min-height:120px;";
+    columnsRow.style.cssText = "display:flex;gap:0;min-height:80px;";
 
     // Group children by status
     const grouped = {};
@@ -1746,6 +1780,7 @@ function _displayProjectsKanban(chitsToDisplay) {
 
         // Card drag (child chit between status columns)
         card.addEventListener("dragstart", e => {
+          e.stopPropagation();
           e.dataTransfer.setData("application/x-kanban-card", JSON.stringify({ chitId: child.id, projectId: project.id, fromStatus: status }));
           e.dataTransfer.effectAllowed = "move";
           card.style.opacity = "0.4";
@@ -1869,6 +1904,58 @@ function _displayProjectsKanban(chitsToDisplay) {
 
     projectBox.appendChild(columnsRow);
     wrapper.appendChild(projectBox);
+  });
+
+  // ── Project-level drag-to-reorder ──────────────────────────────────────
+  wrapper.addEventListener("dragover", e => {
+    // Only handle project reorder drags
+    if (!e.dataTransfer.types.includes("application/x-project-reorder")) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    const box = e.target.closest('.kanban-project-box');
+    wrapper.querySelectorAll('.kanban-project-box').forEach(b => {
+      b.style.borderTop = '';
+      b.style.borderBottom = '';
+    });
+    if (box) {
+      const rect = box.getBoundingClientRect();
+      if (e.clientY < rect.top + rect.height / 2) {
+        box.style.borderTop = '3px solid #8b5a2b';
+      } else {
+        box.style.borderBottom = '3px solid #8b5a2b';
+      }
+    }
+  });
+
+  wrapper.addEventListener("drop", e => {
+    const draggedId = e.dataTransfer.getData("application/x-project-reorder");
+    if (!draggedId) return;
+    e.preventDefault();
+    wrapper.querySelectorAll('.kanban-project-box').forEach(b => {
+      b.style.borderTop = '';
+      b.style.borderBottom = '';
+    });
+    const targetBox = e.target.closest('.kanban-project-box');
+    if (!targetBox || targetBox.dataset.chitId === draggedId) return;
+
+    const boxes = Array.from(wrapper.querySelectorAll('.kanban-project-box[data-chit-id]'));
+    const ids = boxes.map(b => b.dataset.chitId);
+    const fromIdx = ids.indexOf(draggedId);
+    let toIdx = ids.indexOf(targetBox.dataset.chitId);
+    if (fromIdx < 0 || toIdx < 0) return;
+
+    const rect = targetBox.getBoundingClientRect();
+    if (e.clientY > rect.top + rect.height / 2) toIdx++;
+    ids.splice(fromIdx, 1);
+    if (fromIdx < toIdx) toIdx--;
+    ids.splice(toIdx, 0, draggedId);
+
+    saveManualOrder('Projects', ids);
+    currentSortField = 'manual';
+    const sel = document.getElementById('sort-select');
+    if (sel) sel.value = 'manual';
+    _updateSortUI();
+    displayChits();
   });
 
   chitList.appendChild(wrapper);

@@ -40,7 +40,7 @@ let _hotkeyMode = null;
 let _cachedTagObjects = [];
 
 /* ── Chit display options (loaded from settings) ─────────────────────────── */
-let _chitOptions = { fade_past_chits: true, highlight_overdue_chits: true, delete_past_alarm_chits: false, show_tab_counts: false };
+let _chitOptions = { fade_past_chits: true, highlight_overdue_chits: true, highlight_blocked_chits: true, delete_past_alarm_chits: false, show_tab_counts: false };
 
 /* ── Snooze registry: { chitId-alertIdx: expiresAtMs } ───────────────────── */
 let _snoozeRegistry = {};

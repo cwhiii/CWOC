@@ -235,6 +235,9 @@ function storePreviousState() {
     showUnmarked: document.getElementById('show-unmarked')?.checked ?? true,
     hidePastDue: document.getElementById('hide-past-due')?.checked ?? false,
     hideComplete: document.getElementById('hide-complete')?.checked ?? false,
+    hideDeclined: document.getElementById('hide-declined')?.checked ?? false,
+    highlightOverdue: document.getElementById('highlight-overdue')?.checked ?? true,
+    highlightBlocked: document.getElementById('highlight-blocked')?.checked ?? true,
   };
   localStorage.setItem('cwoc_ui_state', JSON.stringify(state));
 }
@@ -243,84 +246,109 @@ function storePreviousState() {
 
 function _restoreUIState() {
   try {
+    // sessionStorage refresh state is always the most recent (saved on every displayChits call)
+    var refreshRaw = null;
+    try { refreshRaw = sessionStorage.getItem('cwoc_refresh_state'); } catch (e) { /* ignore */ }
+    var rs = refreshRaw ? JSON.parse(refreshRaw) : null;
+
+    // localStorage ui state is saved before navigating away (editor, settings, etc.)
+    // It contains richer data (filters, search, toggles) but may be stale for tab/view/period
     const raw = localStorage.getItem('cwoc_ui_state');
-    if (!raw) {
-      // No editor-return state — check for refresh recovery
-      try {
-        var refreshRaw = sessionStorage.getItem('cwoc_refresh_state');
-        if (refreshRaw) {
-          var rs = JSON.parse(refreshRaw);
-          if (rs.tab) currentTab = rs.tab;
-          if (rs.view) currentView = rs.view;
-          if (rs.weekStart) currentWeekStart = new Date(rs.weekStart);
-          if (rs.sortField !== undefined) currentSortField = rs.sortField || null;
-          if (rs.sortDir) currentSortDir = rs.sortDir;
-          // Update tab highlight
-          document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
-          var calTab = document.querySelector(".tab[onclick=\"filterChits('" + currentTab + "')\"]");
-          if (calTab) calTab.classList.add('active');
-          var periodSel = document.getElementById('period-select');
-          if (periodSel) periodSel.value = currentView;
-          // Restore sort UI
-          var rsSortSel = document.getElementById('sort-select');
-          if (rsSortSel && rs.sortField) rsSortSel.value = rs.sortField;
-          _updateSortUI();
-          return true;
-        }
-      } catch (e) { /* ignore */ }
-      return false;
-    }
-    const state = JSON.parse(raw);
-    localStorage.removeItem('cwoc_ui_state'); // one-time restore
-
-    if (state.tab) currentTab = state.tab;
-    if (state.view) currentView = state.view;
-    if (state.weekStart) currentWeekStart = new Date(state.weekStart);
-    if (state.sortField !== undefined) currentSortField = state.sortField;
-    if (state.sortDir) currentSortDir = state.sortDir;
-
-    // Restore search
-    const search = document.getElementById('search');
-    if (search && state.search) search.value = state.search;
-
-    // Restore sort UI
-    const sortSel = document.getElementById('sort-select');
-    if (sortSel && state.sortField) sortSel.value = state.sortField;
-    _updateSortUI();
-
-    // Restore status checkboxes
-    if (state.statusFilters) {
-      document.querySelectorAll('#status-multi input[type="checkbox"]').forEach(cb => {
-        cb.checked = state.statusFilters.includes(cb.value);
-      });
+    var state = null;
+    if (raw) {
+      state = JSON.parse(raw);
+      localStorage.removeItem('cwoc_ui_state'); // one-time restore
     }
 
-    // Restore priority checkboxes
-    if (state.priorityFilters) {
-      document.querySelectorAll('#priority-multi input[type="checkbox"]').forEach(cb => {
-        cb.checked = state.priorityFilters.includes(cb.value);
-      });
+    // Nothing to restore at all
+    if (!rs && !state) return false;
+
+    // Restore tab/view/period from sessionStorage first (most recent), fall back to localStorage
+    if (rs) {
+      if (rs.tab) currentTab = rs.tab;
+      if (rs.view) currentView = rs.view;
+      if (rs.weekStart) currentWeekStart = new Date(rs.weekStart);
+      if (rs.sortField !== undefined) currentSortField = rs.sortField || null;
+      if (rs.sortDir) currentSortDir = rs.sortDir;
+    } else if (state) {
+      if (state.tab) currentTab = state.tab;
+      if (state.view) currentView = state.view;
+      if (state.weekStart) currentWeekStart = new Date(state.weekStart);
+      if (state.sortField !== undefined) currentSortField = state.sortField;
+      if (state.sortDir) currentSortDir = state.sortDir;
     }
 
-    // Restore archive/pinned toggles
-    const sp = document.getElementById('show-pinned');
-    const sa = document.getElementById('show-archived');
-    const su = document.getElementById('show-unmarked');
-    if (sp) sp.checked = state.showPinned ?? true;
-    if (sa) sa.checked = state.showArchived ?? false;
-    if (su) su.checked = state.showUnmarked ?? true;
-    const hpd = document.getElementById('hide-past-due');
-    if (hpd) hpd.checked = state.hidePastDue ?? false;
-    const hc = document.getElementById('hide-complete');
-    if (hc) hc.checked = state.hideComplete ?? false;
-
-    // Restore tab highlight
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    document.querySelector(`.tab[onclick="filterChits('${currentTab}')"]`)?.classList.add('active');
+    // Update tab highlight
+    document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
+    var activeTab = document.querySelector(".tab[onclick=\"filterChits('" + currentTab + "')\"]");
+    if (activeTab) activeTab.classList.add('active');
 
     // Restore period select
     var periodSel = document.getElementById('period-select');
     if (periodSel) periodSel.value = currentView;
+
+    // Restore sort UI
+    var sortSel = document.getElementById('sort-select');
+    if (sortSel && currentSortField) sortSel.value = currentSortField;
+    _updateSortUI();
+
+    // If we have full state from editor return, also restore filters/search/toggles
+    if (state) {
+      // Restore search
+      const search = document.getElementById('search');
+      if (search && state.search) search.value = state.search;
+
+      // Restore status checkboxes
+      if (state.statusFilters) {
+        document.querySelectorAll('#status-multi input[type="checkbox"]').forEach(cb => {
+          cb.checked = state.statusFilters.includes(cb.value);
+        });
+      }
+
+      // Restore priority checkboxes
+      if (state.priorityFilters) {
+        document.querySelectorAll('#priority-multi input[type="checkbox"]').forEach(cb => {
+          cb.checked = state.priorityFilters.includes(cb.value);
+        });
+      }
+
+      // Restore archive/pinned toggles
+      const sp = document.getElementById('show-pinned');
+      const sa = document.getElementById('show-archived');
+      const su = document.getElementById('show-unmarked');
+      if (sp) sp.checked = state.showPinned ?? true;
+      if (sa) sa.checked = state.showArchived ?? false;
+      if (su) su.checked = state.showUnmarked ?? true;
+      const hpd = document.getElementById('hide-past-due');
+      if (hpd) hpd.checked = state.hidePastDue ?? false;
+      const hc = document.getElementById('hide-complete');
+      if (hc) hc.checked = state.hideComplete ?? false;
+      const hd = document.getElementById('hide-declined');
+      if (hd) hd.checked = state.hideDeclined ?? false;
+      const hlO = document.getElementById('highlight-overdue');
+      if (hlO && state.highlightOverdue !== undefined) hlO.checked = state.highlightOverdue;
+      const hlB = document.getElementById('highlight-blocked');
+      if (hlB && state.highlightBlocked !== undefined) hlB.checked = state.highlightBlocked;
+
+      // Restore label filters after they load
+      if (state.labelFilters && state.labelFilters.length > 0) {
+        window._pendingLabelFilters = state.labelFilters;
+      }
+
+      // Auto-expand sidebar filter groups that have active filters
+      if (state.statusFilters && state.statusFilters.some(v => v !== '')) {
+        expandFilterGroup('filter-status');
+      }
+      if (state.priorityFilters && state.priorityFilters.some(v => v !== '')) {
+        expandFilterGroup('filter-priority');
+      }
+      if (state.labelFilters && state.labelFilters.length > 0) {
+        expandFilterGroup('filter-label');
+      }
+      if (state.showArchived || !state.showPinned || !state.showUnmarked || state.hidePastDue || state.hideComplete || state.hideDeclined || state.highlightOverdue === false || state.highlightBlocked === false) {
+        expandFilterGroup('filter-archive');
+      }
+    }
 
     // Show/hide sections based on tab
     const periodSection = document.getElementById('section-period');
@@ -340,31 +368,33 @@ function _restoreUIState() {
     const tasksSectionRestore = document.getElementById('section-tasks-mode');
     if (tasksSectionRestore) tasksSectionRestore.style.display = (currentTab === 'Tasks') ? '' : 'none';
 
-    // Restore label filters after they load
-    if (state.labelFilters && state.labelFilters.length > 0) {
-      window._pendingLabelFilters = state.labelFilters;
-    }
-
-    // Auto-expand sidebar filter groups that have active filters
-    if (state.statusFilters && state.statusFilters.some(v => v !== '')) {
-      expandFilterGroup('filter-status');
-    }
-    if (state.priorityFilters && state.priorityFilters.some(v => v !== '')) {
-      expandFilterGroup('filter-priority');
-    }
-    if (state.labelFilters && state.labelFilters.length > 0) {
-      expandFilterGroup('filter-label');
-    }
-    if (state.showArchived || !state.showPinned || !state.showUnmarked || state.hidePastDue || state.hideComplete) {
-      expandFilterGroup('filter-archive');
-    }
-
     return true;
   } catch (e) {
     return false;
   }
 }
 
+/**
+ * Check for a pending delete-undo from the editor.
+ * If the editor deleted a chit and stored undo info in sessionStorage,
+ * show the undo toast on the dashboard so the user can restore it.
+ */
+function _checkPendingDeleteUndo() {
+  try {
+    var raw = sessionStorage.getItem('cwoc_pending_undo');
+    if (!raw) return;
+    sessionStorage.removeItem('cwoc_pending_undo');
+    var info = JSON.parse(raw);
+    if (!info || !info.id) return;
+    // Only honour if the delete happened within the last 15 seconds
+    if (Date.now() - (info.time || 0) > 15000) return;
+    _showDeleteUndoToast(info.id, info.title, null, function () {
+      fetch('/api/trash/' + info.id + '/restore', { method: 'POST' })
+        .then(function () { fetchChits(); })
+        .catch(function (err) { console.error('Undo restore failed:', err); });
+    });
+  } catch (e) { /* ignore */ }
+}
 
 /* ── Data loading and display orchestration ──────────────────────────────── */
 function fetchChits() {
@@ -499,9 +529,9 @@ function displayChits() {
     filteredChits = filteredChits.filter(c => c.status !== 'Complete');
   }
 
-  // Apply hide-declined filter (RSVP Requirement 5.2, 7.2)
-  var _hideDeclinedSetting = (window._cwocSettings && window._cwocSettings.hide_declined) || '0';
-  if (_hideDeclinedSetting === '1' && typeof _isDeclinedByCurrentUser === 'function') {
+  // Apply hide-declined filter
+  var _hideDeclinedCb = document.getElementById('hide-declined');
+  if (_hideDeclinedCb && _hideDeclinedCb.checked && typeof _isDeclinedByCurrentUser === 'function') {
     filteredChits = filteredChits.filter(function(c) { return !_isDeclinedByCurrentUser(c); });
   }
 
@@ -615,7 +645,11 @@ function _updateTabCounts(filteredChits) {
 }
 
 function _applyChitDisplayOptions() {
-  if (!_chitOptions.fade_past_chits && !_chitOptions.highlight_overdue_chits) return;
+  const _hlOverdueCb = document.getElementById('highlight-overdue');
+  const _hlBlockedCb = document.getElementById('highlight-blocked');
+  const anyHighlight = (_hlOverdueCb ? _hlOverdueCb.checked : !!_chitOptions.highlight_overdue_chits)
+    || (_hlBlockedCb ? _hlBlockedCb.checked : true);
+  if (!_chitOptions.fade_past_chits && !anyHighlight) return;
   const now = new Date();
 
   // Fade past timed events in calendar
@@ -686,7 +720,10 @@ function _applyChitDisplayOptions() {
   {
     const overdueColor = (window._cwocSettings && window._cwocSettings.overdue_border_color) || '#b22222';
     const blockedColor = (window._cwocSettings && window._cwocSettings.blocked_border_color) || '#DAA520';
-    const highlightOverdue = !!_chitOptions.highlight_overdue_chits;
+    const highlightOverdue = document.getElementById('highlight-overdue')?.checked ?? !!_chitOptions.highlight_overdue_chits;
+    const highlightBlocked = document.getElementById('highlight-blocked')?.checked ?? true;
+
+    if (!highlightOverdue && !highlightBlocked) return;
 
     document.querySelectorAll('.chit-card[data-chit-id], .timed-event[data-chit-id], .all-day-event[data-chit-id], .month-event[data-chit-id]').forEach(el => {
       const chitId = el.dataset.chitId;
@@ -695,7 +732,7 @@ function _applyChitDisplayOptions() {
 
       const dueTime = chit.due_datetime ? new Date(chit.due_datetime) : null;
       const isOverdue = highlightOverdue && dueTime && dueTime < now && chit.status !== 'Complete';
-      const isBlocked = chit.status === 'Blocked';
+      const isBlocked = highlightBlocked && chit.status === 'Blocked';
 
       if (isOverdue && isBlocked) {
         // Both: alternating dashed border using background-image gradient trick (longer 16px dashes)
@@ -826,6 +863,14 @@ document.addEventListener("DOMContentLoaded", function () {
     window._cwocSettings = window._cwocSettings || {};
     if (s.overdue_border_color) window._cwocSettings.overdue_border_color = s.overdue_border_color;
     if (s.blocked_border_color) window._cwocSettings.blocked_border_color = s.blocked_border_color;
+    // Initialize hide-declined checkbox from saved setting
+    var _hdCb = document.getElementById('hide-declined');
+    if (_hdCb && s.hide_declined === '1') _hdCb.checked = true;
+    // Initialize highlight checkboxes from chit_options
+    var _hlOverdue = document.getElementById('highlight-overdue');
+    if (_hlOverdue) _hlOverdue.checked = !!_chitOptions.highlight_overdue_chits;
+    var _hlBlocked = document.getElementById('highlight-blocked');
+    if (_hlBlocked) _hlBlocked.checked = (_chitOptions.highlight_blocked_chits !== false);
     // Load default filters per tab
     const df = s.default_filters;
     if (df && typeof df === 'object' && !Array.isArray(df)) {
@@ -854,6 +899,8 @@ document.addEventListener("DOMContentLoaded", function () {
     } catch(e) {}
     fetchChits();
     updateDateRange();
+    // Check for pending delete-undo from editor
+    _checkPendingDeleteUndo();
     // Prefetch weather for all saved locations (async, non-blocking)
     if (typeof prefetchSavedLocationWeather === 'function') prefetchSavedLocationWeather();
 

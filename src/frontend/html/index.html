@@ -226,15 +226,20 @@
                 <!-- Show (Archive/Pinned) -->
                 <div class="filter-group" id="filter-archive">
                     <label class="filter-label" onclick="toggleFilterGroup('filter-archive')">
-                        <span class="section-toggle">▶</span> Show
+                        <span class="section-toggle">▶</span> Display
                     </label>
                     <div class="filter-group-body" style="display:none;">
                         <div class="multi-select">
                             <label><input type="checkbox" id="show-pinned" onchange="onFilterChange()" checked /> <i class="fas fa-bookmark" style="color:#8b5a2b;"></i> Pinned</label>
                             <label><input type="checkbox" id="show-archived" onchange="onFilterChange()" /> 📦 Archived</label>
                             <label><input type="checkbox" id="show-unmarked" onchange="onFilterChange()" checked /> 📄 Unmarked</label>
+                            <hr style="border:0;border-top:1px dashed #c4a882;margin:4px 0;" />
                             <label><input type="checkbox" id="hide-past-due" onchange="onFilterChange()" /> 🚫 Hide Past-Due</label>
                             <label><input type="checkbox" id="hide-complete" onchange="onFilterChange()" /> ✅ Hide Complete</label>
+                            <label><input type="checkbox" id="hide-declined" onchange="onFilterChange()" /> 🚫 Hide Declined</label>
+                            <hr style="border:0;border-top:1px dashed #c4a882;margin:4px 0;" />
+                            <label><input type="checkbox" id="highlight-overdue" onchange="onFilterChange()" checked /> 🚨 Highlight Overdue</label>
+                            <label><input type="checkbox" id="highlight-blocked" onchange="onFilterChange()" checked /> 🚧 Highlight Blocked</label>
                         </div>
                     </div>
                 </div>
