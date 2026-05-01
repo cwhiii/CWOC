@@ -807,84 +807,104 @@
                         <div class="setting-group" id="network-access-block">
                             <h3>🌐 Network Access</h3>
 
-                            <!-- Tailscale sub-section -->
-                            <label class="setting-subheader" style="display:flex;align-items:center;gap:6px;">
-                                Tailscale
+                            <!-- Tailscale header — button and help icon are independent -->
+                            <div class="setting-subheader" style="display:flex;align-items:center;gap:8px;">
+                                <button type="button" id="tailscale-enable-btn" class="zone-button"
+                                        onclick="toggleTailscaleEnabled()"
+                                        style="cursor:pointer;font-size:14px;padding:6px 14px;font-family:Lora,Georgia,serif;">
+                                    Tailscale &nbsp;<span id="tailscale-header-icon">⚪</span>
+                                </button>
                                 <i class="fa-regular fa-circle-question"
                                    onclick="document.getElementById('tailscale-help').style.display = document.getElementById('tailscale-help').style.display === 'none' ? '' : 'none';"
-                                   style="cursor:pointer;font-size:0.85em;opacity:0.6;"
+                                   style="cursor:pointer;font-size:1em;opacity:0.6;"
                                    title="Show setup instructions"></i>
-                            </label>
+                            </div>
 
                             <!-- Help text (hidden by default) -->
                             <div id="tailscale-help" style="display:none;font-size:0.88em;line-height:1.5;margin:4px 0 10px 0;padding:8px 10px;background:rgba(0,0,0,0.04);border-radius:4px;">
+                                <p style="margin:0 0 8px 0;">Tailscale is a free mesh VPN that lets you securely access your CWOC instance from anywhere — your phone, laptop, or another network — without port forwarding or exposing your server to the internet.</p>
                                 <strong>Setup:</strong>
                                 <ol style="margin:4px 0 0 18px;padding:0;">
+                                    <li>Click the <strong>Tailscale</strong> button to expand the configuration.</li>
                                     <li>Create a free account at <a href="https://login.tailscale.com/start" target="_blank" rel="noopener noreferrer">tailscale.com</a> if you don't have one.</li>
                                     <li>Click <strong>🔑 Get Key</strong> to open the Tailscale admin console.</li>
                                     <li>Generate an <em>Auth Key</em> (one-time use strongly recommended). Copy it.</li>
-                                    <li>Paste the key into the <strong>Auth Key</strong> field below and check <strong>Enabled</strong>.</li>
-                                    <li>Click <strong>💾 Save Config</strong>, then <strong>▶️ Connect</strong>.</li>
+                                    <li>Paste the key into the <strong>Auth Key</strong> field and click <strong>💾 Save Config</strong>.</li>
+                                    <li>Click <strong>▶️ Connect</strong>.</li>
                                     <li>Install Tailscale on your phone/laptop from <a href="https://tailscale.com/download" target="_blank" rel="noopener noreferrer">tailscale.com/download</a> and sign in with the same account.</li>
                                     <li>Access CWOC from anywhere using the Tailscale IP shown above.</li>
                                 </ol>
+                                <a href="/frontend/html/help.html#network-access" style="display:inline-block;margin-top:6px;">More info &amp; troubleshooting →</a>
                             </div>
 
-                            <!-- Status indicator -->
-                            <div id="tailscale-status-row" class="setting-inline">
-                                <span>Status:</span>
-                                <span id="tailscale-status-badge">Checking...</span>
-                                <button id="tailscale-refresh-btn" class="standard-button"
-                                        onclick="refreshTailscaleStatus()" style="margin-left:auto;">
-                                    🔄 Check Status
-                                </button>
-                            </div>
+                            <!-- Hidden checkbox for storing enabled state -->
+                            <input type="checkbox" id="tailscale-enabled" style="display:none;" />
 
-                            <!-- IP + Hostname (shown when active) -->
-                            <div id="tailscale-info-row" style="display:none;" class="setting-inline">
-                                <span>IP:</span>
-                                <span id="tailscale-ip">—</span>
-                                <span style="margin-left:12px;">Host:</span>
-                                <span id="tailscale-hostname">—</span>
-                            </div>
+                            <!-- Collapsible Tailscale config body (hidden when disabled) -->
+                            <div id="tailscale-config-body" style="display:none;">
 
-                            <!-- Error message (shown when error or daemon issue) -->
-                            <div id="tailscale-error-row" style="display:none;color:#b22222;font-size:0.85em;margin:6px 0;white-space:pre-wrap;word-break:break-word;">
-                                <span id="tailscale-error-msg"></span>
-                            </div>
+                                <!-- Status indicator -->
+                                <div id="tailscale-status-row" class="setting-inline">
+                                    <span>Status:</span>
+                                    <span id="tailscale-status-badge">Checking...</span>
+                                    <button id="tailscale-refresh-btn" class="standard-button"
+                                            onclick="refreshTailscaleStatus()" style="margin-left:auto;">
+                                        🔄 Check Status
+                                    </button>
+                                </div>
 
-                            <!-- Auth Key input -->
-                            <div class="setting-inline" style="margin-top:10px;">
-                                <label for="tailscale-auth-key">Auth Key</label>
-                                <input type="password" id="tailscale-auth-key" placeholder="tskey-auth-..."
-                                       style="flex:1;min-width:0;" />
-                                <button type="button" class="standard-button" onclick="toggleAuthKeyVisibility()"
-                                        id="tailscale-key-toggle" title="Show/hide key">👁️</button>
-                                <a href="https://login.tailscale.com/admin/settings/keys"
-                                   target="_blank" rel="noopener noreferrer"
-                                   class="standard-button"
-                                   style="text-decoration:none;text-align:center;"
-                                   title="Open Tailscale admin console to generate an auth key">🔑 Get Key</a>
-                            </div>
+                                <!-- IP + Hostname (shown when active) -->
+                                <div id="tailscale-info-row" style="display:none;" class="setting-inline">
+                                    <span>IP:</span>
+                                    <span id="tailscale-ip">—</span>
+                                    <span style="margin-left:12px;">Host:</span>
+                                    <span id="tailscale-hostname">—</span>
+                                </div>
 
-                            <!-- Enable/Disable toggle -->
-                            <div class="setting-inline" style="margin-top:8px;">
-                                <label>Enabled</label>
-                                <input type="checkbox" id="tailscale-enabled" />
-                            </div>
+                                <!-- Error message (shown when error or daemon issue) -->
+                                <div id="tailscale-error-row" style="display:none;color:#b22222;font-size:0.85em;margin:6px 0;white-space:pre-wrap;word-break:break-word;">
+                                    <span id="tailscale-error-msg"></span>
+                                </div>
 
-                            <!-- Save + Up/Down controls -->
-                            <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
-                                <button class="standard-button" onclick="saveTailscaleConfig()" style="flex:1;">
-                                    💾 Save Config
-                                </button>
-                                <button class="standard-button" onclick="tailscaleUp()" id="tailscale-up-btn" style="flex:1;">
-                                    ▶️ Connect
-                                </button>
-                                <button class="standard-button" onclick="tailscaleDown()" id="tailscale-down-btn" style="flex:1;">
-                                    ⏹️ Disconnect
-                                </button>
-                            </div>
+                                <!-- Auth Key input -->
+                                <div class="setting-inline" style="margin-top:10px;">
+                                    <label for="tailscale-auth-key">Auth Key</label>
+                                    <input type="password" id="tailscale-auth-key" placeholder="tskey-auth-..."
+                                           style="flex:1;min-width:0;" />
+                                    <button type="button" class="standard-button" onclick="toggleAuthKeyVisibility()"
+                                            id="tailscale-key-toggle" title="Show/hide key">👁️</button>
+                                    <a href="https://login.tailscale.com/admin/settings/keys"
+                                       target="_blank" rel="noopener noreferrer"
+                                       class="standard-button"
+                                       style="text-decoration:none;text-align:center;"
+                                       title="Open Tailscale admin console to generate an auth key">🔑 Get Key</a>
+                                </div>
+
+                                <!-- Save config -->
+                                <div style="margin-top:12px;">
+                                    <button class="standard-button" id="tailscale-save-btn" onclick="saveTailscaleConfig()" disabled
+                                            style="width:100%;opacity:0.5;"
+                                            title="Saves immediately — independent of the main settings Save button">
+                                        💾 Save Config
+                                    </button>
+                                </div>
+
+                                <!-- Connect / Disconnect -->
+                                <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
+                                    <button class="standard-button" onclick="tailscaleUp()" id="tailscale-up-btn" style="flex:1;">
+                                        ▶️ Connect
+                                    </button>
+                                    <button class="standard-button" onclick="tailscaleDown()" id="tailscale-down-btn" disabled style="flex:1;opacity:0.5;">
+                                        ⏹️ Disconnect
+                                    </button>
+                                </div>
+
+                                <!-- Inline feedback message -->
+                                <div id="tailscale-feedback" style="display:none;margin-top:8px;padding:8px 10px;border-radius:4px;font-size:0.88em;line-height:1.4;cursor:pointer;"
+                                     onclick="this.style.display='none';">
+                                </div>
+
+                            </div><!-- /tailscale-config-body -->
                         </div>
                         <div class="setting-group">
                             <h3>🔄 Version &amp; Updates</h3>

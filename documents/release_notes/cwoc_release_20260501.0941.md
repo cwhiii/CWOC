@@ -1,0 +1,1 @@
+Tailscale Enable/Disable is now a toggle button on the header line. When disabled, the entire config section collapses. When enabled, it expands and loads status. Help text updated, CTID clarified in troubleshooting.

@@ -130,6 +130,8 @@ def tailscale_status(request: Request):
     _require_admin(request)
 
     try:
+        import os
+
         # Step 1: Check if tailscale is installed
         which_result = subprocess.run(
             ["which", "tailscale"],
@@ -138,10 +140,18 @@ def tailscale_status(request: Request):
         if which_result.returncode != 0:
             return {"status": "not_installed"}
 
-        # Step 2: Ensure daemon is running
+        # Step 2: Check TUN device
+        if not os.path.exists("/dev/net/tun"):
+            return {"status": "error", "message": (
+                "TUN device not available (/dev/net/tun missing). "
+                "If running in a Proxmox LXC container, add TUN access to the container config. "
+                "See Help → Network Access → Troubleshooting for details."
+            )}
+
+        # Step 3: Ensure daemon is running
         daemon_ok, daemon_err = _ensure_tailscaled()
         if not daemon_ok:
-            return {"status": "installed_inactive", "message": daemon_err}
+            return {"status": "error", "message": daemon_err}
 
         # Step 3: Get tailscale status as JSON
         status_result = subprocess.run(
@@ -217,8 +227,10 @@ def tailscale_up(request: Request):
             )
 
         # Run tailscale up with the auth key
+        # Force re-authentication so a new key/account is always applied
+        # --reset clears existing state, --force-reauth ensures fresh login
         result = subprocess.run(
-            ["tailscale", "up", "--authkey=" + auth_key],
+            ["tailscale", "up", "--reset", "--authkey=" + auth_key],
             capture_output=True, text=True, timeout=30,
         )
 
@@ -226,6 +238,33 @@ def tailscale_up(request: Request):
             detail = (result.stderr or result.stdout or "Tailscale command failed").strip()
             logger.error(f"tailscale up failed (rc={result.returncode}): {detail}")
             raise HTTPException(status_code=500, detail=detail)
+
+        # Verify the connection actually worked by checking status
+        import time
+        time.sleep(1)
+        verify = subprocess.run(
+            ["tailscale", "status", "--json"],
+            capture_output=True, text=True, timeout=10,
+        )
+        connected = False
+        ip = None
+        hostname = None
+        if verify.returncode == 0:
+            try:
+                vdata = json.loads(verify.stdout)
+                if vdata.get("BackendState") == "Running":
+                    ips = vdata.get("TailscaleIPs", [])
+                    ip = ips[0] if ips else None
+                    hostname = vdata.get("Self", {}).get("HostName")
+                    connected = bool(ip)
+            except (json.JSONDecodeError, KeyError):
+                pass
+
+        if not connected:
+            raise HTTPException(
+                status_code=500,
+                detail="Tailscale command succeeded but connection could not be verified. The auth key may be invalid.",
+            )
 
         # Audit log the action
         try:
@@ -238,7 +277,7 @@ def tailscale_up(request: Request):
         except Exception as e:
             logger.error(f"Audit logging failed for tailscale up: {e}")
 
-        return {"success": True, "message": "Tailscale connected", "output": result.stdout}
+        return {"success": True, "message": "Tailscale connected", "ip": ip, "hostname": hostname}
 
     except HTTPException:
         raise
@@ -364,19 +403,26 @@ def save_network_access(provider: str, body: dict, request: Request):
 
         # Check for existing row to preserve id and created_datetime
         existing = conn.execute(
-            "SELECT id, created_datetime FROM network_access WHERE provider = ?",
+            "SELECT id, created_datetime, config FROM network_access WHERE provider = ?",
             (provider,),
         ).fetchone()
 
+        old_auth_key = None
         if existing:
             row_id = existing["id"]
             created = existing["created_datetime"]
+            try:
+                old_config = json.loads(existing["config"]) if existing["config"] else {}
+                old_auth_key = old_config.get("auth_key", "")
+            except (json.JSONDecodeError, TypeError):
+                old_auth_key = ""
         else:
             row_id = str(uuid4())
             created = now
 
         enabled = body.get("enabled", False)
         config = body.get("config", {})
+        new_auth_key = config.get("auth_key", "")
         config_json = json.dumps(config)
 
         conn.execute(
@@ -399,6 +445,24 @@ def save_network_access(provider: str, body: dict, request: Request):
 
         conn.commit()
 
+        # If this is Tailscale and the auth key changed, disconnect + logout
+        # so the old registration is purged and Connect uses the new key fresh
+        tailscale_disconnected = False
+        if provider == "tailscale" and old_auth_key is not None and new_auth_key != old_auth_key:
+            try:
+                subprocess.run(
+                    ["tailscale", "down"],
+                    capture_output=True, text=True, timeout=15,
+                )
+                subprocess.run(
+                    ["tailscale", "logout"],
+                    capture_output=True, text=True, timeout=15,
+                )
+                tailscale_disconnected = True
+                logger.info("Tailscale disconnected and logged out (auth key changed)")
+            except Exception as e:
+                logger.warning(f"Failed to disconnect Tailscale after key change: {e}")
+
         return {
             "id": row_id,
             "provider": provider,
@@ -406,6 +470,7 @@ def save_network_access(provider: str, body: dict, request: Request):
             "config": config,
             "created_datetime": created,
             "modified_datetime": now,
+            "tailscale_disconnected": tailscale_disconnected,
         }
     except HTTPException:
         raise

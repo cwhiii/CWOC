@@ -1,0 +1,1 @@
+Tailscale button is now the label itself ("Tailscale ✓/✗") with FA status icon. Button just toggles config visibility (no connect/disconnect). Check Status shows "Checking..." then result. Disconnect messages are yellow. Header icon updates on page load even when collapsed.

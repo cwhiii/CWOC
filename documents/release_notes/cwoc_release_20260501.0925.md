@@ -1,0 +1,1 @@
+Tailscale Connect now uses --reset to force re-authentication with the saved key (supports switching accounts). Removing the auth key and saving auto-disconnects and logs out the node. Status refreshes after save.

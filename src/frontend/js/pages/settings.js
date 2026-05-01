@@ -3159,9 +3159,152 @@ if (typeof waitForAuth === 'function') {
 
 // ── Network Access ───────────────────────────────────────────────────────────
 
+// Track the saved config so we can detect changes for the save button
+var _tsSavedAuthKey = '';
+var _tsSavedEnabled = false;
+
+/**
+ * Show an inline feedback message inside the Network Access block.
+ * Stays visible until dismissed (click) or replaced by a new message.
+ * Flashes briefly on each update.
+ * @param {string} message - The message to display
+ * @param {string} [type='success'] - 'success', 'error', or 'info'
+ */
+function _tsFeedback(message, type) {
+  type = type || 'success';
+  var el = document.getElementById('tailscale-feedback');
+  if (!el) return;
+
+  var colors = {
+    success: { bg: 'rgba(45,90,30,0.12)', border: '#2d5a1e', text: '#1e3f14', icon: '✅' },
+    error:   { bg: 'rgba(139,26,26,0.12)', border: '#8b1a1a', text: '#5c1010', icon: '❌' },
+    warning: { bg: 'rgba(184,134,11,0.12)', border: '#b8860b', text: '#6b4f00', icon: '⚠️' },
+    info:    { bg: 'rgba(74,44,42,0.10)', border: '#4a2c2a', text: '#2b1e0f', icon: 'ℹ️' }
+  };
+  var c = colors[type] || colors.info;
+
+  el.style.display = '';
+  el.style.background = c.bg;
+  el.style.border = '1px solid ' + c.border;
+  el.style.color = c.text;
+  el.textContent = c.icon + '  ' + message;
+
+  // Flash effect
+  el.style.opacity = '0';
+  requestAnimationFrame(function () {
+    el.style.transition = 'opacity 0.3s ease';
+    el.style.opacity = '1';
+  });
+}
+
+/**
+ * Toggle Tailscale enabled state — shows/hides the config body,
+ * updates the enable button label, and marks config dirty.
+ */
+function toggleTailscaleEnabled() {
+  var body = document.getElementById('tailscale-config-body');
+  if (!body) return;
+
+  var isVisible = body.style.display !== 'none';
+  body.style.display = isVisible ? 'none' : '';
+
+  if (!isVisible) {
+    // Expanding — refresh status
+    refreshTailscaleStatus();
+  }
+}
+
+/**
+ * Update the Tailscale header icon based on connection status.
+ * @param {string} status - 'not_installed', 'installed_inactive', 'active', 'error'
+ */
+function _tsUpdateHeaderIcon(status) {
+  var icon = document.getElementById('tailscale-header-icon');
+  if (!icon) return;
+
+  switch (status) {
+    case 'active':        icon.textContent = '🟢'; break;
+    case 'installed_inactive': icon.textContent = '🟡'; break;
+    case 'not_installed': icon.textContent = '⚪'; break;
+    case 'error':         icon.textContent = '🔴'; break;
+    default:              icon.textContent = '⚪'; break;
+  }
+}
+
+/**
+ * Quick status fetch that only updates the header icon — no feedback messages.
+ * Used on page load to show connection state even when config is collapsed.
+ */
+async function _tsQuickStatusForIcon() {
+  try {
+    var response = await fetch('/api/network-access/tailscale/status');
+    if (!response.ok) return;
+    var data = await response.json();
+    _tsUpdateHeaderIcon(data.status);
+  } catch (e) {
+    // Silently ignore — icon stays at default
+  }
+}
+
+/**
+ * Sync the enable button and config body visibility with the current checkbox state.
+ * Called after loading config from the server.
+ */
+function _tsApplyEnabledState() {
+  var checkbox = document.getElementById('tailscale-enabled');
+  var body = document.getElementById('tailscale-config-body');
+  if (!checkbox || !body) return;
+
+  if (checkbox.checked) {
+    body.style.display = '';
+    refreshTailscaleStatus();
+  } else {
+    body.style.display = 'none';
+  }
+}
+
+/**
+ * Update the Save button enabled/disabled state based on whether
+ * the auth key or enabled checkbox has changed from the saved values.
+ */
+function _tsUpdateSaveButton() {
+  var authKeyInput = document.getElementById('tailscale-auth-key');
+  var enabledCheckbox = document.getElementById('tailscale-enabled');
+  var saveBtn = document.getElementById('tailscale-save-btn');
+  if (!saveBtn) return;
+
+  var currentKey = authKeyInput ? authKeyInput.value : '';
+  var currentEnabled = enabledCheckbox ? enabledCheckbox.checked : false;
+  var dirty = (currentKey !== _tsSavedAuthKey) || (currentEnabled !== _tsSavedEnabled);
+
+  saveBtn.disabled = !dirty;
+  saveBtn.style.opacity = dirty ? '1' : '0.5';
+}
+
+/**
+ * Update Connect/Disconnect button states based on the current Tailscale status.
+ * @param {string} status - 'not_installed', 'installed_inactive', 'active', 'error'
+ */
+function _tsUpdateConnectionButtons(status) {
+  var upBtn = document.getElementById('tailscale-up-btn');
+  var downBtn = document.getElementById('tailscale-down-btn');
+
+  var canConnect = (status === 'installed_inactive');
+  var canDisconnect = (status === 'active');
+
+  if (upBtn) {
+    upBtn.disabled = !canConnect;
+    upBtn.style.opacity = canConnect ? '1' : '0.5';
+  }
+  if (downBtn) {
+    downBtn.disabled = !canDisconnect;
+    downBtn.style.opacity = canDisconnect ? '1' : '0.5';
+  }
+}
+
 /**
  * Fetch the current Tailscale service status and update the UI badge,
- * IP/hostname row, and error row accordingly.
+ * IP/hostname row, error row, and button states accordingly.
  */
 async function refreshTailscaleStatus() {
   var badge = document.getElementById('tailscale-status-badge');
@@ -3170,11 +3313,22 @@ async function refreshTailscaleStatus() {
   var errorMsg = document.getElementById('tailscale-error-msg');
   var ipSpan = document.getElementById('tailscale-ip');
   var hostnameSpan = document.getElementById('tailscale-hostname');
+  var currentStatus = 'unknown';
+
+  // Show checking state
+  if (badge) badge.textContent = '⏳ Checking...';
+  _tsFeedback('Checking Tailscale status...', 'info');
+  var _tsCheckStart = Date.now();
 
   try {
     var response = await fetch('/api/network-access/tailscale/status');
     if (!response.ok) throw new Error('Status check failed');
     var data = await response.json();
+    currentStatus = data.status;
+
+    // Ensure "Checking..." shows for at least 1 second
+    var elapsed = Date.now() - _tsCheckStart;
+    if (elapsed < 1000) await new Promise(function (r) { setTimeout(r, 1000 - elapsed); });
 
     // Hide both optional rows by default
     if (infoRow) infoRow.style.display = 'none';
@@ -3183,6 +3337,7 @@ async function refreshTailscaleStatus() {
     switch (data.status) {
       case 'not_installed':
         if (badge) badge.textContent = '⚪ Not Installed';
+        _tsFeedback('Tailscale is not installed on this server.', 'info');
         break;
       case 'installed_inactive':
         if (badge) badge.textContent = '🟡 Inactive';
@@ -3190,17 +3345,20 @@ async function refreshTailscaleStatus() {
           if (errorRow) errorRow.style.display = '';
           if (errorMsg) errorMsg.textContent = data.message;
         }
+        _tsFeedback('Tailscale installed but not connected.', 'info');
         break;
       case 'active':
         if (badge) badge.textContent = '🟢 Connected';
         if (infoRow) infoRow.style.display = '';
         if (ipSpan) ipSpan.textContent = data.ip || '—';
         if (hostnameSpan) hostnameSpan.textContent = data.hostname || '—';
+        _tsFeedback('Connected — IP: ' + (data.ip || '—'), 'success');
         break;
       case 'error':
         if (badge) badge.textContent = '🔴 Error';
         if (errorRow) errorRow.style.display = '';
         if (errorMsg) errorMsg.textContent = data.message || 'Unknown error';
+        _tsFeedback('Error: ' + (data.message || 'Unknown'), 'error');
         break;
       default:
         if (badge) badge.textContent = '⚪ Unknown';
@@ -3211,7 +3369,11 @@ async function refreshTailscaleStatus() {
     if (badge) badge.textContent = '⚠️ Unable to check status';
     if (infoRow) infoRow.style.display = 'none';
     if (errorRow) errorRow.style.display = 'none';
+    _tsFeedback('Unable to check status.', 'error');
   }
+
+  _tsUpdateConnectionButtons(currentStatus);
+  _tsUpdateHeaderIcon(currentStatus);
 }
 
 /**
@@ -3227,8 +3389,27 @@ async function loadTailscaleConfig() {
     var authKeyInput = document.getElementById('tailscale-auth-key');
     var enabledCheckbox = document.getElementById('tailscale-enabled');
 
-    if (authKeyInput) authKeyInput.value = (data.config && data.config.auth_key) || '';
-    if (enabledCheckbox) enabledCheckbox.checked = !!data.enabled;
+    var key = (data.config && data.config.auth_key) || '';
+    var enabled = !!data.enabled;
+
+    if (authKeyInput) authKeyInput.value = key;
+    if (enabledCheckbox) enabledCheckbox.checked = enabled;
+
+    // Store saved values for dirty tracking
+    _tsSavedAuthKey = key;
+    _tsSavedEnabled = enabled;
+    _tsUpdateSaveButton();
+    _tsApplyEnabledState();
+
+    // Wire up change listeners (only once)
+    if (authKeyInput && !authKeyInput._tsListenerAdded) {
+      authKeyInput.addEventListener('input', _tsUpdateSaveButton);
+      authKeyInput._tsListenerAdded = true;
+    }
+    if (enabledCheckbox && !enabledCheckbox._tsListenerAdded) {
+      enabledCheckbox.addEventListener('change', _tsUpdateSaveButton);
+      enabledCheckbox._tsListenerAdded = true;
+    }
   } catch (error) {
     console.error('Failed to load Tailscale config:', error);
   }
@@ -3254,10 +3435,26 @@ async function saveTailscaleConfig() {
       var err = await response.json();
       throw new Error(err.detail || 'Save failed');
     }
-    cwocToast('Tailscale configuration saved.');
+    var saveData = await response.json();
+    // Update saved values so save button greys out again
+    _tsSavedAuthKey = authKey;
+    _tsSavedEnabled = enabled;
+    _tsUpdateSaveButton();
+    // If Tailscale was disconnected because key was removed, refresh status and notify
+    if (saveData.tailscale_disconnected) {
+      await refreshTailscaleStatus();
+      if (!authKey) {
+        _tsFeedback('Config saved. Tailscale disconnected (auth key removed).', 'warning');
+      } else {
+        _tsFeedback('Config saved. Tailscale disconnected (key changed — click Connect to re-authenticate).', 'warning');
+      }
+    } else {
+      await refreshTailscaleStatus();
+      _tsFeedback('Tailscale configuration saved.');
+    }
   } catch (error) {
     console.error('Failed to save Tailscale config:', error);
-    cwocToast('Failed to save Tailscale config: ' + error.message, 'error');
+    _tsFeedback('Failed to save config: ' + error.message, 'error');
   }
 }
 
@@ -3273,14 +3470,14 @@ async function tailscaleUp() {
     });
     var data = await response.json();
     if (!response.ok) {
-      cwocToast('Tailscale connect failed: ' + (data.detail || data.output || 'Unknown error'), 'error');
+      _tsFeedback('Connect failed: ' + (data.detail || data.output || 'Unknown error'), 'error');
       return;
     }
     await refreshTailscaleStatus();
-    cwocToast(data.message || 'Tailscale connected.');
+    _tsFeedback(data.message || 'Tailscale connected.');
   } catch (error) {
     console.error('Tailscale up failed:', error);
-    cwocToast('Tailscale connect failed: ' + error.message, 'error');
+    _tsFeedback('Connect failed: ' + error.message, 'error');
   }
 }
 
@@ -3296,14 +3493,14 @@ async function tailscaleDown() {
     });
     var data = await response.json();
     if (!response.ok) {
-      cwocToast('Tailscale disconnect failed: ' + (data.detail || data.output || 'Unknown error'), 'error');
+      _tsFeedback('Disconnect failed: ' + (data.detail || data.output || 'Unknown error'), 'error');
       return;
     }
     await refreshTailscaleStatus();
-    cwocToast(data.message || 'Tailscale disconnected.');
+    _tsFeedback(data.message || 'Tailscale disconnected.', 'warning');
   } catch (error) {
     console.error('Tailscale down failed:', error);
-    cwocToast('Tailscale disconnect failed: ' + error.message, 'error');
+    _tsFeedback('Disconnect failed: ' + error.message, 'error');
   }
 }
 
@@ -3330,7 +3527,8 @@ if (typeof waitForAuth === 'function') {
   waitForAuth().then(function(user) {
     if (user && user.is_admin) {
       loadTailscaleConfig();
-      refreshTailscaleStatus();
+      // Always update header icon regardless of expanded/collapsed state
+      _tsQuickStatusForIcon();
     }
   });
 }

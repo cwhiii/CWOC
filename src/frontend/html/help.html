@@ -404,19 +404,19 @@
             <p>The Settings page includes a <strong>🌐 Network Access</strong> block (admin only) for configuring external network access providers. Currently supports Tailscale, a WireGuard-based mesh VPN for secure remote access without port forwarding.</p>
             <h4>Tailscale</h4>
             <ul>
-                <li><strong>Status</strong> — Shows the current Tailscale state: ⚪ Not Installed, 🟡 Inactive, 🟢 Connected (with IP and hostname), or 🔴 Error. Click 🔄 Check Status to re-check.</li>
+                <li><strong>Status</strong> — Shows the current Tailscale state: ⚪ Not Installed, 🟡 Inactive, 🟢 Connected (with IP and hostname), or 🔴 Error. Click 🔄 Check Status to re-check (read-only — does not attempt to reconnect).</li>
                 <li><strong>Auth Key</strong> — Enter your Tailscale pre-authentication key (from the Tailscale admin console). The key is masked by default; click 👁️ to reveal it. Click 🔑 Get Key to open the Tailscale admin console.</li>
                 <li><strong>Enabled</strong> — Toggle whether Tailscale should be active.</li>
-                <li><strong>💾 Save Config</strong> — Save the auth key and enabled state to the server.</li>
-                <li><strong>▶️ Connect</strong> — Start Tailscale using the saved auth key.</li>
-                <li><strong>⏹️ Disconnect</strong> — Stop the Tailscale service.</li>
+                <li><strong>💾 Save Config</strong> — Saves the auth key and enabled state immediately (independent of the main settings Save button). If the auth key changes, Tailscale is automatically disconnected and logged out so the old credentials are purged.</li>
+                <li><strong>▶️ Connect</strong> — Authenticates and connects Tailscale using the saved auth key. Forces re-authentication each time.</li>
+                <li><strong>⏹️ Disconnect</strong> — Stops the Tailscale connection.</li>
             </ul>
             <h4>Troubleshooting</h4>
             <ul>
-                <li><strong>TUN device missing</strong> — If you see "TUN device not available (/dev/net/tun missing)", your server is likely running in a Proxmox LXC container that doesn't have TUN access enabled. To fix, add these two lines to the container config on the <em>Proxmox host</em> at <code>/etc/pve/lxc/&lt;CTID&gt;.conf</code>:
+                <li><strong>TUN device missing</strong> — If you see "TUN device not available (/dev/net/tun missing)", your server is likely running in a Proxmox LXC container that doesn't have TUN access enabled. To fix, add these two lines to the container config on the <em>Proxmox host</em> at <code>/etc/pve/lxc/&lt;CTID&gt;.conf</code> (where <code>CTID</code> is the numeric container ID, e.g. <code>111</code>):
                     <pre style="margin:6px 0;padding:6px 10px;background:rgba(0,0,0,0.05);border-radius:4px;font-size:0.9em;">lxc.cgroup2.devices.allow: c 10:200 rwm
 lxc.mount.entry: /dev/net/tun dev/net/tun none bind,create=file</pre>
-                    Then restart the container from Proxmox (<code>pct restart &lt;CTID&gt;</code>).
+                    Then restart the container from Proxmox (<code>pct stop &lt;CTID&gt; &amp;&amp; pct start &lt;CTID&gt;</code>).
                 </li>
                 <li><strong>Daemon won't start</strong> — Check the server logs with <code>journalctl -xeu tailscaled.service</code> for details.</li>
                 <li><strong>Auth key expired</strong> — One-time keys can only be used once. Generate a new key from the Tailscale admin console and save it.</li>

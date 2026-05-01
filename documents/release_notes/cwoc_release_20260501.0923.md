@@ -1,0 +1,1 @@
+Tailscale connect now verifies the connection actually works after running `tailscale up` — reports failure if the node isn't reachable, even if the command itself succeeded (catches bad/expired auth keys on already-registered nodes).

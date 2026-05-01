@@ -1,0 +1,1 @@
+Tailscale feedback messages now appear inline in the Network Access block instead of floating toasts. Messages stay until dismissed (click) or replaced. Save button has tooltip clarifying it saves immediately. Help page clarifies CTID is the container ID and documents save/connect behavior.

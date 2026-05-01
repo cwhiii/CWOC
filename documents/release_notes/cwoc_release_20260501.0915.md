@@ -1,0 +1,1 @@
+Tailscale UI polish: Save button greyed out until config changes, Connect/Disconnect buttons enable/disable based on connection state, Save on its own row, help text links to troubleshooting in help page.
