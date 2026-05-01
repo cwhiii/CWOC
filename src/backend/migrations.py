@@ -954,3 +954,55 @@ def migrate_add_notifications():
     finally:
         if conn:
             conn.close()
+
+
+# ── User Profile Fields: migration ───────────────────────────────────────
+
+def migrate_add_user_profile_fields():
+    """Add contact-like profile fields to the users table.
+
+    Adds all fields that contacts have, stored as JSON strings where applicable.
+    Fully idempotent — checks column existence before adding.
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        cols = [row[1] for row in cursor.execute("PRAGMA table_info(users)").fetchall()]
+
+        new_cols = [
+            ("phones", "TEXT"),
+            ("emails_json", "TEXT"),       # 'emails_json' to avoid conflict with existing 'email' column
+            ("addresses", "TEXT"),
+            ("call_signs", "TEXT"),
+            ("x_handles", "TEXT"),
+            ("websites", "TEXT"),
+            ("organization", "TEXT"),
+            ("social_context", "TEXT"),
+            ("notes", "TEXT"),
+            ("nickname", "TEXT"),
+            ("given_name", "TEXT"),
+            ("surname", "TEXT"),
+            ("middle_names", "TEXT"),
+            ("prefix", "TEXT"),
+            ("suffix", "TEXT"),
+            ("has_signal", "INTEGER DEFAULT 0"),
+            ("signal_username", "TEXT"),
+            ("pgp_key", "TEXT"),
+            ("color", "TEXT"),
+            ("tags", "TEXT"),
+        ]
+
+        for col_name, col_type in new_cols:
+            if col_name not in cols:
+                cursor.execute(f"ALTER TABLE users ADD COLUMN {col_name} {col_type}")
+                logger.info(f"Added {col_name} column to users table")
+
+        conn.commit()
+    except Exception as e:
+        logger.error(f"Error in migrate_add_user_profile_fields: {str(e)}")
+        raise
+    finally:
+        if conn:
+            conn.close()

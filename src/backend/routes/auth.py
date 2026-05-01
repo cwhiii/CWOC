@@ -181,6 +181,48 @@ def logout(request: Request):
     return response
 
 
+# ── User profile helper ────────────────────────────────────────────────────
+
+def _user_profile_dict(row, is_self=None):
+    """Convert a user DB row to a full profile dict with all contact-like fields."""
+    from src.backend.db import deserialize_json_field
+    keys = row.keys() if hasattr(row, 'keys') else []
+    def _get(field, default=None):
+        return row[field] if field in keys else default
+    result = {
+        "user_id": row["id"],
+        "username": row["username"],
+        "display_name": row["display_name"],
+        "email": row["email"],
+        "is_admin": bool(row["is_admin"]),
+        "profile_image_url": _get("profile_image_url"),
+        "created_datetime": _get("created_datetime"),
+        "phones": deserialize_json_field(_get("phones")),
+        "emails_json": deserialize_json_field(_get("emails_json")),
+        "addresses": deserialize_json_field(_get("addresses")),
+        "call_signs": deserialize_json_field(_get("call_signs")),
+        "x_handles": deserialize_json_field(_get("x_handles")),
+        "websites": deserialize_json_field(_get("websites")),
+        "organization": _get("organization"),
+        "social_context": _get("social_context"),
+        "notes": _get("notes"),
+        "nickname": _get("nickname"),
+        "given_name": _get("given_name"),
+        "surname": _get("surname"),
+        "middle_names": _get("middle_names"),
+        "prefix": _get("prefix"),
+        "suffix": _get("suffix"),
+        "has_signal": bool(_get("has_signal")),
+        "signal_username": _get("signal_username"),
+        "pgp_key": _get("pgp_key"),
+        "color": _get("color"),
+        "tags": deserialize_json_field(_get("tags")),
+    }
+    if is_self is not None:
+        result["is_self"] = is_self
+    return result
+
+
 # ── GET /api/auth/me ──────────────────────────────────────────────────────
 
 @auth_router.get("/me")
@@ -194,23 +236,12 @@ def get_me(request: Request):
     try:
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
-        row = conn.execute(
-            "SELECT id, username, display_name, email, is_admin, profile_image_url "
-            "FROM users WHERE id = ?",
-            (user_id,),
-        ).fetchone()
+        row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
 
         if row is None:
             raise HTTPException(status_code=404, detail="User not found")
 
-        return {
-            "user_id": row["id"],
-            "username": row["username"],
-            "display_name": row["display_name"],
-            "email": row["email"],
-            "is_admin": bool(row["is_admin"]),
-            "profile_image_url": row["profile_image_url"],
-        }
+        return _user_profile_dict(row)
     except HTTPException:
         raise
     except Exception as e:
@@ -244,6 +275,74 @@ def update_profile(body: ProfileUpdate, request: Request):
         if body.email is not None:
             updates.append("email = ?")
             params.append(body.email)
+        if body.nickname is not None:
+            updates.append("nickname = ?")
+            params.append(body.nickname)
+        if body.organization is not None:
+            updates.append("organization = ?")
+            params.append(body.organization)
+        if body.social_context is not None:
+            updates.append("social_context = ?")
+            params.append(body.social_context)
+        if body.notes is not None:
+            updates.append("notes = ?")
+            params.append(body.notes)
+
+        from src.backend.db import serialize_json_field
+        if body.phones is not None:
+            updates.append("phones = ?")
+            params.append(serialize_json_field(body.phones))
+        if body.emails_json is not None:
+            updates.append("emails_json = ?")
+            params.append(serialize_json_field(body.emails_json))
+        if body.addresses is not None:
+            updates.append("addresses = ?")
+            params.append(serialize_json_field(body.addresses))
+        if body.call_signs is not None:
+            updates.append("call_signs = ?")
+            params.append(serialize_json_field(body.call_signs))
+        if body.x_handles is not None:
+            updates.append("x_handles = ?")
+            params.append(serialize_json_field(body.x_handles))
+        if body.websites is not None:
+            updates.append("websites = ?")
+            params.append(serialize_json_field(body.websites))
+
+        # Name fields
+        if body.given_name is not None:
+            updates.append("given_name = ?")
+            params.append(body.given_name)
+        if body.surname is not None:
+            updates.append("surname = ?")
+            params.append(body.surname)
+        if body.middle_names is not None:
+            updates.append("middle_names = ?")
+            params.append(body.middle_names)
+        if body.prefix is not None:
+            updates.append("prefix = ?")
+            params.append(body.prefix)
+        if body.suffix is not None:
+            updates.append("suffix = ?")
+            params.append(body.suffix)
+
+        # Security fields
+        if body.has_signal is not None:
+            updates.append("has_signal = ?")
+            params.append(1 if body.has_signal else 0)
+        if body.signal_username is not None:
+            updates.append("signal_username = ?")
+            params.append(body.signal_username)
+        if body.pgp_key is not None:
+            updates.append("pgp_key = ?")
+            params.append(body.pgp_key)
+
+        # Color and tags
+        if body.color is not None:
+            updates.append("color = ?")
+            params.append(body.color)
+        if body.tags is not None:
+            updates.append("tags = ?")
+            params.append(serialize_json_field(body.tags))
 
         if not updates:
             raise HTTPException(status_code=400, detail="No fields to update")
@@ -259,16 +358,8 @@ def update_profile(body: ProfileUpdate, request: Request):
         conn.commit()
 
         # Return updated profile
-        row = conn.execute(
-            "SELECT id, display_name, email FROM users WHERE id = ?",
-            (user_id,),
-        ).fetchone()
-
-        return {
-            "user_id": row["id"],
-            "display_name": row["display_name"],
-            "email": row["email"],
-        }
+        row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+        return _user_profile_dict(row)
     except HTTPException:
         raise
     except Exception as e:
@@ -400,11 +491,11 @@ def list_switchable_users(request: Request):
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
-            "SELECT id, username, display_name, profile_image_url FROM users WHERE is_active = 1 ORDER BY display_name ASC"
+            "SELECT id, username, display_name, profile_image_url, color FROM users WHERE is_active = 1 ORDER BY display_name ASC"
         ).fetchall()
 
         return [
-            {"id": row["id"], "username": row["username"], "display_name": row["display_name"], "profile_image_url": row["profile_image_url"]}
+            {"id": row["id"], "username": row["username"], "display_name": row["display_name"], "profile_image_url": row["profile_image_url"], "color": row["color"] if "color" in row.keys() else None}
             for row in rows
         ]
     except Exception as e:
@@ -496,6 +587,38 @@ def delete_profile_image(request: Request):
     except Exception as e:
         logger.error(f"Profile image delete error: {e}")
         raise HTTPException(status_code=500, detail="Failed to remove image")
+    finally:
+        if conn:
+            conn.close()
+
+
+# ── GET /api/auth/user-profile/{user_id} ──────────────────────────────────
+
+@auth_router.get("/user-profile/{target_user_id}")
+def get_user_profile(target_user_id: str, request: Request):
+    """Return a user's public profile info. Any authenticated user can view."""
+    user_id = getattr(request.state, "user_id", None)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        row = conn.execute(
+            "SELECT * FROM users WHERE id = ? AND is_active = 1",
+            (target_user_id,),
+        ).fetchone()
+
+        if row is None:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        return _user_profile_dict(row, is_self=(row["id"] == user_id))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Get user profile error: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
     finally:
         if conn:
             conn.close()

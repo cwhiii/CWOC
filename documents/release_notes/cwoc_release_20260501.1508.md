@@ -1,0 +1,3 @@
+# Release 20260501.1508
+
+People expand modal overhaul: all controls (add/remove, Viewer/Manager pill, assign, RSVP) moved to the left Controls column; status labels (Contact, User, Shared) now use vibrant themed colors (brown for contacts, steel blue for users, teal for shared); favorites section has a darker gold background; edit button restyled with gradient matching the app theme. Both contacts and users now have an edit/view button on the right — contacts open the contact editor, users open the profile page. User profiles open in read-only mode unless it's your own profile. New backend endpoint GET /api/auth/user-profile/{user_id} returns public profile data. Rolodex user rows are now clickable, opening the user's profile page. Rolodex user icon updated to fa-users.

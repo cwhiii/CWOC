@@ -375,7 +375,7 @@ All contact endpoints are scoped by `owner_id` — users can only access their o
 |-------|---------|-------------|
 | `GET /` | `root()` | Serve `index.html` as the main page |
 | `GET /login` | `login_page()` | Serve `login.html` (excluded from auth middleware) |
-| `GET /profile` | `profile_page()` | Serve `profile.html` |
+| `GET /profile` | `profile_page()` | Redirect to `contact-editor.html?mode=profile` |
 | `GET /user-admin` | `user_admin_page()` | Serve `user-admin.html` |
 | `GET /editor` | `editor(id)` | Serve `editor.html` (accepts `?id=` param) |
 | `GET /api/geocode` | `geocode_proxy(q)` | Geocoding proxy to OpenStreetMap Nominatim |
@@ -410,9 +410,11 @@ Provides login, logout, session management, profile updates, password changes, a
 | `POST /api/auth/login` | `login(body)` | Validate credentials, enforce rate limit (10 attempts / 15 min), create session, set `cwoc_session` cookie |
 | `POST /api/auth/logout` | `logout(request)` | Read session token from cookie, delete session row, clear cookie |
 | `GET /api/auth/me` | `get_me(request)` | Return authenticated user's profile info (user_id, username, display_name, email, is_admin) |
+| `GET /api/auth/user-profile/{user_id}` | `get_user_profile(target_user_id, request)` | Return any active user's public profile (display_name, username, email, profile_image_url, created_datetime, is_self flag). Any authenticated user can view |
 | `PUT /api/auth/profile` | `update_profile(body, request)` | Update display_name and/or email for authenticated user |
 | `PUT /api/auth/password` | `change_password(body, request)` | Require current_password verification, hash new_password, update user. Returns 403 if current password is wrong |
 | `POST /api/auth/switch` | `switch_user(body, request)` | Validate target user credentials, invalidate current session, create new session for target user |
+| `GET /api/auth/switchable-users` | `list_switchable_users(request)` | Return minimal list of active users (id, username, display_name, profile_image_url, color) for sharing and people filters |
 
 **Internal helpers:**
 
@@ -809,9 +811,9 @@ Coordinator for shared code between dashboard and editor. Contains glue code for
 | `CwocSidebarFilter(config)` | Class — reusable sidebar filter panel with search, favorites, and hotkey numbers |
 | `_buildTagFilterPanel()` | Build the tag filter panel using CwocSidebarFilter with colored tag badges |
 | `_syncSidebarTagCheckboxes(container, tagObjects)` | Sync hidden checkbox elements to match the sidebar tag selection array |
-| `_buildPeopleFilterPanel()` | Fetch contacts and render the people filter panel |
-| `_renderPeopleFilterPanel(contacts)` | Render people filter chips into both sidebar and hotkey panel containers |
-| `_renderPeopleChipFilter(containerId, contacts, selection)` | Render a chip-based people filter into a specific container |
+| `_buildPeopleFilterPanel()` | Fetch contacts and system users, then render the people filter panel |
+| `_renderPeopleFilterPanel(contacts)` | Render people filter chips (contacts + users) into both sidebar and hotkey panel containers |
+| `_renderPeopleChipFilter(containerId, contacts, users, selection)` | Render a chip-based people filter into a specific container; user chips get a thicker dark border and user icon |
 | `_isPeopleColorLight(hex)` | Check if a people chip color is light (delegates to isLightColor) |
 | `clearPeopleFilter()` | Clear the people filter selection and re-render |
 | `toggleSidebar()` | Toggle sidebar open/closed and persist state to localStorage |
@@ -1150,15 +1152,20 @@ People zone: contacts, system users, sharing controls. Loads all contacts and sy
 | `initPeopleSharingControls(chit)` | Initialize sharing controls for an existing chit — loads shares, sets stealth, determines effective role, syncs assigned-to |
 | `initPeopleSharingForNewChit()` | Initialize sharing controls for a new chit — empty shares, stealth off, null effective role |
 | `_filterPeopleTree(query)` | Filter the people tree by search query |
+| `_contactMatchesFilter(c, filter)` | Check if a contact matches a search filter across all fields (name, email, phone, address, org, social context, call signs, X handles, websites, notes, tags) |
 | `_toggleAllPeopleGroups(event, expand)` | Expand or collapse all letter groups in the people tree (includes both contact and system user letters) |
 | `_addPeopleChip(data)` | Add a person chip (deduped by name), re-render chips and tree |
 | `_removePeopleChip(index)` | Remove a person chip by index, re-render chips and tree |
-| `_renderPeopleChips()` | Render the active people chips (contacts) and shared users (with pill toggles, RSVP status badges, and accept/decline controls for the current user) in the right column |
+| `_renderPeopleChips()` | Render the active people chips (contacts) and shared users (with user-circle icons, pill toggles, RSVP status badges, and accept/decline controls for the current user) in the right column |
 | `_syncPeopleHiddenField()` | Sync the hidden `#people` input with current chip names (comma-separated) |
 | `_updateActivePeopleCount()` | Update the active people count badge (includes both `_peopleChipData.length` and `_currentShares.length`) |
 | `_isLightColor(hex)` | Delegate to shared `isLightColor()` |
 | `_setPeopleFromArray(peopleArray)` | Populate people chips from a chit's people array (called during load) |
-| `openPeopleExpandModal()` | Open the nearly full-screen People expand modal with alphabetical list of all people (contacts + system users), each labeled with type ("Contact", "Viewer", "Manager", "Assigned") |
+| `_expandModalFilter` | Current search filter string for the expand modal |
+| `openPeopleExpandModal()` | Open the full-screen People expand modal — fully interactive with search, add/remove, role management, assign, favorites, user icons |
+| `_renderExpandModalContent()` | Render the expand modal content (search bar, table header, favorites section, alphabetical groups with column layout) |
+| `_el(tag, cls, text)` | Helper to create an element with class and optional text content |
+| `_renderExpandRow(person, showControls, assignedToId)` | Render a single table row — controls column (left: +/✕, pill toggle, assign, RSVP), data columns (icon, thumb, name, email, org, notes, status), edit button (right: open profile/contact in new tab) |
 | `closePeopleExpandModal()` | Close the People expand modal (also triggered by ESC key) |
 
 #### editor-location.js
@@ -1690,19 +1697,18 @@ Weather page: 16-day forecasts for all saved locations rendered as a scrollable 
 | `_wxBuildCityGroups(chits, savedLocations, forecastDates)` | Build city groups from chits at non-saved locations with date→title mapping |
 | `_wxAddCityRows(container, allChits, savedLocations, forecastDates, weekStartDay)` | Add city-based weather rows for chits at non-saved locations; fetch weather per city |
 
-#### profile.js
+#### profile.js — REMOVED (merged into contact-editor.js)
 
-Profile page: display and edit user profile (display name, email), change password.
+Profile functionality is now part of `contact-editor.js`. When `?mode=profile` is in the URL, the contact editor switches to profile mode with these additional functions:
 
 | Function | Description |
 |----------|-------------|
-| `_initProfileSaveSystem()` | Initialize `CwocSaveSystem` and wire up save/cancel buttons |
-| `_showMessage(el, text, type)` | Show a message in the specified message div ('success' or 'error') |
-| `_clearMessage(el)` | Clear a message div |
-| `_loadProfile()` | Fetch user data from `GET /api/auth/me` and populate form fields |
-| `_saveProfile(exitAfter)` | Save profile changes via `PUT /api/auth/profile` with `{ display_name, email }` |
-| `_handlePasswordChange()` | Handle password change via `PUT /api/auth/password`; validates new password matches confirmation |
-| `_monitorProfileChanges()` | Wire up input listeners on editable profile fields to track dirty state |
+| `_initProfileMode()` | Switch UI to profile mode: show account/password zones, hide contact-only features (favorite, tags, delete, QR), update labels |
+| `_loadProfile()` | Load own profile via `GET /api/auth/me` or another user's via `GET /api/auth/user-profile/{id}` |
+| `_populateProfileForm(user)` | Populate the shared form fields from a user profile object (maps user API fields to shared element IDs) |
+| `_saveProfile()` | Save profile data via `PUT /api/auth/profile` |
+| `_applyReadOnlyMode(displayName)` | Disable all inputs, hide save/password, show read-only banner for viewing other users |
+| `changeProfilePassword()` | Change password via `PUT /api/auth/password` with validation |
 
 #### user-admin.js
 

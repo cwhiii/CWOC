@@ -4,9 +4,9 @@
   <img src="src/static/cwod_logo-large.png" alt="CWOC Logo" width="200">
 </p>
 
-A self-hosted personal task, note, and calendar management web app with built-in Tailscale support. One flexible record — the **chit** — serves as a task, note, calendar event, alarm, checklist, or project, all in one unified data model.
+A self-hosted multi-user task, note, and calendar management web app with built-in Tailscale support. One flexible record — the **chit** — serves as a task, note, calendar event, alarm, checklist, or project, all in one unified data model.
 
-Unlike most productivity tools, CWOC doesn't force you to pick a category up front. Fill in the fields that matter and the system figures out where it belongs — a chit with a date shows up on the calendar, add a checklist and it appears in checklists too. No accounts, no subscriptions, no cloud dependency. Your data lives on your hardware in a single SQLite file, accessible from any device on your network. The entire stack is vanilla Python and vanilla JS with zero build steps, so it's easy to deploy, easy to hack on, and easy to understand.
+Unlike most productivity tools, CWOC doesn't force you to pick a category up front. Fill in the fields that matter and the system figures out where it belongs — a chit with a date shows up on the calendar, add a checklist and it appears in checklists too. Multiple users get their own accounts with granular sharing — chit-level and tag-level sharing with viewer/manager roles, RSVP, assignment, and stealth mode. No subscriptions, no cloud dependency. Your data lives on your hardware in a single SQLite file, accessible from any device on your network. The entire stack is vanilla Python and vanilla JS with zero build steps — lightweight enough to run on a Raspberry Pi Zero 2, easy to deploy, easy to hack on, and easy to understand.
 
 ## C CAPTN Views
 
@@ -18,6 +18,8 @@ Unlike most productivity tools, CWOC doesn't force you to pick a category up fro
 | **P**rojects | Kanban-style boards with child chits |
 | **T**asks | Status tracking — ToDo, In Progress, Blocked, Complete |
 | **N**otes | Markdown content |
+
+Plus an **Indicators** tab for health trend charts (heart rate, blood pressure, SpO2, temperature, weight, glucose, and more) with configurable time ranges.
 
 ## Tech Stack
 

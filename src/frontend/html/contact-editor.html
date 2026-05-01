@@ -189,6 +189,13 @@
                 font-size: 0.85em;
             }
 
+            /* Password message */
+            .pw-msg-success { background: rgba(34,139,34,0.15); border: 1px solid #228b22; color: #1a5c1a; display: block !important; }
+            .pw-msg-error { background: rgba(178,34,34,0.15); border: 1px solid #b22222; color: #8b1a1a; display: block !important; }
+
+            /* Read-only banner (profile mode, viewing other user) */
+            .cwoc-readonly-banner { background: rgba(70,130,180,0.15); border: 1px solid rgba(70,130,180,0.4); border-radius: 6px; padding: 8px 14px; margin-bottom: 12px; font-size: 0.95em; color: #1a4a6e; text-align: center; }
+
             /* Color picker */
             .color-swatches {
                 display: flex;
@@ -336,10 +343,33 @@
                         </button>
                     </div>
                     <h2 id="displayNameHeader" style="margin:0;color:var(--aged-brown-dark);flex:1;font-size:1.3em;">New Contact</h2>
+                    <span style="font-size:0.65em;padding:2px 8px;border-radius:10px;background:rgba(70,130,180,0.18);color:#1a4a6e;border:1px solid rgba(70,130,180,0.4);font-weight:600;flex-shrink:0;align-self:center;"><i class="fas fa-address-book"></i> Contact</span>
                 </div>
 
-                <!-- ═══ Column 1: Name (all fields) + Security ═══ -->
+                <!-- ═══ Column 1: Account (profile-only) + Name + Security ═══ -->
                 <div>
+                    <!-- Account Zone (profile mode only — hidden for contacts) -->
+                    <div id="accountSection" class="zone-container" style="display:none;">
+                        <div class="zone-header" onclick="cwocToggleZone(event, 'accountSection', 'accountContent')">
+                            <h2 class="zone-title">👤 Account</h2>
+                            <span class="zone-toggle-icon">🔼</span>
+                        </div>
+                        <div id="accountContent" class="zone-body">
+                            <div class="field">
+                                <label for="accountUsername">Username</label>
+                                <input type="text" id="accountUsername" readonly style="opacity:0.6;cursor:not-allowed;" />
+                            </div>
+                            <div class="field">
+                                <label for="accountDisplayName">Display Name</label>
+                                <input type="text" id="accountDisplayName" placeholder="Display name" />
+                            </div>
+                            <div class="field">
+                                <label for="accountEmail">Email</label>
+                                <input type="text" id="accountEmail" placeholder="Email address" />
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Name Zone (ALL name fields here) -->
                     <div id="nameSection" class="zone-container">
                         <div class="zone-header" onclick="cwocToggleZone(event, 'nameSection', 'nameContent')">
@@ -558,6 +588,30 @@
                                 <span id="colorPreview" style="width:24px;height:24px;border-radius:50%;border:1px solid var(--aged-brown-medium);display:inline-block;"></span>
                             </div>
                             <div class="color-swatches" id="colorSwatches"></div>
+                        </div>
+                    </div>
+
+                    <!-- Password Zone (profile mode only — hidden for contacts) -->
+                    <div id="passwordSection" class="zone-container" style="display:none;">
+                        <div class="zone-header" onclick="cwocToggleZone(event, 'passwordSection', 'passwordContent')">
+                            <h2 class="zone-title">🔑 Change Password</h2>
+                            <span class="zone-toggle-icon">🔽</span>
+                        </div>
+                        <div id="passwordContent" class="zone-body" style="display:none;">
+                            <div class="field full-width">
+                                <label for="currentPassword">Current Password</label>
+                                <input type="password" id="currentPassword" placeholder="Enter current password" style="width:100%;box-sizing:border-box;" />
+                            </div>
+                            <div class="field full-width">
+                                <label for="newPassword">New Password</label>
+                                <input type="password" id="newPassword" placeholder="Enter new password" style="width:100%;box-sizing:border-box;" />
+                            </div>
+                            <div class="field full-width">
+                                <label for="confirmPassword">Confirm New Password</label>
+                                <input type="password" id="confirmPassword" placeholder="Confirm new password" style="width:100%;box-sizing:border-box;" />
+                            </div>
+                            <div id="passwordMessage" style="padding:6px 10px;border-radius:4px;font-size:0.85em;display:none;margin-top:6px;"></div>
+                            <button type="button" onclick="changeProfilePassword()" style="margin-top:6px;">🔑 Change Password</button>
                         </div>
                     </div>
 

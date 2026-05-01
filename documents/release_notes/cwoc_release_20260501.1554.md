@@ -1,0 +1,3 @@
+# Release 20260501.1554
+
+User profiles now have full parity with contact profiles. Added all missing fields: Name section (prefix, given, middle, surname, suffix), Security section (Signal toggle + username, PGP public key), and Color section (hex input + 20-color swatch palette). DB migration adds given_name, surname, middle_names, prefix, suffix, has_signal, signal_username, pgp_key, color, and tags columns to the users table. Backend GET /me, GET /user-profile/{id}, and PUT /profile all handle the complete field set via a shared _user_profile_dict helper. Read-only mode disables all new fields including selects, checkboxes, and color swatches.

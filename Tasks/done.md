@@ -1,6 +1,41 @@
 # CWOC — Completed Items
+The user profile is also supposed to include all information found in the contact profile. All the same fields. Such as social site and all that kind of thing.  Both contact and user profiles should also include an indicator to show whether they are a user or a contact. Who's the same icon you use in the chits editor to indicate users. 
 
-*Extracted from AI Notes and Bugs.md. Items confirmed fixed in the codebase.*
+
+
+also The background for the favorites header in the expanded people thing in the chat editor is supposed to be darker to make the gold stand out better
+
+
+
+In the chit, editor of the expanded people model, when I click on the hitters, it should sort, ascending, then on next click,  descending.
+
+
+
+Also, any chat, editor, expanded people model, the label for contact is still brown. I wanted to have a nice color, make it the blue color that users are now, and then make the users, a gold backgound and almost black text (all re: the chip that says which they are)
+
+### Multi-User System
+1. ~~User management project - COMPLETE~~
+2. Sharing chits project - requirements updated, ready for design & implementation.
+
+- `[ ]` Server configurator script for deployment
+
+
+### External Access
+- I'll be using theis with potentilaly severla different extra-LAN accessmethods. 1st is tailscale. Udpdat ehe installer to get that configured, and add whatever's needd to the settings page to the "🔄 Version & Updates" block of settings. Also, rename it ot " Updates & access" (with applicable good logo.) DO NOT export any passwords for this in the full data export, but DO export all other configs & settigns needed for it. 
+
+- for the invitee, on a chit editor, the invite control (accept & reject)  should be in a banner like teh one for "uour a read only invitee" , and should go away once 
+
+
+users: 
+- the username inoput in settgins, remove it. and only use the one in the user admin page. 
+- add a button in teh settigns page to Manage Users. Grey it out whith hover for non-admin users. 
+- user switcher isn't functional? It switches, but doesn;ta ask for atuthentication, and then doesn' switch back.
+- the switchert button should be the very top right item in the top bar, and should be the user's proifile image.  clicking openes the change user tool, but as a modal.
+
+- **New spec-driven feature.** need to have a new admin block in settings "Network Access**. in it is a A tailscale connection block. Also, need to build whatver is needed in the backend to configure & install it as part of the upgrade script. There will likely be other otion fo rnetwork hole punching/external access, so ensure theat you're naking the set up in such asway that this is not harder later.  But don't set up that other stuff yet.
+
+- Fix the invitee system for acept & reject. 
+- teh exxpand button in peeople zone in chit editoor shouldbe not just for CIEWING, but for MANAGING the people invited, etc, jsut liek the small view, but with more space to breath, for better organization, & finding, etc. 
 
 ---
 

@@ -271,7 +271,7 @@
         } else {
             const placeholder = document.createElement('span');
             placeholder.className = 'contact-thumb-placeholder';
-            placeholder.innerHTML = '<i class="fas fa-user-circle"></i>';
+            placeholder.innerHTML = '<i class="fas fa-users"></i>';
             row.appendChild(placeholder);
         }
 
@@ -290,6 +290,12 @@
         infoCol.appendChild(detailSpan);
 
         row.appendChild(infoCol);
+
+        // Click row → navigate to user profile
+        row.style.cursor = 'pointer';
+        row.addEventListener('click', () => {
+            window.location.href = '/frontend/html/contact-editor.html?mode=profile&user_id=' + encodeURIComponent(user.id);
+        });
 
         return row;
     }

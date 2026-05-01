@@ -1,0 +1,3 @@
+# Release 20260501.1619
+
+Merged the user profile page into the contact editor. Both contacts and user profiles now use a single HTML page (contact-editor.html) and a single JS file (contact-editor.js). The page detects `?mode=profile` to swap behavior: profile mode shows Account and Change Password zones, hides contact-only features (favorite, tags, delete, QR), and uses the profile API endpoints for load/save/image. The old profile.html and profile.js files have been deleted. The `/profile` route now redirects to the contact editor in profile mode. Removed the "Profile updated successfully" message — save feedback now uses the same brief save-button flash as contacts.

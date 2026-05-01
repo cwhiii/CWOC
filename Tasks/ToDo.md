@@ -3,63 +3,48 @@
 *Completed items are in `done.md`. Deferred items in `parking_lot.md`. Declined in `path_not_traveled.md`.*
 
 ---
-
-## Fixing Sharing
-
-
-
-- usesrs in roladex: i should be able to view a user like a contact, and view theri values. Should be able to favorite tehem, jsut like a contact. 
-
-- if stealth is enabled or a chit, all sahring & assiement options should be crewyed out. 
-
-
-- I should be able to drag & drop an all-day chit to a different all-day day.
-
-## Top Priorities
-- Fix the invitee system for acept & reject. 
-- teh exxpand button in peeople zone in chit editoor shouldbe not just for CIEWING, but for MANAGING the people invited, etc, jsut liek the small view, but with more space to breath, for better organization, & finding, etc. 
-
-- **New spec-driven feature.** need to have a new admin block in settings "Network Access**. in it is a A tailscale connection block. Also, need to build whatver is needed in the backend to configure & install it as part of the upgrade script. There will likely be other otion fo rnetwork hole punching/external access, so ensure theat you're naking the set up in such asway that this is not harder later.  But don't set up that other stuff yet.
-
-
-- undersgtand habit sbetter, it's doing somethign strange I don't get. 
-- make the profile picrures in the rop right corner of each page teh same height as the buttons its next to.
-- change hotkry fir x days from ".-->s" to ".-->x"
-
----
 ## Manual Tasks
 - `[ ]` Screenshot and video walkthrough of the app
 
+---
+
+- usesrs in roladex: i should be able to view a user like a contact, and view theri values. Should be able to favorite tehem, jsut like a contact. 
+- if stealth is enabled or a chit, all sahring & assiement options should be crewyed out. 
+- I should be able to drag & drop an all-day chit to a different all-day day.
+- change hotkry fir x days from ".-->s" to ".-->x" update help & ref. 
+- make the profile picrures in the rop right corner of each page teh same height as the buttons its next to.
+- in tasks view, the passed-due items getspecial coloring on them, good! Update the text fo rhe psased-due items to have the label: Passed Due: [due date]. Including the year, in format YYYY-MMM-DD. 
+- in the indicators, on the graphs the date overlaps if they are close together,  have it use smarter, shorter lables, or oly day of the month or somehting better to previent this. 
+- in indicators vierw, use a plain red heart fo rhear rate chart & filter. 
+- in indicators view, let me drag & drop the charts to reorganize them just like is impliments in the notes view. 
+- Combine alerts should be honored on all views, it's not in tasks.
+- On mobile, swiping the top bar should cycle through views.
+- on mobile, scrinking and expanding the sieze of the day veiw doen't adjust the size of the events, so they overflow oddly. fix. 
+- on the suer switchter, put th econteol bittons on teh same line. 
+
+
+
+## Top Priorities
+
+
+- undersgtand habit sbetter, it's doing somethign strange I don't get. 
+- `[ ]` Goals system (completion %, grading, success/failure/abandoned)
+
+
 ## Known Bugs
-
-for the invitee, on a chit editor, the invite control (accept & reject)  should be in a banner like teh one for "uour a read only invitee" , and should go away once 
-
-
-users: 
-- the username inoput in settgins, remove it. and only use the one in the user admin page. 
-- add a button in teh settigns page to Manage Users. Grey it out whith hover for non-admin users. 
-- user switcher isn't functional? It switches, but doesn;ta ask for atuthentication, and then doesn' switch back.
-- the switchert button should be the very top right item in the top bar, and should be the user's proifile image.  clicking openes the change user tool, but as a modal.
-
 
 - the reset on teh admin tool for users doesnt actualy cahnge the password.
 - the admin shoul dbe ableo tto update usernsames for existing users.
-
-
-- the export all doesnt export user data.
+- ensure the export all exports everything. (is this safe? are passwords harshed ? what about the key for tailscale?)
 - pruning shiuld be enabled by default. 
-- tag colors not hononred. 
 
 
 ---
 
 ## Easy Fixes / Low-Hanging Fruit
-- in tasks view, the passed-due items getspecial coloring on them, good! Update the text fo rhe psased-due items to have the alebl: Passed Due: [due date]. Including the year, in format YYYY-MMM-DD. 
-- in the indicators, on the graphs the date overlaps if they are close together,  have it use smarter, shorter lables, or oly day of the month or somehting better to previent this. 
-- in indicators vierw, use a plain red heart fo rhear rate chart & filter. 
-- in indicators view, let me drag & drop the charts to reorganize them just like is impliments in the notes view. 
-- On mobile, swiping the top bar should cycle through views.
-- Combine alerts should be honored on all views, it's not in tasks.
+
+
+
 
 
 
@@ -69,13 +54,9 @@ users:
 - CalcUlator popver/movable modal. Steal from pipeulator & add "insert result S value. Or CRTL+I if in a input field.
 ¿Leave the calculator with wire to value? (persist checkbox)?
 
+- note to markdown export option, per chit, or all.
+- full-chit to markdown epoort, per chit, or all.  
 
-
-
-
-
-### External Access
-- I'll be using theis with potentilaly severla different extra-LAN accessmethods. 1st is tailscale. Udpdat ehe installer to get that configured, and add whatever's needd to the settings page to the "🔄 Version & Updates" block of settings. Also, rename it ot " Updates & access" (with applicable good logo.) DO NOT export any passwords for this in the full data export, but DO export all other configs & settigns needed for it. 
 
 ### MISC
 - `[ ]` Use consistent system for modals (same styling, same in/out function
@@ -115,6 +96,10 @@ users:
 - `[ ]` Side-by-side notes view (2 chits for copy/paste/reference)
 - `[ ]` Auto import/export notes as Markdown to sync with Obsidian
 
+
+
+
+
 ## Major Features / Overhauls
 
 ### Real World Use
@@ -128,10 +113,6 @@ users:
 - `[ ]` Views show 100 HST hours instead of normal hours
 - `[ ]` Span options become 1,2,3,4,5,10 HST hours
 
-### Multi-User System
-1. ~~User management project - COMPLETE~~
-2. Sharing chits project - requirements updated, ready for design & implementation.
-
 ### Event Invitations
 - `[ ]` Accept/reject invitations
 - `[ ]` Invitation status visible to inviter
@@ -139,12 +120,11 @@ users:
 - `[ ]` Declined events toggle 
 
 ### Health Indicators (Enhancements)
-- `[ ]` Symptom tracker (multi-select)
+- `[ ]` Symptom tracker (multi-select), wirth the ability to creqte your own list of symptoms in settings.
 - `[ ]` Cycle tracking (show/hide based on gender setting)
 
 ### Data & Infrastructure
 - `[ ]` E2E encryption
-- `[ ]` Server configurator script for deployment
 - `[ ]` Local desktop storage (cookies?) with server sync
 - `[ ]` Phone app with offline store + sync
 
@@ -158,12 +138,14 @@ users:
 ---
 
 ## Long-term / Dream
-
-- `[ ]` Object & Inventory Tracking zone
-- `[ ]` Home Assistant integration
-- `[ ]` Obsidian sync (auto-export notes as Markdown)
 - `[ ]` Email integration (prototype exists)
-- `[ ]` Goals system (completion %, grading, success/failure/abandoned)
+- `[ ]` Home Assistant integration
+
+
+- `[ ]` Obsidian sync (auto-export notes as Markdown)
+- `[ ]` Object & Inventory Tracking zone
+
+
 - `[ ]` Reports system
 - `[ ]` Automations (if this, then that)
 - `[ ]` Appointments (from other people)

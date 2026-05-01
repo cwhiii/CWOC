@@ -721,7 +721,7 @@
                                 <input
                                     type="text"
                                     id="peopleSearchInput"
-                                    placeholder="Search contacts..."
+                                    placeholder="Search all fields..."
                                     autocomplete="off"
                                 />
                             </div>
@@ -891,7 +891,10 @@
             <div class="cwoc-people-expand-content">
                 <div class="cwoc-people-expand-header">
                     <h2>👥 People</h2>
-                    <button type="button" class="cwoc-people-expand-shrink-btn" onclick="closePeopleExpandModal()" title="Shrink">⤡</button>
+                    <div style="display:flex;gap:8px;align-items:center;">
+                        <button type="button" class="cwoc-people-expand-done-btn" onclick="closePeopleExpandModal()" title="Done (Enter)">✅ Done</button>
+                        <button type="button" class="cwoc-people-expand-shrink-btn" onclick="closePeopleExpandModal()" title="Shrink">⤡</button>
+                    </div>
                 </div>
                 <div class="cwoc-people-expand-body" id="peopleExpandList"></div>
             </div>

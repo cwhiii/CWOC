@@ -398,13 +398,18 @@ function _syncSidebarTagCheckboxes(container, tagObjects) {
 async function _buildPeopleFilterPanel() {
   if (!window._sidebarPeopleSelection) window._sidebarPeopleSelection = [];
   try {
-    var resp = await fetch('/api/contacts');
-    if (!resp.ok) return;
-    var contacts = await resp.json();
+    var contactResp = await fetch('/api/contacts');
+    var contacts = contactResp.ok ? await contactResp.json() : [];
     window._cachedPeopleContacts = contacts;
+
+    // Also fetch system users for the people filter
+    var usersResp = await fetch('/api/auth/switchable-users');
+    var users = usersResp.ok ? await usersResp.json() : [];
+    window._cachedPeopleUsers = users;
+
     _renderPeopleFilterPanel(contacts);
   } catch (e) {
-    console.error('Could not load contacts for people filter:', e);
+    console.error('Could not load contacts/users for people filter:', e);
   }
 }
 
@@ -412,17 +417,18 @@ async function _buildPeopleFilterPanel() {
 function _renderPeopleFilterPanel(contacts) {
   if (!window._sidebarPeopleSelection) window._sidebarPeopleSelection = [];
   var selection = window._sidebarPeopleSelection;
-  _renderPeopleChipFilter('people-multi', contacts, selection);
-  _renderPeopleChipFilter('panel-people-options', contacts, selection);
+  var users = window._cachedPeopleUsers || [];
+  _renderPeopleChipFilter('people-multi', contacts, users, selection);
+  _renderPeopleChipFilter('panel-people-options', contacts, users, selection);
 }
 
-function _renderPeopleChipFilter(containerId, contacts, selection) {
+function _renderPeopleChipFilter(containerId, contacts, users, selection) {
   var container = document.getElementById(containerId);
   if (!container) return;
   container.innerHTML = '';
 
-  if (!contacts || contacts.length === 0) {
-    container.innerHTML = '<span style="font-size:0.8em;opacity:0.5;">No contacts</span>';
+  if ((!contacts || contacts.length === 0) && (!users || users.length === 0)) {
+    container.innerHTML = '<span style="font-size:0.8em;opacity:0.5;">No contacts or users</span>';
     return;
   }
 
@@ -436,26 +442,52 @@ function _renderPeopleChipFilter(containerId, contacts, selection) {
   chipsDiv.style.cssText = 'display:flex;flex-wrap:wrap;gap:4px;max-height:200px;overflow-y:auto;';
   container.appendChild(chipsDiv);
 
-  var sorted = contacts.slice().sort(function(a, b) {
+  // Build a merged list: contacts + users (users marked with _isUser flag)
+  var merged = [];
+  var sortedContacts = (contacts || []).slice().sort(function(a, b) {
     if (a.favorite && !b.favorite) return -1;
     if (!a.favorite && b.favorite) return 1;
     return (a.display_name || '').localeCompare(b.display_name || '');
   });
+  sortedContacts.forEach(function(c) {
+    merged.push({ name: c.display_name || c.given_name || '(Unknown)', color: c.color, image_url: c.image_url, favorite: c.favorite, prefix: c.prefix, _isUser: false });
+  });
+
+  // Add system users (skip duplicates by display_name)
+  var contactNames = new Set(merged.map(function(m) { return m.name.toLowerCase(); }));
+  var sortedUsers = (users || []).slice().sort(function(a, b) {
+    return (a.display_name || a.username || '').localeCompare(b.display_name || b.username || '');
+  });
+  sortedUsers.forEach(function(u) {
+    var uName = u.display_name || u.username || '(Unknown)';
+    if (!contactNames.has(uName.toLowerCase())) {
+      merged.push({ name: uName, color: u.color, image_url: u.profile_image_url, favorite: false, prefix: null, _isUser: true, username: u.username });
+    }
+  });
 
   function renderChips(query) {
     chipsDiv.innerHTML = '';
-    sorted.forEach(function(c) {
-      var name = c.display_name || c.given_name || '(Unknown)';
+    merged.forEach(function(item) {
+      var name = item.name;
       if (query && !name.toLowerCase().includes(query)) return;
 
       var isSelected = selection.includes(name);
       var chip = document.createElement('span');
-      chip.style.cssText = 'display:inline-flex;align-items:center;gap:3px;padding:2px 8px 2px 2px;border-radius:12px;font-size:0.8em;cursor:pointer;border:1px solid;user-select:none;transition:transform 0.1s;';
+      chip.className = 'cwoc-sidebar-people-chip' + (item._isUser ? ' cwoc-sidebar-user-chip' : '');
+      chip.style.cssText = 'display:inline-flex;align-items:center;gap:3px;padding:2px 8px 2px 2px;border-radius:12px;font-size:0.8em;cursor:pointer;user-select:none;transition:transform 0.1s;';
 
-      var bgColor = c.color || '#d2b48c';
+      var bgColor = item.color || '#d2b48c';
       chip.style.backgroundColor = bgColor;
-      chip.style.borderColor = bgColor;
       chip.style.color = _isPeopleColorLight(bgColor) ? '#2b1e0f' : '#fff';
+
+      if (item._isUser) {
+        // User chips: thicker, very dark brown border
+        chip.style.border = '2px solid #1a1208';
+      } else {
+        // Contact chips: standard border matching color
+        chip.style.border = '1px solid ' + bgColor;
+      }
+
       if (isSelected) {
         chip.style.outline = '2px solid #4a2c2a';
         chip.style.fontWeight = 'bold';
@@ -465,8 +497,11 @@ function _renderPeopleChipFilter(containerId, contacts, selection) {
 
       var thumb = document.createElement('span');
       thumb.style.cssText = 'display:inline-flex;align-items:center;flex-shrink:0;';
-      if (c.image_url) {
-        thumb.innerHTML = '<img src="' + c.image_url + '" style="width:18px;height:18px;border-radius:50%;object-fit:cover;" />';
+      if (item.image_url) {
+        thumb.innerHTML = '<img src="' + item.image_url + '" style="width:18px;height:18px;border-radius:50%;object-fit:cover;" />';
+      } else if (item._isUser) {
+        // User icon placeholder
+        thumb.innerHTML = '<span style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:rgba(139,90,43,0.15);color:#8b5a2b;font-size:9px;"><i class="fas fa-user"></i></span>';
       } else {
         thumb.innerHTML = '<span style="display:inline-block;width:18px;height:18px;border-radius:50%;background:rgba(0,0,0,0.1);text-align:center;line-height:18px;font-size:9px;">?</span>';
       }
@@ -474,11 +509,15 @@ function _renderPeopleChipFilter(containerId, contacts, selection) {
 
       var nameSpan = document.createElement('span');
       var chipDisplayName = name;
-      if (c.prefix && chipDisplayName.startsWith(c.prefix)) {
-        chipDisplayName = chipDisplayName.substring(c.prefix.length).trim();
+      if (item.prefix && chipDisplayName.startsWith(item.prefix)) {
+        chipDisplayName = chipDisplayName.substring(item.prefix.length).trim();
       }
-      nameSpan.textContent = (c.favorite ? '★ ' : '') + chipDisplayName;
+      nameSpan.textContent = (item.favorite ? '★ ' : '') + chipDisplayName;
       chip.appendChild(nameSpan);
+
+      if (item._isUser && item.username) {
+        chip.title = item.username;
+      }
 
       chip.addEventListener('click', function() {
         var idx = selection.indexOf(name);

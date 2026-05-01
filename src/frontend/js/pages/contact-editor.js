@@ -15,6 +15,11 @@
     var _saveSystem = null;
     var _currentImageUrl = null;
 
+    // ── Mode detection: contact vs profile ──────────────────────────────
+    var _isProfileMode = false;
+    var _profileUserId = null;       // user_id when viewing another user's profile
+    var _viewingOtherUser = false;   // true = read-only view of another user
+
     // ── Contact Tags State ──────────────────────────────────────────────
     var _contactTags = [];
 
@@ -65,6 +70,8 @@
 
     var params = new URLSearchParams(window.location.search);
     _contactId = params.get('id') || null;
+    _isProfileMode = params.get('mode') === 'profile';
+    _profileUserId = params.get('user_id') || null;
 
     // ── Color palette (matches chit editor) ─────────────────────────────
     var _colorPalette = [
@@ -85,25 +92,27 @@
         _initImageUpload();
         _initSignalToggle();
         _initDisplayNameUpdater();
-        _initContactTags();
 
-        if (!_contactId) {
-            document.getElementById('deleteButton').style.display = 'none';
-            document.getElementById('qrButton').style.display = 'none';
-        }
-
-        if (_contactId) {
-            _loadContact(_contactId);
+        if (_isProfileMode) {
+            _initProfileMode();
         } else {
-            // Auto-focus given name for new contacts
-            var gn = document.getElementById('givenName');
-            if (gn) setTimeout(function () { gn.focus(); }, 100);
+            _initContactTags();
+            if (!_contactId) {
+                document.getElementById('deleteButton').style.display = 'none';
+                document.getElementById('qrButton').style.display = 'none';
+            }
+            if (_contactId) {
+                _loadContact(_contactId);
+            } else {
+                var gn = document.getElementById('givenName');
+                if (gn) setTimeout(function () { gn.focus(); }, 100);
+            }
         }
     });
 
     // ── Live display name header ────────────────────────────────────────
     function _initDisplayNameUpdater() {
-        var fields = ['prefixSelect', 'prefixCustom', 'givenName', 'middleNames', 'surname', 'suffixSelect', 'suffixCustom'];
+        var fields = ['prefixSelect', 'prefixCustom', 'givenName', 'middleNames', 'surname', 'suffixSelect', 'suffixCustom', 'accountDisplayName'];
         fields.forEach(function (id) {
             var el = document.getElementById(id);
             if (el) {
@@ -122,7 +131,7 @@
         var parts = [prefix, given, middle, surname, suffix].filter(function (p) { return p; });
         var header = document.getElementById('displayNameHeader');
         if (header) {
-            header.textContent = parts.length > 0 ? parts.join(' ') : 'New Contact';
+            header.textContent = parts.length > 0 ? parts.join(' ') : (_isProfileMode ? 'Profile' : 'New Contact');
         }
     }
 
@@ -150,7 +159,7 @@
         }
         // Navigate directly
         e.stopImmediatePropagation();
-        window.location.href = '/frontend/html/people.html';
+        window.location.href = _isProfileMode ? '/' : '/frontend/html/people.html';
     }, true);
 
     // ── Load contact from API ───────────────────────────────────────────
@@ -178,7 +187,14 @@
             stayBtnId: 'saveStayButton',
             exitBtnId: 'saveExitButton',
             cancelSelector: '.cancel',
-            getReturnUrl: function () { return '/frontend/html/people.html'; },
+            getReturnUrl: function () {
+                if (_isProfileMode) {
+                    var url = localStorage.getItem('cwoc_settings_return');
+                    localStorage.removeItem('cwoc_settings_return');
+                    return url || '/';
+                }
+                return '/frontend/html/people.html';
+            },
             autoListenInputs: true
         });
     }
@@ -279,17 +295,21 @@
 
     /** Upload the pending image file to the server (called during save) */
     async function _uploadPendingImage() {
-        if (!_pendingImageFile || !_contactId) return;
+        if (!_pendingImageFile) return;
         try {
             var formData = new FormData();
             formData.append('file', _pendingImageFile);
-            var resp = await fetch('/api/contacts/' + encodeURIComponent(_contactId) + '/image', {
-                method: 'POST',
-                body: formData
-            });
+            var url;
+            if (_isProfileMode) {
+                url = '/api/auth/profile-image';
+            } else {
+                if (!_contactId) return;
+                url = '/api/contacts/' + encodeURIComponent(_contactId) + '/image';
+            }
+            var resp = await fetch(url, { method: 'POST', body: formData });
             if (resp.ok) {
                 var result = await resp.json();
-                _currentImageUrl = result.image_url;
+                _currentImageUrl = result.image_url || result.profile_image_url;
             }
         } catch (err) {
             console.error('Image upload error:', err);
@@ -299,9 +319,15 @@
 
     /** Remove the pending image on save */
     async function _removePendingImage() {
-        if (!_contactId) return;
         try {
-            await fetch('/api/contacts/' + encodeURIComponent(_contactId) + '/image', { method: 'DELETE' });
+            var url;
+            if (_isProfileMode) {
+                url = '/api/auth/profile-image';
+            } else {
+                if (!_contactId) return;
+                url = '/api/contacts/' + encodeURIComponent(_contactId) + '/image';
+            }
+            await fetch(url, { method: 'DELETE' });
             _currentImageUrl = null;
         } catch (err) {
             console.error('Error removing image:', err);
@@ -766,6 +792,12 @@
     }
 
     async function _saveContact() {
+        // ── Profile mode save ──
+        if (_isProfileMode) {
+            return await _saveProfile();
+        }
+
+        // ── Contact mode save ──
         var data = collectContactData();
         if (!data.given_name) {
             _showBriefMessage('Given name is required', true);
@@ -827,14 +859,22 @@
 
     window.saveContactAndExit = async function () {
         var saved = await _saveContact();
-        if (saved) window.location.href = '/frontend/html/people.html';
+        if (saved) {
+            if (_isProfileMode) {
+                var url = localStorage.getItem('cwoc_settings_return');
+                localStorage.removeItem('cwoc_settings_return');
+                window.location.href = url || '/';
+            } else {
+                window.location.href = '/frontend/html/people.html';
+            }
+        }
     };
 
     window.cancelOrExit = function () {
         if (_saveSystem) {
             _saveSystem.cancelOrExit();
         } else {
-            window.location.href = '/frontend/html/people.html';
+            window.location.href = _isProfileMode ? '/' : '/frontend/html/people.html';
         }
     };
 
@@ -933,5 +973,309 @@
             '&layer=mapnik&marker=' + lat + ',' + lon + '" style="border:0;border-radius:5px;"></iframe>';
     }
     window._showContactAddressMap = _showContactAddressMap;
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // ── Profile Mode ────────────────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /**
+     * Initialize profile mode: swap UI elements, show/hide zones, load profile data.
+     */
+    function _initProfileMode() {
+        // Update page title and header
+        document.title = 'CWOC Profile';
+        var h1 = document.querySelector('.header-row h1');
+        if (h1) h1.textContent = 'Profile';
+
+        // Hide contact-only elements
+        var favoriteBtn = document.getElementById('favoriteBtn');
+        if (favoriteBtn) favoriteBtn.style.display = 'none';
+        var deleteBtn = document.getElementById('deleteButton');
+        if (deleteBtn) deleteBtn.style.display = 'none';
+        var qrBtn = document.getElementById('qrButton');
+        if (qrBtn) qrBtn.style.display = 'none';
+        var auditBtn = document.getElementById('headerAuditBtn');
+        if (auditBtn) auditBtn.style.display = 'none';
+        var tagsSection = document.getElementById('tagsSection');
+        if (tagsSection) tagsSection.style.display = 'none';
+
+        // Show profile-only zones
+        var accountSection = document.getElementById('accountSection');
+        if (accountSection) accountSection.style.display = '';
+        var passwordSection = document.getElementById('passwordSection');
+        if (passwordSection) passwordSection.style.display = '';
+
+        // Update the type badge
+        var badge = document.querySelector('.profile-image-area span:last-child');
+        if (badge) {
+            badge.style.background = 'rgba(200,150,90,0.3)';
+            badge.style.color = '#3c2210';
+            badge.style.borderColor = 'rgba(200,150,90,0.6)';
+            badge.innerHTML = '<i class="fas fa-users"></i> User';
+        }
+
+        // Remove "required" indicator from given name in profile mode
+        var givenLabel = document.querySelector('label[for="givenName"]');
+        if (givenLabel) {
+            var reqSpan = givenLabel.querySelector('span');
+            if (reqSpan) reqSpan.remove();
+            givenLabel.textContent = 'Given';
+        }
+
+        // Load profile data
+        if (typeof waitForAuth === 'function') {
+            waitForAuth().then(function () { _loadProfile(); });
+        } else {
+            _loadProfile();
+        }
+    }
+
+    /**
+     * Load profile data from the API.
+     */
+    async function _loadProfile() {
+        var currentUser = (typeof getCurrentUser === 'function') ? getCurrentUser() : null;
+        var currentUserId = currentUser ? (currentUser.user_id || currentUser.id) : null;
+
+        // Check if viewing another user
+        if (_profileUserId && _profileUserId !== currentUserId) {
+            _viewingOtherUser = true;
+            try {
+                var resp = await fetch('/api/auth/user-profile/' + encodeURIComponent(_profileUserId));
+                if (!resp.ok) { console.error('[Profile] Failed to load user profile:', resp.status); return; }
+                var user = await resp.json();
+                if (user.is_self) { _viewingOtherUser = false; }
+                _populateProfileForm(user);
+                if (_viewingOtherUser) _applyReadOnlyMode(user.display_name || user.username);
+            } catch (err) { console.error('[Profile] Error loading user profile:', err); }
+        } else {
+            // Load own profile
+            try {
+                var resp = await fetch('/api/auth/me');
+                if (!resp.ok) { console.error('[Profile] Failed to load profile:', resp.status); return; }
+                var user = await resp.json();
+                _populateProfileForm(user);
+            } catch (err) { console.error('[Profile] Error loading profile:', err); }
+        }
+        if (_saveSystem) _saveSystem.markSaved();
+    }
+
+    /**
+     * Populate the shared form fields from a user profile object.
+     * Maps user API field names to the shared contact-editor element IDs.
+     */
+    function _populateProfileForm(user) {
+        // Account fields
+        var usernameEl = document.getElementById('accountUsername');
+        if (usernameEl) usernameEl.value = user.username || '';
+        var displayNameEl = document.getElementById('accountDisplayName');
+        if (displayNameEl) displayNameEl.value = user.display_name || '';
+        var emailEl = document.getElementById('accountEmail');
+        if (emailEl) emailEl.value = user.email || '';
+
+        // Name fields (shared IDs with contact editor)
+        document.getElementById('givenName').value = user.given_name || '';
+        document.getElementById('surname').value = user.surname || '';
+        document.getElementById('middleNames').value = user.middle_names || '';
+        document.getElementById('nickname').value = user.nickname || '';
+
+        // Prefix/suffix — profile uses simple selects (no custom option)
+        var prefixSel = document.getElementById('prefixSelect');
+        if (prefixSel) prefixSel.value = user.prefix || '';
+        var suffixSel = document.getElementById('suffixSelect');
+        if (suffixSel) suffixSel.value = user.suffix || '';
+
+        // Multi-value fields
+        _setMultiValueEntries('phones', user.phones);
+        _setMultiValueEntries('emails', user.emails_json);
+        _setMultiValueEntries('addresses', user.addresses);
+        _setMultiValueEntries('callSigns', user.call_signs);
+        _setMultiValueEntries('xHandles', user.x_handles);
+        _setMultiValueEntries('websites', user.websites);
+
+        // Security
+        var signalCb = document.getElementById('hasSignal');
+        if (signalCb) signalCb.checked = !!user.has_signal;
+        var signalInput = document.getElementById('signalUsername');
+        if (signalInput) {
+            signalInput.value = user.signal_username || '';
+            signalInput.style.display = user.has_signal ? '' : 'none';
+        }
+        var pgpEl = document.getElementById('pgpKey');
+        if (pgpEl) pgpEl.value = user.pgp_key || '';
+
+        // Context
+        document.getElementById('organization').value = user.organization || '';
+        document.getElementById('socialContext').value = user.social_context || '';
+
+        // Notes
+        document.getElementById('contactNotes').value = user.notes || '';
+
+        // Color
+        if (user.color) _selectColor(user.color);
+
+        // Image
+        _setProfileImage(user.profile_image_url || null);
+
+        // Display name header
+        var header = document.getElementById('displayNameHeader');
+        if (header) header.textContent = user.display_name || user.username || 'Profile';
+
+        _updateDisplayNameHeader();
+    }
+
+    /**
+     * Save profile data via PUT /api/auth/profile.
+     */
+    async function _saveProfile() {
+        var payload = {};
+
+        // Account fields
+        var displayNameEl = document.getElementById('accountDisplayName');
+        if (displayNameEl) payload.display_name = displayNameEl.value.trim();
+        var emailEl = document.getElementById('accountEmail');
+        if (emailEl) payload.email = emailEl.value.trim();
+
+        // Name fields
+        payload.given_name = document.getElementById('givenName').value.trim();
+        payload.surname = document.getElementById('surname').value.trim();
+        payload.middle_names = document.getElementById('middleNames').value.trim();
+        payload.nickname = document.getElementById('nickname').value.trim();
+        payload.prefix = document.getElementById('prefixSelect').value;
+        payload.suffix = document.getElementById('suffixSelect').value;
+
+        // Multi-value fields
+        payload.phones = _getMultiValueEntries('phones');
+        payload.emails_json = _getMultiValueEntries('emails');
+        payload.addresses = _getMultiValueEntries('addresses');
+        payload.call_signs = _getMultiValueEntries('callSigns');
+        payload.x_handles = _getMultiValueEntries('xHandles');
+        payload.websites = _getMultiValueEntries('websites');
+
+        // Security
+        payload.has_signal = document.getElementById('hasSignal').checked;
+        payload.signal_username = document.getElementById('signalUsername').value.trim();
+        payload.pgp_key = document.getElementById('pgpKey').value.trim();
+
+        // Context
+        payload.organization = document.getElementById('organization').value.trim();
+        payload.social_context = document.getElementById('socialContext').value.trim();
+        payload.notes = document.getElementById('contactNotes').value.trim();
+
+        // Color
+        payload.color = document.getElementById('colorHex').value.trim();
+
+        try {
+            var resp = await fetch('/api/auth/profile', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (!resp.ok) {
+                var errBody = null;
+                try { errBody = await resp.json(); } catch (e) { /* ignore */ }
+                _showBriefMessage((errBody && errBody.detail) || 'Save failed', true);
+                return null;
+            }
+            var saved = await resp.json();
+
+            // Handle pending image
+            if (_pendingImageFile) {
+                await _uploadPendingImage();
+            } else if (_pendingImageRemove) {
+                await _removePendingImage();
+            }
+
+            _showBriefMessage('Saved');
+            return saved;
+        } catch (err) {
+            console.error('[Profile] Save error:', err);
+            _showBriefMessage('Connection error', true);
+            return null;
+        }
+    }
+
+    /**
+     * Apply read-only mode for viewing another user's profile.
+     */
+    function _applyReadOnlyMode(displayName) {
+        // Update header
+        var h1 = document.querySelector('.header-row h1');
+        if (h1) h1.textContent = (displayName || 'User') + "'s Profile";
+        var header = document.getElementById('displayNameHeader');
+        if (header) header.textContent = displayName || 'User';
+
+        // Disable all inputs, selects, textareas
+        var editor = document.getElementById('mainEditor');
+        if (editor) {
+            editor.querySelectorAll('input, select, textarea').forEach(function (el) {
+                el.readOnly = true;
+                el.disabled = true;
+                el.style.opacity = '0.6';
+                el.style.cursor = 'not-allowed';
+            });
+        }
+
+        // Hide all add-entry and remove buttons
+        editor.querySelectorAll('.add-entry-btn, .remove-entry-btn').forEach(function (btn) { btn.style.display = 'none'; });
+
+        // Hide save buttons and password section
+        var buttons = document.querySelector('.header-row .buttons');
+        if (buttons) buttons.style.display = 'none';
+        var passwordSection = document.getElementById('passwordSection');
+        if (passwordSection) passwordSection.style.display = 'none';
+
+        // Show read-only banner
+        var banner = document.createElement('div');
+        banner.className = 'cwoc-readonly-banner';
+        banner.textContent = '👁️ Viewing ' + (displayName || 'user') + "'s profile (read-only)";
+        var editorEl = document.getElementById('mainEditor');
+        if (editorEl) editorEl.insertBefore(banner, editorEl.firstChild);
+    }
+
+    /**
+     * Change password (profile mode only).
+     */
+    window.changeProfilePassword = async function () {
+        var msgEl = document.getElementById('passwordMessage');
+        if (msgEl) { msgEl.style.display = 'none'; msgEl.className = ''; msgEl.textContent = ''; }
+
+        var currentPw = document.getElementById('currentPassword').value;
+        var newPw = document.getElementById('newPassword').value;
+        var confirmPw = document.getElementById('confirmPassword').value;
+
+        if (!currentPw || !newPw || !confirmPw) {
+            if (msgEl) { msgEl.textContent = 'Please fill in all password fields.'; msgEl.className = 'pw-msg-error'; msgEl.style.display = ''; }
+            return;
+        }
+        if (newPw !== confirmPw) {
+            if (msgEl) { msgEl.textContent = 'New passwords do not match.'; msgEl.className = 'pw-msg-error'; msgEl.style.display = ''; }
+            return;
+        }
+
+        try {
+            var resp = await fetch('/api/auth/password', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ current_password: currentPw, new_password: newPw })
+            });
+            if (resp.status === 403) {
+                if (msgEl) { msgEl.textContent = 'Current password is incorrect.'; msgEl.className = 'pw-msg-error'; msgEl.style.display = ''; }
+                return;
+            }
+            if (!resp.ok) {
+                var errData = await resp.json().catch(function () { return {}; });
+                if (msgEl) { msgEl.textContent = errData.detail || 'Failed to change password.'; msgEl.className = 'pw-msg-error'; msgEl.style.display = ''; }
+                return;
+            }
+            if (msgEl) { msgEl.textContent = 'Password changed successfully.'; msgEl.className = 'pw-msg-success'; msgEl.style.display = ''; }
+            document.getElementById('currentPassword').value = '';
+            document.getElementById('newPassword').value = '';
+            document.getElementById('confirmPassword').value = '';
+        } catch (err) {
+            console.error('[Profile] Password change error:', err);
+            if (msgEl) { msgEl.textContent = 'Failed to change password.'; msgEl.className = 'pw-msg-error'; msgEl.style.display = ''; }
+        }
+    };
 
 })();

@@ -1,8 +1,8 @@
 # ♾️📜♾️ C.W.'s Omni Chits (CWOC)
 
-A personal task, note, and calendar management web app. The core concept is a **chit** — a single flexible record that can serve as a task, note, calendar event, alarm, checklist, or project, all using one unified data model.
+A multi-user task, note, and calendar management web app. The core concept is a **chit** — a single flexible record that can serve as a task, note, calendar event, alarm, checklist, or project, all using one unified data model.
 
-A single chit can appear in multiple views depending on which fields are filled in. The backend auto-assigns system tags based on chit properties, so you never have to manually categorize anything — just fill in the fields that matter and CWOC figures out where it belongs.
+A single chit can appear in multiple views depending on which fields are filled in. The backend auto-assigns system tags based on chit properties, so you never have to manually categorize anything — just fill in the fields that matter and CWOC figures out where it belongs. Multiple users get their own accounts with granular sharing — chit-level and tag-level sharing with viewer/manager roles, RSVP accept/decline, assignment, and stealth mode for private chits.
 
 ## The C CAPTN Views
 

@@ -235,14 +235,30 @@
             </ul>
             <p>A chit can have at most one location. Weather and map load automatically when a location and date are both present.</p>
             <h4>People Zone</h4>
-            <p>The People zone displays both contacts and system users in a grouped alphabetical tree. Contacts appear as plain chips (same as before). System users appear as chips with an inline pill toggle offering two roles: 👁️ Viewer and ✏️ Manager.</p>
+            <p>The People zone displays both contacts and system users in a grouped alphabetical tree. Contacts appear as plain chips with favorite stars (★). System users appear with a <i class="fas fa-users"></i> icon and an inline pill toggle offering two roles: 👁️ Viewer and ✏️ Manager.</p>
             <ul>
+                <li><strong>Search</strong> — The search bar searches across all contact fields: name, email, phone, address, organization, social context, call signs, X handles, websites, notes, and tags</li>
+                <li><strong>Adding a contact</strong> — Click an unlinked contact chip to add them to the chit's people list</li>
                 <li><strong>Adding a share</strong> — Click an unshared system user chip to add them to the chit's shares list as a Viewer</li>
                 <li><strong>Changing role</strong> — Click the pill toggle on a shared user to switch between Viewer and Manager</li>
                 <li><strong>Removing a share</strong> — Click the ✕ button on a shared user chip to remove them from the shares list</li>
                 <li><strong>Owner excluded</strong> — The currently authenticated user (the chit owner) does not appear in the system user list</li>
                 <li><strong>🥷 Stealth toggle</strong> — At the bottom of the People zone, a stealth checkbox hides the chit from all other users. Visible to owners and managers only; hidden for viewers</li>
             </ul>
+            <h4>People Expand View</h4>
+            <p>Click the "Expand" button in the People zone header to open a full-screen table view. All controls are on the left side of each row; an edit/view button is on the right.</p>
+            <ul>
+                <li><strong>Table columns</strong> — Controls, Icon, Thumbnail, Name, Email, Org, Notes, Status, Edit — with a sticky header row</li>
+                <li><strong>Full-field search</strong> — Search across all contact and user fields to find people to add</li>
+                <li><strong>Favorites section</strong> — Favorite contacts appear in a highlighted "★ Favorites" section at the top</li>
+                <li><strong>Controls (left)</strong> — +/✕ add/remove, Viewer/Manager pill toggle, 📌 assign, RSVP badges — all grouped on the left</li>
+                <li><strong>Edit (right)</strong> — Opens the contact editor or user profile in a new tab. User profiles open in read-only mode unless it's your own</li>
+                <li><strong>User icons</strong> — System users display a <i class="fas fa-users"></i> icon to distinguish them from contacts</li>
+            </ul>
+            <h4>User Profiles</h4>
+            <p>User profiles use the same editor page as contacts. Clicking a system user in the People expand view or the Rolodex opens the contact editor in profile mode (read-only for other users, fully editable for your own). Profile mode adds Account and Change Password zones, and hides contact-only features (favorite, tags, delete, QR).</p>
+            <p>Users can pick a profile color from the standard palette or any custom colors defined in Settings. This color appears on their chips in the editor People zone, the sidebar People filter, and tints the editor background.</p>
+            <p>User chips are visually distinguished from contact chips by a thicker, very dark brown border and a <i class="fas fa-user"></i> icon placeholder (when no profile image is set). The sidebar People filter includes both contacts and system users.</p>
             <p>Managers have the same sharing-management permissions as owners — they can add and remove shared users, change roles, and toggle stealth. Viewers see the People zone in read-only mode with no toggles or stealth control.</p>
             <h4>Owner Chip</h4>
             <p>The chit owner's display name is shown as a chip in the title zone header, inline with the "Title" label and the pinned icon. The chip uses the same visual style as people chips (background color, thumbnail image or placeholder). The owner chip is always displayed, even when the current user is the owner.</p>

@@ -256,10 +256,12 @@ async def root():
 async def login_page():
     return FileResponse("/app/src/frontend/html/login.html")
 
-# Profile route to serve profile.html
+# Profile route — serves the unified contact-editor page in profile mode.
+# The ?mode=profile param is added client-side by the redirect.
 @router.get("/profile")
 async def profile_page():
-    return FileResponse("/app/src/frontend/html/profile.html")
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url="/frontend/html/contact-editor.html?mode=profile", status_code=302)
 
 # User Admin route to serve user-admin.html
 @router.get("/user-admin")

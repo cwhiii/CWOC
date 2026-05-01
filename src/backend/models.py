@@ -159,6 +159,26 @@ class LoginRequest(BaseModel):
 class ProfileUpdate(BaseModel):
     display_name: Optional[str] = None
     email: Optional[str] = None
+    phones: Optional[List[Dict[str, Any]]] = None
+    emails_json: Optional[List[Dict[str, Any]]] = None
+    addresses: Optional[List[Dict[str, Any]]] = None
+    call_signs: Optional[List[Dict[str, Any]]] = None
+    x_handles: Optional[List[Dict[str, Any]]] = None
+    websites: Optional[List[Dict[str, Any]]] = None
+    organization: Optional[str] = None
+    social_context: Optional[str] = None
+    notes: Optional[str] = None
+    nickname: Optional[str] = None
+    given_name: Optional[str] = None
+    surname: Optional[str] = None
+    middle_names: Optional[str] = None
+    prefix: Optional[str] = None
+    suffix: Optional[str] = None
+    has_signal: Optional[bool] = None
+    signal_username: Optional[str] = None
+    pgp_key: Optional[str] = None
+    color: Optional[str] = None
+    tags: Optional[List[str]] = None
 
 class PasswordChange(BaseModel):
     current_password: str

@@ -9,228 +9,524 @@
         <link rel="stylesheet" href="/frontend/css/shared/shared-editor.css" />
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" />
         <style>
-            /* ── Profile-specific styles (shared styles come from shared-page.css + shared-editor.css) ── */
+            /* ══ Profile Page-Specific Styles ══ */
 
-            /* Restore profile body styles (shared-editor.css overrides shared-page.css body) */
-            body {
-                font-family: 'Lora', Georgia, serif;
-                background-image: url("/static/parchment.jpg");
-                background-size: cover;
-                background-attachment: fixed;
-                padding: 1em;
+            /* 3-column grid (matches contact editor) */
+            .main-zones-grid {
+                grid-template-columns: 1fr 1fr 1fr !important;
+            }
+            .grid-span-3 {
+                grid-column: span 3;
             }
 
-            /* Profile form layout */
-            .profile-form {
+            /* Profile image area (matches contact editor) */
+            .profile-image-area {
+                grid-column: span 3;
                 display: flex;
-                flex-direction: column;
-                gap: 12px;
-                max-width: 500px;
+                align-items: center;
+                gap: 20px;
+                padding: 10px;
+                border: 1px solid var(--border-color);
+                border-radius: 4px;
+                background-color: var(--zone-header-bg);
+                margin-bottom: 15px;
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+            }
+            .profile-thumb-wrap {
+                position: relative;
+                width: 80px;
+                height: 80px;
+                flex-shrink: 0;
+                cursor: pointer;
+            }
+            .profile-thumb {
+                width: 80px;
+                height: 80px;
+                border-radius: 50%;
+                object-fit: cover;
+                border: 2px solid var(--aged-brown-medium);
+                background: var(--parchment-light);
+            }
+            .profile-thumb-placeholder {
+                width: 80px;
+                height: 80px;
+                border-radius: 50%;
+                border: 2px dashed var(--aged-brown-medium);
+                background: var(--parchment-light);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 2em;
+                color: var(--aged-brown-light);
+                cursor: pointer;
+            }
+            .profile-thumb-wrap:hover::after {
+                content: '📷';
+                position: absolute;
+                bottom: 0; right: 0;
+                font-size: 1.2em;
+                background: var(--parchment-light);
+                border-radius: 50%;
+                padding: 2px;
+            }
+            .profile-remove-img {
+                font-size: 0.75em;
+                padding: 2px 8px;
+                background: var(--danger-red);
+                color: var(--parchment-light);
+                border: 1px solid var(--aged-brown-dark);
+                border-radius: 3px;
+                cursor: pointer;
+                margin-top: 4px;
             }
 
-            .profile-form label {
-                display: block;
-                font-size: 15px;
-                margin-bottom: 4px;
-                color: #1a1208;
+            /* Multi-value entry rows (matches contact editor) */
+            .multi-value-section { margin-bottom: 12px; }
+            .multi-value-section h4 {
+                margin: 0 0 6px 0;
+                font-size: 0.9em;
+                color: var(--aged-brown-dark);
+                text-transform: uppercase;
+                letter-spacing: 1px;
+            }
+            .multi-value-entries { display: flex; flex-direction: column; gap: 6px; }
+            .multi-value-row { display: flex; align-items: center; gap: 6px; }
+            .multi-value-row input.mv-label { width: 80px; flex-shrink: 0; }
+            .multi-value-row input.mv-value { flex: 1; }
+            .multi-value-row .mv-link {
+                flex-shrink: 0;
+                color: var(--accent-teal);
+                text-decoration: none;
+                font-size: 0.9em;
+                display: none;
+            }
+            .multi-value-row .mv-link:hover { text-decoration: underline; }
+            .multi-value-row .remove-entry-btn {
+                padding: 4px 8px;
+                font-size: 0.85em;
+                background: var(--danger-red);
+                color: var(--parchment-light);
+                border: 1px solid var(--aged-brown-dark);
+                border-radius: 3px;
+                cursor: pointer;
+                flex-shrink: 0;
+            }
+            .multi-value-row .remove-entry-btn:hover { background: #a01c1c; }
+            .add-entry-btn {
+                padding: 4px 12px;
+                font-size: 0.85em;
+                background: var(--aged-brown-light);
+                color: var(--parchment-light);
+                border: 1px outset var(--aged-brown-medium);
+                border-radius: 3px;
+                cursor: pointer;
+                margin-top: 4px;
+                align-self: flex-start;
+            }
+            .add-entry-btn:hover { background: #924525; }
+
+            /* Color picker (matches contact editor) */
+            .color-swatches {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 6px;
+                margin-top: 6px;
+            }
+            .color-swatch {
+                width: 28px; height: 28px;
+                border-radius: 50%;
+                border: 2px solid transparent;
+                cursor: pointer;
+                transition: transform 0.1s;
+            }
+            .color-swatch:hover { transform: scale(1.2); }
+            .color-swatch.selected { border-color: var(--aged-brown-dark); box-shadow: 0 0 4px rgba(0,0,0,0.3); }
+
+            /* Color swatch section labels */
+            .color-section-label {
+                width: 100%;
+                font-size: 0.75em;
+                color: #6b4e31;
+                margin: 4px 0 2px;
                 font-weight: bold;
             }
 
-            .profile-form input[type="text"],
-            .profile-form input[type="email"],
-            .profile-form input[type="password"] {
+            /* PGP textarea */
+            #pgpKey {
+                min-height: 80px;
+                resize: vertical;
+                font-family: 'Lora', Georgia, serif;
+                font-size: 0.85em;
+            }
+
+            /* Password zone fields */
+            .password-field input {
                 width: 100%;
                 box-sizing: border-box;
-                border: 1px solid #8b5a2b;
-                border-radius: 5px;
-                padding: 8px 10px;
-                font-size: 16px;
-                color: #1a1208;
-                font-family: 'Lora', Georgia, serif;
-                background: #f5e6cc;
             }
-
-            .profile-form input[readonly] {
-                opacity: 0.6;
-                cursor: not-allowed;
-                background: #e8dcc8;
-            }
-
-            /* Password change section */
-            .password-section {
-                margin-top: 10px;
-                padding-top: 16px;
-                border-top: 2px solid rgba(139, 90, 43, 0.3);
-            }
-
-            .password-section h3 {
-                text-align: left;
-                font-size: 18px;
-                margin: 0 0 12px;
-                padding-bottom: 0;
-                border-bottom: none;
-                text-transform: none;
-                letter-spacing: 0;
-            }
-
-            #change-password-btn {
-                margin-top: 8px;
-            }
-
-            /* Inline messages */
-            .profile-message {
-                padding: 8px 12px;
-                border-radius: 5px;
-                font-size: 14px;
+            .password-message {
+                padding: 6px 10px;
+                border-radius: 4px;
+                font-size: 0.85em;
                 display: none;
-                margin-top: 8px;
+                margin-top: 6px;
             }
-
-            .profile-message.success {
+            .password-message.success {
                 background: rgba(34, 139, 34, 0.15);
                 border: 1px solid #228b22;
                 color: #1a5c1a;
                 display: block;
             }
-
-            .profile-message.error {
+            .password-message.error {
                 background: rgba(178, 34, 34, 0.15);
                 border: 1px solid #b22222;
                 color: #8b1a1a;
                 display: block;
             }
 
-            /* Profile image section */
-            .profile-image-section {
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                gap: 12px;
-            }
-
-            .profile-image-preview {
-                position: relative;
-                width: 120px;
-                height: 120px;
-                border-radius: 50%;
-                overflow: hidden;
-                cursor: pointer;
-                border: 3px solid rgba(139, 90, 43, 0.4);
-                transition: border-color 0.2s;
-            }
-
-            .profile-image-preview:hover {
-                border-color: #8b5a2b;
-            }
-
-            .profile-image-large {
-                width: 100%;
-                height: 100%;
-                object-fit: cover;
-            }
-
-            .profile-image-overlay {
-                position: absolute;
-                bottom: 0;
-                left: 0;
-                right: 0;
-                background: rgba(0, 0, 0, 0.5);
-                color: white;
+            /* Read-only banner */
+            .cwoc-readonly-banner {
+                background: rgba(70, 130, 180, 0.15);
+                border: 1px solid rgba(70, 130, 180, 0.4);
+                border-radius: 6px;
+                padding: 8px 14px;
+                margin-bottom: 12px;
+                font-size: 0.95em;
+                color: #1a4a6e;
                 text-align: center;
-                padding: 4px 0;
-                font-size: 0.8em;
-                opacity: 0;
-                transition: opacity 0.2s;
             }
 
-            .profile-image-preview:hover .profile-image-overlay {
-                opacity: 1;
+            /* Image modal */
+            .image-modal {
+                display: none;
+                position: fixed;
+                top: 0; left: 0; width: 100%; height: 100%;
+                background: rgba(0, 0, 0, 0.7);
+                justify-content: center;
+                align-items: center;
+                z-index: 1000;
+                cursor: pointer;
+            }
+            .image-modal img {
+                max-width: 90vw;
+                max-height: 90vh;
+                border-radius: 8px;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.5);
             }
 
-            .profile-image-actions {
-                display: flex;
-                gap: 8px;
+            /* ── Responsive ──────────────────────────────────────────── */
+            @media (max-width: 900px) {
+                .main-zones-grid { grid-template-columns: 1fr 1fr !important; }
+                .grid-span-3, .profile-image-area { grid-column: span 2; }
+            }
+            @media (max-width: 768px) {
+                .main-zones-grid { grid-template-columns: 1fr !important; }
+                .grid-span-3, .profile-image-area { grid-column: span 1; }
+                .profile-image-area { flex-direction: column; text-align: center; }
+            }
+            @media (max-width: 480px) {
+                .multi-value-row { flex-wrap: wrap; }
+                .multi-value-row input.mv-label { width: 100%; }
             }
         </style>
     </head>
-    <body data-page-title="Profile" data-page-icon="👤">
-
-        <div class="settings-panel">
-            <!-- Save/Cancel buttons (positioned after auto-injected header) -->
-            <div class="cwoc-toolbar" style="margin-bottom:16px;">
-                <button id="save-single-btn" class="standard-button" disabled style="opacity:0.6;pointer-events:none;">✅ Saved</button>
-                <button id="save-stay-btn" class="standard-button" style="display:none;"><i class="fas fa-save"></i> 📌 Save &amp; Stay</button>
-                <button id="save-exit-btn" class="standard-button" style="display:none;"><i class="fas fa-save"></i> 🚪 Save &amp; Exit</button>
-                <button id="cancel-btn" class="standard-button cancel-settings"><i class="fas fa-times"></i> Exit</button>
+    <body>
+        <!-- ═══ Header Row ═══ -->
+        <div class="header-row">
+            <a href="/" title="Go to Dashboard" style="display:inline-block;flex-shrink:0;"><img src="/static/cwod_logo.png" alt="Logo" class="header-image" /></a>
+            <h1>Profile</h1>
+            <div class="buttons">
+                <div class="left-buttons">
+                    <button id="saveStayButton" onclick="profileSaveAndStay()" style="display:none;">
+                        <i class="fas fa-save"></i> 📌 Save &amp; Stay
+                    </button>
+                    <button id="saveExitButton" onclick="profileSaveAndExit()" style="display:none;">
+                        <i class="fas fa-save"></i> 🚪 Save &amp; Exit
+                    </button>
+                    <button id="saveButton" disabled><i class="fas fa-save"></i> Save</button>
+                    <button onclick="profileCancelOrExit()" class="cancel"><i class="fas fa-times"></i> Exit</button>
+                </div>
+                <div class="right-buttons">
+                </div>
             </div>
-
-            <div id="profile-message" class="profile-message"></div>
-
-            <div class="settings-grid">
-                <!-- Profile Image Section -->
-                <div class="setting-group">
-                    <h3>📷 Profile Image</h3>
-                    <div class="profile-image-section">
-                        <div class="profile-image-preview" id="profile-image-preview" onclick="document.getElementById('profile-image-input').click();" title="Click to change image">
-                            <img id="profile-image-display" src="/static/default-avatar.svg" alt="Profile" class="profile-image-large" />
-                            <div class="profile-image-overlay">📷 Change</div>
-                        </div>
-                        <input type="file" id="profile-image-input" accept="image/jpeg,image/png,image/gif,image/webp" style="display:none;" />
-                        <div class="profile-image-actions">
-                            <button class="standard-button" onclick="document.getElementById('profile-image-input').click();">📷 Upload Image</button>
-                            <button class="standard-button" id="remove-profile-image-btn" style="display:none;" onclick="_removeProfileImage();">🗑️ Remove</button>
-                        </div>
-                        <div id="profile-image-message" class="profile-message"></div>
-                    </div>
-                </div>
-
-                <!-- Profile Info Section -->
-                <div class="setting-group">
-                    <h3>👤 Account Info</h3>
-
-                    <div class="profile-form">
-                        <div>
-                            <label for="profile-username">Username</label>
-                            <input type="text" id="profile-username" readonly placeholder="Username" />
-                        </div>
-                        <div>
-                            <label for="profile-display-name">Display Name</label>
-                            <input type="text" id="profile-display-name" placeholder="Display name" />
-                        </div>
-                        <div>
-                            <label for="profile-email">Email</label>
-                            <input type="email" id="profile-email" placeholder="Email address" />
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Password Change Section -->
-                <div class="setting-group">
-                    <h3>🔒 Change Password</h3>
-
-                    <div class="profile-form">
-                        <div>
-                            <label for="current-password">Current Password</label>
-                            <input type="password" id="current-password" placeholder="Enter current password" />
-                        </div>
-                        <div>
-                            <label for="new-password">New Password</label>
-                            <input type="password" id="new-password" placeholder="Enter new password" />
-                        </div>
-                        <div>
-                            <label for="confirm-new-password">Confirm New Password</label>
-                            <input type="password" id="confirm-new-password" placeholder="Confirm new password" />
-                        </div>
-                        <div id="password-message" class="profile-message"></div>
-                        <button id="change-password-btn" class="standard-button">🔑 Change Password</button>
-                    </div>
-                </div>
+            <!-- Profile menu (rightmost element in header) -->
+            <div class="cwoc-profile-menu" id="cwoc-profile-menu" style="margin-left:auto;flex-shrink:0;">
+                <button class="cwoc-profile-btn" id="cwoc-profile-btn" title="User" onclick="event.stopPropagation(); _cwocToggleProfileMenu();">
+                    <img src="/static/default-avatar.svg" alt="Profile" class="cwoc-profile-img" id="cwoc-profile-img" />
+                </button>
             </div>
         </div>
 
-        <!-- Footer is auto-injected by shared-page.js -->
+        <!-- ═══ Editor Body ═══ -->
+        <div class="editor" id="mainEditor">
+            <div class="main-zones-grid">
 
-        <!-- ── 1. Shared sub-scripts (auth first, then utils, coordinator last) ── -->
+                <!-- ═══ Profile Image + Display Name (full-width header) ═══ -->
+                <div class="profile-image-area">
+                    <div class="profile-thumb-wrap" onclick="profileTriggerImageUpload()" title="Click to upload photo">
+                        <div class="profile-thumb-placeholder" id="profilePlaceholder"><i class="fas fa-user"></i></div>
+                        <img class="profile-thumb" id="profileImage" style="display:none;" alt="Profile photo" />
+                    </div>
+                    <input type="file" id="imageFileInput" accept="image/jpeg,image/png,image/gif,image/webp" style="display:none;" />
+                    <div style="display:flex;flex-direction:column;gap:2px;">
+                        <button type="button" class="profile-remove-img" id="viewImageBtn" onclick="profileViewImage()" style="display:none;background:var(--accent-teal);">
+                            <i class="fas fa-expand"></i> View
+                        </button>
+                        <button type="button" class="profile-remove-img" id="removeImageBtn" onclick="profileRemoveImage()" style="display:none;">
+                            <i class="fas fa-times"></i> Remove
+                        </button>
+                    </div>
+                    <h2 id="displayNameHeader" style="margin:0;color:var(--aged-brown-dark);flex:1;font-size:1.3em;">Profile</h2>
+                    <span id="profileTypeBadge" style="font-size:0.65em;padding:2px 8px;border-radius:10px;background:rgba(200,150,90,0.3);color:#3c2210;border:1px solid rgba(200,150,90,0.6);font-weight:600;flex-shrink:0;align-self:center;"><i class="fas fa-users"></i> User</span>
+                </div>
+
+                <!-- ═══ Column 1: Account + Name + Security ═══ -->
+                <div>
+                    <!-- Account Zone -->
+                    <div id="accountSection" class="zone-container">
+                        <div class="zone-header" onclick="cwocToggleZone(event, 'accountSection', 'accountContent')">
+                            <h2 class="zone-title">👤 Account</h2>
+                            <span class="zone-toggle-icon">🔼</span>
+                        </div>
+                        <div id="accountContent" class="zone-body">
+                            <div class="field">
+                                <label for="username">Username</label>
+                                <input type="text" id="username" readonly style="opacity:0.6;cursor:not-allowed;" />
+                            </div>
+                            <div class="field">
+                                <label for="displayName">Display Name</label>
+                                <input type="text" id="displayName" placeholder="Display name" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Name Zone -->
+                    <div id="nameSection" class="zone-container">
+                        <div class="zone-header" onclick="cwocToggleZone(event, 'nameSection', 'nameContent')">
+                            <h2 class="zone-title"><i class="fas fa-id-card"></i> Name</h2>
+                            <span class="zone-toggle-icon">🔼</span>
+                        </div>
+                        <div id="nameContent" class="zone-body">
+                            <div class="field">
+                                <label for="prefixSelect">Prefix</label>
+                                <select id="prefixSelect">
+                                    <option value="">— None —</option>
+                                    <option value="Mr.">Mr.</option>
+                                    <option value="Mrs.">Mrs.</option>
+                                    <option value="Ms.">Ms.</option>
+                                    <option value="Miss">Miss</option>
+                                    <option value="Dr.">Dr.</option>
+                                    <option value="Prof.">Prof.</option>
+                                    <option value="Rev.">Rev.</option>
+                                    <option value="Hon.">Hon.</option>
+                                </select>
+                            </div>
+                            <div class="field">
+                                <label for="givenName">Given</label>
+                                <input type="text" id="givenName" placeholder="Given name" />
+                            </div>
+                            <div class="field">
+                                <label for="middleNames">Middle</label>
+                                <input type="text" id="middleNames" placeholder="Middle name(s)" />
+                            </div>
+                            <div class="field">
+                                <label for="surname">Surname</label>
+                                <input type="text" id="surname" placeholder="Surname / Last name" />
+                            </div>
+                            <div class="field">
+                                <label for="suffixSelect">Suffix</label>
+                                <select id="suffixSelect">
+                                    <option value="">— None —</option>
+                                    <option value="Jr.">Jr.</option>
+                                    <option value="Sr.">Sr.</option>
+                                    <option value="Esq.">Esq.</option>
+                                    <option value="Ph.D.">Ph.D.</option>
+                                    <option value="M.D.">M.D.</option>
+                                    <option value="I">I</option>
+                                    <option value="II">II</option>
+                                    <option value="III">III</option>
+                                    <option value="IV">IV</option>
+                                    <option value="V">V</option>
+                                </select>
+                            </div>
+                            <div class="field">
+                                <label for="nickname">Nickname</label>
+                                <input type="text" id="nickname" placeholder="Nickname / alias" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Security Zone -->
+                    <div id="securitySection" class="zone-container">
+                        <div class="zone-header" onclick="cwocToggleZone(event, 'securitySection', 'securityContent')">
+                            <h2 class="zone-title">🔒 Security</h2>
+                            <span class="zone-toggle-icon">🔼</span>
+                        </div>
+                        <div id="securityContent" class="zone-body">
+                            <div class="switch-wrapper">
+                                <span class="toggle-label">Has Signal</span>
+                                <label class="switch">
+                                    <input type="checkbox" id="hasSignal" onchange="profileOnSignalToggle()" />
+                                    <span class="slider round"></span>
+                                </label>
+                                <input type="text" id="signalUsername" placeholder="Signal username or phone" style="display:none;flex:1;margin-left:8px;" />
+                            </div>
+                            <div class="field full-width">
+                                <label for="pgpKey">PGP Public Key</label>
+                                <textarea id="pgpKey" placeholder="Paste PGP public key here..."></textarea>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ═══ Column 2: Phone & Email + Context + Notes ═══ -->
+                <div>
+                    <!-- Phone & Email Zone -->
+                    <div id="phoneEmailSection" class="zone-container">
+                        <div class="zone-header" onclick="cwocToggleZone(event, 'phoneEmailSection', 'phoneEmailContent')">
+                            <h2 class="zone-title">📞 Phone & Email</h2>
+                            <span class="zone-toggle-icon">🔼</span>
+                        </div>
+                        <div id="phoneEmailContent" class="zone-body">
+                            <div class="multi-value-section">
+                                <h4><i class="fas fa-phone"></i> Phone</h4>
+                                <div class="multi-value-entries" id="phonesEntries"></div>
+                                <button type="button" class="add-entry-btn" onclick="profileAddMvEntry('phones', 'Mobile')">
+                                    <i class="fas fa-plus"></i> Add Phone
+                                </button>
+                            </div>
+                            <div class="multi-value-section">
+                                <h4><i class="fas fa-envelope"></i> Email</h4>
+                                <div class="multi-value-entries" id="emailsEntries"></div>
+                                <button type="button" class="add-entry-btn" onclick="profileAddMvEntry('emails', 'Home')">
+                                    <i class="fas fa-plus"></i> Add Email
+                                </button>
+                            </div>
+                            <div class="multi-value-section">
+                                <h4><i class="fas fa-map-marker-alt"></i> Address</h4>
+                                <div class="multi-value-entries" id="addressesEntries"></div>
+                                <button type="button" class="add-entry-btn" onclick="profileAddMvEntry('addresses', 'Home')">
+                                    <i class="fas fa-plus"></i> Add Address
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Context Zone -->
+                    <div id="contextSection" class="zone-container">
+                        <div class="zone-header" onclick="cwocToggleZone(event, 'contextSection', 'contextContent')">
+                            <h2 class="zone-title"><i class="fas fa-building"></i> Context</h2>
+                            <span class="zone-toggle-icon">🔼</span>
+                        </div>
+                        <div id="contextContent" class="zone-body">
+                            <div class="field">
+                                <label for="organization">Organization</label>
+                                <input type="text" id="organization" placeholder="Company / org" />
+                            </div>
+                            <div class="field">
+                                <label for="socialContext">Social Context</label>
+                                <input type="text" id="socialContext" placeholder="How you know them" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Notes Zone -->
+                    <div id="notesSection" class="zone-container">
+                        <div class="zone-header" onclick="cwocToggleZone(event, 'notesSection', 'notesContent')">
+                            <h2 class="zone-title">📝 Notes</h2>
+                            <span class="zone-toggle-icon">🔽</span>
+                        </div>
+                        <div id="notesContent" class="zone-body" style="display:none;">
+                            <div class="field full-width">
+                                <textarea id="contactNotes" placeholder="Notes..." style="min-height:6em;resize:vertical;"></textarea>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ═══ Column 3: Social & Web + Color + Password ═══ -->
+                <div>
+                    <!-- Social & Web Zone -->
+                    <div id="socialSection" class="zone-container">
+                        <div class="zone-header" onclick="cwocToggleZone(event, 'socialSection', 'socialContent')">
+                            <h2 class="zone-title">🌐 Social & Web</h2>
+                            <span class="zone-toggle-icon">🔼</span>
+                        </div>
+                        <div id="socialContent" class="zone-body">
+                            <div class="multi-value-section">
+                                <h4><i class="fab fa-x-twitter"></i> X Handle</h4>
+                                <div class="multi-value-entries" id="xHandlesEntries"></div>
+                                <button type="button" class="add-entry-btn" onclick="profileAddMvEntry('xHandles', 'X')">
+                                    <i class="fas fa-plus"></i> Add X Handle
+                                </button>
+                            </div>
+                            <div class="multi-value-section">
+                                <h4><i class="fas fa-globe"></i> Website / Social</h4>
+                                <div class="multi-value-entries" id="websitesEntries"></div>
+                                <button type="button" class="add-entry-btn" onclick="profileAddMvEntry('websites', 'Website')">
+                                    <i class="fas fa-plus"></i> Add Website
+                                </button>
+                            </div>
+                            <div class="multi-value-section">
+                                <h4><i class="fas fa-broadcast-tower"></i> Call Sign</h4>
+                                <div class="multi-value-entries" id="callSignsEntries"></div>
+                                <button type="button" class="add-entry-btn" onclick="profileAddMvEntry('callSigns', 'Ham')">
+                                    <i class="fas fa-plus"></i> Add Call Sign
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Color Zone -->
+                    <div id="colorSection" class="zone-container">
+                        <div class="zone-header" onclick="cwocToggleZone(event, 'colorSection', 'colorContent')">
+                            <h2 class="zone-title">🎨 Color</h2>
+                            <span class="zone-toggle-icon">🔼</span>
+                        </div>
+                        <div id="colorContent" class="zone-body">
+                            <div class="field">
+                                <label for="colorHex">Hex</label>
+                                <input type="text" id="colorHex" placeholder="#E3B23C" maxlength="7" style="width:90px;flex:none;" />
+                                <span id="colorPreview" style="width:24px;height:24px;border-radius:50%;border:1px solid var(--aged-brown-medium);display:inline-block;"></span>
+                            </div>
+                            <div class="color-swatches" id="colorSwatches"></div>
+                        </div>
+                    </div>
+
+                    <!-- Password Zone (profile-only) -->
+                    <div id="passwordSection" class="zone-container">
+                        <div class="zone-header" onclick="cwocToggleZone(event, 'passwordSection', 'passwordContent')">
+                            <h2 class="zone-title">🔑 Change Password</h2>
+                            <span class="zone-toggle-icon">🔽</span>
+                        </div>
+                        <div id="passwordContent" class="zone-body" style="display:none;">
+                            <div class="field full-width password-field">
+                                <label for="currentPassword">Current Password</label>
+                                <input type="password" id="currentPassword" placeholder="Enter current password" />
+                            </div>
+                            <div class="field full-width password-field">
+                                <label for="newPassword">New Password</label>
+                                <input type="password" id="newPassword" placeholder="Enter new password" />
+                            </div>
+                            <div class="field full-width password-field">
+                                <label for="confirmPassword">Confirm New Password</label>
+                                <input type="password" id="confirmPassword" placeholder="Confirm new password" />
+                            </div>
+                            <div id="passwordMessage" class="password-message"></div>
+                            <button type="button" onclick="profileChangePassword()" style="margin-top:6px;">🔑 Change Password</button>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- ═══ Image Full-Size Modal ═══ -->
+        <div class="image-modal" id="image-modal" onclick="this.style.display='none'">
+            <img id="image-modal-img" src="" alt="Full size" />
+        </div>
+
+        <!-- ═══ Scripts ═══ -->
         <script src="/frontend/js/shared/shared-auth.js"></script>
         <script src="/frontend/js/shared/shared-utils.js"></script>
         <script src="/frontend/js/shared/shared-touch.js"></script>
@@ -243,11 +539,9 @@
         <script src="/frontend/js/shared/shared-geocoding.js"></script>
         <script src="/frontend/js/shared/shared-qr.js"></script>
         <script src="/frontend/js/shared/shared.js"></script>
-
-        <!-- ── 2. Shared page components ─────────────────────────────────────── -->
         <script src="/frontend/js/pages/shared-page.js"></script>
-
-        <!-- ── 3. Page-specific script ───────────────────────────────────────── -->
+        <script src="/frontend/js/pages/shared-editor.js"></script>
+        <div class="author-info">&copy; 2026 C.W.'s Omni Chits &middot; <a href="https://www.cwholemaniii.com/pages/home.shtml" target="_blank">www.cwholemaniii.com</a></div>
         <script src="/frontend/js/pages/profile.js"></script>
     </body>
 </html>

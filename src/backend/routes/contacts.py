@@ -207,12 +207,24 @@ def get_contacts(request: Request, q: Optional[str] = Query(None)):
                 SELECT * FROM contacts
                 WHERE owner_id = ?
                   AND (display_name LIKE ? COLLATE NOCASE
+                   OR given_name LIKE ? COLLATE NOCASE
+                   OR surname LIKE ? COLLATE NOCASE
+                   OR nickname LIKE ? COLLATE NOCASE
+                   OR organization LIKE ? COLLATE NOCASE
+                   OR social_context LIKE ? COLLATE NOCASE
                    OR emails LIKE ? COLLATE NOCASE
                    OR phones LIKE ? COLLATE NOCASE
-                   OR call_signs LIKE ? COLLATE NOCASE)
+                   OR addresses LIKE ? COLLATE NOCASE
+                   OR call_signs LIKE ? COLLATE NOCASE
+                   OR x_handles LIKE ? COLLATE NOCASE
+                   OR websites LIKE ? COLLATE NOCASE
+                   OR notes LIKE ? COLLATE NOCASE
+                   OR tags LIKE ? COLLATE NOCASE)
                 ORDER BY favorite DESC, display_name COLLATE NOCASE ASC
                 """,
-                (user_id, like_pattern, like_pattern, like_pattern, like_pattern),
+                (user_id, like_pattern, like_pattern, like_pattern, like_pattern,
+                 like_pattern, like_pattern, like_pattern, like_pattern, like_pattern,
+                 like_pattern, like_pattern, like_pattern, like_pattern, like_pattern),
             )
         else:
             cursor.execute(

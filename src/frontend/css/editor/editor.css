@@ -3473,6 +3473,11 @@ input.location {
     border-color: #8b5a2b;
 }
 
+/* User chips: thicker, very dark brown border to distinguish from contact chips */
+.people-chip.people-chip-user {
+    border: 2px solid #1a1208;
+}
+
 /* ── RSVP status badges in editor People zone (Requirements 6.1–6.4) ──────── */
 
 .cwoc-editor-rsvp-badge {
@@ -3711,6 +3716,23 @@ input.location {
     background: var(--button-hover, #c4a882);
 }
 
+.cwoc-people-expand-done-btn {
+    background: #2e7d32;
+    color: #fff8e1;
+    border: 2px outset #1b5e20;
+    border-radius: 6px;
+    padding: 6px 18px;
+    font-size: 1em;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: 'Lora', Georgia, serif;
+    transition: background 0.2s;
+}
+
+.cwoc-people-expand-done-btn:hover {
+    background: #1b5e20;
+}
+
 .cwoc-people-expand-body {
     flex: 1;
     overflow-y: auto;
@@ -3745,95 +3767,207 @@ input.location {
     margin-top: 0;
 }
 
-.cwoc-people-expand-entry {
-    display: flex;
+/* ── Table-style row layout ──────────────────────────────────────────── */
+
+.cwoc-pex-row {
+    display: grid;
+    grid-template-columns: auto 24px 36px minmax(100px, 1.5fr) minmax(80px, 1.2fr) minmax(60px, 1fr) minmax(60px, 1fr) auto auto;
     align-items: center;
-    gap: 12px;
-    padding: 8px 12px;
+    gap: 8px;
+    padding: 6px 12px;
     border-bottom: 1px dashed var(--aged-brown-light, #c4a882);
     transition: background 0.15s;
+    min-height: 36px;
 }
 
-.cwoc-people-expand-entry:last-child {
-    border-bottom: none;
-}
-
-.cwoc-people-expand-entry:hover {
+.cwoc-pex-row:hover:not(.cwoc-pex-header) {
     background: rgba(139, 90, 43, 0.06);
 }
 
-.cwoc-people-expand-thumb {
+.cwoc-pex-active {
+    background: rgba(46, 125, 50, 0.06);
+}
+
+.cwoc-pex-header {
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.8em;
+    font-weight: bold;
+    color: var(--aged-brown-medium, #8b4513);
+    border-bottom: 2px solid var(--aged-brown-medium, #8b4513);
+    padding: 8px 12px 6px;
+    position: sticky;
+    top: 48px;
+    z-index: 1;
+    background: url("/static/parchment.jpg") center/cover;
+    background-color: var(--parchment-light, #fff8e1);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    min-height: unset;
+}
+
+.cwoc-pex-header [class*="cwoc-pex-col-name"],
+.cwoc-pex-header [class*="cwoc-pex-col-email"],
+.cwoc-pex-header [class*="cwoc-pex-col-org"],
+.cwoc-pex-header [class*="cwoc-pex-col-notes"],
+.cwoc-pex-header [class*="cwoc-pex-col-status"] {
+    cursor: pointer;
+    user-select: none;
+    transition: color 0.15s;
+}
+
+.cwoc-pex-header [class*="cwoc-pex-col-"]:hover:not(.cwoc-pex-col-controls):not(.cwoc-pex-col-icon):not(.cwoc-pex-col-thumb):not(.cwoc-pex-col-edit) {
+    color: var(--aged-brown-dark, #4a2c2a);
+}
+
+.cwoc-pex-sort-arrow {
+    font-size: 0.8em;
+    margin-left: 2px;
+    opacity: 0.7;
+}
+
+/* ── Column styles ───────────────────────────────────────────────────── */
+
+.cwoc-pex-col-icon {
+    text-align: center;
+    font-size: 0.9em;
+    color: #d4af37;
     flex-shrink: 0;
-    width: 32px;
-    height: 32px;
+}
+
+.cwoc-pex-user-icon {
+    color: #8b5a2b !important;
+    font-size: 0.8em;
+}
+
+.cwoc-pex-col-thumb {
     display: flex;
     align-items: center;
     justify-content: center;
+    flex-shrink: 0;
 }
 
-.cwoc-people-expand-thumb img {
-    width: 32px;
-    height: 32px;
+.cwoc-pex-col-thumb img {
+    width: 28px;
+    height: 28px;
     border-radius: 50%;
     object-fit: cover;
     border: 1px solid var(--aged-brown-light, #c4a882);
 }
 
-.cwoc-people-expand-thumb-placeholder {
-    width: 32px;
-    height: 32px;
+.cwoc-pex-thumb-placeholder {
+    width: 28px;
+    height: 28px;
     border-radius: 50%;
     background: var(--aged-brown-light, #c4a882);
     color: var(--parchment-light, #fff8e1);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 0.85em;
+    font-size: 0.8em;
     font-weight: bold;
     font-family: 'Lora', Georgia, serif;
 }
 
-.cwoc-people-expand-name {
-    flex: 1;
+.cwoc-pex-thumb-user {
+    background: rgba(139, 90, 43, 0.15) !important;
+    color: #8b5a2b !important;
+}
+
+.cwoc-pex-thumb-user i {
+    font-size: 12px;
+}
+
+.cwoc-pex-col-name {
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.95em;
+    font-weight: 600;
+    color: var(--text-color, #1a1208);
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    min-width: 0;
+}
+
+.cwoc-pex-col-email,
+.cwoc-pex-col-org,
+.cwoc-pex-col-notes {
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.85em;
+    color: var(--aged-brown-dark, #4a2c2a);
+    opacity: 0.7;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    min-width: 0;
+}
+
+.cwoc-pex-col-controls {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+}
+
+.cwoc-pex-col-status {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+.cwoc-pex-col-edit {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.cwoc-pex-edit-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 1px solid var(--aged-brown-medium, #8b4513);
+    background: linear-gradient(#d4a373, #c8965a);
+    color: var(--aged-brown-dark, #4a2c2a);
+    font-size: 0.8em;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    transition: background 0.15s, transform 0.1s;
+}
+
+.cwoc-pex-edit-btn:hover {
+    background: linear-gradient(#c8965a, #a86b3e);
+    transform: translateY(-1px);
+}
+
+.cwoc-pex-pill [data-val] {
+    padding: 3px 6px;
+    white-space: nowrap;
+}
+
+/* ── Section headers (Favorites, letter groups) ──────────────────────── */
+
+.cwoc-pex-section-header {
     font-family: 'Lora', Georgia, serif;
     font-size: 1em;
-    color: var(--text-color, #1a1208);
-}
-
-.cwoc-people-expand-label {
-    flex-shrink: 0;
-    font-family: 'Lora', Georgia, serif;
-    font-size: 0.8em;
-    padding: 3px 10px;
-    border-radius: 12px;
-    font-weight: 600;
-    background: var(--parchment-dark, #f0e6d0);
+    font-weight: bold;
     color: var(--aged-brown-dark, #4a2c2a);
-    border: 1px solid var(--aged-brown-light, #c4a882);
+    padding: 10px 12px 4px;
+    border-bottom: 1px solid var(--aged-brown-light, #c4a882);
+    margin-top: 6px;
 }
 
-.cwoc-people-expand-label-contact {
-    background: #e8f5e9;
-    color: #2e7d32;
-    border-color: #a5d6a7;
-}
-
-.cwoc-people-expand-label-assigned {
-    background: #fff3e0;
-    color: #e65100;
-    border-color: #ffcc80;
-}
-
-.cwoc-people-expand-label-manager {
-    background: #e3f2fd;
-    color: #1565c0;
-    border-color: #90caf9;
-}
-
-.cwoc-people-expand-label-viewer {
-    background: var(--parchment-dark, #f0e6d0);
-    color: var(--aged-brown-dark, #4a2c2a);
-    border-color: var(--aged-brown-light, #c4a882);
+.cwoc-pex-fav-header {
+    color: #4a2c2a;
+    background: rgba(139, 90, 43, 0.2);
+    border-bottom-color: #8b4513;
+    border-radius: 4px 4px 0 0;
+    padding: 10px 12px 6px;
 }
 
 .cwoc-people-expand-empty {
@@ -3845,6 +3979,218 @@ input.location {
     opacity: 0.7;
 }
 
+/* ── Status label badges ──────────────────────────────────────────────── */
+
+.cwoc-pex-label {
+    display: inline-block;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.7em;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.cwoc-pex-label-contact {
+    background: rgba(70, 130, 180, 0.18);
+    color: #1a4a6e;
+    border: 1px solid rgba(70, 130, 180, 0.4);
+}
+
+.cwoc-pex-label-user {
+    background: rgba(200, 150, 90, 0.3);
+    color: #3c2210;
+    border: 1px solid rgba(200, 150, 90, 0.6);
+}
+
+.cwoc-pex-label-shared {
+    background: rgba(0, 128, 128, 0.15);
+    color: #006060;
+    border: 1px solid rgba(0, 128, 128, 0.3);
+}
+
+.cwoc-pex-label-manager {
+    background: rgba(0, 128, 128, 0.15);
+    color: #006060;
+    border: 1px solid rgba(0, 128, 128, 0.3);
+}
+
+.cwoc-pex-label-viewer {
+    background: rgba(139, 90, 43, 0.12);
+    color: #6b4e31;
+    border: 1px solid rgba(139, 90, 43, 0.25);
+}
+
+/* ── User icon placeholder for system user chips ─────────────────────── */
+.chip-thumb-user {
+    background: rgba(139, 90, 43, 0.15) !important;
+    color: #8b5a2b !important;
+    font-size: 14px !important;
+    line-height: 22px !important;
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+}
+
+.chip-thumb-user i {
+    font-size: 14px;
+    line-height: 1;
+}
+
+/* ── Compact assign badge (small view, next to shared user chips) ─────── */
+
+.cwoc-compact-assign-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.6em;
+    height: 1.6em;
+    border-radius: 50%;
+    font-size: 0.75em;
+    flex-shrink: 0;
+    color: #ccc;
+    opacity: 0.35;
+    cursor: default;
+}
+
+.cwoc-compact-assign-active {
+    color: #fff8e1;
+    background: #8b5a2b;
+    opacity: 1;
+    border: 1px solid #5a3f2a;
+}
+
+.cwoc-compact-assign-badge.cwoc-pex-assign-flash {
+    animation: cwoc-assign-flash 1.2s ease-out;
+}
+
+/* ── People Expand Modal — Interactive Management ────────────────────── */
+
+.cwoc-people-expand-search-row {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    padding: 0 0 12px 0;
+    background: url("/static/parchment.jpg") center/cover;
+    background-color: var(--parchment-light, #fff8e1);
+}
+
+.cwoc-people-expand-search {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px 12px;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.95em;
+    border: 1px solid var(--aged-brown-medium, #8b4513);
+    border-radius: 6px;
+    background: var(--parchment-light, #fff8e1);
+    color: var(--text-color, #1a1208);
+}
+
+.cwoc-people-expand-search:focus {
+    outline: none;
+    border-color: var(--accent-gold, #d4af37);
+    box-shadow: 0 0 0 2px rgba(212, 175, 55, 0.25);
+}
+
+.cwoc-people-expand-action-btn {
+    flex-shrink: 0;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 1px solid var(--aged-brown-medium, #8b4513);
+    background: var(--button-bg, #d2b48c);
+    color: var(--aged-brown-dark, #4a2c2a);
+    font-size: 1em;
+    font-weight: bold;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s;
+    padding: 0;
+    font-family: 'Lora', Georgia, serif;
+}
+
+.cwoc-people-expand-action-btn:hover {
+    background: var(--button-hover, #c4a882);
+}
+
+.cwoc-people-expand-action-add {
+    background: #2e7d32;
+    color: #fff8e1;
+    border-color: #1b5e20;
+}
+
+.cwoc-people-expand-action-add:hover {
+    background: #1b5e20;
+}
+
+.cwoc-people-expand-action-remove {
+    background: var(--danger-red, #b22222);
+    color: #fff8e1;
+    border-color: #8b1a1a;
+    font-size: 0.85em;
+}
+
+.cwoc-people-expand-action-remove:hover {
+    background: #a01c1c;
+}
+
+.cwoc-people-expand-assign-btn {
+    flex-shrink: 0;
+    width: 1.8em;
+    height: 1.8em;
+    border: 1px solid #8b5a2b;
+    border-radius: 50%;
+    background: #f5e6cc;
+    color: #bbb;
+    font-size: 0.8em;
+    font-family: 'Lora', Georgia, serif;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, width 0.2s, border-radius 0.2s, padding 0.2s;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    padding: 0;
+}
+
+.cwoc-people-expand-assign-btn:hover {
+    background: #e8d5b7;
+    color: #6b4e31;
+}
+
+.cwoc-people-expand-assigned-active {
+    width: auto;
+    height: auto;
+    padding: 3px 8px;
+    border-radius: 4px;
+    background: #8b5a2b;
+    color: #fff8e1;
+    border-color: #5a3f2a;
+    font-weight: 600;
+    gap: 4px;
+}
+
+.cwoc-people-expand-assigned-active:hover {
+    background: #6b4e31;
+    color: #fff8e1;
+}
+
+/* Flash animation when assign is auto-removed (viewer downgrade) */
+@keyframes cwoc-assign-flash {
+    0%   { background: #b22222; color: #fff8e1; transform: scale(1.15); }
+    30%  { background: #b22222; color: #fff8e1; transform: scale(1.15); }
+    100% { background: #f5e6cc; color: #bbb; transform: scale(1); }
+}
+
+.cwoc-pex-assign-flash {
+    animation: cwoc-assign-flash 1.2s ease-out;
+}
+
+/* ── People Expand Modal — Responsive ────────────────────────────────── */
+
 @media (max-width: 480px) {
     .cwoc-people-expand-content {
         width: 98vw;
@@ -3854,16 +4200,37 @@ input.location {
     }
 
     .cwoc-people-expand-body {
-        padding: 10px 12px;
+        padding: 10px 8px;
     }
 
-    .cwoc-people-expand-entry {
-        gap: 8px;
-        padding: 6px 8px;
+    .cwoc-pex-row {
+        grid-template-columns: auto 20px 28px 1fr auto auto;
+        gap: 4px;
+        padding: 5px 6px;
+    }
+
+    /* Hide email, org, notes columns on mobile */
+    .cwoc-pex-col-email,
+    .cwoc-pex-col-org,
+    .cwoc-pex-col-notes {
+        display: none !important;
     }
 
     .cwoc-people-expand-shrink-btn {
         min-height: 44px;
         min-width: 44px;
+    }
+}
+
+@media (max-width: 768px) {
+    .cwoc-pex-row {
+        grid-template-columns: auto 20px 30px minmax(80px, 1.5fr) minmax(60px, 1fr) auto auto;
+        gap: 6px;
+    }
+
+    /* Hide org and notes on tablet */
+    .cwoc-pex-col-org,
+    .cwoc-pex-col-notes {
+        display: none !important;
     }
 }
