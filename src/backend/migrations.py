@@ -852,3 +852,60 @@ def migrate_add_kiosk_users():
     finally:
         if conn:
             conn.close()
+
+
+# ── Hide Declined Setting: migration ─────────────────────────────────────
+
+def migrate_add_hide_declined():
+    """Add hide_declined column to settings table.
+
+    Stores '0' (show declined chits with faded treatment) or '1' (hide them entirely).
+    Fully idempotent — safe to run multiple times.
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        cursor.execute("PRAGMA table_info(settings)")
+        settings_cols = {row[1] for row in cursor.fetchall()}
+
+        if "hide_declined" not in settings_cols:
+            cursor.execute("ALTER TABLE settings ADD COLUMN hide_declined TEXT DEFAULT '0'")
+            logger.info("Added hide_declined column to settings table")
+
+        conn.commit()
+        logger.info("Hide declined migration complete")
+    except Exception as e:
+        logger.error(f"Error in migrate_add_hide_declined: {str(e)}")
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+
+# ── Network Access: migration ────────────────────────────────────────────
+
+def migrate_add_network_access():
+    """Create network_access table for storing network provider configurations."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS network_access (
+                id TEXT PRIMARY KEY,
+                provider TEXT NOT NULL UNIQUE,
+                enabled BOOLEAN DEFAULT 0,
+                config TEXT,
+                created_datetime TEXT,
+                modified_datetime TEXT
+            )
+        """)
+        conn.commit()
+        logger.info("network_access table ready")
+    except Exception as e:
+        logger.error(f"Error creating network_access table: {str(e)}")
+    finally:
+        if conn:
+            conn.close()

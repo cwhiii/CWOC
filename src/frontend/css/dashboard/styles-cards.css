@@ -761,3 +761,104 @@
 .cwoc-shared-icon:hover {
     opacity: 1;
 }
+
+/* ── Declined chit visual treatment (RSVP Requirement 4) ──────────────────── */
+.chit-card.declined-chit {
+    opacity: 0.35;
+}
+.chit-card.declined-chit:hover {
+    opacity: 0.7;
+}
+
+/* Calendar events also get declined treatment */
+.timed-event.declined-chit,
+.day-event.declined-chit,
+.month-event.declined-chit,
+.all-day-event.declined-chit,
+.itinerary-event.declined-chit {
+    opacity: 0.35;
+}
+.timed-event.declined-chit:hover,
+.day-event.declined-chit:hover,
+.month-event.declined-chit:hover,
+.all-day-event.declined-chit:hover,
+.itinerary-event.declined-chit:hover {
+    opacity: 0.7;
+}
+
+/* ── RSVP status indicators on chit cards (Requirement 3) ─────────────────── */
+.cwoc-rsvp-indicators {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    white-space: nowrap;
+}
+
+.cwoc-rsvp-indicator {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7em;
+    width: 1.4em;
+    height: 1.4em;
+    border-radius: 50%;
+    cursor: default;
+    line-height: 1;
+}
+
+.cwoc-rsvp-invited {
+    opacity: 0.6;
+}
+
+.cwoc-rsvp-accepted {
+    color: #2e7d32;
+    background: rgba(46, 125, 50, 0.12);
+}
+
+.cwoc-rsvp-declined {
+    color: #999;
+    opacity: 0.5;
+    text-decoration: line-through;
+}
+
+/* ── RSVP action buttons on chit cards (Requirement 2) ────────────────────── */
+.cwoc-rsvp-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    white-space: nowrap;
+}
+
+.cwoc-rsvp-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.5em;
+    height: 1.5em;
+    border: 1px solid #c4a882;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.3);
+    cursor: pointer;
+    font-size: 0.8em;
+    font-family: 'Lora', Georgia, serif;
+    color: #4a2c2a;
+    padding: 0;
+    line-height: 1;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.cwoc-rsvp-btn:hover {
+    background: rgba(139, 90, 43, 0.15);
+}
+
+.cwoc-rsvp-accept-btn.cwoc-rsvp-btn-active {
+    background: rgba(46, 125, 50, 0.2);
+    border-color: #2e7d32;
+    color: #2e7d32;
+}
+
+.cwoc-rsvp-decline-btn.cwoc-rsvp-btn-active {
+    background: rgba(178, 34, 34, 0.15);
+    border-color: #b22222;
+    color: #b22222;
+}

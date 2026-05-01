@@ -1,0 +1,1 @@
+Added Network Access administration block to the Settings page with Tailscale VPN configuration, status monitoring, and service control. Includes backend API endpoints, database migration, property-based tests, and configurinator integration for automated Tailscale installation during provisioning.

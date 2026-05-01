@@ -354,6 +354,16 @@ def _determine_share_source(chit, user_id, owner_settings):
     return "unknown"
 
 
+def _normalize_share_rsvp(shares):
+    """Ensure every share entry has a valid rsvp_status, defaulting to 'invited'."""
+    if not isinstance(shares, list):
+        return shares
+    for entry in shares:
+        if isinstance(entry, dict) and entry.get("rsvp_status") is None:
+            entry["rsvp_status"] = "invited"
+    return shares
+
+
 def _deserialize_chit_fields(chit):
     """Deserialize JSON fields on a chit dict in place."""
     chit["tags"] = deserialize_json_field(chit["tags"]) if isinstance(chit.get("tags"), str) else chit.get("tags")
@@ -366,6 +376,8 @@ def _deserialize_chit_fields(chit):
     chit["weather_data"] = deserialize_json_field(chit.get("weather_data")) if isinstance(chit.get("weather_data"), str) else chit.get("weather_data")
     chit["health_data"] = deserialize_json_field(chit.get("health_data")) if isinstance(chit.get("health_data"), str) else chit.get("health_data")
     chit["shares"] = deserialize_json_field(chit.get("shares")) if isinstance(chit.get("shares"), str) else chit.get("shares")
+    # Normalize rsvp_status on share entries (backward compat: missing → "invited")
+    chit["shares"] = _normalize_share_rsvp(chit.get("shares"))
     chit["is_project_master"] = bool(chit.get("is_project_master"))
     chit["all_day"] = bool(chit.get("all_day"))
     chit["hide_when_instance_done"] = bool(chit.get("hide_when_instance_done"))

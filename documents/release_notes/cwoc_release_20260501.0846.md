@@ -1,0 +1,1 @@
+Tailscale now detects missing TUN device (/dev/net/tun) and shows specific fix instructions for Proxmox LXC containers. Added troubleshooting section to help page covering TUN, daemon, and auth key issues.

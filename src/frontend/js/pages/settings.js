@@ -1477,6 +1477,10 @@ class SettingsManager {
     document.getElementById("calendar-snap").value =
       this.settings.calendar_snap || "15";
 
+    // Hide declined chits toggle
+    var hideDeclinedCb = document.getElementById("hide-declined-toggle");
+    if (hideDeclinedCb) hideDeclinedCb.checked = (this.settings.hide_declined === "1");
+
     const weekStartSel = document.getElementById("week-start-day");
     if (weekStartSel) weekStartSel.value = this.settings.week_start_day || "0";
 
@@ -1672,6 +1676,7 @@ class SettingsManager {
       unit_system: document.getElementById("unit-system-toggle").value || "imperial",
       snooze_length: document.getElementById("snooze-length").value,
       calendar_snap: document.getElementById("calendar-snap").value,
+      hide_declined: document.getElementById("hide-declined-toggle").checked ? "1" : "0",
       week_start_day: document.getElementById("week-start-day")?.value || "0",
       work_start_hour: document.getElementById("work-start-hour")?.value || "8",
       work_end_hour: document.getElementById("work-end-hour")?.value || "17",
@@ -2758,28 +2763,94 @@ async function loadLastLog() {
 
 // ── Release Notes Modal ──────────────────────────────────────────────────────
 
+var _releaseNotes = [];      // Array of {version, content} — newest first
+var _releaseNotesIndex = 0;  // Current index being displayed
+
 async function showReleaseNotes() {
   var modal = document.getElementById('release-notes-modal');
   var content = document.getElementById('release-notes-content');
+  var header = document.getElementById('release-notes-version');
   content.innerHTML = '<em>Loading...</em>';
+  if (header) header.textContent = '';
   modal.style.display = 'flex';
 
   try {
     var res = await fetch('/api/release-notes');
     var data = await res.json();
-    if (!data.content) {
+    _releaseNotes = data.notes || [];
+    if (_releaseNotes.length === 0) {
       content.innerHTML = '<p style="opacity:0.6;">No release notes available.</p>';
-    } else {
-      // Convert markdown to HTML using marked.js (loaded via CDN on settings page)
-      if (typeof marked !== 'undefined') {
-        content.innerHTML = marked.parse(data.content);
-      } else {
-        // Fallback: show as preformatted text
-        content.textContent = data.content;
-      }
+      if (header) header.textContent = '';
+      _updateReleaseNotesNav();
+      return;
     }
+    _releaseNotesIndex = 0;
+    _renderCurrentReleaseNote();
   } catch (e) {
     content.innerHTML = '<p style="color:#b22222;">Failed to load release notes.</p>';
+    if (header) header.textContent = '';
+  }
+}
+
+function _renderCurrentReleaseNote() {
+  var content = document.getElementById('release-notes-content');
+  var header = document.getElementById('release-notes-version');
+  if (!content) return;
+
+  var note = _releaseNotes[_releaseNotesIndex];
+  if (!note) {
+    content.innerHTML = '<p style="opacity:0.6;">No release notes available.</p>';
+    if (header) header.textContent = '';
+    _updateReleaseNotesNav();
+    return;
+  }
+
+  if (header) header.textContent = 'v' + note.version;
+
+  if (typeof marked !== 'undefined') {
+    content.innerHTML = marked.parse(note.content);
+  } else {
+    content.textContent = note.content;
+  }
+
+  _updateReleaseNotesNav();
+}
+
+function _updateReleaseNotesNav() {
+  var prevBtn = document.getElementById('release-notes-prev');
+  var nextBtn = document.getElementById('release-notes-next');
+  var counter = document.getElementById('release-notes-counter');
+
+  if (prevBtn) {
+    // "Previous" goes to older (higher index)
+    prevBtn.disabled = _releaseNotesIndex >= _releaseNotes.length - 1;
+    prevBtn.style.opacity = prevBtn.disabled ? '0.4' : '1';
+  }
+  if (nextBtn) {
+    // "Next" goes to newer (lower index)
+    nextBtn.disabled = _releaseNotesIndex <= 0;
+    nextBtn.style.opacity = nextBtn.disabled ? '0.4' : '1';
+  }
+  if (counter) {
+    if (_releaseNotes.length > 0) {
+      counter.textContent = (_releaseNotesIndex + 1) + ' / ' + _releaseNotes.length;
+    } else {
+      counter.textContent = '';
+    }
+  }
+}
+
+function releaseNotesPrev() {
+  if (_releaseNotesIndex < _releaseNotes.length - 1) {
+    _releaseNotesIndex++;
+    _renderCurrentReleaseNote();
+  }
+}
+
+function releaseNotesNext() {
+  if (_releaseNotesIndex > 0) {
+    _releaseNotesIndex--;
+    _renderCurrentReleaseNote();
   }
 }
 
@@ -3082,6 +3153,184 @@ if (typeof waitForAuth === 'function') {
     if (user && user.is_admin) {
       // Wait a tick for settingsManager to finish loading
       setTimeout(_loadKioskUserPicker, 500);
+    }
+  });
+}
+
+// ── Network Access ───────────────────────────────────────────────────────────
+
+/**
+ * Fetch the current Tailscale service status and update the UI badge,
+ * IP/hostname row, and error row accordingly.
+ */
+async function refreshTailscaleStatus() {
+  var badge = document.getElementById('tailscale-status-badge');
+  var infoRow = document.getElementById('tailscale-info-row');
+  var errorRow = document.getElementById('tailscale-error-row');
+  var errorMsg = document.getElementById('tailscale-error-msg');
+  var ipSpan = document.getElementById('tailscale-ip');
+  var hostnameSpan = document.getElementById('tailscale-hostname');
+
+  try {
+    var response = await fetch('/api/network-access/tailscale/status');
+    if (!response.ok) throw new Error('Status check failed');
+    var data = await response.json();
+
+    // Hide both optional rows by default
+    if (infoRow) infoRow.style.display = 'none';
+    if (errorRow) errorRow.style.display = 'none';
+
+    switch (data.status) {
+      case 'not_installed':
+        if (badge) badge.textContent = '⚪ Not Installed';
+        break;
+      case 'installed_inactive':
+        if (badge) badge.textContent = '🟡 Inactive';
+        if (data.message) {
+          if (errorRow) errorRow.style.display = '';
+          if (errorMsg) errorMsg.textContent = data.message;
+        }
+        break;
+      case 'active':
+        if (badge) badge.textContent = '🟢 Connected';
+        if (infoRow) infoRow.style.display = '';
+        if (ipSpan) ipSpan.textContent = data.ip || '—';
+        if (hostnameSpan) hostnameSpan.textContent = data.hostname || '—';
+        break;
+      case 'error':
+        if (badge) badge.textContent = '🔴 Error';
+        if (errorRow) errorRow.style.display = '';
+        if (errorMsg) errorMsg.textContent = data.message || 'Unknown error';
+        break;
+      default:
+        if (badge) badge.textContent = '⚪ Unknown';
+        break;
+    }
+  } catch (error) {
+    console.error('Failed to refresh Tailscale status:', error);
+    if (badge) badge.textContent = '⚠️ Unable to check status';
+    if (infoRow) infoRow.style.display = 'none';
+    if (errorRow) errorRow.style.display = 'none';
+  }
+}
+
+/**
+ * Load the saved Tailscale configuration from the backend and populate
+ * the auth key input and enabled checkbox.
+ */
+async function loadTailscaleConfig() {
+  try {
+    var response = await fetch('/api/network-access/tailscale');
+    if (!response.ok) throw new Error('Failed to load Tailscale config');
+    var data = await response.json();
+
+    var authKeyInput = document.getElementById('tailscale-auth-key');
+    var enabledCheckbox = document.getElementById('tailscale-enabled');
+
+    if (authKeyInput) authKeyInput.value = (data.config && data.config.auth_key) || '';
+    if (enabledCheckbox) enabledCheckbox.checked = !!data.enabled;
+  } catch (error) {
+    console.error('Failed to load Tailscale config:', error);
+  }
+}
+
+/**
+ * Save the current Tailscale auth key and enabled state to the backend.
+ */
+async function saveTailscaleConfig() {
+  var authKeyInput = document.getElementById('tailscale-auth-key');
+  var enabledCheckbox = document.getElementById('tailscale-enabled');
+
+  var authKey = authKeyInput ? authKeyInput.value.trim() : '';
+  var enabled = enabledCheckbox ? enabledCheckbox.checked : false;
+
+  try {
+    var response = await fetch('/api/network-access/tailscale', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled: enabled, config: { auth_key: authKey } })
+    });
+    if (!response.ok) {
+      var err = await response.json();
+      throw new Error(err.detail || 'Save failed');
+    }
+    cwocToast('Tailscale configuration saved.');
+  } catch (error) {
+    console.error('Failed to save Tailscale config:', error);
+    cwocToast('Failed to save Tailscale config: ' + error.message, 'error');
+  }
+}
+
+/**
+ * Start the Tailscale service using the saved auth key.
+ * Refreshes the status badge on success.
+ */
+async function tailscaleUp() {
+  try {
+    var response = await fetch('/api/network-access/tailscale/up', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    var data = await response.json();
+    if (!response.ok) {
+      cwocToast('Tailscale connect failed: ' + (data.detail || data.output || 'Unknown error'), 'error');
+      return;
+    }
+    await refreshTailscaleStatus();
+    cwocToast(data.message || 'Tailscale connected.');
+  } catch (error) {
+    console.error('Tailscale up failed:', error);
+    cwocToast('Tailscale connect failed: ' + error.message, 'error');
+  }
+}
+
+/**
+ * Stop the Tailscale service.
+ * Refreshes the status badge on success.
+ */
+async function tailscaleDown() {
+  try {
+    var response = await fetch('/api/network-access/tailscale/down', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    var data = await response.json();
+    if (!response.ok) {
+      cwocToast('Tailscale disconnect failed: ' + (data.detail || data.output || 'Unknown error'), 'error');
+      return;
+    }
+    await refreshTailscaleStatus();
+    cwocToast(data.message || 'Tailscale disconnected.');
+  } catch (error) {
+    console.error('Tailscale down failed:', error);
+    cwocToast('Tailscale disconnect failed: ' + error.message, 'error');
+  }
+}
+
+/**
+ * Toggle the auth key input between password (masked) and text (visible),
+ * and update the toggle button label accordingly.
+ */
+function toggleAuthKeyVisibility() {
+  var input = document.getElementById('tailscale-auth-key');
+  var toggleBtn = document.getElementById('tailscale-key-toggle');
+  if (!input) return;
+
+  if (input.type === 'password') {
+    input.type = 'text';
+    if (toggleBtn) toggleBtn.textContent = '🔒';
+  } else {
+    input.type = 'password';
+    if (toggleBtn) toggleBtn.textContent = '👁️';
+  }
+}
+
+// Load Network Access config and status after auth resolves (admin only)
+if (typeof waitForAuth === 'function') {
+  waitForAuth().then(function(user) {
+    if (user && user.is_admin) {
+      loadTailscaleConfig();
+      refreshTailscaleStatus();
     }
   });
 }

@@ -1,0 +1,1 @@
+Release notes now use individual versioned files (`cwoc_release_[version].md`) under `documents/`. The Settings modal shows them one at a time with Older/Newer navigation buttons and a version header.

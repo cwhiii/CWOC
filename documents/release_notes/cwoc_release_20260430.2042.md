@@ -1,0 +1,1 @@
+- Release notes now use bullet point format for each item

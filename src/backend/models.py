@@ -55,6 +55,7 @@ class Settings(BaseModel):
     blocked_border_color: Optional[str] = "#DAA520"  # Border color for blocked chits
     shared_tags: Optional[Any] = None  # JSON array: [{"tag": "TagName", "shares": [{"user_id": "uuid", "role": "manager"|"viewer"}]}]
     kiosk_users: Optional[Any] = None  # JSON array of usernames for kiosk view
+    hide_declined: Optional[str] = "0"  # "0" = show declined (faded), "1" = hide declined
 
 class Chit(BaseModel):
     id: Optional[str] = None

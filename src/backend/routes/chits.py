@@ -617,6 +617,87 @@ def patch_recurrence_exceptions(chit_id: str, body: dict, request: Request):
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# RSVP Status
+# ═══════════════════════════════════════════════════════════════════════════
+
+@router.patch("/api/chits/{chit_id}/rsvp")
+def update_rsvp_status(chit_id: str, body: dict, request: Request):
+    """Update the current user's RSVP status on a shared chit.
+
+    Body: { "rsvp_status": "accepted" | "declined" | "invited" }
+
+    Authorization: The requesting user must be in the chit's shares list.
+    The owner cannot have an RSVP status.
+    Users can only update their own RSVP status.
+    """
+    VALID_RSVP_STATUSES = {"invited", "accepted", "declined"}
+
+    rsvp_status = body.get("rsvp_status")
+    if rsvp_status not in VALID_RSVP_STATUSES:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid rsvp_status. Must be one of: invited, accepted, declined",
+        )
+
+    conn = None
+    try:
+        user_id = request.state.user_id
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT id, owner_id, shares, title FROM chits WHERE id = ?", (chit_id,))
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Chit not found or user not in shares list")
+
+        # Owner cannot have RSVP status
+        if row["owner_id"] == user_id:
+            raise HTTPException(status_code=403, detail="Owner cannot have RSVP status")
+
+        # Parse shares and find the requesting user's entry
+        shares = deserialize_json_field(row["shares"]) or []
+        user_found = False
+        for entry in shares:
+            if isinstance(entry, dict) and entry.get("user_id") == user_id:
+                entry["rsvp_status"] = rsvp_status
+                user_found = True
+                break
+
+        if not user_found:
+            raise HTTPException(status_code=404, detail="Chit not found or user not in shares list")
+
+        # Save updated shares back to the database
+        current_time = datetime.utcnow().isoformat()
+        cursor.execute(
+            "UPDATE chits SET shares = ?, modified_datetime = ? WHERE id = ?",
+            (serialize_json_field(shares), current_time, chit_id),
+        )
+
+        # Audit logging
+        try:
+            actor = get_actor_from_request(request)
+            insert_audit_entry(
+                conn, "chit", chit_id, "rsvp_updated", actor,
+                changes=[{"field": "rsvp_status", "old": None, "new": rsvp_status}],
+                entity_summary=row["title"],
+            )
+        except Exception as e:
+            logger.error(f"Audit logging failed for RSVP update (best-effort): {str(e)}")
+
+        conn.commit()
+        return {"message": "RSVP status updated", "rsvp_status": rsvp_status}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating RSVP status for chit {chit_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to update RSVP status")
+    finally:
+        if conn:
+            conn.close()
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Data Management Export/Import
 # ═══════════════════════════════════════════════════════════════════════════
 

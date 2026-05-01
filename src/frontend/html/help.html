@@ -37,6 +37,7 @@
                     <li><a href="#habits-view">Habits View</a></li>
                     <li><a href="#contacts">Contact Editor</a></li>
                     <li><a href="#sharing">Sharing</a></li>
+                    <li><a href="#network-access">Network Access</a></li>
                 </ul>
             </div>
             <h3 id="what-is-cwoc">What is CWOC?</h3>
@@ -262,6 +263,7 @@
                 <li><strong>Version &amp; Updates</strong> — Current version, upgrade button, update log</li>
                 <li><strong>Data</strong> — Audit log link, trash link, audit log pruning limits</li>
                 <li><strong>Data Management</strong> — JSON export/import for chit data and user data (add or replace modes)</li>
+                <li><strong>Network Access</strong> — (Admin only) Configure external network access providers like Tailscale VPN</li>
             </ul>
             <h3 id="data-management">Data Management</h3>
             <p>The Settings page includes a <strong>📦 Data Management</strong> box for exporting and importing your data as JSON files. There are two data categories, each with its own Export and Import buttons:</p>
@@ -398,6 +400,27 @@
             </ul>
             <h4>Dashboard</h4>
             <p>Shared chits display a 🔗 icon on their dashboard card. Hover over the icon to see a tooltip with the owner's name, the list of shared users and their roles, and your effective role. Non-shared chits show no icon.</p>
+            <h3 id="network-access">Network Access</h3>
+            <p>The Settings page includes a <strong>🌐 Network Access</strong> block (admin only) for configuring external network access providers. Currently supports Tailscale, a WireGuard-based mesh VPN for secure remote access without port forwarding.</p>
+            <h4>Tailscale</h4>
+            <ul>
+                <li><strong>Status</strong> — Shows the current Tailscale state: ⚪ Not Installed, 🟡 Inactive, 🟢 Connected (with IP and hostname), or 🔴 Error. Click 🔄 Check Status to re-check.</li>
+                <li><strong>Auth Key</strong> — Enter your Tailscale pre-authentication key (from the Tailscale admin console). The key is masked by default; click 👁️ to reveal it. Click 🔑 Get Key to open the Tailscale admin console.</li>
+                <li><strong>Enabled</strong> — Toggle whether Tailscale should be active.</li>
+                <li><strong>💾 Save Config</strong> — Save the auth key and enabled state to the server.</li>
+                <li><strong>▶️ Connect</strong> — Start Tailscale using the saved auth key.</li>
+                <li><strong>⏹️ Disconnect</strong> — Stop the Tailscale service.</li>
+            </ul>
+            <h4>Troubleshooting</h4>
+            <ul>
+                <li><strong>TUN device missing</strong> — If you see "TUN device not available (/dev/net/tun missing)", your server is likely running in a Proxmox LXC container that doesn't have TUN access enabled. To fix, add these two lines to the container config on the <em>Proxmox host</em> at <code>/etc/pve/lxc/&lt;CTID&gt;.conf</code>:
+                    <pre style="margin:6px 0;padding:6px 10px;background:rgba(0,0,0,0.05);border-radius:4px;font-size:0.9em;">lxc.cgroup2.devices.allow: c 10:200 rwm
+lxc.mount.entry: /dev/net/tun dev/net/tun none bind,create=file</pre>
+                    Then restart the container from Proxmox (<code>pct restart &lt;CTID&gt;</code>).
+                </li>
+                <li><strong>Daemon won't start</strong> — Check the server logs with <code>journalctl -xeu tailscaled.service</code> for details.</li>
+                <li><strong>Auth key expired</strong> — One-time keys can only be used once. Generate a new key from the Tailscale admin console and save it.</li>
+            </ul>
         </div>
     </div>
     <script src="/frontend/js/shared/shared-auth.js"></script>

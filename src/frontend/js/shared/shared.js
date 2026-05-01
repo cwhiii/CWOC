@@ -340,6 +340,120 @@ function showQuickEditModal(chit, onRefresh) {
     modal.appendChild(saveRow);
   }
 
+  // --- RSVP controls for shared chits (Requirement 2.5) ---
+  var _qeRsvpUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+  var _qeRsvpShares = Array.isArray(chit.shares) ? chit.shares : [];
+  if (_qeRsvpUser && chit._shared && chit.owner_id !== _qeRsvpUser.user_id) {
+    var _qeUserShare = _qeRsvpShares.find(function(s) { return s.user_id === _qeRsvpUser.user_id; });
+    if (_qeUserShare) {
+      var _qeRsvpStatus = _qeUserShare.rsvp_status || 'invited';
+      var rsvpRow = document.createElement('div');
+      rsvpRow.style.cssText = rowStyle;
+
+      var rsvpLabel = document.createElement('span');
+      rsvpLabel.style.cssText = 'color:#6b4e31;white-space:nowrap;';
+      rsvpLabel.textContent = '📨 RSVP:';
+      rsvpRow.appendChild(rsvpLabel);
+
+      var rsvpBtnWrap = document.createElement('span');
+      rsvpBtnWrap.className = 'cwoc-rsvp-actions';
+      rsvpBtnWrap.style.cssText = 'display:inline-flex;align-items:center;gap:4px;';
+
+      var qeAcceptBtn = document.createElement('button');
+      qeAcceptBtn.className = 'cwoc-rsvp-btn cwoc-rsvp-accept-btn';
+      if (_qeRsvpStatus === 'accepted') qeAcceptBtn.classList.add('cwoc-rsvp-btn-active');
+      qeAcceptBtn.textContent = '✓ Accept';
+      qeAcceptBtn.title = 'Accept invitation';
+      qeAcceptBtn.style.cssText = 'padding:4px 10px;border:1px solid #c4a882;border-radius:4px;background:rgba(255,255,255,0.3);cursor:pointer;font-size:0.85em;font-family:inherit;color:#4a2c2a;';
+      if (_qeRsvpStatus === 'accepted') qeAcceptBtn.style.cssText += 'background:rgba(46,125,50,0.2);border-color:#2e7d32;color:#2e7d32;';
+
+      var qeDeclineBtn = document.createElement('button');
+      qeDeclineBtn.className = 'cwoc-rsvp-btn cwoc-rsvp-decline-btn';
+      if (_qeRsvpStatus === 'declined') qeDeclineBtn.classList.add('cwoc-rsvp-btn-active');
+      qeDeclineBtn.textContent = '✗ Decline';
+      qeDeclineBtn.title = 'Decline invitation';
+      qeDeclineBtn.style.cssText = 'padding:4px 10px;border:1px solid #c4a882;border-radius:4px;background:rgba(255,255,255,0.3);cursor:pointer;font-size:0.85em;font-family:inherit;color:#4a2c2a;';
+      if (_qeRsvpStatus === 'declined') qeDeclineBtn.style.cssText += 'background:rgba(178,34,34,0.15);border-color:#b22222;color:#b22222;';
+
+      qeAcceptBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var prevStatus = _qeRsvpStatus;
+        qeAcceptBtn.style.background = 'rgba(46,125,50,0.2)';
+        qeAcceptBtn.style.borderColor = '#2e7d32';
+        qeAcceptBtn.style.color = '#2e7d32';
+        qeDeclineBtn.style.background = 'rgba(255,255,255,0.3)';
+        qeDeclineBtn.style.borderColor = '#c4a882';
+        qeDeclineBtn.style.color = '#4a2c2a';
+        fetch('/api/chits/' + chit.id + '/rsvp', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ rsvp_status: 'accepted' })
+        }).then(function(r) {
+          if (r.ok) {
+            close();
+            if (typeof fetchChits === 'function') fetchChits(); else if (onRefresh) onRefresh();
+          } else {
+            console.error('RSVP accept failed:', r.status);
+            // Revert button styles
+            if (prevStatus === 'accepted') { qeAcceptBtn.style.background = 'rgba(46,125,50,0.2)'; qeAcceptBtn.style.borderColor = '#2e7d32'; qeAcceptBtn.style.color = '#2e7d32'; }
+            else { qeAcceptBtn.style.background = 'rgba(255,255,255,0.3)'; qeAcceptBtn.style.borderColor = '#c4a882'; qeAcceptBtn.style.color = '#4a2c2a'; }
+            if (prevStatus === 'declined') { qeDeclineBtn.style.background = 'rgba(178,34,34,0.15)'; qeDeclineBtn.style.borderColor = '#b22222'; qeDeclineBtn.style.color = '#b22222'; }
+          }
+        }).catch(function(err) {
+          console.error('RSVP accept error:', err);
+          if (prevStatus === 'accepted') { qeAcceptBtn.style.background = 'rgba(46,125,50,0.2)'; qeAcceptBtn.style.borderColor = '#2e7d32'; qeAcceptBtn.style.color = '#2e7d32'; }
+          else { qeAcceptBtn.style.background = 'rgba(255,255,255,0.3)'; qeAcceptBtn.style.borderColor = '#c4a882'; qeAcceptBtn.style.color = '#4a2c2a'; }
+          if (prevStatus === 'declined') { qeDeclineBtn.style.background = 'rgba(178,34,34,0.15)'; qeDeclineBtn.style.borderColor = '#b22222'; qeDeclineBtn.style.color = '#b22222'; }
+        });
+      });
+
+      qeDeclineBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var prevStatus = _qeRsvpStatus;
+        qeDeclineBtn.style.background = 'rgba(178,34,34,0.15)';
+        qeDeclineBtn.style.borderColor = '#b22222';
+        qeDeclineBtn.style.color = '#b22222';
+        qeAcceptBtn.style.background = 'rgba(255,255,255,0.3)';
+        qeAcceptBtn.style.borderColor = '#c4a882';
+        qeAcceptBtn.style.color = '#4a2c2a';
+        fetch('/api/chits/' + chit.id + '/rsvp', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ rsvp_status: 'declined' })
+        }).then(function(r) {
+          if (r.ok) {
+            close();
+            if (typeof fetchChits === 'function') fetchChits(); else if (onRefresh) onRefresh();
+          } else {
+            console.error('RSVP decline failed:', r.status);
+            if (prevStatus === 'declined') { qeDeclineBtn.style.background = 'rgba(178,34,34,0.15)'; qeDeclineBtn.style.borderColor = '#b22222'; qeDeclineBtn.style.color = '#b22222'; }
+            else { qeDeclineBtn.style.background = 'rgba(255,255,255,0.3)'; qeDeclineBtn.style.borderColor = '#c4a882'; qeDeclineBtn.style.color = '#4a2c2a'; }
+            if (prevStatus === 'accepted') { qeAcceptBtn.style.background = 'rgba(46,125,50,0.2)'; qeAcceptBtn.style.borderColor = '#2e7d32'; qeAcceptBtn.style.color = '#2e7d32'; }
+          }
+        }).catch(function(err) {
+          console.error('RSVP decline error:', err);
+          if (prevStatus === 'declined') { qeDeclineBtn.style.background = 'rgba(178,34,34,0.15)'; qeDeclineBtn.style.borderColor = '#b22222'; qeDeclineBtn.style.color = '#b22222'; }
+          else { qeDeclineBtn.style.background = 'rgba(255,255,255,0.3)'; qeDeclineBtn.style.borderColor = '#c4a882'; qeDeclineBtn.style.color = '#4a2c2a'; }
+          if (prevStatus === 'accepted') { qeAcceptBtn.style.background = 'rgba(46,125,50,0.2)'; qeAcceptBtn.style.borderColor = '#2e7d32'; qeAcceptBtn.style.color = '#2e7d32'; }
+        });
+      });
+
+      rsvpBtnWrap.appendChild(qeAcceptBtn);
+      rsvpBtnWrap.appendChild(qeDeclineBtn);
+      rsvpRow.appendChild(rsvpBtnWrap);
+
+      // Show current status text
+      var rsvpStatusText = document.createElement('span');
+      rsvpStatusText.style.cssText = 'font-size:0.8em;color:#6b4e31;opacity:0.8;';
+      if (_qeRsvpStatus === 'accepted') rsvpStatusText.textContent = '(accepted)';
+      else if (_qeRsvpStatus === 'declined') rsvpStatusText.textContent = '(declined)';
+      else rsvpStatusText.textContent = '(pending)';
+      rsvpRow.appendChild(rsvpStatusText);
+
+      modal.appendChild(rsvpRow);
+    }
+  }
+
   // --- Recurrence actions (only for recurring chits) ---
   if (isRecurring) {
     addSep();

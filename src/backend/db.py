@@ -288,6 +288,13 @@ def seed_version_info():
             "INSERT OR IGNORE INTO instance_meta (key, value) VALUES ('installed_datetime', ?)",
             (installed_datetime,)
         )
+        # Update installed_datetime when version changes
+        if old_version is not None and old_version != version:
+            cursor.execute(
+                "INSERT INTO instance_meta (key, value) VALUES ('installed_datetime', ?) "
+                "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                (installed_datetime,)
+            )
         conn.commit()
 
         # Audit: log version change if version actually changed

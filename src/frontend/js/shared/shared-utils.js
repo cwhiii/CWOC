@@ -2,7 +2,7 @@
  * shared-utils.js — Core utility functions shared across all CWOC pages.
  *
  * Contains: ID generation, date/time formatting, color contrast helpers,
- * settings cache, save button state, and the cwocConfirm modal.
+ * settings cache, save button state, cwocConfirm modal, and cwocToast notifications.
  *
  * This file MUST load after shared-auth.js (uses waitForAuth() for user-scoped settings).
  * Dependencies: shared-auth.js (getCurrentUser, waitForAuth)
@@ -118,6 +118,57 @@ function cwocConfirm(message, opts) {
     document.body.appendChild(overlay);
     confirmBtn.focus();
   });
+}
+
+/**
+ * Show a parchment-styled toast notification. Auto-dismisses after a delay.
+ * Click to dismiss early. Supports success, error, and info types.
+ * Usage: cwocToast('Saved!');  cwocToast('Failed!', 'error');
+ * @param {string} message - The message to display
+ * @param {string} [type='success'] - 'success', 'error', or 'info'
+ * @param {number} [duration=3000] - Auto-dismiss time in ms (0 = no auto-dismiss)
+ */
+function cwocToast(message, type, duration) {
+  type = type || 'success';
+  if (duration === undefined) duration = (type === 'error') ? 5000 : 3000;
+
+  // Remove any existing toast
+  var existing = document.getElementById('cwoc-toast');
+  if (existing) existing.remove();
+
+  var colors = {
+    success: { bg: '#2d5a1e', border: '#1e3f14' },
+    error:   { bg: '#8b1a1a', border: '#5c1010' },
+    info:    { bg: '#4a2c2a', border: '#2b1e0f' }
+  };
+  var c = colors[type] || colors.info;
+  var icons = { success: '✅', error: '❌', info: 'ℹ️' };
+
+  var toast = document.createElement('div');
+  toast.id = 'cwoc-toast';
+  toast.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);'
+    + 'background:' + c.bg + ';color:#fdf5e6;border:2px solid ' + c.border + ';'
+    + 'border-radius:8px;padding:12px 20px;font-family:Lora,Georgia,serif;font-size:0.95em;'
+    + 'box-shadow:0 4px 16px rgba(0,0,0,0.4);z-index:10000;cursor:pointer;'
+    + 'max-width:90%;text-align:center;opacity:0;transition:opacity 0.3s ease;';
+  toast.textContent = (icons[type] || '') + '  ' + message;
+  toast.onclick = function () { dismiss(); };
+
+  document.body.appendChild(toast);
+
+  // Fade in
+  requestAnimationFrame(function () { toast.style.opacity = '1'; });
+
+  var timer = null;
+  function dismiss() {
+    if (timer) clearTimeout(timer);
+    toast.style.opacity = '0';
+    setTimeout(function () { if (toast.parentNode) toast.remove(); }, 300);
+  }
+
+  if (duration > 0) {
+    timer = setTimeout(dismiss, duration);
+  }
 }
 
 function generateUniqueId() {

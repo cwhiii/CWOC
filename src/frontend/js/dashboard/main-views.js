@@ -34,6 +34,36 @@ function _isSharedChit(chit) {
   return !!chit._shared;
 }
 
+/* ── RSVP helpers ────────────────────────────────────────────────────────── */
+
+/**
+ * Returns the current user's rsvp_status from a chit's shares array,
+ * or null if the user is not a shared user (e.g. owner or not in shares).
+ */
+function _getUserRsvpStatus(chit) {
+  var user = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+  if (!user) return null;
+  var shares = Array.isArray(chit.shares) ? chit.shares : [];
+  for (var i = 0; i < shares.length; i++) {
+    if (shares[i].user_id === user.user_id) {
+      return shares[i].rsvp_status || 'invited';
+    }
+  }
+  return null;
+}
+
+/**
+ * Returns true if the current user has declined this shared chit.
+ * Returns false for owned chits (owners don't have RSVP status).
+ */
+function _isDeclinedByCurrentUser(chit) {
+  var user = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+  if (!user) return false;
+  // Owners don't have RSVP status
+  if (chit.owner_id === user.user_id) return false;
+  return _getUserRsvpStatus(chit) === 'declined';
+}
+
 /* ── Helper: empty state message ─────────────────────────────────────────── */
 
 /** Build a styled empty-state message with an optional Create Chit button. */
@@ -232,6 +262,112 @@ function _buildChitHeader(chit, titleHtml, settings, opts) {
     });
   }
 
+  // RSVP status indicators — show each shared user's RSVP status (Requirements 3.1–3.5)
+  var _rsvpShares = Array.isArray(chit.shares) ? chit.shares : [];
+  if (_rsvpShares.length > 0) {
+    var _rsvpWrap = document.createElement('span');
+    _rsvpWrap.className = 'cwoc-rsvp-indicators';
+    _rsvpShares.forEach(function(entry) {
+      var indicator = document.createElement('span');
+      indicator.className = 'cwoc-rsvp-indicator';
+      var status = entry.rsvp_status || 'invited';
+      var displayName = entry.display_name || entry.user_id || 'Unknown';
+      if (status === 'accepted') {
+        indicator.textContent = '✓';
+        indicator.classList.add('cwoc-rsvp-accepted');
+      } else if (status === 'declined') {
+        indicator.textContent = '✗';
+        indicator.classList.add('cwoc-rsvp-declined');
+      } else {
+        indicator.textContent = '⏳';
+        indicator.classList.add('cwoc-rsvp-invited');
+      }
+      indicator.title = displayName + ' — ' + status;
+      _rsvpWrap.appendChild(indicator);
+    });
+    right.appendChild(_rsvpWrap);
+  }
+
+  // RSVP action controls — accept/decline buttons for shared users (Requirements 2.1–2.4)
+  var _rsvpUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+  if (_rsvpUser && chit._shared && chit.owner_id !== _rsvpUser.user_id) {
+    var _userShare = _rsvpShares.find(function(s) { return s.user_id === _rsvpUser.user_id; });
+    if (_userShare) {
+      var _rsvpCurrentStatus = _userShare.rsvp_status || 'invited';
+      var _rsvpBtnWrap = document.createElement('span');
+      _rsvpBtnWrap.className = 'cwoc-rsvp-actions';
+
+      var _acceptBtn = document.createElement('button');
+      _acceptBtn.className = 'cwoc-rsvp-btn cwoc-rsvp-accept-btn';
+      _acceptBtn.textContent = '✓';
+      _acceptBtn.title = 'Accept invitation';
+      if (_rsvpCurrentStatus === 'accepted') _acceptBtn.classList.add('cwoc-rsvp-btn-active');
+
+      var _declineBtn = document.createElement('button');
+      _declineBtn.className = 'cwoc-rsvp-btn cwoc-rsvp-decline-btn';
+      _declineBtn.textContent = '✗';
+      _declineBtn.title = 'Decline invitation';
+      if (_rsvpCurrentStatus === 'declined') _declineBtn.classList.add('cwoc-rsvp-btn-active');
+
+      _acceptBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        e.preventDefault();
+        var prevStatus = _acceptBtn.classList.contains('cwoc-rsvp-btn-active') ? 'accepted' : _rsvpCurrentStatus;
+        _acceptBtn.classList.add('cwoc-rsvp-btn-active');
+        _declineBtn.classList.remove('cwoc-rsvp-btn-active');
+        fetch('/api/chits/' + chit.id + '/rsvp', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ rsvp_status: 'accepted' })
+        }).then(function(r) {
+          if (r.ok) { fetchChits(); }
+          else {
+            console.error('RSVP accept failed:', r.status);
+            // Revert button state
+            if (prevStatus === 'accepted') _acceptBtn.classList.add('cwoc-rsvp-btn-active');
+            else _acceptBtn.classList.remove('cwoc-rsvp-btn-active');
+            if (prevStatus === 'declined') _declineBtn.classList.add('cwoc-rsvp-btn-active');
+          }
+        }).catch(function(err) {
+          console.error('RSVP accept error:', err);
+          if (prevStatus === 'accepted') _acceptBtn.classList.add('cwoc-rsvp-btn-active');
+          else _acceptBtn.classList.remove('cwoc-rsvp-btn-active');
+          if (prevStatus === 'declined') _declineBtn.classList.add('cwoc-rsvp-btn-active');
+        });
+      });
+
+      _declineBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        e.preventDefault();
+        var prevStatus = _declineBtn.classList.contains('cwoc-rsvp-btn-active') ? 'declined' : _rsvpCurrentStatus;
+        _declineBtn.classList.add('cwoc-rsvp-btn-active');
+        _acceptBtn.classList.remove('cwoc-rsvp-btn-active');
+        fetch('/api/chits/' + chit.id + '/rsvp', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ rsvp_status: 'declined' })
+        }).then(function(r) {
+          if (r.ok) { fetchChits(); }
+          else {
+            console.error('RSVP decline failed:', r.status);
+            if (prevStatus === 'declined') _declineBtn.classList.add('cwoc-rsvp-btn-active');
+            else _declineBtn.classList.remove('cwoc-rsvp-btn-active');
+            if (prevStatus === 'accepted') _acceptBtn.classList.add('cwoc-rsvp-btn-active');
+          }
+        }).catch(function(err) {
+          console.error('RSVP decline error:', err);
+          if (prevStatus === 'declined') _declineBtn.classList.add('cwoc-rsvp-btn-active');
+          else _declineBtn.classList.remove('cwoc-rsvp-btn-active');
+          if (prevStatus === 'accepted') _acceptBtn.classList.add('cwoc-rsvp-btn-active');
+        });
+      });
+
+      _rsvpBtnWrap.appendChild(_acceptBtn);
+      _rsvpBtnWrap.appendChild(_declineBtn);
+      right.appendChild(_rsvpBtnWrap);
+    }
+  }
+
   // Shared icon with tooltip (Requirements 4.1, 4.2, 4.3, 4.4)
   if (chit._shared && chit.effective_role) {
     var sharedIcon = document.createElement('span');
@@ -312,6 +448,7 @@ function displayChecklistView(chitsToDisplay) {
       applyChitColors(chitElement, chitColor(chit));
       if (chit.status === "Complete") chitElement.classList.add("completed-task");
       if (chit.archived) chitElement.classList.add("archived-chit");
+      if (_isDeclinedByCurrentUser(chit)) chitElement.classList.add("declined-chit");
 
       chitElement.appendChild(_buildChitHeader(chit, `<a href="/editor?id=${chit.id}">${chit.title || '(Untitled)'}</a>`, _viSettings));
 
@@ -394,6 +531,7 @@ function displayTasksView(chitsToDisplay) {
     if (chit.archived) chitElement.classList.add("archived-chit");
     applyChitColors(chitElement, typeof chitColor === 'function' ? chitColor(chit) : '#fdf6e3');
     if (chit.status === "Complete") chitElement.classList.add("completed-task");
+    if (_isDeclinedByCurrentUser(chit)) chitElement.classList.add("declined-chit");
 
     chitElement.appendChild(_buildChitHeader(chit, `<a href="/editor?id=${chit.id}">${chit.title || '(Untitled)'}</a>`, _viSettings, { hideStatus: true }));
 
@@ -752,6 +890,7 @@ function displayAssignedToMeView(chitsToDisplay) {
     if (chit.archived) chitElement.classList.add('archived-chit');
     applyChitColors(chitElement, typeof chitColor === 'function' ? chitColor(chit) : '#fdf6e3');
     if (chit.status === 'Complete') chitElement.classList.add('completed-task');
+    if (_isDeclinedByCurrentUser(chit)) chitElement.classList.add('declined-chit');
 
     chitElement.appendChild(_buildChitHeader(chit, '<a href="/editor?id=' + chit.id + '">' + (chit.title || '(Untitled)') + '</a>', _viSettings, { hideStatus: true }));
 
@@ -855,6 +994,7 @@ function displayNotesView(chitsToDisplay) {
       chitElement.dataset.chitId = chit.id;
       applyChitColors(chitElement, chitColor(chit));
       if (chit.archived) chitElement.classList.add("archived-chit");
+      if (_isDeclinedByCurrentUser(chit)) chitElement.classList.add("declined-chit");
 
       // Simple title with icons
       const titleRow = document.createElement("div");
@@ -1488,6 +1628,7 @@ function _displayProjectsKanban(chitsToDisplay) {
         const childFont = contrastColorForBg(childBg);
         card.style.cssText = `padding:0.5em 0.6em;font-size:1em;background:${childBg};color:${childFont};cursor:grab;margin-bottom:0.3em;border-width:1px;line-height:1.4;`;
         if (child.status === "Complete") card.classList.add("completed-task");
+        if (_isDeclinedByCurrentUser(child)) card.classList.add("declined-chit");
 
         const titleEl = document.createElement("div");
         titleEl.style.cssText = "font-weight:bold;margin-bottom:3px;";
@@ -1768,6 +1909,7 @@ function displayAlarmsView(chitsToDisplay) {
     card.draggable = true;
     card.dataset.chitId = chit.id;
     if (chit.archived) card.classList.add("archived-chit");
+    if (_isDeclinedByCurrentUser(chit)) card.classList.add("declined-chit");
     applyChitColors(card, chitColor(chit));
 
     card.appendChild(_buildChitHeader(chit, `<a href="/editor?id=${chit.id}">${chit.title || '(Untitled)'}</a>`, _viSettings));

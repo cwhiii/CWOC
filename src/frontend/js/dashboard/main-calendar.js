@@ -455,6 +455,7 @@ function displayWeekView(chitsToDisplay, opts) {
       ev.className = "timed-event";
       ev.dataset.chitId = chit.id;
       if (chit.status === "Complete") ev.classList.add("completed-task");
+      if (typeof _isDeclinedByCurrentUser === 'function' && _isDeclinedByCurrentUser(chit)) ev.classList.add("declined-chit");
       const _wPct = 95 / _localMax;
       ev.style.top = `${top}px`;
       ev.style.height = `${height}px`;
@@ -558,6 +559,7 @@ function displayMonthView(chitsToDisplay) {
         chitElement.className = "month-event";
         chitElement.dataset.chitId = chit.id;
         applyChitColors(chitElement, chitColor(chit));
+        if (typeof _isDeclinedByCurrentUser === 'function' && _isDeclinedByCurrentUser(chit)) chitElement.classList.add("declined-chit");
         chitElement.title = calendarEventTooltip(chit, info);
         chitElement.innerHTML = calendarEventTitle(chit, info.isDueOnly, info, _viSettings, 'calendar-month');
         attachCalendarChitEvents(chitElement, chit);
@@ -595,6 +597,7 @@ function displayMonthView(chitsToDisplay) {
         applyChitColors(chitElement, chitColor(chit));
         chitElement.style.cursor = "pointer";
         if (chit.status === "Complete") chitElement.classList.add("completed-task");
+        if (typeof _isDeclinedByCurrentUser === 'function' && _isDeclinedByCurrentUser(chit)) chitElement.classList.add("declined-chit");
         chitElement.title = calendarEventTooltip(chit, info);
         chitElement.innerHTML = calendarEventTitle(chit, info.isDueOnly, info, _viSettings, 'calendar-month');
         attachCalendarChitEvents(chitElement, chit);
@@ -625,6 +628,7 @@ function displayMonthView(chitsToDisplay) {
         chitElement.className = "month-event";
         chitElement.dataset.chitId = chit.id;
         applyChitColors(chitElement, chitColor(chit));
+        if (typeof _isDeclinedByCurrentUser === 'function' && _isDeclinedByCurrentUser(chit)) chitElement.classList.add("declined-chit");
         chitElement.title = calendarEventTooltip(chit, info);
         chitElement.innerHTML = calendarEventTitle(chit, info.isDueOnly, info, _viSettings, 'calendar-month');
         attachCalendarChitEvents(chitElement, chit);
@@ -713,6 +717,7 @@ function displayItineraryView(chitsToDisplay) {
       if ((chit.due_datetime || chit.status) && chit.status === "Complete") {
         chitElement.classList.add("completed-task");
       }
+      if (typeof _isDeclinedByCurrentUser === 'function' && _isDeclinedByCurrentUser(chit)) chitElement.classList.add("declined-chit");
 
       const timeColumn = document.createElement("div");
       timeColumn.className = "time-column";
@@ -794,6 +799,7 @@ function displayDayView(chitsToDisplay, opts) {
       ev.dataset.chitId = chit.id;
       applyChitColors(ev, chitColor(chit));
       if (chit.status === "Complete") ev.classList.add("completed-task");
+      if (typeof _isDeclinedByCurrentUser === 'function' && _isDeclinedByCurrentUser(chit)) ev.classList.add("declined-chit");
       ev.title = calendarEventTooltip(chit, info);
       ev.innerHTML = calendarEventTitle(chit, info.isDueOnly, info, _viSettings, 'calendar-slot');
       attachCalendarChitEvents(ev, chit);
@@ -876,6 +882,7 @@ function displayDayView(chitsToDisplay, opts) {
     applyChitColors(el, chitColor(chit));
     el.title = calendarEventTooltip(chit, info);
     if (chit.status === "Complete") el.classList.add("completed-task");
+    if (typeof _isDeclinedByCurrentUser === 'function' && _isDeclinedByCurrentUser(chit)) el.classList.add("declined-chit");
     const timeLabel = info.isDueOnly ? `Due: ${formatTime(info.start)}` : `${formatTime(info.start)} - ${formatTime(info.end)}`;
     el.innerHTML = `${calendarEventTitle(chit, info.isDueOnly, info, _viSettings, 'calendar-slot')}<br>${timeLabel}`;
     attachCalendarChitEvents(el, chit);
@@ -1350,6 +1357,7 @@ function displaySevenDayView(chitsToDisplay, opts) {
       ev.className = "timed-event";
       ev.dataset.chitId = chit.id;
       if (chit.status === "Complete") ev.classList.add("completed-task");
+      if (typeof _isDeclinedByCurrentUser === 'function' && _isDeclinedByCurrentUser(chit)) ev.classList.add("declined-chit");
       const _w = 95 / _localMax;
       ev.style.top = `${top}px`;
       ev.style.height = `${height}px`;

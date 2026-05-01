@@ -787,6 +787,7 @@ function renderAllDayEventsInCells(dayData, allDayEventsRow, settings, context) 
     ev.style.gridRow = `${targetRow + 2}`; // +2 because row 1 is the border cells
     ev.style.margin = '1px 2px';
     if (chit.status === "Complete") ev.classList.add("completed-task");
+    if (typeof _isDeclinedByCurrentUser === 'function' && _isDeclinedByCurrentUser(chit)) ev.classList.add("declined-chit");
     ev.title = calendarEventTooltip(chit, info);
     ev.innerHTML = calendarEventTitle(chit, info.isDueOnly, info, settings, context);
     if (typeof attachCalendarChitEvents === 'function') attachCalendarChitEvents(ev, chit);

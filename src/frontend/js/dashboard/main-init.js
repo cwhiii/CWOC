@@ -463,6 +463,12 @@ function displayChits() {
     filteredChits = filteredChits.filter(c => c.status !== 'Complete');
   }
 
+  // Apply hide-declined filter (RSVP Requirement 5.2, 7.2)
+  var _hideDeclinedSetting = (window._cwocSettings && window._cwocSettings.hide_declined) || '0';
+  if (_hideDeclinedSetting === '1' && typeof _isDeclinedByCurrentUser === 'function') {
+    filteredChits = filteredChits.filter(function(c) { return !_isDeclinedByCurrentUser(c); });
+  }
+
   // Apply sort
   filteredChits = _applySort(filteredChits);
 

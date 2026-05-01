@@ -1,0 +1,1 @@
+Replaced system alert() dialogs in Network Access with styled cwocToast() notifications. Added cwocToast() to shared-utils.js as a reusable parchment-themed toast for success, error, and info messages across all pages.

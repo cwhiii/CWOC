@@ -116,6 +116,7 @@ def save_settings(settings: Settings, request: Request):
             "blocked_border_color": settings.blocked_border_color or "#DAA520",
             "shared_tags": serialize_json_field(settings.shared_tags),
             "kiosk_users": serialize_json_field(settings.kiosk_users),
+            "hide_declined": settings.hide_declined or "0",
         }
 
         cursor.execute(
@@ -126,8 +127,9 @@ def save_settings(settings: Settings, request: Request):
                 calendar_snap, week_start_day, work_start_hour, work_end_hour, work_days, enabled_periods, custom_days_count,
                 all_view_start_hour, all_view_end_hour, day_scroll_to_hour,
                 username, audit_log_max_days, audit_log_max_mb, default_notifications, unit_system,
-                habits_success_window, overdue_border_color, blocked_border_color, shared_tags, kiosk_users
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                habits_success_window, overdue_border_color, blocked_border_color, shared_tags, kiosk_users,
+                hide_declined
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 new_settings_dict["user_id"],
@@ -162,6 +164,7 @@ def save_settings(settings: Settings, request: Request):
                 new_settings_dict["blocked_border_color"],
                 new_settings_dict["shared_tags"],
                 new_settings_dict["kiosk_users"],
+                new_settings_dict["hide_declined"],
             )
         )
 

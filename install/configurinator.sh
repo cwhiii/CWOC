@@ -415,6 +415,29 @@ start_and_verify() {
 }
 
 # ---------------------------------------------------------------------------
+# Phase: Tailscale installation (non-fatal)
+# ---------------------------------------------------------------------------
+
+install_tailscale() {
+    log_step "Installing Tailscale..."
+
+    if command -v tailscale &>/dev/null; then
+        log_ok "Tailscale already installed — skipping."
+        return 0
+    fi
+
+    # Use official Tailscale install script
+    if curl -fsSL https://tailscale.com/install.sh | bash; then
+        log_ok "Tailscale installed successfully."
+        # Enable the daemon so it starts on boot and is ready for the settings UI
+        systemctl enable --now tailscaled 2>/dev/null || true
+    else
+        log_warn "Tailscale installation failed — continuing without Tailscale."
+        return 0  # Non-fatal: don't abort provisioning
+    fi
+}
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -438,6 +461,7 @@ main() {
         install_python_deps
         configure_service
         configure_https
+        install_tailscale
         start_and_verify
         echo "============================================="
         echo " Post-upgrade fixup complete."
@@ -472,6 +496,7 @@ main() {
         install_python_deps
         configure_service
         configure_https
+        install_tailscale
         start_and_verify
     else
         log_step "No existing installation found — running full provisioning."
@@ -481,6 +506,7 @@ main() {
         install_python_deps
         configure_service
         configure_https
+        install_tailscale
         start_and_verify
     fi
 

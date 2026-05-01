@@ -396,23 +396,42 @@ def health_check():
 
 CONFIGURINATOR_PATH = "/app/install/configurinator.sh"
 UPDATE_LOG_PATH = "/app/data/update.log"
-RELEASE_NOTES_PATH = "/app/release_notes.md"
-# Fallback paths for release notes (handles different deployment layouts)
-_RELEASE_NOTES_PATHS = [
-    "/app/release_notes.md",
-    "release_notes.md",
+
+# Directories to scan for release notes files (cwoc_release_*.md)
+_RELEASE_NOTES_DIRS = [
+    "/app/documents/release_notes",
+    "documents/release_notes",
 ]
+
+
+def _find_release_notes():
+    """Scan for all cwoc_release_*.md files, return sorted list of (version, content) tuples (newest first)."""
+    import glob as _glob
+
+    found = {}  # version -> content
+    for directory in _RELEASE_NOTES_DIRS:
+        pattern = os.path.join(directory, "cwoc_release_*.md")
+        for filepath in _glob.glob(pattern):
+            basename = os.path.basename(filepath)
+            # Extract version from filename: cwoc_release_YYYYMMDD.HHMM.md
+            version = basename.replace("cwoc_release_", "").replace(".md", "")
+            if version not in found:
+                try:
+                    with open(filepath, "r") as f:
+                        found[version] = f.read()
+                except (IOError, OSError):
+                    continue
+        if found:
+            break  # Use first directory that has files
+    # Sort by version descending (newest first)
+    return sorted(found.items(), key=lambda x: x[0], reverse=True)
+
 
 @router.get("/api/release-notes")
 def get_release_notes():
-    """Return the contents of the release_notes.md file."""
-    for path in _RELEASE_NOTES_PATHS:
-        try:
-            with open(path, "r") as f:
-                return {"content": f.read()}
-        except (FileNotFoundError, IOError):
-            continue
-    return {"content": None}
+    """Return all release notes as a list of {version, content} objects, newest first."""
+    notes = _find_release_notes()
+    return {"notes": [{"version": v, "content": c} for v, c in notes]}
 
 
 @router.get("/api/update/log")

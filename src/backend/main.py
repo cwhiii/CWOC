@@ -17,6 +17,7 @@
 #   src/backend/routes/health.py — Health, version, sync, geocode, pages
 #   src/backend/routes/auth.py  — Authentication, sessions, profile
 #   src/backend/routes/users.py — Admin-only user management
+#   src/backend/routes/network_access.py — Network access provider config
 #   src/backend/middleware.py   — Auth middleware (session validation)
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -88,6 +89,8 @@ from src.backend.migrations import (
     migrate_add_instance_name,
     migrate_add_sharing,
     migrate_add_kiosk_users,
+    migrate_add_hide_declined,
+    migrate_add_network_access,
 )
 
 # Initialize database and run all migrations (same order as before)
@@ -119,6 +122,8 @@ migrate_add_login_message()
 migrate_add_instance_name()
 migrate_add_sharing()
 migrate_add_kiosk_users()
+migrate_add_hide_declined()
+migrate_add_network_access()
 seed_version_info()
 
 
@@ -135,6 +140,7 @@ from src.backend.routes.contacts import router as contacts_router
 from src.backend.routes.audit import router as audit_router
 from src.backend.routes.health import router as health_router
 from src.backend.routes.sharing import sharing_router
+from src.backend.routes.network_access import router as network_access_router
 
 app.include_router(auth_router)
 app.include_router(users_router)
@@ -145,6 +151,7 @@ app.include_router(settings_router)
 app.include_router(contacts_router)
 app.include_router(audit_router)
 app.include_router(health_router)
+app.include_router(network_access_router)
 
 
 # ═══════════════════════════════════════════════════════════════════════════

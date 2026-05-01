@@ -11,19 +11,30 @@
 
 - usesrs in roladex: i should be able to view a user like a contact, and view theri values. Should be able to favorite tehem, jsut like a contact. 
 
-
+- if stealth is enabled or a chit, all sahring & assiement options should be crewyed out. 
 
 
 - I should be able to drag & drop an all-day chit to a different all-day day.
 
 ## Top Priorities
+- Fix the invitee system for acept & reject. 
+
 - **New spec-driven feature.** need to have a new admin block in settings "Network Access**. in it is a A tailscale connection block. Also, need to build whatver is needed in the backend to configure & install it as part of the upgrade script. There will likely be other otion fo rnetwork hole punching/external access, so ensure theat you're naking the set up in such asway that this is not harder later.  But don't set up that other stuff yet.
+
+
+- undersgtand habit sbetter, it's doing somethign strange I don't get. 
+- make the profile picrures in the rop right corner of each page teh same height as the buttons its next to.
+- change hotkry fir x days from ".-->s" to ".-->x"
 
 ---
 ## Manual Tasks
 - `[ ]` Screenshot and video walkthrough of the app
 
 ## Known Bugs
+
+for the invitee, on a chit editor, the invite control (accept & reject)  should be in a banner like teh one for "uour a read only invitee" , and should go away once 
+
+
 users: 
 - the username inoput in settgins, remove it. and only use the one in the user admin page. 
 - add a button in teh settigns page to Manage Users. Grey it out whith hover for non-admin users. 

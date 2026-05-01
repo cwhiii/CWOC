@@ -1,0 +1,2 @@
+- Moved release notes to `documents/release_notes/` directory
+- Backend now scans `/app/documents/release_notes/` for `cwoc_release_*.md` files

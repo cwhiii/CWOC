@@ -95,9 +95,9 @@ function getSharingData() {
   // Read _currentShares from editor-people.js global
   var shares = (typeof _currentShares !== 'undefined') ? _currentShares : [];
 
-  // Clean shares — strip display_name before saving
+  // Clean shares — strip display_name before saving, preserve rsvp_status
   var cleanShares = shares.map(function (s) {
-    return { user_id: s.user_id, role: s.role };
+    return { user_id: s.user_id, role: s.role, rsvp_status: s.rsvp_status || 'invited' };
   });
 
   return {

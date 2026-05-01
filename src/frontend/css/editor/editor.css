@@ -654,7 +654,6 @@ input.error {
 
 .priority-status-group > .field select {
     flex: 1;
-    max-width: 300px;
 }
 
 #locationSection {
@@ -3391,6 +3390,77 @@ input.location {
 /* Shared user chip highlight */
 .people-chip-shared {
     border-color: #8b5a2b;
+}
+
+/* ── RSVP status badges in editor People zone (Requirements 6.1–6.4) ──────── */
+
+.cwoc-editor-rsvp-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75em;
+    width: 1.6em;
+    height: 1.6em;
+    border-radius: 50%;
+    cursor: default;
+    line-height: 1;
+    flex-shrink: 0;
+}
+
+.cwoc-editor-rsvp-invited {
+    opacity: 0.6;
+}
+
+.cwoc-editor-rsvp-accepted {
+    color: #2e7d32;
+    background: rgba(46, 125, 50, 0.12);
+}
+
+.cwoc-editor-rsvp-declined {
+    color: #999;
+    opacity: 0.5;
+    text-decoration: line-through;
+}
+
+.cwoc-editor-rsvp-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    flex-shrink: 0;
+}
+
+.cwoc-editor-rsvp-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.6em;
+    height: 1.6em;
+    border: 1px solid #c4a882;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.3);
+    cursor: pointer;
+    font-size: 0.8em;
+    font-family: 'Lora', Georgia, serif;
+    color: #4a2c2a;
+    padding: 0;
+    line-height: 1;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.cwoc-editor-rsvp-btn:hover {
+    background: rgba(139, 90, 43, 0.15);
+}
+
+.cwoc-editor-rsvp-accept-btn.cwoc-editor-rsvp-btn-active {
+    background: rgba(46, 125, 50, 0.2);
+    border-color: #2e7d32;
+    color: #2e7d32;
+}
+
+.cwoc-editor-rsvp-decline-btn.cwoc-editor-rsvp-btn-active {
+    background: rgba(178, 34, 34, 0.15);
+    border-color: #b22222;
+    color: #b22222;
 }
 
 /* ── Owner Chip in Title Zone (Requirements 5.2, 5.3) ─────────────────────── */

@@ -1,0 +1,2 @@
+- Release notes modal text is now left-justified
+- Modal has a fixed 700px width and min-height so navigation buttons stay in place

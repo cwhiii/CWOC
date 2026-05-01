@@ -1,0 +1,1 @@
+Fixed Tailscale daemon startup — both status check and connect now ensure tailscaled is running before issuing commands, with clear error messages if the daemon won't start. Renamed "Refresh" to "Check Status" for clarity.

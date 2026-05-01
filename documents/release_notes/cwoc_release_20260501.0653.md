@@ -1,0 +1,1 @@
+Fixed Tailscale connect failing when tailscaled daemon isn't running — the backend now starts the daemon automatically before running `tailscale up`. Configurinator also enables tailscaled on boot after installation.

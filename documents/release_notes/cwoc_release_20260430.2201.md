@@ -1,0 +1,1 @@
+Added invitation/RSVP system to chit sharing. Shared users can now accept or decline chit invitations, with declined chits appearing faded (or hidden via a new "Hide declined chits" setting). RSVP status is visible on dashboard cards, the quick-edit modal, and the chit editor.

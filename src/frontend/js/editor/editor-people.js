@@ -35,6 +35,7 @@ var _currentShares = [];       // Array of {user_id, role, display_name?}
 var _sharingInitialized = false;
 var _effectiveRole = null;     // 'owner', 'manager', 'viewer', or null (for new chits)
 var _chitOwnerId = null;       // Owner user_id of the current chit (used to hide owner from people list)
+var _chitOwnerDisplayName = null; // Owner display name (for assignee dropdown)
 
 // ── People search ────────────────────────────────────────────────────────────
 
@@ -361,7 +362,7 @@ function _findShareByUserId(userId) {
 
 function _addShare(userId, role, displayName) {
   if (_findShareByUserId(userId)) return; // already shared
-  _currentShares.push({ user_id: userId, role: role, display_name: displayName || '(Unknown User)' });
+  _currentShares.push({ user_id: userId, role: role, display_name: displayName || '(Unknown User)', rsvp_status: 'invited' });
   setSaveButtonUnsaved();
   _renderPeopleChips();
   _renderPeopleTree();
@@ -438,7 +439,12 @@ function _syncAssignedToDropdown() {
   var select = document.getElementById('sharingAssignedTo');
   if (!row || !select) return;
 
-  if (_currentShares.length === 0) {
+  // Determine if current user can manage (owner or manager)
+  var canManage = (_effectiveRole === 'owner' || _effectiveRole === 'manager' || _effectiveRole === null);
+
+  // Show the row if there are shares OR if the owner can be assigned (owner/manager viewing)
+  var hasAssignableUsers = _currentShares.length > 0 || (_chitOwnerId && canManage);
+  if (!hasAssignableUsers) {
     row.style.display = 'none';
     if (select.value) {
       select.value = '';
@@ -460,7 +466,26 @@ function _syncAssignedToDropdown() {
   noneOpt.textContent = '— None —';
   select.appendChild(noneOpt);
 
+  // Add the chit owner as an assignable option (only if owner/manager)
+  if (_chitOwnerId && canManage) {
+    var ownerOpt = document.createElement('option');
+    ownerOpt.value = _chitOwnerId;
+    var ownerName = _chitOwnerDisplayName || _getUserDisplayName(_chitOwnerId) || '(Owner)';
+    var ownerInfo = _getUserInfoById(_chitOwnerId);
+    var ownerUsername = ownerInfo ? (ownerInfo.username || '') : '';
+    if (ownerUsername && ownerUsername.toLowerCase() !== ownerName.toLowerCase()) {
+      ownerOpt.textContent = ownerName + ' - ' + ownerUsername + ' (owner)';
+    } else {
+      ownerOpt.textContent = ownerName + ' (owner)';
+    }
+    select.appendChild(ownerOpt);
+    if (_chitOwnerId === currentVal) currentStillValid = true;
+  }
+
   _currentShares.forEach(function (s) {
+    // Skip the owner if they somehow appear in shares (avoid duplicate)
+    if (s.user_id === _chitOwnerId) return;
+
     var opt = document.createElement('option');
     opt.value = s.user_id;
     // Show "First Last - username" format
@@ -499,15 +524,17 @@ function initPeopleSharingControls(chit) {
 
   // Track the chit owner so we can hide them from the people list for non-owners
   _chitOwnerId = chit.owner_id || null;
+  _chitOwnerDisplayName = chit.owner_display_name || null;
 
-  // Load shares from chit
+  // Load shares from chit (preserve rsvp_status for RSVP display)
   _currentShares = [];
   if (Array.isArray(chit.shares)) {
     chit.shares.forEach(function (s) {
       _currentShares.push({
         user_id: s.user_id,
         role: s.role || 'viewer',
-        display_name: s.display_name || (typeof _getUserDisplayName === 'function' ? _getUserDisplayName(s.user_id) : '(Unknown User)')
+        display_name: s.display_name || (typeof _getUserDisplayName === 'function' ? _getUserDisplayName(s.user_id) : '(Unknown User)'),
+        rsvp_status: s.rsvp_status || 'invited'
       });
     });
   }
@@ -551,7 +578,12 @@ function initPeopleSharingForNewChit() {
   _sharingInitialized = true;
   _currentShares = [];
   _effectiveRole = null; // null = owner of new chit
-  _chitOwnerId = null;   // No owner yet for new chits
+  _chitOwnerDisplayName = null;
+
+  // For new chits, the current user is the owner
+  var currentUser = getCurrentUser();
+  _chitOwnerId = currentUser ? currentUser.user_id : null;
+  _chitOwnerDisplayName = currentUser ? (currentUser.display_name || currentUser.username) : null;
 
   // Re-render tree to show sharing controls
   _renderPeopleTree();
@@ -561,9 +593,8 @@ function initPeopleSharingForNewChit() {
   var stealthCb = document.getElementById('sharingStealthToggle');
   if (stealthCb) stealthCb.checked = false;
 
-  // Hide assigned-to row
-  var row = document.getElementById('sharingAssignedRow');
-  if (row) row.style.display = 'none';
+  // Sync assigned-to dropdown (will show owner as assignable option)
+  if (typeof _syncAssignedToDropdown === 'function') _syncAssignedToDropdown();
 }
 
 // ── Tree filter ──────────────────────────────────────────────────────────────
@@ -704,6 +735,98 @@ function _renderPeopleChips() {
     }
 
     row.appendChild(chip);
+
+    // RSVP status badge (Requirements 6.1, 6.2)
+    var rsvpStatus = share.rsvp_status || 'invited';
+    var rsvpBadge = document.createElement('span');
+    rsvpBadge.className = 'cwoc-editor-rsvp-badge';
+    if (rsvpStatus === 'accepted') {
+      rsvpBadge.textContent = '✓';
+      rsvpBadge.classList.add('cwoc-editor-rsvp-accepted');
+      rsvpBadge.title = displayName + ' — accepted';
+    } else if (rsvpStatus === 'declined') {
+      rsvpBadge.textContent = '✗';
+      rsvpBadge.classList.add('cwoc-editor-rsvp-declined');
+      rsvpBadge.title = displayName + ' — declined';
+    } else {
+      rsvpBadge.textContent = '⏳';
+      rsvpBadge.classList.add('cwoc-editor-rsvp-invited');
+      rsvpBadge.title = displayName + ' — invited';
+    }
+    row.appendChild(rsvpBadge);
+
+    // RSVP accept/decline controls for the current user (Requirements 6.3, 6.4)
+    var currentUser = (typeof getCurrentUser === 'function') ? getCurrentUser() : null;
+    var currentUserId = currentUser ? (currentUser.user_id || currentUser.id) : null;
+    if (currentUserId && share.user_id === currentUserId && _effectiveRole !== 'owner') {
+      var rsvpActions = document.createElement('span');
+      rsvpActions.className = 'cwoc-editor-rsvp-actions';
+
+      var acceptBtn = document.createElement('button');
+      acceptBtn.type = 'button';
+      acceptBtn.className = 'cwoc-editor-rsvp-btn cwoc-editor-rsvp-accept-btn';
+      acceptBtn.textContent = '✓';
+      acceptBtn.title = 'Accept invitation';
+      if (rsvpStatus === 'accepted') acceptBtn.classList.add('cwoc-editor-rsvp-btn-active');
+
+      var declineBtn = document.createElement('button');
+      declineBtn.type = 'button';
+      declineBtn.className = 'cwoc-editor-rsvp-btn cwoc-editor-rsvp-decline-btn';
+      declineBtn.textContent = '✗';
+      declineBtn.title = 'Decline invitation';
+      if (rsvpStatus === 'declined') declineBtn.classList.add('cwoc-editor-rsvp-btn-active');
+
+      acceptBtn.addEventListener('click', (function (userId) {
+        return function (e) {
+          e.stopPropagation();
+          var cid = window.currentChitId || (typeof chitId !== 'undefined' ? chitId : null);
+          if (!cid) { console.error('[RSVP] No chit ID available'); return; }
+          fetch('/api/chits/' + cid + '/rsvp', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ rsvp_status: 'accepted' })
+          }).then(function (r) {
+            if (r.ok) {
+              // Update local state
+              var s = _findShareByUserId(userId);
+              if (s) s.rsvp_status = 'accepted';
+              _renderPeopleChips();
+            } else {
+              console.error('[RSVP] Accept failed:', r.status);
+            }
+          }).catch(function (err) {
+            console.error('[RSVP] Accept error:', err);
+          });
+        };
+      })(share.user_id));
+
+      declineBtn.addEventListener('click', (function (userId) {
+        return function (e) {
+          e.stopPropagation();
+          var cid = window.currentChitId || (typeof chitId !== 'undefined' ? chitId : null);
+          if (!cid) { console.error('[RSVP] No chit ID available'); return; }
+          fetch('/api/chits/' + cid + '/rsvp', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ rsvp_status: 'declined' })
+          }).then(function (r) {
+            if (r.ok) {
+              var s = _findShareByUserId(userId);
+              if (s) s.rsvp_status = 'declined';
+              _renderPeopleChips();
+            } else {
+              console.error('[RSVP] Decline failed:', r.status);
+            }
+          }).catch(function (err) {
+            console.error('[RSVP] Decline error:', err);
+          });
+        };
+      })(share.user_id));
+
+      rsvpActions.appendChild(acceptBtn);
+      rsvpActions.appendChild(declineBtn);
+      row.appendChild(rsvpActions);
+    }
 
     // Pill toggle (viewer/manager) — only in the right column
     if (showControls) {
