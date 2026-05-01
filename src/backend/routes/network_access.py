@@ -151,8 +151,13 @@ def tailscale_status(request: Request):
         if status_result.returncode != 0:
             return {"status": "installed_inactive"}
 
-        # Step 3: Parse the JSON output
+        # Step 4: Parse the JSON output
         status_data = json.loads(status_result.stdout)
+
+        # Check BackendState — "Stopped" means tailscale down was called
+        backend_state = status_data.get("BackendState", "")
+        if backend_state == "Stopped":
+            return {"status": "installed_inactive"}
 
         tailscale_ips = status_data.get("TailscaleIPs", [])
         ip = tailscale_ips[0] if tailscale_ips else None
@@ -160,7 +165,7 @@ def tailscale_status(request: Request):
         self_node = status_data.get("Self", {})
         hostname = self_node.get("HostName")
 
-        if ip:
+        if ip and backend_state == "Running":
             return {"status": "active", "ip": ip, "hostname": hostname}
 
         return {"status": "installed_inactive"}
