@@ -263,7 +263,7 @@ def get_shared_chits(request: Request):
         results = get_shared_chits_for_user(user_id)
         return results
     except Exception as e:
-        logger.error(f"Error fetching shared chits: {str(e)}")
+        logger.error(f"Error fetching shared chits for user {user_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to fetch shared chits: {str(e)}")
 
 

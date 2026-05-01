@@ -263,6 +263,19 @@ def create_chit(chit: Chit, request: Request):
                 chit.assigned_to,
             )
         )
+        # Create notifications for shared users on new chit creation
+        try:
+            new_shares = chit.shares if isinstance(chit.shares, list) else []
+            if new_shares:
+                _create_share_notifications(
+                    cursor, chit_id, chit.title, owner_display_name,
+                    [], new_shares,
+                    assigned_to_new=chit.assigned_to,
+                    assigned_to_old=None,
+                )
+        except Exception as e:
+            logger.error(f"Notification creation failed for new chit (best-effort): {str(e)}")
+
         conn.commit()
         return {
             **chit.dict(), "id": chit_id, "tags": chit_tags,
@@ -547,6 +560,18 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                 insert_audit_entry(conn, "chit", chit_id, "created", actor, entity_summary=chit.title)
             except Exception as e:
                 logger.error(f"Audit logging failed for chit creation (best-effort): {str(e)}")
+            # Create notifications for shared users on new chit creation via PUT
+            try:
+                new_shares = chit.shares if isinstance(chit.shares, list) else []
+                if new_shares:
+                    _create_share_notifications(
+                        cursor, chit_id, chit.title, owner_display_name,
+                        [], new_shares,
+                        assigned_to_new=chit.assigned_to,
+                        assigned_to_old=None,
+                    )
+            except Exception as e:
+                logger.error(f"Notification creation failed for new chit via PUT (best-effort): {str(e)}")
         conn.commit()
         return {**chit.dict(), "id": chit_id, "tags": chit_tags, "modified_datetime": current_time}
     except Exception as e:

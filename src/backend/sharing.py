@@ -248,6 +248,29 @@ def get_shared_chits_for_user(user_id):
             chit["owner_display_name"] = chit.get("owner_display_name", "")
             results.append(chit)
 
+        # Enrich owner_display_name from users table (batch lookup)
+        owner_ids = set()
+        for chit in results:
+            oid = chit.get("owner_id")
+            if oid:
+                owner_ids.add(oid)
+        if owner_ids:
+            placeholders = ",".join("?" for _ in owner_ids)
+            cursor.execute(
+                f"SELECT id, display_name, username FROM users WHERE id IN ({placeholders})",
+                list(owner_ids),
+            )
+            owner_name_map = {}
+            for row in cursor.fetchall():
+                uid = row["id"] if isinstance(row, sqlite3.Row) else row[0]
+                dname = row["display_name"] if isinstance(row, sqlite3.Row) else row[1]
+                uname = row["username"] if isinstance(row, sqlite3.Row) else row[2]
+                owner_name_map[uid] = dname or uname or uid
+            for chit in results:
+                oid = chit.get("owner_id")
+                if oid and oid in owner_name_map:
+                    chit["owner_display_name"] = owner_name_map[oid]
+
         # Enrich with assigned_to_display_name (batch lookup)
         assigned_ids = set()
         for chit in results:
@@ -276,8 +299,8 @@ def get_shared_chits_for_user(user_id):
         return results
 
     except Exception as e:
-        logger.error(f"Error fetching shared chits for user {user_id}: {str(e)}")
-        return []
+        logger.error(f"Error fetching shared chits for user {user_id}: {str(e)}", exc_info=True)
+        raise
     finally:
         if conn:
             conn.close()

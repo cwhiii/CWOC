@@ -15,15 +15,15 @@ Implementation proceeds backend-first (permission engine → migrations → rout
   - [x] 1.2 Update `can_delete_chit()` to allow managers to soft-delete
     - Add `owner_settings` parameter, resolve effective role, return true for managers
     - _Requirements: 3.4, 9.3_
-  - [ ]* 1.3 Write property test: Assignment grants manager floor role (Property 17)
+  - [x] 1.3 Write property test: Assignment grants manager floor role (Property 17)
     - **Property 17: Assignment grants manager floor role**
     - **Validates: Requirements 10.1, 10.4**
     - Test in `src/backend/test_sharing_overhaul.py` using `unittest` with manual random generation, 120 iterations
-  - [ ]* 1.4 Write property test: Manager can soft-delete (Property 6)
+  - [x] 1.4 Write property test: Manager can soft-delete (Property 6)
     - **Property 6: Manager can soft-delete**
     - **Validates: Requirements 3.4, 9.3**
     - Test the updated `can_delete_chit()` returns true for managers, false for viewers
-  - [ ]* 1.5 Write property test: Stealth is preserved for non-owners (Property 5)
+  - [x] 1.5 Write property test: Stealth is preserved for non-owners (Property 5)
     - **Property 5: Stealth is preserved for non-owners**
     - **Validates: Requirements 3.3, 9.2**
     - Test that stealth value is never modifiable by non-owners (pure logic test)
@@ -60,15 +60,15 @@ Implementation proceeds backend-first (permission engine → migrations → rout
   - [x] 4.4 Wire notification creation into `set_chit_shares()` in `routes/sharing.py`
     - After saving shares, call `_create_share_notifications()` with old/new shares diff
     - _Requirements: 1.5, 4.1_
-  - [ ]* 4.5 Write property test: Notification creation completeness (Property 3)
+  - [x] 4.5 Write property test: Notification creation completeness (Property 3)
     - **Property 3: Notification creation completeness**
     - **Validates: Requirements 1.5, 2.4, 4.1**
     - Test that for any old/new shares diff, exactly one notification is created per new user_id with all required fields
-  - [ ]* 4.6 Write property test: Notifications ordered by creation time descending (Property 8)
+  - [x] 4.6 Write property test: Notifications ordered by creation time descending (Property 8)
     - **Property 8: Notifications are ordered by creation time descending**
     - **Validates: Requirements 4.2**
     - Test that GET endpoint returns notifications newest-first
-  - [ ]* 4.7 Write property test: Notification and RSVP status stay in sync (Property 9)
+  - [x] 4.7 Write property test: Notification and RSVP status stay in sync (Property 9)
     - **Property 9: Notification and RSVP status stay in sync**
     - **Validates: Requirements 4.3, 4.4**
     - Test that accepting/declining a notification updates the chit's RSVP, and vice versa
@@ -92,10 +92,10 @@ Implementation proceeds backend-first (permission engine → migrations → rout
   - [x] 6.4 Sync RSVP updates with notification status
     - When RSVP is updated via the editor endpoint, find and update the corresponding notification status
     - _Requirements: 4.4_
-  - [ ]* 6.5 Write property test: Manager can persist sharing fields (Property 4)
+  - [x] 6.5 Write property test: Manager can persist sharing fields (Property 4)
     - **Property 4: Manager can persist sharing fields**
     - **Validates: Requirements 3.1, 3.2, 3.6, 9.1, 9.4**
-  - [ ]* 6.6 Write property test: RSVP updates are self-only (Property 7)
+  - [x] 6.6 Write property test: RSVP updates are self-only (Property 7)
     - **Property 7: RSVP updates are self-only**
     - **Validates: Requirements 3.5**
 
@@ -119,10 +119,10 @@ Implementation proceeds backend-first (permission engine → migrations → rout
   - [x] 8.4 Update `getSharingData()` in `editor-sharing.js` to reflect assign logic
     - Ensure the assign auto-add logic is applied before building the save payload
     - _Requirements: 2.2, 2.3_
-  - [ ]* 8.5 Write property test: Invite adds user with viewer role and invited status (Property 1)
+  - [x] 8.5 Write property test: Invite adds user with viewer role and invited status (Property 1)
     - **Property 1: Invite adds user with viewer role and invited status**
     - **Validates: Requirements 1.1**
-  - [ ]* 8.6 Write property test: Assign ensures user is manager in shares (Property 2)
+  - [x] 8.6 Write property test: Assign ensures user is manager in shares (Property 2)
     - **Property 2: Assign ensures user is manager in shares**
     - **Validates: Requirements 2.2, 2.3, 10.2, 10.3**
 
@@ -147,7 +147,7 @@ Implementation proceeds backend-first (permission engine → migrations → rout
     - Style the inbox button, badge, expanded list, notification cards, and Accept/Decline buttons
     - Match existing sidebar visual patterns (parchment theme, Lora font)
     - _Requirements: 5.1_
-  - [ ]* 9.6 Write property test: Pending notification count accuracy (Property 10)
+  - [x] 9.6 Write property test: Pending notification count accuracy (Property 10)
     - **Property 10: Pending notification count accuracy**
     - **Validates: Requirements 5.2**
 
@@ -167,13 +167,13 @@ Implementation proceeds backend-first (permission engine → migrations → rout
   - [x] 11.3 Wire sharing filters into "Clear All" reset
     - Deactivate both sharing filters when "Clear All" is clicked
     - _Requirements: 7.5_
-  - [ ]* 11.4 Write property test: Shared-with-me filter correctness (Property 14)
+  - [x] 11.4 Write property test: Shared-with-me filter correctness (Property 14)
     - **Property 14: Shared-with-me filter correctness**
     - **Validates: Requirements 7.2**
-  - [ ]* 11.5 Write property test: Shared-by-me filter correctness (Property 15)
+  - [x] 11.5 Write property test: Shared-by-me filter correctness (Property 15)
     - **Property 15: Shared-by-me filter correctness**
     - **Validates: Requirements 7.3**
-  - [ ]* 11.6 Write property test: No sharing filter is identity (Property 16)
+  - [x] 11.6 Write property test: No sharing filter is identity (Property 16)
     - **Property 16: No sharing filter is identity**
     - **Validates: Requirements 7.4**
 
@@ -197,13 +197,13 @@ Implementation proceeds backend-first (permission engine → migrations → rout
   - [x] 12.5 Update tag tree shared icon tooltip
     - 🔗 icon on shared tags; hover tooltip lists users the tag is shared with
     - _Requirements: 6.8_
-  - [ ]* 12.6 Write property test: Tag sharing hierarchy invariant (Property 11)
+  - [x] 12.6 Write property test: Tag sharing hierarchy invariant (Property 11)
     - **Property 11: Tag sharing hierarchy invariant**
     - **Validates: Requirements 6.1, 6.2, 6.3**
-  - [ ]* 12.7 Write property test: Tag permission enforcement (Property 12)
+  - [x] 12.7 Write property test: Tag permission enforcement (Property 12)
     - **Property 12: Tag permission enforcement**
     - **Validates: Requirements 6.6, 6.7**
-  - [ ]* 12.8 Write property test: Tag-level shares have no RSVP flow (Property 13)
+  - [x] 12.8 Write property test: Tag-level shares have no RSVP flow (Property 13)
     - **Property 13: Tag-level shares have no RSVP flow**
     - **Validates: Requirements 6.9**
 
@@ -226,7 +226,7 @@ Implementation proceeds backend-first (permission engine → migrations → rout
     - Style the modal overlay, alphabetical list, person entries, type labels, shrink button
     - Match existing parchment theme
     - _Requirements: 8.2_
-  - [ ]* 14.5 Write property test: People modal entries are alphabetically ordered and correctly labeled (Property 18)
+  - [x] 14.5 Write property test: People modal entries are alphabetically ordered and correctly labeled (Property 18)
     - **Property 18: People modal entries are alphabetically ordered and correctly labeled**
     - **Validates: Requirements 8.3, 8.4**
 

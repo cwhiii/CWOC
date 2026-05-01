@@ -18,6 +18,7 @@
 
 ## Top Priorities
 - Fix the invitee system for acept & reject. 
+- teh exxpand button in peeople zone in chit editoor shouldbe not just for CIEWING, but for MANAGING the people invited, etc, jsut liek the small view, but with more space to breath, for better organization, & finding, etc. 
 
 - **New spec-driven feature.** need to have a new admin block in settings "Network Access**. in it is a A tailscale connection block. Also, need to build whatver is needed in the backend to configure & install it as part of the upgrade script. There will likely be other otion fo rnetwork hole punching/external access, so ensure theat you're naking the set up in such asway that this is not harder later.  But don't set up that other stuff yet.
 

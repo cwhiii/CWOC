@@ -382,9 +382,12 @@ function fetchChits() {
       return r.json();
     }),
     fetch("/api/shared-chits").then(function(r) {
-      if (!r.ok) return []; // graceful degradation — show only owned chits
+      if (!r.ok) {
+        console.error('[fetchChits] /api/shared-chits returned', r.status);
+        return r.text().then(function(t) { console.error('[fetchChits] shared-chits error:', t); return []; });
+      }
       return r.json();
-    }).catch(function() { return []; })
+    }).catch(function(err) { console.error('[fetchChits] shared-chits fetch error:', err); return []; })
   ])
     .then(function(results) {
       var ownedChits = Array.isArray(results[0]) ? results[0] : [];
