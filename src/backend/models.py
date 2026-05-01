@@ -163,3 +163,16 @@ class ProfileUpdate(BaseModel):
 class PasswordChange(BaseModel):
     current_password: str
     new_password: str
+
+
+# ── Notification Model ───────────────────────────────────────────────────
+
+class Notification(BaseModel):
+    id: Optional[str] = None
+    user_id: str
+    chit_id: str
+    chit_title: Optional[str] = None
+    owner_display_name: Optional[str] = None
+    notification_type: str  # "invited" or "assigned"
+    status: str = "pending"  # "pending", "accepted", "declined"
+    created_datetime: Optional[str] = None

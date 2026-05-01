@@ -867,6 +867,9 @@ function addTag() {
     input.value = "";
     setSaveButtonUnsaved();
     _renderSettingsTagTree();
+
+    // Inherit parent tag sharing if the new tag is a sub-tag (Req 6.2)
+    _inheritParentTagSharing(tagText);
   }
 }
 
@@ -1014,6 +1017,9 @@ function openTagModal(tag) {
 
   // Initialize tag sharing section
   _initTagSharingSection(rawText);
+
+  // Enforce tag permission (Req 6.6, 6.7): check if current user has view-only access
+  _enforceTagPermission(rawText);
 }
 
 function saveTag() {
@@ -1109,12 +1115,16 @@ function saveTag() {
 
 function deleteTag() {
   if (currentTag) {
-    // Remove sharing config for this tag
+    // Remove sharing config for this tag and all its sub-tags (Req 6.3)
     var deletedName = (currentTag.childNodes[0]?.textContent || '').trim();
     if (deletedName && _tagSharingConfig) {
       var hadSharing = false;
+      var prefix = deletedName + '/';
       _tagSharingConfig = _tagSharingConfig.filter(function(entry) {
-        if (entry.tag === deletedName) { hadSharing = true; return false; }
+        if (entry.tag === deletedName || entry.tag.startsWith(prefix)) {
+          hadSharing = true;
+          return false;
+        }
         return true;
       });
       if (hadSharing) _saveTagSharingConfig(null);
@@ -1163,12 +1173,17 @@ function _renderSettingsTagTree() {
     const fullPath = _findFullPathForBadge(tree, badge, row);
     if (!fullPath) return;
 
-    // Task 11.2: Add 🔗 sharing indicator if tag has active sharing
+    // Task 12.5: Add 🔗 sharing indicator with user list tooltip (Req 6.8)
     if (_tagHasSharing(fullPath)) {
       var linkIcon = document.createElement('span');
       linkIcon.className = 'tag-sharing-link-icon';
       linkIcon.textContent = '🔗';
-      linkIcon.title = 'This tag is shared with other users';
+      // Build tooltip listing shared users
+      var sharedUsers = _getTagShares(fullPath);
+      var userNames = sharedUsers.map(function(s) {
+        return _getTagSharingUserName(s.user_id);
+      });
+      linkIcon.title = 'Shared with: ' + userNames.join(', ');
       // Insert after the badge
       badge.parentNode.insertBefore(linkIcon, badge.nextSibling);
     }
@@ -2326,6 +2341,30 @@ function _renderTagSharesList() {
     badge.textContent = share.role === 'manager' ? '✏️ Manager' : '👁️ Viewer';
     row.appendChild(badge);
 
+    // Tag permission toggle (view/manage) — Req 6.5
+    var permToggle = document.createElement('button');
+    permToggle.type = 'button';
+    permToggle.className = 'tag-share-perm-toggle';
+    var perm = share.tag_permission || 'view';
+    permToggle.textContent = perm === 'manage' ? '🔧 Manage' : '👁️ View';
+    permToggle.title = perm === 'manage' ? 'Tag permission: can rename, recolor, delete' : 'Tag permission: read-only tag access';
+    permToggle.dataset.perm = perm;
+    permToggle.addEventListener('click', (function(uid) {
+      return function() {
+        // Toggle between view and manage
+        for (var i = 0; i < _currentTagShares.length; i++) {
+          if (_currentTagShares[i].user_id === uid) {
+            var cur = _currentTagShares[i].tag_permission || 'view';
+            _currentTagShares[i].tag_permission = cur === 'view' ? 'manage' : 'view';
+            break;
+          }
+        }
+        _renderTagSharesList();
+        _saveTagSharingConfig();
+      };
+    })(share.user_id));
+    row.appendChild(permToggle);
+
     // Remove button
     var removeBtn = document.createElement('button');
     removeBtn.type = 'button';
@@ -2387,7 +2426,7 @@ function _addTagShare() {
     }
   }
 
-  _currentTagShares.push({ user_id: userId, role: role });
+  _currentTagShares.push({ user_id: userId, role: role, tag_permission: 'view' });
   _renderTagSharesList();
   _populateTagSharingUserPicker();
   _saveTagSharingConfig();
@@ -2433,7 +2472,7 @@ async function _saveTagSharingConfig(tagName) {
           _tagSharingConfig.splice(i, 1);
         } else {
           _tagSharingConfig[i].shares = _currentTagShares.map(function(s) {
-            return { user_id: s.user_id, role: s.role };
+            return { user_id: s.user_id, role: s.role, tag_permission: s.tag_permission || 'view' };
           });
         }
         found = true;
@@ -2444,10 +2483,13 @@ async function _saveTagSharingConfig(tagName) {
       _tagSharingConfig.push({
         tag: tagName,
         shares: _currentTagShares.map(function(s) {
-          return { user_id: s.user_id, role: s.role };
+          return { user_id: s.user_id, role: s.role, tag_permission: s.tag_permission || 'view' };
         }),
       });
     }
+
+    // Sub-tag propagation (Req 6.1): propagate parent's sharing config to all sub-tags
+    _propagateTagSharingToSubTags(tagName);
   }
   // else: tagName is null — save config as-is (rename/delete already modified it)
 
@@ -2476,6 +2518,87 @@ async function _saveTagSharingConfig(tagName) {
 }
 
 /**
+ * Propagate a parent tag's sharing config to all its sub-tags (Req 6.1).
+ * Iterates all known tags and applies the parent's shares to any tag
+ * whose fullPath starts with parentTag + '/'.
+ * @param {string} parentTag — the parent tag name
+ */
+function _propagateTagSharingToSubTags(parentTag) {
+  if (!parentTag) return;
+
+  // Get the parent's current shares from the config
+  var parentShares = null;
+  for (var i = 0; i < _tagSharingConfig.length; i++) {
+    if (_tagSharingConfig[i].tag === parentTag) {
+      parentShares = _tagSharingConfig[i].shares;
+      break;
+    }
+  }
+
+  // Get all known tag names from the hidden tag editor
+  var tagDivs = document.querySelectorAll('#tag-editor-hidden .tag:not(.tag-input-container .tag)');
+  var allTagNames = Array.from(tagDivs).map(function(div) {
+    return (div.childNodes[0]?.textContent || '').trim();
+  }).filter(function(n) { return n; });
+
+  var prefix = parentTag + '/';
+
+  allTagNames.forEach(function(tagName) {
+    if (!tagName.startsWith(prefix)) return;
+
+    if (parentShares && parentShares.length > 0) {
+      // Copy parent's shares to sub-tag
+      var subShares = parentShares.map(function(s) {
+        return { user_id: s.user_id, role: s.role, tag_permission: s.tag_permission || 'view' };
+      });
+
+      // Find or create entry for this sub-tag
+      var found = false;
+      for (var j = 0; j < _tagSharingConfig.length; j++) {
+        if (_tagSharingConfig[j].tag === tagName) {
+          _tagSharingConfig[j].shares = subShares;
+          found = true;
+          break;
+        }
+      }
+      if (!found) {
+        _tagSharingConfig.push({ tag: tagName, shares: subShares });
+      }
+    } else {
+      // Parent has no shares — remove sub-tag sharing config (Req 6.3)
+      _tagSharingConfig = _tagSharingConfig.filter(function(entry) {
+        return entry.tag !== tagName;
+      });
+    }
+  });
+}
+
+/**
+ * When a sub-tag is added to a shared parent, copy the parent's sharing config (Req 6.2).
+ * Called after a new tag is created.
+ * @param {string} newTagName — the newly created tag's full path
+ */
+function _inheritParentTagSharing(newTagName) {
+  if (!newTagName || !newTagName.includes('/')) return;
+
+  // Walk up the path to find the nearest parent with sharing config
+  var parts = newTagName.split('/');
+  for (var depth = parts.length - 1; depth >= 1; depth--) {
+    var parentPath = parts.slice(0, depth).join('/');
+    var parentShares = _getTagShares(parentPath);
+    if (parentShares.length > 0) {
+      // Copy parent's shares to the new sub-tag
+      var subShares = parentShares.map(function(s) {
+        return { user_id: s.user_id, role: s.role, tag_permission: s.tag_permission || 'view' };
+      });
+      _tagSharingConfig.push({ tag: newTagName, shares: subShares });
+      _saveTagSharingConfig(null); // Save as-is
+      return;
+    }
+  }
+}
+
+/**
  * Initialize the tag sharing section when the tag modal opens.
  * Called from openTagModal.
  * @param {string} tagName — the tag name being edited
@@ -2483,13 +2606,110 @@ async function _saveTagSharingConfig(tagName) {
 async function _initTagSharingSection(tagName) {
   await _loadTagSharingUserList();
 
-  // Load current shares for this tag
+  // Load current shares for this tag, including tag_permission (default "view")
   _currentTagShares = _getTagShares(tagName).map(function(s) {
-    return { user_id: s.user_id, role: s.role, display_name: s.display_name || '' };
+    return {
+      user_id: s.user_id,
+      role: s.role,
+      tag_permission: s.tag_permission || 'view',
+      display_name: s.display_name || '',
+    };
   });
 
   _populateTagSharingUserPicker();
   _renderTagSharesList();
+}
+
+/**
+ * Enforce tag permission on the tag edit modal (Req 6.6, 6.7).
+ * If the current user is a shared recipient of this tag with "view" permission,
+ * disable rename, recolor, and delete controls.
+ * If "manage" permission, allow full access.
+ * Only applies to tags shared WITH the current user (not tags the current user owns/created).
+ * @param {string} tagName — the tag being edited
+ */
+function _enforceTagPermission(tagName) {
+  var tagNameInput = document.getElementById('tag-name');
+  var colorInput = document.getElementById('tag-color');
+  var fontColorInput = document.getElementById('tag-font-color');
+  var bgSwatches = document.getElementById('tag-color-swatches');
+  var fgSwatches = document.getElementById('tag-font-color-swatches');
+
+  // Find all delete buttons in the modal
+  var deleteBtn = document.querySelector('#tag-modal button[onclick="deleteTag()"]');
+
+  // Reset all controls to enabled by default
+  if (tagNameInput) tagNameInput.disabled = false;
+  if (colorInput) colorInput.disabled = false;
+  if (fontColorInput) fontColorInput.disabled = false;
+  if (bgSwatches) bgSwatches.style.pointerEvents = '';
+  if (fgSwatches) fgSwatches.style.pointerEvents = '';
+  if (deleteBtn) { deleteBtn.disabled = false; deleteBtn.style.opacity = ''; }
+
+  // Check if this tag is shared with the current user by another user
+  var perm = _getTagPermissionForCurrentUser(tagName);
+  if (!perm) return; // Not a shared tag for this user — full access
+
+  if (perm === 'view') {
+    // View-only: disable rename, recolor, delete (Req 6.6)
+    if (tagNameInput) tagNameInput.disabled = true;
+    if (colorInput) colorInput.disabled = true;
+    if (fontColorInput) fontColorInput.disabled = true;
+    if (bgSwatches) bgSwatches.style.pointerEvents = 'none';
+    if (fgSwatches) fgSwatches.style.pointerEvents = 'none';
+    if (deleteBtn) { deleteBtn.disabled = true; deleteBtn.style.opacity = '0.4'; }
+  }
+  // "manage" permission: full access (Req 6.7) — no restrictions needed
+}
+
+/**
+ * Check if the current user has a tag_permission on a tag shared by another user.
+ * Looks through all users' shared_tags configs that include the current user.
+ * For now, checks the local _tagSharingConfig (which is the current user's own config).
+ * Returns null if the tag is not shared with the current user, or the permission level.
+ * @param {string} tagName
+ * @returns {string|null} "view", "manage", or null
+ */
+function _getTagPermissionForCurrentUser(tagName) {
+  // The _tagSharingConfig is the current user's OWN sharing config (tags they share with others).
+  // Tags shared WITH the current user would come from other users' configs.
+  // Since we don't have cross-user config access on the frontend, we check if the tag
+  // appears in the shared_tags_received data (if available).
+  // For now, this is a placeholder that returns null (no restriction) for the tag creator's own tags.
+  // The actual enforcement would need a backend endpoint that returns tags shared with the current user.
+  // However, we can check _tagSharingConfig for tags where the current user appears as a share recipient.
+
+  var currentUser = (typeof getCurrentUser === 'function') ? getCurrentUser() : null;
+  var currentUserId = currentUser ? currentUser.user_id : null;
+  if (!currentUserId || !tagName) return null;
+
+  // Check if the current user is a recipient in any tag sharing config
+  // This would be populated from tags shared BY other users WITH the current user
+  // For the tag creator's own tags, they always have full access
+  for (var i = 0; i < _tagSharingConfig.length; i++) {
+    if (_tagSharingConfig[i].tag === tagName) {
+      // This is the current user's own sharing config — they are the creator, full access
+      return null;
+    }
+  }
+
+  // Check received shared tags (if loaded)
+  if (window._receivedSharedTags) {
+    for (var j = 0; j < window._receivedSharedTags.length; j++) {
+      var entry = window._receivedSharedTags[j];
+      if (entry.tag === tagName) {
+        // Find the current user's permission in this entry
+        var shares = entry.shares || [];
+        for (var k = 0; k < shares.length; k++) {
+          if (shares[k].user_id === currentUserId) {
+            return shares[k].tag_permission || 'view';
+          }
+        }
+      }
+    }
+  }
+
+  return null;
 }
 
 document.addEventListener("DOMContentLoaded", () => {

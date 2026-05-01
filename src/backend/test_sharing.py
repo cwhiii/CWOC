@@ -127,7 +127,7 @@ def resolve_effective_role(chit_row, user_id, owner_settings=None):
 
     # 5. Assignment
     if chit_row.get("assigned_to") == user_id:
-        best_role = _higher_role(best_role, "viewer")
+        best_role = _higher_role(best_role, "manager")
 
     return best_role
 
@@ -138,11 +138,14 @@ def can_edit_chit(chit_row, user_id, owner_settings=None):
     return role in ("owner", "manager")
 
 
-def can_delete_chit(chit_row, user_id):
-    """Return True only if the user is the chit owner."""
+def can_delete_chit(chit_row, user_id, owner_settings=None):
+    """Return True if the user is the chit owner or has manager role."""
     if not chit_row or not user_id:
         return False
-    return chit_row.get("owner_id") == user_id
+    if chit_row.get("owner_id") == user_id:
+        return True
+    role = resolve_effective_role(chit_row, user_id, owner_settings)
+    return role == "manager"
 
 
 def can_manage_sharing(chit_row, user_id, owner_settings=None):
@@ -324,28 +327,39 @@ class TestProperty2ManagerAccessAllowsEditing(unittest.TestCase):
 
 # ── Property 3: Only owner can delete ────────────────────────────────────
 
-class TestProperty3OnlyOwnerCanDelete(unittest.TestCase):
-    """Feature: chit-sharing-system, Property 3: Only owner can delete
+class TestProperty3OwnerAndManagerCanDelete(unittest.TestCase):
+    """Feature: chit-sharing-system, Property 3: Owner and manager can delete
 
-    **Validates: Requirements 1.4, 2.6**
+    **Validates: Requirements 1.4, 2.6, 3.4, 9.3**
 
-    For any chit and any user who is not the owner, can_delete_chit
-    SHALL return False. When user_id == owner_id, can_delete_chit
-    SHALL return True.
+    For any chit, can_delete_chit SHALL return True for the owner and
+    for managers. For viewers and users with no access, can_delete_chit
+    SHALL return False.
     """
 
-    def test_non_owner_cannot_delete(self):
-        """Non-owner users (any role) cannot delete."""
+    def test_viewer_cannot_delete(self):
+        """Non-owner viewer users cannot delete."""
         for i in range(_PBT_ITERATIONS):
             with self.subTest(iteration=i):
                 owner_id = _random_uuid()
                 other_id = _random_uuid()
-                role = _random_role()
-                shares = [{"user_id": other_id, "role": role}]
+                shares = [{"user_id": other_id, "role": "viewer"}]
                 chit = _random_chit(owner_id, shares=shares)
 
                 self.assertFalse(can_delete_chit(chit, other_id),
-                                 f"Non-owner ({role}) should not delete (iter {i})")
+                                 f"Viewer should not delete (iter {i})")
+
+    def test_manager_can_delete(self):
+        """Non-owner manager users can delete."""
+        for i in range(_PBT_ITERATIONS):
+            with self.subTest(iteration=i):
+                owner_id = _random_uuid()
+                other_id = _random_uuid()
+                shares = [{"user_id": other_id, "role": "manager"}]
+                chit = _random_chit(owner_id, shares=shares)
+
+                self.assertTrue(can_delete_chit(chit, other_id),
+                                f"Manager should be able to delete (iter {i})")
 
     def test_owner_can_delete_and_manage(self):
         """Owner can always delete and manage sharing."""
@@ -451,7 +465,7 @@ class TestProperty5MultiplePathsResolveToHighestRole(unittest.TestCase):
                 if tag_role:
                     roles_present.append(tag_role)
                 if is_assigned:
-                    roles_present.append("viewer")
+                    roles_present.append("manager")
 
                 if not roles_present:
                     expected = None
@@ -542,19 +556,19 @@ class TestProperty7StealthOverridesAllSharingForNonOwners(unittest.TestCase):
 
 # ── Property 8: Assignment grants at least viewer access ─────────────────
 
-class TestProperty8AssignmentGrantsAtLeastViewerAccess(unittest.TestCase):
-    """Feature: chit-sharing-system, Property 8: Assignment grants at least viewer access
+class TestProperty8AssignmentGrantsAtLeastManagerAccess(unittest.TestCase):
+    """Feature: chit-sharing-system, Property 8: Assignment grants at least manager access
 
-    **Validates: Requirements 7.2**
+    **Validates: Requirements 7.2, 10.1, 10.4**
 
     For any non-stealth chit where assigned_to is set to a user's ID,
-    resolve_effective_role SHALL return at least 'viewer' for that user.
+    resolve_effective_role SHALL return at least 'manager' for that user.
     If the user also has a higher role via chit-level or tag-level shares,
     the higher role SHALL be returned instead.
     """
 
-    def test_assignment_alone_grants_viewer(self):
-        """Assignment with no other shares → viewer access."""
+    def test_assignment_alone_grants_manager(self):
+        """Assignment with no other shares → manager access."""
         for i in range(_PBT_ITERATIONS):
             with self.subTest(iteration=i):
                 owner_id = _random_uuid()
@@ -562,26 +576,25 @@ class TestProperty8AssignmentGrantsAtLeastViewerAccess(unittest.TestCase):
                 chit = _random_chit(owner_id, shares=None, assigned_to=assignee_id)
 
                 role = resolve_effective_role(chit, assignee_id)
-                self.assertEqual(role, "viewer",
-                                 f"Assignment alone should grant 'viewer', got '{role}' (iter {i})")
+                self.assertEqual(role, "manager",
+                                 f"Assignment alone should grant 'manager', got '{role}' (iter {i})")
 
     def test_assignment_plus_higher_role_returns_higher(self):
-        """Assignment + higher chit-level role → higher role wins."""
+        """Assignment + chit-level role → highest role wins (at least manager)."""
         for i in range(_PBT_ITERATIONS):
             with self.subTest(iteration=i):
                 owner_id = _random_uuid()
                 assignee_id = _random_uuid()
-                higher_role = random.choice(["manager", "viewer"])
-                shares = [{"user_id": assignee_id, "role": higher_role}]
+                share_role = random.choice(["manager", "viewer"])
+                shares = [{"user_id": assignee_id, "role": share_role}]
                 chit = _random_chit(owner_id, shares=shares, assigned_to=assignee_id)
 
                 role = resolve_effective_role(chit, assignee_id)
-                expected = higher_role if higher_role == "manager" else "viewer"
-                self.assertEqual(role, expected,
-                                 f"Expected '{expected}' (share={higher_role}), got '{role}' (iter {i})")
-                # At minimum viewer
-                self.assertIn(role, ("manager", "viewer", "owner"),
-                              f"Assigned user should have at least viewer access (iter {i})")
+                # Assignment floor is manager, so result is always at least manager
+                self.assertEqual(role, "manager",
+                                 f"Expected 'manager' (share={share_role}), got '{role}' (iter {i})")
+                self.assertIn(role, ("manager", "owner"),
+                              f"Assigned user should have at least manager access (iter {i})")
 
 
 # ── Property 9: Migration is idempotent and preserves data ───────────────

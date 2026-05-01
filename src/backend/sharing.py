@@ -99,9 +99,9 @@ def resolve_effective_role(chit_row, user_id, owner_settings=None):
                         if role in ("manager", "viewer"):
                             best_role = _higher_role(best_role, role)
 
-    # 5. Assignment — grants at minimum viewer access
+    # 5. Assignment — grants at minimum manager access
     if chit_row.get("assigned_to") == user_id:
-        best_role = _higher_role(best_role, "viewer")
+        best_role = _higher_role(best_role, "manager")
 
     return best_role
 
@@ -114,11 +114,14 @@ def can_edit_chit(chit_row, user_id, owner_settings=None):
     return role in ("owner", "manager")
 
 
-def can_delete_chit(chit_row, user_id):
-    """Return True only if the user is the chit owner."""
+def can_delete_chit(chit_row, user_id, owner_settings=None):
+    """Return True if the user is the chit owner or has manager role."""
     if not chit_row or not user_id:
         return False
-    return chit_row.get("owner_id") == user_id
+    if chit_row.get("owner_id") == user_id:
+        return True
+    role = resolve_effective_role(chit_row, user_id, owner_settings)
+    return role == "manager"
 
 
 def can_manage_sharing(chit_row, user_id, owner_settings=None):

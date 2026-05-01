@@ -34,7 +34,7 @@ Package marker. No public exports.
 | `AuthMiddleware` | (imported from `middleware.py`) Session-based auth middleware — validates `cwoc_session` cookie, injects user identity into `request.state` |
 | `on_startup()` | Startup event — calls `start_weather_schedulers()` |
 
-Registers all route modules (including `auth_router`, `users_router`, `sharing_router`, and `network_access_router`), runs all migrations (including `migrate_add_multi_user()`, `migrate_add_sharing()`, `migrate_add_kiosk_users()`, and `migrate_add_network_access()`) and `init_db()` at import time, mounts `StaticFiles` for frontend, static, and data directories.
+Registers all route modules (including `auth_router`, `users_router`, `sharing_router`, `notifications_router`, and `network_access_router`), runs all migrations (including `migrate_add_multi_user()`, `migrate_add_sharing()`, `migrate_add_kiosk_users()`, `migrate_add_network_access()`, and `migrate_add_notifications()`) and `init_db()` at import time, mounts `StaticFiles` for frontend, static, and data directories.
 
 ### 1.3 `src/backend/models.py` — Pydantic Models
 
@@ -53,6 +53,7 @@ Registers all route modules (including `auth_router`, `users_router`, `sharing_r
 | `LoginRequest` | Login request — username, password |
 | `ProfileUpdate` | Profile update request — display_name (optional), email (optional) |
 | `PasswordChange` | Password change request — current_password, new_password |
+| `Notification` | Notification record — `id`, `user_id`, `chit_id`, `chit_title`, `owner_display_name`, `notification_type` ("invited" or "assigned"), `status` ("pending", "accepted", "declined"), `created_datetime` |
 
 ### 1.4 `src/backend/db.py` — Database Helpers & Shared State
 
@@ -107,6 +108,7 @@ All migrations run at startup. Each checks if the column/table already exists be
 | `migrate_add_kiosk_users()` | Add `kiosk_users` (TEXT) column to settings table for kiosk user selection |
 | `migrate_add_hide_declined()` | Add `hide_declined` (TEXT, default '0') column to settings table for hiding declined RSVP chits |
 | `migrate_add_network_access()` | Create `network_access` table with columns: `id` (TEXT PRIMARY KEY), `provider` (TEXT NOT NULL UNIQUE), `enabled` (BOOLEAN DEFAULT 0), `config` (TEXT), `created_datetime` (TEXT), `modified_datetime` (TEXT) |
+| `migrate_add_notifications()` | Create `notifications` table with columns: `id` (TEXT PRIMARY KEY), `user_id` (TEXT NOT NULL), `chit_id` (TEXT NOT NULL), `chit_title` (TEXT), `owner_display_name` (TEXT), `notification_type` (TEXT NOT NULL), `status` (TEXT NOT NULL DEFAULT 'pending'), `created_datetime` (TEXT NOT NULL); creates index `idx_notifications_user_id` on `user_id` |
 
 ### 1.6 `src/backend/serializers.py` — vCard & CSV
 
@@ -222,9 +224,9 @@ Provides functions to determine a user's effective role on a chit, check edit/de
 | Function | Description |
 |----------|-------------|
 | `_higher_role(a, b)` | Return whichever role has higher precedence, or the non-None one |
-| `resolve_effective_role(chit_row, user_id, owner_settings)` | Determine the effective role for a user on a chit. Resolution order: owner_id match → 'owner'; stealth=True and not owner → None; chit-level shares → role; tag-level shares → role; assigned_to match → 'viewer'; else None |
+| `resolve_effective_role(chit_row, user_id, owner_settings)` | Determine the effective role for a user on a chit. Resolution order: owner_id match → 'owner'; stealth=True and not owner → None; chit-level shares → role; tag-level shares → role; assigned_to match → 'manager' (floor); else None |
 | `can_edit_chit(chit_row, user_id, owner_settings)` | Return True if the user has owner or manager role on the chit |
-| `can_delete_chit(chit_row, user_id)` | Return True only if the user is the chit owner |
+| `can_delete_chit(chit_row, user_id, owner_settings)` | Return True if the user is the chit owner or has manager role (uses `resolve_effective_role()` internally) |
 | `can_manage_sharing(chit_row, user_id, owner_settings)` | Return True if the user is the chit owner or has manager role (uses `resolve_effective_role()` internally and checks for `role in ("owner", "manager")`) |
 | `get_shared_chits_for_user(user_id)` | Query all non-deleted, non-stealth chits shared with user_id via chit-level shares, tag-level shares, or assignment; annotates each with `effective_role`, `share_source`, `owner_display_name`, and `assigned_to_display_name` |
 | `_parse_shares(shares_raw)` | Parse the shares column value into a list of dicts |
@@ -247,7 +249,7 @@ Property-based tests for the chit sharing permission resolution engine. Uses Pyt
 | `TestProperty5MultiplePathsResolveToHighestRole` | Multiple sharing paths resolve to highest role — highest role wins across chit-level, tag-level, and assignment paths (120+ iterations). **Validates: Requirements 5.1, 5.2** |
 | `TestProperty6OwnerAlwaysHasFullControl` | Owner always has full control — owner gets 'owner' role, can edit, delete, and manage sharing regardless of stealth/shares/assigned_to (120+ iterations). **Validates: Requirements 5.3, 6.3** |
 | `TestProperty7StealthOverridesAllSharingForNonOwners` | Stealth overrides all sharing for non-owners — stealth chits return None for all non-owners regardless of shares (120+ iterations). **Validates: Requirements 5.4, 6.2** |
-| `TestProperty8AssignmentGrantsAtLeastViewerAccess` | Assignment grants at least viewer access — assigned users get 'viewer' or higher; higher roles from other paths take precedence (120+ iterations). **Validates: Requirements 7.2** |
+| `TestProperty8AssignmentGrantsAtLeastViewerAccess` | Assignment grants at least manager access — assigned users get 'manager' or higher; higher roles from other paths take precedence (120+ iterations). **Validates: Requirements 7.2** |
 | `TestProperty9MigrationIdempotentAndPreservesData` | Migration is idempotent and preserves data — running `migrate_add_sharing()` multiple times produces no errors, columns exist, pre-existing data unchanged (120+ iterations). **Validates: Requirements 9.1, 9.2, 9.4** |
 | `TestProperty7ManagersCanManageSharing` | Managers can manage sharing — `can_manage_sharing()` returns True for owner and manager roles, False for viewer and None (120+ iterations). **Validates: Requirements 2.1, 2.3, 2.4** |
 
@@ -280,10 +282,10 @@ All chit endpoints are scoped by `owner_id` — users can only access their own 
 | `GET /api/chits/search` | `search_chits(q, request)` | Global search across all chit fields, scoped to authenticated user |
 | `POST /api/chits` | `create_chit(chit, request)` | Create a new chit with `owner_id`, `owner_display_name`, `owner_username` from authenticated user |
 | `GET /api/chit/{chit_id}` | `get_chit(chit_id, request)` | Get a single chit by ID (verifies ownership or shared access via `resolve_effective_role`); includes `effective_role` and `assigned_to_display_name` in response |
-| `PUT /api/chits/{chit_id}` | `update_chit(chit_id, chit, request)` | Update a chit (verifies ownership or manager access via `can_edit_chit`; non-managers/non-owners cannot change shares/stealth/assigned_to via `can_manage_sharing` guard; viewers get 403) |
-| `DELETE /api/chits/{chit_id}` | `delete_chit(chit_id, request)` | Soft-delete a chit (owner only via `can_delete_chit`) |
+| `PUT /api/chits/{chit_id}` | `update_chit(chit_id, chit, request)` | Update a chit (verifies ownership or manager access via `can_edit_chit`; managers can persist shares/assigned_to via `can_manage_sharing` guard; stealth is always preserved for non-owners; viewers get 403). Creates notifications for newly shared users via `_create_share_notifications()` |
+| `DELETE /api/chits/{chit_id}` | `delete_chit(chit_id, request)` | Soft-delete a chit (owner or manager via `can_delete_chit`; loads owner_settings for role resolution) |
 | `PATCH /api/chits/{chit_id}/recurrence-exceptions` | `patch_recurrence_exceptions(chit_id, body, request)` | Add or update a recurrence exception (verifies ownership) |
-| `PATCH /api/chits/{chit_id}/rsvp` | `update_rsvp_status(chit_id, body, request)` | Update the current user's RSVP status on a shared chit. Validates `rsvp_status` is one of `invited`, `accepted`, `declined` (400 if invalid). Rejects owner (403). Rejects users not in shares (404). Updates the user's `rsvp_status` in the shares JSON, saves with `modified_datetime`, logs audit entry. Returns `{ "message": "RSVP status updated", "rsvp_status": "<value>" }` |
+| `PATCH /api/chits/{chit_id}/rsvp` | `update_rsvp_status(chit_id, body, request)` | Update the current user's RSVP status on a shared chit. Validates `rsvp_status` is one of `invited`, `accepted`, `declined` (400 if invalid). Rejects owner (403). Rejects users not in shares (404). Enforces cross-user RSVP protection (managers cannot update another user's RSVP). Updates the user's `rsvp_status` in the shares JSON, syncs corresponding notification status, saves with `modified_datetime`, logs audit entry. Returns `{ "message": "RSVP status updated", "rsvp_status": "<value>" }` |
 | `GET /api/export/chits` | `export_chits(request)` | Export authenticated user's chits as JSON envelope |
 | `GET /api/export/userdata` | `export_userdata(request)` | Export authenticated user's settings + contacts as JSON envelope |
 | `GET /api/export/all` | `export_all(request)` | Export authenticated user's data (chits + settings + contacts + standalone alerts) as combined JSON envelope |
@@ -450,11 +452,11 @@ Provides endpoints for managing chit-level shares, querying shared chits, and ma
 | Route | Handler | Description |
 |-------|---------|-------------|
 | `GET /api/chits/{chit_id}/shares` | `get_chit_shares(chit_id, request)` | Return shares list for a chit with display names (owner only) |
-| `PUT /api/chits/{chit_id}/shares` | `set_chit_shares(chit_id, body, request)` | Set entire shares list (owner only); validates role values, user_ids existence, rejects sharing with self |
+| `PUT /api/chits/{chit_id}/shares` | `set_chit_shares(chit_id, body, request)` | Set entire shares list (owner only); validates role values, user_ids existence, rejects sharing with self; creates notifications for newly shared users via `_create_share_notifications()` |
 | `DELETE /api/chits/{chit_id}/shares/{target_user_id}` | `remove_chit_share(chit_id, target_user_id, request)` | Remove a specific user from shares (owner only) |
 | `GET /api/shared-chits` | `get_shared_chits(request)` | Return all chits shared with authenticated user, annotated with `effective_role`, `share_source`, and `owner_display_name` |
 | `GET /api/settings/shared-tags` | `get_shared_tags(request)` | Return authenticated user's `shared_tags` configuration with display names |
-| `PUT /api/settings/shared-tags` | `set_shared_tags(body, request)` | Set authenticated user's `shared_tags` configuration; validates role values and user_ids |
+| `PUT /api/settings/shared-tags` | `set_shared_tags(body, request)` | Set authenticated user's `shared_tags` configuration; validates role values and user_ids; persists `tag_permission` field ("view" or "manage") per share entry |
 
 **Internal helpers:**
 
@@ -495,6 +497,22 @@ Property-based tests for network access provider configuration. Uses Python stdl
 | `TestProperty2GetAllReturnsAllStoredProviders` | GET all returns all stored providers — no missing entries, no duplicates (120+ iterations). **Validates: Requirements 2.1, 8.2** |
 | `TestProperty3AuthKeyInTailscaleUpCommand` | Auth key included in tailscale up command — saved auth key appears as `--authkey=<exact_key>` in command args (120+ iterations). **Validates: Requirements 7.4** |
 | `TestEdgeCasesAndAdminEnforcement` | Unit tests for migration idempotency, default config for missing provider, admin-only enforcement, no-auth-key error, and provider uniqueness. **Validates: Requirements 1.2, 1.4, 2.3, 2.5, 2.6, 7.3** |
+
+### 1.30 `src/backend/routes/notifications.py` — Notification API Routes
+
+Provides endpoints for listing, updating, and dismissing sharing notifications. Also provides the helper function `_create_share_notifications()` used by `routes/chits.py` and `routes/sharing.py` to create notifications when shares change.
+
+| Route | Handler | Description |
+|-------|---------|-------------|
+| `GET /api/notifications` | `list_notifications(request)` | List all notifications for the authenticated user, ordered by `created_datetime` DESC (newest first) |
+| `PATCH /api/notifications/{id}` | `update_notification(notification_id, body, request)` | Accept or decline a notification (`status: "accepted" \| "declined"`); syncs RSVP on the chit's shares entry; verifies notification belongs to requesting user |
+| `DELETE /api/notifications/{id}` | `delete_notification(notification_id, request)` | Dismiss (delete) a notification; verifies notification belongs to requesting user |
+
+**Internal helpers:**
+
+| Function | Description |
+|----------|-------------|
+| `_create_share_notifications(cursor, chit_id, chit_title, owner_display_name, old_shares, new_shares, assigned_to_new, assigned_to_old)` | Create notification records for each newly shared user. Compares old_shares to new_shares; for each new user_id, inserts a notification row with `notification_type` "assigned" (if user is newly assigned) or "invited" (otherwise). Called by `routes/chits.py` and `routes/sharing.py` |
 
 ---
 
@@ -777,9 +795,9 @@ Coordinator for shared code between dashboard and editor. Contains glue code for
 | `onFilterSpecificToggle(filterType)` | When a specific filter option is checked, uncheck "Any"; re-check "Any" if all unchecked |
 | `clearFilterGroup(containerId)` | Clear all checkboxes in a filter group and re-check "Any" |
 | `_filterTagCheckboxes()` | Filter visible tag checkboxes by the tag search input query |
-| `_clearAllFilters()` | Reset all sidebar filters, sort, and search to defaults |
+| `_clearAllFilters()` | Reset all sidebar filters (including sharing filters "Shared with me" / "Shared by me"), sort, and search to defaults |
 | `_resetDefaultFilters()` | Reset search to the default filter for the current tab (from settings) |
-| `_updateClearFiltersButton()` | Show/hide the clear-filters button based on whether any filters are active |
+| `_updateClearFiltersButton()` | Show/hide the clear-filters button based on whether any filters are active (including sharing filters) |
 | `_getSelectedFilterValues(containerId, filterType)` | Get an array of checked filter values from a multi-select container |
 | `_getSelectedStatuses()` | Get currently selected status filter values |
 | `_getSelectedLabels()` | Get currently selected label/tag filter values |
@@ -807,6 +825,12 @@ Coordinator for shared code between dashboard and editor. Contains glue code for
 | `expandFilterGroup(groupId)` | Expand a filter sub-group (used by hotkeys) |
 | `restoreSidebarState()` | Restore sidebar open/closed state from localStorage on page load |
 | `_loadLabelFilters()` | Load tag/label filters from settings API and render the tag tree in the sidebar |
+| `_notifInboxItems` | Cached notification list for the inbox |
+| `_toggleNotifInbox()` | Toggle the notification inbox expanded/collapsed; re-renders on expand |
+| `_fetchNotifications()` | Fetch notifications from `GET /api/notifications` and update the badge + cached list; re-renders inbox if expanded |
+| `_updateNotifBadge()` | Update the notification badge count from `_notifInboxItems` (pending count) |
+| `_renderNotifInbox()` | Render the notification inbox list with chit title links, owner name, and Accept/Decline buttons |
+| `_respondNotification(notifId, status)` | Accept or decline a notification via `PATCH /api/notifications/{id}`; removes from list, updates badge, refreshes chits |
 
 #### main-hotkeys.js
 
@@ -991,7 +1015,7 @@ Coordinator for shared code between dashboard and editor. Contains glue code for
 | `_onDebouncedResize()` | Debounced resize handler — re-renders only when viewport crosses a breakpoint |
 | `_checkTabOverflow()` | Detect tab bar overflow and progressively reduce padding or switch to icon-only |
 | `_applyArchiveFilter(chitList)` | Filter chits by pinned/archived/unmarked toggle states |
-| `_applyMultiSelectFilters(chitList)` | Apply status, label, priority, and people multi-select filters |
+| `_applyMultiSelectFilters(chitList)` | Apply status, label, priority, people, and sharing ("Shared with me" / "Shared by me") multi-select filters |
 | `_applySort(chitList)` | Sort chits by the current sort field and direction |
 | `storePreviousState()` | Save the current UI state to localStorage for restoration after editor |
 | `_restoreUIState()` | Restore UI state from localStorage (editor return or refresh recovery) |
@@ -1120,7 +1144,8 @@ People zone: contacts, system users, sharing controls. Loads all contacts and sy
 | `_removeShare(userId)` | Remove a user from `_currentShares`, mark unsaved, re-render tree, sync assigned-to dropdown |
 | `_updateShareRole(userId, newRole)` | Update a user's role in `_currentShares`, mark unsaved, re-render tree, sync assigned-to dropdown |
 | `_renderStealthToggle()` | Render the stealth toggle checkbox at the bottom of `#peopleContent`; hidden for viewers |
-| `_syncAssignedToDropdown()` | Sync the assigned-to dropdown in the Task zone with current shares; show/hide row, populate options, clear if assigned user removed |
+| `_onAssignedToChange()` | Handle assigned-to dropdown change: auto-add user to shares as manager (Requirements 2.1, 2.2, 2.3, 10.2, 10.3). If user not in shares, adds with `role: "manager"`, `rsvp_status: "invited"`. If viewer, upgrades to manager |
+| `_syncAssignedToDropdown()` | Sync the assigned-to dropdown in the Task zone with current shares; show/hide row, populate options from owner + all system users (Requirement 2.5), clear if assigned user removed |
 | `initPeopleSharingControls(chit)` | Initialize sharing controls for an existing chit — loads shares, sets stealth, determines effective role, syncs assigned-to |
 | `initPeopleSharingForNewChit()` | Initialize sharing controls for a new chit — empty shares, stealth off, null effective role |
 | `_filterPeopleTree(query)` | Filter the people tree by search query |
@@ -1132,6 +1157,8 @@ People zone: contacts, system users, sharing controls. Loads all contacts and sy
 | `_updateActivePeopleCount()` | Update the active people count badge (includes both `_peopleChipData.length` and `_currentShares.length`) |
 | `_isLightColor(hex)` | Delegate to shared `isLightColor()` |
 | `_setPeopleFromArray(peopleArray)` | Populate people chips from a chit's people array (called during load) |
+| `openPeopleExpandModal()` | Open the nearly full-screen People expand modal with alphabetical list of all people (contacts + system users), each labeled with type ("Contact", "Viewer", "Manager", "Assigned") |
+| `closePeopleExpandModal()` | Close the People expand modal (also triggered by ESC key) |
 
 #### editor-location.js
 
@@ -1306,7 +1333,7 @@ Thin data-layer module for the chit editor. Provides user list fetching/caching,
 | `_sharingUserList` | Cached list of switchable users (fetched once). Exported as a global for `editor-people.js` |
 | `_loadSharingUserList()` | Fetch the list of switchable users from `/api/auth/switchable-users` (cached after first call) |
 | `_getUserDisplayName(userId)` | Look up a user's display name from the cached user list or `_currentShares` |
-| `getSharingData()` | Return sharing fields (`shares`, `stealth`, `assigned_to`) to merge into the chit save payload; reads `_currentShares` from `editor-people.js` globals (preserving `rsvp_status`), stealth checkbox from people zone, and assigned-to dropdown from task zone |
+| `getSharingData()` | Return sharing fields (`shares`, `stealth`, `assigned_to`) to merge into the chit save payload; reads `_currentShares` from `editor-people.js` globals (preserving `rsvp_status`), stealth checkbox from people zone, and assigned-to dropdown from task zone. Applies assign auto-add logic (Requirements 2.2, 2.3): if assigned_to is set and user is not in shares, adds them as manager; if viewer, upgrades to manager |
 | `hasSharingData(chit)` | Returns true if the chit has sharing data (shares, stealth, or assigned_to); used by `applyZoneStates` |
 
 #### editor-init.js
@@ -1524,12 +1551,16 @@ Settings page logic: tags, colors, clocks, locations, indicators, import/export,
 | `_getTagShares(tagName)` | Get the shares array for a specific tag from the cached config |
 | `_tagHasSharing(tagName)` | Return true if a tag has any active sharing configuration |
 | `_populateTagSharingUserPicker()` | Populate the tag sharing user picker dropdown, excluding current user and already-shared users |
-| `_renderTagSharesList()` | Render the current tag's shares list in the tag modal with role badges and remove buttons |
+| `_renderTagSharesList()` | Render the current tag's shares list in the tag modal with role badges, `tag_permission` toggle (view/manage), and remove buttons |
 | `_getTagSharingUserName(userId)` | Look up a user's display name from the cached tag sharing user list |
 | `_addTagShare()` | Add a user share to the current tag; called by the "Share" button in the tag modal |
 | `_removeTagShare(userId)` | Remove a user from the current tag's shares list |
 | `_saveTagSharingConfig(tagName)` | Save the full shared_tags config to the server via `PUT /api/settings/shared-tags` |
 | `_initTagSharingSection(tagName)` | Initialize the tag sharing section when the tag modal opens; loads user list and populates pickers |
+| `_propagateTagSharingToSubTags(parentTagName)` | Propagate a parent tag's sharing config to all sub-tags (eager propagation at save time) |
+| `_inheritParentTagSharing(tagName)` | When a new sub-tag is added, inherit the parent tag's sharing config if the parent has one |
+| `_enforceTagPermission(tagName)` | Enforce tag permission on the Settings page — "view" users cannot rename, recolor, or delete shared tags; "manage" users get full access |
+| `_getTagPermissionForCurrentUser(tagName)` | Get the current user's `tag_permission` ("view" or "manage") for a shared tag; returns null if not shared with the user |
 | `refreshTailscaleStatus()` | Fetch `GET /api/network-access/tailscale/status`, update status badge (⚪ Not Installed / 🟡 Inactive / 🟢 Connected / 🔴 Error), show/hide IP+hostname and error rows |
 | `loadTailscaleConfig()` | Fetch `GET /api/network-access/tailscale`, populate auth key input and enabled checkbox |
 | `saveTailscaleConfig()` | Collect auth key and enabled state, POST to `/api/network-access/tailscale`, show success/error feedback |
@@ -1784,6 +1815,7 @@ Sidebar positioning, sections, buttons, scroll, filters, multi-select controls, 
 | Order Controls | Sort dropdown and direction button |
 | Clear Filters | Clear-all and reset-defaults buttons |
 | CwocSidebarFilter | Reusable sidebar filter component |
+| Notification Inbox | Notification inbox button with 🔔 icon, count badge, expanded list container, notification cards with chit title, owner name, Accept/Decline buttons, and empty state |
 
 #### styles-tabs.css
 Tab bar, tab styling, active/hover states, icon-only mode, tab count, and tab image rules.
@@ -1894,6 +1926,7 @@ Chit-specific styles. Base editor styles (header-row, zones, fields, buttons) co
 | Sharing Panel | 🔗 Sharing zone styles — current shares list, share list items, user name, role badges (manager/viewer), remove button, add share controls row, user picker, role select, add button, stealth toggle row, assigned-to picker row, empty state message |
 | Sharing UI Overhaul | `.cwoc-pill-toggle` — inline pill toggle for system user role selection (Viewer/Manager); `.people-user-row` — system user row with chip + pill toggle; `.cwoc-owner-chip` — owner chip in title zone matching people chip style; `#cwoc-owner-chip-container` — inline layout for owner chip; `.sharing-assigned-row` — assigned-to dropdown row in task zone; `.cwoc-stealth-toggle-row` — stealth toggle at bottom of people zone |
 | Read-Only Banner | `.cwoc-readonly-banner` — banner for viewer-role shared chits with warning background and border |
+| People Expand Modal | `.people-expand-modal` — nearly full-screen modal overlay with alphabetical list of all people (contacts + system users), type labels ("Contact", "Viewer", "Manager", "Assigned"), shrink button (⤡), and ESC-to-close support |
 | Responsive (≤400px) | Compact chit-specific overrides |
 | Responsive (≤480px) | Mobile chit-specific overrides |
 
@@ -2103,13 +2136,14 @@ src/backend/main.py
   ├── src.backend.migrations  (all migrate_* functions, including migrate_add_multi_user, migrate_add_sharing)
   ├── src.backend.middleware   (AuthMiddleware)
   ├── src.backend.weather     (start_weather_schedulers)
-  └── src.backend.routes.*    (all 9 route modules, including auth_router, users_router, and sharing_router)
+  └── src.backend.routes.*    (all 10 route modules, including auth_router, users_router, sharing_router, and notifications_router)
 
 src/backend/routes/chits.py
   ├── src.backend.db           (DB_PATH, serialize/deserialize, compute_system_tags, _build_export_envelope)
   ├── src.backend.models       (Chit, ImportRequest)
   ├── src.backend.sharing      (resolve_effective_role, can_edit_chit, can_delete_chit, can_manage_sharing)
-  └── src.backend.routes.audit (insert_audit_entry, compute_audit_diff, get_actor_from_request)
+  ├── src.backend.routes.audit (insert_audit_entry, compute_audit_diff, get_actor_from_request)
+  └── src.backend.routes.notifications (_create_share_notifications)
 
 src/backend/routes/trash.py
   └── src.backend.db           (DB_PATH, deserialize_json_field)
@@ -2135,7 +2169,11 @@ src/backend/routes/health.py
 src/backend/routes/sharing.py
   ├── src.backend.db           (DB_PATH, serialize_json_field, deserialize_json_field)
   ├── src.backend.sharing      (can_manage_sharing, get_shared_chits_for_user)
-  └── src.backend.routes.audit (insert_audit_entry, get_actor_from_request)
+  ├── src.backend.routes.audit (insert_audit_entry, get_actor_from_request)
+  └── src.backend.routes.notifications (_create_share_notifications)
+
+src/backend/routes/notifications.py
+  └── src.backend.db           (DB_PATH, serialize_json_field, deserialize_json_field)
 
 src/backend/routes/network_access.py
   ├── src.backend.db           (DB_PATH)
@@ -2177,7 +2215,7 @@ src/backend/models.py
   └── (no internal CWOC imports — leaf module)
 ```
 
-**Dependency summary:** `db.py`, `models.py`, and `auth_utils.py` are leaf modules with no internal imports. `routes/audit.py` is imported by `chits.py`, `contacts.py`, `settings.py`, `health.py`, and `network_access.py` for audit logging. `auth_utils.py` is imported by `routes/auth.py`, `routes/users.py`, and `migrations.py`. `middleware.py` is imported by `main.py`. All route modules import from `db.py`.
+**Dependency summary:** `db.py`, `models.py`, and `auth_utils.py` are leaf modules with no internal imports. `routes/audit.py` is imported by `chits.py`, `contacts.py`, `settings.py`, `health.py`, `sharing.py`, and `network_access.py` for audit logging. `routes/notifications.py` is imported by `chits.py` and `sharing.py` for notification creation. `auth_utils.py` is imported by `routes/auth.py`, `routes/users.py`, and `migrations.py`. `middleware.py` is imported by `main.py`. All route modules import from `db.py`.
 
 ### 5.2 Frontend Script Load Dependencies
 

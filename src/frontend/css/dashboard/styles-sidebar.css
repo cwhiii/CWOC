@@ -333,3 +333,121 @@
     font-size: 0.8em;
     padding: 6px;
 }
+
+/* ── Notification Inbox ───────────────────────────────────────────────────── */
+.cwoc-notif-inbox-btn {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.cwoc-notif-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    font-size: 0.7em;
+    font-weight: bold;
+    color: #fff8e1;
+    background: #a0522d;
+    border-radius: 9px;
+    line-height: 1;
+}
+
+.cwoc-notif-inbox-list {
+    margin-top: 6px;
+    max-height: 260px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.cwoc-notif-empty {
+    font-size: 0.8em;
+    opacity: 0.55;
+    text-align: center;
+    padding: 8px 0;
+    color: #4a3728;
+}
+
+.cwoc-notif-card {
+    background: #fffaf0;
+    border: 1px solid rgba(107, 78, 49, 0.3);
+    border-radius: 4px;
+    padding: 8px 10px;
+}
+
+.cwoc-notif-title {
+    display: block;
+    font-size: 0.85em;
+    font-weight: bold;
+    color: #3c2f2f;
+    text-decoration: none;
+    cursor: pointer;
+    margin-bottom: 2px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.cwoc-notif-title:hover {
+    text-decoration: underline;
+    color: #8b5a2b;
+}
+
+.cwoc-notif-owner {
+    font-size: 0.75em;
+    color: #6b4e31;
+    opacity: 0.8;
+    margin-bottom: 6px;
+}
+
+.cwoc-notif-actions {
+    display: flex;
+    gap: 6px;
+}
+
+.cwoc-notif-accept-btn,
+.cwoc-notif-decline-btn {
+    flex: 1;
+    padding: 4px 0;
+    font-size: 0.75em;
+    font-family: 'Lora', Georgia, serif;
+    border: 1px solid #6b4e31;
+    border-radius: 3px;
+    cursor: pointer;
+    text-align: center;
+}
+
+.cwoc-notif-accept-btn {
+    background: #5a8a5a;
+    color: #fff8e1;
+    border-color: #4a7a4a;
+}
+.cwoc-notif-accept-btn:hover {
+    background: #4a7a4a;
+}
+
+.cwoc-notif-decline-btn {
+    background: #a0522d;
+    color: #fff8e1;
+    border-color: #8b4513;
+}
+.cwoc-notif-decline-btn:hover {
+    background: #8b4513;
+}
+
+.cwoc-notif-inbox-list::-webkit-scrollbar {
+    width: 6px;
+}
+.cwoc-notif-inbox-list::-webkit-scrollbar-track {
+    background: rgba(139, 90, 43, 0.08);
+}
+.cwoc-notif-inbox-list::-webkit-scrollbar-thumb {
+    background: rgba(139, 90, 43, 0.3);
+    border-radius: 3px;
+}

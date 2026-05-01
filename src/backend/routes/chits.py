@@ -20,6 +20,7 @@ from src.backend.db import (
 from src.backend.models import Chit, ImportRequest
 from src.backend.routes.audit import insert_audit_entry, compute_audit_diff, get_actor_from_request
 from src.backend.sharing import resolve_effective_role, can_edit_chit, can_delete_chit, can_manage_sharing
+from src.backend.routes.notifications import _create_share_notifications
 
 
 logger = logging.getLogger(__name__)
@@ -367,10 +368,13 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
             if not can_edit_chit(existing_dict_check, user_id, owner_settings):
                 raise HTTPException(status_code=403, detail="You have read-only access to this chit")
 
-            # Non-managers/non-owners cannot change shares, stealth, or assigned_to — preserve existing values
+            # Stealth is ALWAYS preserved for non-owners (stealth is owner-only)
+            if existing_dict_check.get("owner_id") != user_id:
+                chit.stealth = bool(existing_dict_check.get("stealth"))
+
+            # Non-managers cannot change shares or assigned_to — preserve existing values
             if not can_manage_sharing(existing_dict_check, user_id, owner_settings):
                 chit.shares = deserialize_json_field(existing_dict_check.get("shares"))
-                chit.stealth = bool(existing_dict_check.get("stealth"))
                 chit.assigned_to = existing_dict_check.get("assigned_to")
 
             # Capture old state for audit diff
@@ -458,6 +462,24 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                     insert_audit_entry(conn, "chit", chit_id, "updated", actor, changes=diff, entity_summary=chit.title)
             except Exception as e:
                 logger.error(f"Audit logging failed for chit update (best-effort): {str(e)}")
+
+            # Create notifications for newly shared users
+            try:
+                old_shares = deserialize_json_field(old_chit_dict.get("shares")) or []
+                new_shares = chit.shares if isinstance(chit.shares, list) else []
+                old_assigned = old_chit_dict.get("assigned_to")
+                # Look up owner display name for the notification
+                cursor.execute("SELECT display_name, username FROM users WHERE id = ?", (existing_dict_check.get("owner_id") or user_id,))
+                _owner_row = cursor.fetchone()
+                _owner_display = _owner_row[0] or _owner_row[1] if _owner_row else ""
+                _create_share_notifications(
+                    cursor, chit_id, chit.title, _owner_display,
+                    old_shares, new_shares,
+                    assigned_to_new=chit.assigned_to,
+                    assigned_to_old=old_assigned,
+                )
+            except Exception as e:
+                logger.error(f"Notification creation failed for chit update (best-effort): {str(e)}")
         else:
             # Create new chit — look up owner info
             cursor.execute("SELECT display_name, username FROM users WHERE id = ?", (user_id,))
@@ -549,8 +571,18 @@ def delete_chit(chit_id: str, request: Request):
         # Capture chit title for audit logging before soft-delete
         chit_columns = [col[0] for col in cursor.description]
         chit_dict = dict(zip(chit_columns, existing_chit))
-        # Only owner can delete — non-owners get 404 to avoid revealing chit existence
-        if not can_delete_chit(chit_dict, user_id):
+
+        # Load owner settings for role resolution (needed for non-owner managers)
+        owner_settings = None
+        chit_owner_id = chit_dict.get("owner_id")
+        if chit_owner_id and chit_owner_id != user_id:
+            cursor.execute("SELECT shared_tags FROM settings WHERE user_id = ?", (chit_owner_id,))
+            settings_row = cursor.fetchone()
+            if settings_row and settings_row[0]:
+                owner_settings = {"shared_tags": settings_row[0]}
+
+        # Owner or manager can delete — others get 404 to avoid revealing chit existence
+        if not can_delete_chit(chit_dict, user_id, owner_settings):
             raise HTTPException(status_code=404, detail="Chit not found")
         chit_title = chit_dict.get("title")
 
@@ -639,6 +671,11 @@ def update_rsvp_status(chit_id: str, body: dict, request: Request):
             detail="Invalid rsvp_status. Must be one of: invited, accepted, declined",
         )
 
+    # Cross-user RSVP protection: reject if a target_user_id is specified and differs from the requester
+    target_user_id = body.get("target_user_id")
+    if target_user_id and target_user_id != request.state.user_id:
+        raise HTTPException(status_code=403, detail="You can only update your own RSVP status")
+
     conn = None
     try:
         user_id = request.state.user_id
@@ -655,7 +692,7 @@ def update_rsvp_status(chit_id: str, body: dict, request: Request):
         if row["owner_id"] == user_id:
             raise HTTPException(status_code=403, detail="Owner cannot have RSVP status")
 
-        # Parse shares and find the requesting user's entry
+        # Parse shares and find the requesting user's own entry only
         shares = deserialize_json_field(row["shares"]) or []
         user_found = False
         for entry in shares:
@@ -673,6 +710,16 @@ def update_rsvp_status(chit_id: str, body: dict, request: Request):
             "UPDATE chits SET shares = ?, modified_datetime = ? WHERE id = ?",
             (serialize_json_field(shares), current_time, chit_id),
         )
+
+        # Sync corresponding notification status to match the new RSVP status
+        try:
+            cursor.execute(
+                """UPDATE notifications SET status = ?
+                   WHERE user_id = ? AND chit_id = ? AND status = 'pending'""",
+                (rsvp_status, user_id, chit_id),
+            )
+        except Exception as e:
+            logger.error(f"Notification sync failed for RSVP update (best-effort): {str(e)}")
 
         # Audit logging
         try:

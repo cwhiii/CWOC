@@ -62,6 +62,15 @@ function _initPeopleAutocomplete() {
       input.blur();
     }
   });
+
+  // Wire up assigned-to dropdown change handler (Requirements 2.1, 2.2, 2.3)
+  var assignedSelect = document.getElementById('sharingAssignedTo');
+  if (assignedSelect) {
+    assignedSelect.addEventListener('change', function () {
+      _onAssignedToChange();
+      setSaveButtonUnsaved();
+    });
+  }
 }
 
 function _clearPeopleSearch(event) {
@@ -362,6 +371,12 @@ function _findShareByUserId(userId) {
 
 function _addShare(userId, role, displayName) {
   if (_findShareByUserId(userId)) return; // already shared
+
+  // Self-invite prevention (Requirement 1.6)
+  var currentUser = (typeof getCurrentUser === 'function') ? getCurrentUser() : null;
+  var currentUserId = currentUser ? (currentUser.user_id || currentUser.id) : null;
+  if (currentUserId && userId === currentUserId) return;
+
   _currentShares.push({ user_id: userId, role: role, display_name: displayName || '(Unknown User)', rsvp_status: 'invited' });
   setSaveButtonUnsaved();
   _renderPeopleChips();
@@ -427,12 +442,51 @@ function _renderStealthToggle() {
   container.appendChild(row);
 }
 
-// ── Assigned-to dropdown sync (stub for Task 6) ─────────────────────────────
+// ── Assigned-to dropdown sync (Requirement 2.5) ─────────────────────────────
+
+/**
+ * Handle assigned-to dropdown change: auto-add user to shares as manager.
+ * Requirements 2.1, 2.2, 2.3, 10.2, 10.3
+ */
+function _onAssignedToChange() {
+  var select = document.getElementById('sharingAssignedTo');
+  if (!select) return;
+
+  var userId = select.value;
+  if (!userId) return; // "None" selected — no auto-add needed
+
+  // Skip if the assigned user is the chit owner (owner doesn't need a share entry)
+  if (userId === _chitOwnerId) return;
+
+  var existingShare = _findShareByUserId(userId);
+  if (!existingShare) {
+    // User not in shares — add with role "manager" and rsvp_status "invited"
+    var userInfo = _getUserInfoById(userId);
+    var displayName = userInfo ? (userInfo.display_name || userInfo.username) : _getUserDisplayName(userId);
+    _currentShares.push({
+      user_id: userId,
+      role: 'manager',
+      display_name: displayName || '(Unknown User)',
+      rsvp_status: 'invited'
+    });
+    setSaveButtonUnsaved();
+    _renderPeopleChips();
+    _renderPeopleTree();
+    _updateActivePeopleCount();
+  } else if (existingShare.role === 'viewer') {
+    // User is a viewer — upgrade to manager
+    existingShare.role = 'manager';
+    setSaveButtonUnsaved();
+    _renderPeopleChips();
+    _renderPeopleTree();
+  }
+  // If already "manager", no change needed
+}
 
 /**
  * Sync the assigned-to dropdown in the Task zone with current shares.
- * Shows/hides the row, populates options from _currentShares, and clears
- * the value if the assigned user was removed.
+ * Shows/hides the row, populates options from owner + all system users
+ * (Requirement 2.5), and clears the value if the assigned user was removed.
  */
 function _syncAssignedToDropdown() {
   var row = document.getElementById('sharingAssignedRow');
@@ -442,8 +496,12 @@ function _syncAssignedToDropdown() {
   // Determine if current user can manage (owner or manager)
   var canManage = (_effectiveRole === 'owner' || _effectiveRole === 'manager' || _effectiveRole === null);
 
-  // Show the row if there are shares OR if the owner can be assigned (owner/manager viewing)
-  var hasAssignableUsers = _currentShares.length > 0 || (_chitOwnerId && canManage);
+  // Get current user to exclude from the dropdown
+  var currentUser = (typeof getCurrentUser === 'function') ? getCurrentUser() : null;
+  var currentUserId = currentUser ? (currentUser.user_id || currentUser.id) : null;
+
+  // Show the row if there are system users OR if the owner can be assigned
+  var hasAssignableUsers = (_allUsersCache && _allUsersCache.length > 0) || (_chitOwnerId && canManage);
   if (!hasAssignableUsers) {
     row.style.display = 'none';
     if (select.value) {
@@ -466,6 +524,9 @@ function _syncAssignedToDropdown() {
   noneOpt.textContent = '— None —';
   select.appendChild(noneOpt);
 
+  // Track user IDs already added to avoid duplicates
+  var addedUserIds = {};
+
   // Add the chit owner as an assignable option (only if owner/manager)
   if (_chitOwnerId && canManage) {
     var ownerOpt = document.createElement('option');
@@ -479,33 +540,35 @@ function _syncAssignedToDropdown() {
       ownerOpt.textContent = ownerName + ' (owner)';
     }
     select.appendChild(ownerOpt);
+    addedUserIds[_chitOwnerId] = true;
     if (_chitOwnerId === currentVal) currentStillValid = true;
   }
 
-  _currentShares.forEach(function (s) {
-    // Skip the owner if they somehow appear in shares (avoid duplicate)
-    if (s.user_id === _chitOwnerId) return;
+  // Populate with all system users (Requirement 2.5)
+  (_allUsersCache || []).forEach(function (u) {
+    var uid = u.id || u.user_id;
+    // Skip owner (already added above) and current user
+    if (addedUserIds[uid]) return;
+    if (currentUserId && uid === currentUserId) return;
 
     var opt = document.createElement('option');
-    opt.value = s.user_id;
-    // Show "First Last - username" format
-    var userInfo = _getUserInfoById(s.user_id);
-    var displayName = s.display_name || (userInfo ? (userInfo.display_name || userInfo.username) : _getUserDisplayName(s.user_id));
-    var username = userInfo ? (userInfo.username || '') : '';
-    // Only append username if it differs from display_name
+    opt.value = uid;
+    var displayName = u.display_name || u.username || '(Unknown)';
+    var username = u.username || '';
     if (username && username.toLowerCase() !== displayName.toLowerCase()) {
       opt.textContent = displayName + ' - ' + username;
     } else {
       opt.textContent = displayName;
     }
     select.appendChild(opt);
-    if (s.user_id === currentVal) currentStillValid = true;
+    addedUserIds[uid] = true;
+    if (uid === currentVal) currentStillValid = true;
   });
 
   if (currentStillValid) {
     select.value = currentVal;
   } else if (currentVal) {
-    // Assigned user was removed from shares — clear and mark unsaved
+    // Assigned user is no longer valid — clear and mark unsaved
     select.value = '';
     setSaveButtonUnsaved();
   }
@@ -924,3 +987,157 @@ function _setPeopleFromArray(peopleArray) {
 }
 
 document.addEventListener('DOMContentLoaded', _initPeopleAutocomplete);
+
+// ── People Expand Modal (Requirements 8.1–8.6) ──────────────────────────────
+
+/**
+ * Open the People expand modal with an alphabetical list of all people.
+ * Contacts are labeled "Contact"; system users show their sharing capacity.
+ * Requirements: 8.2, 8.3, 8.4
+ */
+function openPeopleExpandModal(event) {
+  if (event) event.stopPropagation();
+  var modal = document.getElementById('peopleExpandModal');
+  if (!modal) return;
+
+  var listContainer = document.getElementById('peopleExpandList');
+  if (!listContainer) return;
+  listContainer.innerHTML = '';
+
+  // Get current user to exclude
+  var currentUser = (typeof getCurrentUser === 'function') ? getCurrentUser() : null;
+  var currentUserId = currentUser ? (currentUser.user_id || currentUser.id) : null;
+
+  // Get assigned-to value
+  var assignedSelect = document.getElementById('sharingAssignedTo');
+  var assignedToId = assignedSelect ? assignedSelect.value : '';
+
+  // Build a unified list of all people
+  var allPeople = [];
+
+  // Add contacts
+  (_allContactsCache || []).forEach(function (c) {
+    allPeople.push({
+      displayName: c.display_name || c.given_name || '(unnamed)',
+      type: 'contact',
+      label: 'Contact',
+      imageUrl: c.image_url || null,
+      color: c.color || null
+    });
+  });
+
+  // Add system users (exclude current user)
+  (_allUsersCache || []).forEach(function (u) {
+    var uid = u.id || u.user_id;
+    if (currentUserId && uid === currentUserId) return;
+
+    var label = '';
+    var shareEntry = _findShareByUserId(uid);
+
+    if (uid === assignedToId) {
+      label = 'Assigned';
+    } else if (shareEntry) {
+      var role = shareEntry.role || 'viewer';
+      var rsvp = shareEntry.rsvp_status || 'invited';
+      if (rsvp === 'invited') {
+        label = 'Invited/' + (role === 'manager' ? 'Manager' : 'Viewer');
+      } else {
+        label = role === 'manager' ? 'Manager' : 'Viewer';
+      }
+    } else {
+      label = 'User';
+    }
+
+    allPeople.push({
+      displayName: u.display_name || u.username || '(unknown)',
+      type: 'user',
+      label: label,
+      imageUrl: u.profile_image_url || null,
+      color: null
+    });
+  });
+
+  // Sort alphabetically by display name
+  allPeople.sort(function (a, b) {
+    return (a.displayName || '').toLowerCase().localeCompare((b.displayName || '').toLowerCase());
+  });
+
+  // Group by first letter
+  var groups = {};
+  allPeople.forEach(function (person) {
+    var letter = ((person.displayName || '?')[0] || '?').toUpperCase();
+    if (!groups[letter]) groups[letter] = [];
+    groups[letter].push(person);
+  });
+
+  var letters = Object.keys(groups).sort();
+
+  if (letters.length === 0) {
+    listContainer.innerHTML = '<div class="cwoc-people-expand-empty">No people found.</div>';
+    modal.style.display = 'flex';
+    return;
+  }
+
+  letters.forEach(function (letter) {
+    var groupHeader = document.createElement('div');
+    groupHeader.className = 'cwoc-people-expand-group-header';
+    groupHeader.textContent = letter;
+    listContainer.appendChild(groupHeader);
+
+    groups[letter].forEach(function (person) {
+      var entry = document.createElement('div');
+      entry.className = 'cwoc-people-expand-entry';
+
+      var thumb = document.createElement('span');
+      thumb.className = 'cwoc-people-expand-thumb';
+      if (person.imageUrl) {
+        thumb.innerHTML = '<img src="' + person.imageUrl + '" alt="" />';
+      } else {
+        var placeholder = document.createElement('span');
+        placeholder.className = 'cwoc-people-expand-thumb-placeholder';
+        placeholder.textContent = (person.displayName || '?')[0].toUpperCase();
+        if (person.color) {
+          placeholder.style.backgroundColor = person.color;
+          placeholder.style.color = (typeof isLightColor === 'function' && isLightColor(person.color)) ? '#2b1e0f' : '#fff';
+        }
+        thumb.appendChild(placeholder);
+      }
+      entry.appendChild(thumb);
+
+      var nameSpan = document.createElement('span');
+      nameSpan.className = 'cwoc-people-expand-name';
+      nameSpan.textContent = person.displayName;
+      entry.appendChild(nameSpan);
+
+      var labelSpan = document.createElement('span');
+      labelSpan.className = 'cwoc-people-expand-label';
+      if (person.type === 'contact') {
+        labelSpan.classList.add('cwoc-people-expand-label-contact');
+      } else if (person.label === 'Assigned') {
+        labelSpan.classList.add('cwoc-people-expand-label-assigned');
+      } else if (person.label.indexOf('Manager') !== -1) {
+        labelSpan.classList.add('cwoc-people-expand-label-manager');
+      } else if (person.label.indexOf('Viewer') !== -1) {
+        labelSpan.classList.add('cwoc-people-expand-label-viewer');
+      }
+      labelSpan.textContent = person.label;
+      entry.appendChild(labelSpan);
+
+      listContainer.appendChild(entry);
+    });
+  });
+
+  modal.style.display = 'flex';
+}
+
+/**
+ * Close the People expand modal and return focus to the People zone.
+ * Requirements: 8.5
+ */
+function closePeopleExpandModal() {
+  var modal = document.getElementById('peopleExpandModal');
+  if (modal) modal.style.display = 'none';
+  // Return focus to the People zone
+  var peopleSection = document.getElementById('peopleSection');
+  if (peopleSection) peopleSection.focus();
+}

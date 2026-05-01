@@ -238,6 +238,19 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Sharing -->
+                <div class="filter-group" id="filter-sharing">
+                    <label class="filter-label" onclick="toggleFilterGroup('filter-sharing')">
+                        <span class="section-toggle">▶</span> Sharing
+                    </label>
+                    <div class="filter-group-body" style="display:none;">
+                        <div class="multi-select">
+                            <label><input type="checkbox" id="filter-shared-with-me" onchange="onFilterChange()" /> 🔗 Shared with me</label>
+                            <label><input type="checkbox" id="filter-shared-by-me" onchange="onFilterChange()" /> 📤 Shared by me</label>
+                        </div>
+                    </div>
+                </div>
                 </div><!-- /filters-body -->
             </div>
 
@@ -267,6 +280,14 @@
                         🌤️ Weather
                     </button>
                 </div>
+            </div>
+
+            <!-- Notification Inbox -->
+            <div class="sidebar-section" id="section-notif-inbox">
+                <button class="action-button cwoc-notif-inbox-btn" id="notif-inbox-btn" onclick="_toggleNotifInbox()" title="Sharing notifications">
+                    🔔 Notifications <span class="cwoc-notif-badge" id="notif-badge" style="display:none;">0</span>
+                </button>
+                <div class="cwoc-notif-inbox-list" id="notif-inbox-list" style="display:none;"></div>
             </div>
             </div><!-- /sidebar-scroll -->
 

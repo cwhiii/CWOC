@@ -121,6 +121,9 @@ function _clearAllFilters() {
   document.querySelectorAll('input[data-any="true"]').forEach(function(cb) { cb.checked = true; });
   if (window._sidebarPeopleSelection) window._sidebarPeopleSelection.length = 0;
   if (window._cachedPeopleContacts) _renderPeopleFilterPanel(window._cachedPeopleContacts);
+  // Clear sharing filters (Requirement 7.5)
+  var swm = document.getElementById('filter-shared-with-me'); if (swm) swm.checked = false;
+  var sbm = document.getElementById('filter-shared-by-me'); if (sbm) sbm.checked = false;
   currentSortField = null;
   var sortSel = document.getElementById('sort-select'); if (sortSel) sortSel.value = '';
   _updateSortUI();
@@ -153,8 +156,10 @@ function _updateClearFiltersButton() {
   var showUnmarked = document.getElementById('show-unmarked')?.checked ?? true;
   var hidePastDue = document.getElementById('hide-past-due')?.checked ?? false;
   var hideComplete = document.getElementById('hide-complete')?.checked ?? false;
+  var hasSharingFilter = (document.getElementById('filter-shared-with-me')?.checked ?? false)
+    || (document.getElementById('filter-shared-by-me')?.checked ?? false);
   var isDefault = !hasStatusFilter && !hasLabelFilter && !hasPriorityFilter && !hasPeopleFilter
-    && !searchText && showPinned && !showArchived && showUnmarked && !hidePastDue && !hideComplete && !currentSortField;
+    && !searchText && showPinned && !showArchived && showUnmarked && !hidePastDue && !hideComplete && !currentSortField && !hasSharingFilter;
   section.style.display = isDefault ? 'none' : '';
 
   var resetBtn = document.getElementById('reset-defaults-btn');
@@ -723,3 +728,122 @@ async function _loadLabelFilters() {
 }
 
 /* ── Saved Searches are in main-search.js ────────────────────────────────── */
+
+/* ── Notification Inbox ──────────────────────────────────────────────────── */
+
+/** Cached notification list for the inbox. */
+var _notifInboxItems = [];
+
+/** Toggle the notification inbox expanded/collapsed. */
+function _toggleNotifInbox() {
+  var list = document.getElementById('notif-inbox-list');
+  if (!list) return;
+  var isHidden = list.style.display === 'none';
+  list.style.display = isHidden ? '' : 'none';
+  if (isHidden) _renderNotifInbox();
+}
+
+/** Fetch notifications from the API and update the badge + cached list. */
+async function _fetchNotifications() {
+  try {
+    var resp = await fetch('/api/notifications');
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    var all = await resp.json();
+    _notifInboxItems = Array.isArray(all) ? all.filter(function(n) { return n.status === 'pending'; }) : [];
+    _updateNotifBadge();
+    // If inbox is currently expanded, re-render
+    var list = document.getElementById('notif-inbox-list');
+    if (list && list.style.display !== 'none') _renderNotifInbox();
+  } catch (e) {
+    console.error('Failed to fetch notifications:', e);
+    _notifInboxItems = [];
+    _updateNotifBadge();
+  }
+}
+
+/** Update the badge count on the inbox button. */
+function _updateNotifBadge() {
+  var badge = document.getElementById('notif-badge');
+  if (!badge) return;
+  var count = _notifInboxItems.length;
+  if (count > 0) {
+    badge.textContent = count;
+    badge.style.display = '';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+/** Render the expanded notification list. */
+function _renderNotifInbox() {
+  var list = document.getElementById('notif-inbox-list');
+  if (!list) return;
+  list.innerHTML = '';
+
+  if (_notifInboxItems.length === 0) {
+    list.innerHTML = '<div class="cwoc-notif-empty">No pending notifications</div>';
+    return;
+  }
+
+  _notifInboxItems.forEach(function(notif) {
+    var card = document.createElement('div');
+    card.className = 'cwoc-notif-card';
+    card.dataset.notifId = notif.id;
+
+    var titleLink = document.createElement('a');
+    titleLink.className = 'cwoc-notif-title';
+    titleLink.textContent = notif.chit_title || '(Untitled chit)';
+    titleLink.href = '/frontend/html/editor.html?id=' + encodeURIComponent(notif.chit_id);
+    titleLink.title = 'Open chit in editor';
+    titleLink.addEventListener('click', function(e) {
+      e.preventDefault();
+      storePreviousState();
+      window.location.href = this.href;
+    });
+    card.appendChild(titleLink);
+
+    var ownerLine = document.createElement('div');
+    ownerLine.className = 'cwoc-notif-owner';
+    var typeLabel = notif.notification_type === 'assigned' ? 'assigned by' : 'from';
+    ownerLine.textContent = typeLabel + ' ' + (notif.owner_display_name || 'Unknown');
+    card.appendChild(ownerLine);
+
+    var actions = document.createElement('div');
+    actions.className = 'cwoc-notif-actions';
+
+    var acceptBtn = document.createElement('button');
+    acceptBtn.className = 'cwoc-notif-accept-btn';
+    acceptBtn.textContent = 'Accept';
+    acceptBtn.addEventListener('click', function() { _respondNotification(notif.id, 'accepted'); });
+    actions.appendChild(acceptBtn);
+
+    var declineBtn = document.createElement('button');
+    declineBtn.className = 'cwoc-notif-decline-btn';
+    declineBtn.textContent = 'Decline';
+    declineBtn.addEventListener('click', function() { _respondNotification(notif.id, 'declined'); });
+    actions.appendChild(declineBtn);
+
+    card.appendChild(actions);
+    list.appendChild(card);
+  });
+}
+
+/** Accept or decline a notification via PATCH, then remove from list. */
+async function _respondNotification(notifId, status) {
+  try {
+    var resp = await fetch('/api/notifications/' + encodeURIComponent(notifId), {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: status })
+    });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    // Remove from cached list
+    _notifInboxItems = _notifInboxItems.filter(function(n) { return n.id !== notifId; });
+    _updateNotifBadge();
+    _renderNotifInbox();
+    // Refresh chits to reflect RSVP changes
+    if (typeof fetchChits === 'function') fetchChits();
+  } catch (e) {
+    console.error('Failed to ' + status + ' notification ' + notifId + ':', e);
+  }
+}

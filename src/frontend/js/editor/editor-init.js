@@ -928,6 +928,13 @@ document.addEventListener("DOMContentLoaded", function () {
       const fpOpen = document.querySelector('.flatpickr-calendar.open');
       if (fpOpen) { fpOpen._flatpickr?.close(); return; }
 
+      const peopleExpandModalEl = document.getElementById('peopleExpandModal');
+      if (peopleExpandModalEl && peopleExpandModalEl.style.display === 'flex') {
+        e.preventDefault();
+        closePeopleExpandModal();
+        return;
+      }
+
       const notesModalEl = document.getElementById('notesModal');
       if (notesModalEl && notesModalEl.style.display === 'flex') {
         e.preventDefault();

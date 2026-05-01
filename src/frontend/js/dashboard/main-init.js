@@ -122,6 +122,39 @@ function _applyMultiSelectFilters(chitList) {
     });
   }
 
+  // Sharing filters (Requirement 7.2, 7.3, 7.4)
+  var sharedWithMe = document.getElementById('filter-shared-with-me');
+  var sharedByMe = document.getElementById('filter-shared-by-me');
+  var sharedWithMeActive = sharedWithMe && sharedWithMe.checked;
+  var sharedByMeActive = sharedByMe && sharedByMe.checked;
+
+  if (sharedWithMeActive || sharedByMeActive) {
+    var currentUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+    var currentUserId = currentUser ? currentUser.user_id : null;
+
+    result = result.filter(function(c) {
+      var matchesWithMe = false;
+      var matchesByMe = false;
+
+      if (sharedWithMeActive && currentUserId) {
+        // Shared with me: _shared is true and user is not the owner
+        matchesWithMe = c._shared === true && c.owner_id !== currentUserId;
+      }
+
+      if (sharedByMeActive && currentUserId) {
+        // Shared by me: owned by current user with at least one share entry
+        var shares = Array.isArray(c.shares) ? c.shares : [];
+        matchesByMe = c.owner_id === currentUserId && shares.length > 0;
+      }
+
+      // If both filters are active, show chits matching either condition (union)
+      if (sharedWithMeActive && sharedByMeActive) return matchesWithMe || matchesByMe;
+      if (sharedWithMeActive) return matchesWithMe;
+      if (sharedByMeActive) return matchesByMe;
+      return true;
+    });
+  }
+
   return result;
 }
 
@@ -753,6 +786,8 @@ document.addEventListener("DOMContentLoaded", function () {
   _loadLabelFilters();
   _buildPeopleFilterPanel();
   _renderSavedSearches();
+  // Fetch sharing notifications for inbox badge
+  if (typeof _fetchNotifications === 'function') _fetchNotifications();
   _updateSortUI();
   loadSavedLocations().then(function () {
     // Pre-load weather for default location into cache

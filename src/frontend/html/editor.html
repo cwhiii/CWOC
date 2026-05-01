@@ -686,6 +686,14 @@
                             <div class="zone-actions">
                                 <button
                                     type="button"
+                                    onclick="openPeopleExpandModal(event)"
+                                    id="open-people-modal-button"
+                                    class="zone-button"
+                                >
+                                    <i class="fas fa-expand"></i> Expand
+                                </button>
+                                <button
+                                    type="button"
                                     onclick="_toggleAllPeopleGroups(event, true)"
                                     class="zone-button"
                                 >
@@ -860,6 +868,17 @@
                         ></div>
                     </div>
                 </div>
+            </div>
+        </div>
+
+        <!-- People Expand Modal (Requirement 8.2) -->
+        <div id="peopleExpandModal" class="cwoc-people-expand-overlay" style="display: none">
+            <div class="cwoc-people-expand-content">
+                <div class="cwoc-people-expand-header">
+                    <h2>👥 People</h2>
+                    <button type="button" class="cwoc-people-expand-shrink-btn" onclick="closePeopleExpandModal()" title="Shrink">⤡</button>
+                </div>
+                <div class="cwoc-people-expand-body" id="peopleExpandList"></div>
             </div>
         </div>
 

@@ -305,6 +305,26 @@
                 .tag-sharing-item .tag-share-remove:hover {
                     background: #8b4513;
                 }
+                .tag-share-perm-toggle {
+                    font-size: 0.8em;
+                    padding: 1px 6px;
+                    border-radius: 3px;
+                    border: 1px solid rgba(139, 90, 43, 0.4);
+                    background: #fdf5e6;
+                    color: #4a2c2a;
+                    cursor: pointer;
+                    font-family: inherit;
+                    flex-shrink: 0;
+                    transition: background 0.15s;
+                }
+                .tag-share-perm-toggle:hover {
+                    background: #e8dcc8;
+                }
+                .tag-share-perm-toggle[data-perm="manage"] {
+                    background: rgba(139, 90, 43, 0.2);
+                    border-color: #8b5a2b;
+                    font-weight: 600;
+                }
                 .tag-sharing-empty {
                     opacity: 0.5;
                     font-size: 0.85em;
@@ -929,16 +949,7 @@
                         <span id="tag-favorite-star" onclick="toggleTagFavorite()" style="font-size:1.4em;cursor:pointer;color:#999;flex-shrink:0;" title="Favorite this Tag">☆</span>
                         <input type="text" id="tag-name" placeholder="Enter tag name" style="flex:1;min-width:0;" />
                     </div>
-                    <label for="tag-color">Background Color:</label>
-                    <input type="color" id="tag-color" value="#d4c4b0" />
-                    <div id="tag-color-swatches" style="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;"></div>
-                    <label for="tag-font-color">Font Color:</label>
-                    <input type="color" id="tag-font-color" value="#5c3317" />
-                    <div id="tag-font-color-swatches" style="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;"></div>
-                    <div id="tag-preview" style="display:inline-block;padding:4px 12px;border-radius:4px;font-size:1em;margin:8px 0;font-family:'Lora', Georgia, serif;">Preview</div>
-                    <div class="color-options" id="tag-color-options"></div>
-
-                    <!-- ── Tag Sharing Configuration ── -->
+                    <!-- ── Tag Sharing Configuration (above coloring per Req 6.4) ── -->
                     <div id="tag-sharing-section" style="margin-top:14px;padding-top:10px;border-top:1px solid rgba(139,90,43,0.3);">
                         <label class="setting-subheader" style="margin-top:0;">🔗 Sharing</label>
                         <div id="tag-sharing-list" style="margin-bottom:8px;"></div>
@@ -953,6 +964,15 @@
                             <button type="button" onclick="_addTagShare()" class="standard-button" style="flex-shrink:0;">➕ Share</button>
                         </div>
                     </div>
+
+                    <label for="tag-color" style="margin-top:10px;">Background Color:</label>
+                    <input type="color" id="tag-color" value="#d4c4b0" />
+                    <div id="tag-color-swatches" style="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;"></div>
+                    <label for="tag-font-color">Font Color:</label>
+                    <input type="color" id="tag-font-color" value="#5c3317" />
+                    <div id="tag-font-color-swatches" style="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;"></div>
+                    <div id="tag-preview" style="display:inline-block;padding:4px 12px;border-radius:4px;font-size:1em;margin:8px 0;font-family:'Lora', Georgia, serif;">Preview</div>
+                    <div class="color-options" id="tag-color-options"></div>
 
                     <div style="display:flex;align-items:center;gap:8px;margin-top:12px;">
                         <button onclick="saveTag()" class="standard-button">

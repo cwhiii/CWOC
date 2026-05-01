@@ -81,6 +81,10 @@ function _getUserDisplayName(userId) {
  * Reads _currentShares from editor-people.js globals, stealth checkbox
  * from the people zone, and assigned-to dropdown from the task zone.
  *
+ * Applies assign auto-add logic (Requirements 2.2, 2.3): if assigned_to
+ * is set and the user is not in shares, add them as manager. If they are
+ * a viewer, upgrade to manager.
+ *
  * @returns {Object} sharing fields to merge into the chit object
  */
 function getSharingData() {
@@ -95,6 +99,37 @@ function getSharingData() {
   // Read _currentShares from editor-people.js global
   var shares = (typeof _currentShares !== 'undefined') ? _currentShares : [];
 
+  var assignedTo = (assignedToPicker && assignedToPicker.value) ? assignedToPicker.value : null;
+
+  // Assign auto-add logic (Requirements 2.2, 2.3): ensure assigned user is in shares as manager
+  if (assignedTo) {
+    var chitOwner = (typeof _chitOwnerId !== 'undefined') ? _chitOwnerId : null;
+    // Only auto-add if the assigned user is not the chit owner
+    if (assignedTo !== chitOwner) {
+      var found = false;
+      for (var i = 0; i < shares.length; i++) {
+        if (shares[i].user_id === assignedTo) {
+          found = true;
+          // Upgrade viewer to manager
+          if (shares[i].role === 'viewer') {
+            shares[i].role = 'manager';
+          }
+          break;
+        }
+      }
+      if (!found) {
+        // Add assigned user as manager with invited status
+        var displayName = (typeof _getUserDisplayName === 'function') ? _getUserDisplayName(assignedTo) : '(Unknown User)';
+        shares.push({
+          user_id: assignedTo,
+          role: 'manager',
+          display_name: displayName,
+          rsvp_status: 'invited'
+        });
+      }
+    }
+  }
+
   // Clean shares — strip display_name before saving, preserve rsvp_status
   var cleanShares = shares.map(function (s) {
     return { user_id: s.user_id, role: s.role, rsvp_status: s.rsvp_status || 'invited' };
@@ -103,7 +138,7 @@ function getSharingData() {
   return {
     shares: cleanShares.length > 0 ? cleanShares : null,
     stealth: stealthCheckbox ? stealthCheckbox.checked : false,
-    assigned_to: (assignedToPicker && assignedToPicker.value) ? assignedToPicker.value : null,
+    assigned_to: assignedTo,
   };
 }
 

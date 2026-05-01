@@ -25,6 +25,7 @@ from src.backend.db import (
 )
 from src.backend.sharing import can_manage_sharing, get_shared_chits_for_user
 from src.backend.routes.audit import insert_audit_entry, get_actor_from_request
+from src.backend.routes.notifications import _create_share_notifications
 
 
 logger = logging.getLogger(__name__)
@@ -172,6 +173,19 @@ def set_chit_shares(chit_id: str, body: dict, request: Request):
             )
         except Exception as e:
             logger.error(f"Audit logging failed for shares update (best-effort): {str(e)}")
+
+        # Create notifications for newly shared users
+        try:
+            owner_display = chit_row.get("owner_display_name") or ""
+            assigned_to = chit_row.get("assigned_to")
+            _create_share_notifications(
+                cursor, chit_id, chit_row.get("title"), owner_display,
+                old_shares, new_shares,
+                assigned_to_new=assigned_to,
+                assigned_to_old=assigned_to,
+            )
+        except Exception as e:
+            logger.error(f"Notification creation failed for shares update (best-effort): {str(e)}")
 
         conn.commit()
         return {"shares": new_shares}
@@ -348,10 +362,16 @@ def set_shared_tags(body: dict, request: Request):
         for tag_entry in new_shared_tags:
             clean_shares = []
             for share in (tag_entry.get("shares") or []):
-                clean_shares.append({
+                entry = {
                     "user_id": share.get("user_id"),
                     "role": share.get("role"),
-                })
+                }
+                # Persist tag_permission if provided (default: "view")
+                tp = share.get("tag_permission", "view")
+                if tp not in ("view", "manage"):
+                    tp = "view"
+                entry["tag_permission"] = tp
+                clean_shares.append(entry)
             clean_shared_tags.append({
                 "tag": tag_entry.get("tag"),
                 "shares": clean_shares,

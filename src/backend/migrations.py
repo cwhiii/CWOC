@@ -909,3 +909,48 @@ def migrate_add_network_access():
     finally:
         if conn:
             conn.close()
+
+
+# ── Notifications Table: migration ───────────────────────────────────────
+
+def migrate_add_notifications():
+    """Create notifications table for the sharing notification system.
+
+    Stores notification records when chits are shared with users via
+    invite or assign actions. Each notification tracks the chit, owner,
+    type (invited/assigned), and status (pending/accepted/declined).
+
+    Fully idempotent — uses CREATE TABLE IF NOT EXISTS and
+    CREATE INDEX IF NOT EXISTS.
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS notifications (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                chit_id TEXT NOT NULL,
+                chit_title TEXT,
+                owner_display_name TEXT,
+                notification_type TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending',
+                created_datetime TEXT NOT NULL
+            )
+        """)
+
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_notifications_user_id
+            ON notifications (user_id)
+        """)
+
+        conn.commit()
+        logger.info("notifications table and indexes ready")
+    except Exception as e:
+        logger.error(f"Error creating notifications table: {str(e)}")
+        raise
+    finally:
+        if conn:
+            conn.close()

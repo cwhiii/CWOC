@@ -91,6 +91,7 @@ from src.backend.migrations import (
     migrate_add_kiosk_users,
     migrate_add_hide_declined,
     migrate_add_network_access,
+    migrate_add_notifications,
 )
 
 # Initialize database and run all migrations (same order as before)
@@ -124,6 +125,7 @@ migrate_add_sharing()
 migrate_add_kiosk_users()
 migrate_add_hide_declined()
 migrate_add_network_access()
+migrate_add_notifications()
 seed_version_info()
 
 
@@ -140,6 +142,7 @@ from src.backend.routes.contacts import router as contacts_router
 from src.backend.routes.audit import router as audit_router
 from src.backend.routes.health import router as health_router
 from src.backend.routes.sharing import sharing_router
+from src.backend.routes.notifications import notifications_router
 from src.backend.routes.network_access import router as network_access_router
 
 app.include_router(auth_router)
@@ -147,6 +150,7 @@ app.include_router(users_router)
 app.include_router(chits_router)
 app.include_router(trash_router)
 app.include_router(sharing_router)
+app.include_router(notifications_router)
 app.include_router(settings_router)
 app.include_router(contacts_router)
 app.include_router(audit_router)
