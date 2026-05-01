@@ -750,7 +750,11 @@
                         </div>
                         <div class="setting-group">
                             <h3>🛠️ Tools</h3>
-                            <button onclick="window.location.href='/wall-station?users=' + encodeURIComponent((typeof getCurrentUser === 'function' && getCurrentUser()) ? getCurrentUser().username : '')" class="standard-button" style="width:100%;">📺 Wall Station (Kiosk) →</button>
+
+                            <label class="setting-subheader">📺 Kiosk</label>
+                            <p class="setting-hint">Select users to display on the kiosk. Only chits tagged "Share" will appear.</p>
+                            <div id="kiosk-user-list" style="max-height:200px;overflow-y:auto;border:1px solid #8b5a2b;border-radius:4px;padding:8px;background:#fffaf0;margin-bottom:10px;"></div>
+                            <button onclick="_openKiosk()" class="standard-button" style="width:100%;">📺 Open Kiosk →</button>
                         </div>
                         <div class="setting-group">
                             <h3>📦 Data Management</h3>

@@ -189,7 +189,7 @@
         }
     </style>
 </head>
-<!-- No data-page-title: wall station does NOT use shared-page.js header injection -->
+<!-- No data-page-title: kiosk does NOT use shared-page.js header injection -->
 <body>
 
     <div class="settings-panel">
@@ -217,13 +217,13 @@
         &middot; <span id="cwoc-footer-version"></span>
     </div>
 
-    <!-- No shared-auth.js — wall station is unauthenticated -->
+    <!-- No shared-auth.js — kiosk is unauthenticated -->
     <!-- No shared-page.js — no header injection or nav needed -->
 
     <script>
     /* ═══════════════════════════════════════════════════════════════════════
        Kiosk — standalone unauthenticated page
-       Reads `users` query parameter, fetches /api/wall-station, renders
+       Reads `users` query parameter, fetches /api/kiosk, renders
        a combined calendar + task view with owner attribution.
        Auto-refreshes every 60 seconds.
        ═══════════════════════════════════════════════════════════════════════ */
@@ -452,7 +452,7 @@
                 return;
             }
 
-            var url = '/api/wall-station?user_ids=' + encodeURIComponent(userIds.join(','));
+            var url = '/api/kiosk?user_ids=' + encodeURIComponent(userIds.join(','));
 
             fetch(url)
                 .then(function(r) {
@@ -505,7 +505,7 @@
                     updatedEl.textContent = 'Last updated: ' + now.toLocaleTimeString();
                 })
                 .catch(function(err) {
-                    console.error('Wall station fetch error:', err);
+                    console.error('Kiosk fetch error:', err);
                     contentEl.innerHTML = '<div class="wall-error">' +
                         '<i class="fa-solid fa-triangle-exclamation"></i> ' +
                         _esc(err.message || 'Unable to load data.') + ' Will retry automatically.' +

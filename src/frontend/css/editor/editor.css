@@ -635,14 +635,26 @@ input.error {
 
 .priority-status-group {
     display: flex;
-    flex-wrap: wrap;
+    flex-direction: column;
     gap: 10px;
 }
 
 .priority-status-group > .field {
-    flex: 1 1 0;
-    min-width: 140px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
     margin-bottom: 0;
+}
+
+.priority-status-group > .field label {
+    min-width: 80px;
+    flex-shrink: 0;
+    text-align: right;
+}
+
+.priority-status-group > .field select {
+    flex: 1;
+    max-width: 300px;
 }
 
 #locationSection {
@@ -1720,8 +1732,7 @@ hr {
     }
     .notes-checklist-container,
     .status-location-container,
-    #titleWeatherContainer,
-    .priority-status-group {
+    #titleWeatherContainer {
         grid-template-columns: 1fr;
         gap: 10px;
     }
@@ -1730,8 +1741,7 @@ hr {
     .status-fields-group,
     #locationSection,
     #titleWeatherContainer .field,
-    #compactWeatherSection,
-    .priority-status-group > * {
+    #compactWeatherSection {
         width: 100%;
         min-width: unset;
     }

@@ -16,8 +16,8 @@ import urllib.parse
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi import APIRouter, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
+from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
 
 from src.backend.db import (
     DB_PATH, _update_lock, deserialize_json_field,
@@ -276,11 +276,11 @@ async def editor(id: str = None):
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# Wall Station
+# Kiosk
 # ═══════════════════════════════════════════════════════════════════════════
 
-@router.get("/api/wall-station")
-def get_wall_station(user_ids: str = Query("", description="Comma-separated user UUIDs or usernames")):
+@router.get("/api/kiosk")
+def get_kiosk(user_ids: str = Query("", description="Comma-separated user UUIDs or usernames")):
     """Return combined non-deleted, non-stealth chits from the specified users.
 
     Unauthenticated endpoint — no request.state.user_id available.
@@ -293,11 +293,11 @@ def get_wall_station(user_ids: str = Query("", description="Comma-separated user
     }
     """
     if not user_ids or not user_ids.strip():
-        raise HTTPException(status_code=400, detail="Invalid user IDs")
+        raise HTTPException(status_code=400, detail="No user IDs provided. Pass ?user_ids=username1,username2")
 
     raw_ids = [uid.strip() for uid in user_ids.split(",") if uid.strip()]
     if not raw_ids:
-        raise HTTPException(status_code=400, detail="Invalid user IDs")
+        raise HTTPException(status_code=400, detail="No user IDs provided. Pass ?user_ids=username1,username2")
 
     conn = None
     try:
@@ -312,18 +312,15 @@ def get_wall_station(user_ids: str = Query("", description="Comma-separated user
             raw_ids + raw_ids,
         )
         found_rows = cursor.fetchall()
-        found_ids = {row["id"] for row in found_rows}
-        found_usernames = {row["username"] for row in found_rows if row["username"]}
 
-        # Validate that all provided identifiers matched
-        unmatched = [r for r in raw_ids if r not in found_ids and r not in found_usernames]
-        if unmatched:
-            raise HTTPException(status_code=400, detail="Invalid user IDs")
+        # If no identifiers matched at all, return an error
+        if not found_rows:
+            raise HTTPException(status_code=400, detail=f"No matching users found for: {', '.join(raw_ids)}")
 
-        resolved_ids = list(found_ids)
+        resolved_ids = [row["id"] for row in found_rows]
         users_list = [{"id": row["id"], "display_name": row["display_name"] or ""} for row in found_rows]
 
-        # Fetch non-deleted, non-stealth chits owned by those users
+        # Fetch non-deleted, non-stealth chits owned by those users that have the "Share" tag
         id_placeholders = ",".join("?" for _ in resolved_ids)
         cursor.execute(
             f"""SELECT * FROM chits
@@ -340,22 +337,40 @@ def get_wall_station(user_ids: str = Query("", description="Comma-separated user
             _deserialize_chit_fields(chit)
             chit["assigned_to"] = chit.get("assigned_to")
             chit["owner_display_name"] = chit.get("owner_display_name", "")
-            chits.append(chit)
+            # Only include chits that have the "Share" tag
+            chit_tags = chit.get("tags") or []
+            if isinstance(chit_tags, list) and any(t.lower() == "share" for t in chit_tags):
+                chits.append(chit)
 
         return {"chits": chits, "users": users_list}
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error fetching wall station data: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to fetch wall station data: {str(e)}")
+        logger.error(f"Error fetching kiosk data: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch kiosk data: {str(e)}")
     finally:
         if conn:
             conn.close()
 
 
+@router.get("/kiosk")
+async def kiosk_page():
+    return FileResponse("/app/src/frontend/html/kiosk.html")
+
+
+# Legacy redirects for old /wall-station URLs
 @router.get("/wall-station")
-async def wall_station_page():
-    return FileResponse("/app/src/frontend/html/wall-station.html")
+async def wall_station_redirect(request: Request):
+    query = str(request.url.query)
+    target = "/kiosk" + ("?" + query if query else "")
+    return RedirectResponse(url=target, status_code=301)
+
+
+@router.get("/api/wall-station")
+def wall_station_api_redirect(request: Request):
+    query = str(request.url.query)
+    target = "/api/kiosk" + ("?" + query if query else "")
+    return RedirectResponse(url=target, status_code=301)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -382,15 +397,22 @@ def health_check():
 CONFIGURINATOR_PATH = "/app/install/configurinator.sh"
 UPDATE_LOG_PATH = "/app/data/update.log"
 RELEASE_NOTES_PATH = "/app/release_notes.md"
+# Fallback paths for release notes (handles different deployment layouts)
+_RELEASE_NOTES_PATHS = [
+    "/app/release_notes.md",
+    "release_notes.md",
+]
 
 @router.get("/api/release-notes")
 def get_release_notes():
     """Return the contents of the release_notes.md file."""
-    try:
-        with open(RELEASE_NOTES_PATH, "r") as f:
-            return {"content": f.read()}
-    except (FileNotFoundError, IOError):
-        return {"content": None}
+    for path in _RELEASE_NOTES_PATHS:
+        try:
+            with open(path, "r") as f:
+                return {"content": f.read()}
+        except (FileNotFoundError, IOError):
+            continue
+    return {"content": None}
 
 
 @router.get("/api/update/log")

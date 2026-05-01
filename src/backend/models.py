@@ -54,6 +54,7 @@ class Settings(BaseModel):
     overdue_border_color: Optional[str] = "#b22222"  # Border color for overdue chits
     blocked_border_color: Optional[str] = "#DAA520"  # Border color for blocked chits
     shared_tags: Optional[Any] = None  # JSON array: [{"tag": "TagName", "shares": [{"user_id": "uuid", "role": "manager"|"viewer"}]}]
+    kiosk_users: Optional[Any] = None  # JSON array of usernames for kiosk view
 
 class Chit(BaseModel):
     id: Optional[str] = None

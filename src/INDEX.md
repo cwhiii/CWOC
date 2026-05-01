@@ -34,7 +34,7 @@ Package marker. No public exports.
 | `AuthMiddleware` | (imported from `middleware.py`) Session-based auth middleware — validates `cwoc_session` cookie, injects user identity into `request.state` |
 | `on_startup()` | Startup event — calls `start_weather_schedulers()` |
 
-Registers all route modules (including `auth_router`, `users_router`, and `sharing_router`), runs all migrations (including `migrate_add_multi_user()` and `migrate_add_sharing()`) and `init_db()` at import time, mounts `StaticFiles` for frontend, static, and data directories.
+Registers all route modules (including `auth_router`, `users_router`, and `sharing_router`), runs all migrations (including `migrate_add_multi_user()`, `migrate_add_sharing()`, and `migrate_add_kiosk_users()`) and `init_db()` at import time, mounts `StaticFiles` for frontend, static, and data directories.
 
 ### 1.3 `src/backend/models.py` — Pydantic Models
 
@@ -104,6 +104,7 @@ All migrations run at startup. Each checks if the column/table already exists be
 | `migrate_add_login_message()` | Create `login_message` table for instance login welcome message |
 | `migrate_add_instance_name()` | Add `instance_name` column to login_message table |
 | `migrate_add_sharing()` | Add `shares` (TEXT), `stealth` (BOOLEAN, default 0), `assigned_to` (TEXT) columns to chits table; add `shared_tags` (TEXT) column to settings table |
+| `migrate_add_kiosk_users()` | Add `kiosk_users` (TEXT) column to settings table for kiosk user selection |
 
 ### 1.6 `src/backend/serializers.py` — vCard & CSV
 
@@ -172,7 +173,7 @@ Session-based authentication middleware for all CWOC requests.
 | `SESSION_COOKIE_NAME` | Cookie name constant: `"cwoc_session"` |
 | `_INACTIVITY_SECONDS` | Inactivity timeout: 24 hours (86,400 seconds) |
 | `_CLEANUP_INTERVAL` | Periodic cleanup interval: every 100 requests |
-| `_is_excluded(path, method)` | Return True if the request path/method should skip auth (static assets, login page, health check, login API, login-message API, wall station page and API) |
+| `_is_excluded(path, method)` | Return True if the request path/method should skip auth (static assets, login page, health check, login API, login-message API, kiosk page and API) |
 | `_cleanup_expired_sessions()` | Delete sessions past their `expires_datetime` or inactive > 24h |
 | `AuthMiddleware` | Starlette `BaseHTTPMiddleware` subclass — validates `cwoc_session` cookie, injects `request.state.user_id` and `request.state.username`, returns 401 for API paths or redirects to `/login` for page paths |
 
@@ -348,7 +349,7 @@ All contact endpoints are scoped by `owner_id` — users can only access their o
 | `insert_audit_entry(conn, entity_type, entity_id, action, actor, changes, entity_summary)` | Insert an audit log row |
 | `_run_auto_prune()` | Internal auto-prune logic |
 
-### 1.24 `src/backend/routes/health.py` — Health, Version, Sync, Pages & Wall Station
+### 1.24 `src/backend/routes/health.py` — Health, Version, Sync, Pages & Kiosk
 
 | Route | Handler | Description |
 |-------|---------|-------------|
@@ -368,8 +369,10 @@ All contact endpoints are scoped by `owner_id` — users can only access their o
 | `GET /api/update/log` | `get_update_log()` | Get the last update log |
 | `GET /api/release-notes` | `get_release_notes()` | Get the release notes markdown content |
 | `GET /api/update/run` | `run_update()` | Run upgrade (SSE stream) |
-| `GET /api/wall-station` | `get_wall_station(user_ids)` | Return combined non-deleted, non-stealth chits from specified users (comma-separated usernames or UUIDs) with `owner_display_name` attribution; also returns user display names. Unauthenticated endpoint |
-| `GET /wall-station` | `wall_station_page()` | Serve `wall-station.html` page (unauthenticated) |
+| `GET /api/kiosk` | `get_kiosk(user_ids)` | Return combined non-deleted, non-stealth chits from specified users (comma-separated usernames or UUIDs) with `owner_display_name` attribution; also returns user display names. Unauthenticated endpoint |
+| `GET /kiosk` | `kiosk_page()` | Serve `kiosk.html` page (unauthenticated) |
+| `GET /wall-station` | `wall_station_redirect()` | Legacy redirect → `/kiosk` |
+| `GET /api/wall-station` | `wall_station_api_redirect()` | Legacy redirect → `/api/kiosk` |
 
 **Internal helpers:**
 
@@ -2003,7 +2006,7 @@ New frontend pages added for multi-user system:
 - `user-admin.html` — Admin-only user management page. Uses `shared-page.css`, `shared-page.js`. Loads `user-admin.js`. Redirects non-admins to `/`.
 
 New frontend pages added for chit sharing system:
-- `wall-station.html` — Standalone unauthenticated wall station page. Reads `users` query parameter from the URL, fetches combined data from `/api/wall-station?user_ids=...`, renders a combined calendar view and task list with `owner_display_name` attribution. Auto-refreshes every 60 seconds. Does not require authentication — no `shared-auth.js` dependency. Uses `shared-page.css` for parchment theme plus inline `<style>` for wall-specific layout. All JS is inline in a single IIFE.
+- `kiosk.html` — Standalone unauthenticated kiosk page. Reads `users` query parameter from the URL, fetches combined data from `/api/kiosk?user_ids=...`, renders a combined calendar view and task list with `owner_display_name` attribution. Auto-refreshes every 60 seconds. Does not require authentication — no `shared-auth.js` dependency. Uses `shared-page.css` for parchment theme plus inline `<style>` for kiosk-specific layout. All JS is inline in a single IIFE.
 
 
 ---

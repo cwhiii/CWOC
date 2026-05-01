@@ -87,6 +87,7 @@ from src.backend.migrations import (
     migrate_add_login_message,
     migrate_add_instance_name,
     migrate_add_sharing,
+    migrate_add_kiosk_users,
 )
 
 # Initialize database and run all migrations (same order as before)
@@ -117,6 +118,7 @@ migrate_add_alerts_owner_id()
 migrate_add_login_message()
 migrate_add_instance_name()
 migrate_add_sharing()
+migrate_add_kiosk_users()
 seed_version_info()
 
 
@@ -138,11 +140,11 @@ app.include_router(auth_router)
 app.include_router(users_router)
 app.include_router(chits_router)
 app.include_router(trash_router)
+app.include_router(sharing_router)
 app.include_router(settings_router)
 app.include_router(contacts_router)
 app.include_router(audit_router)
 app.include_router(health_router)
-app.include_router(sharing_router)
 
 
 # ═══════════════════════════════════════════════════════════════════════════

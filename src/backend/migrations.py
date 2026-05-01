@@ -822,3 +822,33 @@ def migrate_add_sharing():
     finally:
         if conn:
             conn.close()
+
+
+# ── Kiosk Users: migration ───────────────────────────────────────────────
+
+def migrate_add_kiosk_users():
+    """Add kiosk_users column to settings table.
+
+    Stores a JSON array of usernames selected for the kiosk view.
+    Fully idempotent — safe to run multiple times.
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        cursor.execute("PRAGMA table_info(settings)")
+        settings_cols = {row[1] for row in cursor.fetchall()}
+
+        if "kiosk_users" not in settings_cols:
+            cursor.execute("ALTER TABLE settings ADD COLUMN kiosk_users TEXT")
+            logger.info("Added kiosk_users column to settings table")
+
+        conn.commit()
+        logger.info("Kiosk users migration complete")
+    except Exception as e:
+        logger.error(f"Error in migrate_add_kiosk_users: {str(e)}")
+        raise
+    finally:
+        if conn:
+            conn.close()

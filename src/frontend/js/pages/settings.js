@@ -1745,6 +1745,7 @@ class SettingsManager {
       habits_success_window: (window._cwocSettings && window._cwocSettings.habits_success_window) || '30',
       overdue_border_color: _borderColorOverdue || '#b22222',
       blocked_border_color: _borderColorBlocked || '#DAA520',
+      kiosk_users: _gatherKioskUsers(),
     };
   }
 
@@ -2979,6 +2980,108 @@ if (typeof waitForAuth === 'function') {
   waitForAuth().then(function(user) {
     if (user && user.is_admin) {
       _loadLoginMessage();
+    }
+  });
+}
+
+// ── Kiosk User Picker ────────────────────────────────────────────────────────
+
+var _kioskUsersCache = []; // All system users for the picker
+
+/**
+ * Load all system users and render the kiosk user picker checkboxes.
+ * Called after auth resolves (admin only section).
+ */
+async function _loadKioskUserPicker() {
+  var container = document.getElementById('kiosk-user-list');
+  if (!container) return;
+
+  try {
+    var resp = await fetch('/api/auth/switchable-users');
+    if (!resp.ok) {
+      container.innerHTML = '<span style="opacity:0.5;font-size:0.85em;">Unable to load users.</span>';
+      return;
+    }
+    _kioskUsersCache = await resp.json();
+  } catch (e) {
+    container.innerHTML = '<span style="opacity:0.5;font-size:0.85em;">Unable to load users.</span>';
+    return;
+  }
+
+  // Get saved kiosk_users from settings
+  var savedKioskUsers = [];
+  if (window.settingsManager && window.settingsManager.settings && window.settingsManager.settings.kiosk_users) {
+    savedKioskUsers = window.settingsManager.settings.kiosk_users;
+    if (typeof savedKioskUsers === 'string') {
+      try { savedKioskUsers = JSON.parse(savedKioskUsers); } catch (e) { savedKioskUsers = []; }
+    }
+  }
+  if (!Array.isArray(savedKioskUsers)) savedKioskUsers = [];
+
+  // Sort users alphabetically by display_name
+  var sorted = _kioskUsersCache.slice().sort(function(a, b) {
+    var na = (a.display_name || a.username || '').toLowerCase();
+    var nb = (b.display_name || b.username || '').toLowerCase();
+    return na.localeCompare(nb);
+  });
+
+  container.innerHTML = '';
+  sorted.forEach(function(u) {
+    var username = u.username || '';
+    var displayName = u.display_name || username;
+    var isChecked = savedKioskUsers.indexOf(username) !== -1;
+
+    var label = document.createElement('label');
+    label.style.cssText = 'display:flex;align-items:center;gap:6px;padding:3px 0;cursor:pointer;font-size:0.9em;color:#1a1208;';
+
+    var cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = isChecked;
+    cb.dataset.username = username;
+    cb.className = 'kiosk-user-cb';
+    cb.addEventListener('change', function() { setSaveButtonUnsaved(); });
+
+    label.appendChild(cb);
+    label.appendChild(document.createTextNode(displayName + (username !== displayName ? ' (' + username + ')' : '')));
+    container.appendChild(label);
+  });
+
+  if (sorted.length === 0) {
+    container.innerHTML = '<span style="opacity:0.5;font-size:0.85em;">No users found.</span>';
+  }
+}
+
+/**
+ * Gather the selected kiosk usernames from the checkboxes.
+ * @returns {Array} Array of username strings
+ */
+function _gatherKioskUsers() {
+  var checkboxes = document.querySelectorAll('.kiosk-user-cb:checked');
+  var usernames = [];
+  checkboxes.forEach(function(cb) {
+    if (cb.dataset.username) usernames.push(cb.dataset.username);
+  });
+  return usernames;
+}
+
+/**
+ * Open the kiosk with the selected users.
+ */
+function _openKiosk() {
+  var selected = _gatherKioskUsers();
+  if (selected.length === 0) {
+    alert('Please select at least one user for the kiosk view.');
+    return;
+  }
+  window.open('/kiosk?users=' + encodeURIComponent(selected.join(',')), '_blank');
+}
+
+// Load kiosk user picker after auth resolves (admin section)
+if (typeof waitForAuth === 'function') {
+  waitForAuth().then(function(user) {
+    if (user && user.is_admin) {
+      // Wait a tick for settingsManager to finish loading
+      setTimeout(_loadKioskUserPicker, 500);
     }
   });
 }

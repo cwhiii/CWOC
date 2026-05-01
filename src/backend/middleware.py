@@ -56,7 +56,12 @@ def _is_excluded(path: str, method: str) -> bool:
     if path == "/api/auth/login-message" and method == "GET":
         return True
 
-    # Wall station (unauthenticated shared-screen view)
+    # Kiosk (unauthenticated shared-screen view)
+    if path == "/kiosk" and method == "GET":
+        return True
+    if path == "/api/kiosk" and method == "GET":
+        return True
+    # Legacy wall-station redirects
     if path == "/wall-station" and method == "GET":
         return True
     if path == "/api/wall-station" and method == "GET":

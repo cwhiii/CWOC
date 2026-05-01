@@ -814,7 +814,7 @@ input[type="color"] {
    (Requirements 4.2, 6.5, 7.4)
 
    These mirror the styles in dashboard/styles-cards.css for pages that
-   load shared-page.css instead of the dashboard CSS (e.g. wall station).
+   load shared-page.css instead of the dashboard CSS (e.g. kiosk).
    ═══════════════════════════════════════════════════════════════════════════ */
 
 /* ── Owner badge on shared chit cards ─────────────────────────────────────── */
