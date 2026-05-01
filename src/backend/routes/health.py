@@ -280,11 +280,12 @@ async def editor(id: str = None):
 # ═══════════════════════════════════════════════════════════════════════════
 
 @router.get("/api/wall-station")
-def get_wall_station(user_ids: str = Query("", description="Comma-separated user UUIDs")):
+def get_wall_station(user_ids: str = Query("", description="Comma-separated user UUIDs or usernames")):
     """Return combined non-deleted, non-stealth chits from the specified users.
 
     Unauthenticated endpoint — no request.state.user_id available.
-    Validates user_ids against the users table; returns 400 for invalid IDs.
+    Accepts either UUIDs or usernames. Validates against the users table;
+    returns 400 for invalid identifiers.
 
     Response: {
         "chits": [ ...chit objects with owner_display_name... ],
@@ -304,26 +305,32 @@ def get_wall_station(user_ids: str = Query("", description="Comma-separated user
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 
-        # Validate all user_ids exist in the users table
+        # Try to resolve identifiers — could be UUIDs or usernames
         placeholders = ",".join("?" for _ in raw_ids)
         cursor.execute(
-            f"SELECT id, display_name FROM users WHERE id IN ({placeholders})",
-            raw_ids,
+            f"SELECT id, display_name, username FROM users WHERE id IN ({placeholders}) OR username IN ({placeholders})",
+            raw_ids + raw_ids,
         )
         found_rows = cursor.fetchall()
         found_ids = {row["id"] for row in found_rows}
-        if found_ids != set(raw_ids):
+        found_usernames = {row["username"] for row in found_rows if row["username"]}
+
+        # Validate that all provided identifiers matched
+        unmatched = [r for r in raw_ids if r not in found_ids and r not in found_usernames]
+        if unmatched:
             raise HTTPException(status_code=400, detail="Invalid user IDs")
 
+        resolved_ids = list(found_ids)
         users_list = [{"id": row["id"], "display_name": row["display_name"] or ""} for row in found_rows]
 
         # Fetch non-deleted, non-stealth chits owned by those users
+        id_placeholders = ",".join("?" for _ in resolved_ids)
         cursor.execute(
             f"""SELECT * FROM chits
                 WHERE (deleted = 0 OR deleted IS NULL)
                   AND (stealth = 0 OR stealth IS NULL)
-                  AND owner_id IN ({placeholders})""",
-            raw_ids,
+                  AND owner_id IN ({id_placeholders})""",
+            resolved_ids,
         )
         rows = cursor.fetchall()
 
@@ -374,6 +381,17 @@ def health_check():
 
 CONFIGURINATOR_PATH = "/app/install/configurinator.sh"
 UPDATE_LOG_PATH = "/app/data/update.log"
+RELEASE_NOTES_PATH = "/app/release_notes.md"
+
+@router.get("/api/release-notes")
+def get_release_notes():
+    """Return the contents of the release_notes.md file."""
+    try:
+        with open(RELEASE_NOTES_PATH, "r") as f:
+            return {"content": f.read()}
+    except (FileNotFoundError, IOError):
+        return {"content": None}
+
 
 @router.get("/api/update/log")
 def get_update_log():

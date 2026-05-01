@@ -61,10 +61,14 @@ for dir in "${DIRECTORIES[@]}"; do
     fi
 done
 
-# Push root-level files (VERSION, etc.)
+# Push root-level files (VERSION, release_notes, etc.)
 echo "📤 Pushing: VERSION ..."
 rsync -az "$LOCAL_ROOT/VERSION" "$SERVER:$REMOTE_BASE/VERSION"
 echo "✅ Pushed: VERSION"
+
+echo "📤 Pushing: release_notes.md ..."
+rsync -az "$LOCAL_ROOT/release_notes.md" "$SERVER:$REMOTE_BASE/release_notes.md"
+echo "✅ Pushed: release_notes.md"
 
 echo "--------------------------------------------------"
 

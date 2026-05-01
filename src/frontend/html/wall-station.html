@@ -195,7 +195,7 @@
     <div class="settings-panel">
         <div class="header-and-buttons">
             <h2>
-                <img src="/static/cwod_logo.png" alt="Logo" />
+                <a href="/" title="Go to Dashboard" style="display:inline-block;vertical-align:middle;"><img src="/static/cwod_logo.png" alt="Logo" /></a>
                 📺 Wall Station
             </h2>
         </div>
@@ -234,7 +234,7 @@
         var _refreshTimer = null;
         var _userDisplayNames = {}; // id → display_name lookup
 
-        /* ── Read user IDs from query string ─────────────────────────────── */
+        /* ── Read user identifiers from query string (usernames or UUIDs) ── */
         function _getUserIds() {
             var params = new URLSearchParams(window.location.search);
             var raw = params.get('users') || '';
@@ -447,7 +447,7 @@
             if (userIds.length === 0) {
                 contentEl.innerHTML = '<div class="wall-error">' +
                     '<i class="fa-solid fa-triangle-exclamation"></i> ' +
-                    'No users specified. Add <code>?users=uuid1,uuid2</code> to the URL.' +
+                    'No users specified. Add <code>?users=username1,username2</code> to the URL.' +
                     '</div>';
                 return;
             }

@@ -145,10 +145,13 @@ function resetEditorForNewChit() {
 
   _collapseAllZonesForNewChit();
 
-  // Initialize sharing zone for new chit
-  if (typeof initSharingZoneForNewChit === 'function') {
-    initSharingZoneForNewChit();
+  // Initialize sharing controls in People zone for new chit
+  if (typeof initPeopleSharingForNewChit === 'function') {
+    initPeopleSharingForNewChit();
   }
+
+  // Owner chip for new chit — show current user's chip (Requirement 5.6)
+  _renderOwnerChipForCurrentUser();
 }
 
 /**
@@ -168,7 +171,6 @@ function _collapseAllZonesForNewChit() {
     ['healthIndicatorsSection', 'healthIndicatorsContent'],
     ['colorSection', 'colorContent'],
     ['projectsSection', 'projectsContent'],
-    ['sharingSection', 'sharingContent'],
   ];
 
   allZones.forEach(([sectionId, contentId]) => {
@@ -241,6 +243,87 @@ function initializeFlatpickr(selector, options) {
   }
 }
 
+// ── Owner Chip Rendering (Requirements 5.1–5.6) ─────────────────────────────
+
+/**
+ * Render the owner chip inside #cwoc-owner-chip-container for an existing chit.
+ * Uses chit.owner_display_name for the label. Resolves the owner's profile image
+ * from getCurrentUser() (if owner is current user) or from _allUsersCache.
+ *
+ * @param {Object} chit — the chit object with owner_id, owner_display_name
+ */
+function _renderOwnerChip(chit) {
+  var container = document.getElementById('cwoc-owner-chip-container');
+  if (!container) return;
+  container.innerHTML = '';
+
+  var displayName = chit.owner_display_name || '(Unknown)';
+  var profileImageUrl = null;
+
+  // Try to resolve the owner's profile image
+  var currentUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+  if (currentUser && chit.owner_id && currentUser.user_id === chit.owner_id) {
+    profileImageUrl = currentUser.profile_image_url || null;
+  } else if (typeof _allUsersCache !== 'undefined' && Array.isArray(_allUsersCache)) {
+    var ownerUser = _allUsersCache.find(function (u) {
+      return (u.id || u.user_id) === chit.owner_id;
+    });
+    if (ownerUser) {
+      profileImageUrl = ownerUser.profile_image_url || null;
+    }
+  }
+
+  container.appendChild(_buildOwnerChipElement(displayName, profileImageUrl));
+}
+
+/**
+ * Render the owner chip for a new chit — shows the current user's own chip.
+ */
+function _renderOwnerChipForCurrentUser() {
+  var container = document.getElementById('cwoc-owner-chip-container');
+  if (!container) return;
+  container.innerHTML = '';
+
+  var currentUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+  var displayName = (currentUser && currentUser.display_name) ? currentUser.display_name : '(Unknown)';
+  var profileImageUrl = (currentUser && currentUser.profile_image_url) ? currentUser.profile_image_url : null;
+
+  container.appendChild(_buildOwnerChipElement(displayName, profileImageUrl));
+}
+
+/**
+ * Build an owner chip DOM element matching the people chip visual style.
+ *
+ * @param {string} displayName — the owner's display name
+ * @param {string|null} profileImageUrl — the owner's profile image URL, or null
+ * @returns {HTMLElement} the chip span element
+ */
+function _buildOwnerChipElement(displayName, profileImageUrl) {
+  var chip = document.createElement('span');
+  chip.className = 'people-chip cwoc-owner-chip';
+
+  var thumbEl = document.createElement('span');
+  thumbEl.className = 'chip-thumb';
+  if (profileImageUrl) {
+    var img = document.createElement('img');
+    img.src = profileImageUrl;
+    img.alt = displayName;
+    thumbEl.appendChild(img);
+  } else {
+    var placeholder = document.createElement('span');
+    placeholder.className = 'chip-thumb-placeholder';
+    placeholder.textContent = '?';
+    thumbEl.appendChild(placeholder);
+  }
+  chip.appendChild(thumbEl);
+
+  var nameSpan = document.createElement('span');
+  nameSpan.textContent = displayName;
+  chip.appendChild(nameSpan);
+
+  return chip;
+}
+
 async function loadChitData(chitId) {
   if (!chitId || window.isNewChit) {
     return;
@@ -263,20 +346,8 @@ async function loadChitData(chitId) {
       titleInput.value = chit.title || "";
     }
 
-    // Owner info — show below title when owner differs from current user
-    var ownerInfoEl = document.getElementById("cwoc-editor-owner-info");
-    if (ownerInfoEl) ownerInfoEl.remove();
-    if (chit.owner_display_name) {
-      var editorUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
-      if (!editorUser || chit.owner_display_name !== editorUser.display_name) {
-        var ownerInfo = document.createElement('div');
-        ownerInfo.id = 'cwoc-editor-owner-info';
-        ownerInfo.className = 'cwoc-editor-owner-info';
-        ownerInfo.textContent = '👤 Owner: ' + chit.owner_display_name;
-        var titleField = document.getElementById('titleField');
-        if (titleField) titleField.appendChild(ownerInfo);
-      }
-    }
+    // Owner chip in title zone (Requirement 5.1–5.6)
+    _renderOwnerChip(chit);
 
     const noteTextarea = document.getElementById("note");
     if (noteTextarea) {
@@ -473,9 +544,9 @@ async function loadChitData(chitId) {
 
     applyZoneStates(chit);
 
-    // Initialize sharing zone (visible only to owner)
-    if (typeof initSharingZone === 'function') {
-      await initSharingZone(chit);
+    // Initialize sharing controls in the merged People zone
+    if (typeof initPeopleSharingControls === 'function') {
+      await initPeopleSharingControls(chit);
     }
 
     // Read-only mode for viewer-role chits (Requirement 4.3)
@@ -550,10 +621,6 @@ function _applyViewerReadOnlyMode(chit) {
   // Hide archive button (viewers can't change archive state)
   var archiveBtn = document.getElementById('archivedButton');
   if (archiveBtn) archiveBtn.style.display = 'none';
-
-  // Hide sharing zone entirely for viewers
-  var sharingSection = document.getElementById('sharingSection');
-  if (sharingSection) sharingSection.style.display = 'none';
 }
 
 /**
@@ -566,14 +633,13 @@ function applyZoneStates(chit) {
     ["taskSection", "taskContent", () => !!(chit.priority || chit.severity || chit.status)],
     ["locationSection", "locationContent", () => !!(chit.location && chit.location.trim())],
     ["tagsSection", "tagsContent", () => Array.isArray(chit.tags) && chit.tags.length > 0],
-    ["peopleSection", "peopleContent", () => Array.isArray(chit.people) ? chit.people.length > 0 : !!(chit.people && chit.people.trim())],
+    ["peopleSection", "peopleContent", () => (Array.isArray(chit.people) ? chit.people.length > 0 : !!(chit.people && chit.people.trim())) || (typeof hasSharingData === 'function' && hasSharingData(chit))],
     ["notesSection", "notesContent", () => !!(chit.note && chit.note.trim())],
     ["checklistSection", "checklistContent", () => Array.isArray(chit.checklist) && chit.checklist.length > 0],
     ["alertsSection", "alertsContent", () => !!(chit.alarm || chit.notification || (Array.isArray(chit.alerts) && chit.alerts.length > 0))],
     ["healthIndicatorsSection", "healthIndicatorsContent", () => false],
     ["colorSection", "colorContent", () => !!(chit.color && chit.color !== "#C66B6B")],
     ["projectsSection", "projectsContent", () => !!(chit.is_project_master || (Array.isArray(chit.child_chits) && chit.child_chits.length > 0))],
-    ["sharingSection", "sharingContent", () => typeof hasSharingData === 'function' && hasSharingData(chit)],
   ];
 
   zones.forEach(([sectionId, contentId, hasData]) => {

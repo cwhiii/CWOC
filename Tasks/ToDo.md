@@ -3,6 +3,25 @@
 *Completed items are in `done.md`. Deferred items in `parking_lot.md`. Declined in `path_not_traveled.md`.*
 
 ---
+
+## Fixing Sharing
+
+
+
+- Mamangers should be able to see the sharing uptions too.
+- move th assigned-to drop down to the Task zone. (but only avialable if it's been shared).
+- the view option in the display should use the same format as the man/woman setting in the settings page, and be editable after creation by any chit mamanger fo rhtis chit. 
+- the appearance of the people in this should be the way they look in the people zone. Other than having the the virewer/manager toggle after the user's chit.
+the peopel list should include all users in the system, as well as all contacts. 
+the onwer badge should be in line with the chit title, and be the contact/user chip.
+
+- usesrs in roladex: i should be able to view a user like a contact, and view theri values. Should be able to favorite tehem, jsut like a contact. 
+
+- kiosk view should be by username in th eurl, not the uuid. 
+- the concept of invited, accepted & declined should exist, and be easily manageble. (along with a new setting: hide deeclined chits) the chit should indicate to toehr users if it's been sent as an invite, acepted, or reejcted by listing each user that one of thoase apply to , and with differernt viusals for each.
+
+- I should be able to drag & drop an all-day chit to a different all-day day.
+
 ## Top Priorities
 - **New spec-driven feature.** need to have a new admin block in settings "Network Access**. in it is a A tailscale connection block. Also, need to build whatver is needed in the backend to configure & install it as part of the upgrade script. There will likely be other otion fo rnetwork hole punching/external access, so ensure theat you're naking the set up in such asway that this is not harder later.  But don't set up that other stuff yet.
 
@@ -30,7 +49,7 @@ users:
 ---
 
 ## Easy Fixes / Low-Hanging Fruit
-
+- in tasks view, the passed-due items getspecial coloring on them, good! Update the text fo rhe psased-due items to have the alebl: Passed Due: [due date]. Including the year, in format YYYY-MMM-DD. 
 - in the indicators, on the graphs the date overlaps if they are close together,  have it use smarter, shorter lables, or oly day of the month or somehting better to previent this. 
 - in indicators vierw, use a plain red heart fo rhear rate chart & filter. 
 - in indicators view, let me drag & drop the charts to reorganize them just like is impliments in the notes view. 

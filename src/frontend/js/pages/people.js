@@ -10,15 +10,79 @@
 
     let _allContacts = [];   // Full contact list from API
     let _filteredContacts = []; // After client-side search filter
+    let _allUsers = [];      // All app users from switchable-users API
+    let _grouped = true;     // Whether to show sections grouped or flat
 
     const listEl = document.getElementById('people-list');
     const searchEl = document.getElementById('people-search');
+    const groupToggleBtn = document.getElementById('group-toggle-btn');
+    const groupToggleLabel = document.getElementById('group-toggle-label');
+
+    // ── Group/Ungroup toggle (persisted in localStorage) ────────────
+    const GROUP_KEY = 'cwoc_people_grouped';
+    function _loadGroupState() {
+        const stored = localStorage.getItem(GROUP_KEY);
+        _grouped = stored === null ? true : stored === '1';
+        _updateGroupButton();
+    }
+    function _updateGroupButton() {
+        if (_grouped) {
+            groupToggleLabel.textContent = 'Ungroup';
+            groupToggleBtn.title = 'Show all entries in one flat list';
+            groupToggleBtn.querySelector('i').className = 'fas fa-layer-group';
+        } else {
+            groupToggleLabel.textContent = 'Group';
+            groupToggleBtn.title = 'Show entries in separate groups';
+            groupToggleBtn.querySelector('i').className = 'fas fa-list';
+        }
+    }
+    groupToggleBtn.addEventListener('click', function() {
+        _grouped = !_grouped;
+        localStorage.setItem(GROUP_KEY, _grouped ? '1' : '0');
+        _updateGroupButton();
+        _renderList();
+    });
+
+    // ── Section collapse state (persisted in localStorage) ──────────────
+    const COLLAPSE_KEY = 'cwoc_people_collapsed';
+    function _getCollapseState() {
+        try {
+            return JSON.parse(localStorage.getItem(COLLAPSE_KEY)) || {};
+        } catch (e) { return {}; }
+    }
+    function _setCollapseState(state) {
+        localStorage.setItem(COLLAPSE_KEY, JSON.stringify(state));
+    }
+    function _isSectionCollapsed(sectionId) {
+        return !!_getCollapseState()[sectionId];
+    }
+    function _toggleSection(sectionId) {
+        const state = _getCollapseState();
+        state[sectionId] = !state[sectionId];
+        _setCollapseState(state);
+        _renderList();
+    }
 
     // ── Init ────────────────────────────────────────────────────────────
     document.addEventListener('DOMContentLoaded', () => {
+        _loadGroupState();
+        _loadUsers();
         loadContacts();
         searchEl.addEventListener('input', _onSearchInput);
     });
+
+    // ── Load users from API ─────────────────────────────────────────────
+    async function _loadUsers() {
+        try {
+            const resp = await fetch('/api/auth/switchable-users');
+            if (!resp.ok) throw new Error('Failed to fetch users');
+            _allUsers = await resp.json();
+            _renderList();
+        } catch (err) {
+            console.error('Error loading users:', err);
+            _allUsers = [];
+        }
+    }
 
     // ── Load contacts from API ──────────────────────────────────────────
     async function loadContacts(query) {
@@ -84,7 +148,15 @@
         listEl.innerHTML = '';
         const q = (searchEl.value || '').trim();
 
-        if (_filteredContacts.length === 0) {
+        // Filter users by search query too
+        const filteredUsers = q
+            ? _allUsers.filter(u => {
+                const fields = [u.display_name || '', u.username || ''];
+                return fields.some(f => f.toLowerCase().includes(q.toLowerCase()));
+            })
+            : _allUsers.slice();
+
+        if (_filteredContacts.length === 0 && filteredUsers.length === 0) {
             listEl.innerHTML = q
                 ? '<div class="people-empty">No contacts match your search.</div>'
                 : '<div class="people-empty">No contacts yet. Click "New Contact" to add one.</div>';
@@ -105,23 +177,121 @@
         favorites.sort(sortFn);
         others.sort(sortFn);
 
-        if (favorites.length > 0) {
-            const divider = document.createElement('div');
-            divider.className = 'people-divider';
-            divider.textContent = '★ Favorites';
-            listEl.appendChild(divider);
-            favorites.forEach(c => listEl.appendChild(_createRow(c, q)));
+        // ── Ungrouped mode: flat alphabetical list ──────────────────────
+        if (!_grouped) {
+            // Merge users (as pseudo-entries) and all contacts into one list
+            const combined = [];
+            filteredUsers.forEach(function(u) {
+                combined.push({ _type: 'user', _sortName: (u.display_name || u.username || '').toLowerCase(), data: u });
+            });
+            _filteredContacts.forEach(function(c) {
+                combined.push({ _type: 'contact', _sortName: (c.display_name || c.given_name || '').toLowerCase(), data: c });
+            });
+            combined.sort(function(a, b) { return a._sortName.localeCompare(b._sortName, undefined, { sensitivity: 'base' }); });
+
+            combined.forEach(function(item) {
+                if (item._type === 'user') {
+                    listEl.appendChild(_createUserRow(item.data, q));
+                } else {
+                    listEl.appendChild(_createRow(item.data, q));
+                }
+            });
+            return;
         }
 
-        if (others.length > 0) {
-            if (favorites.length > 0) {
-                const divider = document.createElement('div');
-                divider.className = 'people-divider';
-                divider.textContent = 'All Contacts';
-                listEl.appendChild(divider);
-            }
-            others.forEach(c => listEl.appendChild(_createRow(c, q)));
+        // ── Grouped mode (default): separate sections ───────────────────
+
+        // ── Favorites section ───────────────────────────────────────────
+        if (favorites.length > 0) {
+            _renderSection('favorites', '★ Favorites', favorites, q, function(c) {
+                return _createRow(c, q);
+            });
         }
+
+        // ── Users section ───────────────────────────────────────────────
+        if (filteredUsers.length > 0) {
+            _renderSection('users', '<i class="fas fa-users"></i> Users', filteredUsers, q, function(u) {
+                return _createUserRow(u, q);
+            });
+        }
+
+        // ── All Contacts section ────────────────────────────────────────
+        if (others.length > 0) {
+            _renderSection('all-contacts', 'All Contacts', others, q, function(c) {
+                return _createRow(c, q);
+            });
+        }
+    }
+
+    // ── Render a collapsible section ────────────────────────────────────
+    function _renderSection(sectionId, label, items, query, rowFactory) {
+        const collapsed = _isSectionCollapsed(sectionId);
+
+        // Divider / header
+        const divider = document.createElement('div');
+        divider.className = 'people-divider' + (collapsed ? ' collapsed' : '');
+        divider.innerHTML = '<span>' + label + ' (' + items.length + ')</span><span class="section-toggle"><i class="fas fa-chevron-down"></i></span>';
+        divider.addEventListener('click', function() {
+            _toggleSection(sectionId);
+        });
+        listEl.appendChild(divider);
+
+        // Content wrapper
+        const content = document.createElement('div');
+        content.className = 'people-section-content' + (collapsed ? ' collapsed' : '');
+        items.forEach(function(item) {
+            content.appendChild(rowFactory(item));
+        });
+        if (!collapsed) {
+            content.style.maxHeight = 'none';
+        }
+        listEl.appendChild(content);
+    }
+
+    // ── Create a user row ───────────────────────────────────────────────
+    function _createUserRow(user, query) {
+        const row = document.createElement('div');
+        row.className = 'people-row people-user-row';
+        row.dataset.userId = user.id;
+
+        // No star for users — placeholder for alignment
+        const starPlaceholder = document.createElement('span');
+        starPlaceholder.className = 'star-toggle';
+        starPlaceholder.style.visibility = 'hidden';
+        starPlaceholder.textContent = '☆';
+        row.appendChild(starPlaceholder);
+
+        // Thumbnail
+        if (user.profile_image_url) {
+            const thumb = document.createElement('img');
+            thumb.className = 'contact-thumb';
+            thumb.src = user.profile_image_url;
+            thumb.alt = '';
+            row.appendChild(thumb);
+        } else {
+            const placeholder = document.createElement('span');
+            placeholder.className = 'contact-thumb-placeholder';
+            placeholder.innerHTML = '<i class="fas fa-user-circle"></i>';
+            row.appendChild(placeholder);
+        }
+
+        // Name + username column
+        const infoCol = document.createElement('div');
+        infoCol.className = 'contact-info';
+
+        const name = document.createElement('span');
+        name.className = 'contact-name';
+        name.innerHTML = _highlightMatch(user.display_name || user.username, query);
+        infoCol.appendChild(name);
+
+        const detailSpan = document.createElement('span');
+        detailSpan.className = 'contact-detail';
+        detailSpan.innerHTML = _highlightMatch('@' + user.username, query);
+        infoCol.appendChild(detailSpan);
+
+        row.appendChild(infoCol);
+
+        return row;
     }
 
     // ── Create a single contact row ─────────────────────────────────────
@@ -130,9 +300,9 @@
         row.className = 'people-row';
         row.dataset.contactId = contact.id;
 
-        // Apply contact color as row background
+        // Apply contact color as row background with auto-contrast text
         if (contact.color) {
-            row.style.backgroundColor = contact.color;
+            applyChitColors(row, contact.color);
             row.style.borderLeft = '3px solid ' + contact.color;
         }
 

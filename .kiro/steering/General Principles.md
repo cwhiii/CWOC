@@ -99,3 +99,12 @@ There is an index. It contains a complete map of where every function is, and wh
 
 ## Modularity
 CWOC is broken up into a bunch of code files. Each one is very tight and directed. Ensure that code that you ad gets put in the correct file for the applicable functionality. If there is not a good file to place a new functionality into, find the best place to put a new file based on the structure and index, and then make the new file. The point of these is to keep each file relatively small and more maintainable. If you ever create new files, ensure you update the index file.
+
+## Release Notes
+Every time you complete a new version, update a file called "release_notes-[version#].md". In extremely brief summary of what you did. Most of these should be one sentence. Replace the entire contents of the file with your new version update description.
+
+On some super long and complex new feature additions, it may be as much as a paragraph. But it should basically never exceed that.
+
+In the settings page should be a button in the "🔄 Version & Updates" section, which you can click to bring up a model just like the upgrade one. It should show the HTML converted markdown from the file. It should have a simple dismiss button.
+
+I'm sure that the release notes file is emtied, and rebuilt a the completion of every new feature.

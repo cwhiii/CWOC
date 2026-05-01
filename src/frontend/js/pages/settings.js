@@ -1270,6 +1270,15 @@ document.addEventListener("keydown", (event) => {
       return;
     }
 
+    // 1b. Release notes modal
+    var releaseNotesModal = document.getElementById("release-notes-modal");
+    if (releaseNotesModal && releaseNotesModal.style.display === "flex") {
+      event.preventDefault();
+      event.stopPropagation();
+      closeReleaseNotesModal();
+      return;
+    }
+
     // 2. QR overlay (shared)
     var qrOverlay = document.getElementById("cwoc-qr-overlay");
     if (qrOverlay) { qrOverlay.remove(); return; }
@@ -2743,6 +2752,38 @@ async function loadLastLog() {
   }
   closeBtn.disabled = false;
   modal.style.display = 'flex';
+}
+
+
+// ── Release Notes Modal ──────────────────────────────────────────────────────
+
+async function showReleaseNotes() {
+  var modal = document.getElementById('release-notes-modal');
+  var content = document.getElementById('release-notes-content');
+  content.innerHTML = '<em>Loading...</em>';
+  modal.style.display = 'flex';
+
+  try {
+    var res = await fetch('/api/release-notes');
+    var data = await res.json();
+    if (!data.content) {
+      content.innerHTML = '<p style="opacity:0.6;">No release notes available.</p>';
+    } else {
+      // Convert markdown to HTML using marked.js (loaded via CDN on settings page)
+      if (typeof marked !== 'undefined') {
+        content.innerHTML = marked.parse(data.content);
+      } else {
+        // Fallback: show as preformatted text
+        content.textContent = data.content;
+      }
+    }
+  } catch (e) {
+    content.innerHTML = '<p style="color:#b22222;">Failed to load release notes.</p>';
+  }
+}
+
+function closeReleaseNotesModal() {
+  document.getElementById('release-notes-modal').style.display = 'none';
 }
 
 

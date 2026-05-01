@@ -49,6 +49,7 @@
             cursor: pointer;
             transition: background 0.15s;
             gap: 10px;
+            color: #2b1e0f;
         }
         .people-row:last-child { border-bottom: none; }
         .people-row:hover { background: rgba(212, 196, 160, 0.2); }
@@ -81,13 +82,13 @@
             align-items: center;
             justify-content: center;
             font-size: 0.8em;
-            color: #8b5a2b;
+            color: inherit;
             flex-shrink: 0;
         }
         .people-row .contact-name {
             flex: 1;
             font-size: 1em;
-            color: #2b1e0f;
+            color: inherit;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
@@ -102,7 +103,8 @@
         }
         .people-row .contact-detail {
             font-size: 0.8em;
-            color: #6b4e31;
+            color: inherit;
+            opacity: 0.8;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
@@ -129,6 +131,29 @@
             border-bottom: 1px solid #d4c5a9;
             text-transform: uppercase;
             letter-spacing: 1px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+            user-select: none;
+        }
+        .people-divider:hover {
+            background: #d6c8a5;
+        }
+        .people-divider .section-toggle {
+            font-size: 0.9em;
+            transition: transform 0.2s;
+        }
+        .people-divider.collapsed .section-toggle {
+            transform: rotate(-90deg);
+        }
+        .people-section-content {
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+        .people-section-content.collapsed {
+            max-height: 0 !important;
+            overflow: hidden;
         }
         .people-empty {
             text-align: center;
@@ -257,6 +282,9 @@
             </button>
             <button id="export-btn" class="standard-button" title="Export all contacts">
                 <i class="fas fa-file-export"></i> Export
+            </button>
+            <button id="group-toggle-btn" class="standard-button" title="Toggle grouped/ungrouped view">
+                <i class="fas fa-layer-group"></i> <span id="group-toggle-label">Ungroup</span>
             </button>
             <input type="text" id="people-search" class="people-search" placeholder="🔍 Search contacts..." autocomplete="off" />
         </div>

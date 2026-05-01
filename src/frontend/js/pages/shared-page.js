@@ -122,10 +122,15 @@ window.CwocSaveSystem = CwocSaveSystem;
   header.className = 'header-and-buttons';
 
   var h2 = document.createElement('h2');
+  var logoLink = document.createElement('a');
+  logoLink.href = '/';
+  logoLink.style.cssText = 'display:inline-block;vertical-align:middle;';
+  logoLink.title = 'Go to Dashboard';
   var logo = document.createElement('img');
   logo.src = '/static/cwod_logo.png';
   logo.alt = 'Logo';
-  h2.appendChild(logo);
+  logoLink.appendChild(logo);
+  h2.appendChild(logoLink);
   h2.appendChild(document.createTextNode(' ' + (pageIcon ? pageIcon + ' ' : '') + pageTitle));
   header.appendChild(h2);
 

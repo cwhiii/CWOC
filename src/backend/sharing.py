@@ -121,11 +121,12 @@ def can_delete_chit(chit_row, user_id):
     return chit_row.get("owner_id") == user_id
 
 
-def can_manage_sharing(chit_row, user_id):
-    """Return True only if the user is the chit owner."""
+def can_manage_sharing(chit_row, user_id, owner_settings=None):
+    """Return True if the user is the chit owner or has manager role."""
     if not chit_row or not user_id:
         return False
-    return chit_row.get("owner_id") == user_id
+    role = resolve_effective_role(chit_row, user_id, owner_settings)
+    return role in ("owner", "manager")
 
 
 # ── Query: shared chits for a user ──────────────────────────────────────

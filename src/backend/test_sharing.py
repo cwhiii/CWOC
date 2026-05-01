@@ -145,11 +145,12 @@ def can_delete_chit(chit_row, user_id):
     return chit_row.get("owner_id") == user_id
 
 
-def can_manage_sharing(chit_row, user_id):
-    """Return True only if the user is the chit owner."""
+def can_manage_sharing(chit_row, user_id, owner_settings=None):
+    """Return True if the user is the chit owner or has manager role."""
     if not chit_row or not user_id:
         return False
-    return chit_row.get("owner_id") == user_id
+    role = resolve_effective_role(chit_row, user_id, owner_settings)
+    return role in ("owner", "manager")
 
 
 # ── Random data generators ───────────────────────────────────────────────
@@ -321,20 +322,20 @@ class TestProperty2ManagerAccessAllowsEditing(unittest.TestCase):
                                 f"Tag-level manager should be able to edit (iter {i})")
 
 
-# ── Property 3: Only owner can delete and manage sharing ─────────────────
+# ── Property 3: Only owner can delete ────────────────────────────────────
 
-class TestProperty3OnlyOwnerCanDeleteAndManageSharing(unittest.TestCase):
-    """Feature: chit-sharing-system, Property 3: Only owner can delete and manage sharing
+class TestProperty3OnlyOwnerCanDelete(unittest.TestCase):
+    """Feature: chit-sharing-system, Property 3: Only owner can delete
 
     **Validates: Requirements 1.4, 2.6**
 
-    For any chit and any user who is not the owner, can_delete_chit and
-    can_manage_sharing SHALL return False. When user_id == owner_id,
-    both SHALL return True.
+    For any chit and any user who is not the owner, can_delete_chit
+    SHALL return False. When user_id == owner_id, can_delete_chit
+    SHALL return True.
     """
 
-    def test_non_owner_cannot_delete_or_manage(self):
-        """Non-owner users (any role) cannot delete or manage sharing."""
+    def test_non_owner_cannot_delete(self):
+        """Non-owner users (any role) cannot delete."""
         for i in range(_PBT_ITERATIONS):
             with self.subTest(iteration=i):
                 owner_id = _random_uuid()
@@ -345,8 +346,6 @@ class TestProperty3OnlyOwnerCanDeleteAndManageSharing(unittest.TestCase):
 
                 self.assertFalse(can_delete_chit(chit, other_id),
                                  f"Non-owner ({role}) should not delete (iter {i})")
-                self.assertFalse(can_manage_sharing(chit, other_id),
-                                 f"Non-owner ({role}) should not manage sharing (iter {i})")
 
     def test_owner_can_delete_and_manage(self):
         """Owner can always delete and manage sharing."""
@@ -740,6 +739,107 @@ class TestProperty9MigrationIdempotentAndPreservesData(unittest.TestCase):
                 finally:
                     if os.path.exists(db_path):
                         os.unlink(db_path)
+
+
+# ── Property 7 (sharing-ui-overhaul): Managers can manage sharing ────────
+
+class TestProperty7ManagersCanManageSharing(unittest.TestCase):
+    """Feature: sharing-ui-overhaul, Property 7: Managers can manage sharing
+
+    **Validates: Requirements 2.1, 2.3, 2.4**
+
+    For any chit and any user whose effective role is 'owner' or 'manager',
+    can_manage_sharing() SHALL return True. For any user whose effective
+    role is 'viewer' or None, can_manage_sharing() SHALL return False.
+    """
+
+    def test_owner_can_manage_sharing(self):
+        """Owner always gets can_manage_sharing() == True."""
+        for i in range(_PBT_ITERATIONS):
+            with self.subTest(iteration=i):
+                owner_id = _random_uuid()
+                other_ids = [_random_uuid() for _ in range(random.randint(0, 4))]
+                shares = _random_shares(other_ids)
+                tags = _random_tags()
+                stealth = random.choice([True, False])
+                assigned_to = random.choice(other_ids) if other_ids else None
+                chit = _random_chit(owner_id, shares=shares, tags=tags,
+                                    stealth=stealth, assigned_to=assigned_to)
+
+                shared_tags = _random_shared_tags_config(tags, other_ids) if tags and other_ids else []
+                owner_settings = _random_owner_settings(shared_tags=shared_tags)
+
+                self.assertTrue(can_manage_sharing(chit, owner_id, owner_settings),
+                                f"Owner should always be able to manage sharing "
+                                f"(stealth={stealth}, iter {i})")
+
+    def test_chit_level_manager_can_manage_sharing(self):
+        """Chit-level manager gets can_manage_sharing() == True."""
+        for i in range(_PBT_ITERATIONS):
+            with self.subTest(iteration=i):
+                owner_id = _random_uuid()
+                manager_id = _random_uuid()
+                shares = [{"user_id": manager_id, "role": "manager"}]
+                for _ in range(random.randint(0, 3)):
+                    shares.append({"user_id": _random_uuid(), "role": _random_role()})
+                chit = _random_chit(owner_id, shares=shares)
+
+                self.assertTrue(can_manage_sharing(chit, manager_id),
+                                f"Chit-level manager should be able to manage sharing (iter {i})")
+
+    def test_tag_level_manager_can_manage_sharing(self):
+        """Tag-level manager gets can_manage_sharing() == True."""
+        for i in range(_PBT_ITERATIONS):
+            with self.subTest(iteration=i):
+                owner_id = _random_uuid()
+                manager_id = _random_uuid()
+                tags = _random_tags(min_count=1, max_count=3)
+                chit = _random_chit(owner_id, shares=None, tags=tags)
+
+                shared_tags = _random_shared_tags_config(tags, [manager_id], role="manager")
+                owner_settings = _random_owner_settings(shared_tags=shared_tags)
+
+                self.assertTrue(can_manage_sharing(chit, manager_id, owner_settings),
+                                f"Tag-level manager should be able to manage sharing (iter {i})")
+
+    def test_viewer_cannot_manage_sharing(self):
+        """Viewer gets can_manage_sharing() == False."""
+        for i in range(_PBT_ITERATIONS):
+            with self.subTest(iteration=i):
+                owner_id = _random_uuid()
+                viewer_id = _random_uuid()
+                shares = [{"user_id": viewer_id, "role": "viewer"}]
+                for _ in range(random.randint(0, 3)):
+                    shares.append({"user_id": _random_uuid(), "role": _random_role()})
+                chit = _random_chit(owner_id, shares=shares)
+
+                self.assertFalse(can_manage_sharing(chit, viewer_id),
+                                 f"Viewer should not be able to manage sharing (iter {i})")
+
+    def test_no_access_cannot_manage_sharing(self):
+        """User with no access gets can_manage_sharing() == False."""
+        for i in range(_PBT_ITERATIONS):
+            with self.subTest(iteration=i):
+                owner_id = _random_uuid()
+                outsider_id = _random_uuid()
+                other_ids = [_random_uuid() for _ in range(random.randint(0, 4))]
+                shares = _random_shares(other_ids)
+                chit = _random_chit(owner_id, shares=shares)
+
+                self.assertFalse(can_manage_sharing(chit, outsider_id),
+                                 f"User with no access should not manage sharing (iter {i})")
+
+    def test_stealth_blocks_manager_from_managing(self):
+        """Manager on a stealth chit gets can_manage_sharing() == False."""
+        for i in range(_PBT_ITERATIONS):
+            with self.subTest(iteration=i):
+                owner_id = _random_uuid()
+                manager_id = _random_uuid()
+                shares = [{"user_id": manager_id, "role": "manager"}]
+                chit = _random_chit(owner_id, shares=shares, stealth=True)
+
+                self.assertFalse(can_manage_sharing(chit, manager_id),
+                                 f"Manager on stealth chit should not manage sharing (iter {i})")
 
 
 if __name__ == "__main__":

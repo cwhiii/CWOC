@@ -746,3 +746,18 @@
     color: #4a2c2a;
     opacity: 0.85;
 }
+
+/* ── Shared icon on dashboard chit cards (Requirement 4.1) ────────────────── */
+.cwoc-shared-icon {
+    display: inline-flex;
+    align-items: center;
+    font-size: 0.85em;
+    cursor: pointer;
+    white-space: nowrap;
+    opacity: 0.85;
+    transition: opacity 0.15s;
+}
+
+.cwoc-shared-icon:hover {
+    opacity: 1;
+}

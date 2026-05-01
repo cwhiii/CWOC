@@ -232,30 +232,28 @@ function _buildChitHeader(chit, titleHtml, settings, opts) {
     });
   }
 
-  // Owner badge — show only when owner differs from current user
-  if (chit.owner_display_name) {
-    var currentUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
-    if (!currentUser || chit.owner_display_name !== currentUser.display_name) {
-      var ownerBadge = document.createElement('span');
-      ownerBadge.className = 'cwoc-owner-badge';
-      ownerBadge.textContent = '👤 ' + chit.owner_display_name;
-      ownerBadge.title = 'Owner: ' + chit.owner_display_name;
-      right.appendChild(ownerBadge);
-    }
-  }
-
-  // Role indicator for shared chits (Requirement 4.2)
+  // Shared icon with tooltip (Requirements 4.1, 4.2, 4.3, 4.4)
   if (chit._shared && chit.effective_role) {
-    var roleBadge = document.createElement('span');
-    roleBadge.className = 'cwoc-role-badge';
-    if (chit.effective_role === 'viewer') {
-      roleBadge.textContent = '👁 Viewer';
-      roleBadge.title = 'You have read-only access to this chit';
-    } else if (chit.effective_role === 'manager') {
-      roleBadge.textContent = '✏️ Manager';
-      roleBadge.title = 'You can edit this chit';
+    var sharedIcon = document.createElement('span');
+    sharedIcon.className = 'cwoc-shared-icon';
+    sharedIcon.textContent = '🔗';
+
+    // Build tooltip: owner, shared users with roles, current user's role
+    var tooltipLines = [];
+    tooltipLines.push('Owner: ' + (chit.owner_display_name || 'Unknown'));
+    var shares = Array.isArray(chit.shares) ? chit.shares : [];
+    if (shares.length > 0) {
+      tooltipLines.push('Shared with:');
+      shares.forEach(function(entry) {
+        var name = entry.display_name || entry.user_id || 'Unknown';
+        var role = (entry.role || 'viewer').charAt(0).toUpperCase() + (entry.role || 'viewer').slice(1);
+        tooltipLines.push('  ' + name + ' (' + role + ')');
+      });
     }
-    right.appendChild(roleBadge);
+    tooltipLines.push('Your role: ' + chit.effective_role.charAt(0).toUpperCase() + chit.effective_role.slice(1));
+    sharedIcon.title = tooltipLines.join('\n');
+
+    right.appendChild(sharedIcon);
   }
 
   // Assignee display name (Requirement 7.4)

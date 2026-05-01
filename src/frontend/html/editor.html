@@ -19,7 +19,7 @@
     </head>
     <body>
         <div class="header-row">
-            <img src="/static/create_new.png" alt="Logo" class="header-image" />
+            <a href="/" title="Go to Dashboard" style="display:inline-block;flex-shrink:0;"><img src="/static/create_new.png" alt="Logo" class="header-image" /></a>
             <h1>Chit Editor</h1>
             <div class="buttons">
                 <div class="left-buttons">
@@ -95,6 +95,7 @@
                                     value="false"
                                 />
                             </div>
+                            <span id="cwoc-owner-chip-container"></span>
                         </label>
                         <input
                             type="text"
@@ -263,6 +264,12 @@
                                         <option value="Minor">Minor</option>
                                     </select>
                                 </div>
+                                <div class="field" id="sharingAssignedRow" style="display:none;">
+                                    <label for="sharingAssignedTo">Assignee</label>
+                                    <select id="sharingAssignedTo">
+                                        <option value="">— None —</option>
+                                    </select>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -426,60 +433,81 @@
                         </div>
                     </div>
 
-                    <div id="peopleSection" class="zone-container">
+                    <div id="colorSection" class="zone-container">
                         <div
                             class="zone-header"
-                            onclick="toggleZone(event, 'peopleSection', 'peopleContent')"
+                            onclick="toggleZone(event, 'colorSection', 'colorContent')"
                         >
-                            <h2 class="zone-title">👥 People (<span id="activePeopleCount">0</span> active)</h2>
-                            <div class="zone-actions">
-                                <button
-                                    type="button"
-                                    onclick="_toggleAllPeopleGroups(event, true)"
-                                    class="zone-button"
-                                >
-                                    <i class="fas fa-expand-alt"></i> Expand All
-                                </button>
-                                <button
-                                    type="button"
-                                    onclick="_toggleAllPeopleGroups(event, false)"
-                                    class="zone-button"
-                                >
-                                    <i class="fas fa-compress-alt"></i> Collapse All
-                                </button>
-                            </div>
+                            <h2 class="zone-title">🌈 Color</h2>
                             <span class="zone-toggle-icon">🔽</span>
                         </div>
-                        <div id="peopleContent" class="zone-body">
-                            <div class="tags-search-row">
-                                <button
-                                    type="button"
-                                    class="clear-search-button"
-                                    onclick="_clearPeopleSearch(event)"
-                                >
-                                    <i class="fas fa-times"></i>
-                                </button>
-                                <input
-                                    type="text"
-                                    id="peopleSearchInput"
-                                    placeholder="Search contacts..."
-                                    autocomplete="off"
-                                />
+                        <div id="colorContent" class="zone-body">
+                            <div class="field">
+                                <label for="color">
+                                    <span id="selected-color-name"
+                                        >Dusty Rose</span
+                                    >
+                                    <div class="color-input">
+                                        <span
+                                            id="selected-color"
+                                            class="color-preview"
+                                            style="background-color: #c66b6b"
+                                        ></span>
+                                        <input
+                                            type="text"
+                                            id="color"
+                                            value="#C66B6B"
+                                            readonly
+                                        />
+                                    </div>
+                                </label>
                             </div>
-                            <div class="verticalBox">
-                                <div class="tag-container" id="peopleTreeContainer"></div>
-                                <div class="tag-container-Active" id="activePeopleBox">
-                                    <h3 style="margin:0 0 4px 0;font-size:0.85em;">Active People</h3>
-                                    <div id="peopleChips" class="people-chips-container"></div>
+                            <div class="color-picker">
+                                <div class="color-row" id="default-colors">
+                                    <div
+                                        class="color-swatch"
+                                        data-color="transparent"
+                                        style="
+                                            background-color: transparent;
+                                            font-size: 2em;
+                                        "
+                                    >
+                                        ☒
+                                    </div>
+                                    <div
+                                        class="color-swatch selected"
+                                        data-color="#C66B6B"
+                                        style="background-color: #c66b6b"
+                                    ></div>
+                                    <div
+                                        class="color-swatch"
+                                        data-color="#D68A59"
+                                        style="background-color: #d68a59"
+                                    ></div>
+                                    <div
+                                        class="color-swatch"
+                                        data-color="#E3B23C"
+                                        style="background-color: #e3b23c"
+                                    ></div>
+                                    <div
+                                        class="color-swatch"
+                                        data-color="#8A9A5B"
+                                        style="background-color: #8a9a5b"
+                                    ></div>
+                                    <div
+                                        class="color-swatch"
+                                        data-color="#6B8299"
+                                        style="background-color: #6b8299"
+                                    ></div>
+                                    <div
+                                        class="color-swatch"
+                                        data-color="#8B6B99"
+                                        style="background-color: #8b6b99"
+                                    ></div>
                                 </div>
+                                <div class="color-row" id="custom-colors"></div>
                             </div>
-                            <input type="hidden" id="people" />
                         </div>
-                        <input
-                            type="hidden"
-                            id="isPeopleMaster"
-                            value="false"
-                        />
                     </div>
                 </div>
 
@@ -649,116 +677,60 @@
                         </div>
                     </div>
 
-                    <div
-                        id="healthIndicatorsSection"
-                        class="zone-container healthZone"
-                    >
+                    <div id="peopleSection" class="zone-container">
                         <div
                             class="zone-header"
-                            onclick="toggleZone(event, 'healthIndicatorsSection', 'healthIndicatorsContent')"
+                            onclick="toggleZone(event, 'peopleSection', 'peopleContent')"
                         >
-                            <h2 class="zone-title">❤️ Health Indicators</h2>
+                            <h2 class="zone-title">👥 People (<span id="activePeopleCount">0</span> active)</h2>
+                            <div class="zone-actions">
+                                <button
+                                    type="button"
+                                    onclick="_toggleAllPeopleGroups(event, true)"
+                                    class="zone-button"
+                                >
+                                    <i class="fas fa-expand-alt"></i> Expand All
+                                </button>
+                                <button
+                                    type="button"
+                                    onclick="_toggleAllPeopleGroups(event, false)"
+                                    class="zone-button"
+                                >
+                                    <i class="fas fa-compress-alt"></i> Collapse All
+                                </button>
+                            </div>
                             <span class="zone-toggle-icon">🔽</span>
                         </div>
-                        <div
-                            id="healthIndicatorsContent"
-                            class="zone-body healthBox"
-                            style="display:grid;grid-template-columns:1fr 1fr;gap:0 12px;"
-                        >
-                            <!-- Vitals -->
-                            <div class="healthInput" id="heartRateEntry"></div>
-                            <div class="healthInput" id="bpEntry"></div>
-                            <div class="healthInput" id="spo2Entry"></div>
-                            <div class="healthInput" id="temperatureEntry"></div>
-                            <!-- Body -->
-                            <div class="healthInput" id="weightEntry"></div>
-                            <div class="healthInput" id="heightEntry"></div>
-                            <div class="healthInput" id="glucoseEntry"></div>
-                            <!-- Activity -->
-                            <div class="healthInput" id="distanceEntry"></div>
-                            <!-- Cycle (female only) -->
-                            <div id="reproductionSection" style="display:none;">
-                                <div class="healthInput" id="cycleEntry"></div>
+                        <div id="peopleContent" class="zone-body">
+                            <div class="tags-search-row">
+                                <button
+                                    type="button"
+                                    class="clear-search-button"
+                                    onclick="_clearPeopleSearch(event)"
+                                >
+                                    <i class="fas fa-times"></i>
+                                </button>
+                                <input
+                                    type="text"
+                                    id="peopleSearchInput"
+                                    placeholder="Search contacts..."
+                                    autocomplete="off"
+                                />
                             </div>
-                        </div>
-                    </div>
-
-                    <!-- Replace the existing colorSection with this -->
-                    <div id="colorSection" class="zone-container">
-                        <div
-                            class="zone-header"
-                            onclick="toggleZone(event, 'colorSection', 'colorContent')"
-                        >
-                            <h2 class="zone-title">🌈 Color</h2>
-                            <span class="zone-toggle-icon">🔽</span>
-                        </div>
-                        <div id="colorContent" class="zone-body">
-                            <div class="field">
-                                <label for="color">
-                                    <span id="selected-color-name"
-                                        >Dusty Rose</span
-                                    >
-                                    <div class="color-input">
-                                        <span
-                                            id="selected-color"
-                                            class="color-preview"
-                                            style="background-color: #c66b6b"
-                                        ></span>
-                                        <input
-                                            type="text"
-                                            id="color"
-                                            value="#C66B6B"
-                                            readonly
-                                        />
-                                    </div>
-                                </label>
-                            </div>
-                            <div class="color-picker">
-                                <div class="color-row" id="default-colors">
-                                    <div
-                                        class="color-swatch"
-                                        data-color="transparent"
-                                        style="
-                                            background-color: transparent;
-                                            font-size: 2em;
-                                        "
-                                    >
-                                        ☒
-                                    </div>
-                                    <div
-                                        class="color-swatch selected"
-                                        data-color="#C66B6B"
-                                        style="background-color: #c66b6b"
-                                    ></div>
-                                    <div
-                                        class="color-swatch"
-                                        data-color="#D68A59"
-                                        style="background-color: #d68a59"
-                                    ></div>
-                                    <div
-                                        class="color-swatch"
-                                        data-color="#E3B23C"
-                                        style="background-color: #e3b23c"
-                                    ></div>
-                                    <div
-                                        class="color-swatch"
-                                        data-color="#8A9A5B"
-                                        style="background-color: #8a9a5b"
-                                    ></div>
-                                    <div
-                                        class="color-swatch"
-                                        data-color="#6B8299"
-                                        style="background-color: #6b8299"
-                                    ></div>
-                                    <div
-                                        class="color-swatch"
-                                        data-color="#8B6B99"
-                                        style="background-color: #8b6b99"
-                                    ></div>
+                            <div class="verticalBox">
+                                <div class="tag-container" id="peopleTreeContainer"></div>
+                                <div class="tag-container-Active" id="activePeopleBox">
+                                    <h3 style="margin:0 0 4px 0;font-size:0.85em;">Active People</h3>
+                                    <div id="peopleChips" class="people-chips-container"></div>
                                 </div>
-                                <div class="color-row" id="custom-colors"></div>
                             </div>
+                            <input type="hidden" id="people" />
                         </div>
+                        <input
+                            type="hidden"
+                            id="isPeopleMaster"
+                            value="false"
+                        />
                     </div>
 
                     <div id="projectsSection" class="zone-container">
@@ -818,49 +790,36 @@
                         </div>
                     </div>
 
-                    <!-- Sharing (visible only to chit owner) -->
-                    <div id="sharingSection" class="zone-container" style="display:none;">
+                    <div
+                        id="healthIndicatorsSection"
+                        class="zone-container healthZone"
+                    >
                         <div
                             class="zone-header"
-                            onclick="toggleZone(event, 'sharingSection', 'sharingContent')"
+                            onclick="toggleZone(event, 'healthIndicatorsSection', 'healthIndicatorsContent')"
                         >
-                            <h2 class="zone-title">🔗 Sharing</h2>
+                            <h2 class="zone-title">❤️ Health Indicators</h2>
                             <span class="zone-toggle-icon">🔽</span>
                         </div>
-                        <div id="sharingContent" class="zone-body">
-                            <!-- Current shares list -->
-                            <div id="sharingCurrentList" class="sharing-current-list">
-                                <div class="sharing-empty">No users shared with this chit</div>
-                            </div>
-
-                            <!-- Add share controls -->
-                            <div class="sharing-add-row">
-                                <select id="sharingUserPicker" class="sharing-user-picker">
-                                    <option value="">— Select User —</option>
-                                </select>
-                                <select id="sharingRoleSelect" class="sharing-role-select">
-                                    <option value="viewer">Viewer</option>
-                                    <option value="manager">Manager</option>
-                                </select>
-                                <button type="button" class="zone-button sharing-add-btn" onclick="addShare()">
-                                    <i class="fas fa-plus"></i> Add
-                                </button>
-                            </div>
-
-                            <!-- Stealth toggle -->
-                            <div class="sharing-stealth-row">
-                                <label class="sharing-stealth-label">
-                                    <input type="checkbox" id="sharingStealthToggle" onchange="onStealthToggle()" />
-                                    🥷 Stealth — hide from all other users
-                                </label>
-                            </div>
-
-                            <!-- Assigned-to picker -->
-                            <div class="sharing-assigned-row">
-                                <label for="sharingAssignedTo" class="sharing-assigned-label">Assigned to:</label>
-                                <select id="sharingAssignedTo" class="sharing-assigned-picker" onchange="onAssignedToChange()">
-                                    <option value="">— None —</option>
-                                </select>
+                        <div
+                            id="healthIndicatorsContent"
+                            class="zone-body healthBox"
+                            style="display:grid;grid-template-columns:1fr 1fr;gap:0 12px;"
+                        >
+                            <!-- Vitals -->
+                            <div class="healthInput" id="heartRateEntry"></div>
+                            <div class="healthInput" id="bpEntry"></div>
+                            <div class="healthInput" id="spo2Entry"></div>
+                            <div class="healthInput" id="temperatureEntry"></div>
+                            <!-- Body -->
+                            <div class="healthInput" id="weightEntry"></div>
+                            <div class="healthInput" id="heightEntry"></div>
+                            <div class="healthInput" id="glucoseEntry"></div>
+                            <!-- Activity -->
+                            <div class="healthInput" id="distanceEntry"></div>
+                            <!-- Cycle (female only) -->
+                            <div id="reproductionSection" style="display:none;">
+                                <div class="healthInput" id="cycleEntry"></div>
                             </div>
                         </div>
                     </div>
@@ -1274,6 +1233,7 @@
         <script src="/frontend/js/editor/editor.js"></script>
         <script src="/frontend/js/editor/editor-dates.js"></script>
         <script src="/frontend/js/editor/editor-tags.js"></script>
+        <script src="/frontend/js/editor/editor-sharing.js"></script>
         <script src="/frontend/js/editor/editor-people.js"></script>
         <script src="/frontend/js/editor/editor-location.js"></script>
         <script src="/frontend/js/editor/editor-notes.js"></script>
@@ -1281,7 +1241,6 @@
         <script src="/frontend/js/editor/editor-color.js"></script>
         <script src="/frontend/js/editor/editor-health.js"></script>
         <script src="/frontend/js/editor/editor-save.js"></script>
-        <script src="/frontend/js/editor/editor-sharing.js"></script>
         <script src="/frontend/js/editor/editor-init.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
         <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>

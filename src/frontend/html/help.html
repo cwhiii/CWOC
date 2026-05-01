@@ -36,6 +36,7 @@
                     <li><a href="#audit-log">Audit Log</a></li>
                     <li><a href="#habits-view">Habits View</a></li>
                     <li><a href="#contacts">Contact Editor</a></li>
+                    <li><a href="#sharing">Sharing</a></li>
                 </ul>
             </div>
             <h3 id="what-is-cwoc">What is CWOC?</h3>
@@ -221,7 +222,7 @@
             <h4>Independent Alerts Board</h4>
             <p>Switch to the <strong>Independent</strong> view mode in the Alarms tab sidebar to access a 3-column board for quick alarms, timers, and stopwatches that aren't connected to any chit. Click the <strong>+</strong> button in each column header to add a new item. Edit names, times, and durations inline — changes save automatically on blur. Delete items with the ❌ button. Timers and stopwatches have Start/Pause, Reset, and Lap controls just like in the chit editor. Timers and stopwatches start immediately when created — no save step needed.</p>
             <h4>Task Zone</h4>
-            <p>Status (ToDo, In Progress, Blocked, Complete), Priority (High, Medium, Low), and Severity (Critical, Major, Normal, Minor).</p>
+            <p>Status (ToDo, In Progress, Blocked, Complete), Priority (High, Medium, Low), and Severity (Critical, Major, Normal, Minor). When a chit is shared with other users, an <strong>Assignee</strong> dropdown appears after Severity, listing only the users the chit is currently shared with. Removing a shared user from the People zone automatically updates the Assignee options.</p>
             <p>In the Tasks view, status is shown with matching icons: ● ToDo, ⟳ In Progress, ⊘ Blocked, ✓ Complete.</p>
             <h4>Location Zone</h4>
             <ul>
@@ -232,6 +233,18 @@
                 <li><strong>Google Maps button</strong> — When "Prefer Google for Maps" is enabled in Settings → Chit Options, the Map and Directions buttons use Google Maps instead of OpenStreetMap. No API key or account needed — these are plain web links.</li>
             </ul>
             <p>A chit can have at most one location. Weather and map load automatically when a location and date are both present.</p>
+            <h4>People Zone</h4>
+            <p>The People zone displays both contacts and system users in a grouped alphabetical tree. Contacts appear as plain chips (same as before). System users appear as chips with an inline pill toggle offering two roles: 👁️ Viewer and ✏️ Manager.</p>
+            <ul>
+                <li><strong>Adding a share</strong> — Click an unshared system user chip to add them to the chit's shares list as a Viewer</li>
+                <li><strong>Changing role</strong> — Click the pill toggle on a shared user to switch between Viewer and Manager</li>
+                <li><strong>Removing a share</strong> — Click the ✕ button on a shared user chip to remove them from the shares list</li>
+                <li><strong>Owner excluded</strong> — The currently authenticated user (the chit owner) does not appear in the system user list</li>
+                <li><strong>🥷 Stealth toggle</strong> — At the bottom of the People zone, a stealth checkbox hides the chit from all other users. Visible to owners and managers only; hidden for viewers</li>
+            </ul>
+            <p>Managers have the same sharing-management permissions as owners — they can add and remove shared users, change roles, and toggle stealth. Viewers see the People zone in read-only mode with no toggles or stealth control.</p>
+            <h4>Owner Chip</h4>
+            <p>The chit owner's display name is shown as a chip in the title zone header, inline with the "Title" label and the pinned icon. The chip uses the same visual style as people chips (background color, thumbnail image or placeholder). The owner chip is always displayed, even when the current user is the owner.</p>
             <h3 id="quick-edit">Quick Edit Modal</h3>
             <p>Shift+click any chit. Edit title (double-click), change Priority/Severity/Status, Pin/Archive/Delete/QR. Recurring chits get per-field "All" checkboxes and series edit options.</p>
             <h3 id="settings">Settings</h3>
@@ -375,6 +388,16 @@
                 <li><strong>Tags</strong> — Tags for contacts, auto-prefixed with "Contact/" (shared with the general tag system)</li>
                 <li><strong>Suffixes</strong> — Text suffixes (Jr., Sr., Esq., Ph.D., M.D.) listed before numeric suffixes (I–X)</li>
             </ul>
+            <h3 id="sharing">Sharing</h3>
+            <p>Chits can be shared with other system users, giving them Viewer or Manager access. All sharing controls live in the People zone of the chit editor.</p>
+            <h4>Roles</h4>
+            <ul>
+                <li><strong>Owner</strong> — The user who created the chit. Full control over all fields and sharing</li>
+                <li><strong>Manager</strong> — Can edit the chit and manage sharing (add/remove users, change roles, toggle stealth)</li>
+                <li><strong>Viewer</strong> — Can view the chit but cannot change sharing settings. The People zone appears in read-only mode</li>
+            </ul>
+            <h4>Dashboard</h4>
+            <p>Shared chits display a 🔗 icon on their dashboard card. Hover over the icon to see a tooltip with the owner's name, the list of shared users and their roles, and your effective role. Non-shared chits show no icon.</p>
         </div>
     </div>
     <script src="/frontend/js/shared/shared-auth.js"></script>

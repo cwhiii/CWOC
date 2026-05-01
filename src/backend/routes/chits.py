@@ -19,7 +19,7 @@ from src.backend.db import (
 )
 from src.backend.models import Chit, ImportRequest
 from src.backend.routes.audit import insert_audit_entry, compute_audit_diff, get_actor_from_request
-from src.backend.sharing import resolve_effective_role, can_edit_chit, can_delete_chit
+from src.backend.sharing import resolve_effective_role, can_edit_chit, can_delete_chit, can_manage_sharing
 
 
 logger = logging.getLogger(__name__)
@@ -367,9 +367,8 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
             if not can_edit_chit(existing_dict_check, user_id, owner_settings):
                 raise HTTPException(status_code=403, detail="You have read-only access to this chit")
 
-            # Managers cannot change shares, stealth, or assigned_to — preserve existing values
-            is_owner = (chit_owner_id == user_id)
-            if not is_owner:
+            # Non-managers/non-owners cannot change shares, stealth, or assigned_to — preserve existing values
+            if not can_manage_sharing(existing_dict_check, user_id, owner_settings):
                 chit.shares = deserialize_json_field(existing_dict_check.get("shares"))
                 chit.stealth = bool(existing_dict_check.get("stealth"))
                 chit.assigned_to = existing_dict_check.get("assigned_to")

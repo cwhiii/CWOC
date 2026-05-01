@@ -633,6 +633,18 @@ input.error {
     margin-bottom: 0;
 }
 
+.priority-status-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.priority-status-group > .field {
+    flex: 1 1 0;
+    min-width: 140px;
+    margin-bottom: 0;
+}
+
 #locationSection {
     flex: 1;
     margin-top: 0;
@@ -2694,6 +2706,14 @@ button.archive-btn.archived-active {
     color: var(--aged-brown-dark, #4a2c2a);
     transition: transform 0.1s;
     user-select: none;
+    white-space: nowrap;
+    max-width: 100%;
+}
+
+.people-chip .chip-name-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .people-chip:hover {
@@ -2745,15 +2765,10 @@ button.archive-btn.archived-active {
 }
 
 .people-tree-group .people-chip {
-    display: inline-flex;
+    display: flex;
     margin: 2px 2px 2px 12px;
     font-size: 0.8em;
-}
-
-.people-chip-active {
-    opacity: 0.5;
-    pointer-events: auto;
-    cursor: pointer;
+    width: fit-content;
 }
 
 /* ── Tablet Breakpoint (≤768px) — Editor-specific ──────────────────────── */
@@ -3281,7 +3296,6 @@ input.location {
     align-items: center;
     gap: 8px;
     padding: 8px 0;
-    border-top: 1px dashed var(--aged-brown-light);
 }
 
 .sharing-assigned-label {
@@ -3311,6 +3325,153 @@ input.location {
     font-style: italic;
     color: var(--aged-brown-medium);
     opacity: 0.8;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Sharing UI Overhaul — Pill Toggles, Owner Chip, Assigned-To, Stealth
+   (Requirements 1.4, 1.5, 3.2, 5.2, 5.3, 6.1, 6.2)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Pill Toggle (Viewer/Manager on system user chips) ────────────────────── */
+/* Matches the cwoc-pill-toggle pattern from settings.html (sex selector)     */
+
+.cwoc-pill-toggle {
+    display: inline-flex;
+    border: 1px solid #8b5a2b;
+    border-radius: 4px;
+    overflow: hidden;
+    cursor: pointer;
+    font-size: 0.75em;
+    flex-shrink: 0;
+    user-select: none;
+}
+
+.cwoc-pill-toggle [data-val] {
+    padding: 3px 6px;
+    white-space: nowrap;
+    transition: background 0.15s, color 0.15s;
+}
+
+/* Active (highlighted) option */
+.cwoc-pill-toggle [data-val].pill-active {
+    background: #8b5a2b;
+    color: #fff8e1;
+    font-weight: bold;
+}
+
+/* Inactive (dimmed) option */
+.cwoc-pill-toggle [data-val].pill-inactive {
+    background: #f5e6cc;
+    color: #bbb;
+}
+
+/* Dimmed pill toggle for unshared users */
+.cwoc-pill-toggle.pill-dimmed {
+    opacity: 0.4;
+}
+
+/* ── People user row (chip + pill toggle side by side) ────────────────────── */
+.people-user-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 2px 0 2px 12px;
+}
+
+/* Shared user chip highlight */
+.people-chip-shared {
+    border-color: #8b5a2b;
+}
+
+/* ── Owner Chip in Title Zone (Requirements 5.2, 5.3) ─────────────────────── */
+
+#cwoc-owner-chip-container {
+    display: inline-flex;
+    align-items: center;
+    vertical-align: middle;
+    margin-left: 6px;
+}
+
+.cwoc-owner-chip {
+    font-size: 0.8em;
+    padding: 1px 8px 1px 1px;
+    cursor: default;
+    background: var(--button-bg, #d2b48c);
+    border: 1px solid var(--aged-brown-medium, #8b4513);
+    border-radius: 14px;
+    color: var(--aged-brown-dark, #4a2c2a);
+}
+
+.cwoc-owner-chip:hover {
+    transform: none;
+}
+
+.cwoc-owner-chip .chip-thumb img {
+    width: 18px;
+    height: 18px;
+}
+
+.cwoc-owner-chip .chip-thumb-placeholder {
+    width: 18px;
+    height: 18px;
+    line-height: 18px;
+    font-size: 9px;
+}
+
+/* ── Assigned-To Row in Task Zone (Requirement 3.2) ───────────────────────── */
+/* Matches the existing Status/Priority/Severity layout pattern               */
+
+.sharing-assigned-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 0;
+}
+
+.sharing-assigned-row label {
+    font-size: 0.9em;
+    font-weight: 600;
+    color: var(--aged-brown-dark, #4a2c2a);
+    white-space: nowrap;
+    min-width: 80px;
+}
+
+.sharing-assigned-row select {
+    flex: 1;
+    min-width: 120px;
+    padding: 6px 8px;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.9em;
+    border: 1px solid var(--aged-brown-medium, #8b4513);
+    border-radius: 4px;
+    background: var(--input-bg, #fff8e1);
+    color: var(--text-color, #1a1208);
+}
+
+/* ── Stealth Toggle in People Zone (Requirements 6.1, 6.2) ────────────────── */
+
+.cwoc-stealth-toggle-row {
+    padding: 8px 4px 4px 4px;
+    border-top: 1px solid #d4c5a9;
+    margin-top: 8px;
+}
+
+.cwoc-stealth-toggle-row label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    font-size: 0.85em;
+    color: #6b4e31;
+    font-weight: 600;
+    user-select: none;
+}
+
+.cwoc-stealth-toggle-row input[type="checkbox"] {
+    flex: 0 0 auto;
+    width: auto;
+    padding: 0;
+    cursor: pointer;
 }
 
 /* ── Read-only banner for viewer-role shared chits (Requirement 4.3) ──────── */

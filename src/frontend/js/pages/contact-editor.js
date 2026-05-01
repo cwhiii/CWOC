@@ -394,8 +394,15 @@
         var mainEditor = document.getElementById('mainEditor');
         preview.style.backgroundColor = hex || 'transparent';
         if (!fromInput) hexInput.value = hex;
-        // Tint the editor background with the contact's color (like chit editor does)
-        if (mainEditor) mainEditor.style.backgroundColor = hex || '';
+        // Tint the editor background with the contact's color and auto-contrast text
+        if (mainEditor) {
+            if (hex) {
+                applyChitColors(mainEditor, hex);
+            } else {
+                mainEditor.style.backgroundColor = '';
+                mainEditor.style.color = '';
+            }
+        }
 
         // Update swatch selection
         var swatches = document.querySelectorAll('#colorSwatches .color-swatch');

@@ -222,7 +222,7 @@ Provides functions to determine a user's effective role on a chit, check edit/de
 | `resolve_effective_role(chit_row, user_id, owner_settings)` | Determine the effective role for a user on a chit. Resolution order: owner_id match → 'owner'; stealth=True and not owner → None; chit-level shares → role; tag-level shares → role; assigned_to match → 'viewer'; else None |
 | `can_edit_chit(chit_row, user_id, owner_settings)` | Return True if the user has owner or manager role on the chit |
 | `can_delete_chit(chit_row, user_id)` | Return True only if the user is the chit owner |
-| `can_manage_sharing(chit_row, user_id)` | Return True only if the user is the chit owner |
+| `can_manage_sharing(chit_row, user_id, owner_settings)` | Return True if the user is the chit owner or has manager role (uses `resolve_effective_role()` internally and checks for `role in ("owner", "manager")`) |
 | `get_shared_chits_for_user(user_id)` | Query all non-deleted, non-stealth chits shared with user_id via chit-level shares, tag-level shares, or assignment; annotates each with `effective_role`, `share_source`, `owner_display_name`, and `assigned_to_display_name` |
 | `_parse_shares(shares_raw)` | Parse the shares column value into a list of dicts |
 | `_parse_shared_tags(shared_tags_raw)` | Parse the shared_tags column value into a list of dicts |
@@ -238,13 +238,14 @@ Property-based tests for the chit sharing permission resolution engine. Uses Pyt
 |------------------|-------------|
 | `TestProperty1ViewerAccessIsReadOnly` | Viewer access is read-only — chit-level and tag-level viewer shares return 'viewer' role and `can_edit_chit` returns False (120+ iterations). **Validates: Requirements 1.2, 2.2** |
 | `TestProperty2ManagerAccessAllowsEditing` | Manager access allows editing — chit-level and tag-level manager shares return at least 'manager' role and `can_edit_chit` returns True (120+ iterations). **Validates: Requirements 1.3, 2.3** |
-| `TestProperty3OnlyOwnerCanDeleteAndManageSharing` | Only owner can delete and manage sharing — non-owners get False for `can_delete_chit` and `can_manage_sharing`; owners get True (120+ iterations). **Validates: Requirements 1.4, 2.6** |
+| `TestProperty3OnlyOwnerCanDeleteAndManageSharing` | Only owner can delete — non-owners get False for `can_delete_chit`; owners and managers get True for `can_manage_sharing`; only owners get True for `can_delete_chit` (120+ iterations). **Validates: Requirements 1.4, 2.6** |
 | `TestProperty4RemovingShareRevokesAccess` | Removing a share revokes access — users with no sharing path get None from `resolve_effective_role` (120+ iterations). **Validates: Requirements 1.5, 2.4, 2.5** |
 | `TestProperty5MultiplePathsResolveToHighestRole` | Multiple sharing paths resolve to highest role — highest role wins across chit-level, tag-level, and assignment paths (120+ iterations). **Validates: Requirements 5.1, 5.2** |
 | `TestProperty6OwnerAlwaysHasFullControl` | Owner always has full control — owner gets 'owner' role, can edit, delete, and manage sharing regardless of stealth/shares/assigned_to (120+ iterations). **Validates: Requirements 5.3, 6.3** |
 | `TestProperty7StealthOverridesAllSharingForNonOwners` | Stealth overrides all sharing for non-owners — stealth chits return None for all non-owners regardless of shares (120+ iterations). **Validates: Requirements 5.4, 6.2** |
 | `TestProperty8AssignmentGrantsAtLeastViewerAccess` | Assignment grants at least viewer access — assigned users get 'viewer' or higher; higher roles from other paths take precedence (120+ iterations). **Validates: Requirements 7.2** |
 | `TestProperty9MigrationIdempotentAndPreservesData` | Migration is idempotent and preserves data — running `migrate_add_sharing()` multiple times produces no errors, columns exist, pre-existing data unchanged (120+ iterations). **Validates: Requirements 9.1, 9.2, 9.4** |
+| `TestProperty7ManagersCanManageSharing` | Managers can manage sharing — `can_manage_sharing()` returns True for owner and manager roles, False for viewer and None (120+ iterations). **Validates: Requirements 2.1, 2.3, 2.4** |
 
 ---
 
@@ -253,7 +254,7 @@ Package marker. No public exports.
 
 ### 1.19 `src/backend/routes/chits.py` — Chit CRUD & Import/Export
 
-All chit endpoints are scoped by `owner_id` — users can only access their own chits, plus chits shared with them via the sharing system. The `request.state.user_id` (set by `AuthMiddleware`) is used for ownership filtering, sharing permission checks, and assignment. Uses `resolve_effective_role`, `can_edit_chit`, and `can_delete_chit` from `sharing.py` for access control.
+All chit endpoints are scoped by `owner_id` — users can only access their own chits, plus chits shared with them via the sharing system. The `request.state.user_id` (set by `AuthMiddleware`) is used for ownership filtering, sharing permission checks, and assignment. Uses `resolve_effective_role`, `can_edit_chit`, `can_delete_chit`, and `can_manage_sharing` from `sharing.py` for access control.
 
 | Route | Handler | Description |
 |-------|---------|-------------|
@@ -261,7 +262,7 @@ All chit endpoints are scoped by `owner_id` — users can only access their own 
 | `GET /api/chits/search` | `search_chits(q, request)` | Global search across all chit fields, scoped to authenticated user |
 | `POST /api/chits` | `create_chit(chit, request)` | Create a new chit with `owner_id`, `owner_display_name`, `owner_username` from authenticated user |
 | `GET /api/chit/{chit_id}` | `get_chit(chit_id, request)` | Get a single chit by ID (verifies ownership or shared access via `resolve_effective_role`); includes `effective_role` and `assigned_to_display_name` in response |
-| `PUT /api/chits/{chit_id}` | `update_chit(chit_id, chit, request)` | Update a chit (verifies ownership or manager access via `can_edit_chit`; managers cannot change shares/stealth/assigned_to; viewers get 403) |
+| `PUT /api/chits/{chit_id}` | `update_chit(chit_id, chit, request)` | Update a chit (verifies ownership or manager access via `can_edit_chit`; non-managers/non-owners cannot change shares/stealth/assigned_to via `can_manage_sharing` guard; viewers get 403) |
 | `DELETE /api/chits/{chit_id}` | `delete_chit(chit_id, request)` | Soft-delete a chit (owner only via `can_delete_chit`) |
 | `PATCH /api/chits/{chit_id}/recurrence-exceptions` | `patch_recurrence_exceptions(chit_id, body, request)` | Add or update a recurrence exception (verifies ownership) |
 | `GET /api/export/chits` | `export_chits(request)` | Export authenticated user's chits as JSON envelope |
@@ -365,8 +366,9 @@ All contact endpoints are scoped by `owner_id` — users can only access their o
 | `GET /api/version` | `get_version()` | Get version info |
 | `GET /health` | `health_check()` | Health check endpoint |
 | `GET /api/update/log` | `get_update_log()` | Get the last update log |
+| `GET /api/release-notes` | `get_release_notes()` | Get the release notes markdown content |
 | `GET /api/update/run` | `run_update()` | Run upgrade (SSE stream) |
-| `GET /api/wall-station` | `get_wall_station(user_ids)` | Return combined non-deleted, non-stealth chits from specified users (comma-separated UUIDs) with `owner_display_name` attribution; also returns user display names. Unauthenticated endpoint |
+| `GET /api/wall-station` | `get_wall_station(user_ids)` | Return combined non-deleted, non-stealth chits from specified users (comma-separated usernames or UUIDs) with `owner_display_name` attribution; also returns user display names. Unauthenticated endpoint |
 | `GET /wall-station` | `wall_station_page()` | Serve `wall-station.html` page (unauthenticated) |
 
 **Internal helpers:**
@@ -813,7 +815,7 @@ Coordinator for shared code between dashboard and editor. Contains glue code for
 | `_emptyState(message)` | Build a styled empty-state message with an optional Create Chit button |
 | `_getTagColor(tagName)` | Get tag color from cached settings tags, fallback to pastel |
 | `_getTagFontColor(tagName)` | Get tag font color from cached settings tags, fallback to dark brown |
-| `_buildChitHeader(chit, titleHtml, settings, opts)` | Build a standard chit card header row with icons, indicators, title, meta, owner badge, role badge, stealth indicator, and assignee badge for shared chits |
+| `_buildChitHeader(chit, titleHtml, settings, opts)` | Build a standard chit card header row with icons, indicators, title, meta, 🔗 shared icon with tooltip (owner, shared users with roles, current user's role) for shared chits, stealth indicator, and assignee badge |
 | `_renderChitMeta(chit, mode)` | Legacy compact meta builder — kept for backward compat |
 | `displayChecklistView(chitsToDisplay)` | Render the Checklists tab — chits with interactive checklist items |
 | `displayTasksView(chitsToDisplay)` | Render the Tasks tab — chits with status dropdowns and note previews; dispatches to `displayHabitsView` when in habits mode |
@@ -1033,7 +1035,7 @@ Tag tree rendering, search, selection, favorites, recents, and inline tag creati
 
 #### editor-people.js
 
-People zone: contact search, chips, and grouped alphabetical tree.
+People zone: contacts, system users, sharing controls. Loads all contacts and system users from the API, renders them in a merged grouped alphabetical tree, manages people chips (add/remove), syncs the hidden people field for save, provides search/filter within the people tree, and manages sharing state (shares, stealth, assigned-to). System users appear with inline pill toggles (Viewer/Manager) for role selection. Contacts appear as plain chips (no pill toggle). Depends on: `shared.js` (`setSaveButtonUnsaved`, `isLightColor`), `shared-auth.js` (`getCurrentUser`), `editor-sharing.js` (`_sharingUserList`, `_loadSharingUserList`, `getSharingData`). Loaded after: `editor-sharing.js`. Loaded before: `editor-init.js`, `editor.js`.
 
 | Symbol | Description |
 |--------|-------------|
@@ -1043,18 +1045,35 @@ People zone: contact search, chips, and grouped alphabetical tree.
 | `_peopleChipData` | Array of active people chips (`{display_name, id, color, image_url}`) |
 | `_allContactsCache` | Full contacts list fetched from the API for the tree |
 | `_peopleGroupsExpanded` | Object tracking which letter groups are expanded/collapsed |
+| `_allUsersCache` | System users from `/api/auth/switchable-users` |
+| `_currentShares` | Array of current shares (`{user_id, role, display_name}`) — moved from `editor-sharing.js` |
+| `_sharingInitialized` | Boolean flag indicating whether sharing controls have been initialized |
+| `_effectiveRole` | Current user's effective role on the chit (`'owner'`, `'manager'`, `'viewer'`, or `null` for new chits) |
+| `_chitOwnerId` | Owner user_id of the current chit (used to hide owner from people list for non-owners) |
 | `_focusPeopleSearch()` | Focus the people search input |
-| `_initPeopleAutocomplete()` | Initialize the people zone — load contacts and attach search listeners |
+| `_initPeopleAutocomplete()` | Initialize the people zone — load contacts and system users, attach search listeners |
 | `_clearPeopleSearch(event)` | Clear the people search input and reset the tree filter |
 | `_loadAllContactsForTree()` | Fetch all contacts from `/api/contacts` and render the people tree |
-| `_renderPeopleTree(filter)` | Render the grouped alphabetical contact tree with active-chip highlighting |
+| `_loadAllUsersForTree()` | Fetch system users from `/api/auth/switchable-users` (or reuse `_sharingUserList`), cache in `_allUsersCache`, and render the people tree |
+| `_renderPeopleTree(filter)` | Render the merged grouped alphabetical tree with contacts and system users; hides items already added/shared; includes stealth toggle at bottom |
+| `_renderContactChipInTree(parent, c)` | Render a contact chip in the tree; hides completely when already added to the chit |
+| `_renderUserChipInTree(parent, u, showControls)` | Render a system user chip in the tree (left column only); simple clickable chip with username tooltip; hides when already shared |
+| `_getUserInfoById(userId)` | Look up a user object from `_allUsersCache` by user ID |
+| `_findShareByUserId(userId)` | Find a share entry in `_currentShares` by user ID |
+| `_addShare(userId, role, displayName)` | Add a user to `_currentShares`, mark unsaved, re-render tree, sync assigned-to dropdown |
+| `_removeShare(userId)` | Remove a user from `_currentShares`, mark unsaved, re-render tree, sync assigned-to dropdown |
+| `_updateShareRole(userId, newRole)` | Update a user's role in `_currentShares`, mark unsaved, re-render tree, sync assigned-to dropdown |
+| `_renderStealthToggle()` | Render the stealth toggle checkbox at the bottom of `#peopleContent`; hidden for viewers |
+| `_syncAssignedToDropdown()` | Sync the assigned-to dropdown in the Task zone with current shares; show/hide row, populate options, clear if assigned user removed |
+| `initPeopleSharingControls(chit)` | Initialize sharing controls for an existing chit — loads shares, sets stealth, determines effective role, syncs assigned-to |
+| `initPeopleSharingForNewChit()` | Initialize sharing controls for a new chit — empty shares, stealth off, null effective role |
 | `_filterPeopleTree(query)` | Filter the people tree by search query |
-| `_toggleAllPeopleGroups(event, expand)` | Expand or collapse all letter groups in the people tree |
+| `_toggleAllPeopleGroups(event, expand)` | Expand or collapse all letter groups in the people tree (includes both contact and system user letters) |
 | `_addPeopleChip(data)` | Add a person chip (deduped by name), re-render chips and tree |
 | `_removePeopleChip(index)` | Remove a person chip by index, re-render chips and tree |
-| `_renderPeopleChips()` | Render the active people chips with thumbnails, colors, and remove buttons |
+| `_renderPeopleChips()` | Render the active people chips (contacts) and shared users (with pill toggles) in the right column |
 | `_syncPeopleHiddenField()` | Sync the hidden `#people` input with current chip names (comma-separated) |
-| `_updateActivePeopleCount()` | Update the active people count badge |
+| `_updateActivePeopleCount()` | Update the active people count badge (includes both `_peopleChipData.length` and `_currentShares.length`) |
 | `_isLightColor(hex)` | Delegate to shared `isLightColor()` |
 | `_setPeopleFromArray(peopleArray)` | Populate people chips from a chit's people array (called during load) |
 
@@ -1224,40 +1243,35 @@ Save system: build chit object, save, delete, pin, archive, QR.
 
 #### editor-sharing.js
 
-Sharing panel zone for the chit editor. Provides the "🔗 Sharing" zone visible only to the chit owner. Handles loading/displaying current shares, user picker, role selector, stealth toggle, assigned-to picker, and saving shares via `PUT /api/chits/{chit_id}/shares`. Depends on: `shared-auth.js` (`getCurrentUser`), `shared-utils.js` (`setSaveButtonUnsaved`), `editor.js` (`chitId`), `editor-init.js` (`loadChitData`).
+Thin data-layer module for the chit editor. Provides user list fetching/caching, sharing data gathering for save, zone state detection, and display name lookup. UI rendering has been moved to `editor-people.js` (merged People zone). Depends on: `shared-auth.js` (`getCurrentUser`). Loaded before: `editor-people.js`, `editor-init.js`.
 
-| Function | Description |
-|----------|-------------|
-| `initSharingZone(chit)` | Initialize the sharing zone after chit data is loaded; shows zone only to chit owner; loads user list, populates pickers, renders shares list |
-| `initSharingZoneForNewChit()` | Initialize the sharing zone for a new chit (no shares yet); shows zone for owner |
+| Symbol | Description |
+|--------|-------------|
+| `_sharingUserList` | Cached list of switchable users (fetched once). Exported as a global for `editor-people.js` |
 | `_loadSharingUserList()` | Fetch the list of switchable users from `/api/auth/switchable-users` (cached after first call) |
-| `_populateUserPicker()` | Populate the "Add user" dropdown with users not already in shares and not the current user |
-| `_populateAssignedToPicker(assignedTo)` | Populate the assigned-to dropdown with all users except the owner |
-| `_renderSharesList()` | Render the current shares list with role badges and remove buttons |
-| `_getUserDisplayName(userId)` | Look up a user's display name from the cached user list |
-| `addShare()` | Add a share from the user picker and role selector; called by the "Add" button |
-| `_removeShare(userId)` | Remove a user from the shares list |
-| `onStealthToggle()` | Handle stealth toggle change; marks editor as unsaved |
-| `onAssignedToChange()` | Handle assigned-to dropdown change; marks editor as unsaved |
-| `getSharingData()` | Return sharing fields (shares, stealth, assigned_to) to merge into the chit save payload |
-| `saveSharingData(chitIdToSave)` | Save shares to the dedicated sharing endpoint after the main chit save via `PUT /api/chits/{id}/shares` |
+| `_getUserDisplayName(userId)` | Look up a user's display name from the cached user list or `_currentShares` |
+| `getSharingData()` | Return sharing fields (`shares`, `stealth`, `assigned_to`) to merge into the chit save payload; reads `_currentShares` from `editor-people.js` globals, stealth checkbox from people zone, and assigned-to dropdown from task zone |
 | `hasSharingData(chit)` | Returns true if the chit has sharing data (shares, stealth, or assigned_to); used by `applyZoneStates` |
 
 #### editor-init.js
 
-Editor initialization, zone management, and DOMContentLoaded handler.
+Editor initialization, zone management, owner chip rendering, and DOMContentLoaded handler.
 
 | Symbol | Description |
 |--------|-------------|
 | `_initializeChitId()` | Parse chit ID and instance from URL params; generate new ID if creating |
 | `toggleZone(event, sectionId, contentId)` | Toggle a zone section's expand/collapse state (delegates to `cwocToggleZone`) |
 | `_toggleSection(contentId, button)` | Toggle a section's visibility between hidden and visible |
-| `resetEditorForNewChit()` | Reset all editor fields, zones, alerts, tags, and weather for a blank new chit |
-| `_collapseAllZonesForNewChit()` | Collapse all zones, then expand only the zone matching the source tab |
+| `resetEditorForNewChit()` | Reset all editor fields, zones, alerts, tags, and weather for a blank new chit; calls `initPeopleSharingForNewChit()` and `_renderOwnerChipForCurrentUser()` |
+| `_collapseAllZonesForNewChit()` | Collapse all zones, then expand only the zone matching the source tab (no `sharingSection` entry) |
 | `setSelectValue(selectElement, value)` | Set a `<select>` element's value with case-insensitive matching |
 | `initializeFlatpickr(selector, options)` | Initialize a Flatpickr date picker on a selector with error handling |
-| `loadChitData(chitId)` | Load a chit from the API and populate all editor fields, zones, and states |
-| `applyZoneStates(chit)` | Expand zones with data and collapse empty zones after loading a chit |
+| `_renderOwnerChip(chit)` | Render the owner chip inside `#cwoc-owner-chip-container` for an existing chit; resolves profile image from `getCurrentUser()` or `_allUsersCache` |
+| `_renderOwnerChipForCurrentUser()` | Render the owner chip for a new chit — shows the current user's own chip |
+| `_buildOwnerChipElement(displayName, profileImageUrl)` | Build an owner chip DOM element matching the people chip visual style (`people-chip cwoc-owner-chip`) |
+| `loadChitData(chitId)` | Load a chit from the API and populate all editor fields, zones, and states; calls `_renderOwnerChip(chit)` and `initPeopleSharingControls(chit)` instead of old sharing zone init; applies viewer read-only mode for viewer-role chits |
+| `_applyViewerReadOnlyMode(chit)` | Apply read-only mode when the current user has viewer role — disables form fields, hides save/delete buttons, shows read-only banner |
+| `applyZoneStates(chit)` | Expand zones with data and collapse empty zones after loading a chit; no `sharingSection` entry; `peopleSection` checks `hasSharingData` |
 | `DOMContentLoaded handler` | Main init — wires up save system, Flatpickr, checklist, color swatches, event listeners, hotkeys, ESC chain, and conditionally loads or resets chit data |
 
 #### editor_checklists.js
@@ -1440,6 +1454,8 @@ Settings page logic: tags, colors, clocks, locations, indicators, import/export,
 | `onUpgradeComplete(data)` | Handle upgrade completion — show result, re-enable buttons, reload version |
 | `copyUpdateLog()` | Copy the update log text to the clipboard |
 | `loadLastLog()` | Load and display the last upgrade log from `/api/update/log` |
+| `showReleaseNotes()` | Fetch and display release notes markdown in a modal |
+| `closeReleaseNotesModal()` | Close the release notes modal |
 | `_renderDefaultNotifList(type, items)` | Render default notification rows for a given type ('start' or 'due') |
 | `_addDefaultNotifRow(type)` | Add a new default notification row for a given type |
 | `_gatherDefaultNotifList(type)` | Gather default notification rows from the DOM for a given type |
@@ -1457,14 +1473,23 @@ Settings page logic: tags, colors, clocks, locations, indicators, import/export,
 
 #### people.js
 
-People page: rolodex browse view with search, favorites, import/export.
+People page: rolodex browse view with search, favorites, users section, import/export. Sections (Favorites, Users, All Contacts) are collapsible with localStorage persistence. A Group/Ungroup toggle lets users switch between the grouped three-section view and a flat alphabetical list combining all entries.
 
 | Symbol | Description |
 |--------|-------------|
+| `_getCollapseState()` | Get section collapse state from localStorage |
+| `_setCollapseState(state)` | Save section collapse state to localStorage |
+| `_isSectionCollapsed(sectionId)` | Check if a section is collapsed |
+| `_toggleSection(sectionId)` | Toggle a section's collapsed state and re-render |
+| `_loadGroupState()` | Load group/ungroup preference from localStorage |
+| `_updateGroupButton()` | Update the group toggle button label and icon to reflect current state |
+| `_loadUsers()` | Fetch active users from GET `/api/auth/switchable-users` |
 | `loadContacts(query)` | Fetch contacts from GET `/api/contacts` (optionally filtered by query) |
 | `_onSearchInput()` | Search input handler — client-side filter with debounced API fallback |
 | `_applyFilter()` | Client-side filter: match query against display name, nickname, org, emails, phones, etc. |
-| `_renderList()` | Render the filtered contact list with favorites section at top |
+| `_renderList()` | Render the filtered contact list; grouped mode shows Favorites/Users/All Contacts sections, ungrouped mode shows a single flat alphabetical list |
+| `_renderSection(sectionId, label, items, query, rowFactory)` | Render a collapsible section with divider header and content wrapper |
+| `_createUserRow(user, query)` | Create a user row element with profile image, display name, and username |
 | `_createRow(contact, query)` | Create a single contact row element with star, thumbnail, name, details, and share button |
 | `_toggleFavorite(contact, starEl)` | Toggle favorite via PATCH `/api/contacts/:id/favorite` and re-render |
 | `_shareContact(contact)` | Share contact via QR code using `showContactQrCode` from contact-qr.js |
@@ -1740,6 +1765,7 @@ Chit card styling, notes masonry layout, markdown, people chips, view-specific l
 | Stealth Indicator (`.cwoc-stealth-indicator`) | 🥷 stealth icon on chit cards, visible to owner only |
 | Assignee Badge (`.cwoc-assignee-badge`) | Assigned-to display name badge on chit cards |
 | Role Badge (`.cwoc-role-badge`) | Role indicator badge (viewer/manager) on shared chit cards |
+| Shared Icon (`.cwoc-shared-icon`) | 🔗 shared icon on dashboard chit cards with hover tooltip showing owner, shared users with roles, and current user's role |
 
 #### styles-hotkeys.css
 Hotkey overlay, panels, reference overlay, and sidebar dimming.
@@ -1797,6 +1823,7 @@ Chit-specific styles. Base editor styles (header-row, zones, fields, buttons) co
 | Projects Zone | Kanban-style project container, status sections, drag handles, status dropdowns |
 | Archive/Audit Buttons | Header button styling for archive and audit log |
 | Sharing Panel | 🔗 Sharing zone styles — current shares list, share list items, user name, role badges (manager/viewer), remove button, add share controls row, user picker, role select, add button, stealth toggle row, assigned-to picker row, empty state message |
+| Sharing UI Overhaul | `.cwoc-pill-toggle` — inline pill toggle for system user role selection (Viewer/Manager); `.people-user-row` — system user row with chip + pill toggle; `.cwoc-owner-chip` — owner chip in title zone matching people chip style; `#cwoc-owner-chip-container` — inline layout for owner chip; `.sharing-assigned-row` — assigned-to dropdown row in task zone; `.cwoc-stealth-toggle-row` — stealth toggle at bottom of people zone |
 | Read-Only Banner | `.cwoc-readonly-banner` — banner for viewer-role shared chits with warning background and border |
 | Responsive (≤400px) | Compact chit-specific overrides |
 | Responsive (≤480px) | Mobile chit-specific overrides |
@@ -1911,11 +1938,10 @@ All JS is loaded via `<script>` tags — no ES modules. Load order matters becau
 <script src="/frontend/js/pages/shared-page.js"></script>
 <script src="/frontend/js/pages/shared-editor.js"></script>
 
-<!-- 4. Editor sub-scripts (zone modules, then save, then init) -->
+<!-- 4. Editor sub-scripts (zone modules, then save, then sharing data-layer, then people, then init) -->
 <script src="/frontend/js/editor/editor.js"></script>
 <script src="/frontend/js/editor/editor-dates.js"></script>
 <script src="/frontend/js/editor/editor-tags.js"></script>
-<script src="/frontend/js/editor/editor-people.js"></script>
 <script src="/frontend/js/editor/editor-location.js"></script>
 <script src="/frontend/js/editor/editor-notes.js"></script>
 <script src="/frontend/js/editor/editor-alerts.js"></script>
@@ -1923,6 +1949,7 @@ All JS is loaded via `<script>` tags — no ES modules. Load order matters becau
 <script src="/frontend/js/editor/editor-health.js"></script>
 <script src="/frontend/js/editor/editor-save.js"></script>
 <script src="/frontend/js/editor/editor-sharing.js"></script>
+<script src="/frontend/js/editor/editor-people.js"></script>
 <script src="/frontend/js/editor/editor-init.js"></script>
 
 <!-- 5. CDN (loaded last) -->
@@ -1996,7 +2023,7 @@ src/backend/main.py
 src/backend/routes/chits.py
   ├── src.backend.db           (DB_PATH, serialize/deserialize, compute_system_tags, _build_export_envelope)
   ├── src.backend.models       (Chit, ImportRequest)
-  ├── src.backend.sharing      (resolve_effective_role, can_edit_chit, can_delete_chit)
+  ├── src.backend.sharing      (resolve_effective_role, can_edit_chit, can_delete_chit, can_manage_sharing)
   └── src.backend.routes.audit (insert_audit_entry, compute_audit_diff, get_actor_from_request)
 
 src/backend/routes/trash.py
@@ -2112,14 +2139,14 @@ shared-auth.js            ← MUST load first (getCurrentUser, isAdmin, waitForA
                     editor.js             (core editor globals and helpers)
                     editor-dates.js       (date zone logic)
                     editor-tags.js        (tag zone — uses shared-tags)
-                    editor-people.js      (people zone)
+                    editor-people.js      (people zone + sharing controls — depends on editor-sharing.js globals)
                     editor-location.js    (location zone — uses shared-geocoding)
                     editor-notes.js       (notes zone)
                     editor-alerts.js      (alerts zone)
                     editor-color.js       (color zone)
                     editor-health.js      (health indicators zone)
                     editor-save.js        (save/exit logic)
-                    editor-sharing.js     (sharing panel — uses shared-auth, shared-utils)
+                    editor-sharing.js     (sharing data-layer — uses shared-auth; provides _sharingUserList, getSharingData, hasSharingData for editor-people.js and editor-init.js)
                     editor-init.js        (entry point — calls init functions)
 ```
 
