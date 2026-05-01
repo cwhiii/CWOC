@@ -56,6 +56,32 @@ DO NOT INSTALL THINGS!
 - `CwocSaveSystem` (in `shared-page.js`) provides the standard save/cancel button pattern — use it for any page with editable state.
 - External CDN libraries (Flatpickr, Font Awesome 6, marked.js) are loaded via `<link>` / `<script>` tags in HTML. Do not add npm dependencies.
 
+## Incremental Template & Custom Element Adoption
+
+When making **substantial changes** to a JS function that builds DOM via string templates (`innerHTML = \`...\``) or `createElement` chains, convert that function to use native `<template>` elements instead. "Substantial" means you're rewriting or significantly modifying the function — not fixing a one-line bug or tweaking a value.
+
+**`<template>` pattern:**
+- Define the markup in the HTML file inside a `<template id="tmpl-thing">` element
+- In JS, clone it with `document.getElementById('tmpl-thing').content.cloneNode(true)`
+- Populate dynamic values by querying the cloned fragment (`clone.querySelector('.title').textContent = chit.title`)
+- This keeps markup in HTML where it belongs and makes it easier to read and style
+
+**Custom Elements (light, no Shadow DOM):**
+- Use `class extends HTMLElement` for patterns that repeat across multiple pages (modals, zone panels, card types)
+- Don't reach for Custom Elements for one-off DOM structures — `<template>` alone is fine for those
+- Register with `customElements.define('cwoc-thing', CwocThing)`
+- Keep them simple — they're just reusable DOM constructors, not a framework
+
+**When NOT to convert:**
+- One-line bug fixes or value tweaks in existing DOM-building code
+- Functions you're not otherwise modifying
+- Anything where the conversion would triple the scope of the current task
+
+**File organization:**
+- `<template>` elements go in the HTML file that uses them, grouped at the bottom before closing `</body>`
+- If a template is shared across pages, put it in `_template.html` or inject it via `shared-page.js`
+- Custom Element classes go in the shared JS file most relevant to their purpose (e.g., a modal element goes in `shared-utils.js` or a new `shared-elements.js` if enough accumulate)
+
 ## Typography & Contrast
 - Text must be high-contrast and easily readable. Use dark colors (`#1a1208` or darker) on parchment backgrounds — never light brown on light brown.
 - Avoid `opacity` values below 0.7 on text elements. If text looks faded, increase the opacity or darken the color.

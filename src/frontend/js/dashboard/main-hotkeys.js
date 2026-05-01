@@ -107,7 +107,7 @@ function _applyEnabledPeriods() {
 
   var refOverlay = document.getElementById('reference-overlay');
   if (refOverlay) {
-    var periodMap = { 'I': 'Itinerary', 'D': 'Day', 'W': 'Week', 'K': 'Work', 'S': 'SevenDay', 'M': 'Month', 'Y': 'Year' };
+    var periodMap = { 'I': 'Itinerary', 'D': 'Day', 'W': 'Week', 'K': 'Work', 'X': 'SevenDay', 'M': 'Month', 'Y': 'Year' };
     // Search both old (.ref-col div) and new (.ref-item) structures
     refOverlay.querySelectorAll('.ref-item, .ref-col div').forEach(function(div) {
       var keyEl = div.querySelector('.ref-key');

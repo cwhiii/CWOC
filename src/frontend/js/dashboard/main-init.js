@@ -1005,6 +1005,42 @@ document.addEventListener("DOMContentLoaded", function () {
     }, { passive: true });
   })();
 
+  // ── Mobile swipe on top bar (tabs) to cycle through views ─────────────
+  (function() {
+    var tabsEl = document.querySelector('.tabs');
+    if (!tabsEl) return;
+    var _tbSwStartX = 0, _tbSwStartY = 0;
+    var _tbSwiping = false;
+    var SWIPE_MIN = 60;
+
+    var _tabOrder = ['Calendar', 'Checklists', 'Alarms', 'Projects', 'Tasks', 'Notes', 'Indicators', 'Search'];
+
+    tabsEl.addEventListener('touchstart', function(e) {
+      var t = e.touches[0];
+      _tbSwStartX = t.clientX;
+      _tbSwStartY = t.clientY;
+    }, { passive: true });
+
+    tabsEl.addEventListener('touchend', function(e) {
+      if (_tbSwiping) return;
+      var t = e.changedTouches[0];
+      var dx = t.clientX - _tbSwStartX;
+      var dy = Math.abs(t.clientY - _tbSwStartY);
+      if (Math.abs(dx) < SWIPE_MIN || dy > Math.abs(dx)) return;
+
+      _tbSwiping = true;
+      var goNext = dx < 0;
+      var curIdx = _tabOrder.indexOf(currentTab);
+      if (curIdx < 0) curIdx = 0;
+      var newIdx = goNext ? curIdx + 1 : curIdx - 1;
+      if (newIdx < 0) newIdx = _tabOrder.length - 1;
+      if (newIdx >= _tabOrder.length) newIdx = 0;
+
+      filterChits(_tabOrder[newIdx]);
+      setTimeout(function() { _tbSwiping = false; }, 300);
+    }, { passive: true });
+  })();
+
   const now = new Date();
   const oneHourLater = new Date(now.getTime() + 60 * 60 * 1000);
   const startDateTime = document.getElementById("start_datetime");
@@ -1172,7 +1208,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
     // ── PERIOD submenu (after '.') ──
     if (_hotkeyMode === 'PERIOD') {
-      const periodMap = { i: 'Itinerary', d: 'Day', w: 'Week', k: 'Work', s: 'SevenDay', m: 'Month', y: 'Year' };
+      const periodMap = { i: 'Itinerary', d: 'Day', w: 'Week', k: 'Work', x: 'SevenDay', m: 'Month', y: 'Year' };
       if (periodMap[keyLower]) {
         e.preventDefault();
         _pickPeriod(periodMap[keyLower]);

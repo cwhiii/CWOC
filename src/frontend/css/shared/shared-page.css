@@ -346,11 +346,13 @@ input[type="color"] {
     gap: 10px;
     justify-content: center;
     margin-top: 14px;
+    flex-wrap: nowrap;
 }
 .modal-content .modal-buttons button,
 .modal-content .modal-buttons .standard-button {
     flex: 1;
     min-width: 0;
+    white-space: nowrap;
 }
 
 /* ── Loader Spinner ─────────────────────────────────────────────────────── */
@@ -675,6 +677,22 @@ input[type="color"] {
     height: 32px;
     border-radius: 50%;
     object-fit: cover;
+}
+
+/* Match profile button height to adjacent standard-button height */
+.header-buttons .cwoc-profile-menu {
+    display: inline-flex;
+    align-items: center;
+}
+.header-buttons .cwoc-profile-btn {
+    height: 100%;
+    box-sizing: border-box;
+}
+/* Ensure profile image matches button height */
+.header-buttons .cwoc-profile-img {
+    width: auto;
+    height: calc(1em + 12px); /* match standard-button padding + font-size */
+    aspect-ratio: 1;
 }
 
 /* ── Profile Dropdown ────────────────────────────────────────────────────── */

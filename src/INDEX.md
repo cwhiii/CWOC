@@ -938,6 +938,8 @@ Coordinator for shared code between dashboard and editor. Contains glue code for
 | `_indicatorsLoadCustomRange()` | Load indicators with custom date range from inputs |
 | `_indicatorsLoad()` | Fetch health data from API and render SVG trend charts with expand buttons |
 | `_indToggleExpand(key)` | Expand/collapse a single indicator chart — fills available viewport height when expanded, updates on resize |
+| `_enableIndicatorsDragReorder(container)` | Enable drag-to-reorder on indicator chart divs, persists order to localStorage |
+| `_restoreIndicatorsOrder(container)` | Restore saved indicator chart order from localStorage |
 
 #### main-alerts.js
 
@@ -1147,6 +1149,7 @@ People zone: contacts, system users, sharing controls. Loads all contacts and sy
 | `_removeShare(userId)` | Remove a user from `_currentShares`, mark unsaved, re-render tree, sync assigned-to dropdown |
 | `_updateShareRole(userId, newRole)` | Update a user's role in `_currentShares`, mark unsaved, re-render tree, sync assigned-to dropdown |
 | `_renderStealthToggle()` | Render the stealth toggle checkbox at the bottom of `#peopleContent`; hidden for viewers |
+| `_applyStealthGreyout()` | Grey out sharing controls, people chips, assigned-to row, and search when stealth is enabled |
 | `_onAssignedToChange()` | Handle assigned-to dropdown change: auto-add user to shares as manager (Requirements 2.1, 2.2, 2.3, 10.2, 10.3). If user not in shares, adds with `role: "manager"`, `rsvp_status: "invited"`. If viewer, upgrades to manager |
 | `_syncAssignedToDropdown()` | Sync the assigned-to dropdown in the Task zone with current shares; show/hide row, populate options from owner + all system users (Requirement 2.5), clear if assigned user removed |
 | `initPeopleSharingControls(chit)` | Initialize sharing controls for an existing chit — loads shares, sets stealth, determines effective role, syncs assigned-to |

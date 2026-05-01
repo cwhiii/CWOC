@@ -475,6 +475,7 @@ function _renderStealthToggle() {
   checkbox.id = 'sharingStealthToggle';
   checkbox.addEventListener('change', function () {
     setSaveButtonUnsaved();
+    _applyStealthGreyout();
   });
 
   label.appendChild(checkbox);
@@ -484,7 +485,42 @@ function _renderStealthToggle() {
   container.appendChild(row);
 }
 
-// ── Assigned-to dropdown sync (Requirement 2.5) ─────────────────────────────
+// ── Assigned-to dropdown sync (Requirement 2.5) ─────────────────────────
+
+// ── Stealth greyout — disable sharing & assignment when stealth is on ────
+
+function _applyStealthGreyout() {
+  var stealthCb = document.getElementById('sharingStealthToggle');
+  var isStealth = stealthCb && stealthCb.checked;
+
+  // Grey out the people tree container (sharing controls)
+  var treeContainer = document.getElementById('peopleTreeContainer');
+  if (treeContainer) {
+    treeContainer.style.opacity = isStealth ? '0.35' : '';
+    treeContainer.style.pointerEvents = isStealth ? 'none' : '';
+  }
+
+  // Grey out the people chips (shared users)
+  var chipsContainer = document.getElementById('peopleChips');
+  if (chipsContainer) {
+    chipsContainer.style.opacity = isStealth ? '0.35' : '';
+    chipsContainer.style.pointerEvents = isStealth ? 'none' : '';
+  }
+
+  // Grey out the assigned-to row
+  var assignedRow = document.getElementById('sharingAssignedRow');
+  if (assignedRow) {
+    assignedRow.style.opacity = isStealth ? '0.35' : '';
+    assignedRow.style.pointerEvents = isStealth ? 'none' : '';
+  }
+
+  // Grey out the people search
+  var searchInput = document.getElementById('peopleSearchInput');
+  if (searchInput) {
+    searchInput.disabled = !!isStealth;
+    searchInput.style.opacity = isStealth ? '0.35' : '';
+  }
+}────
 
 /**
  * Handle assigned-to dropdown change: auto-add user to shares as manager.
@@ -668,6 +704,7 @@ function initPeopleSharingControls(chit) {
   if (stealthCb) {
     stealthCb.checked = !!chit.stealth;
   }
+  _applyStealthGreyout();
 
   // For viewers: hide pill toggles and stealth toggle (read-only mode)
   // This is handled by _renderPeopleTree checking _effectiveRole

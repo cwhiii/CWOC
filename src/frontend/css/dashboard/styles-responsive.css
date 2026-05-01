@@ -299,6 +299,11 @@
         padding: 2px;
     }
 
+    /* ── Day column: contain events within column bounds ──────────────────── */
+    .day-column {
+        overflow: hidden;
+    }
+
     /* ── Month grid: tighter ──────────────────────────────────────────────── */
     .month-grid {
         gap: 1px;
@@ -439,6 +444,10 @@
         font-size: 0.65em;
         line-height: 1.2;
         overflow: hidden;
+        max-width: 100% !important;
+        width: calc(100% - 4px) !important;
+        box-sizing: border-box !important;
+        word-break: break-word;
     }
     .timed-event .label img {
         width: 1em !important;

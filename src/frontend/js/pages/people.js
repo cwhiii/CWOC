@@ -173,6 +173,10 @@
         const favorites = _filteredContacts.filter(c => c.favorite);
         const others = _filteredContacts.filter(c => !c.favorite);
 
+        // Also check for favorited users (stored in localStorage)
+        const favUsers = filteredUsers.filter(u => localStorage.getItem('cwoc_user_fav_' + u.id) === '1');
+        const nonFavUsers = filteredUsers.filter(u => localStorage.getItem('cwoc_user_fav_' + u.id) !== '1');
+
         const sortFn = (a, b) => (a.display_name || '').localeCompare(b.display_name || '', undefined, { sensitivity: 'base' });
         favorites.sort(sortFn);
         others.sort(sortFn);
@@ -202,15 +206,19 @@
         // ── Grouped mode (default): separate sections ───────────────────
 
         // ── Favorites section ───────────────────────────────────────────
-        if (favorites.length > 0) {
-            _renderSection('favorites', '★ Favorites', favorites, q, function(c) {
-                return _createRow(c, q);
+        if (favorites.length > 0 || favUsers.length > 0) {
+            const allFavItems = [];
+            favorites.forEach(c => allFavItems.push({ _type: 'contact', data: c }));
+            favUsers.forEach(u => allFavItems.push({ _type: 'user', data: u }));
+            _renderSection('favorites', '★ Favorites', allFavItems, q, function(item) {
+                if (item._type === 'user') return _createUserRow(item.data, q);
+                return _createRow(item.data, q);
             });
         }
 
         // ── Users section ───────────────────────────────────────────────
-        if (filteredUsers.length > 0) {
-            _renderSection('users', '<i class="fas fa-users"></i> Users', filteredUsers, q, function(u) {
+        if (nonFavUsers.length > 0) {
+            _renderSection('users', '<i class="fas fa-users"></i> Users', nonFavUsers, q, function(u) {
                 return _createUserRow(u, q);
             });
         }
@@ -254,12 +262,28 @@
         row.className = 'people-row people-user-row';
         row.dataset.userId = user.id;
 
-        // No star for users — placeholder for alignment
-        const starPlaceholder = document.createElement('span');
-        starPlaceholder.className = 'star-toggle';
-        starPlaceholder.style.visibility = 'hidden';
-        starPlaceholder.textContent = '☆';
-        row.appendChild(starPlaceholder);
+        // Star toggle for users (persisted in localStorage)
+        const star = document.createElement('span');
+        star.className = 'star-toggle';
+        const favKey = 'cwoc_user_fav_' + user.id;
+        const isFav = localStorage.getItem(favKey) === '1';
+        star.textContent = isFav ? '★' : '☆';
+        star.title = isFav ? 'Remove from favorites' : 'Add to favorites';
+        star.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const nowFav = localStorage.getItem(favKey) === '1';
+            if (nowFav) {
+                localStorage.removeItem(favKey);
+                star.textContent = '☆';
+                star.title = 'Add to favorites';
+            } else {
+                localStorage.setItem(favKey, '1');
+                star.textContent = '★';
+                star.title = 'Remove from favorites';
+            }
+            _renderList();
+        });
+        row.appendChild(star);
 
         // Thumbnail
         if (user.profile_image_url) {
@@ -280,7 +304,7 @@
         infoCol.className = 'contact-info';
 
         const name = document.createElement('span');
-        name.className = 'contact-name';
+        name.className = 'contact-name' + (isFav ? ' favorite' : '');
         name.innerHTML = _highlightMatch(user.display_name || user.username, query);
         infoCol.appendChild(name);
 

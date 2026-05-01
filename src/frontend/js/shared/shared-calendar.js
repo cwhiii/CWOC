@@ -674,17 +674,16 @@ function enableAllDayDrag(allDayEventsRow, days) {
   allDayEventsRow.addEventListener('drop', async (e) => {
     if (!draggedEv) return;
     e.preventDefault();
-    // Find which day cell was dropped on (skip the spacer — first child)
-    const cells = Array.from(allDayEventsRow.children).slice(1); // skip spacer
-    let targetIdx = -1;
-    for (let i = 0; i < cells.length; i++) {
-      const rect = cells[i].getBoundingClientRect();
-      if (e.clientX >= rect.left && e.clientX <= rect.right) {
-        targetIdx = i;
-        break;
-      }
-    }
-    if (targetIdx < 0 || targetIdx >= days.length) return;
+    // Find which day was dropped on by calculating position within the grid
+    // The grid spans the full width minus the spacer (first child, 60px)
+    const spacer = allDayEventsRow.children[0];
+    const spacerWidth = spacer ? spacer.getBoundingClientRect().width : 60;
+    const rowRect = allDayEventsRow.getBoundingClientRect();
+    const availableWidth = rowRect.width - spacerWidth;
+    const relativeX = e.clientX - rowRect.left - spacerWidth;
+    const dayWidth = availableWidth / days.length;
+    let targetIdx = Math.floor(relativeX / dayWidth);
+    targetIdx = Math.max(0, Math.min(days.length - 1, targetIdx));
 
     const chitId = draggedEv.dataset.chitId;
     if (!chitId) return;

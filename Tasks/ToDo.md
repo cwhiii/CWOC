@@ -56,6 +56,7 @@
 
 - note to markdown export option, per chit, or all.
 - full-chit to markdown epoort, per chit, or all.  
+- notes links: auto-fill dropdown using anme of other chit.
 
 
 ### MISC
@@ -101,6 +102,18 @@
 
 
 ## Major Features / Overhauls
+
+### Framework Adoption — Recommendation: Don't
+
+At 67k lines (33k JS, 18k Python, 10k CSS, 7k HTML), the question of whether a frontend framework would help is fair. The answer is: not for this project.
+
+**Pros of a framework (React/Vue/Svelte):** Declarative UI updates instead of manual DOM manipulation, built-in component reuse for repeated patterns (modals, cards, zones), reactive state management, and probably a ~30% reduction in JS line count (down to ~20-22k).
+
+**Cons:** Requires a full frontend rewrite — you can't incrementally adopt a framework into global-function vanilla JS. Introduces a build step (npm, vite/webpack, node_modules, dependency updates), which you currently have zero of. Complicates deployment since FastAPI currently just serves static files. Adds ongoing maintenance burden for framework version upgrades and dependency security patches. Drag-and-drop, calendar rendering, and checklist logic are roughly the same complexity in any framework.
+
+**Scope if you did it anyway:** 4-8 weeks of full-time work to rewrite the frontend. Every HTML page, every JS file, every DOM interaction rebuilt. You'd need to set up a build pipeline, convert all shared utilities to modules, rewrite the editor zones as components, and re-implement all the drag-drop and calendar interactions. High risk of regressions across the six C CAPTN views.
+
+**Better incremental path:** Use native `<template>` elements to replace DOM-building string literals, and lightweight Custom Elements (`class extends HTMLElement`) for repeated patterns like modals and zone panels. No build step, no dependencies, works with the existing architecture, and can be adopted one file at a time.
 
 ### Real World Use
 - `[ ]` Establish external access path (Home Assistant? Secured reverse proxy? Mobile platform?)

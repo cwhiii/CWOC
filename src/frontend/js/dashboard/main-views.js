@@ -237,11 +237,18 @@ function _buildChitHeader(chit, titleHtml, settings, opts) {
     const dueDate = new Date(chit.due_datetime);
     const isOverdue = dueDate < new Date() && chit.status !== 'Complete';
     const s = document.createElement('span');
-    s.textContent = `Due: ${formatDate(dueDate)}`;
     if (isOverdue) {
+      // Format as YYYY-MMM-DD for past-due items
+      var _months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      var _pdYear = dueDate.getFullYear();
+      var _pdMon = _months[dueDate.getMonth()];
+      var _pdDay = String(dueDate.getDate()).padStart(2, '0');
+      s.textContent = 'Past Due: ' + _pdYear + '-' + _pdMon + '-' + _pdDay;
       var overdueCol = (window._cwocSettings && window._cwocSettings.overdue_border_color) || '#b22222';
       var overdueTextCol = contrastColorForBg(overdueCol);
       s.style.cssText = 'background:' + overdueCol + ';color:' + overdueTextCol + ';font-weight:bold;padding:1px 6px;border-radius:3px;';
+    } else {
+      s.textContent = `Due: ${formatDate(dueDate)}`;
     }
     if (currentSortField === 'due') { s.style.fontWeight = 'bold'; s.textContent += (currentSortDir === 'asc' ? ' ▲' : ' ▼'); }
     right.appendChild(s);
@@ -2847,7 +2854,7 @@ async function _indicatorsLoad() {
     var isMetric = (settings.unit_system === 'metric');
 
     var charts = [
-      { key: 'heart_rate', label: '💓 Heart Rate', unit: 'bpm', color: '#b22222' },
+      { key: 'heart_rate', label: '❤️ Heart Rate', unit: 'bpm', color: '#b22222' },
       { key: 'bp_systolic', label: '🩸 Blood Pressure', unit: 'mmHg', color: '#c44', paired: 'bp_diastolic', pairedLabel: 'Diastolic', pairedColor: '#4682b4' },
       { key: 'spo2', label: '🫁 Oxygen Saturation', unit: '%', color: '#4682b4' },
       { key: 'temperature', label: '🌡️ Temperature', unit: isMetric ? '°C' : '°F', color: '#d4a017' },
@@ -2972,10 +2979,27 @@ async function _indicatorsLoad() {
         svg += '<text x="' + (padL - 3) + '" y="' + (gy + 3) + '" text-anchor="end" font-size="9" fill="#6b4e31">' + (Math.round(gv * 10) / 10) + '</text>';
       }
       var xSteps = Math.min(points.length, 6);
+      // Smart date labels: use shorter format when dates are close together
+      var _dateSpanDays = (maxDate - minDate) / 86400000;
       for (var xi = 0; xi < xSteps; xi++) {
         var idx = Math.round(xi * (points.length - 1) / Math.max(xSteps - 1, 1));
         var pt = points[idx], tx = xPos(new Date(pt.datetime || pt.date).getTime());
-        svg += '<text x="' + tx + '" y="' + (svgHeight - 3) + '" text-anchor="middle" font-size="8" fill="#6b4e31">' + pt.date + '</text>';
+        var _labelDate = new Date(pt.datetime || pt.date);
+        var _dateLabel;
+        if (_dateSpanDays <= 2) {
+          // Very short range: show time
+          _dateLabel = String(_labelDate.getHours()).padStart(2, '0') + ':' + String(_labelDate.getMinutes()).padStart(2, '0');
+        } else if (_dateSpanDays <= 14) {
+          // Short range: day of month only
+          _dateLabel = String(_labelDate.getDate());
+        } else if (_dateSpanDays <= 90) {
+          // Medium range: M/D
+          _dateLabel = (_labelDate.getMonth() + 1) + '/' + _labelDate.getDate();
+        } else {
+          // Long range: M/D/YY
+          _dateLabel = (_labelDate.getMonth() + 1) + '/' + _labelDate.getDate() + '/' + String(_labelDate.getFullYear()).slice(2);
+        }
+        svg += '<text x="' + tx + '" y="' + (svgHeight - 3) + '" text-anchor="middle" font-size="8" fill="#6b4e31">' + _dateLabel + '</text>';
       }
       if (pairedPoints.length > 1) {
         var pp = 'M';
@@ -3003,6 +3027,11 @@ async function _indicatorsLoad() {
 
     if (container.children.length === 0) {
       container.innerHTML = '<div style="text-align:center;padding:2em;opacity:0.5;">Select indicators in the sidebar.</div>';
+    } else {
+      // Enable drag-to-reorder on indicator charts
+      _enableIndicatorsDragReorder(container);
+      // Restore saved chart order
+      _restoreIndicatorsOrder(container);
     }
   } catch (e) {
     console.error('Indicators load error:', e);
@@ -3083,5 +3112,89 @@ window.addEventListener('resize', function() {
     });
   }, 150);
 });
+
+// ── Indicators drag-to-reorder ───────────────────────────────────────────────
+
+var _IND_ORDER_KEY = 'cwoc_indicators_chart_order';
+
+function _enableIndicatorsDragReorder(container) {
+  var draggedEl = null;
+
+  Array.from(container.children).forEach(function(chartDiv) {
+    if (!chartDiv.dataset.indKey) return;
+    chartDiv.draggable = true;
+    chartDiv.style.cursor = 'grab';
+
+    chartDiv.addEventListener('dragstart', function(e) {
+      draggedEl = chartDiv;
+      e.dataTransfer.setData('text/plain', chartDiv.dataset.indKey);
+      e.dataTransfer.effectAllowed = 'move';
+      chartDiv.style.opacity = '0.4';
+    });
+
+    chartDiv.addEventListener('dragend', function() {
+      chartDiv.style.opacity = '';
+      draggedEl = null;
+      container.querySelectorAll('[data-ind-key]').forEach(function(c) {
+        c.style.borderTop = '';
+        c.style.borderBottom = '';
+      });
+    });
+
+    chartDiv.addEventListener('dragover', function(e) {
+      if (!draggedEl || draggedEl === chartDiv) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      var rect = chartDiv.getBoundingClientRect();
+      container.querySelectorAll('[data-ind-key]').forEach(function(c) {
+        c.style.borderTop = '';
+        c.style.borderBottom = '';
+      });
+      if (e.clientY < rect.top + rect.height / 2) {
+        chartDiv.style.borderTop = '3px solid #8b5a2b';
+      } else {
+        chartDiv.style.borderBottom = '3px solid #8b5a2b';
+      }
+    });
+
+    chartDiv.addEventListener('drop', function(e) {
+      e.preventDefault();
+      container.querySelectorAll('[data-ind-key]').forEach(function(c) {
+        c.style.borderTop = '';
+        c.style.borderBottom = '';
+      });
+      if (!draggedEl || draggedEl === chartDiv) return;
+
+      var rect = chartDiv.getBoundingClientRect();
+      if (e.clientY < rect.top + rect.height / 2) {
+        container.insertBefore(draggedEl, chartDiv);
+      } else {
+        container.insertBefore(draggedEl, chartDiv.nextSibling);
+      }
+
+      // Save order
+      var order = [];
+      container.querySelectorAll('[data-ind-key]').forEach(function(c) {
+        order.push(c.dataset.indKey);
+      });
+      try { localStorage.setItem(_IND_ORDER_KEY, JSON.stringify(order)); } catch(ex) {}
+    });
+  });
+}
+
+function _restoreIndicatorsOrder(container) {
+  try {
+    var raw = localStorage.getItem(_IND_ORDER_KEY);
+    if (!raw) return;
+    var order = JSON.parse(raw);
+    if (!Array.isArray(order)) return;
+
+    // Reorder children to match saved order
+    order.forEach(function(key) {
+      var el = container.querySelector('[data-ind-key="' + key + '"]');
+      if (el) container.appendChild(el);
+    });
+  } catch(ex) {}
+}
 
 

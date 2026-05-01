@@ -13,7 +13,7 @@ window._healthData = {};
 
 var _healthFields = [
   // Vitals
-  { id: 'heartRateEntry', key: 'heart_rate', label: '💓 Heart Rate', unit: 'bpm', metricUnit: 'bpm' },
+  { id: 'heartRateEntry', key: 'heart_rate', label: '❤️ Heart Rate', unit: 'bpm', metricUnit: 'bpm' },
   { id: 'bpEntry', key: 'bp', label: '🩸 Blood Pressure', unit: 'mmHg', metricUnit: 'mmHg', isBP: true },
   { id: 'spo2Entry', key: 'spo2', label: '🫁 Oxygen Saturation', unit: '%', metricUnit: '%' },
   { id: 'temperatureEntry', key: 'temperature', label: '🌡️ Temperature', unit: '°F', metricUnit: '°C' },
