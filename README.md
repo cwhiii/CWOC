@@ -25,6 +25,16 @@ Unlike most productivity tools, CWOC doesn't force you to pick a category up fro
 - **Frontend:** Vanilla JS, HTML5, CSS3 — no frameworks, no build step
 - **Theme:** 1940s parchment/magic aesthetic
 
+## Hardware
+
+Lightweight enough to run on minimal hardware like a Raspberry Pi Zero 2 W, though the original Pi Zero would likely be sluggish due to its single-core CPU and Python overhead. Any modern SBC, small VM, or LXC container with 1+ CPU cores and 512MB RAM will run it comfortably.
+
+**LXC / VM Recommended Specs:**
+- 2 vCPUs, 1GB RAM, 4GB disk
+
+**Minimum Functional Specs:**
+- 1 vCPU, 256MB RAM, 2GB disk — will run, but expect slower response times under concurrent use
+
 ## Documentation
 
 - [Full README & Feature List](./documents/README.md)

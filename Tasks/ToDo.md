@@ -8,7 +8,6 @@
 
 
 
-
 - usesrs in roladex: i should be able to view a user like a contact, and view theri values. Should be able to favorite tehem, jsut like a contact. 
 
 - if stealth is enabled or a chit, all sahring & assiement options should be crewyed out. 
