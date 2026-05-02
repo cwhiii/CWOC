@@ -1100,3 +1100,41 @@ def migrate_habits_overhaul():
     finally:
         if conn:
             conn.close()
+
+
+# ── Habits Phase 2: reset period, hide overall, perpetual ────────────────
+
+def migrate_habits_phase2():
+    """Add habit_reset_period, habit_last_action_date, habit_hide_overall, perpetual to chits.
+
+    Fully idempotent — safe to run multiple times.
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        cursor.execute("PRAGMA table_info(chits)")
+        chit_cols = {row[1] for row in cursor.fetchall()}
+
+        if "habit_reset_period" not in chit_cols:
+            cursor.execute("ALTER TABLE chits ADD COLUMN habit_reset_period TEXT DEFAULT NULL")
+            logger.info("Added habit_reset_period column to chits table")
+        if "habit_last_action_date" not in chit_cols:
+            cursor.execute("ALTER TABLE chits ADD COLUMN habit_last_action_date TEXT DEFAULT NULL")
+            logger.info("Added habit_last_action_date column to chits table")
+        if "habit_hide_overall" not in chit_cols:
+            cursor.execute("ALTER TABLE chits ADD COLUMN habit_hide_overall BOOLEAN DEFAULT 0")
+            logger.info("Added habit_hide_overall column to chits table")
+        if "perpetual" not in chit_cols:
+            cursor.execute("ALTER TABLE chits ADD COLUMN perpetual BOOLEAN DEFAULT 0")
+            logger.info("Added perpetual column to chits table")
+
+        conn.commit()
+        logger.info("Habits phase 2 migration complete")
+    except Exception as e:
+        logger.error(f"Error in migrate_habits_phase2: {str(e)}")
+        raise
+    finally:
+        if conn:
+            conn.close()

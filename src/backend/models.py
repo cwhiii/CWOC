@@ -97,6 +97,10 @@ class Chit(BaseModel):
     habit_goal: Optional[int] = 1                    # Completions per period target
     habit_success: Optional[int] = 0                 # Current period completion count
     show_on_calendar: Optional[bool] = True          # Whether habit appears on calendar
+    habit_reset_period: Optional[str] = None         # Cooldown: null, "DAILY", "WEEKLY", "MONTHLY"
+    habit_last_action_date: Optional[str] = None     # ISO date of last habit increment
+    habit_hide_overall: Optional[bool] = False       # Hide overall % badge in view
+    perpetual: Optional[bool] = False                # Starts now, continues forever
     shares: Optional[List[Any]] = None         # JSON array: [{"user_id": "uuid", "role": "manager"|"viewer"}]
     stealth: Optional[bool] = False            # When true, hides chit from all non-owner users
     assigned_to: Optional[str] = None          # UUID of the assigned user

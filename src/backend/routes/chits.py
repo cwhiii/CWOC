@@ -77,6 +77,10 @@ def get_all_chits(request: Request):
             chit["habit_goal"] = int(chit.get("habit_goal") or 1)
             chit["habit_success"] = int(chit.get("habit_success") or 0)
             chit["show_on_calendar"] = bool(chit.get("show_on_calendar", 1))
+            chit["habit_reset_period"] = chit.get("habit_reset_period")
+            chit["habit_last_action_date"] = chit.get("habit_last_action_date")
+            chit["habit_hide_overall"] = bool(chit.get("habit_hide_overall"))
+            chit["perpetual"] = bool(chit.get("perpetual"))
             chit["shares"] = deserialize_json_field(chit.get("shares"))
             chit["stealth"] = bool(chit.get("stealth"))
             chit["assigned_to"] = chit.get("assigned_to")
@@ -127,6 +131,10 @@ def search_chits(request: Request, q: Optional[str] = Query(None)):
             chit["habit_goal"] = int(chit.get("habit_goal") or 1)
             chit["habit_success"] = int(chit.get("habit_success") or 0)
             chit["show_on_calendar"] = bool(chit.get("show_on_calendar", 1))
+            chit["habit_reset_period"] = chit.get("habit_reset_period")
+            chit["habit_last_action_date"] = chit.get("habit_last_action_date")
+            chit["habit_hide_overall"] = bool(chit.get("habit_hide_overall"))
+            chit["perpetual"] = bool(chit.get("perpetual"))
             chit["shares"] = deserialize_json_field(chit.get("shares"))
             chit["stealth"] = bool(chit.get("stealth"))
             chit["assigned_to"] = chit.get("assigned_to")
@@ -224,9 +232,10 @@ def create_chit(chit: Chit, request: Request):
                 deleted, created_datetime, modified_datetime, is_project_master, child_chits, all_day, alerts,
                 recurrence_rule, recurrence_exceptions, weather_data, health_data,
                 habit, habit_goal, habit_success, show_on_calendar,
+                habit_reset_period, habit_last_action_date, habit_hide_overall, perpetual,
                 owner_id, owner_display_name, owner_username,
                 shares, stealth, assigned_to
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 chit_id,
@@ -265,6 +274,10 @@ def create_chit(chit: Chit, request: Request):
                 chit.habit_goal if chit.habit_goal is not None else 1,
                 chit.habit_success if chit.habit_success is not None else 0,
                 1 if chit.show_on_calendar is None or chit.show_on_calendar else 0,
+                chit.habit_reset_period,
+                chit.habit_last_action_date,
+                1 if chit.habit_hide_overall else 0,
+                1 if chit.perpetual else 0,
                 user_id,
                 owner_display_name,
                 owner_username,
@@ -341,6 +354,10 @@ def get_chit(chit_id: str, request: Request):
         chit["habit_goal"] = int(chit.get("habit_goal") or 1)
         chit["habit_success"] = int(chit.get("habit_success") or 0)
         chit["show_on_calendar"] = bool(chit.get("show_on_calendar", 1))
+        chit["habit_reset_period"] = chit.get("habit_reset_period")
+        chit["habit_last_action_date"] = chit.get("habit_last_action_date")
+        chit["habit_hide_overall"] = bool(chit.get("habit_hide_overall"))
+        chit["perpetual"] = bool(chit.get("perpetual"))
         chit["shares"] = deserialize_json_field(chit.get("shares"))
         chit["stealth"] = bool(chit.get("stealth"))
         chit["assigned_to"] = chit.get("assigned_to")
@@ -416,6 +433,7 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                     archived = ?, deleted = ?, modified_datetime = ?, is_project_master = ?, child_chits = ?, all_day = ?, alerts = ?,
                     recurrence_rule = ?, recurrence_exceptions = ?, weather_data = ?, health_data = ?,
                     habit = ?, habit_goal = ?, habit_success = ?, show_on_calendar = ?,
+                    habit_reset_period = ?, habit_last_action_date = ?, habit_hide_overall = ?, perpetual = ?,
                     shares = ?, stealth = ?, assigned_to = ?
                 WHERE id = ?
                 """,
@@ -454,6 +472,10 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                     chit.habit_goal if chit.habit_goal is not None else 1,
                     chit.habit_success if chit.habit_success is not None else 0,
                     1 if chit.show_on_calendar is None or chit.show_on_calendar else 0,
+                    chit.habit_reset_period,
+                    chit.habit_last_action_date,
+                    1 if chit.habit_hide_overall else 0,
+                    1 if chit.perpetual else 0,
                     serialize_json_field(chit.shares),
                     1 if chit.stealth else 0,
                     chit.assigned_to,
@@ -484,6 +506,10 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                     "habit_goal": chit.habit_goal if chit.habit_goal is not None else 1,
                     "habit_success": chit.habit_success if chit.habit_success is not None else 0,
                     "show_on_calendar": 1 if chit.show_on_calendar is None or chit.show_on_calendar else 0,
+                    "habit_reset_period": chit.habit_reset_period,
+                    "habit_last_action_date": chit.habit_last_action_date,
+                    "habit_hide_overall": 1 if chit.habit_hide_overall else 0,
+                    "perpetual": 1 if chit.perpetual else 0,
                     "shares": serialize_json_field(chit.shares),
                     "stealth": 1 if chit.stealth else 0,
                     "assigned_to": chit.assigned_to,
@@ -528,9 +554,10 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                     deleted, created_datetime, modified_datetime, is_project_master, child_chits, all_day, alerts,
                     recurrence_rule, recurrence_exceptions, weather_data, health_data,
                     habit, habit_goal, habit_success, show_on_calendar,
+                    habit_reset_period, habit_last_action_date, habit_hide_overall, perpetual,
                     owner_id, owner_display_name, owner_username,
                     shares, stealth, assigned_to
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     chit_id,
@@ -569,6 +596,10 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                     chit.habit_goal if chit.habit_goal is not None else 1,
                     chit.habit_success if chit.habit_success is not None else 0,
                     1 if chit.show_on_calendar is None or chit.show_on_calendar else 0,
+                    chit.habit_reset_period,
+                    chit.habit_last_action_date,
+                    1 if chit.habit_hide_overall else 0,
+                    1 if chit.perpetual else 0,
                     user_id,
                     owner_display_name,
                     owner_username,

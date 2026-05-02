@@ -940,6 +940,16 @@ li.cwoc-dragging {
     color: #6b4e31;
 }
 
+.habit-section-header.habit-section-resting {
+    margin-top: 16px;
+    color: #6b4e31;
+}
+
+/* Resting habit: faded like accomplished */
+.habit-card.habit-resting {
+    opacity: 0.6;
+}
+
 .habit-section-icon {
     display: inline-flex;
     align-items: center;

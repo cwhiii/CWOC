@@ -486,6 +486,18 @@ function onHabitToggle() {
     if (controlsRow) controlsRow.style.display = '';
     if (calendarRow) calendarRow.style.display = '';
 
+    // Show reset period and hide overall rows
+    var resetRow = document.getElementById('habitResetRow');
+    var habitFreqSel = document.getElementById('habitFrequency');
+    var cycleFreq = habitFreqSel ? habitFreqSel.value : 'DAILY';
+    // Hide reset row for DAILY habits (no smaller unit available)
+    if (resetRow) resetRow.style.display = (cycleFreq === 'DAILY') ? 'none' : '';
+    var hideOverallRow = document.getElementById('habitHideOverallRow');
+    if (hideOverallRow) hideOverallRow.style.display = '';
+
+    // Update reset unit options based on cycle frequency
+    _updateResetUnitOptions();
+
     // Update progress display
     _updateHabitProgressDisplay();
   } else {
@@ -524,6 +536,12 @@ function onHabitToggle() {
     if (controlsRow) controlsRow.style.display = 'none';
     if (calendarRow) calendarRow.style.display = 'none';
 
+    // Hide reset period and hide overall rows
+    var resetRow = document.getElementById('habitResetRow');
+    if (resetRow) resetRow.style.display = 'none';
+    var hideOverallRow = document.getElementById('habitHideOverallRow');
+    if (hideOverallRow) hideOverallRow.style.display = 'none';
+
     // Restore recurrence labels to normal format
     _updateRecurrenceLabels();
   }
@@ -546,7 +564,52 @@ function onHabitFrequencyChange() {
     recurrenceSel.value = habitFreqSel.value;
     onRecurrenceChange();
   }
+  // Update reset unit options — limit to one level smaller than cycle
+  _updateResetUnitOptions();
+  // Hide reset row for DAILY habits
+  var resetRow = document.getElementById('habitResetRow');
+  if (resetRow) resetRow.style.display = (habitFreqSel && habitFreqSel.value === 'DAILY') ? 'none' : '';
   setSaveButtonUnsaved();
+}
+
+/**
+ * Update the reset unit dropdown options based on the cycle frequency.
+ * Reset units must be smaller than the cycle:
+ * - DAILY cycle → no reset (hide row)
+ * - WEEKLY cycle → Day(s) only
+ * - MONTHLY cycle → Day(s), Week(s)
+ * - YEARLY cycle → Day(s), Week(s), Month(s)
+ */
+function _updateResetUnitOptions() {
+  var habitFreqSel = document.getElementById('habitFrequency');
+  var resetUnitSel = document.getElementById('habitResetUnit');
+  if (!habitFreqSel || !resetUnitSel) return;
+
+  var freq = habitFreqSel.value;
+  var currentVal = resetUnitSel.value;
+
+  // Clear and rebuild options
+  resetUnitSel.innerHTML = '<option value="">— None —</option>';
+
+  if (freq === 'WEEKLY') {
+    resetUnitSel.innerHTML += '<option value="DAILY">Day(s)</option>';
+  } else if (freq === 'MONTHLY') {
+    resetUnitSel.innerHTML += '<option value="DAILY">Day(s)</option>';
+    resetUnitSel.innerHTML += '<option value="WEEKLY">Week(s)</option>';
+  } else if (freq === 'YEARLY') {
+    resetUnitSel.innerHTML += '<option value="DAILY">Day(s)</option>';
+    resetUnitSel.innerHTML += '<option value="WEEKLY">Week(s)</option>';
+    resetUnitSel.innerHTML += '<option value="MONTHLY">Month(s)</option>';
+  }
+  // DAILY cycle → no reset options (just "None")
+
+  // Restore previous value if still valid
+  var options = Array.from(resetUnitSel.options).map(function(o) { return o.value; });
+  if (options.indexOf(currentVal) !== -1) {
+    resetUnitSel.value = currentVal;
+  } else {
+    resetUnitSel.value = '';
+  }
 }
 
 /** Update the "X / Y" progress display from current field values */
@@ -610,4 +673,58 @@ function _updateAllDayBtnState() {
     btn.style.pointerEvents = '';
     btn.title = 'Toggle all-day';
   }
+}
+
+
+// ── Perpetual toggle ─────────────────────────────────────────────────────
+
+/**
+ * Handle the Perpetual checkbox toggle.
+ * When checked: set start date to today, clear end date, disable end date input,
+ * set date mode to startend if not already.
+ * When unchecked: re-enable end date input.
+ */
+function onPerpetualToggle() {
+  var cb = document.getElementById('perpetualEnabled');
+  if (!cb) return;
+  var isOn = cb.checked;
+
+  var startEndRow = document.getElementById('startEndRow');
+  var dueRow = document.getElementById('dueRow');
+  var dateModeNoneRow = document.getElementById('dateModeNoneRow');
+
+  if (isOn) {
+    // Switch to Start/End mode silently
+    var startEndRadio = document.getElementById('dateModeStartEnd');
+    if (startEndRadio) startEndRadio.checked = true;
+    _dateModeSuppressUnsaved = true;
+    onDateModeChange();
+    _dateModeSuppressUnsaved = false;
+
+    // Set start date to today
+    var startDateInput = document.getElementById('start_datetime');
+    if (startDateInput) {
+      var now = new Date();
+      var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      startDateInput.value = now.getFullYear() + '-' + months[now.getMonth()] + '-' + String(now.getDate()).padStart(2, '0');
+    }
+
+    // Clear end date
+    var endDateInput = document.getElementById('end_datetime');
+    var endTimeInput = document.getElementById('end_time');
+    if (endDateInput) endDateInput.value = '';
+    if (endTimeInput) endTimeInput.value = '';
+
+    // Hide all date rows — perpetual means no visible date controls
+    if (startEndRow) startEndRow.style.display = 'none';
+    if (dueRow) dueRow.style.display = 'none';
+    if (dateModeNoneRow) dateModeNoneRow.style.display = 'none';
+  } else {
+    // Show date rows again
+    if (startEndRow) startEndRow.style.display = '';
+    if (dueRow) dueRow.style.display = '';
+    if (dateModeNoneRow) dateModeNoneRow.style.display = '';
+  }
+
+  setSaveButtonUnsaved();
 }

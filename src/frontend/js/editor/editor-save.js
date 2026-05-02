@@ -140,6 +140,22 @@ async function buildChitObject() {
   var showOnCalCb = document.getElementById('showOnCalendar');
   chit.show_on_calendar = showOnCalCb ? showOnCalCb.checked : true;
 
+  // Habit reset period — stored as "N:UNIT" (e.g., "3:DAILY") or null
+  var resetValEl = document.getElementById('habitResetValue');
+  var resetUnitEl = document.getElementById('habitResetUnit');
+  var resetVal = resetValEl ? (parseInt(resetValEl.value) || 1) : 1;
+  var resetUnit = resetUnitEl ? resetUnitEl.value : '';
+  chit.habit_reset_period = resetUnit ? (resetVal + ':' + resetUnit) : null;
+  chit.habit_last_action_date = window._currentHabitLastActionDate || null;
+
+  // Habit hide overall %
+  var hideOverallCb = document.getElementById('habitHideOverall');
+  chit.habit_hide_overall = hideOverallCb ? hideOverallCb.checked : false;
+
+  // Perpetual
+  var perpetualCb = document.getElementById('perpetualEnabled');
+  chit.perpetual = perpetualCb ? perpetualCb.checked : false;
+
   const colorInput = document.getElementById("color");
   chit.color = colorInput ? colorInput.value || null : null;
 

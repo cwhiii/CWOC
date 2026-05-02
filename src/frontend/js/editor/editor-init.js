@@ -151,10 +151,27 @@ function resetEditorForNewChit() {
     recIcon.style.display = 'none';
   }
   window._currentHabitSuccess = 0;
+  window._currentHabitLastActionDate = null;
   var habitGoalEl = document.getElementById('habitGoal');
   if (habitGoalEl) habitGoalEl.value = 1;
   var showOnCalCb = document.getElementById('showOnCalendar');
   if (showOnCalCb) showOnCalCb.checked = true;
+  // Reset habit reset period
+  var resetValEl = document.getElementById('habitResetValue');
+  if (resetValEl) resetValEl.value = 1;
+  var resetUnitEl = document.getElementById('habitResetUnit');
+  if (resetUnitEl) resetUnitEl.value = '';
+  // Reset habit hide overall
+  var hideOverallCb = document.getElementById('habitHideOverall');
+  if (hideOverallCb) hideOverallCb.checked = false;
+  // Reset perpetual
+  var perpetualCb = document.getElementById('perpetualEnabled');
+  if (perpetualCb) perpetualCb.checked = false;
+  // Re-enable end date inputs
+  var endDateInput = document.getElementById('end_datetime');
+  if (endDateInput) { endDateInput.disabled = false; endDateInput.title = ''; endDateInput.style.opacity = ''; }
+  var endTimeInput = document.getElementById('end_time');
+  if (endTimeInput) { endTimeInput.disabled = false; endTimeInput.style.opacity = ''; }
   if (typeof _toggleHabitLogZone === 'function') _toggleHabitLogZone(false);
 
   // Show weather placeholder for new chits
@@ -411,6 +428,50 @@ async function loadChitData(chitId) {
     if (showOnCalCb) {
       showOnCalCb.checked = chit.show_on_calendar !== false;
     }
+
+    // Load habit reset period — format "N:UNIT" (e.g., "3:DAILY")
+    var resetValEl = document.getElementById('habitResetValue');
+    var resetUnitEl = document.getElementById('habitResetUnit');
+    if (chit.habit_reset_period && chit.habit_reset_period.indexOf(':') !== -1) {
+      var parts = chit.habit_reset_period.split(':');
+      if (resetValEl) resetValEl.value = parseInt(parts[0]) || 1;
+      if (resetUnitEl) resetUnitEl.value = parts[1] || '';
+    } else if (chit.habit_reset_period) {
+      // Legacy format: just "DAILY"/"WEEKLY"/"MONTHLY"
+      if (resetValEl) resetValEl.value = 1;
+      if (resetUnitEl) resetUnitEl.value = chit.habit_reset_period;
+    } else {
+      if (resetValEl) resetValEl.value = 1;
+      if (resetUnitEl) resetUnitEl.value = '';
+    }
+    window._currentHabitLastActionDate = chit.habit_last_action_date || null;
+
+    // Load habit hide overall
+    var hideOverallCb = document.getElementById('habitHideOverall');
+    if (hideOverallCb) {
+      hideOverallCb.checked = !!chit.habit_hide_overall;
+    }
+
+    // Load perpetual
+    var perpetualCb = document.getElementById('perpetualEnabled');
+    if (perpetualCb) {
+      perpetualCb.checked = !!chit.perpetual;
+      // Apply perpetual state (disable end date if checked)
+      if (chit.perpetual) {
+        var _endDateInput = document.getElementById('end_datetime');
+        var _endTimeInput = document.getElementById('end_time');
+        if (_endDateInput) {
+          _endDateInput.disabled = true;
+          _endDateInput.title = 'Perpetual — no end date';
+          _endDateInput.style.opacity = '0.5';
+        }
+        if (_endTimeInput) {
+          _endTimeInput.disabled = true;
+          _endTimeInput.style.opacity = '0.5';
+        }
+      }
+    }
+
     // Sync habit frequency dropdown from the chit's recurrence rule
     var habitFreqSel = document.getElementById('habitFrequency');
     if (habitFreqSel && chit.recurrence_rule && chit.recurrence_rule.freq) {

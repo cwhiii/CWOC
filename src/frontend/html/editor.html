@@ -124,6 +124,17 @@
                         </div>
                         <div id="datesContent" class="zone-body">
                             <div class="date-mode-group">
+                                <!-- Perpetual checkbox (above Start/End) -->
+                                <div class="date-mode-row" id="perpetualRow">
+                                    <label class="date-mode-label" style="cursor:pointer;">
+                                        <input type="checkbox" id="perpetualEnabled" onchange="onPerpetualToggle()" />
+                                        ♾️ Perpetual
+                                    </label>
+                                    <div class="date-mode-fields">
+                                        <span class="cwoc-inline-label-sm" style="color:#6b4e31;">Starts now, continues forever</span>
+                                    </div>
+                                </div>
+
                                 <!-- Start/End -->
                                 <div class="date-mode-row" id="startEndRow">
                                     <label class="date-mode-label">
@@ -170,6 +181,19 @@
                                         <span id="habitProgressDisplay" style="font-size:0.9em;font-weight:bold;margin-left:12px;margin-right:12px;">0 / 1</span>
                                     </div>
                                 </div>
+                                <!-- Reset period row (visible when habit active) — "Reset every X units" -->
+                                <div class="date-mode-row" id="habitResetRow" style="display:none;">
+                                    <label class="date-mode-label">⏳ Reset</label>
+                                    <div class="date-mode-fields">
+                                        <span class="cwoc-inline-label-sm" style="margin-right:4px;">every</span>
+                                        <input type="number" id="habitResetValue" min="1" value="1" style="width:50px;font-size:0.85em;" onchange="setSaveButtonUnsaved()" />
+                                        <select id="habitResetUnit" class="date-time" style="width:auto;font-size:0.85em;" onchange="setSaveButtonUnsaved()">
+                                            <option value="">— None —</option>
+                                            <option value="DAILY">Day(s)</option>
+                                            <option value="WEEKLY">Week(s)</option>
+                                        </select>
+                                    </div>
+                                </div>
                                 <!-- Show on calendar row (visible when habit active) -->
                                 <div class="date-mode-row" id="habitCalendarRow" style="display:none;">
                                     <label class="date-mode-label">🗓️ Calendar</label>
@@ -177,6 +201,16 @@
                                         <label class="cwoc-inline-check cwoc-inline-label-sm">
                                             <input type="checkbox" id="showOnCalendar" checked />
                                             Show on calendar views
+                                        </label>
+                                    </div>
+                                </div>
+                                <!-- Hide overall % row (visible when habit active) -->
+                                <div class="date-mode-row" id="habitHideOverallRow" style="display:none;">
+                                    <label class="date-mode-label">📈 Overall</label>
+                                    <div class="date-mode-fields">
+                                        <label class="cwoc-inline-check cwoc-inline-label-sm">
+                                            <input type="checkbox" id="habitHideOverall" onchange="setSaveButtonUnsaved()" />
+                                            Hide overall % in view
                                         </label>
                                     </div>
                                 </div>

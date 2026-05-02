@@ -690,6 +690,54 @@ function displayTasksView(chitsToDisplay) {
 /* ── Habits View ─────────────────────────────────────────────────────────── */
 
 /**
+ * Check if a habit's reset period is currently active (user acted within the period).
+ * @param {object} chit - The chit object
+ * @returns {boolean} true if the reset period is active and the user should wait
+ */
+function _isResetPeriodActive(chit) {
+  if (!chit.habit_reset_period || !chit.habit_last_action_date) return false;
+  var lastAction = new Date(chit.habit_last_action_date + 'T00:00:00');
+  if (isNaN(lastAction.getTime())) return false;
+  var today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  // Parse "N:UNIT" format (e.g., "3:DAILY") or legacy "DAILY"
+  var resetStr = chit.habit_reset_period;
+  var resetNum = 1;
+  var resetUnit = resetStr;
+  if (resetStr.indexOf(':') !== -1) {
+    var parts = resetStr.split(':');
+    resetNum = parseInt(parts[0]) || 1;
+    resetUnit = parts[1];
+  }
+
+  // Calculate the reset end date: lastAction + N units
+  var resetEnd = new Date(lastAction);
+  if (resetUnit === 'DAILY') {
+    resetEnd.setDate(resetEnd.getDate() + resetNum);
+  } else if (resetUnit === 'WEEKLY') {
+    resetEnd.setDate(resetEnd.getDate() + resetNum * 7);
+  } else if (resetUnit === 'MONTHLY') {
+    resetEnd.setMonth(resetEnd.getMonth() + resetNum);
+  } else {
+    return false;
+  }
+
+  // Reset is active if today is before the reset end date
+  return today < resetEnd;
+}
+
+/**
+ * Get today's date as an ISO string (YYYY-MM-DD).
+ */
+function _getTodayISO() {
+  var d = new Date();
+  return d.getFullYear() + '-' +
+    String(d.getMonth() + 1).padStart(2, '0') + '-' +
+    String(d.getDate()).padStart(2, '0');
+}
+
+/**
  * Render the Habits view — one card per chit with habit=true.
  * Cards show progress (X/Y), frequency, streak 🔥, success rate %, status badge.
  * Goal=1 habits get a checkbox; goal>1 habits get +/− counter buttons.
@@ -801,21 +849,31 @@ function displayHabitsView(chitsToDisplay) {
 function _renderHabitCards(container, habitData, windowDays) {
   container.innerHTML = '';
 
-  // 6.8 — Stable sort: incomplete first, completed last
-  var incomplete = habitData.filter(function(h) { return !h.isCompleted; });
-  var completed = habitData.filter(function(h) { return h.isCompleted; });
-  // Sort incomplete: closest to missing goal first (least remaining / goal ratio)
-  incomplete.sort(function(a, b) {
-    // remaining = goal - success (lower = more urgent)
+  // Split into 3 groups: On Deck, Out of Mind, Accomplished
+  var onDeck = [];
+  var outOfMind = [];
+  var completed = [];
+
+  habitData.forEach(function(h) {
+    if (h.isCompleted) {
+      completed.push(h);
+    } else if (h.chit.habit_reset_period && _isResetPeriodActive(h.chit) && h.success < h.goal) {
+      outOfMind.push(h);
+    } else {
+      onDeck.push(h);
+    }
+  });
+
+  // Sort on-deck: closest to missing goal first
+  onDeck.sort(function(a, b) {
     var remainA = a.goal - a.success;
     var remainB = b.goal - b.success;
-    // As a fraction of goal — habits with less % remaining are more urgent
     var pctA = remainA / (a.goal || 1);
     var pctB = remainB / (b.goal || 1);
     return pctA - pctB;
   });
 
-  var sorted = incomplete.concat(completed);
+  var sorted = onDeck.concat(outOfMind).concat(completed);
 
   if (sorted.length === 0) {
     var emptyMsg = document.createElement('div');
@@ -827,16 +885,26 @@ function _renderHabitCards(container, habitData, windowDays) {
   }
 
   // Section header: On Deck
-  if (incomplete.length > 0) {
+  if (onDeck.length > 0) {
     var onDeckHeader = document.createElement('div');
     onDeckHeader.className = 'habit-section-header';
     onDeckHeader.innerHTML = '<span class="habit-section-icon">🔜</span> On Deck';
     container.appendChild(onDeckHeader);
   }
 
+  var outOfMindHeaderAdded = false;
   var completedHeaderAdded = false;
 
   sorted.forEach(function(h) {
+    // Insert "Out of Mind" header before the first out-of-mind habit
+    if (!outOfMindHeaderAdded && outOfMind.indexOf(h) !== -1) {
+      outOfMindHeaderAdded = true;
+      var restingHeader = document.createElement('div');
+      restingHeader.className = 'habit-section-header habit-section-resting';
+      restingHeader.innerHTML = '😌 Out of Mind';
+      container.appendChild(restingHeader);
+    }
+
     // Insert "Accomplished" header before the first completed habit
     if (h.isCompleted && !completedHeaderAdded) {
       completedHeaderAdded = true;
@@ -847,10 +915,12 @@ function _renderHabitCards(container, habitData, windowDays) {
     }
 
     var chit = h.chit;
+    var isResting = outOfMind.indexOf(h) !== -1;
     var card = document.createElement('div');
     card.className = 'habit-card';
     card.dataset.chitId = chit.id;
     if (h.isCompleted) card.classList.add('habit-done');
+    if (isResting) card.classList.add('habit-resting');
     if (typeof applyChitColors === 'function') {
       applyChitColors(card, typeof chitColor === 'function' ? chitColor(chit) : '#fdf6e3');
     }
@@ -864,7 +934,15 @@ function _renderHabitCards(container, habitData, windowDays) {
       var checkbox = document.createElement('input');
       checkbox.type = 'checkbox';
       checkbox.checked = h.isCompleted;
-      checkbox.title = h.isCompleted ? 'Mark as not done' : 'Mark as done for this period';
+      // Disable if reset period is active
+      var _resetActive = _isResetPeriodActive(chit);
+      if (_resetActive && !h.isCompleted) {
+        checkbox.disabled = true;
+        checkbox.title = 'Reset period active — wait for cooldown';
+        checkbox.style.opacity = '0.4';
+      } else {
+        checkbox.title = h.isCompleted ? 'Mark as not done' : 'Mark as done for this period';
+      }
       checkbox.addEventListener('change', function(e) {
         e.stopPropagation();
         var newSuccess = checkbox.checked ? 1 : 0;
@@ -876,6 +954,10 @@ function _renderHabitCards(container, habitData, windowDays) {
           chit.status = 'Complete';
         } else if (chit.status === 'Complete') {
           chit.status = '';
+        }
+        // Set last action date when incrementing
+        if (newSuccess > 0) {
+          chit.habit_last_action_date = _getTodayISO();
         }
         // Optimistic UI update
         _optimisticHabitCardUpdate(card, chit, newSuccess, h.goal);
@@ -959,6 +1041,7 @@ function _renderHabitCards(container, habitData, windowDays) {
     if (h.goal > 1) {
       var counterWrap = document.createElement('span');
       counterWrap.className = 'habit-counter';
+      var _resetActiveCounter = _isResetPeriodActive(chit);
 
       var minusBtn = document.createElement('button');
       minusBtn.type = 'button';
@@ -984,10 +1067,17 @@ function _renderHabitCards(container, habitData, windowDays) {
       plusBtn.type = 'button';
       plusBtn.className = 'habit-counter-btn';
       plusBtn.textContent = '+';
-      plusBtn.title = 'Increment';
+      plusBtn.title = _resetActiveCounter ? 'Reset period active — wait for cooldown' : 'Increment';
+      if (_resetActiveCounter) {
+        plusBtn.disabled = true;
+        plusBtn.style.opacity = '0.4';
+        plusBtn.style.cursor = 'not-allowed';
+      }
       plusBtn.addEventListener('click', function(e) {
         e.stopPropagation();
         e.preventDefault();
+        // Re-check reset period at click time
+        if (_isResetPeriodActive(chit)) return;
         var curSuccess = chit.habit_success || 0;
         var goal = chit.habit_goal || 1;
         if (curSuccess >= goal) return;
@@ -996,6 +1086,8 @@ function _renderHabitCards(container, habitData, windowDays) {
         if (newSuccess >= goal) {
           chit.status = 'Complete';
         }
+        // Set last action date
+        chit.habit_last_action_date = _getTodayISO();
         _optimisticHabitCardUpdate(card, chit, newSuccess, h.goal);
         _persistHabitUpdate(JSON.parse(JSON.stringify(chit)));
       });
@@ -1024,22 +1116,24 @@ function _renderHabitCards(container, habitData, windowDays) {
     cycleBox.appendChild(cycleVal);
     metrics.appendChild(cycleBox);
 
-    // Overall success rate box
-    var overallBox = document.createElement('div');
-    overallBox.className = 'habit-metric-box';
-    var overallLabel = document.createElement('span');
-    overallLabel.className = 'habit-metric-label';
-    overallLabel.textContent = '📈 Overall';
-    overallBox.appendChild(overallLabel);
-    var overallVal = document.createElement('div');
-    overallVal.className = 'habit-metric-value';
-    var overallSpan = document.createElement('span');
-    overallSpan.className = 'habit-success-badge';
-    overallSpan.textContent = h.successRate + '%';
-    overallSpan.title = 'Completed ' + h.metCount + ' of ' + h.totalPeriods + ' cycles successfully';
-    overallVal.appendChild(overallSpan);
-    overallBox.appendChild(overallVal);
-    metrics.appendChild(overallBox);
+    // Overall success rate box (hidden if habit_hide_overall is set)
+    if (!chit.habit_hide_overall) {
+      var overallBox = document.createElement('div');
+      overallBox.className = 'habit-metric-box';
+      var overallLabel = document.createElement('span');
+      overallLabel.className = 'habit-metric-label';
+      overallLabel.textContent = '📈 Overall';
+      overallBox.appendChild(overallLabel);
+      var overallVal = document.createElement('div');
+      overallVal.className = 'habit-metric-value';
+      var overallSpan = document.createElement('span');
+      overallSpan.className = 'habit-success-badge';
+      overallSpan.textContent = h.successRate + '%';
+      overallSpan.title = 'Completed ' + h.metCount + ' of ' + h.totalPeriods + ' cycles successfully';
+      overallVal.appendChild(overallSpan);
+      overallBox.appendChild(overallVal);
+      metrics.appendChild(overallBox);
+    }
 
     // Streak box (only if streak > 0)
     if (h.streak > 0) {
@@ -1201,10 +1295,12 @@ function _optimisticHabitCardUpdate(card, chit, newSuccess, goal) {
 
       // Find or create section headers
       var doneHeader = container.querySelector('.habit-section-done');
-      var onDeckHeader = container.querySelector('.habit-section-header:not(.habit-section-done)');
+      var onDeckHeader = container.querySelector('.habit-section-header:not(.habit-section-done):not(.habit-section-resting)');
+      var restingHeader = container.querySelector('.habit-section-resting');
 
       // Move the card to the correct section
       if (isNowCompleted) {
+        card.classList.remove('habit-resting');
         if (!doneHeader) {
           doneHeader = document.createElement('div');
           doneHeader.className = 'habit-section-header habit-section-done';
@@ -1212,6 +1308,21 @@ function _optimisticHabitCardUpdate(card, chit, newSuccess, goal) {
           container.appendChild(doneHeader);
         }
         doneHeader.insertAdjacentElement('afterend', card);
+      } else if (chit.habit_reset_period && _isResetPeriodActive(chit)) {
+        // Move to Out of Mind
+        card.classList.add('habit-resting');
+        if (!restingHeader) {
+          restingHeader = document.createElement('div');
+          restingHeader.className = 'habit-section-header habit-section-resting';
+          restingHeader.innerHTML = '😌 Out of Mind';
+          // Insert before Accomplished header or at end
+          if (doneHeader) {
+            container.insertBefore(restingHeader, doneHeader);
+          } else {
+            container.appendChild(restingHeader);
+          }
+        }
+        restingHeader.insertAdjacentElement('afterend', card);
       } else {
         if (onDeckHeader) {
           var nextSibling = onDeckHeader.nextElementSibling;

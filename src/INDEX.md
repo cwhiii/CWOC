@@ -44,7 +44,7 @@ Registers all route modules (including `auth_router`, `users_router`, `sharing_r
 | `SharedTagEntry` | Tag-level share entry with `tag: str` and `shares: List[ShareEntry]` |
 | `Tag` | Tag with name, color, fontColor, favorite |
 | `Settings` | User settings — time format, tags, colors, indicators, calendar config, audit limits, habits success window, shared_tags, hide_declined, etc. |
-| `Chit` | Core chit model — title, note, dates, status, checklist, alerts, recurrence, location, color, people, habit, habit_goal, habit_success, show_on_calendar, shares, stealth, assigned_to, etc. |
+| `Chit` | Core chit model — title, note, dates, status, checklist, alerts, recurrence, location, color, people, habit, habit_goal, habit_success, show_on_calendar, habit_reset_period, habit_last_action_date, habit_hide_overall, perpetual, shares, stealth, assigned_to, etc. |
 | `MultiValueEntry` | Label/value pair for contact multi-value fields (phone, email, etc.) |
 | `Contact` | Contact model — name fields, phones, emails, addresses, social, security, notes, tags, color |
 | `ImportRequest` | Import envelope — mode ("add"/"replace") + data dict |
@@ -110,6 +110,7 @@ All migrations run at startup. Each checks if the column/table already exists be
 | `migrate_add_network_access()` | Create `network_access` table with columns: `id` (TEXT PRIMARY KEY), `provider` (TEXT NOT NULL UNIQUE), `enabled` (BOOLEAN DEFAULT 0), `config` (TEXT), `created_datetime` (TEXT), `modified_datetime` (TEXT) |
 | `migrate_add_notifications()` | Create `notifications` table with columns: `id` (TEXT PRIMARY KEY), `user_id` (TEXT NOT NULL), `chit_id` (TEXT NOT NULL), `chit_title` (TEXT), `owner_display_name` (TEXT), `notification_type` (TEXT NOT NULL), `status` (TEXT NOT NULL DEFAULT 'pending'), `created_datetime` (TEXT NOT NULL); creates index `idx_notifications_user_id` on `user_id` |
 | `migrate_habits_overhaul()` | Add `habit` (BOOLEAN DEFAULT 0), `habit_goal` (INTEGER DEFAULT 1), `habit_success` (INTEGER DEFAULT 0), `show_on_calendar` (BOOLEAN DEFAULT 1) columns to chits table; add `default_show_habits_on_calendar` (TEXT DEFAULT '1') column to settings table; remove `hide_when_instance_done` column via table rebuild (copy-to-temp, recreate, copy-back) |
+| `migrate_habits_phase2()` | Add `habit_reset_period` (TEXT DEFAULT NULL), `habit_last_action_date` (TEXT DEFAULT NULL), `habit_hide_overall` (BOOLEAN DEFAULT 0), `perpetual` (BOOLEAN DEFAULT 0) columns to chits table |
 
 ### 1.6 `src/backend/serializers.py` — vCard & CSV
 
@@ -934,7 +935,9 @@ Coordinator for shared code between dashboard and editor. Contains glue code for
 | `displayChecklistView(chitsToDisplay)` | Render the Checklists tab — chits with interactive checklist items |
 | `displayTasksView(chitsToDisplay)` | Render the Tasks tab — chits with status dropdowns and note previews; dispatches to `displayHabitsView` when in habits mode |
 | `displayHabitsView(chitsToDisplay)` | Render the Habits view — filters by `chit.habit === true`, evaluates period rollover, renders habit cards with goal progress, checkbox/counter interactions, success rate badges, and streak indicators |
-| `_renderHabitCards(container, habitChits, windowDays)` | Render habit cards into a container with completion-based sorting (incomplete first, completed last); checkbox interaction for goal=1, counter +/− for goal>1; auto-sets Complete when goal reached |
+| `_isResetPeriodActive(chit)` | Check if a habit's reset period cooldown is currently active (user acted within the current Daily/Weekly/Monthly period) |
+| `_getTodayISO()` | Get today's date as an ISO string (YYYY-MM-DD) |
+| `_renderHabitCards(container, habitChits, windowDays)` | Render habit cards into a container with 3-section sorting: On Deck (actionable), Out of Mind (reset period active), Accomplished (complete); enforces reset period on +/checkbox; respects habit_hide_overall |
 | `_persistHabitUpdate(chit)` | Persist a habit chit's updated `habit_success` and status to the backend via PUT `/api/chits/{id}` |
 | `displayNotesView(chitsToDisplay)` | Render the Notes tab — markdown notes in a masonry column layout |
 | `displayAssignedToMeView(chitsToDisplay)` | Render the "Assigned to Me" view — chits where `assigned_to` matches the current user's ID, with owner badges and role indicators |
@@ -1140,6 +1143,7 @@ Date mode system, recurrence picker, time picker dropdown, and date-clearing hel
 | `onHabitGoalChange()` | Handle habit goal input change — enforce minimum of 1, update progress display, mark unsaved |
 | `_toggleAllDayBtn()` | Toggle the All Day button — mirrors the hidden checkbox and calls `toggleAllDay()` |
 | `_updateAllDayBtnState()` | Sync the All Day button appearance (teal active, disabled when habit forces all-day) from the hidden checkbox state |
+| `onPerpetualToggle()` | Handle Perpetual checkbox — when checked: set start date to today, clear/disable end date, switch to Start/End mode; when unchecked: re-enable end date |
 
 #### editor-habits.js
 
