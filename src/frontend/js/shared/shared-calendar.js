@@ -208,8 +208,9 @@ function _hideSnapGrid() {
  * @param {HTMLElement[]} dayColumns - array of day column elements (in order)
  * @param {Date[]} days - array of Date objects corresponding to dayColumns
  * @param {object[]} chitsMap - map of element -> { chit, info }
+ * @param {Map} [longPressMap] - optional map of element → long-press callback for unified gesture coordination
  */
-function enableCalendarDrag(scrollContainer, dayColumns, days, chitsMap) {
+function enableCalendarDrag(scrollContainer, dayColumns, days, chitsMap, longPressMap) {
   if (!scrollContainer) return;
 
   // Add resize handle to each timed event (only for start/end chits, not due-only)
@@ -288,9 +289,10 @@ function enableCalendarDrag(scrollContainer, dayColumns, days, chitsMap) {
       document.addEventListener('mouseup', _onCalDragEnd);
     });
 
-    // Move: touch support via enableTouchDrag
-    enableTouchDrag(el, {
-      onStart: function (data) {
+    // Move: touch support — use enableTouchGesture when long-press callback exists,
+    // otherwise fall back to enableTouchDrag (drag-only)
+    var _moveDragCallbacks = {
+      onDragStart: function (data) {
         // Don't start move if touch is on the resize handle
         if (data.target && data.target.closest && data.target.closest('.cal-resize-handle')) return;
         const entry = chitsMap.find(c => c.el === el);
@@ -307,13 +309,26 @@ function enableCalendarDrag(scrollContainer, dayColumns, days, chitsMap) {
           hasMoved: false,
         };
       },
-      onMove: function (data) {
+      onDragMove: function (data) {
         _onCalDragMove({ clientX: data.clientX, clientY: data.clientY });
       },
-      onEnd: function (data) {
+      onDragEnd: function (data) {
         _onCalDragEnd({ clientX: data.clientX, clientY: data.clientY });
       },
-    });
+    };
+    var _lpCallback = longPressMap && longPressMap.get(el);
+    if (_lpCallback) {
+      // Unified gesture: drag + long-press coordinated through enableTouchGesture
+      _moveDragCallbacks.onLongPress = _lpCallback;
+      enableTouchGesture(el, _moveDragCallbacks);
+    } else {
+      // Drag-only: no long-press needed for this element
+      enableTouchDrag(el, {
+        onStart: _moveDragCallbacks.onDragStart,
+        onMove: _moveDragCallbacks.onDragMove,
+        onEnd: _moveDragCallbacks.onDragEnd,
+      });
+    }
   });
 }
 

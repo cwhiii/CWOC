@@ -1291,6 +1291,10 @@ function _onNotesDragMoveXY(clientX, clientY) {
   s.card.style.left = newLeft + 'px';
   s.card.style.top = newTop + 'px';
 
+  // Hide dragged card from hit testing so elementFromPoint / getBoundingClientRect
+  // targeting is not blocked by the floating card in the masonry layout
+  s.card.style.pointerEvents = 'none';
+
   // Which column is the cursor over?
   const cursorX = clientX - containerRect.left;
   const targetCol = Math.min(
@@ -1312,6 +1316,9 @@ function _onNotesDragMoveXY(clientX, clientY) {
       break;
     }
   }
+
+  // Restore pointer-events on the dragged card
+  s.card.style.pointerEvents = '';
 
   // Live preview: re-stack affected columns with a gap where the card will land
   // Only re-stack source column and target column (if different)

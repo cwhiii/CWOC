@@ -633,7 +633,7 @@ Calendar display helpers, drag interactions, multi-day rendering, and pinch zoom
 | `_snapToGrid(minutes)` | Snap a minute value to the nearest grid interval |
 | `_showSnapGrid(container)` | Show a visual snap grid overlay on a calendar container (deferred until first drag movement) |
 | `_hideSnapGrid()` | Remove the snap grid overlay |
-| `enableCalendarDrag(scrollContainer, dayColumns, days, chitsMap)` | Make timed calendar events draggable (move) and resizable (bottom edge); skips drag/resize for viewer-role shared chits |
+| `enableCalendarDrag(scrollContainer, dayColumns, days, chitsMap, longPressMap)` | Make timed calendar events draggable (move) and resizable (bottom edge); skips drag/resize for viewer-role shared chits. Optional `longPressMap` (Map of element → long-press callback) enables unified gesture coordination via `enableTouchGesture()` instead of `enableTouchDrag()` for elements with a long-press callback, preventing race conditions between drag and long-press |
 | `_onCalDragMove(e)` | Handle mouse/touch move during calendar drag operations |
 | `_onCalDragEnd(e)` | Handle mouse/touch end during calendar drag; save new times via API |
 | `_showRecurringDragModal(parentId, dateStr, newTimes, virtualChit)` | Show a modal after dragging a recurring instance with apply-scope options |
@@ -712,7 +712,7 @@ Coordinator for shared code between dashboard and editor. Contains glue code for
 | `applyNotesLayout(container)` | Apply column-persistent masonry layout to a notes-view container |
 | `enableNotesDragReorder(container, tab, onReorder)` | Enable mouse and touch drag-to-reorder on notes cards with column-aware drop; touch uses enableTouchGesture for unified drag + long-press inline edit |
 | `_onNotesDragMove(e)` | Handle mouse move during notes drag with live preview |
-| `_onNotesDragMoveXY(clientX, clientY)` | Shared drag-move logic for notes reorder (used by both mouse and touch) |
+| `_onNotesDragMoveXY(clientX, clientY)` | Shared drag-move logic for notes reorder (used by both mouse and touch); sets `pointer-events: none` on the dragged card before `elementFromPoint()` calls to prevent the floating card from blocking hit testing in the absolute-positioned masonry layout, then restores it |
 | `_onNotesDragEnd(e)` | Handle mouse up during notes drag; save new order |
 | `_onNotesDragKey(e)` | Handle ESC key to cancel notes drag |
 | `_ensureSidebarBackdrop()` | Ensure the sidebar backdrop element exists in the DOM |
@@ -883,7 +883,7 @@ Coordinator for shared code between dashboard and editor. Contains glue code for
 | `nextPeriod()` | Navigate to the next calendar period (day/week/month/year) |
 | `updateDateRange()` | Update the date range display in the sidebar header |
 | `openChitForEdit(chit)` | Open a chit in the editor (handles virtual recurring instances) |
-| `attachCalendarChitEvents(el, chit)` | Attach dblclick (edit) and shift+click (quick edit) to a calendar event element; quick-edit is disabled for viewer-role shared chits |
+| `attachCalendarChitEvents(el, chit)` | Attach dblclick (edit) and shift+click (quick edit) to a calendar event element; quick-edit is disabled for viewer-role shared chits. No longer calls `enableLongPress()` — long-press callbacks are now passed through to `enableCalendarDrag()` via `longPressMap` for unified gesture coordination |
 | `attachEmptySlotCreate(col, day, defaultDurationMin)` | Attach dblclick on empty calendar space to create a new chit at that time |
 | `_getResponsiveDayCount()` | Return the number of days to show in week view (always 7) |
 | `displayWeekView(chitsToDisplay, opts)` | Render the week calendar view with hour grid, all-day events, and timed events |
@@ -929,10 +929,10 @@ Coordinator for shared code between dashboard and editor. Contains glue code for
 | `_createIndependentAlert(alertData)` | Create a new independent alert via API and refresh the view |
 | `_updateIndependentAlert(id, alertData)` | Update an existing independent alert via API and refresh |
 | `_deleteIndependentAlert(id)` | Delete an independent alert, clean up runtime state, and refresh |
-| `displayProjectsView(chitsToDisplay)` | Render the Projects tab — list view of project masters with draggable child chits (reorder, touch gesture, long-press quick-edit) |
-| `_displayProjectsKanban(chitsToDisplay)` | Render the Projects Kanban view — status columns with drag-and-drop cards |
+| `displayProjectsView(chitsToDisplay)` | Render the Projects tab — list view of project masters with draggable child chits (reorder, touch gesture, long-press quick-edit); list mode now includes project-level HTML5 drag and `enableTouchGesture()` on project boxes for reorder, plus `onLongPress` for quick-edit |
+| `_displayProjectsKanban(chitsToDisplay)` | Render the Projects Kanban view — status columns with drag-and-drop cards; attaches `enableTouchGesture()` to `.kanban-project-header` elements for touch drag-to-reorder of projects with `onLongPress` to open the editor |
 | `displayAlarmsView(chitsToDisplay)` | Render the Alarms tab — list of chits with alerts, or independent alerts board |
-| `_displayIndependentAlertsBoard()` | Render the independent alerts board with Alarms, Timers, and Stopwatches columns |
+| `_displayIndependentAlertsBoard()` | Render the independent alerts board with Alarms, Timers, and Stopwatches columns; now includes HTML5 drag and `enableTouchGesture()` on `.sa-card` elements for drag-to-reorder within each type column, with order persisted to localStorage |
 | `_addIndependentAlert(type)` | Create a new independent alert of the given type with sensible defaults |
 | `_buildIndependentCard(id, type, data)` | Build an independent alert card element and delegate to type-specific builder |
 | `_parseTimeInput(str)` | Parse various time input formats ("HH:MM", "H:MM AM/PM") into 24h "HH:MM" |
@@ -952,7 +952,7 @@ Coordinator for shared code between dashboard and editor. Contains glue code for
 | `_indicatorsSetRange(range)` | Set the indicator time range (day/week/month/year/all) and reload |
 | `_indicatorsHighlightBtn(range)` | Highlight the active time range button in the Indicators sidebar |
 | `_indicatorsLoadCustomRange()` | Load indicators with custom date range from inputs |
-| `_indicatorsLoad()` | Fetch health data from API and render SVG trend charts with expand buttons |
+| `_indicatorsLoad()` | Fetch health data from API and render SVG trend charts with expand buttons; attaches `enableTouchGesture()` to `div[data-ind-key]` chart sections for touch drag-to-reorder, with order persisted to localStorage |
 | `_indToggleExpand(key)` | Expand/collapse a single indicator chart — fills available viewport height when expanded, updates on resize |
 | `_enableIndicatorsDragReorder(container)` | Enable drag-to-reorder on indicator chart divs, persists order to localStorage |
 | `_restoreIndicatorsOrder(container)` | Restore saved indicator chart order from localStorage |

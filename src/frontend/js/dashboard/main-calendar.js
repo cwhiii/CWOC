@@ -14,7 +14,7 @@
  * Depends on shared.js: formatTime, applyChitColors, contrastColorForBg, getCalendarDateInfo,
  *   chitMatchesDay, calendarEventTitle, calendarEventTooltip, enableCalendarDrag, enableMonthDrag,
  *   enableAllDayDrag, renderAllDayEventsInCells, enableCalendarPinchZoom, expandRecurrence,
- *   _loadCalSnapSetting, enableLongPress, showQuickEditModal
+ *   _loadCalSnapSetting, showQuickEditModal
  */
 
 /* ── Calendar settings (loaded from settings API) ────────────────────────── */
@@ -184,6 +184,8 @@ function openChitForEdit(chit) {
 
 /**
  * Attach dblclick (edit) and shift+click (quick edit modal) to a calendar event element.
+ * Long-press for quick-edit on mobile is coordinated through enableCalendarDrag()
+ * via the longPressMap parameter, preventing race conditions with the drag system.
  * Viewer-role shared chits open in read-only mode (editor handles this via effective_role).
  * Quick-edit modal is disabled for viewer-role chits.
  */
@@ -204,14 +206,6 @@ function attachCalendarChitEvents(el, chit) {
       showQuickEditModal(chit, function() { displayChits(); });
     }
   });
-  if (typeof enableLongPress === 'function') {
-    enableLongPress(el, function() {
-      if (window._dragJustEnded) return;
-      // Prevent quick-edit for viewer-role shared chits
-      if (typeof _isViewerRole === 'function' && _isViewerRole(chit)) return;
-      showQuickEditModal(chit, function() { displayChits(); });
-    });
-  }
 }
 
 /**
@@ -487,7 +481,18 @@ function displayWeekView(chitsToDisplay, opts) {
 
   // Enable drag
   _loadCalSnapSetting().then(() => {
-    enableCalendarDrag(scrollGrid, weekDayColumns, days, weekChitsMap);
+    // Build longPressMap: element → quick-edit callback for unified gesture coordination
+    var longPressMap = new Map();
+    weekChitsMap.forEach(function(entry) {
+      var _chit = entry.chit;
+      if (typeof _isViewerRole === 'function' && _isViewerRole(_chit)) return;
+      longPressMap.set(entry.el, function() {
+        if (window._dragJustEnded) return;
+        if (typeof _isViewerRole === 'function' && _isViewerRole(_chit)) return;
+        showQuickEditModal(_chit, function() { displayChits(); });
+      });
+    });
+    enableCalendarDrag(scrollGrid, weekDayColumns, days, weekChitsMap, longPressMap);
   });
 
   // Enable pinch-to-zoom on mobile (vertical axis only)
@@ -902,7 +907,18 @@ function displayDayView(chitsToDisplay, opts) {
   renderTimeBar("Day");
 
   _loadCalSnapSetting().then(() => {
-    enableCalendarDrag(dayView, dayViewColumns, dayViewDays, dayChitsMapFinal);
+    // Build longPressMap: element → quick-edit callback for unified gesture coordination
+    var longPressMap = new Map();
+    dayChitsMapFinal.forEach(function(entry) {
+      var _chit = entry.chit;
+      if (typeof _isViewerRole === 'function' && _isViewerRole(_chit)) return;
+      longPressMap.set(entry.el, function() {
+        if (window._dragJustEnded) return;
+        if (typeof _isViewerRole === 'function' && _isViewerRole(_chit)) return;
+        showQuickEditModal(_chit, function() { displayChits(); });
+      });
+    });
+    enableCalendarDrag(dayView, dayViewColumns, dayViewDays, dayChitsMapFinal, longPressMap);
   });
 
   // Enable pinch-to-zoom on mobile (vertical axis only)
@@ -1388,7 +1404,18 @@ function displaySevenDayView(chitsToDisplay, opts) {
   renderTimeBar("SevenDay");
 
   _loadCalSnapSetting().then(() => {
-    enableCalendarDrag(scrollGrid, sdDayColumns, days, sdChitsMap);
+    // Build longPressMap: element → quick-edit callback for unified gesture coordination
+    var longPressMap = new Map();
+    sdChitsMap.forEach(function(entry) {
+      var _chit = entry.chit;
+      if (typeof _isViewerRole === 'function' && _isViewerRole(_chit)) return;
+      longPressMap.set(entry.el, function() {
+        if (window._dragJustEnded) return;
+        if (typeof _isViewerRole === 'function' && _isViewerRole(_chit)) return;
+        showQuickEditModal(_chit, function() { displayChits(); });
+      });
+    });
+    enableCalendarDrag(scrollGrid, sdDayColumns, days, sdChitsMap, longPressMap);
   });
 
   // Enable pinch-to-zoom on mobile (vertical axis only)

@@ -494,6 +494,7 @@
     .alarms-view,
     .projects-view {
         padding: 4px;
+        overscroll-behavior: contain;
     }
 
     /* ── People chips: compact ────────────────────────────────────────────── */
@@ -564,6 +565,7 @@
     .projects-view {
         padding: 4px !important;
         gap: 6px !important;
+        overscroll-behavior: contain;
     }
 
     /* ── Chit cards in all views: full width, readable ────────────────────── */

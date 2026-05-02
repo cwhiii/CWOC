@@ -135,6 +135,7 @@
     min-height: 0;
     font-size: 1em;
     color: #2b1e0f;
+    overscroll-behavior: contain;
 }
 .checklist-view .chit-card,
 .alarms-view .chit-card,
@@ -232,6 +233,7 @@ li.cwoc-dragging {
     width: 100%;
     min-height: 0;
     box-sizing: border-box;
+    overscroll-behavior: contain;
 }
 .notes-view .chit-card {
     position: absolute;

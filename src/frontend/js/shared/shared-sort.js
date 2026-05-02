@@ -189,8 +189,9 @@ function enableDragToReorder(container, tab, onReorder, longPressMap) {
     if (onReorder) onReorder();
   });
 
-  // Touch drag support for chit card reorder (unified with long-press)
-  var _touchDraggedCard = null;
+  // ── Touch drag support: float card under finger, shift others out of the way ──
+  var _touchDragState = null;
+
   container.querySelectorAll('.chit-card[data-chit-id]').forEach(function (card) {
     // Skip cards inside checklist areas
     if (card.closest('ul[data-chit-id]')) return;
@@ -198,65 +199,123 @@ function enableDragToReorder(container, tab, onReorder, longPressMap) {
     var chitId = card.dataset.chitId;
     var lpCallback = longPressMap ? longPressMap[chitId] : null;
 
-    // Build drag callbacks (shared between both paths)
     var dragCallbacks = {
       onStart: function (data) {
         if (data.target && data.target.closest && data.target.closest('li[data-idx]')) return;
         if (data.target && data.target.closest && data.target.closest('ul[data-chit-id]')) return;
-        _touchDraggedCard = card;
+
+        // Remove the default touch-drag class — we apply our own floating styles
+        card.classList.remove('cwoc-touch-dragging');
+
+        var rect = card.getBoundingClientRect();
+
+        // Create a placeholder to hold the card's space in the flow
+        var placeholder = document.createElement('div');
+        placeholder.className = 'cwoc-drag-placeholder';
+        placeholder.style.cssText = 'height:' + rect.height + 'px;border:2px dashed #8b5a2b;border-radius:6px;background:rgba(139,90,43,0.08);box-sizing:border-box;margin-bottom:' + (getComputedStyle(card).marginBottom || '0') + ';transition:height 0.15s ease;';
+        card.parentNode.insertBefore(placeholder, card);
+
+        // Float the card under the finger
+        card.style.position = 'fixed';
+        card.style.left = rect.left + 'px';
+        card.style.top = rect.top + 'px';
+        card.style.width = rect.width + 'px';
+        card.style.zIndex = '10000';
+        card.style.opacity = '0.9';
+        card.style.boxShadow = '0 8px 24px rgba(0,0,0,0.3)';
+        card.style.transition = 'none';
+        card.style.pointerEvents = 'none';
+
+        // Prevent pull-to-refresh during drag
+        document.body.style.overscrollBehavior = 'contain';
+
+        _touchDragState = {
+          card: card,
+          placeholder: placeholder,
+          offsetX: data.clientX - rect.left,
+          offsetY: data.clientY - rect.top,
+          startScrollTop: container.scrollTop || 0,
+          lastInsertIdx: -1,
+        };
       },
       onMove: function (data) {
-        if (!_touchDraggedCard) return;
-        container.querySelectorAll('.chit-card').forEach(function (c) {
-          c.style.borderTop = '';
-          c.style.borderBottom = '';
-        });
-        var target = document.elementFromPoint(data.clientX, data.clientY);
-        if (!target) return;
-        var targetCard = target.closest('.chit-card');
-        if (targetCard && targetCard !== _touchDraggedCard) {
-          var rect = targetCard.getBoundingClientRect();
-          var midY = rect.top + rect.height / 2;
-          if (data.clientY < midY) {
-            targetCard.style.borderTop = '3px solid #8b5a2b';
-          } else {
-            targetCard.style.borderBottom = '3px solid #8b5a2b';
+        if (!_touchDragState) return;
+        var s = _touchDragState;
+
+        // Move the floating card to follow the finger
+        s.card.style.left = (data.clientX - s.offsetX) + 'px';
+        s.card.style.top = (data.clientY - s.offsetY) + 'px';
+
+        // Find which card the finger is over (excluding the dragged card)
+        var allCards = Array.from(container.querySelectorAll('.chit-card[data-chit-id]'));
+        var otherCards = allCards.filter(function (c) { return c !== s.card; });
+
+        // Determine insert position based on finger Y
+        var insertIdx = otherCards.length; // default: end
+        for (var i = 0; i < otherCards.length; i++) {
+          var r = otherCards[i].getBoundingClientRect();
+          if (data.clientY < r.top + r.height / 2) {
+            insertIdx = i;
+            break;
           }
+        }
+
+        // Only reorder DOM if position changed
+        if (insertIdx !== s.lastInsertIdx) {
+          s.lastInsertIdx = insertIdx;
+
+          // Move placeholder to the new position in the DOM
+          if (insertIdx >= otherCards.length) {
+            // After the last card
+            container.appendChild(s.placeholder);
+          } else {
+            container.insertBefore(s.placeholder, otherCards[insertIdx]);
+          }
+        }
+
+        // Auto-scroll when near edges of the container
+        var containerRect = container.getBoundingClientRect();
+        var edgeZone = 50;
+        var scrollSpeed = 8;
+        if (data.clientY < containerRect.top + edgeZone) {
+          container.scrollTop -= scrollSpeed;
+        } else if (data.clientY > containerRect.bottom - edgeZone) {
+          container.scrollTop += scrollSpeed;
         }
       },
       onEnd: function (data) {
-        if (!_touchDraggedCard) return;
-        container.querySelectorAll('.chit-card').forEach(function (c) {
-          c.style.borderTop = '';
-          c.style.borderBottom = '';
-        });
+        if (!_touchDragState) return;
+        var s = _touchDragState;
 
-        var target = document.elementFromPoint(data.clientX, data.clientY);
-        if (!target) { _touchDraggedCard = null; return; }
-        var targetCard = target.closest('.chit-card');
-        if (!targetCard || targetCard === _touchDraggedCard) { _touchDraggedCard = null; return; }
+        // Restore body overscroll
+        document.body.style.overscrollBehavior = '';
 
+        // Remove floating styles and touch-drag class
+        s.card.classList.remove('cwoc-touch-dragging');
+        s.card.style.position = '';
+        s.card.style.left = '';
+        s.card.style.top = '';
+        s.card.style.width = '';
+        s.card.style.zIndex = '';
+        s.card.style.opacity = '';
+        s.card.style.boxShadow = '';
+        s.card.style.transition = '';
+        s.card.style.pointerEvents = '';
+
+        // Insert the card where the placeholder is
+        s.placeholder.parentNode.insertBefore(s.card, s.placeholder);
+        s.placeholder.remove();
+
+        // Read the new order from the DOM
         var cards = Array.from(container.querySelectorAll('.chit-card[data-chit-id]'));
         var ids = cards.map(function (c) { return c.dataset.chitId; });
-        var fromId = _touchDraggedCard.dataset.chitId;
-        var toId = targetCard.dataset.chitId;
-        var fromIdx = ids.indexOf(fromId);
-        var toIdx = ids.indexOf(toId);
-        if (fromIdx < 0 || toIdx < 0) { _touchDraggedCard = null; return; }
-
-        var rect = targetCard.getBoundingClientRect();
-        if (data.clientY > rect.top + rect.height / 2) toIdx++;
-
-        ids.splice(fromIdx, 1);
-        if (fromIdx < toIdx) toIdx--;
-        ids.splice(toIdx, 0, fromId);
 
         saveManualOrder(tab, ids);
         currentSortField = 'manual';
         var sel = document.getElementById('sort-select');
         if (sel) sel.value = 'manual';
         _updateSortUI();
-        _touchDraggedCard = null;
+        _touchDragState = null;
         if (onReorder) onReorder();
       },
     };
@@ -267,7 +326,30 @@ function enableDragToReorder(container, tab, onReorder, longPressMap) {
         onDragStart: dragCallbacks.onStart,
         onDragMove: dragCallbacks.onMove,
         onDragEnd: dragCallbacks.onEnd,
-        onLongPress: function () { lpCallback(); },
+        onLongPress: function () {
+          // Clean up floating card state if drag was active before long-press took over
+          if (_touchDragState) {
+            var s = _touchDragState;
+            document.body.style.overscrollBehavior = '';
+            s.card.classList.remove('cwoc-touch-dragging');
+            s.card.style.position = '';
+            s.card.style.left = '';
+            s.card.style.top = '';
+            s.card.style.width = '';
+            s.card.style.zIndex = '';
+            s.card.style.opacity = '';
+            s.card.style.boxShadow = '';
+            s.card.style.transition = '';
+            s.card.style.pointerEvents = '';
+            // Put card back where placeholder is, then remove placeholder
+            if (s.placeholder && s.placeholder.parentNode) {
+              s.placeholder.parentNode.insertBefore(s.card, s.placeholder);
+              s.placeholder.remove();
+            }
+            _touchDragState = null;
+          }
+          lpCallback();
+        },
       });
     } else {
       enableTouchDrag(card, {

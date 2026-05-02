@@ -1429,12 +1429,15 @@ function displayProjectsView(chitsToDisplay) {
   // Use all chits (not filtered) to find project masters — filters shouldn't hide projects
   // Deduplicate by ID to prevent showing the same project twice
   const seenIds = new Set();
-  const projects = chits.filter((c) => {
+  var projects = chits.filter((c) => {
     if (!c.is_project_master || c.deleted || c.archived) return false;
     if (seenIds.has(c.id)) return false;
     seenIds.add(c.id);
     return true;
   });
+
+  // Apply manual sort order for projects (shared with kanban view)
+  projects = applyManualOrder('Projects', projects);
 
   if (projects.length === 0) {
     chitList.innerHTML = _emptyState("No projects found. Create a chit and enable Project Master in the Projects zone.");
@@ -1454,23 +1457,54 @@ function displayProjectsView(chitsToDisplay) {
 
     // Outer box colored with project color
     const box = document.createElement("div");
+    box.dataset.chitId = project.id;
+    box.draggable = true;
     box.style.cssText = `border:2px solid #8b5a2b;border-radius:6px;overflow:hidden;background:${projectColor};color:${projectFontColor};`;
 
     // Project header row — use standard header builder
     const header = document.createElement("div");
-    header.style.cssText = `padding:0.5em 0.7em;background:${projectColor};color:${projectFontColor};cursor:pointer;`;
-    header.appendChild(_buildChitHeader(project, project.title || "(Untitled Project)", _viSettings));
+    header.style.cssText = `padding:0.5em 0.7em;background:${projectColor};color:${projectFontColor};cursor:pointer;display:flex;align-items:center;gap:0.5em;`;
+
+    // Drag grip handle for project reorder
+    var _listProjGrip = document.createElement("span");
+    _listProjGrip.style.cssText = "opacity:0.5;font-size:0.9em;cursor:grab;flex-shrink:0;";
+    _listProjGrip.textContent = "≡";
+    _listProjGrip.title = "Drag to reorder project";
+    header.appendChild(_listProjGrip);
+
+    var _listProjHeaderContent = document.createElement("div");
+    _listProjHeaderContent.style.cssText = "flex:1;min-width:0;";
+    _listProjHeaderContent.appendChild(_buildChitHeader(project, project.title || "(Untitled Project)", _viSettings));
 
     if (project.note) {
       const note = document.createElement("div");
-      note.style.cssText = "font-size:0.8em;opacity:0.65;margin-top:2px;padding:0 0.7em;";
+      note.style.cssText = "font-size:0.8em;opacity:0.65;margin-top:2px;";
       note.textContent = project.note.slice(0, 100) + (project.note.length > 100 ? "…" : "");
-      header.appendChild(note);
+      _listProjHeaderContent.appendChild(note);
     }
+    header.appendChild(_listProjHeaderContent);
+
     header.addEventListener("dblclick", () => {
       storePreviousState();
       window.location.href = `/editor?id=${project.id}`;
     });
+
+    // HTML5 drag for project-level reorder (desktop parity)
+    box.addEventListener("dragstart", function (e) {
+      if (!e.target.closest('div[style*="cursor:pointer"]') && e.target !== box) return;
+      e.dataTransfer.setData("application/x-list-project-reorder", project.id);
+      e.dataTransfer.effectAllowed = "move";
+      box.classList.add('cwoc-dragging');
+    });
+    box.addEventListener("dragend", function () {
+      box.classList.remove('cwoc-dragging');
+      view.querySelectorAll('div[data-chit-id]').forEach(function (b) {
+        b.style.borderTop = '';
+        b.style.borderBottom = '';
+      });
+      if (typeof _markDragJustEnded === 'function') _markDragJustEnded();
+    });
+
     box.appendChild(header);
 
     // Child chits tree
@@ -1721,6 +1755,141 @@ function displayProjectsView(chitsToDisplay) {
 
     view.appendChild(box);
   });
+
+  // ── Project-level drag-to-reorder (HTML5 desktop) ────────────────────────
+  view.addEventListener("dragover", function (e) {
+    if (!e.dataTransfer.types.includes("application/x-list-project-reorder")) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    var targetBox = e.target.closest('div[data-chit-id]');
+    // Only target top-level project boxes (direct children of view)
+    if (targetBox && targetBox.parentElement !== view) targetBox = null;
+    view.querySelectorAll(':scope > div[data-chit-id]').forEach(function (b) {
+      b.style.borderTop = '';
+      b.style.borderBottom = '';
+    });
+    if (targetBox) {
+      var rect = targetBox.getBoundingClientRect();
+      if (e.clientY < rect.top + rect.height / 2) {
+        targetBox.style.borderTop = '3px solid #8b5a2b';
+      } else {
+        targetBox.style.borderBottom = '3px solid #8b5a2b';
+      }
+    }
+  });
+
+  view.addEventListener("drop", function (e) {
+    var draggedId = e.dataTransfer.getData("application/x-list-project-reorder");
+    if (!draggedId) return;
+    e.preventDefault();
+    view.querySelectorAll(':scope > div[data-chit-id]').forEach(function (b) {
+      b.style.borderTop = '';
+      b.style.borderBottom = '';
+    });
+    var targetBox = e.target.closest('div[data-chit-id]');
+    if (targetBox && targetBox.parentElement !== view) targetBox = null;
+    if (!targetBox || targetBox.dataset.chitId === draggedId) return;
+
+    var boxes = Array.from(view.querySelectorAll(':scope > div[data-chit-id]'));
+    var ids = boxes.map(function (b) { return b.dataset.chitId; });
+    var fromIdx = ids.indexOf(draggedId);
+    var toIdx = ids.indexOf(targetBox.dataset.chitId);
+    if (fromIdx < 0 || toIdx < 0) return;
+
+    var rect = targetBox.getBoundingClientRect();
+    if (e.clientY > rect.top + rect.height / 2) toIdx++;
+    ids.splice(fromIdx, 1);
+    if (fromIdx < toIdx) toIdx--;
+    ids.splice(toIdx, 0, draggedId);
+
+    saveManualOrder('Projects', ids);
+    currentSortField = 'manual';
+    var sel = document.getElementById('sort-select');
+    if (sel) sel.value = 'manual';
+    _updateSortUI();
+    displayChits();
+  });
+
+  // ── Touch gesture for project header reorder (mobile) ──────────────────
+  if (typeof enableTouchGesture === 'function') {
+    var _listHeaderDraggedBox = null;
+    view.querySelectorAll(':scope > div[data-chit-id]').forEach(function (box) {
+      var headerEl = box.querySelector('div[style*="cursor:pointer"]');
+      if (!headerEl || !box.dataset.chitId) return;
+      var _projectChit = chitMap[box.dataset.chitId];
+
+      enableTouchGesture(box, {
+        onDragStart: function () {
+          _listHeaderDraggedBox = box;
+          box.classList.add('cwoc-dragging');
+        },
+        onDragMove: function (data) {
+          if (!_listHeaderDraggedBox) return;
+          // Clear all drop indicators
+          view.querySelectorAll(':scope > div[data-chit-id]').forEach(function (b) {
+            b.style.borderTop = '';
+            b.style.borderBottom = '';
+          });
+          var target = document.elementFromPoint(data.clientX, data.clientY);
+          if (!target) return;
+          var targetBox = target.closest('div[data-chit-id]');
+          if (targetBox && targetBox.parentElement !== view) targetBox = null;
+          if (targetBox && targetBox !== _listHeaderDraggedBox) {
+            var rect = targetBox.getBoundingClientRect();
+            var midY = rect.top + rect.height / 2;
+            if (data.clientY < midY) {
+              targetBox.style.borderTop = '3px solid #8b5a2b';
+            } else {
+              targetBox.style.borderBottom = '3px solid #8b5a2b';
+            }
+          }
+        },
+        onDragEnd: function (data) {
+          if (!_listHeaderDraggedBox) return;
+          _listHeaderDraggedBox.classList.remove('cwoc-dragging');
+          // Clear all drop indicators
+          view.querySelectorAll(':scope > div[data-chit-id]').forEach(function (b) {
+            b.style.borderTop = '';
+            b.style.borderBottom = '';
+          });
+
+          var target = document.elementFromPoint(data.clientX, data.clientY);
+          if (!target) { _listHeaderDraggedBox = null; return; }
+          var targetBox = target.closest('div[data-chit-id]');
+          if (targetBox && targetBox.parentElement !== view) targetBox = null;
+          if (!targetBox || targetBox === _listHeaderDraggedBox) { _listHeaderDraggedBox = null; return; }
+
+          // Reorder project boxes
+          var boxes = Array.from(view.querySelectorAll(':scope > div[data-chit-id]'));
+          var ids = boxes.map(function (b) { return b.dataset.chitId; });
+          var fromId = _listHeaderDraggedBox.dataset.chitId;
+          var toId = targetBox.dataset.chitId;
+          var fromIdx = ids.indexOf(fromId);
+          var toIdx = ids.indexOf(toId);
+          if (fromIdx < 0 || toIdx < 0) { _listHeaderDraggedBox = null; return; }
+
+          var rect = targetBox.getBoundingClientRect();
+          if (data.clientY > rect.top + rect.height / 2) toIdx++;
+          ids.splice(fromIdx, 1);
+          if (fromIdx < toIdx) toIdx--;
+          ids.splice(toIdx, 0, fromId);
+
+          saveManualOrder('Projects', ids);
+          currentSortField = 'manual';
+          var sel = document.getElementById('sort-select');
+          if (sel) sel.value = 'manual';
+          _updateSortUI();
+          _listHeaderDraggedBox = null;
+          displayChits();
+        },
+        onLongPress: function () {
+          if (_projectChit && typeof showQuickEditModal === 'function') {
+            showQuickEditModal(_projectChit, function () { displayChits(); });
+          }
+        },
+      });
+    });
+  }
 
   chitList.appendChild(view);
 }
@@ -2220,6 +2389,84 @@ function _displayProjectsKanban(chitsToDisplay) {
     displayChits();
   });
 
+  // ── Touch gesture for project header reorder (mobile) ──────────────────
+  if (typeof enableTouchGesture === 'function') {
+    var _kanbanHeaderDraggedBox = null;
+    wrapper.querySelectorAll('.kanban-project-header').forEach(function (headerEl) {
+      var projectBox = headerEl.closest('.kanban-project-box');
+      if (!projectBox || !projectBox.dataset.chitId) return;
+      var projectId = projectBox.dataset.chitId;
+
+      enableTouchGesture(headerEl, {
+        onDragStart: function () {
+          _kanbanHeaderDraggedBox = projectBox;
+          projectBox.classList.add('cwoc-dragging');
+        },
+        onDragMove: function (data) {
+          if (!_kanbanHeaderDraggedBox) return;
+          // Clear all drop indicators
+          wrapper.querySelectorAll('.kanban-project-box').forEach(function (b) {
+            b.style.borderTop = '';
+            b.style.borderBottom = '';
+          });
+          var target = document.elementFromPoint(data.clientX, data.clientY);
+          if (!target) return;
+          var targetBox = target.closest('.kanban-project-box');
+          if (targetBox && targetBox !== _kanbanHeaderDraggedBox) {
+            var rect = targetBox.getBoundingClientRect();
+            var midY = rect.top + rect.height / 2;
+            if (data.clientY < midY) {
+              targetBox.style.borderTop = '3px solid #8b5a2b';
+            } else {
+              targetBox.style.borderBottom = '3px solid #8b5a2b';
+            }
+          }
+        },
+        onDragEnd: function (data) {
+          if (!_kanbanHeaderDraggedBox) return;
+          _kanbanHeaderDraggedBox.classList.remove('cwoc-dragging');
+          // Clear all drop indicators
+          wrapper.querySelectorAll('.kanban-project-box').forEach(function (b) {
+            b.style.borderTop = '';
+            b.style.borderBottom = '';
+          });
+
+          var target = document.elementFromPoint(data.clientX, data.clientY);
+          if (!target) { _kanbanHeaderDraggedBox = null; return; }
+          var targetBox = target.closest('.kanban-project-box');
+          if (!targetBox || targetBox === _kanbanHeaderDraggedBox) { _kanbanHeaderDraggedBox = null; return; }
+
+          // Reorder project boxes
+          var boxes = Array.from(wrapper.querySelectorAll('.kanban-project-box[data-chit-id]'));
+          var ids = boxes.map(function (b) { return b.dataset.chitId; });
+          var fromId = _kanbanHeaderDraggedBox.dataset.chitId;
+          var toId = targetBox.dataset.chitId;
+          var fromIdx = ids.indexOf(fromId);
+          var toIdx = ids.indexOf(toId);
+          if (fromIdx < 0 || toIdx < 0) { _kanbanHeaderDraggedBox = null; return; }
+
+          var rect = targetBox.getBoundingClientRect();
+          if (data.clientY > rect.top + rect.height / 2) toIdx++;
+          ids.splice(fromIdx, 1);
+          if (fromIdx < toIdx) toIdx--;
+          ids.splice(toIdx, 0, fromId);
+
+          saveManualOrder('Projects', ids);
+          currentSortField = 'manual';
+          var sel = document.getElementById('sort-select');
+          if (sel) sel.value = 'manual';
+          _updateSortUI();
+          _kanbanHeaderDraggedBox = null;
+          displayChits();
+        },
+        onLongPress: function () {
+          storePreviousState();
+          window.location.href = '/editor?id=' + projectId;
+        },
+      });
+    });
+  }
+
   chitList.appendChild(wrapper);
 }
 
@@ -2315,6 +2562,7 @@ function _displayIndependentAlertsBoard() {
   types.forEach(typeInfo => {
     const col = document.createElement("div");
     col.className = "sa-column";
+    col.dataset.saType = typeInfo.key;
 
     // Column header with add button
     const colHeader = document.createElement("div");
@@ -2328,8 +2576,22 @@ function _displayIndependentAlertsBoard() {
     colHeader.appendChild(addBtn);
     col.appendChild(colHeader);
 
-    // Cards for this type
-    const items = _independentAlerts.filter(a => a._type === typeInfo.key);
+    // Cards for this type — apply saved order from localStorage
+    var items = _independentAlerts.filter(a => a._type === typeInfo.key);
+    var savedOrderKey = 'cwoc_sa_order_' + typeInfo.key;
+    try {
+      var savedOrder = JSON.parse(localStorage.getItem(savedOrderKey));
+      if (Array.isArray(savedOrder) && savedOrder.length > 0) {
+        items.sort(function (a, b) {
+          var ai = savedOrder.indexOf(String(a.id));
+          var bi = savedOrder.indexOf(String(b.id));
+          if (ai === -1) ai = savedOrder.length;
+          if (bi === -1) bi = savedOrder.length;
+          return ai - bi;
+        });
+      }
+    } catch (e) { /* ignore bad localStorage data */ }
+
     if (items.length === 0) {
       const empty = document.createElement("div");
       empty.className = "sa-empty";
@@ -2338,8 +2600,130 @@ function _displayIndependentAlertsBoard() {
     } else {
       items.forEach(alert => {
         const data = alert.data || alert;
-        col.appendChild(_buildIndependentCard(alert.id, typeInfo.key, data));
+        var card = _buildIndependentCard(alert.id, typeInfo.key, data);
+        card.draggable = true;
+        col.appendChild(card);
       });
+
+      // ── HTML5 drag events for desktop parity ─────────────────────────
+      var _html5DraggedCard = null;
+      col.addEventListener('dragstart', function (e) {
+        var card = e.target.closest('.sa-card');
+        if (!card) return;
+        _html5DraggedCard = card;
+        card.classList.add('cwoc-dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', card.dataset.alertId || '');
+      });
+      col.addEventListener('dragend', function (e) {
+        if (_html5DraggedCard) {
+          _html5DraggedCard.classList.remove('cwoc-dragging');
+          _html5DraggedCard = null;
+        }
+        col.querySelectorAll('.sa-card').forEach(function (c) {
+          c.style.borderTop = '';
+          c.style.borderBottom = '';
+        });
+      });
+      col.addEventListener('dragover', function (e) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        col.querySelectorAll('.sa-card').forEach(function (c) {
+          c.style.borderTop = '';
+          c.style.borderBottom = '';
+        });
+        var target = e.target.closest('.sa-card');
+        if (target && target !== _html5DraggedCard) {
+          var rect = target.getBoundingClientRect();
+          if (e.clientY < rect.top + rect.height / 2) {
+            target.style.borderTop = '3px solid #8b5a2b';
+          } else {
+            target.style.borderBottom = '3px solid #8b5a2b';
+          }
+        }
+      });
+      col.addEventListener('drop', function (e) {
+        e.preventDefault();
+        if (!_html5DraggedCard) return;
+        var target = e.target.closest('.sa-card');
+        if (!target || target === _html5DraggedCard) return;
+        var rect = target.getBoundingClientRect();
+        if (e.clientY < rect.top + rect.height / 2) {
+          col.insertBefore(_html5DraggedCard, target);
+        } else {
+          col.insertBefore(_html5DraggedCard, target.nextSibling);
+        }
+        // Save new order to localStorage
+        var ids = Array.from(col.querySelectorAll('.sa-card[data-alert-id]')).map(function (c) { return c.dataset.alertId; });
+        try { localStorage.setItem(savedOrderKey, JSON.stringify(ids)); } catch (e) {}
+        _html5DraggedCard.classList.remove('cwoc-dragging');
+        _html5DraggedCard = null;
+      });
+
+      // ── Touch drag-to-reorder within column (mobile) ─────────────────
+      if (typeof enableTouchGesture === 'function') {
+        var _saDraggedCard = null;
+        col.querySelectorAll('.sa-card').forEach(function (cardEl) {
+          enableTouchGesture(cardEl, {
+            onDragStart: function () {
+              _saDraggedCard = cardEl;
+              cardEl.classList.add('cwoc-dragging');
+            },
+            onDragMove: function (data) {
+              if (!_saDraggedCard) return;
+              // Clear all drop indicators in this column
+              col.querySelectorAll('.sa-card').forEach(function (c) {
+                c.style.borderTop = '';
+                c.style.borderBottom = '';
+              });
+              // Temporarily hide dragged card from hit testing
+              _saDraggedCard.style.pointerEvents = 'none';
+              var target = document.elementFromPoint(data.clientX, data.clientY);
+              _saDraggedCard.style.pointerEvents = '';
+              if (!target) return;
+              var targetCard = target.closest('.sa-card');
+              if (targetCard && targetCard !== _saDraggedCard) {
+                var rect = targetCard.getBoundingClientRect();
+                var midY = rect.top + rect.height / 2;
+                if (data.clientY < midY) {
+                  targetCard.style.borderTop = '3px solid #8b5a2b';
+                } else {
+                  targetCard.style.borderBottom = '3px solid #8b5a2b';
+                }
+              }
+            },
+            onDragEnd: function (data) {
+              if (!_saDraggedCard) return;
+              _saDraggedCard.classList.remove('cwoc-dragging');
+              // Clear all drop indicators
+              col.querySelectorAll('.sa-card').forEach(function (c) {
+                c.style.borderTop = '';
+                c.style.borderBottom = '';
+              });
+              // Find drop target
+              _saDraggedCard.style.pointerEvents = 'none';
+              var target = document.elementFromPoint(data.clientX, data.clientY);
+              _saDraggedCard.style.pointerEvents = '';
+              if (!target) { _saDraggedCard = null; return; }
+              var targetCard = target.closest('.sa-card');
+              if (!targetCard || targetCard === _saDraggedCard) { _saDraggedCard = null; return; }
+
+              // Reorder in DOM
+              var rect = targetCard.getBoundingClientRect();
+              if (data.clientY < rect.top + rect.height / 2) {
+                col.insertBefore(_saDraggedCard, targetCard);
+              } else {
+                col.insertBefore(_saDraggedCard, targetCard.nextSibling);
+              }
+
+              // Save new order to localStorage
+              var ids = Array.from(col.querySelectorAll('.sa-card[data-alert-id]')).map(function (c) { return c.dataset.alertId; });
+              try { localStorage.setItem(savedOrderKey, JSON.stringify(ids)); } catch (e) {}
+              _saDraggedCard = null;
+            },
+          });
+        });
+      }
     }
 
     wrapper.appendChild(col);
@@ -3289,10 +3673,97 @@ async function _indicatorsLoad() {
     if (container.children.length === 0) {
       container.innerHTML = '<div style="text-align:center;padding:2em;opacity:0.5;">Select indicators in the sidebar.</div>';
     } else {
-      // Enable drag-to-reorder on indicator charts
+      // Enable drag-to-reorder on indicator charts (HTML5 desktop + touch mobile)
       _enableIndicatorsDragReorder(container);
       // Restore saved chart order
       _restoreIndicatorsOrder(container);
+
+      // ── Touch gesture for indicator chart reorder (mobile) ─────────────
+      if (typeof enableTouchGesture === 'function') {
+        var _indDraggedChart = null;
+        container.querySelectorAll('[data-ind-key]').forEach(function (chartEl) {
+          enableTouchGesture(chartEl, {
+            onDragStart: function () {
+              _indDraggedChart = chartEl;
+              chartEl.classList.add('cwoc-dragging');
+            },
+            onDragMove: function (data) {
+              if (!_indDraggedChart) return;
+              // Clear all drop indicators
+              container.querySelectorAll('[data-ind-key]').forEach(function (c) {
+                c.style.borderTop = '';
+                c.style.borderBottom = '';
+              });
+              // Temporarily hide dragged chart from hit testing
+              _indDraggedChart.style.pointerEvents = 'none';
+              var target = document.elementFromPoint(data.clientX, data.clientY);
+              _indDraggedChart.style.pointerEvents = '';
+              if (!target) return;
+              var targetChart = target.closest('[data-ind-key]');
+              if (targetChart && targetChart !== _indDraggedChart) {
+                var rect = targetChart.getBoundingClientRect();
+                var midY = rect.top + rect.height / 2;
+                if (data.clientY < midY) {
+                  targetChart.style.borderTop = '3px solid #8b5a2b';
+                } else {
+                  targetChart.style.borderBottom = '3px solid #8b5a2b';
+                }
+              }
+            },
+            onDragEnd: function (data) {
+              if (!_indDraggedChart) return;
+              _indDraggedChart.classList.remove('cwoc-dragging');
+              // Clear all drop indicators
+              container.querySelectorAll('[data-ind-key]').forEach(function (c) {
+                c.style.borderTop = '';
+                c.style.borderBottom = '';
+              });
+              // Find drop target
+              _indDraggedChart.style.pointerEvents = 'none';
+              var target = document.elementFromPoint(data.clientX, data.clientY);
+              _indDraggedChart.style.pointerEvents = '';
+              if (!target) { _indDraggedChart = null; return; }
+              var targetChart = target.closest('[data-ind-key]');
+              if (!targetChart || targetChart === _indDraggedChart) { _indDraggedChart = null; return; }
+
+              // Reorder in DOM
+              var rect = targetChart.getBoundingClientRect();
+              if (data.clientY < rect.top + rect.height / 2) {
+                container.insertBefore(_indDraggedChart, targetChart);
+              } else {
+                container.insertBefore(_indDraggedChart, targetChart.nextSibling);
+              }
+
+              // Save new order to localStorage
+              var order = [];
+              container.querySelectorAll('[data-ind-key]').forEach(function (c) {
+                order.push(c.dataset.indKey);
+              });
+              try { localStorage.setItem('cwoc_ind_chart_order', JSON.stringify(order)); } catch (ex) {}
+              if (typeof _markDragJustEnded === 'function') _markDragJustEnded();
+              _indDraggedChart = null;
+            },
+            onLongPress: function () {
+              // Long-press: open quick-edit modal for the indicator's chit if applicable
+              var indKey = chartEl.dataset.indKey;
+              // Find the most recent chit that has this indicator
+              var matchChit = null;
+              if (typeof chits !== 'undefined' && Array.isArray(chits)) {
+                for (var ci = chits.length - 1; ci >= 0; ci--) {
+                  var c = chits[ci];
+                  if (c.health_indicators && c.health_indicators[indKey] != null) {
+                    matchChit = c;
+                    break;
+                  }
+                }
+              }
+              if (matchChit && typeof showQuickEditModal === 'function') {
+                showQuickEditModal(matchChit, function () { displayChits(); });
+              }
+            },
+          });
+        });
+      }
     }
   } catch (e) {
     console.error('Indicators load error:', e);
