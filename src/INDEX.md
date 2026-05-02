@@ -879,6 +879,7 @@ Coordinator for shared code between dashboard and editor. Contains glue code for
 | `_pickNav(href)` | Navigate to a page selected from the Navigate hotkey panel |
 | `_pickPeriod(period)` | Switch to a calendar period selected from the Period hotkey panel |
 | `_applyEnabledPeriods()` | Apply enabled periods — hide disabled options in dropdown and grey out in panels |
+| `_openModePanel()` | Build and show the Mode panel (M key) for the current tab's view modes |
 | `_enterFilterSub(type)` | Enter a filter sub-panel (status, label, priority, or people) from the Filter hotkey |
 | `_buildFilterSubPanel(containerId, checkboxSelector)` | Build a hotkey sub-panel with numbered options mirroring sidebar checkboxes |
 | `openHelpPage()` | Navigate to the help page |
@@ -997,8 +998,8 @@ Coordinator for shared code between dashboard and editor. Contains glue code for
 | `_showTimerDoneModal(timerName, onDismiss)` | Show a "Time's up!" alert modal for a completed timer |
 | `_sendBrowserNotification(title, body, chitId, playSound)` | Send a browser notification with vibration and click-to-open |
 | `_globalCheckAlarms()` | Check all chit-based and independent alarms against the current time |
-| `_globalCheckNotifications()` | Check all chit notification alerts against their fire times; supports targetType and loop re-firing |
-| `_showGlobalLoopingToast(emoji, label, chitTitle, chitId, loopKey)` | Show a persistent looping notification toast that stays until acknowledged |
+| `_globalCheckNotifications()` | Check all chit notification alerts against their fire times; supports habit cycle-end targeting and only_if_undone suppression for habits |
+| `_globalGetHabitCycleEnd(chit)` | Calculate the end-of-cycle datetime for a habit chit using its recurrence_rule.freq |
 | `_getSnoozeMs()` | Get the snooze duration in milliseconds from settings |
 | `_startGlobalAlertSystem()` | Initialize the global alert system — permissions, intervals, sync listeners |
 
@@ -1143,11 +1144,13 @@ Date mode system, recurrence picker, time picker dropdown, and date-clearing hel
 | `onHabitGoalChange()` | Handle habit goal input change — enforce minimum of 1, update progress display, mark unsaved |
 | `_toggleAllDayBtn()` | Toggle the All Day button — mirrors the hidden checkbox and calls `toggleAllDay()` |
 | `_updateAllDayBtnState()` | Sync the All Day button appearance (teal active, disabled when habit forces all-day) from the hidden checkbox state |
-| `onPerpetualToggle()` | Handle Perpetual checkbox — when checked: set start date to today, clear/disable end date, switch to Start/End mode; when unchecked: re-enable end date |
+| `onPerpetualToggle()` | Handle Perpetual checkbox — when checked: set start date to today, clear/disable end date, switch to Start/End mode, update description with start date; when unchecked: re-enable end date |
+| `_fmtPerpetualDate()` | Format a date string for the perpetual description (e.g. "May 2, 2026") |
+| `onHabitResetToggle()` | Handle Reset checkbox toggle — show/hide the number and unit inputs |
 
 #### editor-habits.js
 
-Habit Log zone logic: period history display, inline editing of past counts, and canvas-based habit charts. New file created as part of the habits overhaul. Visible only when `habit=true`.
+Habits zone logic: period history display, inline editing of past counts, and canvas-based habit charts. New file created as part of the habits overhaul. Visible only when `habit=true`.
 
 | Symbol | Description |
 |--------|-------------|
@@ -1158,7 +1161,7 @@ Habit Log zone logic: period history display, inline editing of past counts, and
 | `_drawCompletionChart(canvas, exceptions, goal)` | Draw a completion bar chart showing habit_success per period with a habit_goal reference line |
 | `_drawSuccessRateChart(canvas, exceptions)` | Draw a success rate trend line chart showing rolling percentage over time |
 | `_drawStreakChart(canvas, exceptions)` | Draw a streak timeline visualization showing consecutive completion periods |
-| `_toggleHabitLogZone(visible)` | Show or hide the Habit Log zone based on the habit flag state |
+| `_toggleHabitLogZone(visible)` | Show or hide the Habits zone based on the habit flag state |
 
 #### editor-tags.js
 
@@ -1187,6 +1190,7 @@ People zone: contacts, system users, sharing controls. Loads all contacts and sy
 | `_peopleChipData` | Array of active people chips (`{display_name, id, color, image_url}`) |
 | `_allContactsCache` | Full contacts list fetched from the API for the tree |
 | `_peopleGroupsExpanded` | Object tracking which letter groups are expanded/collapsed |
+| `_currentPeopleFilter` | Current search filter string (preserved across re-renders) |
 | `_allUsersCache` | System users from `/api/auth/switchable-users` |
 | `_currentShares` | Array of current shares (`{user_id, role, display_name}`) — moved from `editor-sharing.js` |
 | `_sharingInitialized` | Boolean flag indicating whether sharing controls have been initialized |
@@ -1301,16 +1305,18 @@ Alerts zone: alarms, timers, stopwatches, notifications.
 | `_firedNotifications` | Set of notification keys already fired (prevents re-firing) |
 | `_startNotificationChecker()` | Start the 30-second notification checker interval |
 | `_stopNotificationChecker()` | Stop the notification checker interval |
-| `_checkNotificationAlerts()` | Check all notifications against chit dates (using targetType) and fire when due; supports loop re-firing |
-| `_notifTimingLabel(n)` | Build a human-readable timing label for a notification using targetType (e.g., "before start", "after due") |
-| `_fireNotificationAlert(msg, notif, notifIdx)` | Fire a browser notification and inline toast; looping notifications show "Acknowledge" button |
+| `_checkNotificationAlerts()` | Check all notifications against chit dates (using targetType) and fire when due; supports habit cycle-end targeting and only_if_undone suppression |
+| `_getHabitCycleEnd()` | Calculate the end-of-cycle datetime for the current habit period (DAILY/WEEKLY/MONTHLY/YEARLY) |
+| `_notifTimingLabel(n)` | Build a human-readable timing label for a notification — handles "cycle" targetType for habits and normal before/after start/due |
+| `_fireNotificationAlert(msg, notif, notifIdx)` | Fire a browser notification and inline toast with auto-dismiss |
 | `_alertsFromChit(chit)` | Parse a chit's alerts array into the `_alertsData` structure and render |
 | `_alertsToArray()` | Flatten `_alertsData` back into a single array for saving |
 | `renderAllAlerts()` | Render all four alert containers (notifications, alarms, timers, stopwatches) |
 | `renderAlarmsContainer()` | Render the alarms list with name, time, days, toggle, delete, and snooze bar |
 | `_defaultNotifsApplied` | Tracks which date modes have had default notifications applied |
 | `_applyDefaultNotifications(mode)` | Auto-populate notifications from settings defaults when a date mode is first activated |
-| `renderNotificationsContainer()` | Render the notifications list with value, unit, combined timing dropdown (before/after start/due), loop toggle, and delete controls |
+| `renderNotificationsContainer()` | Render the notifications list with value, unit, timing dropdown (habit-aware: "before end of cycle" for habits, before/after start/due otherwise), "disable if done" checkbox for habits, and delete controls |
+| `_habitPeriodLabel()` | Return a human-readable label for the current habit cycle period (day/week/month/year) |
 | `_notifTargetLabel()` | Return "start", "due", or "start/due" based on which date fields the chit has (legacy helper) |
 | `_editingAlarmIdx` | Index of the alarm currently being edited (or null) |
 | `openAlarmModal(event)` | Add a new alarm inline with default time and today's day |

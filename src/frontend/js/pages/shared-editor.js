@@ -49,7 +49,7 @@ function cwocToggleZone(event, sectionId, contentId) {
   const icon = section.querySelector('.zone-toggle-icon');
   if (icon) icon.textContent = isCollapsing ? '🔽' : '🔼';
 
-  const zoneButtons = section.querySelectorAll('.zone-button');
+  const zoneButtons = section.querySelectorAll('.zone-button:not(.zone-button-persist)');
   zoneButtons.forEach(function (button) {
     if (isCollapsing) {
       button.style.display = 'none';

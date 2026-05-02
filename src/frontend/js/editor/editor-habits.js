@@ -101,33 +101,83 @@ function _buildPeriodRow(period, index, chit) {
   dateLabel.textContent = _formatPeriodDate(period.date, freq);
   row.appendChild(dateLabel);
 
-  // Editable count (third column) — styled as a clickable input-like field
-  var countSpan = document.createElement('span');
-  countSpan.className = 'habit-log-count';
-  countSpan.dataset.periodDate = period.date;
-  countSpan.dataset.periodIndex = index;
+  // Counter widget (third column) — uses shared _buildHabitCounter
+  var counterCell = document.createElement('span');
+  counterCell.className = 'habit-log-counter-cell';
 
   if (period.broken_off) {
-    countSpan.textContent = '—';
-    countSpan.classList.add('habit-log-skipped');
-  } else {
-    countSpan.textContent = success;
-    countSpan.classList.add(success >= goal ? 'habit-log-met' : 'habit-log-missed');
-    countSpan.title = 'Click to edit';
-    countSpan.style.cursor = 'pointer';
-    countSpan.addEventListener('click', function () {
-      _startInlineEdit(this, chit);
+    counterCell.textContent = '—';
+    counterCell.style.color = 'var(--dark-grey)';
+    counterCell.style.fontStyle = 'italic';
+  } else if (typeof _buildHabitCounter === 'function') {
+    var periodDate = period.date;
+    var exceptions = window._loadedRecurrenceExceptions || [];
+    var counter = _buildHabitCounter({
+      success: success,
+      goal: goal,
+      freqLabel: '',
+      disabled: false,
+      onIncrement: function(newVal) {
+        _updatePeriodException(periodDate, newVal, goal, chit, row);
+      },
+      onDecrement: function(newVal) {
+        _updatePeriodException(periodDate, newVal, goal, chit, row);
+      }
     });
+    counterCell.appendChild(counter);
+  } else {
+    counterCell.textContent = success + ' / ' + goal;
   }
-  row.appendChild(countSpan);
-
-  // Goal display (fourth column)
-  var goalSpan = document.createElement('span');
-  goalSpan.className = 'habit-log-goal';
-  goalSpan.textContent = '/ ' + goal;
-  row.appendChild(goalSpan);
+  row.appendChild(counterCell);
 
   return row;
+}
+
+/**
+ * Update a period's exception entry after counter change, refresh status icon and charts.
+ */
+function _updatePeriodException(periodDate, newSuccess, goal, chit, row) {
+  var exceptions = window._loadedRecurrenceExceptions || [];
+  if (!Array.isArray(exceptions)) {
+    try { exceptions = JSON.parse(exceptions); } catch (e) { exceptions = []; }
+  }
+
+  // Find and update the exception
+  for (var i = 0; i < exceptions.length; i++) {
+    if (exceptions[i].date === periodDate) {
+      exceptions[i].habit_success = newSuccess;
+      exceptions[i].completed = (newSuccess >= goal);
+      break;
+    }
+  }
+  window._loadedRecurrenceExceptions = exceptions;
+
+  // Update status icon in the row
+  var statusSpan = row.querySelector('.habit-log-status');
+  if (statusSpan) {
+    if (newSuccess >= goal) {
+      statusSpan.textContent = '✅';
+      statusSpan.title = 'Goal met';
+    } else {
+      statusSpan.textContent = '❌';
+      statusSpan.title = 'Goal not met';
+    }
+  }
+
+  // Re-render charts
+  var chartsContainer = document.getElementById('habitLogChartsContainer');
+  if (chartsContainer) {
+    var virtualChit = Object.assign({}, chit);
+    virtualChit.recurrence_exceptions = exceptions;
+    var periods = [];
+    for (var k = 0; k < exceptions.length; k++) {
+      if (exceptions[k].date) periods.push(exceptions[k]);
+    }
+    periods.sort(function(a, b) { return a.date < b.date ? 1 : a.date > b.date ? -1 : 0; });
+    _renderHabitCharts(virtualChit, periods);
+  }
+
+  if (typeof setSaveButtonUnsaved === 'function') setSaveButtonUnsaved();
 }
 
 /**
@@ -696,6 +746,20 @@ function _toggleHabitLogZone(isHabit) {
 
   if (isHabit) {
     section.style.display = '';
+    // Auto-expand the zone content and sub-sections
+    var content = document.getElementById('habitLogContent');
+    if (content) content.style.display = '';
+    var settings = document.getElementById('habitSettingsBody');
+    if (settings) settings.style.display = '';
+    var charts = document.getElementById('habitLogChartsContainer');
+    if (charts) charts.style.display = '';
+    var periods = document.getElementById('habitLogPeriodList');
+    if (periods) periods.style.display = '';
+    // Update toggle icon to expanded
+    var icon = section.querySelector('.zone-toggle-icon');
+    if (icon) icon.textContent = '🔼';
+    // Update sub-header toggles to expanded
+    section.querySelectorAll('.habit-log-toggle').forEach(function(t) { t.textContent = '▼'; });
   } else {
     section.style.display = 'none';
   }

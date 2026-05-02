@@ -129,6 +129,69 @@ function _applyEnabledPeriods() {
   }
 }
 
+/* ── Mode panel handler (M key) ──────────────────────────────────────────── */
+
+/**
+ * Build and show the mode panel for the current tab.
+ * Returns false if the current tab has no modes (caller should ignore M key).
+ */
+function _openModePanel() {
+  var container = document.getElementById('panel-mode-options');
+  if (!container) return false;
+
+  var title = document.getElementById('panel-mode-title');
+  var modes = [];
+
+  if (currentTab === 'Calendar') {
+    if (title) title.textContent = '📅 Calendar Period';
+    modes = [
+      { key: 'I', label: 'Itinerary', action: function() { _pickPeriod('Itinerary'); } },
+      { key: 'D', label: 'Day',       action: function() { _pickPeriod('Day'); } },
+      { key: 'W', label: 'Week',      action: function() { _pickPeriod('Week'); } },
+      { key: 'K', label: 'Work Hours', action: function() { _pickPeriod('Work'); } },
+      { key: 'X', label: _customDaysCount + ' Days', action: function() { _pickPeriod('SevenDay'); } },
+      { key: 'M', label: 'Month',     action: function() { _pickPeriod('Month'); } },
+      { key: 'Y', label: 'Year',      action: function() { _pickPeriod('Year'); } },
+    ];
+  } else if (currentTab === 'Tasks') {
+    if (title) title.textContent = '✅ Tasks Mode';
+    modes = [
+      { key: 'T', label: 'Tasks',    action: function() { _setTasksMode('tasks'); _exitHotkeyMode(); } },
+      { key: 'H', label: 'Habits',   action: function() { _setTasksMode('habits'); _exitHotkeyMode(); } },
+      { key: 'A', label: 'Assigned', action: function() { _setTasksMode('assigned'); _exitHotkeyMode(); } },
+    ];
+  } else if (currentTab === 'Alarms') {
+    if (title) title.textContent = '🔔 Alarms Mode';
+    modes = [
+      { key: 'L', label: 'List',        action: function() { _setAlarmsMode('list'); _exitHotkeyMode(); } },
+      { key: 'I', label: 'Independent', action: function() { _setAlarmsMode('independent'); _exitHotkeyMode(); } },
+    ];
+  } else if (currentTab === 'Projects') {
+    if (title) title.textContent = '📁 Projects Mode';
+    modes = [
+      { key: 'L', label: 'List',   action: function() { _setProjectsMode('list'); _exitHotkeyMode(); } },
+      { key: 'K', label: 'Kanban', action: function() { _setProjectsMode('kanban'); _exitHotkeyMode(); } },
+    ];
+  } else {
+    return false; // No modes for this tab
+  }
+
+  container.innerHTML = '';
+  window._modeKeyMap = {};
+  modes.forEach(function(m) {
+    var div = document.createElement('div');
+    div.className = 'hotkey-panel-option';
+    div.innerHTML = '<span class="panel-key">' + m.key + '</span><span class="panel-label">' + m.label + '</span>';
+    div.addEventListener('click', m.action);
+    container.appendChild(div);
+    window._modeKeyMap[m.key.toLowerCase()] = m.action;
+  });
+
+  _hotkeyMode = 'MODE';
+  _showPanel('panel-mode');
+  return true;
+}
+
 /* ── Filter sub-panel entry ──────────────────────────────────────────────── */
 
 function _enterFilterSub(type) {

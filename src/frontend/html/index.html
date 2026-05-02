@@ -330,6 +330,13 @@
             <div class="hotkey-panel-footer">ESC to cancel</div>
         </div>
 
+        <!-- Mode submenu panel (M key — dynamically populated) -->
+        <div class="hotkey-panel" id="panel-mode">
+            <h3 id="panel-mode-title">🔀 Mode</h3>
+            <div id="panel-mode-options"></div>
+            <div class="hotkey-panel-footer">ESC to cancel</div>
+        </div>
+
         <!-- Filter submenu panel -->
         <div class="hotkey-panel" id="panel-filter">
             <h3>🔍 Filter By</h3>
@@ -475,6 +482,16 @@
                                         <div class="ref-item"><span class="ref-key">A</span> Alarm</div>
                                         <div class="ref-item"><span class="ref-key">T</span> Timer</div>
                                         <div class="ref-item"><span class="ref-key">S</span> Stopwatch</div>
+                                    </div>
+                                </div>
+
+                                <div class="ref-submenu">
+                                    <div class="ref-tree-root"><span class="ref-key">M</span> Mode ▸ <span class="ref-hint">(per tab)</span></div>
+                                    <div class="ref-tree-children">
+                                        <div class="ref-item">Calendar: <span class="ref-key">I</span> <span class="ref-key">D</span> <span class="ref-key">W</span> <span class="ref-key">K</span> <span class="ref-key">X</span> <span class="ref-key">M</span> <span class="ref-key">Y</span></div>
+                                        <div class="ref-item">Tasks: <span class="ref-key">T</span> Tasks · <span class="ref-key">H</span> Habits · <span class="ref-key">A</span> Assigned</div>
+                                        <div class="ref-item">Alarms: <span class="ref-key">L</span> List · <span class="ref-key">I</span> Independent</div>
+                                        <div class="ref-item">Projects: <span class="ref-key">L</span> List · <span class="ref-key">K</span> Kanban</div>
                                     </div>
                                 </div>
 

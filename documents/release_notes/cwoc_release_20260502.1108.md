@@ -1,0 +1,1 @@
+Fixed People zone in the chit editor: search filter is now preserved across re-renders, typing a name and pressing Enter adds it as a free-text person, empty state messages are more visible and guide the user, and the tree now renders even if the contacts API fails. Updated help docs.

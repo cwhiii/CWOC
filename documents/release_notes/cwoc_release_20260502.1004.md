@@ -1,0 +1,1 @@
+Shared habit counter widget — extracted the −/+ counter into _buildHabitCounter() in shared.js, used by both the Habits View and the Chit Editor. The − button is now on the left of the progress text, + on the right: [−] 2 / 5 each Week [+]. Editor now has the same interactive counter in the habit controls row.

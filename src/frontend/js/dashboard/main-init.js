@@ -1236,6 +1236,15 @@ document.addEventListener("DOMContentLoaded", function () {
       return;
     }
 
+    // ── MODE submenu (after 'M') ──
+    if (_hotkeyMode === 'MODE') {
+      e.preventDefault();
+      if (window._modeKeyMap && window._modeKeyMap[keyLower]) {
+        window._modeKeyMap[keyLower]();
+      }
+      return;
+    }
+
     // ── FILTER submenu (after 'F') ──
     if (_hotkeyMode === 'FILTER') {
       e.preventDefault();
@@ -1405,6 +1414,12 @@ document.addEventListener("DOMContentLoaded", function () {
       storePreviousState();
       localStorage.setItem('cwoc_settings_return', '/');
       window.location.href = '/frontend/html/settings.html';
+      return;
+    }
+
+    if (keyLower === 'm' && !_hotkeyMode) {
+      e.preventDefault();
+      _openModePanel();
       return;
     }
 

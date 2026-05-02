@@ -168,20 +168,39 @@ function _checkNotificationAlerts() {
   const dueVal = document.getElementById("due_datetime")?.value;
   const title = document.getElementById("title")?.value || "Chit";
 
+  // Habit state for cycle-based notifications
+  const habitCb = document.getElementById('habitEnabled');
+  const isHabit = habitCb && habitCb.checked;
+
   window._alertsData.notifications.forEach((n, idx) => {
     if (!n.value || !n.unit) return;
+
+    // Skip habit notifications if goal already met and only_if_undone is set
+    if (isHabit && n.only_if_undone !== false) {
+      const goalEl = document.getElementById('habitGoal');
+      const goal = goalEl ? (parseInt(goalEl.value) || 1) : 1;
+      const success = window._currentHabitSuccess || 0;
+      if (success >= goal) return;
+    }
 
     // Convert to milliseconds
     const unitMs = { minutes: 60000, hours: 3600000, days: 86400000, weeks: 604800000 };
     const offsetMs = n.value * (unitMs[n.unit] || 60000);
 
-    // Determine target datetime based on targetType
-    const targetType = n.targetType || (dueVal && !startVal ? "due" : "start");
-    const targetStr = targetType === "due" ? (dueVal || startVal) : (startVal || dueVal);
-    if (!targetStr) return;
+    let targetDate = null;
 
-    const targetDate = new Date(targetStr);
-    if (isNaN(targetDate.getTime())) return;
+    if (n.targetType === "cycle" && isHabit) {
+      // Calculate end of current habit cycle period
+      targetDate = _getHabitCycleEnd();
+    } else {
+      // Normal: use start or due datetime
+      const targetType = n.targetType || (dueVal && !startVal ? "due" : "start");
+      const targetStr = targetType === "due" ? (dueVal || startVal) : (startVal || dueVal);
+      if (!targetStr) return;
+      targetDate = new Date(targetStr);
+    }
+
+    if (!targetDate || isNaN(targetDate.getTime())) return;
 
     // before = target - offset, after = target + offset
     const fireAt = n.afterTarget
@@ -194,31 +213,58 @@ function _checkNotificationAlerts() {
     if (diff >= 0 && diff < 30000) {
       const key = `notif-${idx}-${fireAt.toISOString()}`;
       if (_firedNotifications.has(key)) return;
-      if (!n.loop) _firedNotifications.add(key);
+      _firedNotifications.add(key);
 
       const timingLabel = _notifTimingLabel(n);
       const msg = `${n.value} ${n.unit} ${timingLabel}: "${title}"`;
       _fireNotificationAlert(msg, n, idx);
     }
-
-    // Loop support: re-fire every 60 seconds if loop is enabled and not acknowledged
-    if (n.loop && diff >= 30000) {
-      const loopKey = `notif-loop-${idx}`;
-      const lastFire = window._notifLoopLastFire && window._notifLoopLastFire[loopKey];
-      if (!lastFire || (now.getTime() - lastFire) >= 60000) {
-        if (!window._notifLoopAcknowledged) window._notifLoopAcknowledged = {};
-        if (window._notifLoopAcknowledged[loopKey]) return;
-        if (!window._notifLoopLastFire) window._notifLoopLastFire = {};
-        window._notifLoopLastFire[loopKey] = now.getTime();
-        const timingLabel = _notifTimingLabel(n);
-        const msg = `${n.value} ${n.unit} ${timingLabel}: "${title}"`;
-        _fireNotificationAlert(msg, n, idx);
-      }
-    }
   });
 }
 
+/**
+ * Calculate the end-of-cycle datetime for the current habit period.
+ * Returns a Date representing midnight at the end of the current cycle.
+ */
+function _getHabitCycleEnd() {
+  const habitFreqSel = document.getElementById('habitFrequency');
+  const freq = habitFreqSel ? habitFreqSel.value : 'DAILY';
+  const now = new Date();
+
+  switch (freq) {
+    case 'DAILY': {
+      // End of today (midnight tonight)
+      const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0);
+      return end;
+    }
+    case 'WEEKLY': {
+      // End of this week (next Sunday midnight, or next week-start-day)
+      const wsd = (window._cwocSettings && window._cwocSettings.week_start_day !== undefined)
+        ? parseInt(window._cwocSettings.week_start_day) || 0 : 0;
+      const dayOfWeek = now.getDay();
+      const daysUntilEnd = (7 - dayOfWeek + wsd) % 7 || 7;
+      const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + daysUntilEnd, 0, 0, 0);
+      return end;
+    }
+    case 'MONTHLY': {
+      // End of this month (first of next month midnight)
+      const end = new Date(now.getFullYear(), now.getMonth() + 1, 1, 0, 0, 0);
+      return end;
+    }
+    case 'YEARLY': {
+      // End of this year (Jan 1 next year midnight)
+      const end = new Date(now.getFullYear() + 1, 0, 1, 0, 0, 0);
+      return end;
+    }
+    default:
+      return null;
+  }
+}
+
 function _notifTimingLabel(n) {
+  if (n.targetType === "cycle") {
+    return "before end of " + (typeof _habitPeriodLabel === 'function' ? _habitPeriodLabel() : "cycle");
+  }
   const hasStart = !!document.getElementById("start_datetime")?.value;
   const hasDue = !!document.getElementById("due_datetime")?.value;
   const targetType = n.targetType || (hasDue && !hasStart ? "due" : "start");
@@ -234,26 +280,13 @@ function _fireNotificationAlert(msg, notif, notifIdx) {
   const toast = document.createElement("div");
   toast.style.cssText = "position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:9999;background:#fff5e6;border:2px solid #8b5a2b;border-radius:8px;padding:0.75em 1.5em;box-shadow:0 4px 16px rgba(0,0,0,0.3);display:flex;align-items:center;gap:0.5em;";
   toast.innerHTML = `<span>📢 ${msg}</span>`;
-  if (notif && notif.loop) {
-    toast.innerHTML += `<span style="font-size:0.75em;opacity:0.6;">🔁 looping</span>`;
-  }
   const dismissBtn = document.createElement("button");
-  dismissBtn.textContent = (notif && notif.loop) ? "Acknowledge" : "Dismiss";
+  dismissBtn.textContent = "Dismiss";
   dismissBtn.style.cssText = "padding:3px 8px;cursor:pointer;margin-left:0.5em;";
-  dismissBtn.onclick = () => {
-    toast.remove();
-    // If looping, mark as acknowledged to stop re-firing
-    if (notif && notif.loop && notifIdx !== undefined) {
-      if (!window._notifLoopAcknowledged) window._notifLoopAcknowledged = {};
-      window._notifLoopAcknowledged[`notif-loop-${notifIdx}`] = true;
-    }
-  };
+  dismissBtn.onclick = () => { toast.remove(); };
   toast.appendChild(dismissBtn);
   document.body.appendChild(toast);
-  // Don't auto-dismiss looping notifications
-  if (!notif || !notif.loop) {
-    setTimeout(() => toast.remove(), 8000);
-  }
+  setTimeout(() => toast.remove(), 8000);
 }
 
 function _alertsFromChit(chit) {
@@ -528,6 +561,10 @@ function renderNotificationsContainer() {
   header.textContent = "📢 Notifications";
   c.appendChild(header);
 
+  // Detect if this chit is a habit
+  const habitCb = document.getElementById('habitEnabled');
+  const isHabit = habitCb && habitCb.checked;
+
   window._alertsData.notifications.forEach((n, idx) => {
     const row = document.createElement("div");
     row.style.cssText = "display:flex;align-items:center;gap:0.4em;padding:4px 0;border-bottom:1px solid #e0d4b5;flex-wrap:wrap;";
@@ -547,36 +584,57 @@ function renderNotificationsContainer() {
     });
     unitSel.addEventListener("change", () => { window._alertsData.notifications[idx].unit = unitSel.value; setSaveButtonUnsaved(); });
 
-    // Combined timing dropdown: before/after + start/due in one control
+    // Combined timing dropdown — habit-aware
     const timingSel = document.createElement("select");
     timingSel.style.cssText = "font-size:0.85em;padding:2px 4px;";
-    const hasStart = !!document.getElementById("start_datetime")?.value;
-    const hasDue = !!document.getElementById("due_datetime")?.value;
-    const timingOptions = [];
-    if (hasStart || (!hasStart && !hasDue)) {
-      timingOptions.push({ value: "before-start", label: "before start" });
-      timingOptions.push({ value: "after-start",  label: "after start" });
+
+    if (isHabit) {
+      // Habit mode: "before end of [cycle/reset period]"
+      const habitFreqSel = document.getElementById('habitFrequency');
+      const cycleLabel = _habitPeriodLabel();
+      const timingOptions = [
+        { value: "before-cycle", label: "before end of " + cycleLabel }
+      ];
+      timingOptions.forEach((t) => {
+        const opt = document.createElement("option");
+        opt.value = t.value; opt.textContent = t.label;
+        if (n.targetType === "cycle" || !n.targetType) opt.selected = true;
+        timingSel.appendChild(opt);
+      });
+      timingSel.addEventListener("change", () => {
+        window._alertsData.notifications[idx].afterTarget = false;
+        window._alertsData.notifications[idx].targetType = "cycle";
+        setSaveButtonUnsaved();
+      });
+    } else {
+      // Normal mode: before/after start/due
+      const hasStart = !!document.getElementById("start_datetime")?.value;
+      const hasDue = !!document.getElementById("due_datetime")?.value;
+      const timingOptions = [];
+      if (hasStart || (!hasStart && !hasDue)) {
+        timingOptions.push({ value: "before-start", label: "before start" });
+        timingOptions.push({ value: "after-start",  label: "after start" });
+      }
+      if (hasDue) {
+        timingOptions.push({ value: "before-due", label: "before due" });
+        timingOptions.push({ value: "after-due",  label: "after due" });
+      }
+      const curDir = n.afterTarget ? "after" : "before";
+      const curTarget = n.targetType || (hasDue && !hasStart ? "due" : "start");
+      const curVal = curDir + "-" + curTarget;
+      timingOptions.forEach((t) => {
+        const opt = document.createElement("option");
+        opt.value = t.value; opt.textContent = t.label;
+        if (t.value === curVal) opt.selected = true;
+        timingSel.appendChild(opt);
+      });
+      timingSel.addEventListener("change", () => {
+        const parts = timingSel.value.split("-");
+        window._alertsData.notifications[idx].afterTarget = (parts[0] === "after");
+        window._alertsData.notifications[idx].targetType = parts[1];
+        setSaveButtonUnsaved();
+      });
     }
-    if (hasDue) {
-      timingOptions.push({ value: "before-due", label: "before due" });
-      timingOptions.push({ value: "after-due",  label: "after due" });
-    }
-    // Determine current selection from stored data
-    const curDir = n.afterTarget ? "after" : "before";
-    const curTarget = n.targetType || (hasDue && !hasStart ? "due" : "start");
-    const curVal = curDir + "-" + curTarget;
-    timingOptions.forEach((t) => {
-      const opt = document.createElement("option");
-      opt.value = t.value; opt.textContent = t.label;
-      if (t.value === curVal) opt.selected = true;
-      timingSel.appendChild(opt);
-    });
-    timingSel.addEventListener("change", () => {
-      const parts = timingSel.value.split("-");
-      window._alertsData.notifications[idx].afterTarget = (parts[0] === "after");
-      window._alertsData.notifications[idx].targetType = parts[1];
-      setSaveButtonUnsaved();
-    });
 
     const delBtn = document.createElement("button");
     delBtn.type = "button"; delBtn.textContent = "❌"; delBtn.style.cssText = "padding:1px 5px;";
@@ -587,24 +645,42 @@ function renderNotificationsContainer() {
     row.appendChild(unitSel);
     row.appendChild(timingSel);
 
-    // Loop until acknowledged checkbox
-    const loopLbl = document.createElement("label");
-    loopLbl.style.cssText = "display:flex;align-items:center;gap:2px;font-size:0.8em;cursor:pointer;white-space:nowrap;";
-    loopLbl.title = "Repeat notification until acknowledged";
-    const loopCb = document.createElement("input");
-    loopCb.type = "checkbox";
-    loopCb.checked = !!n.loop;
-    loopCb.addEventListener("change", () => {
-      window._alertsData.notifications[idx].loop = loopCb.checked;
-      setSaveButtonUnsaved();
-    });
-    loopLbl.appendChild(loopCb);
-    loopLbl.appendChild(document.createTextNode("🔁"));
-    row.appendChild(loopLbl);
+    // Habit mode: "Disable if complete for [period]" checkbox
+    if (isHabit) {
+      const disableLbl = document.createElement("label");
+      disableLbl.style.cssText = "display:flex;align-items:center;gap:3px;font-size:0.8em;cursor:pointer;white-space:nowrap;";
+      disableLbl.title = "Skip this notification if the habit goal is already met for the current " + _habitPeriodLabel();
+      const disableCb = document.createElement("input");
+      disableCb.type = "checkbox";
+      disableCb.checked = n.only_if_undone !== false; // default true for habits
+      disableCb.addEventListener("change", () => {
+        window._alertsData.notifications[idx].only_if_undone = disableCb.checked;
+        setSaveButtonUnsaved();
+      });
+      disableLbl.appendChild(disableCb);
+      disableLbl.appendChild(document.createTextNode("disable if done"));
+      row.appendChild(disableLbl);
+    }
 
     row.appendChild(delBtn);
     c.appendChild(row);
   });
+}
+
+/**
+ * Returns a human-readable label for the current habit's cycle period.
+ * Uses the habit frequency dropdown (DAILY/WEEKLY/MONTHLY/YEARLY).
+ */
+function _habitPeriodLabel() {
+  const habitFreqSel = document.getElementById('habitFrequency');
+  const freq = habitFreqSel ? habitFreqSel.value : 'DAILY';
+  switch (freq) {
+    case 'DAILY': return 'day';
+    case 'WEEKLY': return 'week';
+    case 'MONTHLY': return 'month';
+    case 'YEARLY': return 'year';
+    default: return 'cycle';
+  }
 }
 
 /** Returns "start", "due", or "start/due" based on which date fields the chit has */

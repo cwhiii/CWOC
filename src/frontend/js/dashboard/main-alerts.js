@@ -149,47 +149,6 @@ function _showGlobalToast(emoji, label, chitTitle, chitId, onDismiss) {
   return toast;
 }
 
-/**
- * Show a persistent looping notification toast that stays until acknowledged.
- * Acknowledging stops the loop from re-firing.
- */
-function _showGlobalLoopingToast(emoji, label, chitTitle, chitId, loopKey) {
-  const toast = document.createElement("div");
-  toast.style.cssText = "position:fixed;top:16px;right:16px;z-index:99999;background:#fff5e6;border:2px solid #8b5a2b;border-radius:8px;padding:0.75em 1em;box-shadow:0 4px 20px rgba(0,0,0,0.35);min-width:240px;max-width:320px;font-family:Lora, Georgia, serif;display:flex;flex-direction:column;gap:0.4em;";
-  const titleRow = document.createElement("div");
-  titleRow.style.cssText = "font-weight:bold;font-size:1em;";
-  titleRow.textContent = `${emoji} ${chitTitle || "Alert"} 🔁`;
-  const labelRow = document.createElement("div");
-  labelRow.style.cssText = "font-size:0.85em;opacity:0.8;";
-  labelRow.textContent = label;
-  const btnRow = document.createElement("div");
-  btnRow.style.cssText = "display:flex;gap:0.5em;margin-top:0.2em;";
-  if (chitId) {
-    const openBtn = document.createElement("button");
-    openBtn.textContent = "Open Chit";
-    openBtn.style.cssText = "flex:1;padding:3px 8px;cursor:pointer;font-weight:bold;";
-    openBtn.onclick = () => { toast.remove(); window.location.href = `/editor?id=${chitId}`; };
-    btnRow.appendChild(openBtn);
-  }
-  const ackBtn = document.createElement("button");
-  ackBtn.textContent = "✓ Acknowledge";
-  ackBtn.style.cssText = "padding:3px 8px;cursor:pointer;font-weight:bold;";
-  ackBtn.onclick = () => {
-    toast.remove();
-    if (loopKey) {
-      if (!window._globalNotifLoopAcknowledged) window._globalNotifLoopAcknowledged = {};
-      window._globalNotifLoopAcknowledged[loopKey] = true;
-    }
-  };
-  btnRow.appendChild(ackBtn);
-  toast.appendChild(titleRow);
-  toast.appendChild(labelRow);
-  toast.appendChild(btnRow);
-  document.body.appendChild(toast);
-  // No auto-dismiss for looping notifications
-  return toast;
-}
-
 // ── Bold full-screen alert modal for alarms & timers ─────────────────────────
 function _showAlertModal(opts) {
   // opts: { icon, title, subtitle, chitId, onDismiss, showSnooze, snoozeKey, triggerKey }
@@ -573,20 +532,35 @@ function _globalCheckNotifications() {
     chit.alerts.forEach((alert, alertIdx) => {
       if (alert._type !== "notification" || !alert.value || !alert.unit) return;
 
-      // "Only if undone" — skip if chit is complete (default: true)
+      // "Only if undone" — for habits, skip if goal met; for normal chits, skip if complete
       const onlyIfUndone = alert.only_if_undone !== false; // default true
-      if (onlyIfUndone && chit.status === 'Complete') return;
+      if (onlyIfUndone) {
+        if (chit.habit) {
+          const goal = chit.habit_goal || 1;
+          const success = chit.habit_success || 0;
+          if (success >= goal) return;
+        } else if (chit.status === 'Complete') {
+          return;
+        }
+      }
 
       const unitMs = { minutes: 60000, hours: 3600000, days: 86400000, weeks: 604800000 };
       const offsetMs = alert.value * (unitMs[alert.unit] || 60000);
 
-      // Determine target based on targetType field
-      const targetType = alert.targetType || (chit.due_datetime && !chit.start_datetime ? "due" : "start");
-      const targetStr = targetType === "due" ? (chit.due_datetime || chit.start_datetime) : (chit.start_datetime || chit.due_datetime);
-      if (!targetStr) return;
+      let targetDate = null;
 
-      const targetDate = new Date(targetStr);
-      if (isNaN(targetDate.getTime())) return;
+      if (alert.targetType === "cycle" && chit.habit) {
+        // Calculate end of current habit cycle period
+        targetDate = _globalGetHabitCycleEnd(chit);
+      } else {
+        // Determine target based on targetType field
+        const targetType = alert.targetType || (chit.due_datetime && !chit.start_datetime ? "due" : "start");
+        const targetStr = targetType === "due" ? (chit.due_datetime || chit.start_datetime) : (chit.start_datetime || chit.due_datetime);
+        if (!targetStr) return;
+        targetDate = new Date(targetStr);
+      }
+
+      if (!targetDate || isNaN(targetDate.getTime())) return;
 
       // before = target - offset, after = target + offset
       const fireAt = alert.afterTarget
@@ -598,33 +572,44 @@ function _globalCheckNotifications() {
       if (diff >= 0 && diff < 60000) {
         const key = `${chit.id}-notif-${alertIdx}-${fireAt.toISOString()}`;
         if (_globalFiredNotifications.has(key)) return;
-        if (!alert.loop) _globalFiredNotifications.add(key);
+        _globalFiredNotifications.add(key);
 
         const dir = alert.afterTarget ? "after" : "before";
-        const label = `${alert.value} ${alert.unit} ${dir} ${targetType}`;
+        const label = alert.targetType === "cycle"
+          ? `${alert.value} ${alert.unit} before end of cycle`
+          : `${alert.value} ${alert.unit} ${dir} ${alert.targetType || "start"}`;
         const toastTitle = alert.message ? `${chit.title} — ${alert.message}` : chit.title;
         _showGlobalToast("📢", label, toastTitle, chit.id, null);
         _sendBrowserNotification(`📢 Reminder: ${toastTitle}`, label, chit.id);
       }
-
-      // Loop support: re-fire every 60 seconds if loop is enabled and not acknowledged
-      if (alert.loop && diff >= 60000) {
-        const loopKey = `${chit.id}-notif-loop-${alertIdx}`;
-        if (!window._globalNotifLoopAcknowledged) window._globalNotifLoopAcknowledged = {};
-        if (window._globalNotifLoopAcknowledged[loopKey]) return;
-        if (!window._globalNotifLoopLastFire) window._globalNotifLoopLastFire = {};
-        const lastFire = window._globalNotifLoopLastFire[loopKey];
-        if (!lastFire || (now.getTime() - lastFire) >= 60000) {
-          window._globalNotifLoopLastFire[loopKey] = now.getTime();
-          const dir = alert.afterTarget ? "after" : "before";
-          const label = `${alert.value} ${alert.unit} ${dir} ${targetType} 🔁`;
-          const toastTitle = alert.message ? `${chit.title} — ${alert.message}` : chit.title;
-          _showGlobalLoopingToast("📢", label, toastTitle, chit.id, loopKey);
-          _sendBrowserNotification(`📢 Reminder (repeating): ${toastTitle}`, label, chit.id);
-        }
-      }
     });
   });
+}
+
+/**
+ * Calculate the end-of-cycle datetime for a habit chit (dashboard version).
+ * Uses the chit's recurrence_rule.freq to determine the period.
+ */
+function _globalGetHabitCycleEnd(chit) {
+  const freq = (chit.recurrence_rule && chit.recurrence_rule.freq) || 'DAILY';
+  const now = new Date();
+  switch (freq) {
+    case 'DAILY':
+      return new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0);
+    case 'WEEKLY': {
+      const wsd = (window._cwocSettings && window._cwocSettings.week_start_day !== undefined)
+        ? parseInt(window._cwocSettings.week_start_day) || 0 : 0;
+      const dayOfWeek = now.getDay();
+      const daysUntilEnd = (7 - dayOfWeek + wsd) % 7 || 7;
+      return new Date(now.getFullYear(), now.getMonth(), now.getDate() + daysUntilEnd, 0, 0, 0);
+    }
+    case 'MONTHLY':
+      return new Date(now.getFullYear(), now.getMonth() + 1, 1, 0, 0, 0);
+    case 'YEARLY':
+      return new Date(now.getFullYear() + 1, 0, 1, 0, 0, 0);
+    default:
+      return null;
+  }
 }
 
 function _getSnoozeMs() {

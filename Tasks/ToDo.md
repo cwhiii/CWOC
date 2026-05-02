@@ -11,6 +11,15 @@
 
 ## Top Priorities
 
+
+fix habit notifications:
+
+
+
+The how it charts are pre-rendering the text. So they're grainy and terrible. Use actual text instead of rendered text from an image for those charts.
+
+
+
 ---
 
 ## Known Bugs
@@ -29,7 +38,7 @@
 - `[ ]` Use consistent system for modals (same styling, same in/out function)
 - `[ ]` Note-to-markdown export option, per chit or all
 - `[ ]` Full-chit-to-markdown export, per chit or all
-
+- on a notification, had a bump a [unit options] . It will push the start times or due time out by whatever the selected unit is. Tomorrow to next week to next month.
 ---
 
 ## Medium

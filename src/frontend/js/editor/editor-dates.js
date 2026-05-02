@@ -455,6 +455,10 @@ function onHabitToggle() {
     var noneRow = document.getElementById('dateModeNoneRow');
     if (noneRow) noneRow.style.display = 'none';
 
+    // Hide the Due row — habits use Start/End
+    var dueRow = document.getElementById('dueRow');
+    if (dueRow) dueRow.style.display = 'none';
+
     // Hide the Due Complete checkbox — habits manage completion via goal
     var dueCompleteLabel = document.getElementById('dueCompleteLabel');
     if (dueCompleteLabel) dueCompleteLabel.style.display = 'none';
@@ -486,6 +490,12 @@ function onHabitToggle() {
     if (controlsRow) controlsRow.style.display = '';
     if (calendarRow) calendarRow.style.display = '';
 
+    // Show perpetual row (only for habits)
+    var perpetualRow = document.getElementById('perpetualRow');
+    if (perpetualRow) perpetualRow.style.display = '';
+
+    // Header counter will be built by _updateHabitProgressDisplay
+
     // Show reset period and hide overall rows
     var resetRow = document.getElementById('habitResetRow');
     var habitFreqSel = document.getElementById('habitFrequency');
@@ -500,6 +510,20 @@ function onHabitToggle() {
 
     // Update progress display
     _updateHabitProgressDisplay();
+
+    // Expand the Settings section in the Habits zone
+    var habitSettingsBody = document.getElementById('habitSettingsBody');
+    if (habitSettingsBody) habitSettingsBody.style.display = '';
+
+    // Auto-expand Dates zone when habit is toggled on
+    var datesSection = document.getElementById('datesSection');
+    var datesContent = document.getElementById('datesContent');
+    if (datesSection && datesContent) {
+      datesContent.style.display = '';
+      datesSection.classList.remove('collapsed');
+      var dIcon = datesSection.querySelector('.zone-toggle-icon');
+      if (dIcon) dIcon.textContent = '🔼';
+    }
   } else {
     // Unlock all-day checkbox
     if (allDayCb) {
@@ -526,6 +550,10 @@ function onHabitToggle() {
     var noneRow = document.getElementById('dateModeNoneRow');
     if (noneRow) noneRow.style.display = '';
 
+    // Show the Due row again
+    var dueRow = document.getElementById('dueRow');
+    if (dueRow) dueRow.style.display = '';
+
     // Show the repeat row again (if a date mode is active and repeat is on)
     var activeMode = document.querySelector('input[name="dateMode"]:checked');
     if (repeatRow && activeMode && activeMode.value !== 'none') {
@@ -535,6 +563,10 @@ function onHabitToggle() {
     // Hide habit controls row and calendar row
     if (controlsRow) controlsRow.style.display = 'none';
     if (calendarRow) calendarRow.style.display = 'none';
+
+    // Hide perpetual row
+    var perpetualRow = document.getElementById('perpetualRow');
+    if (perpetualRow) perpetualRow.style.display = 'none';
 
     // Hide reset period and hide overall rows
     var resetRow = document.getElementById('habitResetRow');
@@ -549,6 +581,11 @@ function onHabitToggle() {
   // Toggle Habit Log zone visibility
   if (typeof _toggleHabitLogZone === 'function') {
     _toggleHabitLogZone(isHabit);
+  }
+
+  // Re-render notifications so timing dropdown reflects habit/non-habit mode
+  if (typeof renderNotificationsContainer === 'function') {
+    renderNotificationsContainer();
   }
 
   setSaveButtonUnsaved();
@@ -569,6 +606,10 @@ function onHabitFrequencyChange() {
   // Hide reset row for DAILY habits
   var resetRow = document.getElementById('habitResetRow');
   if (resetRow) resetRow.style.display = (habitFreqSel && habitFreqSel.value === 'DAILY') ? 'none' : '';
+  // Re-render notifications so "before end of [period]" label updates
+  if (typeof renderNotificationsContainer === 'function') {
+    renderNotificationsContainer();
+  }
   setSaveButtonUnsaved();
 }
 
@@ -616,10 +657,42 @@ function _updateResetUnitOptions() {
 function _updateHabitProgressDisplay() {
   var goalEl = document.getElementById('habitGoal');
   var display = document.getElementById('habitProgressDisplay');
-  if (!display) return;
+  var logHeaderCounter = document.getElementById('habitLogHeaderCounter');
   var goal = goalEl ? (parseInt(goalEl.value) || 1) : 1;
   var success = window._currentHabitSuccess || 0;
-  display.textContent = success + ' / ' + goal;
+
+  // Update the simple text display in the controls row
+  if (display) display.textContent = success + ' / ' + goal;
+
+  // Shared callback for increment/decrement
+  function _onInc(newVal) {
+    window._currentHabitSuccess = newVal;
+    if (display) display.textContent = newVal + ' / ' + goal;
+    // Rebuild all counters to sync
+    _updateHabitProgressDisplay();
+    setSaveButtonUnsaved();
+  }
+  function _onDec(newVal) {
+    window._currentHabitSuccess = newVal;
+    if (display) display.textContent = newVal + ' / ' + goal;
+    _updateHabitProgressDisplay();
+    setSaveButtonUnsaved();
+  }
+
+  var counterOpts = {
+    success: success,
+    goal: goal,
+    freqLabel: '',
+    disabled: false,
+    onIncrement: _onInc,
+    onDecrement: _onDec
+  };
+
+  // Build counter in Habit Log zone header
+  if (logHeaderCounter && typeof _buildHabitCounter === 'function') {
+    logHeaderCounter.innerHTML = '';
+    logHeaderCounter.appendChild(_buildHabitCounter(counterOpts));
+  }
 }
 
 /** Handle goal input change — clamp to min 1 and update progress display */
@@ -678,6 +751,25 @@ function _updateAllDayBtnState() {
 
 // ── Perpetual toggle ─────────────────────────────────────────────────────
 
+// ── Habit reset toggle ───────────────────────────────────────────────────
+
+/**
+ * Handle the Reset checkbox toggle.
+ * When unchecked: hide the number and unit inputs.
+ * When checked: show them.
+ */
+function onHabitResetToggle() {
+  var cb = document.getElementById('habitResetEnabled');
+  var valEl = document.getElementById('habitResetValue');
+  var unitEl = document.getElementById('habitResetUnit');
+  var isOn = cb && cb.checked;
+  if (valEl) valEl.style.display = isOn ? '' : 'none';
+  if (unitEl) unitEl.style.display = isOn ? '' : 'none';
+  setSaveButtonUnsaved();
+}
+
+// ── Perpetual toggle ─────────────────────────────────────────────────────
+
 /**
  * Handle the Perpetual checkbox toggle.
  * When checked: set start date to today, clear end date, disable end date input,
@@ -692,6 +784,7 @@ function onPerpetualToggle() {
   var startEndRow = document.getElementById('startEndRow');
   var dueRow = document.getElementById('dueRow');
   var dateModeNoneRow = document.getElementById('dateModeNoneRow');
+  var descEl = document.getElementById('perpetualDescription');
 
   if (isOn) {
     // Switch to Start/End mode silently
@@ -719,12 +812,43 @@ function onPerpetualToggle() {
     if (startEndRow) startEndRow.style.display = 'none';
     if (dueRow) dueRow.style.display = 'none';
     if (dateModeNoneRow) dateModeNoneRow.style.display = 'none';
+
+    // Update description with start date
+    if (descEl) {
+      var startVal = startDateInput ? startDateInput.value : '';
+      var dateFmt = _fmtPerpetualDate(startVal);
+      descEl.textContent = dateFmt
+        ? 'Starts now, continues forever. (Started ' + dateFmt + '.)'
+        : 'Starts now, continues forever';
+    }
   } else {
     // Show date rows again
     if (startEndRow) startEndRow.style.display = '';
     if (dueRow) dueRow.style.display = '';
     if (dateModeNoneRow) dateModeNoneRow.style.display = '';
+
+    // Reset description
+    if (descEl) descEl.textContent = 'Starts now, continues forever';
   }
 
   setSaveButtonUnsaved();
+}
+
+/**
+ * Format a date string for the perpetual description.
+ * Handles "YYYY-Mon-DD" format (e.g. "2026-May-02") → "May 2, 2026".
+ */
+function _fmtPerpetualDate(raw) {
+  if (!raw) return '';
+  var parts = raw.split('-');
+  if (parts.length === 3) {
+    var monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    var monthIdx = monthNames.indexOf(parts[1]);
+    if (monthIdx !== -1) {
+      var fullMonths = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+      return fullMonths[monthIdx] + ' ' + parseInt(parts[2], 10) + ', ' + parts[0];
+    }
+    return raw;
+  }
+  return raw;
 }

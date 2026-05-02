@@ -851,6 +851,13 @@ li.cwoc-dragging {
     background: rgba(139, 90, 43, 0.3);
 }
 
+/* Shared counter widget: [−] text [+] */
+.habit-counter-widget {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
 /* ── Habit status badge ──────────────────────────────────────────────── */
 .habit-status-badge {
     display: inline-block;
@@ -877,6 +884,20 @@ li.cwoc-dragging {
     color: #2e7d32;
     white-space: nowrap;
     flex-shrink: 0;
+}
+
+.habit-resting-line {
+    font-size: 0.8em;
+    font-weight: normal;
+    color: #6b4e31;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.habit-card.habit-resting .habit-resting-line {
+    background: #fdf6e3;
+    padding: 1px 6px;
+    border-radius: 4px;
 }
 
 /* ── Habit card grid: left (title+metrics) + right (note) ─────────────── */

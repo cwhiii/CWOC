@@ -3743,6 +3743,93 @@ async function _persistHabitRollover(chit) {
   }
 }
 
+/**
+ * Build a habit counter widget: [−] progress [+]
+ * Shared between the Habits View and the Chit Editor.
+ *
+ * @param {object} opts
+ *   - success: current habit_success value
+ *   - goal: habit_goal value
+ *   - freqLabel: optional frequency label (e.g., " each Week")
+ *   - disabled: whether buttons should be disabled (reset active)
+ *   - onIncrement: function(newSuccess) called when + is clicked
+ *   - onDecrement: function(newSuccess) called when − is clicked
+ * @returns {HTMLElement} container with − button, progress text, + button
+ */
+function _buildHabitCounter(opts) {
+  var success = opts.success || 0;
+  var goal = opts.goal || 1;
+  var freqLabel = opts.freqLabel || '';
+  var disabled = opts.disabled || false;
+
+  var wrap = document.createElement('span');
+  wrap.className = 'habit-counter-widget';
+
+  // − button (left)
+  var minusBtn = document.createElement('button');
+  minusBtn.type = 'button';
+  minusBtn.className = 'habit-counter-btn';
+  minusBtn.textContent = '−';
+  minusBtn.title = 'Decrement';
+  minusBtn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    e.preventDefault();
+    var cur = parseInt(wrap.dataset.success) || 0;
+    if (cur <= 0) return;
+    var newVal = cur - 1;
+    wrap.dataset.success = newVal;
+    _updateCounterDisplay(wrap, newVal, parseInt(wrap.dataset.goal) || 1, freqLabel);
+    if (opts.onDecrement) opts.onDecrement(newVal);
+  });
+  wrap.appendChild(minusBtn);
+
+  // Progress text
+  var progressSpan = document.createElement('span');
+  progressSpan.className = 'habit-progress';
+  progressSpan.textContent = success + ' / ' + goal + freqLabel;
+  progressSpan.title = 'Progress: ' + success + ' of ' + goal + ' this period';
+  wrap.appendChild(progressSpan);
+
+  // + button (right)
+  var plusBtn = document.createElement('button');
+  plusBtn.type = 'button';
+  plusBtn.className = 'habit-counter-btn';
+  plusBtn.textContent = '+';
+  plusBtn.title = disabled ? 'Reset period active — wait for cooldown' : 'Increment';
+  if (disabled) {
+    plusBtn.disabled = true;
+    plusBtn.style.opacity = '0.4';
+    plusBtn.style.cursor = 'not-allowed';
+  }
+  plusBtn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    e.preventDefault();
+    var cur = parseInt(wrap.dataset.success) || 0;
+    var g = parseInt(wrap.dataset.goal) || 1;
+    if (cur >= g) return;
+    var newVal = cur + 1;
+    wrap.dataset.success = newVal;
+    _updateCounterDisplay(wrap, newVal, g, freqLabel);
+    if (opts.onIncrement) opts.onIncrement(newVal);
+  });
+  wrap.appendChild(plusBtn);
+
+  // Store state on the element for updates
+  wrap.dataset.success = success;
+  wrap.dataset.goal = goal;
+
+  return wrap;
+}
+
+/** Update the progress text inside a habit counter widget */
+function _updateCounterDisplay(wrap, success, goal, freqLabel) {
+  var span = wrap.querySelector('.habit-progress');
+  if (span) {
+    span.textContent = success + ' / ' + goal + (freqLabel || '');
+    span.title = 'Progress: ' + success + ' of ' + goal + ' this period';
+  }
+}
+
 // Auto-init on page load
 if (typeof document !== 'undefined') {
   if (document.readyState === 'loading') {

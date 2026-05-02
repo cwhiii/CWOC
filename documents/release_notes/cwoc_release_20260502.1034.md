@@ -1,0 +1,1 @@
+Added reverse-color "today" highlighting across all calendar views — day headers, day columns, month cells, year view cells, and itinerary day separators now use a dark-on-light inverted color scheme to make the current date immediately visible.

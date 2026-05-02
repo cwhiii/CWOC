@@ -141,16 +141,18 @@ async function buildChitObject() {
   chit.show_on_calendar = showOnCalCb ? showOnCalCb.checked : true;
 
   // Habit reset period — stored as "N:UNIT" (e.g., "3:DAILY") or null
+  var resetEnabledCb = document.getElementById('habitResetEnabled');
   var resetValEl = document.getElementById('habitResetValue');
   var resetUnitEl = document.getElementById('habitResetUnit');
+  var resetEnabled = resetEnabledCb ? resetEnabledCb.checked : false;
   var resetVal = resetValEl ? (parseInt(resetValEl.value) || 1) : 1;
   var resetUnit = resetUnitEl ? resetUnitEl.value : '';
-  chit.habit_reset_period = resetUnit ? (resetVal + ':' + resetUnit) : null;
+  chit.habit_reset_period = (resetEnabled && resetUnit) ? (resetVal + ':' + resetUnit) : null;
   chit.habit_last_action_date = window._currentHabitLastActionDate || null;
 
-  // Habit hide overall %
-  var hideOverallCb = document.getElementById('habitHideOverall');
-  chit.habit_hide_overall = hideOverallCb ? hideOverallCb.checked : false;
+  // Habit hide overall % (checkbox is "Show", so unchecked = hide)
+  var showOverallCb = document.getElementById('habitHideOverall');
+  chit.habit_hide_overall = showOverallCb ? !showOverallCb.checked : false;
 
   // Perpetual
   var perpetualCb = document.getElementById('perpetualEnabled');

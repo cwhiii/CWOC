@@ -728,6 +728,78 @@ function _isResetPeriodActive(chit) {
 }
 
 /**
+ * Get the date when the reset period expires as a formatted string.
+ * Returns null if no reset period or no last action date.
+ */
+function _getResetEndDate(chit) {
+  if (!chit.habit_reset_period || !chit.habit_last_action_date) return null;
+  var lastAction = new Date(chit.habit_last_action_date + 'T00:00:00');
+  if (isNaN(lastAction.getTime())) return null;
+
+  var resetStr = chit.habit_reset_period;
+  var resetNum = 1;
+  var resetUnit = resetStr;
+  if (resetStr.indexOf(':') !== -1) {
+    var parts = resetStr.split(':');
+    resetNum = parseInt(parts[0]) || 1;
+    resetUnit = parts[1];
+  }
+
+  var resetEnd = new Date(lastAction);
+  if (resetUnit === 'DAILY') resetEnd.setDate(resetEnd.getDate() + resetNum);
+  else if (resetUnit === 'WEEKLY') resetEnd.setDate(resetEnd.getDate() + resetNum * 7);
+  else if (resetUnit === 'MONTHLY') resetEnd.setMonth(resetEnd.getMonth() + resetNum);
+  else return null;
+
+  var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return months[resetEnd.getMonth()] + ' ' + resetEnd.getDate();
+}
+
+/**
+ * Calculate urgency score for a habit — lower = more urgent (needs action sooner).
+ * Returns the number of days until the next action is needed.
+ *
+ * Logic:
+ * - If the habit has remaining completions and a reset period:
+ *   days until cycle ends / remaining completions (spread evenly)
+ * - If no reset period: days until cycle ends / remaining completions
+ * - Daily habits with work to do: 0 (most urgent)
+ *
+ * @param {object} h — habit data object with chit, goal, success
+ * @returns {number} days until next action needed (lower = more urgent)
+ */
+function _habitUrgencyScore(h) {
+  var chit = h.chit;
+  var remaining = h.goal - h.success;
+  if (remaining <= 0) return 9999; // complete — least urgent
+
+  var rule = chit.recurrence_rule;
+  var freq = (rule && rule.freq) ? rule.freq : 'DAILY';
+
+  // Calculate days left in the current cycle
+  var today = new Date();
+  today.setHours(0, 0, 0, 0);
+  var currentPeriod = (typeof getCurrentPeriodDate === 'function') ? getCurrentPeriodDate(chit) : null;
+  var daysInCycle = 1;
+  if (freq === 'DAILY') daysInCycle = 1;
+  else if (freq === 'WEEKLY') daysInCycle = 7;
+  else if (freq === 'MONTHLY') daysInCycle = 30;
+  else if (freq === 'YEARLY') daysInCycle = 365;
+
+  var daysLeft = daysInCycle;
+  if (currentPeriod) {
+    var periodStart = new Date(currentPeriod + 'T00:00:00');
+    var elapsed = Math.floor((today - periodStart) / 86400000);
+    daysLeft = Math.max(1, daysInCycle - elapsed);
+  }
+
+  // Days per remaining completion — how often you need to act
+  var daysPerAction = daysLeft / remaining;
+
+  return daysPerAction;
+}
+
+/**
  * Get today's date as an ISO string (YYYY-MM-DD).
  */
 function _getTodayISO() {
@@ -857,20 +929,19 @@ function _renderHabitCards(container, habitData, windowDays) {
   habitData.forEach(function(h) {
     if (h.isCompleted) {
       completed.push(h);
-    } else if (h.chit.habit_reset_period && _isResetPeriodActive(h.chit) && h.success < h.goal) {
+    } else if (h.chit.habit_reset_period && _isResetPeriodActive(h.chit) && h.success > 0 && h.success < h.goal) {
       outOfMind.push(h);
     } else {
       onDeck.push(h);
     }
   });
 
-  // Sort on-deck: closest to missing goal first
+  // Sort on-deck: most time-urgent first.
+  // "When do I need to do this next?" — soonest deadline at the top.
+  // For habits with a reset: next action = when reset expires
+  // For habits without reset: next action = time left in cycle / remaining completions
   onDeck.sort(function(a, b) {
-    var remainA = a.goal - a.success;
-    var remainB = b.goal - b.success;
-    var pctA = remainA / (a.goal || 1);
-    var pctB = remainB / (b.goal || 1);
-    return pctA - pctB;
+    return _habitUrgencyScore(a) - _habitUrgencyScore(b);
   });
 
   var sorted = onDeck.concat(outOfMind).concat(completed);
@@ -935,7 +1006,7 @@ function _renderHabitCards(container, habitData, windowDays) {
       checkbox.type = 'checkbox';
       checkbox.checked = h.isCompleted;
       // Disable if reset period is active
-      var _resetActive = _isResetPeriodActive(chit);
+      var _resetActive = (h.success > 0) && _isResetPeriodActive(chit);
       if (_resetActive && !h.isCompleted) {
         checkbox.disabled = true;
         checkbox.title = 'Reset period active — wait for cooldown';
@@ -1012,8 +1083,17 @@ function _renderHabitCards(container, habitData, windowDays) {
       }
       var completeLine = document.createElement('span');
       completeLine.className = 'habit-complete-line';
-      completeLine.textContent = ' — ✅ Habit complete for this cycle.' + (_nextPeriod ? ' (Next cycle starts ' + _nextPeriod + '.)' : '');
+      completeLine.textContent = '✅ Complete for this cycle.' + (_nextPeriod ? ' (Next cycle starts ' + _nextPeriod + '.)' : '');
       header.appendChild(completeLine);
+    }
+
+    // Resting label for Out of Mind habits (reset period active, not yet complete)
+    if (isResting) {
+      var resetEndDate = _getResetEndDate(chit);
+      var restingLine = document.createElement('span');
+      restingLine.className = 'habit-resting-line';
+      restingLine.textContent = '☐ Too soon to complete again. Resets on ' + (resetEndDate || '—') + '.';
+      header.appendChild(restingLine);
     }
 
     card.appendChild(header);
@@ -1033,15 +1113,20 @@ function _renderHabitCards(container, habitData, windowDays) {
     progressRow.className = 'habit-metric-value';
     var progressSpan = document.createElement('span');
     progressSpan.className = 'habit-progress';
-    progressSpan.textContent = h.success + ' / ' + h.goal;
+    var _freqLabel = '';
+    var _rule = chit.recurrence_rule;
+    if (_rule && _rule.freq) {
+      if (_rule.freq === 'DAILY') _freqLabel = ' each Day';
+      else if (_rule.freq === 'WEEKLY') _freqLabel = ' each Week';
+      else if (_rule.freq === 'MONTHLY') _freqLabel = ' each Month';
+      else if (_rule.freq === 'YEARLY') _freqLabel = ' each Year';
+    }
+    progressSpan.textContent = h.success + ' / ' + h.goal + _freqLabel;
     progressSpan.title = 'Progress: ' + h.success + ' of ' + h.goal + ' this period';
-    progressRow.appendChild(progressSpan);
 
-    // Counter buttons inside the progress box
+    // Counter buttons: [−] progress [+]
     if (h.goal > 1) {
-      var counterWrap = document.createElement('span');
-      counterWrap.className = 'habit-counter';
-      var _resetActiveCounter = _isResetPeriodActive(chit);
+      var _resetActiveCounter = (h.success > 0) && _isResetPeriodActive(chit);
 
       var minusBtn = document.createElement('button');
       minusBtn.type = 'button';
@@ -1061,7 +1146,8 @@ function _renderHabitCards(container, habitData, windowDays) {
         _optimisticHabitCardUpdate(card, chit, newSuccess, h.goal);
         _persistHabitUpdate(JSON.parse(JSON.stringify(chit)));
       });
-      counterWrap.appendChild(minusBtn);
+      progressRow.appendChild(minusBtn);
+      progressRow.appendChild(progressSpan);
 
       var plusBtn = document.createElement('button');
       plusBtn.type = 'button';
@@ -1076,8 +1162,7 @@ function _renderHabitCards(container, habitData, windowDays) {
       plusBtn.addEventListener('click', function(e) {
         e.stopPropagation();
         e.preventDefault();
-        // Re-check reset period at click time
-        if (_isResetPeriodActive(chit)) return;
+        if ((chit.habit_success || 0) > 0 && _isResetPeriodActive(chit)) return;
         var curSuccess = chit.habit_success || 0;
         var goal = chit.habit_goal || 1;
         if (curSuccess >= goal) return;
@@ -1086,14 +1171,13 @@ function _renderHabitCards(container, habitData, windowDays) {
         if (newSuccess >= goal) {
           chit.status = 'Complete';
         }
-        // Set last action date
         chit.habit_last_action_date = _getTodayISO();
         _optimisticHabitCardUpdate(card, chit, newSuccess, h.goal);
         _persistHabitUpdate(JSON.parse(JSON.stringify(chit)));
       });
-      counterWrap.appendChild(plusBtn);
-
-      progressRow.appendChild(counterWrap);
+      progressRow.appendChild(plusBtn);
+    } else {
+      progressRow.appendChild(progressSpan);
     }
     progressBox.appendChild(progressRow);
     metrics.appendChild(progressBox);
@@ -1249,7 +1333,15 @@ function _optimisticHabitCardUpdate(card, chit, newSuccess, goal) {
   // Update progress text
   var progressSpan = card.querySelector('.habit-progress');
   if (progressSpan) {
-    progressSpan.textContent = newSuccess + ' / ' + goal;
+    var _oFreqLabel = '';
+    var _oRule = chit.recurrence_rule;
+    if (_oRule && _oRule.freq) {
+      if (_oRule.freq === 'DAILY') _oFreqLabel = ' each Day';
+      else if (_oRule.freq === 'WEEKLY') _oFreqLabel = ' each Week';
+      else if (_oRule.freq === 'MONTHLY') _oFreqLabel = ' each Month';
+      else if (_oRule.freq === 'YEARLY') _oFreqLabel = ' each Year';
+    }
+    progressSpan.textContent = newSuccess + ' / ' + goal + _oFreqLabel;
     progressSpan.title = 'Progress: ' + newSuccess + ' of ' + goal + ' this period';
   }
 
@@ -1366,7 +1458,7 @@ function _updateStatusBadge(card, status) {
       existing.className = 'habit-complete-line';
       header.appendChild(existing);
     }
-    existing.textContent = ' — ✅ Habit complete for this cycle.';
+    existing.textContent = '✅ Complete for this cycle.';
   } else if (existing) {
     existing.remove();
   }

@@ -4291,28 +4291,62 @@ input.location {
     }
 }
 
-/* ── Habit Log Zone ────────────────────────────────────────────────────────── */
+/* ── Habits Zone ───────────────────────────────────────────────────────────── */
 
 .habit-log-period-list {
-    max-height: 300px;
+    max-height: 400px;
     overflow-y: auto;
     margin-bottom: 10px;
 }
 
+.habit-log-two-col {
+    column-count: 2;
+    column-gap: 16px;
+    column-rule: 1px solid var(--aged-brown-light);
+}
+
+.habit-log-two-col .habit-log-period-row {
+    break-inside: avoid;
+    width: 100%;
+}
+
+.habit-log-sub-header {
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.85em;
+    font-weight: bold;
+    color: var(--aged-brown-dark);
+    padding: 6px 8px 4px;
+    cursor: pointer;
+    user-select: none;
+    margin-bottom: 4px;
+}
+
+.habit-log-sub-header:hover {
+    background: rgba(139, 90, 43, 0.06);
+}
+
+.habit-log-toggle {
+    display: inline-block;
+    width: 1em;
+    font-size: 0.8em;
+    color: var(--aged-brown-medium);
+}
+
+@media (max-width: 480px) {
+    .habit-log-two-col {
+        column-count: 1;
+    }
+}
+
 .habit-log-period-row {
     display: grid;
-    grid-template-columns: 1.5em auto 3em auto;
+    grid-template-columns: 1.5em auto auto;
     align-items: center;
     gap: 6px;
     padding: 5px 8px;
-    border-bottom: 1px dotted var(--aged-brown-light);
     font-size: 0.9em;
     color: var(--text-color);
     width: fit-content;
-}
-
-.habit-log-period-row:last-child {
-    border-bottom: none;
 }
 
 .habit-log-period-row.habit-log-broken-off {
@@ -4370,6 +4404,46 @@ input.location {
     white-space: nowrap;
 }
 
+.habit-log-counter-cell {
+    display: inline-flex;
+    align-items: center;
+}
+
+/* Consistent styling for habit zone dropdowns and number inputs */
+.habit-zone-select {
+    width: auto;
+    min-width: 80px;
+    height: 30px;
+    padding: 4px 6px;
+    font-size: 0.85em;
+    font-family: 'Lora', Georgia, serif;
+    border: 1px solid var(--border-color);
+    border-radius: 3px;
+    background: var(--parchment-light, #fff8e1);
+    color: var(--text-color);
+    box-sizing: border-box;
+}
+
+.habit-zone-input {
+    width: 50px;
+    height: 30px;
+    padding: 4px 6px;
+    font-size: 0.85em;
+    font-family: 'Lora', Georgia, serif;
+    border: 1px solid var(--border-color);
+    border-radius: 3px;
+    background: var(--parchment-light, #fff8e1);
+    color: var(--text-color);
+    box-sizing: border-box;
+}
+
+/* Normalize all inputs in the dates zone to the same height */
+#datesContent .date-input,
+#datesContent .time-input {
+    height: 30px;
+    box-sizing: border-box;
+}
+
 .habit-log-empty {
     padding: 12px;
     text-align: center;
@@ -4392,6 +4466,43 @@ input.location {
 .habit-log-inline-input:focus {
     outline: none;
     box-shadow: 0 0 0 2px rgba(0, 128, 128, 0.25);
+}
+
+/* Shared counter widget: [−] text [+] */
+.habit-counter-widget {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.habit-counter-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.6em;
+    height: 1.6em;
+    border: 1px solid #c4a882;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.4);
+    cursor: pointer;
+    font-size: 0.95em;
+    font-family: 'Lora', Georgia, serif;
+    font-weight: bold;
+    color: #4a2c2a;
+    padding: 0;
+    line-height: 1;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.habit-counter-btn:hover {
+    background: rgba(139, 90, 43, 0.18);
+    border-color: #8b5a2b;
+}
+
+.habit-progress {
+    font-weight: bold;
+    color: var(--aged-brown-dark);
+    white-space: nowrap;
 }
 
 /* Charts grid — 2-column layout */

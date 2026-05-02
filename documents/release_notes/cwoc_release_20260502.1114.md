@@ -1,0 +1,1 @@
+Fixed syntax errors in editor-people.js (stray box-drawing character after function closing brace) and editor-dates.js (orphaned `setSaveButtonUnsaved()` and extra `}` at end of file) that were preventing the entire chit editor from loading.

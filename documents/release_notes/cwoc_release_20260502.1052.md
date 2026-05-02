@@ -1,0 +1,1 @@
+Added M hotkey for switching view modes across tabs. Opens a modal with sub-key options: Calendar periods (I/D/W/K/X/M/Y), Tasks modes (T/H/A), Alarms modes (L/I), and Projects modes (L/K). Updated reference overlay and help page.

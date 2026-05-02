@@ -27,6 +27,7 @@ var _peopleApiAvailable = true;
 var _peopleChipData = []; // Array of {display_name, id, color, image_url}
 var _allContactsCache = []; // Full contacts list for the tree
 var _peopleGroupsExpanded = {}; // Track which letter groups are expanded
+var _currentPeopleFilter = ''; // Current search filter (preserved across re-renders)
 
 // ── Sharing state (Task 5.1) ────────────────────────────────────────────────
 
@@ -52,14 +53,25 @@ function _initPeopleAutocomplete() {
   if (!input) return;
 
   input.addEventListener('input', function () {
-    _filterPeopleTree(input.value.trim().toLowerCase());
+    _currentPeopleFilter = input.value.trim().toLowerCase();
+    _renderPeopleTree();
   });
 
   input.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') {
       input.value = '';
-      _filterPeopleTree('');
+      _currentPeopleFilter = '';
+      _renderPeopleTree();
       input.blur();
+    }
+    // Enter adds the typed name as a free-text person (if not empty)
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      var name = input.value.trim();
+      if (!name) return;
+      _addPeopleChip({ display_name: name, id: null, color: null, image_url: null });
+      input.value = '';
+      _currentPeopleFilter = '';
     }
   });
 
@@ -76,7 +88,9 @@ function _initPeopleAutocomplete() {
 function _clearPeopleSearch(event) {
   if (event) event.stopPropagation();
   var input = document.getElementById('peopleSearchInput');
-  if (input) { input.value = ''; _filterPeopleTree(''); }
+  if (input) { input.value = ''; }
+  _currentPeopleFilter = '';
+  _renderPeopleTree();
 }
 
 // ── Contact loading ──────────────────────────────────────────────────────────
@@ -84,7 +98,11 @@ function _clearPeopleSearch(event) {
 async function _loadAllContactsForTree() {
   try {
     var resp = await fetch('/api/contacts');
-    if (!resp.ok) return;
+    if (!resp.ok) {
+      console.error('[People] Contacts API returned status:', resp.status);
+      _renderPeopleTree();
+      return;
+    }
     _allContactsCache = await resp.json();
     _renderPeopleTree();
     // Re-render chips to pick up colors/images if chips were loaded before cache
@@ -105,6 +123,7 @@ async function _loadAllContactsForTree() {
     }
   } catch (e) {
     console.error('[People] Failed to load contacts for tree:', e);
+    _renderPeopleTree();
   }
 }
 
@@ -127,6 +146,7 @@ async function _loadAllUsersForTree() {
       if (!resp.ok) {
         console.error('[People] Failed to load system users:', resp.status);
         _allUsersCache = [];
+        _renderPeopleTree();
         return;
       }
       _allUsersCache = await resp.json();
@@ -135,6 +155,7 @@ async function _loadAllUsersForTree() {
   } catch (e) {
     console.error('[People] Error loading system users:', e);
     _allUsersCache = [];
+    _renderPeopleTree();
   }
 }
 
@@ -144,6 +165,9 @@ function _renderPeopleTree(filter) {
   var container = document.getElementById('peopleTreeContainer');
   if (!container) return;
   container.innerHTML = '';
+
+  // Use the stored filter if none is passed explicitly
+  if (filter === undefined) filter = _currentPeopleFilter || undefined;
 
   // Get current user to exclude from system user list
   var currentUser = (typeof getCurrentUser === 'function') ? getCurrentUser() : null;
@@ -256,7 +280,10 @@ function _renderPeopleTree(filter) {
   });
 
   if (container.children.length === 0) {
-    container.innerHTML = '<div style="opacity:0.5;font-size:0.85em;padding:8px;">No contacts or users found.</div>';
+    var emptyMsg = filter
+      ? 'No matches for "' + filter + '". Press Enter to add as a person.'
+      : 'No contacts or users found. Type a name and press Enter to add.';
+    container.innerHTML = '<div style="color:#6b4e31;font-size:0.85em;padding:8px;">' + emptyMsg + '</div>';
   }
 
   // Render stealth toggle at the bottom (Task 5.4)
@@ -520,7 +547,7 @@ function _applyStealthGreyout() {
     searchInput.disabled = !!isStealth;
     searchInput.style.opacity = isStealth ? '0.35' : '';
   }
-}────
+}
 
 /**
  * Handle assigned-to dropdown change: auto-add user to shares as manager.
@@ -779,7 +806,8 @@ function _contactMatchesFilter(c, filter) {
 }
 
 function _filterPeopleTree(query) {
-  _renderPeopleTree(query || undefined);
+  _currentPeopleFilter = query || '';
+  _renderPeopleTree();
 }
 
 function _toggleAllPeopleGroups(event, expand) {
@@ -808,6 +836,12 @@ function _addPeopleChip(data) {
   _renderPeopleChips();
   _syncPeopleHiddenField();
   _updateActivePeopleCount();
+  // Clear search after adding so the tree refreshes to show remaining contacts
+  var input = document.getElementById('peopleSearchInput');
+  if (input && input.value) {
+    input.value = '';
+    _currentPeopleFilter = '';
+  }
   _renderPeopleTree();
   setSaveButtonUnsaved();
 }
@@ -1209,7 +1243,7 @@ function _renderExpandModalContent() {
   searchInput.type = 'text';
   searchInput.id = 'expandModalSearch';
   searchInput.className = 'cwoc-people-expand-search';
-  searchInput.placeholder = 'Search all fields (name, email, phone, org, tags…)';
+  searchInput.placeholder = 'Search or type a name & press Enter to add...';
   searchInput.value = filter;
   searchInput.addEventListener('input', function () {
     _expandModalFilter = searchInput.value.trim().toLowerCase();
@@ -1228,6 +1262,18 @@ function _renderExpandModalContent() {
         if (el) el.focus();
         e.stopPropagation();
       }
+    }
+    // Enter adds the typed name as a free-text person (if not empty)
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      var name = searchInput.value.trim();
+      if (!name) return;
+      _addPeopleChip({ display_name: name, id: null, color: null, image_url: null });
+      searchInput.value = '';
+      _expandModalFilter = '';
+      _renderExpandModalContent();
+      var el = document.getElementById('expandModalSearch');
+      if (el) el.focus();
     }
   });
   searchRow.appendChild(searchInput);

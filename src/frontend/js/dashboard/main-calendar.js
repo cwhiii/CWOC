@@ -59,7 +59,7 @@ function getYearStart(date) {
 /** Dashboard-specific formatDate — includes day-of-week for calendar headers. */
 function formatDate(date) {
   var dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  return String(date.getDate()).padStart(2, '0') + ' ' + dayNames[date.getDay()];
+  return dayNames[date.getDay()] + ' ' + date.getDate();
 }
 
 function formatWeekRange(start, end) {
@@ -982,6 +982,7 @@ function displayYearView(chitsToDisplay) {
       const dayDate = new Date(currentYear, idx, day);
       const dayElement = document.createElement("div");
       dayElement.className = "day";
+      if (dayDate.toDateString() === new Date().toDateString()) dayElement.classList.add("today");
       dayElement.textContent = day;
       dayElement.style.padding = "5px";
       dayElement.style.textAlign = "center";

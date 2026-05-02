@@ -257,16 +257,36 @@
     background: rgba(139, 90, 43, 0.2);
 }
 
-/* ── Today highlight in calendar views ────────────────────────────────────── */
+/* ── Today highlight in calendar views (reverse-color) ────────────────────── */
 .day-header.today {
-    background-color: #d4c4a0 !important;
+    background-color: var(--aged-brown-dark, #4a2c2a) !important;
+    color: var(--parchment-light, #fdf5e6) !important;
     font-weight: bold;
 }
 .day-column.today {
-    background-color: rgba(212, 196, 160, 0.15);
+    background-color: rgba(74, 44, 42, 0.06);
 }
 .month-day.today {
-    background-color: rgba(212, 196, 160, 0.25) !important;
+    background-color: rgba(74, 44, 42, 0.08) !important;
+    outline: 2px solid var(--aged-brown-dark, #4a2c2a);
+    outline-offset: -2px;
+}
+.month-day.today .day-number {
+    background-color: var(--aged-brown-dark, #4a2c2a);
+    color: var(--parchment-light, #fdf5e6);
+    border-radius: 50%;
+    width: 1.6em;
+    height: 1.6em;
+    line-height: 1.6em;
+    text-align: center;
+    display: inline-block;
+}
+/* Year view today cell */
+.year-view .day.today {
+    background-color: var(--aged-brown-dark, #4a2c2a) !important;
+    color: var(--parchment-light, #fdf5e6) !important;
+    border-radius: 3px;
+    font-weight: bold;
 }
 
 /* ── Current time indicator ───────────────────────────────────────────────── */
@@ -291,9 +311,9 @@
 }
 
 .day-separator.today h3 {
-    color: #4a2c2a;
-    background-color: rgba(212, 196, 160, 0.3);
-    padding: 2px 8px;
+    background-color: var(--aged-brown-dark, #4a2c2a);
+    color: var(--parchment-light, #fdf5e6);
+    padding: 2px 10px;
     border-radius: 4px;
     display: inline-block;
 }

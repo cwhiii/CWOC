@@ -141,6 +141,9 @@ function resetEditorForNewChit() {
     habitToggleBtn.style.borderColor = '';
     habitToggleBtn.textContent = '🎯 Habit';
   }
+  // Hide perpetual row
+  var perpetualRow = document.getElementById('perpetualRow');
+  if (perpetualRow) perpetualRow.style.display = 'none';
   // Reset All Day button state
   if (typeof _updateAllDayBtnState === 'function') _updateAllDayBtnState();
   // Reset recurrence icon
@@ -161,9 +164,12 @@ function resetEditorForNewChit() {
   if (resetValEl) resetValEl.value = 1;
   var resetUnitEl = document.getElementById('habitResetUnit');
   if (resetUnitEl) resetUnitEl.value = '';
-  // Reset habit hide overall
+  var resetEnabledCb = document.getElementById('habitResetEnabled');
+  if (resetEnabledCb) resetEnabledCb.checked = false;
+  if (typeof onHabitResetToggle === 'function') onHabitResetToggle();
+  // Reset habit hide overall (default: show = checked)
   var hideOverallCb = document.getElementById('habitHideOverall');
-  if (hideOverallCb) hideOverallCb.checked = false;
+  if (hideOverallCb) hideOverallCb.checked = true;
   // Reset perpetual
   var perpetualCb = document.getElementById('perpetualEnabled');
   if (perpetualCb) perpetualCb.checked = false;
@@ -219,7 +225,7 @@ function _collapseAllZonesForNewChit() {
     section.classList.add('collapsed');
     const icon = section.querySelector('.zone-toggle-icon');
     if (icon) icon.textContent = '🔽';
-    section.querySelectorAll('.zone-button').forEach(btn => { btn.style.display = 'none'; });
+    section.querySelectorAll('.zone-button:not(.zone-button-persist)').forEach(btn => { btn.style.display = 'none'; });
   });
 
   let sourceTab = 'Calendar';
@@ -251,7 +257,7 @@ function _collapseAllZonesForNewChit() {
     section.classList.remove('collapsed');
     const icon = section.querySelector('.zone-toggle-icon');
     if (icon) icon.textContent = '🔼';
-    section.querySelectorAll('.zone-button').forEach(btn => { btn.style.display = ''; });
+    section.querySelectorAll('.zone-button:not(.zone-button-persist)').forEach(btn => { btn.style.display = ''; });
   });
 }
 
@@ -432,24 +438,30 @@ async function loadChitData(chitId) {
     // Load habit reset period — format "N:UNIT" (e.g., "3:DAILY")
     var resetValEl = document.getElementById('habitResetValue');
     var resetUnitEl = document.getElementById('habitResetUnit');
+    var resetEnabledCb = document.getElementById('habitResetEnabled');
     if (chit.habit_reset_period && chit.habit_reset_period.indexOf(':') !== -1) {
       var parts = chit.habit_reset_period.split(':');
       if (resetValEl) resetValEl.value = parseInt(parts[0]) || 1;
       if (resetUnitEl) resetUnitEl.value = parts[1] || '';
+      if (resetEnabledCb) resetEnabledCb.checked = true;
     } else if (chit.habit_reset_period) {
       // Legacy format: just "DAILY"/"WEEKLY"/"MONTHLY"
       if (resetValEl) resetValEl.value = 1;
       if (resetUnitEl) resetUnitEl.value = chit.habit_reset_period;
+      if (resetEnabledCb) resetEnabledCb.checked = true;
     } else {
       if (resetValEl) resetValEl.value = 1;
       if (resetUnitEl) resetUnitEl.value = '';
+      if (resetEnabledCb) resetEnabledCb.checked = false;
     }
+    // Apply reset toggle visibility
+    if (typeof onHabitResetToggle === 'function') onHabitResetToggle();
     window._currentHabitLastActionDate = chit.habit_last_action_date || null;
 
-    // Load habit hide overall
+    // Load habit hide overall (reversed: hide=true means unchecked for "Show")
     var hideOverallCb = document.getElementById('habitHideOverall');
     if (hideOverallCb) {
-      hideOverallCb.checked = !!chit.habit_hide_overall;
+      hideOverallCb.checked = !chit.habit_hide_overall;
     }
 
     // Load perpetual
@@ -468,6 +480,15 @@ async function loadChitData(chitId) {
         if (_endTimeInput) {
           _endTimeInput.disabled = true;
           _endTimeInput.style.opacity = '0.5';
+        }
+        // Update perpetual description with start date
+        var _descEl = document.getElementById('perpetualDescription');
+        var _startVal = (document.getElementById('start_datetime') || {}).value || '';
+        if (_descEl && typeof _fmtPerpetualDate === 'function') {
+          var _dateFmt = _fmtPerpetualDate(_startVal);
+          _descEl.textContent = _dateFmt
+            ? 'Starts now, continues forever. (Started ' + _dateFmt + '.)'
+            : 'Starts now, continues forever';
         }
       }
     }
@@ -816,15 +837,35 @@ function applyZoneStates(chit) {
       section.classList.remove("collapsed");
       const icon = section.querySelector('.zone-toggle-icon');
       if (icon) icon.textContent = '🔼';
-      section.querySelectorAll(".zone-button").forEach((btn) => { btn.style.display = ""; });
+      section.querySelectorAll(".zone-button:not(.zone-button-persist)").forEach((btn) => { btn.style.display = ""; });
     } else {
       content.style.display = 'none';
       section.classList.add("collapsed");
       const icon = section.querySelector('.zone-toggle-icon');
       if (icon) icon.textContent = '🔽';
-      section.querySelectorAll(".zone-button").forEach((btn) => { btn.style.display = "none"; });
+      section.querySelectorAll(".zone-button:not(.zone-button-persist)").forEach((btn) => { btn.style.display = "none"; });
     }
   });
+
+  // Habit-specific zone overrides: expand Dates + Habit Log, collapse Task
+  if (chit.habit) {
+    var datesSection = document.getElementById('datesSection');
+    var datesContent = document.getElementById('datesContent');
+    if (datesSection && datesContent) {
+      datesContent.style.display = '';
+      datesSection.classList.remove('collapsed');
+      var dIcon = datesSection.querySelector('.zone-toggle-icon');
+      if (dIcon) dIcon.textContent = '🔼';
+    }
+    var taskSection = document.getElementById('taskSection');
+    var taskContent = document.getElementById('taskContent');
+    if (taskSection && taskContent) {
+      taskContent.style.display = 'none';
+      taskSection.classList.add('collapsed');
+      var tIcon = taskSection.querySelector('.zone-toggle-icon');
+      if (tIcon) tIcon.textContent = '🔽';
+    }
+  }
 }
 
 // ── DOMContentLoaded — main editor initialization ────────────────────────────
