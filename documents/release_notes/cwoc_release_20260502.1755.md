@@ -1,0 +1,1 @@
+Styled all Ntfy notifications with the CWOC logo icon and appropriate priority levels. Alarms and timers use priority 5 (urgent — long vibration, pop-over notification). Start/due reminders use priority 4 (high). All notifications display the CWOC logo as the notification icon. Removed inline emojis from titles since the icon now provides visual identity.

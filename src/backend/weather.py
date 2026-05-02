@@ -118,7 +118,21 @@ def _send_chit_ntfy(owner_id, chit_id, chit_title, time_label, time_value):
         body = f"{time_label} {time_value}"
         base = _get_server_base_url()
         click_url = f"{base}/frontend/html/editor.html?id={chit_id}"
-        tags = "alarm_clock" if "Alarm" in time_label else "calendar"
+        icon_url = f"{base}/static/cwoc-icon-192.png"
+
+        # Set priority and tags based on alert type
+        if "Alarm" in time_label:
+            tags = "alarm_clock"
+            priority = 5  # urgent — long vibration, pop-over
+        elif "Timer" in time_label:
+            tags = "timer_clock"
+            priority = 5  # urgent
+        elif "Reminder" in time_label:
+            tags = "bell"
+            priority = 4  # high
+        else:
+            tags = "calendar"
+            priority = 4  # high
 
         result = send_ntfy_notification(
             user_id=owner_id,
@@ -126,6 +140,8 @@ def _send_chit_ntfy(owner_id, chit_id, chit_title, time_label, time_value):
             body=body,
             click_url=click_url,
             tags=tags,
+            priority=priority,
+            icon_url=icon_url,
         )
         if result.get("sent"):
             logger.info(f"Ntfy sent for chit {chit_id} to user {owner_id}: {result}")
@@ -760,14 +776,17 @@ async def _alert_push_loop():
                 _fired_keys.add(key)
                 name = data.get("name") or "Independent Alarm"
                 ia_click_url = f"{_get_server_base_url()}/"
+                ia_icon_url = f"{_get_server_base_url()}/static/cwoc-icon-192.png"
                 try:
                     from src.backend.routes.ntfy import send_ntfy_notification
                     send_ntfy_notification(
                         user_id=owner_id,
-                        title=f"🔔 {name}",
+                        title=name,
                         body=f"Alarm at {data['time']}",
                         click_url=ia_click_url,
                         tags="alarm_clock",
+                        priority=5,
+                        icon_url=ia_icon_url,
                     )
                 except Exception as e:
                     logger.warning(f"Ntfy failed for independent alarm {ia_id}: {e}")

@@ -467,12 +467,15 @@ async def _timer_fire_task(key, delay_seconds, user_id, name, source_type, sourc
             click_url = f"{base}/frontend/html/editor.html?id={source_id}"
         else:
             click_url = f"{base}/"
+        icon_url = f"{base}/static/cwoc-icon-192.png"
         send_ntfy_notification(
             user_id=user_id,
-            title=f"⏱️ {name or 'Timer'}",
-            body="Time's up!",
+            title=f"{name or 'Timer'} — Time's up!",
+            body="Your timer has finished.",
             click_url=click_url,
             tags="timer_clock",
+            priority=5,
+            icon_url=icon_url,
         )
     except Exception as e:
         logger.warning(f"Ntfy failed for timer {key}: {e}")

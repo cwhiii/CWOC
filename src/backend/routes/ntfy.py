@@ -101,7 +101,8 @@ def get_ntfy_config() -> dict:
 # ═══════════════════════════════════════════════════════════════════════════
 
 def send_ntfy_notification(user_id: str, title: str, body: str,
-                           click_url: str = None, tags: str = None) -> dict:
+                           click_url: str = None, tags: str = None,
+                           priority: int = None, icon_url: str = None) -> dict:
     """Send a notification via HTTP POST to the ntfy server.
 
     Reads config from the network_access table on each call so that
@@ -113,6 +114,8 @@ def send_ntfy_notification(user_id: str, title: str, body: str,
         body:      Notification body (POST request body).
         click_url: Optional URL to open on tap (X-Click header).
         tags:      Optional comma-separated emoji tags (X-Tags header).
+        priority:  Optional priority 1-5 (X-Priority header). 5=max/urgent, 4=high, 3=default.
+        icon_url:  Optional URL to notification icon (X-Icon header).
 
     Returns:
         {'sent': True, 'topic': str} on success.
@@ -158,6 +161,10 @@ def send_ntfy_notification(user_id: str, title: str, body: str,
                 req.add_header("X-Click", click_url)
             except UnicodeEncodeError:
                 req.add_header("X-Click", click_url.encode("utf-8").decode("ascii", errors="ignore"))
+        if priority:
+            req.add_header("X-Priority", str(priority))
+        if icon_url:
+            req.add_header("X-Icon", icon_url)
 
         with urllib.request.urlopen(req, timeout=10) as resp:
             status_code = resp.getcode()
@@ -331,6 +338,8 @@ def ntfy_test(request: Request):
         body="If you see this, Ntfy is working! Tap to open Settings.",
         click_url=click_url,
         tags="white_check_mark",
+        priority=4,
+        icon_url=f"{scheme}://{host}/static/cwoc-icon-192.png",
     )
 
     if result.get("sent"):
