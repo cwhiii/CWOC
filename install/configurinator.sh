@@ -264,7 +264,7 @@ install_python_deps() {
     fi
 
     # Always ensure the known required packages are present
-    local required_pkgs="fastapi uvicorn pydantic python-dotenv python-multipart websockets"
+    local required_pkgs="fastapi uvicorn pydantic python-dotenv python-multipart websockets pywebpush"
     "$APP_DIR/venv/bin/pip" install $required_pkgs \
         || log_error "Failed to install required Python packages." \
             "Check internet connectivity. Try manually: $APP_DIR/venv/bin/pip install $required_pkgs"
@@ -332,17 +332,87 @@ configure_https() {
     fi
 
     local cert_dir="/etc/ssl/cwoc"
-    if [[ ! -f "$cert_dir/cwoc.crt" ]] || [[ ! -f "$cert_dir/cwoc.key" ]]; then
-        log_step "Generating self-signed SSL certificate..."
+
+    # ── CA-based certificate setup ──────────────────────────────────────
+    # We generate a local CA (installed on phones/tablets) and a server
+    # cert signed by that CA (used by nginx). Chrome/Android require:
+    #   1. A trusted CA certificate installed at the OS level
+    #   2. A server cert with Subject Alternative Names (SANs)
+    #
+    # Files:
+    #   cwoc-ca.key     — CA private key (stays on server)
+    #   cwoc-ca.crt     — CA certificate (downloaded by users to trust)
+    #   cwoc.key        — Server private key
+    #   cwoc.crt        — Server certificate (signed by CA, used by nginx)
+    # ────────────────────────────────────────────────────────────────────
+
+    if [[ ! -f "$cert_dir/cwoc-ca.crt" ]] || [[ ! -f "$cert_dir/cwoc.crt" ]]; then
+        log_step "Generating CA + server SSL certificates..."
         mkdir -p "$cert_dir"
-        openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
-            -keyout "$cert_dir/cwoc.key" \
+
+        # Detect the server's IP address for SANs
+        local server_ip
+        server_ip=$(hostname -I 2>/dev/null | awk '{print $1}')
+        if [[ -z "$server_ip" ]]; then
+            server_ip="127.0.0.1"
+        fi
+        local server_hostname
+        server_hostname=$(hostname 2>/dev/null || echo "cwoc")
+
+        # 1. Generate CA key + cert (10-year validity)
+        openssl genrsa -out "$cert_dir/cwoc-ca.key" 2048 2>/dev/null \
+            || log_error "Failed to generate CA key."
+        openssl req -x509 -new -nodes -days 3650 \
+            -key "$cert_dir/cwoc-ca.key" \
+            -out "$cert_dir/cwoc-ca.crt" \
+            -subj "/CN=CWOC Local CA/O=CWOC/C=US" 2>/dev/null \
+            || log_error "Failed to generate CA certificate."
+
+        # 2. Generate server key + CSR
+        openssl genrsa -out "$cert_dir/cwoc.key" 2048 2>/dev/null \
+            || log_error "Failed to generate server key."
+        openssl req -new -nodes \
+            -key "$cert_dir/cwoc.key" \
+            -out "$cert_dir/cwoc.csr" \
+            -subj "/CN=$server_hostname/O=CWOC/C=US" 2>/dev/null \
+            || log_error "Failed to generate server CSR."
+
+        # 3. Sign server cert with CA (includes SANs for IP + hostname)
+        cat > "$cert_dir/cwoc-ext.cnf" <<EXTEOF
+authorityKeyIdentifier=keyid,issuer
+basicConstraints=CA:FALSE
+keyUsage=digitalSignature,keyEncipherment
+extendedKeyUsage=serverAuth
+subjectAltName=@alt_names
+
+[alt_names]
+DNS.1 = $server_hostname
+DNS.2 = localhost
+IP.1 = $server_ip
+IP.2 = 127.0.0.1
+EXTEOF
+
+        openssl x509 -req -days 3650 \
+            -in "$cert_dir/cwoc.csr" \
+            -CA "$cert_dir/cwoc-ca.crt" \
+            -CAkey "$cert_dir/cwoc-ca.key" \
+            -CAcreateserial \
             -out "$cert_dir/cwoc.crt" \
-            -subj "/CN=cwoc/O=CWOC/C=US" 2>/dev/null \
-            || log_error "Failed to generate self-signed certificate."
-        log_ok "Self-signed certificate created (valid 10 years)."
+            -extfile "$cert_dir/cwoc-ext.cnf" 2>/dev/null \
+            || log_error "Failed to sign server certificate."
+
+        # Clean up temp files
+        rm -f "$cert_dir/cwoc.csr" "$cert_dir/cwoc-ext.cnf" "$cert_dir/cwoc-ca.srl"
+
+        # Make CA cert readable (users download this to trust the server)
+        chmod 644 "$cert_dir/cwoc-ca.crt"
+
+        log_ok "CA + server certificates created (valid 10 years)."
+        log_ok "  CA cert (install on devices): $cert_dir/cwoc-ca.crt"
+        log_ok "  Server cert (used by nginx):  $cert_dir/cwoc.crt"
+        log_ok "  SANs: DNS=$server_hostname, DNS=localhost, IP=$server_ip, IP=127.0.0.1"
     else
-        log_ok "SSL certificate already exists — keeping it."
+        log_ok "SSL certificates already exist — keeping them."
     fi
 
     cat > /etc/nginx/sites-available/cwoc <<'NGINX_EOF'
@@ -422,19 +492,133 @@ install_tailscale() {
     log_step "Installing Tailscale..."
 
     if command -v tailscale &>/dev/null; then
-        log_ok "Tailscale already installed — skipping."
+        log_ok "Tailscale already installed — skipping install."
+    else
+        # Use official Tailscale install script
+        if curl -fsSL https://tailscale.com/install.sh | bash; then
+            log_ok "Tailscale installed successfully."
+            # Enable the daemon so it starts on boot and is ready for the settings UI
+            systemctl enable --now tailscaled 2>/dev/null || true
+        else
+            log_warn "Tailscale installation failed — continuing without Tailscale."
+            return 0  # Non-fatal: don't abort provisioning
+        fi
+    fi
+
+    # Advertise the local subnet so remote devices can reach local IPs
+    # (e.g., Ntfy on 192.168.1.111:2586) through the Tailscale tunnel.
+    # The route must still be approved in the Tailscale admin console.
+    if command -v tailscale &>/dev/null; then
+        local server_ip
+        server_ip=$(hostname -I 2>/dev/null | awk '{print $1}')
+        if [[ -n "$server_ip" ]]; then
+            # Derive the /24 subnet from the server IP
+            local subnet
+            subnet=$(echo "$server_ip" | sed 's/\.[0-9]*$/.0\/24/')
+            tailscale set --advertise-routes="$subnet" 2>/dev/null \
+                && log_ok "Tailscale subnet route advertised: $subnet (approve in admin console)" \
+                || log_warn "Could not advertise Tailscale subnet route — Tailscale may not be connected yet."
+        fi
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# Phase: Ntfy installation (non-fatal)
+# ---------------------------------------------------------------------------
+
+install_ntfy() {
+    log_step "Installing Ntfy push notification server..."
+
+    if command -v ntfy &>/dev/null || [[ -f /usr/bin/ntfy ]]; then
+        log_ok "Ntfy already installed — skipping download."
+        # Ensure the service is enabled and running
+        if [[ -f /etc/systemd/system/ntfy.service ]]; then
+            systemctl enable ntfy 2>/dev/null || true
+            systemctl start ntfy 2>/dev/null || true
+            log_ok "Ntfy service enabled and started."
+        fi
         return 0
     fi
 
-    # Use official Tailscale install script
-    if curl -fsSL https://tailscale.com/install.sh | bash; then
-        log_ok "Tailscale installed successfully."
-        # Enable the daemon so it starts on boot and is ready for the settings UI
-        systemctl enable --now tailscaled 2>/dev/null || true
-    else
-        log_warn "Tailscale installation failed — continuing without Tailscale."
-        return 0  # Non-fatal: don't abort provisioning
+    # Detect architecture
+    local arch
+    arch=$(uname -m)
+    case "$arch" in
+        x86_64)  arch="amd64" ;;
+        aarch64) arch="arm64" ;;
+        armv7l)  arch="armv7" ;;
+        *)
+            log_warn "Unsupported architecture for ntfy: $arch — skipping."
+            return 0
+            ;;
+    esac
+
+    # Download ntfy binary from official releases
+    local ntfy_version="v2.11.0"
+    local ntfy_url="https://github.com/binwiederhier/ntfy/releases/download/${ntfy_version}/ntfy_${ntfy_version#v}_linux_${arch}.tar.gz"
+    local tmp_tar="/tmp/ntfy.tar.gz"
+    local tmp_extract="/tmp/ntfy-extract"
+
+    log_step "Downloading ntfy ${ntfy_version} for ${arch}..."
+    if ! wget -q -O "$tmp_tar" "$ntfy_url" 2>/dev/null; then
+        log_warn "Failed to download ntfy from $ntfy_url — continuing without ntfy."
+        rm -f "$tmp_tar"
+        return 0
     fi
+
+    # Extract and install
+    rm -rf "$tmp_extract"
+    mkdir -p "$tmp_extract"
+    if ! tar -xzf "$tmp_tar" -C "$tmp_extract" 2>/dev/null; then
+        log_warn "Failed to extract ntfy archive — continuing without ntfy."
+        rm -rf "$tmp_tar" "$tmp_extract"
+        return 0
+    fi
+
+    # Find the ntfy binary in the extracted files
+    local ntfy_bin
+    ntfy_bin=$(find "$tmp_extract" -name "ntfy" -type f | head -1)
+    if [[ -z "$ntfy_bin" ]]; then
+        log_warn "ntfy binary not found in archive — continuing without ntfy."
+        rm -rf "$tmp_tar" "$tmp_extract"
+        return 0
+    fi
+
+    cp "$ntfy_bin" /usr/bin/ntfy
+    chmod +x /usr/bin/ntfy
+    rm -rf "$tmp_tar" "$tmp_extract"
+
+    # Verify the binary is executable
+    if ! /usr/bin/ntfy --version &>/dev/null; then
+        log_warn "ntfy binary installed but not executable — continuing without ntfy."
+        return 0
+    fi
+
+    log_ok "Ntfy binary installed to /usr/bin/ntfy."
+
+    # Create systemd service — listen on localhost only, port 2586
+    cat > /etc/systemd/system/ntfy.service <<'NTFY_EOF'
+[Unit]
+Description=Ntfy Push Notification Server
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/ntfy serve --listen-http :2586
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+NTFY_EOF
+
+    log_ok "Ntfy systemd unit written."
+
+    systemctl daemon-reload
+    systemctl enable ntfy 2>/dev/null || true
+    systemctl start ntfy 2>/dev/null || true
+
+    log_ok "Ntfy service enabled and started on port 2586."
 }
 
 # ---------------------------------------------------------------------------
@@ -462,6 +646,7 @@ main() {
         configure_service
         configure_https
         install_tailscale
+        install_ntfy
         start_and_verify
         echo "============================================="
         echo " Post-upgrade fixup complete."
@@ -497,6 +682,7 @@ main() {
         configure_service
         configure_https
         install_tailscale
+        install_ntfy
         start_and_verify
     else
         log_step "No existing installation found — running full provisioning."
@@ -507,6 +693,7 @@ main() {
         configure_service
         configure_https
         install_tailscale
+        install_ntfy
         start_and_verify
     fi
 

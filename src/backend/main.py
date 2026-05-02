@@ -18,13 +18,24 @@
 #   src/backend/routes/auth.py  — Authentication, sessions, profile
 #   src/backend/routes/users.py — Admin-only user management
 #   src/backend/routes/network_access.py — Network access provider config
+#   src/backend/routes/push.py — Web Push notification endpoints
+#   src/backend/routes/ntfy.py — Ntfy push notification sender & endpoints
+#   src/backend/middleware.py   — Auth middleware (session validation)
+#
+# PWA files served directly from src/pwa/:
+#   GET /sw.js          — Service worker (Content-Type: application/javascript)
+#   GET /manifest.json  — Web app manifest (Content-Type: application/json)
+#   /pwa/*              — Static mount for pwa-register.js, offline.html, etc.
+#   /static/cwoc-icon-* — PWA icons served from src/pwa/ via explicit routes
 #   src/backend/middleware.py   — Auth middleware (session validation)
 # ═══════════════════════════════════════════════════════════════════════════
 
 import asyncio
 import logging
+import os
 
 from fastapi import FastAPI
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request as StarletteRequest
@@ -95,6 +106,8 @@ from src.backend.migrations import (
     migrate_add_user_profile_fields,
     migrate_habits_overhaul,
     migrate_habits_phase2,
+    migrate_add_push_subscriptions,
+    migrate_add_vapid_keys,
 )
 
 # Initialize database and run all migrations (same order as before)
@@ -132,6 +145,8 @@ migrate_add_notifications()
 migrate_add_user_profile_fields()
 migrate_habits_overhaul()
 migrate_habits_phase2()
+migrate_add_push_subscriptions()
+migrate_add_vapid_keys()
 seed_version_info()
 
 
@@ -150,6 +165,8 @@ from src.backend.routes.health import router as health_router
 from src.backend.routes.sharing import sharing_router
 from src.backend.routes.notifications import notifications_router
 from src.backend.routes.network_access import router as network_access_router
+from src.backend.routes.push import push_router
+from src.backend.routes.ntfy import ntfy_router
 
 app.include_router(auth_router)
 app.include_router(users_router)
@@ -161,7 +178,54 @@ app.include_router(settings_router)
 app.include_router(contacts_router)
 app.include_router(audit_router)
 app.include_router(health_router)
+app.include_router(ntfy_router)
 app.include_router(network_access_router)
+app.include_router(push_router)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PWA File Serving
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Resolve the PWA directory path (works both locally and in /app/ container)
+_PWA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "src", "pwa")
+
+
+@app.get("/sw.js", include_in_schema=False)
+async def serve_service_worker():
+    """Serve the service worker at root scope with correct headers."""
+    return FileResponse(
+        os.path.join(_PWA_DIR, "sw.js"),
+        media_type="application/javascript",
+        headers={"Service-Worker-Allowed": "/"},
+    )
+
+
+@app.get("/manifest.json", include_in_schema=False)
+async def serve_manifest():
+    """Serve the web app manifest with correct content type."""
+    return FileResponse(
+        os.path.join(_PWA_DIR, "manifest.json"),
+        media_type="application/json",
+    )
+
+
+@app.get("/static/cwoc-icon-192.png", include_in_schema=False)
+async def serve_icon_192():
+    """Serve 192x192 PWA icon (referenced by manifest and apple-touch-icon)."""
+    return FileResponse(
+        os.path.join(_PWA_DIR, "cwoc-icon-192.png"),
+        media_type="image/png",
+    )
+
+
+@app.get("/static/cwoc-icon-512.png", include_in_schema=False)
+async def serve_icon_512():
+    """Serve 512x512 PWA icon (referenced by manifest)."""
+    return FileResponse(
+        os.path.join(_PWA_DIR, "cwoc-icon-512.png"),
+        media_type="image/png",
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -181,6 +245,9 @@ app.mount("/data/contacts", StaticFiles(directory="/app/data/contacts"), name="d
 
 # Serve user profile pictures from data/users/
 app.mount("/data/users", StaticFiles(directory="/app/data/users"), name="data_users")
+
+# Serve PWA files (pwa-register.js, offline.html, etc.) from src/pwa/
+app.mount("/pwa", StaticFiles(directory="/app/src/pwa"), name="pwa")
 
 
 # ═══════════════════════════════════════════════════════════════════════════

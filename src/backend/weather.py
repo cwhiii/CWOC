@@ -19,6 +19,97 @@ from src.backend.db import DB_PATH, _update_lock, serialize_json_field
 logger = logging.getLogger(__name__)
 
 
+# --- Push notification helper (graceful if pywebpush unavailable) ---
+
+def _send_chit_push(owner_id, chit_id, chit_title, time_label, time_value):
+    """Send a push notification for a chit event to the chit owner.
+
+    Imports send_push_to_user from the push routes module. If pywebpush
+    is not installed or the import fails, logs a warning and returns silently.
+
+    Args:
+        owner_id: User ID of the chit owner.
+        chit_id: The chit's UUID.
+        chit_title: Display title for the notification.
+        time_label: One of "Alarm at", "Starts at", or "Due at".
+        time_value: Human-readable time string (e.g. "3:00 PM").
+    """
+    try:
+        from src.backend.routes.push import send_push_to_user
+    except ImportError:
+        logger.debug("Push routes not available — skipping push notification")
+        return
+    except Exception as e:
+        logger.debug(f"Could not import push routes: {e}")
+        return
+
+    payload = {
+        "title": chit_title or "CWOC Reminder",
+        "body": f"{time_label} {time_value}",
+        "icon": "/static/cwoc-icon-192.png",
+        "badge": "/static/cwoc-icon-192.png",
+        "data": {
+            "chit_id": chit_id,
+            "url": f"/frontend/html/editor.html?id={chit_id}",
+        },
+    }
+
+    try:
+        result = send_push_to_user(owner_id, payload)
+        if result.get("sent", 0) > 0:
+            logger.info(f"Push sent for chit {chit_id} to user {owner_id}: {result}")
+        elif result.get("error"):
+            logger.debug(f"Push skipped for chit {chit_id}: {result.get('error')}")
+    except Exception as e:
+        logger.warning(f"Push notification failed for chit {chit_id}: {e}")
+
+
+# --- Ntfy notification helper (parallel channel to web push) ---
+
+def _send_chit_ntfy(owner_id, chit_id, chit_title, time_label, time_value):
+    """Send an ntfy notification for a chit event to the chit owner.
+
+    Imports send_ntfy_notification from the ntfy routes module and sends
+    a notification with the chit title, time info, and a click URL to the
+    chit editor. Failures are caught and logged — never propagated.
+
+    Args:
+        owner_id: User ID of the chit owner.
+        chit_id: The chit's UUID.
+        chit_title: Display title for the notification.
+        time_label: One of "Starts at" or "Due at".
+        time_value: Human-readable time string (e.g. "3:00 PM").
+    """
+    try:
+        from src.backend.routes.ntfy import send_ntfy_notification
+    except ImportError:
+        logger.debug("Ntfy routes not available — skipping ntfy notification")
+        return
+    except Exception as e:
+        logger.debug(f"Could not import ntfy routes: {e}")
+        return
+
+    try:
+        title = chit_title if chit_title else "CWOC Reminder"
+        body = f"{time_label} {time_value}"
+        click_url = f"/frontend/html/editor.html?id={chit_id}"
+        tags = "alarm_clock" if "Alarm" in time_label else "calendar"
+
+        result = send_ntfy_notification(
+            user_id=owner_id,
+            title=title,
+            body=body,
+            click_url=click_url,
+            tags=tags,
+        )
+        if result.get("sent"):
+            logger.info(f"Ntfy sent for chit {chit_id} to user {owner_id}: {result}")
+        else:
+            logger.debug(f"Ntfy skipped for chit {chit_id}: {result.get('reason')}")
+    except Exception as e:
+        logger.warning(f"Ntfy notification failed for chit {chit_id}: {e}")
+
+
 # --- Helper — get chit focus date ---
 
 def _get_chit_focus_date(chit):
@@ -399,6 +490,93 @@ async def _weather_daily_loop():
             logger.error(f"Weather daily loop unexpected error: {e}")
 
 
+async def _alert_push_loop():
+    """Background task: send push notifications when chit start/due times arrive.
+
+    Runs every 60 seconds. Checks for non-deleted chits whose start_datetime
+    or due_datetime falls within the last 60-second window. Sends a push
+    notification to the chit owner for each match.
+
+    Handles pywebpush not being installed gracefully (logs and skips).
+    """
+    while True:
+        try:
+            await asyncio.sleep(60)  # Check every 60 seconds
+            now = datetime.utcnow()
+            window_start = now - timedelta(seconds=60)
+            now_iso = now.isoformat()
+            window_start_iso = window_start.isoformat()
+
+            try:
+                conn = sqlite3.connect(DB_PATH)
+                cursor = conn.cursor()
+                # Find chits whose start_datetime or due_datetime falls in the last 60s window
+                cursor.execute(
+                    "SELECT id, title, start_datetime, due_datetime, owner_id, alerts "
+                    "FROM chits "
+                    "WHERE (deleted = 0 OR deleted IS NULL) "
+                    "AND owner_id IS NOT NULL AND owner_id != '' "
+                    "AND ("
+                    "  (start_datetime IS NOT NULL AND start_datetime > ? AND start_datetime <= ?) "
+                    "  OR (due_datetime IS NOT NULL AND due_datetime > ? AND due_datetime <= ?)"
+                    ")",
+                    (window_start_iso, now_iso, window_start_iso, now_iso),
+                )
+                rows = cursor.fetchall()
+                columns = [col[0] for col in cursor.description]
+                chits = [dict(zip(columns, row)) for row in rows]
+                conn.close()
+            except Exception as e:
+                logger.error(f"Alert push loop: DB query error: {e}")
+                continue
+
+            if not chits:
+                continue
+
+            logger.info(f"Alert push loop: found {len(chits)} chit(s) with arriving times")
+
+            for chit in chits:
+                chit_id = chit.get("id")
+                chit_title = chit.get("title") or "CWOC Reminder"
+                owner_id = chit.get("owner_id")
+                start_dt = chit.get("start_datetime")
+                due_dt = chit.get("due_datetime")
+
+                if not owner_id:
+                    continue
+
+                # Send push for start_datetime if it's in the window
+                if start_dt and window_start_iso < start_dt <= now_iso:
+                    try:
+                        dt = datetime.fromisoformat(start_dt.replace("Z", "+00:00"))
+                        time_str = dt.strftime("%I:%M %p").lstrip("0")
+                    except (ValueError, TypeError):
+                        time_str = start_dt
+                    _send_chit_push(owner_id, chit_id, chit_title, "Starts at", time_str)
+                    try:
+                        _send_chit_ntfy(owner_id, chit_id, chit_title, "Starts at", time_str)
+                    except Exception as e:
+                        logger.warning(f"Ntfy call failed for chit {chit_id} start: {e}")
+
+                # Send push for due_datetime if it's in the window
+                if due_dt and window_start_iso < due_dt <= now_iso:
+                    try:
+                        dt = datetime.fromisoformat(due_dt.replace("Z", "+00:00"))
+                        time_str = dt.strftime("%I:%M %p").lstrip("0")
+                    except (ValueError, TypeError):
+                        time_str = due_dt
+                    _send_chit_push(owner_id, chit_id, chit_title, "Due at", time_str)
+                    try:
+                        _send_chit_ntfy(owner_id, chit_id, chit_title, "Due at", time_str)
+                    except Exception as e:
+                        logger.warning(f"Ntfy call failed for chit {chit_id} due: {e}")
+
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logger.error(f"Alert push loop unexpected error: {e}")
+
+
 async def start_weather_schedulers():
     """Register background weather tasks. Called from main.py on startup."""
     from src.backend.routes.audit import _run_auto_prune
@@ -413,4 +591,5 @@ async def start_weather_schedulers():
     asyncio.create_task(_deferred_auto_prune())
     asyncio.create_task(_weather_hourly_loop())
     asyncio.create_task(_weather_daily_loop())
-    logger.info("Weather scheduler tasks started (hourly + daily)")
+    asyncio.create_task(_alert_push_loop())
+    logger.info("Weather scheduler tasks started (hourly + daily + alert push)")

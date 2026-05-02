@@ -1,4 +1,11 @@
 # CWOC — Completed Items
+### UI & Layout
+- `[X]` Wall/kiosk view for persistent displays
+### Event Invitations
+- `[X]` Accept/reject invitations
+- `[X]` Invitation status visible to inviter
+- `[X]` Accepted invitations appear on invitee's calendar
+- `[X]` Declined events toggle
 
 
 

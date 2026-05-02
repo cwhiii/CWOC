@@ -436,6 +436,45 @@ def health_check():
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# SSL Certificate Download
+# ═══════════════════════════════════════════════════════════════════════════
+
+_SSL_CA_CERT_PATH = "/etc/ssl/cwoc/cwoc-ca.crt"
+_SSL_CERT_PATH = "/etc/ssl/cwoc/cwoc.crt"  # fallback for legacy single-cert setups
+
+
+@router.get("/api/ssl-cert")
+def download_ssl_cert():
+    """Download the server's CA certificate for device trust.
+
+    Returns the CA certificate (PEM-encoded) that users install on their
+    phones/tablets to trust the CWOC server. This enables PWA installation
+    over HTTPS with a self-signed certificate chain.
+
+    Prefers the CA cert (cwoc-ca.crt) from the new two-cert setup.
+    Falls back to the server cert (cwoc.crt) for legacy single-cert installs.
+    No authentication required — the CA cert is public by nature.
+    """
+    # Prefer the CA cert (new setup)
+    if os.path.isfile(_SSL_CA_CERT_PATH):
+        return FileResponse(
+            _SSL_CA_CERT_PATH,
+            media_type="application/x-pem-file",
+            filename="cwoc-ca.crt",
+            headers={"Content-Disposition": "attachment; filename=cwoc-ca.crt"},
+        )
+    # Fall back to server cert (legacy single-cert setup)
+    if os.path.isfile(_SSL_CERT_PATH):
+        return FileResponse(
+            _SSL_CERT_PATH,
+            media_type="application/x-pem-file",
+            filename="cwoc-server.crt",
+            headers={"Content-Disposition": "attachment; filename=cwoc-server.crt"},
+        )
+    raise HTTPException(status_code=404, detail="SSL certificate not found on this server")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Version Management & Update Streaming
 # ═══════════════════════════════════════════════════════════════════════════
 

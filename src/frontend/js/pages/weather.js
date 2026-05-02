@@ -20,7 +20,7 @@ function _wxPageGetIcon(code) {
 }
 
 function _wxPageC2F(c) {
-  return Math.round(c * 9 / 5 + 32);
+  return _convertTemp(c);
 }
 
 /** Get precipitation type from WMO weather code. */

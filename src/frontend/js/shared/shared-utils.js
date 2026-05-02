@@ -171,6 +171,60 @@ function cwocToast(message, type, duration) {
   }
 }
 
+// ── Temperature & Wind Conversion (unit_system-aware) ────────────────────────
+
+/**
+ * Convert a Celsius temperature for display based on the user's unit_system setting.
+ * Returns a rounded integer. If unit_system is 'metric', returns Celsius as-is.
+ * @param {number} c - Temperature in Celsius
+ * @returns {number} Temperature in the user's preferred unit
+ */
+function _convertTemp(c) {
+  var s = window._cwocSettings;
+  if (s && s.unit_system === 'metric') return Math.round(c);
+  return Math.round(c * 9 / 5 + 32);
+}
+
+/**
+ * Returns the temperature unit label based on the user's unit_system setting.
+ * @returns {string} '°C' or '°F'
+ */
+function _tempUnit() {
+  var s = window._cwocSettings;
+  return (s && s.unit_system === 'metric') ? '°C' : '°F';
+}
+
+/**
+ * Returns true if the user's unit_system is 'metric'.
+ */
+function _isMetricUnits() {
+  var s = window._cwocSettings;
+  return s && s.unit_system === 'metric';
+}
+
+/**
+ * Convert wind speed from km/h for display based on the user's unit_system setting.
+ * Metric: returns km/h. Imperial: returns mph.
+ * @param {number} kmh - Wind speed in km/h
+ * @returns {{ value: number, unit: string }}
+ */
+function _convertWind(kmh) {
+  var s = window._cwocSettings;
+  if (s && s.unit_system === 'metric') return { value: Math.round(kmh), unit: 'km/h' };
+  return { value: Math.round(kmh * 0.621371), unit: 'mph' };
+}
+
+/**
+ * Get the temperature bar range (min/max) for visual temperature bars.
+ * Metric: -10°C to 40°C. Imperial: -14°F to 104°F (equivalent range).
+ * @returns {{ barMin: number, barMax: number }}
+ */
+function _tempBarRange() {
+  var s = window._cwocSettings;
+  if (s && s.unit_system === 'metric') return { barMin: -10, barMax: 40 };
+  return { barMin: -14, barMax: 104 };
+}
+
 function generateUniqueId() {
   return Date.now().toString(36) + Math.random().toString(36).substr(2);
 }

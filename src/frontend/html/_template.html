@@ -5,6 +5,12 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Page Title — C.W.'s Omni Chits</title>
+    <!-- PWA -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#8b5a2b" />
+    <link rel="apple-touch-icon" href="/static/cwoc-icon-192.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <link rel="stylesheet" href="/frontend/css/shared/shared-page.css" />
     <!-- Uncomment if this page uses editor-like zones (collapsible sections, form fields): -->
     <!-- <link rel="stylesheet" href="/frontend/css/shared/shared-editor.css" /> -->
@@ -79,5 +85,8 @@
 
     <!-- ── 4. Page-specific script ───────────────────────────────────────── -->
     <!-- <script src="/frontend/js/pages/your-page.js"></script> -->
+
+    <!-- ── PWA ───────────────────────────────────────────────────────────── -->
+    <script src="/pwa/pwa-register.js"></script>
 </body>
 </html>

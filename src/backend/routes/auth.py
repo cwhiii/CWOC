@@ -86,6 +86,7 @@ def _set_session_cookie(response: JSONResponse, token: str) -> JSONResponse:
         httponly=True,
         path="/",
         samesite="lax",
+        max_age=SESSION_LIFETIME_HOURS * 3600,  # persist across browser restarts
     )
     return response
 

@@ -33,8 +33,12 @@ Package marker. No public exports.
 | `NoCacheStaticMiddleware` | Middleware that adds no-cache headers to `/frontend/`, `/static/`, `/data/` responses |
 | `AuthMiddleware` | (imported from `middleware.py`) Session-based auth middleware — validates `cwoc_session` cookie, injects user identity into `request.state` |
 | `on_startup()` | Startup event — calls `start_weather_schedulers()` |
+| `serve_service_worker()` | `GET /sw.js` — Serve the service worker from `src/pwa/sw.js` with `Content-Type: application/javascript` and `Service-Worker-Allowed: /` header |
+| `serve_manifest()` | `GET /manifest.json` — Serve the web app manifest from `src/pwa/manifest.json` with `Content-Type: application/json` |
+| `serve_icon_192()` | `GET /static/cwoc-icon-192.png` — Serve 192×192 PWA icon from `src/pwa/` |
+| `serve_icon_512()` | `GET /static/cwoc-icon-512.png` — Serve 512×512 PWA icon from `src/pwa/` |
 
-Registers all route modules (including `auth_router`, `users_router`, `sharing_router`, `notifications_router`, and `network_access_router`), runs all migrations (including `migrate_add_multi_user()`, `migrate_add_sharing()`, `migrate_add_kiosk_users()`, `migrate_add_network_access()`, `migrate_add_notifications()`, `migrate_habits_overhaul()`, and `migrate_habits_phase2()`) and `init_db()` at import time, mounts `StaticFiles` for frontend, static, and data directories.
+Registers all route modules (including `auth_router`, `users_router`, `sharing_router`, `notifications_router`, `network_access_router`, `push_router`, and `ntfy_router`), runs all migrations (including `migrate_add_multi_user()`, `migrate_add_sharing()`, `migrate_add_kiosk_users()`, `migrate_add_network_access()`, `migrate_add_notifications()`, `migrate_habits_overhaul()`, `migrate_habits_phase2()`, `migrate_add_push_subscriptions()`, and `migrate_add_vapid_keys()`) and `init_db()` at import time, mounts `StaticFiles` for frontend, static, data, and PWA directories.
 
 ### 1.3 `src/backend/models.py` — Pydantic Models
 
@@ -111,6 +115,8 @@ All migrations run at startup. Each checks if the column/table already exists be
 | `migrate_add_notifications()` | Create `notifications` table with columns: `id` (TEXT PRIMARY KEY), `user_id` (TEXT NOT NULL), `chit_id` (TEXT NOT NULL), `chit_title` (TEXT), `owner_display_name` (TEXT), `notification_type` (TEXT NOT NULL), `status` (TEXT NOT NULL DEFAULT 'pending'), `created_datetime` (TEXT NOT NULL); creates index `idx_notifications_user_id` on `user_id` |
 | `migrate_habits_overhaul()` | Add `habit` (BOOLEAN DEFAULT 0), `habit_goal` (INTEGER DEFAULT 1), `habit_success` (INTEGER DEFAULT 0), `show_on_calendar` (BOOLEAN DEFAULT 1) columns to chits table; add `default_show_habits_on_calendar` (TEXT DEFAULT '1') column to settings table; remove `hide_when_instance_done` column via table rebuild (copy-to-temp, recreate, copy-back) |
 | `migrate_habits_phase2()` | Add `habit_reset_period` (TEXT DEFAULT NULL), `habit_last_action_date` (TEXT DEFAULT NULL), `habit_hide_overall` (BOOLEAN DEFAULT 0), `perpetual` (BOOLEAN DEFAULT 0) columns to chits table |
+| `migrate_add_push_subscriptions()` | Create `push_subscriptions` table with columns: `id` (TEXT PRIMARY KEY), `user_id` (TEXT NOT NULL), `endpoint` (TEXT NOT NULL UNIQUE), `p256dh` (TEXT NOT NULL), `auth` (TEXT NOT NULL), `device_label` (TEXT), `created_datetime` (TEXT NOT NULL). Uses `CREATE TABLE IF NOT EXISTS` for idempotency |
+| `migrate_add_vapid_keys()` | Ensure `instance_meta` table exists for storing VAPID key pair as key-value rows (`vapid_public_key`, `vapid_private_key`). Uses `CREATE TABLE IF NOT EXISTS` for idempotency |
 
 ### 1.6 `src/backend/serializers.py` — vCard & CSV
 
@@ -122,10 +128,12 @@ All migrations run at startup. Each checks if the column/table already exists be
 | `csv_export(contacts)` | Export a list of contacts as a CSV string |
 | `csv_import(csv_text)` | Import contacts from a CSV string; returns (contacts, errors) |
 
-### 1.7 `src/backend/weather.py` — Weather API & Schedulers
+### 1.7 `src/backend/weather.py` — Weather API, Schedulers & Push Notifications
 
 | Function | Description |
 |----------|-------------|
+| `_send_chit_push(owner_id, chit_id, chit_title, time_label, time_value)` | Send a push notification for a chit event to the chit owner. Imports `send_push_to_user` from push routes; fails silently if pywebpush unavailable |
+| `_send_chit_ntfy(owner_id, chit_id, chit_title, time_label, time_value)` | Send an ntfy notification for a chit event to the chit owner. Imports `send_ntfy_notification` from ntfy routes; fails silently on error. Defaults title to "CWOC Reminder" if empty |
 | `_get_chit_focus_date(chit)` | Determine the relevant date for weather lookup on a chit |
 | `_partition_eligible_chits(chits, now)` | Split chits into 7-day and 8–16 day buckets for weather fetching |
 | `_extract_weather_for_date(forecast_daily, focus_date)` | Pull a single day's forecast from the daily forecast array |
@@ -135,7 +143,8 @@ All migrations run at startup. Each checks if the column/table already exists be
 | `weather_update()` | Main weather update — geocodes chit locations, fetches forecasts, writes to DB |
 | `_weather_hourly_loop()` | Background loop — runs `weather_update()` every hour for 7-day chits |
 | `_weather_daily_loop()` | Background loop — runs `weather_update()` every 24h for 8–16 day chits |
-| `start_weather_schedulers()` | Start both weather background loops |
+| `_alert_push_loop()` | Background loop — runs every 60 seconds, checks for chits whose start/due time falls within the last 60-second window, sends push notifications to chit owners via `_send_chit_push()` and ntfy notifications via `_send_chit_ntfy()` |
+| `start_weather_schedulers()` | Start weather background loops (hourly + daily) and the alert push loop |
 
 ### 1.8 `src/backend/test_audit.py` — Audit Diff Property Tests
 
@@ -179,7 +188,7 @@ Session-based authentication middleware for all CWOC requests.
 | `SESSION_COOKIE_NAME` | Cookie name constant: `"cwoc_session"` |
 | `_INACTIVITY_SECONDS` | Inactivity timeout: 24 hours (86,400 seconds) |
 | `_CLEANUP_INTERVAL` | Periodic cleanup interval: every 100 requests |
-| `_is_excluded(path, method)` | Return True if the request path/method should skip auth (static assets, login page, health check, login API, login-message API, kiosk page and API) |
+| `_is_excluded(path, method)` | Return True if the request path/method should skip auth (static assets, login page, health check, login API, login-message API, kiosk page and API, PWA files: `/sw.js`, `/manifest.json`, `/pwa/*`, `/api/push/vapid-public-key`) |
 | `_cleanup_expired_sessions()` | Delete sessions past their `expires_datetime` or inactive > 24h |
 | `AuthMiddleware` | Starlette `BaseHTTPMiddleware` subclass — validates `cwoc_session` cookie, injects `request.state.user_id` and `request.state.username`, returns 401 for API paths or redirects to `/login` for page paths |
 
@@ -538,6 +547,84 @@ Provides endpoints for listing, updating, and dismissing sharing notifications. 
 |----------|-------------|
 | `_create_share_notifications(cursor, chit_id, chit_title, owner_display_name, old_shares, new_shares, assigned_to_new, assigned_to_old)` | Create notification records for each newly shared user. Compares old_shares to new_shares; for each new user_id, inserts a notification row with `notification_type` "assigned" (if user is newly assigned) or "invited" (otherwise). Called by `routes/chits.py` and `routes/sharing.py` |
 
+### 1.31 `src/backend/routes/push.py` — Push Notification API Routes
+
+Provides endpoints for VAPID key retrieval, push subscription management, and sending push notifications to user devices via Web Push. Gracefully degrades when pywebpush is not installed — VAPID key and subscribe endpoints still work, only send fails silently.
+
+| Route | Handler | Description |
+|-------|---------|-------------|
+| `GET /api/push/vapid-public-key` | `get_vapid_public_key()` | Return VAPID public key for push subscription (no auth required — excluded in middleware) |
+| `POST /api/push/subscribe` | `subscribe_push(request)` | Store push subscription for authenticated user (upserts by endpoint) |
+| `DELETE /api/push/subscribe` | `unsubscribe_push(request)` | Remove a push subscription by endpoint (user-scoped) |
+| `POST /api/push/send` | `send_push(request)` | Internal endpoint to send push notification to a user's devices |
+
+**Module-level state:**
+
+| Symbol | Description |
+|--------|-------------|
+| `_PUSH_AVAILABLE` | Boolean flag — True if pywebpush is importable |
+| `_py_vapid` | Cached `py_vapid` module reference (or None) |
+| `_webpush_mod` | Cached `pywebpush` module reference (or None) |
+
+**Helpers:**
+
+| Function | Description |
+|----------|-------------|
+| `ensure_pywebpush()` | Check if pywebpush is importable and set module-level `_PUSH_AVAILABLE` flag. Called once at module import time. Does NOT attempt to install anything |
+| `get_or_create_vapid_keys()` | Generate VAPID keys on first call, retrieve from `instance_meta` thereafter. Tries `py_vapid` first, falls back to `cryptography` library. Returns dict with `public_key` and `private_key` (base64url-encoded) |
+| `_generate_vapid_keys_with_py_vapid()` | Generate VAPID keys using `py_vapid` (bundled with pywebpush). Returns `(public_key_b64, private_key_b64)` |
+| `_generate_vapid_keys_with_cryptography()` | Generate VAPID keys using the `cryptography` library directly (fallback). Returns `(public_key_b64, private_key_b64)` |
+| `send_push_to_user(user_id, payload)` | Send push notification to all of a user's subscribed devices. Automatically removes subscriptions that return 410 Gone. Returns dict with `sent`, `failed`, `cleaned` counts |
+
+### 1.32 `src/backend/test_push.py` — Push Notification Property & Unit Tests
+
+Property-based tests for push notification backend logic. Uses Python stdlib only (unittest + sqlite3 + random + uuid) — no external libraries. Each property test runs 120+ iterations with randomly generated inputs. Inlines minimal production logic (direct DB operations) to avoid importing FastAPI.
+
+| Class / Function | Description |
+|------------------|-------------|
+| `TestProperty5VapidKeyIdempotence` | VAPID key generation is idempotent — calling `get_or_create_vapid_keys()` N times always returns the same key pair (120+ iterations). **Validates: Requirements 11.1** |
+| `TestProperty6SubscriptionRoundTrip` | Push subscription storage round-trip — storing a subscription and querying by user_id returns identical endpoint, p256dh, and auth values; upsert updates existing endpoint (120+ iterations). **Validates: Requirements 11.5** |
+| `TestProperty8ExpiredSubscriptionCleanup` | Expired subscriptions removed on 410 — simulating 410 responses removes expired subscriptions while preserving surviving ones (120+ iterations). **Validates: Requirements 11.10** |
+| `TestVapidPublicKeyEndpoint` | VAPID public key available without auth — `get_or_create_vapid_keys()` returns a non-empty base64url-encoded public key |
+| `TestSubscribeUnsubscribeFlow` | Full subscribe → verify → unsubscribe → verify-gone flow; wrong-user unsubscribe does nothing; multiple devices per user supported |
+
+### 1.33 `src/backend/routes/ntfy.py` — Ntfy Push Notification Sender
+
+Ntfy push notification sender module. Encapsulates all Ntfy notification logic: topic generation, config retrieval, HTTP POST delivery, and API endpoints for status/test/save. Uses Python stdlib only (`urllib.request`, `sqlite3`, `json`). No external dependencies.
+
+| Function / Route | Description |
+|------------------|-------------|
+| `get_ntfy_topic(user_id)` | Return deterministic topic: `'cwoc-'` + first 12 alphanumeric chars of user_id (hyphens stripped) |
+| `get_ntfy_config()` | Read ntfy provider config from `network_access` table. Returns `{'enabled': bool, 'server_url': str}` with default `http://localhost:2586` |
+| `send_ntfy_notification(user_id, title, body, click_url, tags)` | Send notification via HTTP POST to `{server_url}/{topic}` with X-Title, X-Tags, X-Click headers; 10s timeout; graceful error handling. Returns `{'sent': True, 'topic': str}` or `{'sent': False, 'reason': str}` |
+| `GET /api/network-access/ntfy/status` | `ntfy_status(request)` — Check ntfy service reachability via `{server_url}/v1/health`; returns `active`, `unreachable`, or `not_configured`. Admin only |
+| `POST /api/network-access/ntfy/test` | `ntfy_test(request)` — Send test notification ("CWOC Test") to requesting user's topic. Any authenticated user |
+| `POST /api/network-access/ntfy` | `save_ntfy_config(body, request)` — Save ntfy config with server_url validation (rejects empty/whitespace-only). Admin only. Audit logged |
+
+**Internal helpers:**
+
+| Function | Description |
+|----------|-------------|
+| `_utcnow_iso()` | Return current UTC time as ISO 8601 string with Z suffix |
+| `_require_admin(request)` | Check that the requesting user is an admin; return `user_id` if so, raise 403 otherwise |
+
+### 1.34 `src/backend/test_ntfy.py` — Ntfy Property & Unit Tests
+
+Property-based tests for the ntfy push notification module. Uses Python stdlib only (unittest + sqlite3 + random + uuid) — no external libraries. Each property test runs 120+ iterations with randomly generated inputs. Inlines minimal production logic (direct DB operations) to avoid importing FastAPI.
+
+| Class / Function | Description |
+|------------------|-------------|
+| `TestGetNtfyTopic` | Unit tests for `get_ntfy_topic()` — standard UUID, prefix check, determinism, hyphen exclusion, short/empty user_id, max length. **Validates: Requirements 2.1, 2.2** |
+| `TestGetNtfyConfig` | Unit tests for `get_ntfy_config()` — default when no config, reads saved config, disabled config, default server_url when missing. **Validates: Requirements 1.1, 1.3, 11.4** |
+| `TestBuildNtfyRequest` | Unit tests for HTTP request construction — URL construction, trailing slash stripping, X-Title/X-Click/X-Tags headers, body passthrough. **Validates: Requirements 3.1, 3.2, 3.3, 3.4** |
+| `TestServerUrlValidation` | Unit tests for server URL validation — empty/whitespace rejection, valid URL acceptance, save rejects invalid, strips whitespace, preserves row ID, config unchanged on invalid. **Validates: Requirements 1.4** |
+| `TestSendNtfyNotificationSkip` | Unit tests for skip behavior when ntfy is disabled or not configured. **Validates: Requirements 4.2, 11.5** |
+| `TestPBTTopicDeterminismAndFormat` | Property 1: Topic = 'cwoc-' + first 12 alnum chars, deterministic (120 iterations). **Validates: Requirements 2.1, 2.2** |
+| `TestPBTWhitespaceURLRejection` | Property 2: Whitespace-only URLs rejected, config unchanged (120 iterations). **Validates: Requirements 1.4** |
+| `TestPBTHTTPRequestConstruction` | Property 3: Request URL, headers, body match inputs (120 iterations). **Validates: Requirements 3.1, 3.2, 3.4** |
+| `TestPBTTitleDefaulting` | Property 4: Empty/None titles default to "CWOC Reminder" (120 iterations). **Validates: Requirements 4.5** |
+| `TestPBTDisabledProviderSkip` | Property 5: Disabled/unconfigured provider always skips (120 iterations). **Validates: Requirements 11.5, 4.2** |
+
 ---
 
 ## 2. Frontend JavaScript
@@ -568,6 +655,11 @@ Core utility functions shared across all CWOC pages. Must load after `shared-aut
 |----------|-------------|
 | `getCachedSettings()` | Promise-based settings fetch with caching; waits for auth, then fetches from `/api/settings/{user_id}` using the authenticated user's ID |
 | `_invalidateSettingsCache()` | Clear the settings cache to force a fresh fetch on next call |
+| `_convertTemp(c)` | Convert Celsius temperature for display based on user's `unit_system` setting (metric → °C, imperial → °F) |
+| `_tempUnit()` | Return the temperature unit label (`'°C'` or `'°F'`) based on user's `unit_system` setting |
+| `_isMetricUnits()` | Return true if the user's `unit_system` is `'metric'` |
+| `_convertWind(kmh)` | Convert wind speed from km/h for display; returns `{ value, unit }` (metric → km/h, imperial → mph) |
+| `_tempBarRange()` | Return `{ barMin, barMax }` for temperature bar visuals (metric: -10–40°C, imperial: -14–104°F) |
 | `cwocConfirm(message, opts)` | Show a parchment-styled confirm modal; returns a Promise resolving to boolean |
 | `generateUniqueId()` | Create a unique ID string from timestamp + random base-36 |
 | `formatDate(date)` | Format a Date as `YYYY-Mon-DD` string |
@@ -1069,6 +1161,7 @@ Coordinator for shared code between dashboard and editor. Contains glue code for
 | `displayChits()` | Main render dispatcher — filter (including hide-declined RSVP filter), sort, expand recurrence, and render the active view |
 | `_updateTabCounts(filteredChits)` | Update tab labels with counts of displayed chits per tab |
 | `_applyChitDisplayOptions()` | Apply visual options — fade past events and highlight overdue chits |
+| `DOMContentLoaded handler` | Main init — wires up sidebar, hotkeys, mobile UI, weather refresh, resize handler, notification inbox, and PWA install button (`#pwa-install-btn` → `handleInstallClick()` from `pwa-register.js`) |
 
 #### main.js
 
@@ -1643,6 +1736,11 @@ Settings page logic: tags, colors, clocks, locations, indicators, import/export,
 | `tailscaleUp()` | POST to `/api/network-access/tailscale/up`, show result, refresh status on success |
 | `tailscaleDown()` | POST to `/api/network-access/tailscale/down`, show result, refresh status on success |
 | `toggleAuthKeyVisibility()` | Toggle auth key input between `type="password"` and `type="text"`, update toggle button label |
+| `refreshNtfyStatus()` | Fetch `GET /api/network-access/ntfy/status`, update status badge (🟢 active / ⚪ inactive / 🔴 error) |
+| `loadNtfyConfig()` | Fetch `GET /api/network-access/ntfy`, populate server URL input and enabled checkbox, display user's topic |
+| `saveNtfyConfig()` | Collect server URL and enabled state, POST to `/api/network-access/ntfy`, show success/error feedback |
+| `testNtfyNotification()` | POST to `/api/network-access/ntfy/test`, show success/error feedback |
+| `toggleNtfySection()` | Toggle visibility of the Ntfy config section body |
 
 #### people.js
 
@@ -1823,7 +1921,7 @@ Shared styles for ALL secondary pages (settings, help, trash, people, contacts, 
 | Empty State (`.cwoc-empty`) | Centered empty-state message |
 | Toolbar (`.cwoc-toolbar`) | Flex toolbar for button rows |
 | Indicator / Checkbox Lists | Flex column lists for settings checkboxes |
-| Help Content (`.help-content`) | Help page typography and spacing |
+| Help Content (`.help-content`) | Help page typography and spacing — includes Ntfy Notifications section (setup flow, topic subscription, local vs Tailscale access, troubleshooting) |
 | Author Footer (`.author-info`) | Page footer with copyright |
 | Modal (`.modal`) | Full-screen modal overlay and content box |
 | Loader Spinner (`.loader`) | CSS spinner animation |
@@ -2010,7 +2108,11 @@ Chit-specific styles. Base editor styles (header-row, zones, fields, buttons) co
 
 ### 3.4 Settings HTML — Network Access Block (`settings.html`)
 
-The `#network-access-block` div inside the `#admin-section` `.settings-grid` provides the Tailscale configuration UI. Contains: status indicator row with refresh button, IP/hostname info row (hidden by default), error message row (hidden by default), auth key password input with visibility toggle, enabled checkbox, and Save Config / Connect / Disconnect buttons.
+The `#network-access-block` div inside the `#admin-section` `.settings-grid` provides the Tailscale and Ntfy configuration UI.
+
+**Tailscale section:** Status indicator row with refresh button, IP/hostname info row (hidden by default), error message row (hidden by default), auth key password input with visibility toggle, enabled checkbox, and Save Config / Connect / Disconnect buttons.
+
+**Ntfy section:** Toggle button with status icon (🟢 active / ⚪ inactive / 🔴 error), collapsible config body with status indicator + refresh button, server URL input (default: `http://localhost:2586`), read-only topic display (per-user, computed from logged-in user's UUID), 💾 Save Config button, and 🔔 Test button.
 
 ---
 
@@ -2024,12 +2126,81 @@ The `#network-access-block` div inside the `#admin-section` `.settings-grid` pro
 
 Called in both fresh-install and upgrade paths of `main()`, after `configure_https` and before `start_and_verify`.
 
+`install_python_deps()` includes `pywebpush` in the `required_pkgs` list, installed via `/app/venv/bin/pip`.
+
+### `cwoc-push.sh` — Push Service Startup Script
+
+Ensures push-related services stay running. Checks Tailscale and Ntfy service status on each invocation.
+
+| Block | Description |
+|-------|-------------|
+| Tailscale check | If Tailscale is installed, ensure it stays running via `systemctl start tailscale` |
+| Ntfy check | If ntfy is installed (`command -v ntfy` or `/usr/bin/ntfy`), ensure it stays running via `systemctl start ntfy` |
+
+---
+
+## 3.6 PWA Files (`src/pwa/`)
+
+All Progressive Web App files live under `src/pwa/`. Served by FastAPI via explicit routes (`/sw.js`, `/manifest.json`) and a static mount (`/pwa/*`).
+
+### `src/pwa/manifest.json` — Web App Manifest
+
+JSON manifest defining the PWA identity: `name`, `short_name`, `display` (standalone), `start_url`, `scope`, `theme_color` (#8b5a2b), `background_color` (#f5e6cc), `orientation` (any), and `icons` array (192×192 and 512×512 PNGs).
+
+### `src/pwa/sw.js` — Service Worker
+
+Cache strategy: app-shell URLs use stale-while-revalidate; `/api/*` is network-only; external origins are passthrough; navigation misses fall back to `offline.html`. Versioned cache name: `cwoc-shell-v1`.
+
+| Handler | Description |
+|---------|-------------|
+| `install` | Pre-cache app shell URLs (HTML pages, CSS, JS, icons, fonts) + `offline.html`, then `skipWaiting()` |
+| `activate` | Delete old versioned caches, then `clients.claim()` |
+| `fetch` | Route requests: network-only for `/api/*`, passthrough for external origins, stale-while-revalidate for app shell, offline fallback for navigation misses |
+| `push` | Parse push event payload as JSON, display notification via `showNotification()` with title, body, icon, badge, and data |
+| `notificationclick` | Close notification, navigate to chit URL from payload data, focus existing CWOC window or open new one |
+
+| Symbol | Description |
+|--------|-------------|
+| `CACHE_NAME` | Versioned cache name constant: `'cwoc-shell-v1'` |
+| `APP_SHELL_URLS` | Array of all app shell URLs to pre-cache (HTML, CSS, JS, icons, fonts) |
+
+### `src/pwa/pwa-register.js` — Service Worker Registration & Push Subscription
+
+Loaded via `<script>` on every page. Handles service worker registration, install prompt capture, standalone mode detection, and push notification subscription. All functions are globally accessible (no modules).
+
+| Symbol | Description |
+|--------|-------------|
+| `_pwaInstallPrompt` | Deferred `beforeinstallprompt` event, captured for later use |
+| `registerServiceWorker()` | Register the service worker at `/sw.js` with root scope. Checks for browser support first — fails silently if unsupported |
+| `captureInstallPrompt()` | Listen for `beforeinstallprompt` event, defer it, show install button in sidebar. Also listens for `appinstalled` to clean up |
+| `handleInstallClick()` | Trigger the deferred install prompt. Called when the user clicks the install button. Hides button on accept or dismiss |
+| `_detectStandaloneMode()` | Detect if the app is running in standalone mode (installed). Hides install button if already installed |
+| `subscribeToPush()` | Subscribe the browser to push notifications: fetch VAPID public key from `/api/push/vapid-public-key`, subscribe via `pushManager.subscribe()`, POST subscription to `/api/push/subscribe`. Only runs after notification permission is granted |
+| `_urlBase64ToUint8Array(base64String)` | Convert a base64url-encoded string to a Uint8Array (needed for `applicationServerKey`) |
+| `_arrayBufferToBase64(buffer)` | Convert an ArrayBuffer to a base64 string (used to serialize push subscription keys) |
+| `_handleSubscriptionChange()` | Handle push subscription changes — re-subscribe if subscription was lost but permission is still granted |
+
+### `src/pwa/offline.html` — Offline Fallback Page
+
+Standalone offline fallback page served when navigation requests fail. CWOC parchment theme with friendly "no network" message, retry button, and link to dashboard. Uses `shared-page.css` with inline fallback styles for full offline capability.
+
+### `src/pwa/cwoc-icon-192.png` — 192×192 PWA Icon
+
+PWA icon at 192×192 pixels. Referenced by `manifest.json` and `<link rel="apple-touch-icon">`. Served at `/static/cwoc-icon-192.png` via explicit route in `main.py`.
+
+### `src/pwa/cwoc-icon-512.png` — 512×512 PWA Icon
+
+PWA icon at 512×512 pixels. Referenced by `manifest.json`. Served at `/static/cwoc-icon-512.png` via explicit route in `main.py`.
+
 
 ---
 
 ## 4. Load Order
 
 All JS is loaded via `<script>` tags — no ES modules. Load order matters because later scripts depend on globals defined by earlier ones.
+
+**PWA meta tags (all pages except `login.html`):**
+All HTML pages include the following PWA `<head>` tags: `<link rel="manifest" href="/manifest.json">`, `<meta name="theme-color" content="#8b5a2b">`, `<link rel="apple-touch-icon" href="/static/cwoc-icon-192.png">`, `<meta name="apple-mobile-web-app-capable" content="yes">`, `<meta name="apple-mobile-web-app-status-bar-style" content="default">`. Each page also loads `<script src="/pwa/pwa-register.js"></script>` before closing `</body>`.
 
 ### 4.1 Dashboard (`index.html`)
 
@@ -2090,9 +2261,10 @@ All JS is loaded via `<script>` tags — no ES modules. Load order matters becau
 <script src="/frontend/js/dashboard/main-modals.js"></script>
 <script src="/frontend/js/dashboard/main-init.js"></script>
 <script src="/frontend/js/dashboard/main.js"></script>
-```
 
-### 4.2 Editor (`editor.html`)
+<!-- 4. PWA registration (service worker, install prompt, push subscription) -->
+<script src="/pwa/pwa-register.js"></script>
+```
 
 **CSS link order:**
 ```html
@@ -2151,6 +2323,9 @@ All JS is loaded via `<script>` tags — no ES modules. Load order matters becau
 <!-- 5. CDN (loaded last) -->
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+<!-- 6. PWA registration (service worker, install prompt, push subscription) -->
+<script src="/pwa/pwa-register.js"></script>
 ```
 
 ### 4.3 Secondary Pages (settings, people, weather, trash, etc.)
@@ -2189,6 +2364,9 @@ All secondary pages follow the same shared pattern. Example from `settings.html`
 
 <!-- 4. Page-specific script -->
 <script src="/frontend/js/pages/settings.js"></script>
+
+<!-- 5. PWA registration (service worker, install prompt, push subscription) -->
+<script src="/pwa/pwa-register.js"></script>
 ```
 
 Pages using this pattern: `settings.html`, `people.html`, `contact-editor.html`, `weather.html`, `trash.html`, `audit-log.html`, `help.html`, `profile.html`, `user-admin.html`.
@@ -2211,10 +2389,10 @@ New frontend pages added for chit sharing system:
 ```
 src/backend/main.py
   ├── src.backend.db          (init_db, seed_version_info)
-  ├── src.backend.migrations  (all migrate_* functions, including migrate_add_multi_user, migrate_add_sharing)
+  ├── src.backend.migrations  (all migrate_* functions, including migrate_add_multi_user, migrate_add_sharing, migrate_add_push_subscriptions, migrate_add_vapid_keys)
   ├── src.backend.middleware   (AuthMiddleware)
   ├── src.backend.weather     (start_weather_schedulers)
-  └── src.backend.routes.*    (all 10 route modules, including auth_router, users_router, sharing_router, and notifications_router)
+  └── src.backend.routes.*    (all 12 route modules, including auth_router, users_router, sharing_router, notifications_router, network_access_router, push_router, and ntfy_router)
 
 src/backend/routes/chits.py
   ├── src.backend.db           (DB_PATH, serialize/deserialize, compute_system_tags, _build_export_envelope)
@@ -2257,6 +2435,13 @@ src/backend/routes/network_access.py
   ├── src.backend.db           (DB_PATH)
   └── src.backend.routes.audit (get_actor_from_request, insert_audit_entry)
 
+src/backend/routes/push.py
+  └── src.backend.db           (DB_PATH)
+
+src/backend/routes/ntfy.py
+  ├── src.backend.db           (DB_PATH)
+  └── src.backend.routes.audit (get_actor_from_request, insert_audit_entry)
+
 src/backend/sharing.py
   └── src.backend.db           (DB_PATH, deserialize_json_field)
 
@@ -2277,7 +2462,9 @@ src/backend/auth_utils.py
   └── (no internal CWOC imports — leaf module)
 
 src/backend/weather.py
-  └── src.backend.db           (DB_PATH, _update_lock, serialize_json_field)
+  ├── src.backend.db           (DB_PATH, _update_lock, serialize_json_field)
+  ├── src.backend.routes.push  (send_push_to_user — imported lazily in _send_chit_push)
+  └── src.backend.routes.ntfy  (send_ntfy_notification — imported lazily in _send_chit_ntfy)
 
 src/backend/migrations.py
   ├── src.backend.db           (DB_PATH, serialize_json_field)
@@ -2293,7 +2480,7 @@ src/backend/models.py
   └── (no internal CWOC imports — leaf module)
 ```
 
-**Dependency summary:** `db.py`, `models.py`, and `auth_utils.py` are leaf modules with no internal imports. `routes/audit.py` is imported by `chits.py`, `contacts.py`, `settings.py`, `health.py`, `sharing.py`, and `network_access.py` for audit logging. `routes/notifications.py` is imported by `chits.py` and `sharing.py` for notification creation. `auth_utils.py` is imported by `routes/auth.py`, `routes/users.py`, and `migrations.py`. `middleware.py` is imported by `main.py`. All route modules import from `db.py`.
+**Dependency summary:** `db.py`, `models.py`, and `auth_utils.py` are leaf modules with no internal imports. `routes/audit.py` is imported by `chits.py`, `contacts.py`, `settings.py`, `health.py`, `sharing.py`, `network_access.py`, and `ntfy.py` for audit logging. `routes/notifications.py` is imported by `chits.py` and `sharing.py` for notification creation. `routes/push.py` is imported lazily by `weather.py` for push notification sending. `routes/ntfy.py` is imported lazily by `weather.py` for ntfy notification sending. `auth_utils.py` is imported by `routes/auth.py`, `routes/users.py`, and `migrations.py`. `middleware.py` is imported by `main.py`. All route modules import from `db.py`.
 
 ### 5.2 Frontend Script Load Dependencies
 

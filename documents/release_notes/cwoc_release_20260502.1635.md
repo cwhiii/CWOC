@@ -1,0 +1,1 @@
+Ntfy settings now shows both local and Tailscale server URLs (when Tailscale is active) with a hint to subscribe to both in the phone app. This ensures notifications work seamlessly whether at home or remote, without ever needing to reconfigure.

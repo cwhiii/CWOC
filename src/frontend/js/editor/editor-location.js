@@ -145,8 +145,8 @@ function _displayWeatherInCompactSection(weatherData, address) {
     const maxC = today.temperature_2m_max[0];
     const precipMm = today.precipitation_sum[0];
 
-    const min = Math.round((minC * 9) / 5 + 32);
-    const max = Math.round((maxC * 9) / 5 + 32);
+    const min = _convertTemp(minC);
+    const max = _convertTemp(maxC);
 
     const icon = weatherIcons[weatherCode] || "❓";
     const precip = _editorFormatPrecip(precipMm, weatherCode);
@@ -154,8 +154,9 @@ function _displayWeatherInCompactSection(weatherData, address) {
     const d = new Date();
     const formattedDate = `${d.toLocaleDateString("en-US", { weekday: "short" })} ${d.getFullYear()}-${d.toLocaleDateString("en-US", { month: "short" })}-${String(d.getDate()).padStart(2, "0")}`;
 
-    const barMin = -14;
-    const barMax = 104;
+    const barRange = _tempBarRange();
+    const barMin = barRange.barMin;
+    const barMax = barRange.barMax;
     const range = barMax - barMin;
     const startPct = ((min - barMin) / range) * 100;
     const endPct = ((max - barMin) / range) * 100;

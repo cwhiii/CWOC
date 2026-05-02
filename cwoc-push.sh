@@ -87,6 +87,56 @@ if [[ "$RESTART" == true ]]; then
                     echo "   ✅ Tailscale still connected"
                 fi
             fi
+
+            # If ntfy is installed, ensure it stays running
+            if command -v ntfy &>/dev/null || [ -f /usr/bin/ntfy ]; then
+                systemctl start ntfy 2>/dev/null
+                echo "   ✅ Ntfy service running"
+            else
+                # Install ntfy if not present
+                ARCH=$(uname -m)
+                case "$ARCH" in
+                    x86_64)  ARCH="amd64" ;;
+                    aarch64) ARCH="arm64" ;;
+                    armv7l)  ARCH="armv7" ;;
+                    *)       ARCH="" ;;
+                esac
+                if [ -n "$ARCH" ]; then
+                    NTFY_VER="v2.11.0"
+                    NTFY_URL="https://github.com/binwiederhier/ntfy/releases/download/${NTFY_VER}/ntfy_${NTFY_VER#v}_linux_${ARCH}.tar.gz"
+                    TMP_TAR="/tmp/ntfy.tar.gz"
+                    TMP_DIR="/tmp/ntfy-extract"
+                    if wget -q -O "$TMP_TAR" "$NTFY_URL" 2>/dev/null; then
+                        rm -rf "$TMP_DIR" && mkdir -p "$TMP_DIR"
+                        tar -xzf "$TMP_TAR" -C "$TMP_DIR" 2>/dev/null
+                        NTFY_BIN=$(find "$TMP_DIR" -name "ntfy" -type f | head -1)
+                        if [ -n "$NTFY_BIN" ]; then
+                            cp "$NTFY_BIN" /usr/bin/ntfy
+                            chmod +x /usr/bin/ntfy
+                            cat > /etc/systemd/system/ntfy.service <<NTFYEOF
+[Unit]
+Description=Ntfy Push Notification Server
+After=network.target
+[Service]
+Type=simple
+ExecStart=/usr/bin/ntfy serve --listen-http :2586
+Restart=on-failure
+RestartSec=5
+[Install]
+WantedBy=multi-user.target
+NTFYEOF
+                            systemctl daemon-reload
+                            systemctl enable ntfy 2>/dev/null
+                            systemctl start ntfy 2>/dev/null
+                            echo "   ✅ Ntfy installed and started"
+                        fi
+                        rm -rf "$TMP_TAR" "$TMP_DIR"
+                    else
+                        echo "   ℹ️  Ntfy download failed — skipping"
+                        rm -f "$TMP_TAR"
+                    fi
+                fi
+            fi
         else
             echo "   ❌ Restart failed!"
             systemctl status cwoc.service --no-pager -l

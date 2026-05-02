@@ -4042,6 +4042,10 @@ function filterChits(tab) {
   storePreviousState();
 
   currentTab = tab;
+
+  // Update mobile Views button to show current tab name
+  if (typeof _updateMobileViewsLabel === 'function') _updateMobileViewsLabel();
+
   document
     .querySelectorAll(".tab")
     .forEach((t) => t.classList.remove("active"));

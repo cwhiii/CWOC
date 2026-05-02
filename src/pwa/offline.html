@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Offline — C.W.'s Omni Chits</title>
+    <link rel="icon" href="/static/cwod_logo-favicon.png" />
+
+    <!-- PWA meta tags -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#8b5a2b" />
+    <link rel="apple-touch-icon" href="/static/cwoc-icon-192.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+
+    <!-- Shared page styles (available when cached by service worker) -->
+    <link rel="stylesheet" href="/frontend/css/shared/shared-page.css" />
+
+    <!-- Inline fallback styles — ensures the page looks right even if
+         shared-page.css fails to load (this page must work fully offline) -->
+    <style>
+        /* ── Fallback: Lora font (graceful degradation to Georgia/serif) ── */
+        body {
+            font-family: 'Lora', Georgia, 'Times New Roman', serif;
+            background-color: #f5e6cc;
+            color: #1a1208;
+            margin: 0;
+            padding: 1em;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            text-align: center;
+        }
+
+        /* ── Fallback panel ── */
+        .offline-panel {
+            background: linear-gradient(to bottom, #fff8e1, #f5e6cc);
+            border: 2px solid #8b5a2b;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+            max-width: 480px;
+            width: 100%;
+            padding: 40px 30px;
+            position: relative;
+        }
+        .offline-panel::before {
+            content: "";
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle, rgba(255, 215, 0, 0.1), transparent);
+            pointer-events: none;
+            border-radius: 10px;
+        }
+
+        .offline-icon {
+            font-size: 4em;
+            margin-bottom: 16px;
+            line-height: 1;
+        }
+
+        .offline-title {
+            font-size: 26px;
+            color: #1a1208;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin: 0 0 12px;
+            border-bottom: 1px solid #8b5a2b;
+            padding-bottom: 10px;
+        }
+
+        .offline-message {
+            font-size: 16px;
+            color: #4a2c2a;
+            line-height: 1.6;
+            margin: 0 0 24px;
+        }
+
+        .offline-retry-btn {
+            background: linear-gradient(#d4a373, #c8965a);
+            color: #2b1e0f;
+            border: none;
+            border-radius: 5px;
+            padding: 12px 28px;
+            cursor: pointer;
+            font-size: 16px;
+            font-family: 'Lora', Georgia, serif;
+            font-weight: bold;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            transition: box-shadow 0.3s, transform 0.1s;
+            letter-spacing: 1px;
+        }
+        .offline-retry-btn:hover {
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+            transform: translateY(-1px);
+        }
+        .offline-retry-btn:active {
+            transform: translateY(0);
+        }
+
+        .offline-hint {
+            font-size: 14px;
+            color: #6b4e31;
+            margin-top: 20px;
+            line-height: 1.5;
+        }
+
+        /* ── Mobile responsive ── */
+        @media (max-width: 480px) {
+            .offline-panel {
+                padding: 28px 18px;
+            }
+            .offline-title {
+                font-size: 20px;
+            }
+            .offline-icon {
+                font-size: 3em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="offline-panel">
+        <div class="offline-icon">📜</div>
+        <h2 class="offline-title">You're Offline</h2>
+        <p class="offline-message">
+            C.W.'s Omni Chits needs a network connection to load this page.
+            Check your Wi-Fi or mobile data and try again.
+        </p>
+        <button class="offline-retry-btn" onclick="location.reload()">
+            ↻ Try Again
+        </button>
+        <p class="offline-hint">
+            Pages you've visited recently may still be available &mdash;
+            try navigating to the <a href="/" style="color: #8b5a2b; font-weight: bold;">dashboard</a>.
+        </p>
+    </div>
+</body>
+</html>

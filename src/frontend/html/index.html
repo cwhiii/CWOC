@@ -9,6 +9,12 @@
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>C.W.'s Omni Chits</title>
+        <!-- PWA -->
+        <link rel="manifest" href="/manifest.json" />
+        <meta name="theme-color" content="#8b5a2b" />
+        <link rel="apple-touch-icon" href="/static/cwoc-icon-192.png" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <link
             rel="stylesheet"
             href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css"
@@ -668,5 +674,6 @@
             if (el) el.style.display = '';
         }
         </script>
+        <script src="/pwa/pwa-register.js"></script>
     </body>
 </html>

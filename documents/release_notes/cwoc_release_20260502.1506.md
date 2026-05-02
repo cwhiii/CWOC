@@ -1,0 +1,1 @@
+Added "Open in Chrome to Install" button to Settings → Install as App. On Firefox Android (which can't install standalone PWAs), the button launches Chrome directly to the CWOC server URL via an Android intent, so users can install the real standalone app from there. Updated help page with accurate Firefox limitations and the Chrome install workflow.

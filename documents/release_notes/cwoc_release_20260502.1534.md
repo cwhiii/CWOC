@@ -1,0 +1,1 @@
+Improved push notification diagnostics. subscribeToPush now returns detailed step-by-step results (sw-ready, vapid-fetch, push-subscribe, server-store) with specific error messages. The push test button displays exactly which step failed so the issue can be identified.

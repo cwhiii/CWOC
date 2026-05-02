@@ -1,0 +1,1 @@
+Push script now auto-installs ntfy if not present on the server (downloads binary, creates systemd service, starts it). Added "Open Tailscale" button to the Tailscale config section and "Open Ntfy" button to the Ntfy config section for quick access to their web UIs.

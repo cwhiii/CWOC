@@ -3,6 +3,9 @@
 *Completed items are in `done.md`. Deferred items in `parking_lot.md`. Declined in `path_not_traveled.md`.*
 
 ---
+Add an update to the top level read me. Include a dependency section. Include both tail scale, and NFTY, and explain what each is used for.
+
+
 
 ## Manual Tasks
 - `[ ]` Screenshot and video walkthrough of the app
@@ -18,7 +21,10 @@ fix habit notifications:
 
 The how it charts are pre-rendering the text. So they're grainy and terrible. Use actual text instead of rendered text from an image for those charts.
 
-
+## Exporting
+- Export chit as markdwon with frontmatter.
+- Export chit as calendar file. (.ics)
+- Export all chits in either of the above, per user, or all users.
 
 ---
 
@@ -95,12 +101,6 @@ The how it charts are pre-rendering the text. So they're grainy and terrible. Us
 - `[ ]` Views show 100 HST hours instead of normal hours
 - `[ ]` Span options become 1,2,3,4,5,10 HST hours
 
-### Event Invitations
-- `[ ]` Accept/reject invitations
-- `[ ]` Invitation status visible to inviter
-- `[ ]` Accepted invitations appear on invitee's calendar
-- `[ ]` Declined events toggle
-
 ### Health Indicators (Enhancements)
 - `[ ]` Symptom tracker (multi-select), with the ability to create your own list of symptoms in settings
 - `[ ]` Cycle tracking (show/hide based on gender setting)
@@ -111,9 +111,8 @@ The how it charts are pre-rendering the text. So they're grainy and terrible. Us
 - `[ ]` Phone app with offline store + sync
 
 ### UI & Layout
-- `[X]` Wall/kiosk view for persistent displays
 - `[ ]` Rolling circular chits view (next task in project, repeat when done)
-- `[ ]` Context switching (hide chits by time schedule + tags)
+- `[ ]` Automatic Context switching (hide chits by time schedule + tags) via rule
 - `[ ]` Show events by map
 - `[ ]` Schedule appointment hours and days
 

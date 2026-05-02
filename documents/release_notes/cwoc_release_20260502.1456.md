@@ -1,0 +1,1 @@
+Added "Install as App" section to Settings with a button to download the server's self-signed SSL certificate. Users can install the cert on their phone/tablet to trust the server, enabling PWA installation from Firefox, Chrome, and Safari. Updated Help page with Firefox-specific install instructions and certificate trust steps.

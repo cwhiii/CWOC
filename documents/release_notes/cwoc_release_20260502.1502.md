@@ -1,0 +1,1 @@
+Moved the PWA install button from the dashboard sidebar to Settings → Install as App. The section now shows a direct install button (on browsers that support it) plus instructions for using the browser menu. Clarified that Firefox's "Add to Home Screen" is the correct PWA install method. Updated help page accordingly.

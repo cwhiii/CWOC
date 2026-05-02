@@ -5,6 +5,12 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>CWOC Help — C.W.'s Omni Chits</title>
+    <!-- PWA -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#8b5a2b" />
+    <link rel="apple-touch-icon" href="/static/cwoc-icon-192.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <link rel="stylesheet" href="/frontend/css/shared/shared-page.css" />
 </head>
 <body data-page-title="Help Guide" data-page-icon="❓">
@@ -38,7 +44,9 @@
                     <li><a href="#contacts">Contact Editor</a></li>
                     <li><a href="#sharing">Sharing</a></li>
                     <li><a href="#kiosk">Kiosk</a></li>
-                    <li><a href="#network-access">Network Access</a></li>
+                    <li><a href="#network-access">Dependent Apps</a></li>
+                    <li><a href="#ntfy-notifications">Ntfy Notifications</a></li>
+                    <li><a href="#install-app">Install as App</a></li>
                 </ul>
             </div>
             <h3 id="what-is-cwoc">What is CWOC?</h3>
@@ -294,7 +302,7 @@
                 <li><strong>Data</strong> — Audit log link, trash link, audit log pruning limits</li>
                 <li><strong>Data Management</strong> — JSON export/import for chit data and user data (add or replace modes)</li>
                 <li><strong>Kiosk</strong> — Select which tags to display on the unauthenticated kiosk view, and launch it</li>
-                <li><strong>Network Access</strong> — (Admin only) Configure external network access providers like Tailscale VPN</li>
+                <li><strong>Dependent Apps</strong> — (Admin only) Configure external services: Tailscale VPN for remote access, Ntfy for push notifications</li>
             </ul>
             <h3 id="data-management">Data Management</h3>
             <p>The Settings page includes a <strong>📦 Data Management</strong> box for exporting and importing your data as JSON files. There are two data categories, each with its own Export and Import buttons:</p>
@@ -538,8 +546,8 @@
                 <li><strong>Click to edit</strong> — Clicking any event or task opens it in the chit editor. After saving, you're returned to the kiosk.</li>
             </ul>
             <p>A tag legend at the bottom shows which tags are active, and a timestamp shows when data was last refreshed.</p>
-            <h3 id="network-access">Network Access</h3>
-            <p>The Settings page includes a <strong>🌐 Network Access</strong> block (admin only) for configuring external network access providers. Currently supports Tailscale, a WireGuard-based mesh VPN for secure remote access without port forwarding.</p>
+            <h3 id="network-access">Dependent Apps</h3>
+            <p>The Settings page includes a <strong>📱 Dependent Apps</strong> block (admin only) for configuring external services that CWOC integrates with. Currently supports Tailscale (mesh VPN for secure remote access) and Ntfy (push notifications to your phone).</p>
             <h4>Tailscale</h4>
             <ul>
                 <li><strong>Status</strong> — Shows the current Tailscale state: ⚪ Not Installed, 🟡 Inactive, 🟢 Connected (with IP and hostname), or 🔴 Error. Click 🔄 Check Status to re-check (read-only — does not attempt to reconnect).</li>
@@ -559,6 +567,97 @@ lxc.mount.entry: /dev/net/tun dev/net/tun none bind,create=file</pre>
                 <li><strong>Daemon won't start</strong> — Check the server logs with <code>journalctl -xeu tailscaled.service</code> for details.</li>
                 <li><strong>Auth key expired</strong> — One-time keys can only be used once. Generate a new key from the Tailscale admin console and save it.</li>
             </ul>
+            <h3 id="ntfy-notifications">Ntfy Notifications</h3>
+            <p>Ntfy is a lightweight push notification service that delivers alerts to your phone even when the browser is closed. CWOC runs its own Ntfy server alongside the main app — no third-party services needed. Notifications work for chit alarms, start times, and due dates.</p>
+            <h4>Setup (One-Time)</h4>
+            <ol>
+                <li><strong>Enable Ntfy on the server</strong> — Go to <strong>Settings → Dependent Apps → Ntfy</strong> (admin only). Expand the Ntfy section and check that the status shows 🟢 Active. Click <strong>💾 Save Config</strong> if not already enabled.</li>
+                <li><strong>Note your Topic and Server URL</strong> — In the same section, your auto-generated Topic (e.g., <code>cwoc-a1b2c3d4e5f6</code>) and Server URL (e.g., <code>http://192.168.1.111:2586</code>) are displayed. You'll need both for the next step.</li>
+                <li><strong>Install the Ntfy app on your phone</strong>
+                    <ul>
+                        <li><strong>Android:</strong> Search "ntfy" on the Google Play Store or F-Droid</li>
+                        <li><strong>iOS:</strong> Search "ntfy" on the App Store</li>
+                    </ul>
+                </li>
+                <li><strong>Subscribe to your Topic</strong> — Open the Ntfy app, tap <strong>+</strong> to add a subscription:
+                    <ul>
+                        <li><strong>Topic:</strong> Enter your Topic exactly as shown in Settings (e.g., <code>cwoc-a1b2c3d4e5f6</code>)</li>
+                        <li><strong>Server URL:</strong> Enter the Server URL shown in Settings — use the <strong>local IP</strong> with port 2586 (e.g., <code>http://192.168.1.111:2586</code>)</li>
+                    </ul>
+                    <p><strong>Important:</strong> Only add <strong>one</strong> subscription. Do not add a second subscription for the Tailscale IP — that would cause duplicate notifications. The single local-IP subscription works both at home and remotely (see below).</p>
+                </li>
+                <li><strong>Enable Instant Delivery</strong> — In the Ntfy app, tap your subscription, then enable <strong>Instant Delivery</strong>. This keeps a persistent connection so notifications arrive immediately.</li>
+                <li><strong>Test it</strong> — Back in CWOC Settings → Ntfy, click the <strong>🔔 Test</strong> button. You should see a notification on your phone within seconds.</li>
+            </ol>
+            <h4>How It Works at Home vs. Away</h4>
+            <p>You only need <strong>one subscription</strong> using the server's local IP (e.g., <code>http://192.168.1.111:2586</code>). This works in both scenarios:</p>
+            <ul>
+                <li><strong>At home (WiFi)</strong> — Your phone connects directly to the server on the local network. Tailscale is not needed.</li>
+                <li><strong>Away from home</strong> — Turn on Tailscale on your phone. Because the CWOC server advertises its local subnet through Tailscale (subnet routing), your phone can still reach <code>192.168.1.111</code> through the Tailscale tunnel. The same Ntfy subscription works without any changes.</li>
+            </ul>
+            <p>When Tailscale is off and you're away from home, notifications won't arrive until you reconnect (either by returning home or turning Tailscale on).</p>
+            <h4>Tailscale Subnet Routing (Required for Remote Access)</h4>
+            <p>For notifications to work when you're away from home, the CWOC server must advertise its local network through Tailscale. This is set up automatically by the configurator, but you need to approve it once:</p>
+            <ol>
+                <li>Go to <a href="https://login.tailscale.com/admin/machines" target="_blank">login.tailscale.com/admin/machines</a></li>
+                <li>Find your CWOC server in the list (e.g., "zamonia")</li>
+                <li>Click the <strong>⋯</strong> menu → <strong>Edit route settings</strong></li>
+                <li>Enable the subnet route (e.g., <code>192.168.1.0/24</code>)</li>
+            </ol>
+            <p>This is a one-time step. After approval, any device on your Tailscale network can reach your home server's local IP through the tunnel.</p>
+            <h4>What Gets Notified</h4>
+            <p>Ntfy sends notifications for chit start times, due times, and alarms. Each notification shows the chit title and the time that triggered it. Tapping a notification opens the chit in the editor.</p>
+            <h4>Troubleshooting</h4>
+            <ul>
+                <li><strong>Status shows 🔴 or ⚪</strong> — The Ntfy service may not be installed or may have stopped. On the server, run <code>systemctl status ntfy</code> to check.</li>
+                <li><strong>Wrong Server URL</strong> — The URL in the Ntfy app must use port <strong>2586</strong> (not the CWOC port 443 or 3333) and start with <code>http://</code>, not <code>https://</code>.</li>
+                <li><strong>Topic mismatch</strong> — The Topic in the Ntfy app must exactly match the one shown in Settings. Topics are case-sensitive.</li>
+                <li><strong>Duplicate notifications</strong> — You probably have two subscriptions in the Ntfy app (local IP and Tailscale IP). Delete one — you only need the local IP subscription.</li>
+                <li><strong>Works at home but not remotely</strong> — Make sure Tailscale is running on both the server and your phone. Check that subnet routing is approved in the Tailscale admin console (see above).</li>
+                <li><strong>Notifications delayed</strong> — Enable Instant Delivery in the Ntfy app for your subscription. Also check that Android isn't killing the Ntfy app — add it to your battery optimization exceptions (Settings → Apps → Ntfy → Battery → Unrestricted).</li>
+            </ul>
+            <h3 id="install-app">Install as App</h3>
+            <p>CWOC is a Progressive Web App (PWA) — you can install it on your phone, tablet, or desktop so it runs in its own window without browser chrome, just like a native app.</p>
+            <h4>Trusting the Server Certificate</h4>
+            <p>If your CWOC server uses a self-signed SSL certificate (the default), your device won't trust it out of the box — you'll see a certificate warning and browsers won't install the app as a standalone PWA. You need to install the server's CA certificate on your device first.</p>
+            <ol>
+                <li>Go to <strong>Settings → 📱 Install as App</strong> and tap <strong>"📜 Download Server Certificate"</strong>. This downloads the CA certificate that signed your server's SSL cert.</li>
+                <li>Install the downloaded certificate on your device:
+                    <ul>
+                        <li><strong>Android:</strong> Open the downloaded file. Go to Settings → Security → Encryption &amp; credentials → Install a certificate → CA certificate. Accept the warning. This is a one-time setup per device.</li>
+                        <li><strong>iOS:</strong> Open the downloaded file → Settings → Profile Downloaded → Install. Then go to Settings → General → About → Certificate Trust Settings and enable full trust for the "CWOC Local CA" certificate.</li>
+                    </ul>
+                </li>
+                <li>After installing the cert, <strong>close and reopen your browser completely</strong> (swipe it away from the app switcher). The certificate warning should be gone when you revisit CWOC.</li>
+            </ol>
+            <h4>Installing on Desktop (Chrome, Edge)</h4>
+            <ul>
+                <li>Go to <strong>Settings → 📱 Install as App</strong>. If your browser supports direct install, a <strong>"📲 Install CWOC App"</strong> button will appear — click it and confirm.</li>
+                <li>Alternatively, click the install icon in the browser address bar (usually a ⊕ or monitor icon on the right side).</li>
+                <li>Once installed, CWOC appears in your app launcher and opens in its own window.</li>
+            </ul>
+            <h4>Installing on Android — Firefox</h4>
+            <ul>
+                <li>Firefox on Android cannot install standalone PWAs — its "Add to Home Screen" only creates a bookmark that opens in a regular Firefox tab.</li>
+                <li>To get a real standalone app, go to <strong>Settings → 📱 Install as App</strong> and tap <strong>"🌐 Open in Chrome to Install"</strong>. This launches Chrome directly to your CWOC server.</li>
+                <li>In Chrome, tap the menu (⋮) → <strong>"Add to Home screen"</strong> or <strong>"Install app"</strong>. The installed app runs independently — you don't need to use Chrome for anything else.</li>
+                <li>Chrome must be installed on your device (it comes pre-installed on most Android phones).</li>
+            </ul>
+            <h4>Installing on Android — Chrome</h4>
+            <ul>
+                <li>Go to <strong>Settings → 📱 Install as App</strong> and tap <strong>"📲 Install CWOC App"</strong> if the button appears.</li>
+                <li>Or tap the browser menu (⋮) and select <strong>"Add to Home screen"</strong> or <strong>"Install app"</strong>.</li>
+                <li>CWOC will appear on your home screen with the CWOC icon.</li>
+            </ul>
+            <h4>Installing on iOS (Safari)</h4>
+            <ul>
+                <li>Tap the <strong>Share</strong> button (the square with an arrow) and select <strong>"Add to Home Screen"</strong>.</li>
+                <li>CWOC will appear on your home screen and launch in standalone mode.</li>
+            </ul>
+            <h4>Push Notifications</h4>
+            <p>When installed as an app, CWOC can send push notifications for chit alarms and due dates even when the app tab is closed. Grant notification permission when prompted to enable this. The server sends push notifications when a chit's alarm, start time, or due time arrives — tapping the notification opens the chit in the editor.</p>
+            <h4>Offline</h4>
+            <p>Pages you've visited are cached for faster loading. If you open CWOC without a network connection and the page isn't cached, a friendly offline message appears with a retry button. CWOC requires a network connection for full functionality since data is stored on the server.</p>
         </div>
     </div>
     <script src="/frontend/js/shared/shared-auth.js"></script>
@@ -588,5 +687,6 @@ lxc.mount.entry: /dev/net/tun dev/net/tun none bind,create=file</pre>
         h3.appendChild(a);
     });
     </script>
+    <script src="/pwa/pwa-register.js"></script>
 </body>
 </html>

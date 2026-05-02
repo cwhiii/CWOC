@@ -1138,3 +1138,67 @@ def migrate_habits_phase2():
     finally:
         if conn:
             conn.close()
+
+
+# ── Push Notifications: migrations ───────────────────────────────────────
+
+def migrate_add_push_subscriptions():
+    """Create push_subscriptions table for storing Web Push subscription objects.
+
+    Each row represents one browser/device subscription for a user.
+    Uses CREATE TABLE IF NOT EXISTS for idempotency.
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS push_subscriptions (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                endpoint TEXT NOT NULL UNIQUE,
+                p256dh TEXT NOT NULL,
+                auth TEXT NOT NULL,
+                device_label TEXT,
+                created_datetime TEXT NOT NULL
+            )
+        """)
+        conn.commit()
+        logger.info("push_subscriptions table ready")
+    except Exception as e:
+        logger.error(f"Error creating push_subscriptions table: {str(e)}")
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+
+def migrate_add_vapid_keys():
+    """Ensure instance_meta table exists for storing VAPID key pair.
+
+    The instance_meta table is a generic key-value store that already exists
+    (created in db.py for instance_id/version tracking). This migration
+    ensures it's present so VAPID keys can be stored as rows:
+      - key='vapid_public_key',  value=<base64url-encoded public key>
+      - key='vapid_private_key', value=<base64url-encoded private key>
+
+    Uses CREATE TABLE IF NOT EXISTS for idempotency.
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS instance_meta (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            )
+        """)
+        conn.commit()
+        logger.info("instance_meta table ready (for VAPID keys)")
+    except Exception as e:
+        logger.error(f"Error ensuring instance_meta table: {str(e)}")
+        raise
+    finally:
+        if conn:
+            conn.close()

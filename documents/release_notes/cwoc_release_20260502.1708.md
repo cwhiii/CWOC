@@ -1,0 +1,1 @@
+Replaced the broken Web Push test buttons in Settings → Install as App with a single "Test Phone Notification" button that sends via Ntfy. Tapping the notification on your phone opens the CWOC settings page. Removed the browser notification and push notification test buttons that didn't work on Firefox Android.

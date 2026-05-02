@@ -1,0 +1,1 @@
+Simplified Ntfy settings: removed the editable Server URL input and Save button. The server URL is now read-only and auto-computed — Tailscale IP if active, local IP as fallback. Ntfy auto-enables in the database when the status check confirms the service is reachable.

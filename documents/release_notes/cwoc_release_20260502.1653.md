@@ -1,0 +1,1 @@
+Fixed push notification test so the delayed second notification fires even when the browser is backgrounded or closed. The 10-second delay now runs server-side via asyncio instead of a client-side JS timer that gets throttled by mobile browsers. Both test notifications also send via Ntfy.

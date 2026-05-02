@@ -1,0 +1,1 @@
+Added Progressive Web App (PWA) wrapper — CWOC can now be installed as a standalone app on phones, tablets, and desktops. Includes web app manifest, service worker with app-shell caching and offline fallback, install prompt button in the dashboard sidebar, and Web Push notifications via VAPID/pywebpush for server-sent chit reminders even when the app tab is closed.

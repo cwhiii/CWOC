@@ -1804,7 +1804,9 @@ function initMobileViewsButton() {
   // Tab button in header, pushed to right edge via margin-left:auto
   var btn = document.createElement('button');
   btn.className = 'mobile-views-btn';
-  btn.textContent = '☰ Views';
+  btn.id = 'mobile-views-btn';
+  // Show current view name instead of generic "Views"
+  btn.textContent = '☰ ' + (typeof currentTab !== 'undefined' && currentTab ? currentTab : 'Views');
   header.appendChild(btn);
 
   // Backdrop
@@ -1894,6 +1896,17 @@ function initMobileViewsButton() {
       _closeViewsPanel();
     }
   }, { passive: true });
+}
+
+/**
+ * Update the mobile Views button label to show the current tab name.
+ * Called from filterChits() and on initial load after state restore.
+ */
+function _updateMobileViewsLabel() {
+  var btn = document.getElementById('mobile-views-btn');
+  if (!btn) return;
+  var label = (typeof currentTab !== 'undefined' && currentTab) ? currentTab : 'Views';
+  btn.textContent = '☰ ' + label;
 }
 
 

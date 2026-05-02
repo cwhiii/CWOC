@@ -243,9 +243,9 @@ function _formatPrecip(precipMm, weatherCode) {
 
 // ── Weather Utility Functions ─────────────────────────────────────────────────
 
-/** Convert Celsius to Fahrenheit, rounded to nearest integer. */
+/** Convert Celsius to display temperature, respecting unit_system setting. */
 function _celsiusToFahrenheit(c) {
-  return Math.round(c * 9 / 5 + 32);
+  return _convertTemp(c);
 }
 
 /** Returns true if the given ISO timestamp is older than 24 hours from now. */
@@ -336,12 +336,12 @@ async function _fetchAndApplyChitWeather(address, spans) {
   var weatherCode = today.weathercode[0];
   var minC = today.temperature_2m_min[0], maxC = today.temperature_2m_max[0], precipMm = today.precipitation_sum[0];
   var windKmh = today.wind_speed_10m_max ? today.wind_speed_10m_max[0] : 0;
-  var windMph = Math.round(windKmh * 0.621371);
-  var minF = Math.round((minC * 9) / 5 + 32), maxF = Math.round((maxC * 9) / 5 + 32);
+  var wind = _convertWind(windKmh);
+  var minT = _convertTemp(minC), maxT = _convertTemp(maxC);
   var icon = _getWeatherIcon(weatherCode);
   var precipText = _formatPrecip(precipMm, weatherCode);
-  var windText = windMph >= 20 ? ' · 💨' + windMph + 'mph' : '';
-  var tooltip = maxF + '°/' + minF + '°';
+  var windText = wind.value >= (_isMetricUnits() ? 32 : 20) ? ' · 💨' + wind.value + wind.unit : '';
+  var tooltip = maxT + '°/' + minT + '°';
   if (precipText) tooltip += ' · ' + precipText;
   tooltip += windText;
 
@@ -495,26 +495,28 @@ async function _fetchWeatherForModal(address, label) {
     var maxC = today.temperature_2m_max[0];
     var precipMm = today.precipitation_sum[0];
     var windKmh = today.wind_speed_10m_max ? today.wind_speed_10m_max[0] : 0;
-    var windMph = Math.round(windKmh * 0.621371);
+    var wind = _convertWind(windKmh);
 
-    var minF = Math.round((minC * 9) / 5 + 32);
-    var maxF = Math.round((maxC * 9) / 5 + 32);
+    var minT = _convertTemp(minC);
+    var maxT = _convertTemp(maxC);
+    var tUnit = _tempUnit();
 
     var icon = _getWeatherIcon(weatherCode);
     var precipText = _formatPrecip(precipMm, weatherCode);
-    var windText = windMph >= 15 ? '💨 ' + windMph + ' mph wind' : '';
+    var windText = wind.value >= (_isMetricUnits() ? 24 : 15) ? '💨 ' + wind.value + ' ' + wind.unit + ' wind' : '';
 
-    var barMin = -14, barMax = 104, barRange = barMax - barMin;
-    var lowPct = Math.max(0, Math.min(100, ((minF - barMin) / barRange) * 100));
-    var highPct = Math.max(0, Math.min(100, ((maxF - barMin) / barRange) * 100));
+    var barR = _tempBarRange();
+    var barMin = barR.barMin, barMax = barR.barMax, barRange = barMax - barMin;
+    var lowPct = Math.max(0, Math.min(100, ((minT - barMin) / barRange) * 100));
+    var highPct = Math.max(0, Math.min(100, ((maxT - barMin) / barRange) * 100));
 
     if (bodyEl) {
       var weatherHtml =
         '<div class="weather-modal-icon">' + icon + '</div>' +
-        '<div class="weather-modal-temps"><span class="temp-high">' + maxF + '°F</span> / <span class="temp-low">' + minF + '°F</span></div>' +
+        '<div class="weather-modal-temps"><span class="temp-high">' + maxT + tUnit + '</span> / <span class="temp-low">' + minT + tUnit + '</span></div>' +
         (precipText ? '<div class="weather-modal-precip">' + precipText + '</div>' : '') +
         (windText ? '<div class="weather-modal-precip" style="margin-top:2px;">' + windText + '</div>' : '') +
-        '<div class="weather-modal-temp-bar"><div class="temp-bar-marker" style="left:' + lowPct + '%" title="Low ' + minF + '°F"></div><div class="temp-bar-marker" style="left:' + highPct + '%" title="High ' + maxF + '°F"></div></div>';
+        '<div class="weather-modal-temp-bar"><div class="temp-bar-marker" style="left:' + lowPct + '%" title="Low ' + minT + tUnit + '"></div><div class="temp-bar-marker" style="left:' + highPct + '%" title="High ' + maxT + tUnit + '"></div></div>';
       bodyEl.innerHTML = weatherHtml;
       // Cache the result
       try { localStorage.setItem(cacheKey, JSON.stringify({ html: weatherHtml, ts: Date.now() })); } catch (e) { /* ignore */ }
@@ -549,13 +551,15 @@ async function _fetchWeatherForCache(address, cacheKey) {
     var today = wxData.daily;
     var weatherCode = today.weathercode[0];
     var minC = today.temperature_2m_min[0], maxC = today.temperature_2m_max[0], precipMm = today.precipitation_sum[0];
-    var minF = Math.round((minC * 9) / 5 + 32), maxF = Math.round((maxC * 9) / 5 + 32);
+    var minT = _convertTemp(minC), maxT = _convertTemp(maxC);
+    var tUnit = _tempUnit();
     var icon = _getWeatherIcon(weatherCode);
     var precipText = _formatPrecip(precipMm, weatherCode);
-    var barMin = -14, barMax = 104, barRange = barMax - barMin;
-    var lowPct = Math.max(0, Math.min(100, ((minF - barMin) / barRange) * 100));
-    var highPct = Math.max(0, Math.min(100, ((maxF - barMin) / barRange) * 100));
-    var html = '<div class="weather-modal-icon">' + icon + '</div><div class="weather-modal-temps"><span class="temp-high">' + maxF + '°F</span> / <span class="temp-low">' + minF + '°F</span></div>' + (precipText ? '<div class="weather-modal-precip">' + precipText + '</div>' : '') + '<div class="weather-modal-temp-bar"><div class="temp-bar-marker" style="left:' + lowPct + '%" title="Low ' + minF + '°F"></div><div class="temp-bar-marker" style="left:' + highPct + '%" title="High ' + maxF + '°F"></div></div>';
+    var barR = _tempBarRange();
+    var barMin = barR.barMin, barMax = barR.barMax, barRange = barMax - barMin;
+    var lowPct = Math.max(0, Math.min(100, ((minT - barMin) / barRange) * 100));
+    var highPct = Math.max(0, Math.min(100, ((maxT - barMin) / barRange) * 100));
+    var html = '<div class="weather-modal-icon">' + icon + '</div><div class="weather-modal-temps"><span class="temp-high">' + maxT + tUnit + '</span> / <span class="temp-low">' + minT + tUnit + '</span></div>' + (precipText ? '<div class="weather-modal-precip">' + precipText + '</div>' : '') + '<div class="weather-modal-temp-bar"><div class="temp-bar-marker" style="left:' + lowPct + '%" title="Low ' + minT + tUnit + '"></div><div class="temp-bar-marker" style="left:' + highPct + '%" title="High ' + maxT + tUnit + '"></div></div>';
     try { localStorage.setItem(cacheKey, JSON.stringify({ html: html, ts: Date.now() })); } catch (e) { /* ignore */ }
   } catch (e) { /* background fetch — silently fail */ }
 }

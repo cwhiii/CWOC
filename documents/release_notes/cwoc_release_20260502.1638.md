@@ -1,0 +1,1 @@
+Added ntfy binary installation to the configurator script. Downloads the official ntfy release, installs to /usr/bin/ntfy, creates a systemd service on port 2586, and enables it on boot. Idempotent — skips if already installed. Also updated the Ntfy settings UI to show both local and Tailscale server URLs with a hint to subscribe to both for seamless local + remote coverage.

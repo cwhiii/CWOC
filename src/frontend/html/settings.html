@@ -5,6 +5,12 @@
             <meta charset="UTF-8" />
             <meta name="viewport" content="width=device-width, initial-scale=1.0" />
             <title>CWOC Settings</title>
+            <!-- PWA -->
+            <link rel="manifest" href="/manifest.json" />
+            <meta name="theme-color" content="#8b5a2b" />
+            <link rel="apple-touch-icon" href="/static/cwoc-icon-192.png" />
+            <meta name="apple-mobile-web-app-capable" content="yes" />
+            <meta name="apple-mobile-web-app-status-bar-style" content="default" />
             <link rel="stylesheet" href="/frontend/css/shared/shared-page.css" />
             <link rel="stylesheet" href="/frontend/css/shared/shared-editor.css" />
             <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" />
@@ -418,6 +424,41 @@
                     }
                 }
 
+                /* ── Network Access mobile fixes ── */
+                /* Prevent monospace URLs and long text from overflowing on mobile */
+                #ntfy-config-body .setting-inline,
+                #tailscale-config-body .setting-inline {
+                    flex-wrap: wrap;
+                    min-width: 0;
+                }
+                #ntfy-config-body .setting-inline > span[style*="monospace"],
+                #ntfy-server-url-local,
+                #ntfy-server-url-ts,
+                #ntfy-topic-display,
+                #tailscale-ip,
+                #tailscale-hostname {
+                    word-break: break-all;
+                    overflow-wrap: break-word;
+                    min-width: 0;
+                }
+                @media (max-width: 480px) {
+                    #ntfy-config-body .setting-inline,
+                    #tailscale-config-body .setting-inline {
+                        flex-wrap: wrap;
+                    }
+                    #ntfy-config-body .setting-inline > label,
+                    #tailscale-config-body .setting-inline > label,
+                    #ntfy-config-body .setting-inline > span:first-of-type,
+                    #tailscale-config-body .setting-inline > span:first-of-type {
+                        flex: 0 0 auto;
+                    }
+                    #ntfy-server-url-local,
+                    #ntfy-server-url-ts,
+                    #ntfy-topic-display {
+                        font-size: 0.85em !important;
+                    }
+                }
+
                 /* ── Saved Locations ── */
                 .cwoc-checkbox-label {
                     font-size: 0.9em;
@@ -773,6 +814,30 @@
                         <div id="settings-tag-tree" style="max-height:300px;overflow-y:auto;border:1px solid #8b5a2b;border-radius:4px;padding:8px;background:#fffaf0;box-sizing:border-box;"></div>
                         <div id="tag-editor-hidden" style="display:none;"></div>
                     </div>
+                    <div class="setting-group" id="pwa-cert-section">
+                        <h3>📱 Install as App</h3>
+                        <p class="setting-hint">CWOC can be installed as a standalone app on your phone, tablet, or desktop.</p>
+                        <button id="pwa-install-btn" class="standard-button" style="width:100%;display:none;" onclick="handleInstallClick()">📲 Install CWOC App</button>
+                        <p id="pwa-install-hint" class="setting-hint" style="display:none;margin-top:4px;font-size:0.8em;">Your browser supports direct install — click the button above.</p>
+                        <button id="pwa-open-in-chrome" class="standard-button" style="width:100%;margin-top:6px;display:none;" onclick="_openInChromeForInstall()">🌐 Open in Chrome to Install</button>
+                        <p id="pwa-chrome-hint" class="setting-hint" style="display:none;margin-top:4px;font-size:0.8em;">Firefox can't install standalone apps. This opens CWOC in Chrome where you can tap ⋮ → "Add to Home Screen" for a real app experience.</p>
+                        <p id="pwa-install-manual" class="setting-hint" style="margin-top:4px;font-size:0.8em;">
+                            <strong>To install:</strong> Use your browser's menu (⋮) → "Add to Home Screen" or "Install app." On Firefox Android, use the "Open in Chrome" button above for standalone app mode.
+                        </p>
+                        <hr style="border:none;border-top:1px solid rgba(139,90,43,0.2);margin:12px 0;">
+                        <p class="setting-hint">If your browser shows a certificate warning, download and install the server certificate on your device first.</p>
+                        <button id="download-cert-btn" class="standard-button" style="width:100%;" onclick="_downloadSslCert()">📜 Download Server Certificate</button>
+                        <p class="setting-hint" style="margin-top:8px;font-size:0.8em;line-height:1.4;">
+                            <strong>Android:</strong> Open the downloaded file → Settings → Security → Install a certificate → CA certificate.<br>
+                            <strong>iOS:</strong> Open the file → Settings → Profile Downloaded → Install → then Settings → General → About → Certificate Trust Settings → enable trust.<br>
+                            After installing the cert, revisit CWOC in your browser and use the menu to "Add to Home Screen."
+                        </p>
+                        <hr style="border:none;border-top:1px solid rgba(139,90,43,0.2);margin:12px 0;">
+                        <label class="setting-subheader">🔔 Notifications</label>
+                        <p class="setting-hint">Send a test notification to your phone via Ntfy. Requires Ntfy to be enabled in Network Access and the Ntfy app installed on your phone.</p>
+                        <button class="standard-button" style="width:100%;" onclick="_testNtfyFromInstallSection()">🔔 Test Phone Notification</button>
+                        <p id="pwa-notif-status" class="setting-hint" style="margin-top:6px;font-size:0.8em;"></p>
+                    </div>
                 </div>
 
                 <!-- ═══ Administration (admin-only, hidden by default) ═══ -->
@@ -844,7 +909,7 @@
                             <p class="setting-hint">Uncheck to disable pruning. When either limit is reached, oldest entries are pruned first.</p>
                         </div>
                         <div class="setting-group" id="network-access-block">
-                            <h3>🌐 Network Access</h3>
+                            <h3>📱 Dependent Apps</h3>
 
                             <!-- Tailscale header — button and help icon are independent -->
                             <div class="setting-subheader" style="display:flex;align-items:center;gap:8px;">
@@ -928,14 +993,19 @@
                                     </button>
                                 </div>
 
-                                <!-- Connect / Disconnect -->
+                                <!-- Connect / Disconnect / Open App -->
                                 <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
-                                    <button class="standard-button" onclick="tailscaleUp()" id="tailscale-up-btn" style="flex:1;">
+                                    <button class="standard-button" onclick="tailscaleUp()" id="tailscale-up-btn" style="flex:1;min-width:0;">
                                         ▶️ Connect
                                     </button>
-                                    <button class="standard-button" onclick="tailscaleDown()" id="tailscale-down-btn" disabled style="flex:1;opacity:0.5;">
+                                    <button class="standard-button" onclick="tailscaleDown()" id="tailscale-down-btn" disabled style="flex:1;min-width:0;opacity:0.5;">
                                         ⏹️ Disconnect
                                     </button>
+                                    <a href="tailscale://"
+                                       class="standard-button"
+                                       style="flex:1;min-width:0;text-decoration:none;text-align:center;">
+                                        📱 Open App
+                                    </a>
                                 </div>
 
                                 <!-- Inline feedback message -->
@@ -944,6 +1014,100 @@
                                 </div>
 
                             </div><!-- /tailscale-config-body -->
+
+                            <!-- ── Ntfy Push Notifications ── -->
+
+                            <!-- Ntfy header — button and help icon are independent -->
+                            <div class="setting-subheader" style="display:flex;align-items:center;gap:8px;margin-top:16px;">
+                                <button type="button" id="ntfy-enable-btn" class="zone-button"
+                                        onclick="toggleNtfySection()"
+                                        style="cursor:pointer;font-size:14px;padding:6px 14px;font-family:Lora,Georgia,serif;">
+                                    Ntfy &nbsp;<span id="ntfy-header-icon">⚪</span>
+                                </button>
+                                <i class="fa-regular fa-circle-question"
+                                   onclick="document.getElementById('ntfy-help').style.display = document.getElementById('ntfy-help').style.display === 'none' ? '' : 'none';"
+                                   style="cursor:pointer;font-size:1em;opacity:0.6;"
+                                   title="Show setup instructions"></i>
+                            </div>
+
+                            <!-- Help text (hidden by default) -->
+                            <div id="ntfy-help" style="display:none;font-size:0.88em;line-height:1.5;margin:4px 0 10px 0;padding:8px 10px;background:rgba(0,0,0,0.04);border-radius:4px;">
+                                <p style="margin:0 0 8px 0;">Ntfy sends push notifications to your phone — even when the browser is closed. One subscription, works at home and away.</p>
+                                <strong>Setup:</strong>
+                                <ol style="margin:4px 0 0 18px;padding:0;">
+                                    <li>Verify status shows 🟢 Active below. Click <strong>💾 Save Config</strong>.</li>
+                                    <li>Install the <a href="https://ntfy.sh" target="_blank" rel="noopener noreferrer">Ntfy app</a> on your phone (Play Store or F-Droid).</li>
+                                    <li>In the app, tap <strong>+</strong> → enter the <strong>Topic</strong> and <strong>Server (local)</strong> URL shown below.</li>
+                                    <li>Enable <strong>Instant Delivery</strong> in the Ntfy app for the subscription.</li>
+                                    <li>Click <strong>🔔 Test</strong> below to verify.</li>
+                                </ol>
+                                <p style="margin:8px 0 4px 0;"><strong>Remote access:</strong> At home, notifications work over WiFi. Away from home, turn on Tailscale on your phone — the same subscription works through the Tailscale tunnel (subnet routing). Only add <strong>one</strong> subscription using the local IP — do not add a second for the Tailscale IP or you'll get duplicates.</p>
+                                <a href="/frontend/html/help.html#ntfy-notifications" style="display:inline-block;margin-top:6px;">Full setup guide &amp; troubleshooting →</a>
+                            </div>
+
+                            <!-- Collapsible Ntfy config body (hidden by default) -->
+                            <div id="ntfy-config-body" style="display:none;">
+
+                                <!-- Status indicator -->
+                                <div id="ntfy-status-row" class="setting-inline">
+                                    <span>Status:</span>
+                                    <span id="ntfy-status-badge">Checking...</span>
+                                    <button id="ntfy-refresh-btn" class="standard-button"
+                                            onclick="checkNtfyStatus()" style="margin-left:auto;">
+                                        🔄 Check Status
+                                    </button>
+                                </div>
+
+                                <!-- Local server URL (always shown) -->
+                                <div class="setting-inline" style="margin-top:10px;">
+                                    <label>Server (local)</label>
+                                    <span id="ntfy-server-url-local" style="font-family:monospace;font-size:0.95em;color:#4a2c2a;font-weight:bold;">—</span>
+                                    <button type="button" class="standard-button" title="Copy local Server URL"
+                                            onclick="copyNtfyField('ntfy-server-url-local', this)"
+                                            style="padding:4px 8px;font-size:0.85em;margin-left:4px;">📋</button>
+                                </div>
+
+                                <!-- Tailscale server URL (shown only when Tailscale is active) -->
+                                <div id="ntfy-tailscale-row" class="setting-inline" style="margin-top:4px;display:none;">
+                                    <label>Server (Tailscale)</label>
+                                    <span id="ntfy-server-url-ts" style="font-family:monospace;font-size:0.95em;color:#4a2c2a;font-weight:bold;">—</span>
+                                    <button type="button" class="standard-button" title="Copy Tailscale Server URL"
+                                            onclick="copyNtfyField('ntfy-server-url-ts', this)"
+                                            style="padding:4px 8px;font-size:0.85em;margin-left:4px;">📋</button>
+                                </div>
+
+                                <!-- Hint about single subscription -->
+                                <div id="ntfy-both-hint" style="display:none;font-size:0.82em;color:#6b4f00;margin-top:4px;padding-left:2px;">
+                                    💡 Use only the <strong>local</strong> URL in the Ntfy app. With Tailscale subnet routing, it works both at home and remotely — no second subscription needed.
+                                </div>
+
+                                <!-- Topic display (read-only) -->
+                                <div class="setting-inline" style="margin-top:8px;">
+                                    <label>Topic</label>
+                                    <span id="ntfy-topic-display" style="font-family:monospace;font-size:0.95em;color:#4a2c2a;font-weight:bold;">—</span>
+                                    <button type="button" class="standard-button" title="Copy Topic"
+                                            onclick="copyNtfyField('ntfy-topic-display', this)"
+                                            style="padding:4px 8px;font-size:0.85em;margin-left:4px;">📋</button>
+                                </div>
+
+                                <!-- Test notification + Open App -->
+                                <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
+                                    <button class="standard-button" id="ntfy-test-btn" onclick="testNtfyNotification()"
+                                            style="flex:1;min-width:0;">
+                                        🔔 Test
+                                    </button>
+                                    <button class="standard-button" onclick="openNtfyApp()"
+                                            style="flex:1;min-width:0;">
+                                        📱 Open App
+                                    </button>
+                                </div>
+
+                                <!-- Inline feedback message -->
+                                <div id="ntfy-feedback" style="display:none;margin-top:8px;padding:8px 10px;border-radius:4px;font-size:0.88em;line-height:1.4;cursor:pointer;"
+                                     onclick="this.style.display='none';">
+                                </div>
+
+                            </div><!-- /ntfy-config-body -->
                         </div>
                         <div class="setting-group">
                             <h3>🔄 Version &amp; Updates</h3>
@@ -1115,5 +1279,6 @@
               }
             })();
             </script>
+            <script src="/pwa/pwa-register.js"></script>
         </body>
     </html>

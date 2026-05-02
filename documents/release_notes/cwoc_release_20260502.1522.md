@@ -1,0 +1,1 @@
+Added two-step notification test buttons to Settings → Install as App. Both browser and push tests now send a first notification, wait for the user to acknowledge it, count down 10 seconds, then send a second notification to confirm delivery works in the background.

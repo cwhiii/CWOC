@@ -1,0 +1,1 @@
+Fixed push notification test hanging on "Subscribing to push" after browser restart. Added 10-second timeout to service worker ready check, and the push test now re-registers the service worker before attempting to subscribe.

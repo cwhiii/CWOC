@@ -2794,6 +2794,117 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
 
+// ── Phone Notification Testing (via Ntfy) ────────────────────────────────────
+
+/**
+ * Send a test notification to the user's phone via the Ntfy server.
+ * Called from the "Install as App" section. Tapping the notification
+ * on the phone opens the CWOC settings page.
+ */
+async function _testNtfyFromInstallSection() {
+  var statusEl = document.getElementById('pwa-notif-status');
+  if (statusEl) statusEl.textContent = '⏳ Sending test notification...';
+
+  try {
+    var res = await fetch('/api/network-access/ntfy/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    var result = await res.json();
+
+    if (result.success) {
+      if (statusEl) statusEl.textContent = '✅ Notification sent to topic "' + result.topic + '". Check your Ntfy app!';
+    } else {
+      if (statusEl) statusEl.textContent = '❌ ' + (result.error || 'Could not send. Check that Ntfy is enabled in Network Access.');
+    }
+  } catch (e) {
+    console.error('[Settings] Ntfy test failed:', e);
+    if (statusEl) statusEl.textContent = '❌ Error: ' + e.message;
+  }
+}
+
+
+// ── SSL Certificate Download ─────────────────────────────────────────────────
+
+/**
+ * Open the current CWOC URL in Chrome via an Android intent URL.
+ * Works from Firefox (or any browser) on Android — launches Chrome
+ * directly to this server so the user can install the PWA from there.
+ */
+function _openInChromeForInstall() {
+  // Build the intent URL using the current origin
+  var url = window.location.origin + '/';
+  // intent:// scheme requires the URL without the protocol prefix
+  var stripped = url.replace(/^https?:\/\//, '');
+  var scheme = window.location.protocol === 'https:' ? 'https' : 'http';
+  var intentUrl = 'intent://' + stripped + '#Intent;scheme=' + scheme +
+    ';package=com.android.chrome;end';
+  window.location.href = intentUrl;
+}
+
+/**
+ * Show the "Open in Chrome" button on Firefox Android (where standalone
+ * PWA install isn't supported). Called on DOMContentLoaded from settings init.
+ */
+function _initPwaInstallSection() {
+  var isAndroid = /Android/i.test(navigator.userAgent);
+  var isFirefox = /Firefox/i.test(navigator.userAgent);
+  var isStandalone = window.matchMedia('(display-mode: standalone)').matches
+    || window.navigator.standalone === true;
+
+  // Hide everything if already installed as standalone
+  if (isStandalone) {
+    var section = document.getElementById('pwa-cert-section');
+    if (section) {
+      var h3 = section.querySelector('h3');
+      if (h3) h3.insertAdjacentHTML('afterend',
+        '<p class="setting-hint" style="color:#2d6a2e;font-weight:bold;">✅ CWOC is installed as an app.</p>');
+    }
+    return;
+  }
+
+  // On Firefox Android, show the "Open in Chrome" button
+  if (isAndroid && isFirefox) {
+    var chromeBtn = document.getElementById('pwa-open-in-chrome');
+    if (chromeBtn) chromeBtn.style.display = '';
+    var chromeHint = document.getElementById('pwa-chrome-hint');
+    if (chromeHint) chromeHint.style.display = '';
+  }
+}
+
+// Run on DOMContentLoaded (settings.js is loaded after shared scripts)
+document.addEventListener('DOMContentLoaded', function() {
+  _initPwaInstallSection();
+});
+
+
+async function _downloadSslCert() {
+  try {
+    const res = await fetch('/api/ssl-cert');
+    if (res.status === 404) {
+      alert('No SSL certificate found on this server. The server may not be using HTTPS.');
+      return;
+    }
+    if (!res.ok) {
+      alert('Failed to download certificate: ' + res.status);
+      return;
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'cwoc-server.crt';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    console.error('[Settings] SSL cert download failed:', e);
+    alert('Failed to download certificate. Check the console for details.');
+  }
+}
+
+
 // ── Version Info ─────────────────────────────────────────────────────────────
 
 let _updateEventSource = null;
@@ -3772,6 +3883,279 @@ if (typeof waitForAuth === 'function') {
       loadTailscaleConfig();
       // Always update header icon regardless of expanded/collapsed state
       _tsQuickStatusForIcon();
+      // Load Ntfy config and display topic
+      loadNtfyConfig();
+      _ntfyQuickStatusForIcon();
     }
   });
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Ntfy Push Notifications
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Show an inline feedback message inside the Ntfy config block.
+ * Stays visible until dismissed (click) or replaced by a new message.
+ * @param {string} message - The message to display
+ * @param {string} [type='success'] - 'success', 'error', or 'info'
+ */
+function _ntfyFeedback(message, type) {
+  type = type || 'success';
+  var el = document.getElementById('ntfy-feedback');
+  if (!el) return;
+
+  var colors = {
+    success: { bg: 'rgba(45,90,30,0.12)', border: '#2d5a1e', text: '#1e3f14', icon: '✅' },
+    error:   { bg: 'rgba(139,26,26,0.12)', border: '#8b1a1a', text: '#5c1010', icon: '❌' },
+    warning: { bg: 'rgba(184,134,11,0.12)', border: '#b8860b', text: '#6b4f00', icon: '⚠️' },
+    info:    { bg: 'rgba(74,44,42,0.10)', border: '#4a2c2a', text: '#2b1e0f', icon: 'ℹ️' }
+  };
+  var c = colors[type] || colors.info;
+
+  el.style.display = '';
+  el.style.background = c.bg;
+  el.style.border = '1px solid ' + c.border;
+  el.style.color = c.text;
+  el.textContent = c.icon + '  ' + message;
+
+  // Flash effect
+  el.style.opacity = '0';
+  requestAnimationFrame(function () {
+    el.style.transition = 'opacity 0.3s ease';
+    el.style.opacity = '1';
+  });
+}
+
+/**
+ * Toggle Ntfy section — expand/collapse the ntfy config body.
+ */
+function toggleNtfySection() {
+  var body = document.getElementById('ntfy-config-body');
+  if (!body) return;
+
+  var isVisible = body.style.display !== 'none';
+  body.style.display = isVisible ? 'none' : '';
+
+  if (!isVisible) {
+    // Expanding — refresh status, server URL, and topic
+    checkNtfyStatus();
+    displayNtfyTopic();
+    displayNtfyServerUrl();
+  }
+}
+
+/**
+ * Update the Ntfy header icon based on service status.
+ * @param {string} status - 'active', 'unreachable', 'not_configured'
+ */
+function _ntfyUpdateHeaderIcon(status) {
+  var icon = document.getElementById('ntfy-header-icon');
+  if (!icon) return;
+
+  switch (status) {
+    case 'active':         icon.textContent = '🟢'; break;
+    case 'unreachable':    icon.textContent = '🔴'; break;
+    case 'not_configured': icon.textContent = '⚪'; break;
+    default:               icon.textContent = '⚪'; break;
+  }
+}
+
+/**
+ * Quick status fetch that only updates the header icon — no feedback messages.
+ * Used on page load to show service state even when config is collapsed.
+ */
+async function _ntfyQuickStatusForIcon() {
+  try {
+    var response = await fetch('/api/network-access/ntfy/status');
+    if (!response.ok) return;
+    var data = await response.json();
+    _ntfyUpdateHeaderIcon(data.status);
+  } catch (e) {
+    // Silently ignore — icon stays at default
+  }
+}
+
+/**
+ * Fetch the current Ntfy service status and update the UI badge
+ * and header icon accordingly.
+ * GET /api/network-access/ntfy/status
+ */
+async function checkNtfyStatus() {
+  var badge = document.getElementById('ntfy-status-badge');
+  var currentStatus = 'unknown';
+
+  if (badge) badge.textContent = '⏳ Checking...';
+  _ntfyFeedback('Checking Ntfy status...', 'info');
+  var checkStart = Date.now();
+
+  try {
+    var response = await fetch('/api/network-access/ntfy/status');
+    if (!response.ok) throw new Error('Status check failed');
+    var data = await response.json();
+    currentStatus = data.status;
+
+    // Ensure "Checking..." shows for at least 1 second
+    var elapsed = Date.now() - checkStart;
+    if (elapsed < 1000) await new Promise(function (r) { setTimeout(r, 1000 - elapsed); });
+
+    switch (data.status) {
+      case 'active':
+        if (badge) badge.textContent = '🟢 Active';
+        _ntfyFeedback('Ntfy service is running.', 'success');
+        break;
+      case 'unreachable':
+        if (badge) badge.textContent = '🔴 Unreachable';
+        _ntfyFeedback('Ntfy service unreachable: ' + (data.message || 'Connection failed'), 'error');
+        break;
+      case 'not_configured':
+        if (badge) badge.textContent = '⚪ Not Configured';
+        _ntfyFeedback('Ntfy is not configured yet.', 'info');
+        break;
+      default:
+        if (badge) badge.textContent = '⚪ Unknown';
+        break;
+    }
+  } catch (error) {
+    console.error('Failed to check Ntfy status:', error);
+    if (badge) badge.textContent = '⚠️ Unable to check status';
+    _ntfyFeedback('Unable to check status.', 'error');
+  }
+
+  _ntfyUpdateHeaderIcon(currentStatus);
+}
+
+/**
+ * Send a test notification to the current user's Ntfy topic.
+ * POST /api/network-access/ntfy/test
+ */
+async function testNtfyNotification() {
+  var testBtn = document.getElementById('ntfy-test-btn');
+  if (testBtn) {
+    testBtn.disabled = true;
+    testBtn.style.opacity = '0.5';
+  }
+
+  _ntfyFeedback('Sending test notification...', 'info');
+
+  try {
+    var response = await fetch('/api/network-access/ntfy/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+    var data = await response.json();
+
+    if (data.success) {
+      _ntfyFeedback('Test notification sent to topic: ' + data.topic, 'success');
+    } else {
+      _ntfyFeedback('Test failed: ' + (data.error || 'Unknown error'), 'error');
+    }
+  } catch (error) {
+    console.error('Ntfy test failed:', error);
+    _ntfyFeedback('Test failed: ' + error.message, 'error');
+  } finally {
+    if (testBtn) {
+      testBtn.disabled = false;
+      testBtn.style.opacity = '1';
+    }
+  }
+}
+
+/**
+ * Open the Ntfy app on the phone via deep link.
+ * Uses the ntfy:// URL scheme which the Ntfy Android/iOS app registers.
+ */
+function openNtfyApp() {
+  window.location.href = 'ntfy://';
+}
+
+/**
+ * Compute and display the user's auto-generated Ntfy topic from their UUID.
+ * Topic = "cwoc-" + first 12 alphanumeric chars of user_id.
+ */
+function displayNtfyTopic() {
+  var topicSpan = document.getElementById('ntfy-topic-display');
+  if (!topicSpan) return;
+
+  var user = (typeof getCurrentUser === 'function') ? getCurrentUser() : null;
+  if (!user || !user.user_id) {
+    topicSpan.textContent = '—';
+    return;
+  }
+
+  var alphanumeric = user.user_id.replace(/[^a-zA-Z0-9]/g, '');
+  var topic = 'cwoc-' + alphanumeric.substring(0, 12);
+  topicSpan.textContent = topic;
+}
+
+/**
+ * Display the Ntfy server URLs for the phone app.
+ * Always shows the local URL (browser's current hostname).
+ * Also shows the Tailscale URL if Tailscale is active, with a hint
+ * to subscribe to both for seamless local + remote coverage.
+ */
+async function displayNtfyServerUrl() {
+  var localSpan = document.getElementById('ntfy-server-url-local');
+  var tsSpan = document.getElementById('ntfy-server-url-ts');
+  var tsRow = document.getElementById('ntfy-tailscale-row');
+  var hint = document.getElementById('ntfy-both-hint');
+
+  // Local URL — use the hostname the browser is currently connected to
+  var localHost = window.location.hostname || 'localhost';
+  if (localSpan) localSpan.textContent = 'http://' + localHost + ':2586';
+
+  // Hide Tailscale row and hint by default
+  if (tsRow) tsRow.style.display = 'none';
+  if (hint) hint.style.display = 'none';
+
+  // Check if Tailscale is active — show its URL too
+  try {
+    var response = await fetch('/api/network-access/tailscale/status');
+    if (response.ok) {
+      var data = await response.json();
+      if (data.status === 'active' && data.ip) {
+        if (tsSpan) tsSpan.textContent = 'http://' + data.ip + ':2586';
+        if (tsRow) tsRow.style.display = '';
+        if (hint) hint.style.display = '';
+      }
+    }
+  } catch (e) {
+    // Tailscale not available — just show local URL
+  }
+}
+
+/**
+ * Copy the text content of an Ntfy display field to the clipboard.
+ * Shows a brief ✅ on the button, then restores the 📋 icon.
+ * @param {string} elementId - ID of the span to copy from
+ * @param {HTMLElement} btn - The button element that was clicked
+ */
+function copyNtfyField(elementId, btn) {
+  var el = document.getElementById(elementId);
+  if (!el) return;
+
+  var text = el.textContent;
+  if (!text || text === '—') return;
+
+  navigator.clipboard.writeText(text).then(function() {
+    if (btn) {
+      var orig = btn.textContent;
+      btn.textContent = '✅';
+      setTimeout(function() { btn.textContent = orig; }, 1200);
+    }
+  }).catch(function() {
+    _ntfyFeedback('Failed to copy to clipboard.', 'error');
+  });
+}
+
+/**
+ * Load the saved Ntfy configuration from the backend and populate
+ * the server URL input. Also display the user's topic.
+ * GET /api/network-access/ntfy (generic provider endpoint)
+ */
+async function loadNtfyConfig() {
+  displayNtfyTopic();
+  await displayNtfyServerUrl();
 }

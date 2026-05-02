@@ -815,6 +815,8 @@ document.addEventListener("DOMContentLoaded", function () {
   if (!restored) {
     currentTab = "Calendar";
   }
+  // Update mobile Views button to reflect restored tab
+  if (typeof _updateMobileViewsLabel === 'function') _updateMobileViewsLabel();
   // Ensure clear-filters button reflects restored filter state
   _updateClearFiltersButton();
 

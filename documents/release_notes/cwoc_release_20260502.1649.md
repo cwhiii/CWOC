@@ -1,0 +1,1 @@
+The push send endpoint now also sends via Ntfy alongside Web Push. This means the existing test buttons (browser notification and push notification) in Settings will deliver to the Ntfy phone app too, so the 10-second delayed test notification arrives even with Firefox completely closed.

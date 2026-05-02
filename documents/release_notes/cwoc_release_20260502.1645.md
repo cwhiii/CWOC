@@ -1,0 +1,1 @@
+Changed "Open" buttons to app deep links — Tailscale button uses tailscale:// and Ntfy button uses ntfy:// to launch the phone apps directly. Fixed mobile overflow in the Network Access section so monospace URLs and long text wrap properly on narrow screens.

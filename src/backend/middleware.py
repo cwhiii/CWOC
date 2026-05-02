@@ -5,7 +5,9 @@ into request.state, and periodically cleans up expired sessions.
 
 Excluded paths (no auth required):
   POST /api/auth/login, GET /login, GET /health,
-  /static/*, /frontend/*, /data/*
+  GET /sw.js, GET /manifest.json,
+  GET /api/push/vapid-public-key,
+  /static/*, /frontend/*, /data/*, /pwa/*
 """
 
 import logging
@@ -38,8 +40,16 @@ def _utcnow_iso() -> str:
 
 def _is_excluded(path: str, method: str) -> bool:
     """Return True if the request path/method combination should skip auth."""
-    # Static / frontend / data assets
+    # Static / frontend / data / PWA assets
     if path.startswith("/static/") or path.startswith("/frontend/") or path.startswith("/data/"):
+        return True
+    if path.startswith("/pwa/"):
+        return True
+
+    # PWA root-level files (service worker and manifest)
+    if path == "/sw.js" and method == "GET":
+        return True
+    if path == "/manifest.json" and method == "GET":
         return True
 
     # Login page and health check
@@ -50,6 +60,14 @@ def _is_excluded(path: str, method: str) -> bool:
 
     # Login API endpoint
     if path == "/api/auth/login" and method == "POST":
+        return True
+
+    # Push VAPID public key (needed before user authenticates on new devices)
+    if path == "/api/push/vapid-public-key" and method == "GET":
+        return True
+
+    # SSL certificate download (public — cert is not secret)
+    if path == "/api/ssl-cert" and method == "GET":
         return True
 
     # Login welcome message (public, read-only)
