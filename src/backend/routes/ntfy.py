@@ -131,7 +131,16 @@ def send_ntfy_notification(user_id: str, title: str, body: str,
     try:
         data = body.encode("utf-8") if body else b""
         req = urllib.request.Request(url, data=data, method="POST")
-        req.add_header("X-Title", title)
+
+        # Ntfy supports UTF-8 in headers, but Python's urllib encodes as latin-1.
+        # Use RFC 2047 base64 encoding for non-ASCII characters (emojis, etc.)
+        import base64 as _b64
+        try:
+            title.encode("latin-1")
+            req.add_header("X-Title", title)
+        except UnicodeEncodeError:
+            encoded_title = "=?UTF-8?B?" + _b64.b64encode(title.encode("utf-8")).decode("ascii") + "?="
+            req.add_header("X-Title", encoded_title)
 
         # Add a unique message ID to help with deduplication if the user
         # has multiple subscriptions pointing to the same server
@@ -144,7 +153,11 @@ def send_ntfy_notification(user_id: str, title: str, body: str,
         if tags:
             req.add_header("X-Tags", tags)
         if click_url:
-            req.add_header("X-Click", click_url)
+            try:
+                click_url.encode("latin-1")
+                req.add_header("X-Click", click_url)
+            except UnicodeEncodeError:
+                req.add_header("X-Click", click_url.encode("utf-8").decode("ascii", errors="ignore"))
 
         with urllib.request.urlopen(req, timeout=10) as resp:
             status_code = resp.getcode()

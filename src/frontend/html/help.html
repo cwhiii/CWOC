@@ -186,12 +186,12 @@
             </ul>
             <p>Drag clocks between Active and Inactive zones in Settings to choose which appear. Use "Change Orientation" to switch between horizontal and vertical layout.</p>
             <h3 id="weather">Weather</h3>
-            <p>Press <kbd>W</kbd> on the dashboard to open the weather modal. It shows the current forecast for your default saved location, including weather icon, high/low temperatures (°F), and precipitation. If no default location is configured, the modal will prompt you to set one in Settings. The modal includes a <strong>📊 Full Forecast</strong> button that opens the dedicated Weather page.</p>
+            <p>Press <kbd>W</kbd> on the dashboard to open the weather modal. It shows the current forecast for your default saved location, including weather icon, high/low temperatures, and precipitation. Temperatures display in °F or °C based on your unit system setting (Settings → Unit System). If no default location is configured, the modal will prompt you to set one in Settings. The modal includes a <strong>📊 Full Forecast</strong> button that opens the dedicated Weather page.</p>
             <p>In the chit editor, weather loads automatically when a chit has both a location and a date. Stored forecast data displays immediately on load, then a live fetch updates it in the background. Placeholder messages appear when either location or date is missing.</p>
             <h4>Weather Data on Chits</h4>
             <p>Each chit with a location and date stores its own weather forecast. The stored data includes:</p>
             <ul>
-                <li><strong>High / Low</strong> — Forecast high and low temperatures (stored in Celsius, displayed in °F)</li>
+                <li><strong>High / Low</strong> — Forecast high and low temperatures (stored in Celsius, displayed in °F or °C based on your unit system setting)</li>
                 <li><strong>Precipitation</strong> — Expected precipitation sum in mm</li>
                 <li><strong>Weather Code</strong> — Determines the weather icon (☀️ sunny, 🌧️ rainy, 🌨️ snowy, etc.)</li>
                 <li><strong>Focus Date</strong> — The date the forecast applies to (earliest of start or due date)</li>
@@ -202,7 +202,7 @@
             <p>On the calendar, chits with stored weather data show a compact weather summary on their event card:</p>
             <ul>
                 <li><strong>Weather icon</strong> — Derived from the weather code (e.g., ☀️, 🌤️, 🌧️, 🌨️)</li>
-                <li><strong>High / Low temps</strong> — Displayed in °F</li>
+                <li><strong>High / Low temps</strong> — Displayed in °F or °C based on your unit system setting</li>
                 <li><strong>Precipitation</strong> — Shown on Day, Week, Work Hours, and X Days views</li>
                 <li><strong>⏳ Stale indicator</strong> — Appears when the forecast data is more than 24 hours old</li>
             </ul>
@@ -214,7 +214,7 @@
                 <li>The <strong>📊 Full Forecast</strong> button in the weather modal</li>
                 <li>Shift+click the <strong>🌤️ Weather</strong> button in the sidebar</li>
             </ul>
-            <p>The page displays one row per saved location, with up to 16 days of forecast data. Each day block shows the weather icon, high/low temperatures in °F, and precipitation. Drag rows by the ☰ handle to reorder locations — your arrangement is saved automatically. Days where you have a chit at that location are highlighted with a darker background. Click any day block to jump to that day in the Calendar Day view — any chits at that location will flash briefly to draw your eye. If no saved locations are configured, a message directs you to add them in Settings. Press <kbd>ESC</kbd> to navigate back.</p>
+            <p>The page displays one row per saved location, with up to 16 days of forecast data. Each day block shows the weather icon, high/low temperatures, and precipitation. Temperatures respect your unit system setting (°F or °C). Drag rows by the ☰ handle to reorder locations — your arrangement is saved automatically. Days where you have a chit at that location are highlighted with a darker background. Click any day block to jump to that day in the Calendar Day view — any chits at that location will flash briefly to draw your eye. If no saved locations are configured, a message directs you to add them in Settings. Press <kbd>ESC</kbd> to navigate back.</p>
             <h4>City Rows from Chits</h4>
             <p>Below the saved-location rows, the Weather page automatically adds rows for cities where you have upcoming chits but no saved location. These rows are labeled with the city name (extracted from the chit's address) and only show weather blocks on days that have chits in that city — other days are left empty. Click a day block to jump to that day in the Calendar, same as saved-location rows.</p>
             <h4>Weather Update Schedule</h4>

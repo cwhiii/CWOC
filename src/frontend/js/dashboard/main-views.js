@@ -3871,6 +3871,9 @@ function _buildSaTimerCard(card, id, data) {
       clearInterval(rt.intervalId); rt.intervalId = null; rt.running = false;
       startStopBtn.textContent = "▶ Start";
       syncSend('timer_paused', { alertId: id, remaining: rt.remaining });
+      // Cancel server-side timer tracking
+      fetch('/api/timer-state', { method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source_type: 'independent', source_id: id }) }).catch(function() {});
     } else {
       if (rt.remaining <= 0) rt.remaining = data.totalSeconds || 0;
       _showBarMode();
@@ -3878,6 +3881,10 @@ function _buildSaTimerCard(card, id, data) {
       var endTs = Date.now() + rt.remaining * 1000;
       rt._endTs = endTs;
       syncSend('timer_started', { alertId: id, totalSeconds: data.totalSeconds, endTs: endTs, name: data.name });
+      // Register with server for Ntfy notification when timer expires
+      fetch('/api/timer-state', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source_type: 'independent', source_id: id,
+          end_ts: new Date(endTs).toISOString(), name: data.name || 'Timer' }) }).catch(function() {});
       // Use 100ms ticks for precision; decrement by 0.1s internally
       let _fracRemain = rt.remaining * 10; // tenths of a second
       rt.intervalId = setInterval(() => {
@@ -3921,6 +3928,9 @@ function _buildSaTimerCard(card, id, data) {
     startStopBtn.textContent = "▶ Start";
     _showInputMode();
     syncSend('timer_reset', { alertId: id });
+    // Cancel server-side timer tracking
+    fetch('/api/timer-state', { method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source_type: 'independent', source_id: id }) }).catch(function() {});
   };
 
   controls.appendChild(startStopBtn);

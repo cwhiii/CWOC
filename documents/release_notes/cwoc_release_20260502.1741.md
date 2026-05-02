@@ -1,0 +1,1 @@
+Reduced alert push loop interval from 60 seconds to 15 seconds for near-instant Ntfy delivery of alarms, start/due times, and notification alerts. Timers already use instant scheduling via asyncio tasks.

@@ -1,0 +1,1 @@
+All Ntfy notifications now include click URLs. Tapping a chit alarm/notification opens the chit editor. Tapping an independent alarm opens the dashboard. URLs use the server's detected local IP with HTTPS so they work from the Ntfy Android app.

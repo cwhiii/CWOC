@@ -1,0 +1,1 @@
+Replaced timer polling with instant scheduled delivery. When a timer starts, the server schedules an asyncio task that fires the Ntfy notification at exactly the right time — no 60-second polling delay. Pausing or resetting cancels the scheduled task. Timer state is in-memory (asyncio tasks), not database-polled.

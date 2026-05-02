@@ -1202,3 +1202,40 @@ def migrate_add_vapid_keys():
     finally:
         if conn:
             conn.close()
+
+
+# ── Running Timers: server-side tracking for Ntfy notifications ──────────
+
+def migrate_add_running_timers():
+    """Create running_timers table for tracking active timer countdowns.
+
+    When a user starts a timer (chit or independent), the browser POSTs
+    the expected end timestamp. The server's alert loop checks this table
+    and sends Ntfy notifications when timers expire.
+
+    Uses CREATE TABLE IF NOT EXISTS for idempotency.
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS running_timers (
+                id TEXT PRIMARY KEY,
+                owner_id TEXT NOT NULL,
+                source_type TEXT NOT NULL,
+                source_id TEXT NOT NULL,
+                alert_index INTEGER,
+                end_ts TEXT NOT NULL,
+                name TEXT,
+                created_datetime TEXT NOT NULL
+            )
+        """)
+        conn.commit()
+        logger.info("running_timers table ready")
+    except Exception as e:
+        logger.error(f"Error creating running_timers table: {str(e)}")
+        raise
+    finally:
+        if conn:
+            conn.close()

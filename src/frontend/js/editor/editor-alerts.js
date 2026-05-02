@@ -1148,9 +1148,24 @@ function renderTimersContainer() {
         clearInterval(rt.intervalId); rt.intervalId = null; rt.running = false;
         startStopBtn.textContent = "▶ Start";
         // Keep bar visible, frozen — click bar to edit
+        // Cancel server-side timer tracking
+        var _pauseChitId = window.currentChitId || new URLSearchParams(window.location.search).get('id');
+        if (_pauseChitId) {
+          fetch('/api/timer-state', { method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ source_type: 'chit', source_id: _pauseChitId, alert_index: idx }) }).catch(function() {});
+        }
       } else {
         if (rt.remaining <= 0) rt.remaining = window._alertsData.timers[idx].totalSeconds;
         _showCountdownMode();
+        // Register with server for Ntfy notification when timer expires
+        var _startChitId = window.currentChitId || new URLSearchParams(window.location.search).get('id');
+        if (_startChitId) {
+          var _endTs = new Date(Date.now() + rt.remaining * 1000).toISOString();
+          var _timerName = window._alertsData.timers[idx].name || 'Timer';
+          fetch('/api/timer-state', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ source_type: 'chit', source_id: _startChitId, alert_index: idx,
+              end_ts: _endTs, name: _timerName }) }).catch(function() {});
+        }
         let _edFracRemain = rt.remaining * 10;
         const _edTickFn = () => {
           _edFracRemain = Math.max(0, _edFracRemain - 1);
@@ -1204,6 +1219,12 @@ function renderTimersContainer() {
       startStopBtn.textContent = "▶ Start";
       _showInputMode();
       _updateBar();
+      // Cancel server-side timer tracking
+      var _resetChitId = window.currentChitId || new URLSearchParams(window.location.search).get('id');
+      if (_resetChitId) {
+        fetch('/api/timer-state', { method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ source_type: 'chit', source_id: _resetChitId, alert_index: idx }) }).catch(function() {});
+      }
     };
 
     controls.appendChild(startStopBtn);

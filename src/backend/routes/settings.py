@@ -430,3 +430,152 @@ def cleanup_alert_states():
     finally:
         if conn:
             conn.close()
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Running Timer State (for server-side Ntfy notifications)
+# ═══════════════════════════════════════════════════════════════════════════
+
+# In-memory map of active timer tasks: key -> asyncio.Task
+# Key format: "chit:<source_id>:<alert_index>" or "independent:<source_id>"
+_timer_tasks = {}
+
+
+def _timer_key(source_type, source_id, alert_index=None):
+    """Build a unique key for a timer task."""
+    if alert_index is not None:
+        return f"{source_type}:{source_id}:{alert_index}"
+    return f"{source_type}:{source_id}"
+
+
+async def _timer_fire_task(key, delay_seconds, user_id, name, source_type, source_id):
+    """Async task that waits for the timer to expire, then sends Ntfy notification."""
+    import asyncio
+    try:
+        await asyncio.sleep(delay_seconds)
+    except asyncio.CancelledError:
+        logger.debug(f"Timer task cancelled: {key}")
+        return
+
+    # Timer expired — send notification
+    logger.info(f"Timer expired: {key} — sending Ntfy to user {user_id}")
+    try:
+        from src.backend.routes.ntfy import send_ntfy_notification
+        from src.backend.weather import _get_server_base_url
+        base = _get_server_base_url()
+        if source_type == "chit" and source_id:
+            click_url = f"{base}/frontend/html/editor.html?id={source_id}"
+        else:
+            click_url = f"{base}/"
+        send_ntfy_notification(
+            user_id=user_id,
+            title=f"⏱️ {name or 'Timer'}",
+            body="Time's up!",
+            click_url=click_url,
+            tags="timer_clock",
+        )
+    except Exception as e:
+        logger.warning(f"Ntfy failed for timer {key}: {e}")
+
+    # Also try Web Push
+    try:
+        from src.backend.weather import _send_chit_push
+        _send_chit_push(user_id, source_id or "", name or "Timer", "⏱️ Timer done:", "Time's up!")
+    except Exception as e:
+        logger.debug(f"Web Push failed for timer {key}: {e}")
+
+    # Clean up
+    _timer_tasks.pop(key, None)
+
+
+@router.post("/api/timer-state")
+async def register_running_timer(request: Request):
+    """Register a running timer — schedules a delayed Ntfy notification.
+
+    When the timer expires, the server sends a push notification immediately
+    (no polling delay). If the timer is paused or reset before expiry,
+    the scheduled task is cancelled via DELETE /api/timer-state.
+
+    Expects JSON body:
+    {
+        "source_type": "chit" or "independent",
+        "source_id": "<chit_id or alert_id>",
+        "alert_index": 0,  (for chit timers — index in the alerts array)
+        "end_ts": "2026-05-02T15:30:00Z",  (ISO datetime when timer expires)
+        "name": "My Timer"  (optional display name)
+    }
+    """
+    import asyncio
+
+    user_id = request.state.user_id
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+    source_type = body.get("source_type")
+    source_id = body.get("source_id")
+    end_ts = body.get("end_ts")
+
+    if not source_type or not source_id or not end_ts:
+        raise HTTPException(status_code=400, detail="Missing required fields: source_type, source_id, end_ts")
+
+    # Parse end_ts and compute delay
+    try:
+        end_dt = datetime.fromisoformat(end_ts.replace("Z", "+00:00")).replace(tzinfo=None)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="Invalid end_ts format")
+
+    delay = (end_dt - datetime.utcnow()).total_seconds()
+    if delay < 0:
+        delay = 0  # Already expired — fire immediately
+
+    key = _timer_key(source_type, source_id, body.get("alert_index"))
+
+    # Cancel any existing task for this timer
+    old_task = _timer_tasks.pop(key, None)
+    if old_task and not old_task.done():
+        old_task.cancel()
+
+    # Schedule the new task
+    task = asyncio.create_task(
+        _timer_fire_task(key, delay, user_id, body.get("name"), source_type, source_id)
+    )
+    _timer_tasks[key] = task
+
+    logger.info(f"Timer scheduled: {key} fires in {delay:.1f}s")
+    return {"status": "scheduled", "key": key, "delay_seconds": round(delay, 1)}
+
+
+@router.delete("/api/timer-state")
+async def cancel_running_timer(request: Request):
+    """Cancel a running timer (paused or reset by the user).
+
+    Cancels the scheduled asyncio task so no notification is sent.
+
+    Expects JSON body:
+    {
+        "source_type": "chit" or "independent",
+        "source_id": "<chit_id or alert_id>",
+        "alert_index": 0  (optional, for chit timers)
+    }
+    """
+    user_id = request.state.user_id
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+    source_type = body.get("source_type")
+    source_id = body.get("source_id")
+
+    if not source_type or not source_id:
+        raise HTTPException(status_code=400, detail="Missing required fields: source_type, source_id")
+
+    key = _timer_key(source_type, source_id, body.get("alert_index"))
+    task = _timer_tasks.pop(key, None)
+    if task and not task.done():
+        task.cancel()
+        logger.info(f"Timer cancelled: {key}")
+        return {"status": "cancelled"}
+    return {"status": "not_found"}

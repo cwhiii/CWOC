@@ -19,6 +19,30 @@ from src.backend.db import DB_PATH, _update_lock, serialize_json_field
 logger = logging.getLogger(__name__)
 
 
+# --- Server base URL helper (for Ntfy click URLs) ---
+
+_cached_base_url = None
+
+def _get_server_base_url():
+    """Get the server's HTTPS base URL for building click URLs in notifications.
+    Caches the result after first call."""
+    global _cached_base_url
+    if _cached_base_url:
+        return _cached_base_url
+    import socket
+    try:
+        local_ip = socket.gethostbyname(socket.gethostname())
+        if local_ip.startswith("127."):
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(("8.8.8.8", 80))
+            local_ip = s.getsockname()[0]
+            s.close()
+    except Exception:
+        local_ip = "localhost"
+    _cached_base_url = f"https://{local_ip}"
+    return _cached_base_url
+
+
 # --- Push notification helper (graceful if pywebpush unavailable) ---
 
 def _send_chit_push(owner_id, chit_id, chit_title, time_label, time_value):
@@ -92,7 +116,8 @@ def _send_chit_ntfy(owner_id, chit_id, chit_title, time_label, time_value):
     try:
         title = chit_title if chit_title else "CWOC Reminder"
         body = f"{time_label} {time_value}"
-        click_url = f"/frontend/html/editor.html?id={chit_id}"
+        base = _get_server_base_url()
+        click_url = f"{base}/frontend/html/editor.html?id={chit_id}"
         tags = "alarm_clock" if "Alarm" in time_label else "calendar"
 
         result = send_ntfy_notification(
@@ -491,49 +516,68 @@ async def _weather_daily_loop():
 
 
 async def _alert_push_loop():
-    """Background task: send push notifications when chit start/due times arrive.
+    """Background task: send push notifications for chit events, alarms, and notifications.
 
-    Runs every 60 seconds. Checks for non-deleted chits whose start_datetime
-    or due_datetime falls within the last 60-second window. Sends a push
-    notification to the chit owner for each match.
+    Runs every 15 seconds. Checks for:
+    1. Chits whose start_datetime or due_datetime falls in the current 60s window
+    2. Chit alarms whose time matches the current HH:MM and day of week
+    3. Chit notification alerts whose computed fire time falls in the current 60s window
+    4. Independent alarms (standalone_alerts) whose time matches now
 
-    Handles pywebpush not being installed gracefully (logs and skips).
+    Sends both Web Push and Ntfy notifications. Deduplicates using an in-memory
+    set keyed by chit_id + alert_index + date so alarms don't re-fire.
     """
+    # Dedup set: tracks fired alert keys for the current day
+    _fired_keys = set()
+    _fired_date = ""
+
     while True:
         try:
-            await asyncio.sleep(60)  # Check every 60 seconds
+            await asyncio.sleep(15)  # Check every 15 seconds for near-instant delivery
             now = datetime.utcnow()
-            window_start = now - timedelta(seconds=60)
+            window_start = now - timedelta(seconds=15)
             now_iso = now.isoformat()
             window_start_iso = window_start.isoformat()
+            current_hhmm = now.strftime("%H:%M")
+            days_of_week = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+            current_day = days_of_week[now.weekday()]  # Python weekday: Mon=0..Sun=6
+            today_str = now.strftime("%Y-%m-%d")
+
+            # Reset dedup set at midnight
+            if _fired_date != today_str:
+                _fired_keys = set()
+                _fired_date = today_str
 
             try:
                 conn = sqlite3.connect(DB_PATH)
                 cursor = conn.cursor()
-                # Find chits whose start_datetime or due_datetime falls in the last 60s window
+                # Fetch all non-deleted chits with owner_id
                 cursor.execute(
-                    "SELECT id, title, start_datetime, due_datetime, owner_id, alerts "
+                    "SELECT id, title, start_datetime, due_datetime, owner_id, alerts, "
+                    "       status, habit, habit_goal, habit_success "
                     "FROM chits "
                     "WHERE (deleted = 0 OR deleted IS NULL) "
-                    "AND owner_id IS NOT NULL AND owner_id != '' "
-                    "AND ("
-                    "  (start_datetime IS NOT NULL AND start_datetime > ? AND start_datetime <= ?) "
-                    "  OR (due_datetime IS NOT NULL AND due_datetime > ? AND due_datetime <= ?)"
-                    ")",
-                    (window_start_iso, now_iso, window_start_iso, now_iso),
+                    "AND owner_id IS NOT NULL AND owner_id != ''"
                 )
                 rows = cursor.fetchall()
                 columns = [col[0] for col in cursor.description]
                 chits = [dict(zip(columns, row)) for row in rows]
+
+                # Also fetch independent alarms (standalone_alerts)
+                cursor.execute(
+                    "SELECT id, owner_id, data FROM standalone_alerts "
+                    "WHERE owner_id IS NOT NULL AND owner_id != ''"
+                )
+                ia_rows = cursor.fetchall()
+                ia_columns = [col[0] for col in cursor.description]
+                independent_alerts = [dict(zip(ia_columns, row)) for row in ia_rows]
+
                 conn.close()
             except Exception as e:
                 logger.error(f"Alert push loop: DB query error: {e}")
                 continue
 
-            if not chits:
-                continue
-
-            logger.info(f"Alert push loop: found {len(chits)} chit(s) with arriving times")
+            sent_count = 0
 
             for chit in chits:
                 chit_id = chit.get("id")
@@ -545,31 +589,192 @@ async def _alert_push_loop():
                 if not owner_id:
                     continue
 
-                # Send push for start_datetime if it's in the window
-                if start_dt and window_start_iso < start_dt <= now_iso:
-                    try:
-                        dt = datetime.fromisoformat(start_dt.replace("Z", "+00:00"))
-                        time_str = dt.strftime("%I:%M %p").lstrip("0")
-                    except (ValueError, TypeError):
-                        time_str = start_dt
-                    _send_chit_push(owner_id, chit_id, chit_title, "Starts at", time_str)
-                    try:
-                        _send_chit_ntfy(owner_id, chit_id, chit_title, "Starts at", time_str)
-                    except Exception as e:
-                        logger.warning(f"Ntfy call failed for chit {chit_id} start: {e}")
+                # ── 1. Start/due time notifications (existing) ──────────────
 
-                # Send push for due_datetime if it's in the window
+                if start_dt and window_start_iso < start_dt <= now_iso:
+                    key = f"start-{chit_id}-{today_str}"
+                    if key not in _fired_keys:
+                        _fired_keys.add(key)
+                        try:
+                            dt = datetime.fromisoformat(start_dt.replace("Z", "+00:00"))
+                            time_str = dt.strftime("%I:%M %p").lstrip("0")
+                        except (ValueError, TypeError):
+                            time_str = start_dt
+                        _send_chit_push(owner_id, chit_id, chit_title, "Starts at", time_str)
+                        try:
+                            _send_chit_ntfy(owner_id, chit_id, chit_title, "Starts at", time_str)
+                        except Exception as e:
+                            logger.warning(f"Ntfy failed for chit {chit_id} start: {e}")
+                        sent_count += 1
+
                 if due_dt and window_start_iso < due_dt <= now_iso:
-                    try:
-                        dt = datetime.fromisoformat(due_dt.replace("Z", "+00:00"))
-                        time_str = dt.strftime("%I:%M %p").lstrip("0")
-                    except (ValueError, TypeError):
-                        time_str = due_dt
-                    _send_chit_push(owner_id, chit_id, chit_title, "Due at", time_str)
-                    try:
-                        _send_chit_ntfy(owner_id, chit_id, chit_title, "Due at", time_str)
-                    except Exception as e:
-                        logger.warning(f"Ntfy call failed for chit {chit_id} due: {e}")
+                    key = f"due-{chit_id}-{today_str}"
+                    if key not in _fired_keys:
+                        _fired_keys.add(key)
+                        try:
+                            dt = datetime.fromisoformat(due_dt.replace("Z", "+00:00"))
+                            time_str = dt.strftime("%I:%M %p").lstrip("0")
+                        except (ValueError, TypeError):
+                            time_str = due_dt
+                        _send_chit_push(owner_id, chit_id, chit_title, "Due at", time_str)
+                        try:
+                            _send_chit_ntfy(owner_id, chit_id, chit_title, "Due at", time_str)
+                        except Exception as e:
+                            logger.warning(f"Ntfy failed for chit {chit_id} due: {e}")
+                        sent_count += 1
+
+                # ── 2. Parse alerts JSON ────────────────────────────────────
+
+                alerts_raw = chit.get("alerts")
+                if not alerts_raw:
+                    continue
+                try:
+                    alerts = json.loads(alerts_raw) if isinstance(alerts_raw, str) else alerts_raw
+                except (json.JSONDecodeError, TypeError):
+                    continue
+                if not isinstance(alerts, list):
+                    continue
+
+                for idx, alert in enumerate(alerts):
+                    alert_type = alert.get("_type")
+
+                    # ── 3. Alarms — match current HH:MM + day ──────────────
+
+                    if alert_type == "alarm":
+                        if not alert.get("enabled") or not alert.get("time"):
+                            continue
+                        alarm_time = alert["time"]  # "HH:MM"
+                        if alarm_time != current_hhmm:
+                            continue
+                        alarm_days = alert.get("days") or [current_day]
+                        if current_day not in alarm_days:
+                            continue
+                        key = f"alarm-{chit_id}-{idx}-{today_str}"
+                        if key in _fired_keys:
+                            continue
+                        _fired_keys.add(key)
+                        alarm_name = alert.get("name", "")
+                        label = f"🔔 Alarm at {alarm_time}"
+                        if alarm_name:
+                            label += f" — {alarm_name}"
+                        _send_chit_push(owner_id, chit_id, chit_title, "Alarm at", alarm_time)
+                        try:
+                            _send_chit_ntfy(owner_id, chit_id, chit_title, "Alarm at", alarm_time)
+                        except Exception as e:
+                            logger.warning(f"Ntfy failed for alarm {chit_id}[{idx}]: {e}")
+                        sent_count += 1
+
+                    # ── 4. Notifications — compute fire time from offset ────
+
+                    elif alert_type == "notification":
+                        value = alert.get("value")
+                        unit = alert.get("unit")
+                        if not value or not unit:
+                            continue
+
+                        # "Only if undone" check
+                        only_if_undone = alert.get("only_if_undone", True)
+                        if only_if_undone:
+                            if chit.get("habit"):
+                                goal = chit.get("habit_goal") or 1
+                                success = chit.get("habit_success") or 0
+                                if isinstance(goal, str):
+                                    try: goal = int(goal)
+                                    except: goal = 1
+                                if isinstance(success, str):
+                                    try: success = int(success)
+                                    except: success = 0
+                                if success >= goal:
+                                    continue
+                            elif chit.get("status") == "Complete":
+                                continue
+
+                        # Compute offset
+                        unit_seconds = {
+                            "minutes": 60, "hours": 3600,
+                            "days": 86400, "weeks": 604800
+                        }
+                        offset_secs = int(value) * unit_seconds.get(unit, 60)
+
+                        # Determine target datetime
+                        target_type = alert.get("targetType", "start")
+                        if target_type == "due":
+                            target_str = due_dt or start_dt
+                        else:
+                            target_str = start_dt or due_dt
+                        if not target_str:
+                            continue
+
+                        try:
+                            target_dt = datetime.fromisoformat(target_str.replace("Z", "+00:00")).replace(tzinfo=None)
+                        except (ValueError, TypeError):
+                            continue
+
+                        # before = target - offset, after = target + offset
+                        after_target = alert.get("afterTarget", False)
+                        if after_target:
+                            fire_dt = target_dt + timedelta(seconds=offset_secs)
+                        else:
+                            fire_dt = target_dt - timedelta(seconds=offset_secs)
+
+                        fire_iso = fire_dt.isoformat()
+                        if window_start_iso < fire_iso <= now_iso:
+                            key = f"notif-{chit_id}-{idx}-{fire_iso[:16]}"
+                            if key in _fired_keys:
+                                continue
+                            _fired_keys.add(key)
+                            direction = "after" if after_target else "before"
+                            body = f"{value} {unit} {direction} {target_type}"
+                            _send_chit_push(owner_id, chit_id, chit_title, "Reminder:", body)
+                            try:
+                                _send_chit_ntfy(owner_id, chit_id, chit_title, "Reminder:", body)
+                            except Exception as e:
+                                logger.warning(f"Ntfy failed for notification {chit_id}[{idx}]: {e}")
+                            sent_count += 1
+
+            # ── 5. Independent alarms (standalone_alerts) ───────────────────
+
+            for ia in independent_alerts:
+                ia_id = ia.get("id")
+                owner_id = ia.get("owner_id")
+                data_raw = ia.get("data")
+                if not owner_id or not data_raw:
+                    continue
+                try:
+                    data = json.loads(data_raw) if isinstance(data_raw, str) else data_raw
+                except (json.JSONDecodeError, TypeError):
+                    continue
+
+                if data.get("_type") != "alarm":
+                    continue
+                if not data.get("enabled") or not data.get("time"):
+                    continue
+                if data["time"] != current_hhmm:
+                    continue
+                alarm_days = data.get("days") or [current_day]
+                if current_day not in alarm_days:
+                    continue
+                key = f"ia-alarm-{ia_id}-{today_str}"
+                if key in _fired_keys:
+                    continue
+                _fired_keys.add(key)
+                name = data.get("name") or "Independent Alarm"
+                ia_click_url = f"{_get_server_base_url()}/"
+                try:
+                    from src.backend.routes.ntfy import send_ntfy_notification
+                    send_ntfy_notification(
+                        user_id=owner_id,
+                        title=f"🔔 {name}",
+                        body=f"Alarm at {data['time']}",
+                        click_url=ia_click_url,
+                        tags="alarm_clock",
+                    )
+                except Exception as e:
+                    logger.warning(f"Ntfy failed for independent alarm {ia_id}: {e}")
+                sent_count += 1
+
+            if sent_count > 0:
+                logger.info(f"Alert push loop: sent {sent_count} notification(s)")
 
         except asyncio.CancelledError:
             break
