@@ -1,15 +1,18 @@
 /**
  * Property test for getHabitStreak
  *
- * Feature: habits-view, Property 5: Streak calculation correctness
- * Validates: Requirements 5.1, 5.2, 5.3, 5.4
+ * Feature: habits-overhaul, Property 13: Streak calculation
+ * **Validates: Requirements 9.1, 9.2, 9.3, 9.4, 9.5**
  *
  * Runs 120 iterations with randomly generated recurring chits and exception patterns.
+ * Tests both new-style (habit_success/habit_goal) and legacy (completed) entries.
  * Verifies:
- *   - Streak count matches manual backward walk from most recent non-broken-off occurrence
+ *   - Streak count matches manual backward walk from most recent past occurrence
+ *   - New-style entries use habit_success >= habit_goal for "met" determination
+ *   - Legacy entries fall back to completed field
  *   - Broken-off dates are skipped (neutral — neither contribute to nor break the streak)
- *   - Stops at first genuinely missed occurrence (not completed, not broken off)
- *   - Returns 0 when no completed occurrences exist
+ *   - Stops at first genuinely missed occurrence (not met, not broken off)
+ *   - Returns 0 when no met occurrences exist
  *
  * Usage: node src/frontend/js/shared/test_habits_streak.js
  */
@@ -49,11 +52,9 @@ function getHabitStreak(chit) {
   var byDayNums = byDay.map(function(d) { return dayMap[d]; }).filter(function(n) { return n !== undefined; });
 
   var exceptions = chit.recurrence_exceptions || [];
-  var brokenOffDates = {};
-  var completedDates = {};
+  var exceptionMap = {};
   for (var i = 0; i < exceptions.length; i++) {
-    if (exceptions[i].broken_off) brokenOffDates[exceptions[i].date] = true;
-    if (exceptions[i].completed) completedDates[exceptions[i].date] = true;
+    exceptionMap[exceptions[i].date] = exceptions[i];
   }
 
   var occurrences = [];
@@ -72,9 +73,7 @@ function getHabitStreak(chit) {
     }
 
     if (dayMatches) {
-      if (!brokenOffDates[dateStr]) {
-        occurrences.push(dateStr);
-      }
+      occurrences.push(dateStr);
     }
 
     if (freq === 'DAILY') {
@@ -99,7 +98,23 @@ function getHabitStreak(chit) {
 
   var streak = 0;
   for (var j = occurrences.length - 1; j >= 0; j--) {
-    if (completedDates[occurrences[j]]) {
+    var dateKey = occurrences[j];
+    var ex = exceptionMap[dateKey];
+
+    if (ex && ex.broken_off) {
+      continue;
+    }
+
+    var wasMet = false;
+    if (ex) {
+      if (ex.habit_success !== undefined && ex.habit_goal !== undefined) {
+        wasMet = ex.habit_success >= ex.habit_goal;
+      } else {
+        wasMet = !!ex.completed;
+      }
+    }
+
+    if (wasMet) {
       streak++;
     } else {
       break;
@@ -148,9 +163,7 @@ var ALL_FREQS = ['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'];
 var ALL_DAYS  = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
 var DAY_MAP   = { SU: 0, MO: 1, TU: 2, WE: 3, TH: 4, FR: 5, SA: 6 };
 
-// ── Oracle: collect all occurrence dates (independent re-implementation) ─────
-// Returns all occurrence date strings from startDate up to rangeEnd,
-// using the same recurrence walk logic as the function under test.
+// ── Oracle: collect all occurrence dates ─────────────────────────────────────
 function collectOccurrences(chit, rangeStart, rangeEnd) {
   var rule = chit.recurrence_rule;
   var freq = rule.freq;
@@ -211,11 +224,12 @@ function generateRandomChit() {
     byDay = randSubset(ALL_DAYS, 1, 3);
   }
 
-  // Start date: 10 to 120 days in the past
   var startDate = randomPastDate(120);
 
   return {
     title: 'Test Habit',
+    habit: true,
+    habit_goal: randInt(1, 5),
     start_datetime: _fmtDate(startDate) + 'T00:00:00',
     recurrence_rule: {
       freq: freq,
@@ -226,25 +240,37 @@ function generateRandomChit() {
   };
 }
 
-// ── Attach random exceptions to a chit based on its actual occurrences ───────
+// ── Attach random exceptions — mix of new-style and legacy ───────────────────
 function attachRandomExceptions(chit) {
   var today = new Date();
   today.setHours(0, 0, 0, 0);
   var startDate = parseYMD(chit.start_datetime.split('T')[0]);
 
   var allDates = collectOccurrences(chit, startDate, today);
+  var goal = chit.habit_goal || 1;
 
   var exceptions = [];
   for (var i = 0; i < allDates.length; i++) {
     var roll = Math.random();
-    if (roll < 0.40) {
-      // Mark as completed
+    if (roll < 0.25) {
+      // New-style: met goal
+      var successVal = randInt(goal, goal + 2);
+      exceptions.push({ date: allDates[i], completed: true, habit_success: successVal, habit_goal: goal, broken_off: false });
+    } else if (roll < 0.40) {
+      // New-style: missed goal
+      var missVal = randInt(0, Math.max(0, goal - 1));
+      exceptions.push({ date: allDates[i], completed: false, habit_success: missVal, habit_goal: goal, broken_off: false });
+    } else if (roll < 0.50) {
+      // Legacy: completed=true (no habit_success/habit_goal)
       exceptions.push({ date: allDates[i], completed: true, broken_off: false });
     } else if (roll < 0.60) {
-      // Mark as broken off
+      // Legacy: completed=false (missed)
+      exceptions.push({ date: allDates[i], completed: false, broken_off: false });
+    } else if (roll < 0.75) {
+      // Broken off
       exceptions.push({ date: allDates[i], completed: false, broken_off: true });
     }
-    // else: no exception (genuinely missed)
+    // else: no exception (missed)
   }
 
   chit.recurrence_exceptions = exceptions;
@@ -252,12 +278,6 @@ function attachRandomExceptions(chit) {
 }
 
 // ── Oracle: manually compute streak ──────────────────────────────────────────
-// Independent re-implementation of the streak logic:
-//   1. Collect all occurrence dates from start to today
-//   2. Remove broken-off dates (they are neutral)
-//   3. Walk backward from the most recent remaining occurrence
-//   4. Count consecutive completed occurrences
-//   5. Stop at first genuinely missed (not completed, not broken off)
 function oracleStreak(chit) {
   var rule = chit.recurrence_rule;
   if (!rule || !rule.freq) return 0;
@@ -267,33 +287,37 @@ function oracleStreak(chit) {
   today.setHours(0, 0, 0, 0);
   var startDate = parseYMD(chit.start_datetime.split('T')[0]);
 
-  // Collect ALL occurrence dates from start to today
   var allDates = collectOccurrences(chit, startDate, today);
 
-  // Build exception lookup
+  // Build exception lookup by date
   var exceptions = chit.recurrence_exceptions || [];
-  var brokenOffSet = {};
-  var completedSet = {};
+  var exMap = {};
   for (var i = 0; i < exceptions.length; i++) {
-    if (exceptions[i].broken_off) brokenOffSet[exceptions[i].date] = true;
-    if (exceptions[i].completed) completedSet[exceptions[i].date] = true;
+    exMap[exceptions[i].date] = exceptions[i];
   }
 
-  // Filter out broken-off dates (they are neutral — skipped entirely)
-  var nonBrokenDates = [];
-  for (var j = 0; j < allDates.length; j++) {
-    if (!brokenOffSet[allDates[j]]) {
-      nonBrokenDates.push(allDates[j]);
-    }
-  }
-
-  // Walk backward from the most recent non-broken-off occurrence
+  // Walk backward from the most recent occurrence
   var streak = 0;
-  for (var k = nonBrokenDates.length - 1; k >= 0; k--) {
-    if (completedSet[nonBrokenDates[k]]) {
+  for (var k = allDates.length - 1; k >= 0; k--) {
+    var d = allDates[k];
+    var ex = exMap[d];
+
+    // Skip broken-off (neutral)
+    if (ex && ex.broken_off) continue;
+
+    // Determine if met
+    var wasMet = false;
+    if (ex) {
+      if (ex.habit_success !== undefined && ex.habit_goal !== undefined) {
+        wasMet = ex.habit_success >= ex.habit_goal;
+      } else {
+        wasMet = !!ex.completed;
+      }
+    }
+
+    if (wasMet) {
       streak++;
     } else {
-      // Genuinely missed — stop counting
       break;
     }
   }
@@ -328,10 +352,8 @@ for (var iter = 0; iter < ITERATIONS; iter++) {
   // ── Assert 3: streak ≤ total non-broken-off occurrences ──
   var exceptions = chit.recurrence_exceptions || [];
   var brokenOffSet = {};
-  var completedSet = {};
   for (var e = 0; e < exceptions.length; e++) {
     if (exceptions[e].broken_off) brokenOffSet[exceptions[e].date] = true;
-    if (exceptions[e].completed) completedSet[exceptions[e].date] = true;
   }
   var today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -423,9 +445,11 @@ if (allBrokenResult !== 0) {
   passed++;
 }
 
-// ── Edge case: all occurrences completed gives streak = total non-broken ──
-var allCompletedChit = {
-  title: 'All Completed',
+// ── Edge case: all occurrences met (new-style) gives streak = total non-broken ──
+var allMetChit = {
+  title: 'All Met',
+  habit: true,
+  habit_goal: 3,
   start_datetime: '',
   recurrence_rule: { freq: 'DAILY', interval: 1, byDay: [] },
   recurrence_exceptions: []
@@ -433,16 +457,16 @@ var allCompletedChit = {
 var fiveDaysAgo = new Date();
 fiveDaysAgo.setHours(0, 0, 0, 0);
 fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5);
-allCompletedChit.start_datetime = _fmtDate(fiveDaysAgo) + 'T00:00:00';
-var allCompletedDates = collectOccurrences(allCompletedChit, fiveDaysAgo, new Date());
-allCompletedChit.recurrence_exceptions = allCompletedDates.map(function(d) {
-  return { date: d, completed: true, broken_off: false };
+allMetChit.start_datetime = _fmtDate(fiveDaysAgo) + 'T00:00:00';
+var allMetDates = collectOccurrences(allMetChit, fiveDaysAgo, new Date());
+allMetChit.recurrence_exceptions = allMetDates.map(function(d) {
+  return { date: d, completed: true, habit_success: 3, habit_goal: 3, broken_off: false };
 });
-var allCompletedResult = getHabitStreak(allCompletedChit);
-var allCompletedExpected = allCompletedDates.length;
-if (allCompletedResult !== allCompletedExpected) {
+var allMetResult = getHabitStreak(allMetChit);
+var allMetExpected = allMetDates.length;
+if (allMetResult !== allMetExpected) {
   failed++;
-  failures.push({ iteration: 'edge-all-completed', result: allCompletedResult, expected: allCompletedExpected, errors: ['All completed should give streak = ' + allCompletedExpected] });
+  failures.push({ iteration: 'edge-all-met', result: allMetResult, expected: allMetExpected, errors: ['All met should give streak = ' + allMetExpected] });
 } else {
   passed++;
 }
@@ -450,6 +474,8 @@ if (allCompletedResult !== allCompletedExpected) {
 // ── Edge case: broken-off in the middle does not break streak ──
 var brokenMiddleChit = {
   title: 'Broken Middle',
+  habit: true,
+  habit_goal: 2,
   start_datetime: '',
   recurrence_rule: { freq: 'DAILY', interval: 1, byDay: [] },
   recurrence_exceptions: []
@@ -459,22 +485,15 @@ sevenDaysAgo.setHours(0, 0, 0, 0);
 sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 brokenMiddleChit.start_datetime = _fmtDate(sevenDaysAgo) + 'T00:00:00';
 var brokenMiddleDates = collectOccurrences(brokenMiddleChit, sevenDaysAgo, new Date());
-// Pattern: completed, completed, broken-off, completed, completed, completed, completed, completed
-// The broken-off is skipped, so the streak from the end should be 5 (last 5 completed)
-// Wait — let's be precise. We have 8 dates (7 days ago through today).
-// Mark all as completed except make one in the middle broken-off
 var bmExceptions = [];
 for (var bm = 0; bm < brokenMiddleDates.length; bm++) {
   if (bm === 2) {
-    // broken-off in the middle
     bmExceptions.push({ date: brokenMiddleDates[bm], completed: false, broken_off: true });
   } else {
-    bmExceptions.push({ date: brokenMiddleDates[bm], completed: true, broken_off: false });
+    bmExceptions.push({ date: brokenMiddleDates[bm], completed: true, habit_success: 2, habit_goal: 2, broken_off: false });
   }
 }
 brokenMiddleChit.recurrence_exceptions = bmExceptions;
-// Oracle: non-broken dates are all except index 2. All of those are completed.
-// Walking backward: all completed → streak = total non-broken = brokenMiddleDates.length - 1
 var brokenMiddleExpected = brokenMiddleDates.length - 1;
 var brokenMiddleResult = getHabitStreak(brokenMiddleChit);
 if (brokenMiddleResult !== brokenMiddleExpected) {
@@ -487,6 +506,8 @@ if (brokenMiddleResult !== brokenMiddleExpected) {
 // ── Edge case: missed occurrence stops the streak ──
 var missedStopChit = {
   title: 'Missed Stop',
+  habit: true,
+  habit_goal: 1,
   start_datetime: '',
   recurrence_rule: { freq: 'DAILY', interval: 1, byDay: [] },
   recurrence_exceptions: []
@@ -496,20 +517,16 @@ sixDaysAgo.setHours(0, 0, 0, 0);
 sixDaysAgo.setDate(sixDaysAgo.getDate() - 6);
 missedStopChit.start_datetime = _fmtDate(sixDaysAgo) + 'T00:00:00';
 var missedStopDates = collectOccurrences(missedStopChit, sixDaysAgo, new Date());
-// Pattern: completed, completed, MISSED, completed, completed, completed, completed
-// Streak from end: 4 (last 4 completed), stops at the missed one
 var msExceptions = [];
 for (var ms = 0; ms < missedStopDates.length; ms++) {
   if (ms === 2) {
     // genuinely missed — no exception entry at all
   } else {
-    msExceptions.push({ date: missedStopDates[ms], completed: true, broken_off: false });
+    msExceptions.push({ date: missedStopDates[ms], completed: true, habit_success: 1, habit_goal: 1, broken_off: false });
   }
 }
 missedStopChit.recurrence_exceptions = msExceptions;
-// Oracle: all dates are non-broken. Walking backward from end:
-// index 6: completed, 5: completed, 4: completed, 3: completed, 2: missed → stop. Streak = 4
-var missedStopExpected = missedStopDates.length - 3; // total - 3 (first 2 completed + 1 missed)
+var missedStopExpected = missedStopDates.length - 3;
 var missedStopResult = getHabitStreak(missedStopChit);
 if (missedStopResult !== missedStopExpected) {
   failed++;
@@ -518,15 +535,41 @@ if (missedStopResult !== missedStopExpected) {
   passed++;
 }
 
-var TOTAL_TESTS = ITERATIONS + 7;
+// ── Edge case: legacy entries (completed=true, no habit_success) count as met ──
+var legacyStreakChit = {
+  title: 'Legacy Streak',
+  habit: true,
+  habit_goal: 1,
+  start_datetime: '',
+  recurrence_rule: { freq: 'DAILY', interval: 1, byDay: [] },
+  recurrence_exceptions: []
+};
+var fourDaysAgo = new Date();
+fourDaysAgo.setHours(0, 0, 0, 0);
+fourDaysAgo.setDate(fourDaysAgo.getDate() - 4);
+legacyStreakChit.start_datetime = _fmtDate(fourDaysAgo) + 'T00:00:00';
+var legacyDates = collectOccurrences(legacyStreakChit, fourDaysAgo, new Date());
+legacyStreakChit.recurrence_exceptions = legacyDates.map(function(d) {
+  return { date: d, completed: true, broken_off: false };
+});
+var legacyStreakResult = getHabitStreak(legacyStreakChit);
+var legacyStreakExpected = legacyDates.length;
+if (legacyStreakResult !== legacyStreakExpected) {
+  failed++;
+  failures.push({ iteration: 'edge-legacy-streak', result: legacyStreakResult, expected: legacyStreakExpected, errors: ['Legacy completed=true should count as met, expected streak ' + legacyStreakExpected] });
+} else {
+  passed++;
+}
+
+var TOTAL_TESTS = ITERATIONS + 9;
 
 // ── Summary ──────────────────────────────────────────────────────────────────
 _log('');
 _log('=== Property Test: getHabitStreak ===');
-_log('Feature: habits-view, Property 5: Streak calculation correctness');
-_log('Validates: Requirements 5.1, 5.2, 5.3, 5.4');
+_log('Feature: habits-overhaul, Property 13: Streak calculation');
+_log('Validates: Requirements 9.1, 9.2, 9.3, 9.4, 9.5');
 _log('');
-_log('Iterations: ' + TOTAL_TESTS + ' (' + ITERATIONS + ' random + 7 edge cases)');
+_log('Iterations: ' + TOTAL_TESTS + ' (' + ITERATIONS + ' random + 9 edge cases)');
 _log('Passed:     ' + passed);
 _log('Failed:     ' + failed);
 _log('');

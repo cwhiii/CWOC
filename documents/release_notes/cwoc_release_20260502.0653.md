@@ -1,0 +1,1 @@
+Fixed fast button clicks on habit cards triggering double-click navigation — dblclick handler now ignores clicks on buttons and checkboxes. Fixed repeat row still showing when loading an existing habit in the editor — onDateModeChange now respects the habit active state, and the habit toggle is applied after date mode and all-day setup to prevent re-showing.

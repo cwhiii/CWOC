@@ -1,4 +1,9 @@
 # CWOC — Completed Items
+
+
+
+- DO NOTHING. ONLY TALK! I need to understand habits better, it's doing something strange I don't get. Update the help about it to make all the parts crystal clear: how it works, and how to interact with it and the `[ ]` Goals system (completion %, grading, success/failure/abandoned)???
+
 The user profile is also supposed to include all information found in the contact profile. All the same fields. Such as social site and all that kind of thing.  Both contact and user profiles should also include an indicator to show whether they are a user or a contact. Who's the same icon you use in the chits editor to indicate users. 
 
 

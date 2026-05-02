@@ -87,7 +87,9 @@ function calendarEventTitle(chit, isDueOnly, info, settings, context) {
   const pinnedIcon = chit.pinned ? '<i class="fas fa-bookmark" style="font-size:0.8em;margin-right:2px;"></i>' : '';
   const dueIcon = isDueOnly ? '⌚ ' : '';
   // Recurrence icon is already included in _getAllIndicators, so skip if allIcons has it
-  const recurIcon = (!allIcons.includes('🔁') && ((chit.recurrence_rule && chit.recurrence_rule.freq) || chit._isVirtual)) ? '🔁 ' : '';
+  const recurIcon = (!allIcons.includes('🔁') && !allIcons.includes('🎯') && ((chit.recurrence_rule && chit.recurrence_rule.freq) || chit._isVirtual))
+    ? (chit.habit ? '🎯 ' : '🔁 ')
+    : '';
   // Weather icon from cache (if chit has location and weather setting allows)
   var wxIcon = '';
   if (chit.location && chit.location.trim() && settings) {
@@ -120,7 +122,7 @@ function calendarEventTitle(chit, isDueOnly, info, settings, context) {
 function calendarEventTooltip(chit, info) {
   let tooltip = chit.title || '(Untitled)';
   if (chit.recurrence_rule && chit.recurrence_rule.freq) {
-    tooltip += ' — ' + formatRecurrenceRule(chit.recurrence_rule);
+    tooltip += ' — ' + formatRecurrenceRule(chit.recurrence_rule, !!chit.habit);
     if (chit._instanceNum) tooltip += ` (#${chit._instanceNum})`;
   }
   if (info && info.hasDate) {

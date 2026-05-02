@@ -1,0 +1,1 @@
+Habit card layout overhaul: completion text now inline with title ("— ✅ Complete (next: May 5)"), note preview on the right side of each card (hidden on narrow screens), metric badges now have subtle background colors for readability, card body uses flex layout with metrics left and note right.

@@ -1,12 +1,15 @@
 /**
  * Property test for getHabitSuccessRate
  *
- * Feature: habits-view, Property 4: Success rate calculation correctness
- * Validates: Requirements 4.1, 4.6, 4.7
+ * Feature: habits-overhaul, Property 12: Success rate calculation
+ * **Validates: Requirements 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7**
  *
  * Runs 150 iterations with randomly generated recurring chits and exception arrays.
+ * Tests both new-style (habit_success/habit_goal) and legacy (completed) entries.
  * Verifies:
  *   - Calculated rate matches manual computation excluding broken-off dates
+ *   - New-style entries use habit_success >= habit_goal for "met" determination
+ *   - Legacy entries fall back to completed field
  *   - Result is an integer in the range 0–100
  *   - Returns 0 when no occurrences exist
  *
@@ -60,15 +63,13 @@ function getHabitSuccessRate(chit, windowDays) {
   var byDayNums = byDay.map(function(d) { return dayMap[d]; }).filter(function(n) { return n !== undefined; });
 
   var exceptions = chit.recurrence_exceptions || [];
-  var brokenOffDates = {};
-  var completedDates = {};
+  var exceptionMap = {};
   for (var i = 0; i < exceptions.length; i++) {
-    if (exceptions[i].broken_off) brokenOffDates[exceptions[i].date] = true;
-    if (exceptions[i].completed) completedDates[exceptions[i].date] = true;
+    exceptionMap[exceptions[i].date] = exceptions[i];
   }
 
   var total = 0;
-  var completed = 0;
+  var met = 0;
   var current = new Date(startDate);
   var maxIter = 10000;
 
@@ -84,10 +85,22 @@ function getHabitSuccessRate(chit, windowDays) {
     }
 
     if (dayMatches && current >= rangeStart) {
-      if (!brokenOffDates[dateStr]) {
+      var ex = exceptionMap[dateStr];
+
+      if (ex && ex.broken_off) {
+        // excluded
+      } else {
         total++;
-        if (completedDates[dateStr]) {
-          completed++;
+        if (ex) {
+          if (ex.habit_success !== undefined && ex.habit_goal !== undefined) {
+            if (ex.habit_success >= ex.habit_goal) {
+              met++;
+            }
+          } else {
+            if (ex.completed) {
+              met++;
+            }
+          }
         }
       }
     }
@@ -113,7 +126,7 @@ function getHabitSuccessRate(chit, windowDays) {
   }
 
   if (total === 0) return 0;
-  return Math.round((completed / total) * 100);
+  return Math.round((met / total) * 100);
 }
 
 // ── Helper: date formatting ──────────────────────────────────────────────────
@@ -151,9 +164,6 @@ function parseYMD(str) {
 }
 
 // ── Generate occurrence dates (oracle) ───────────────────────────────────────
-// This is an independent re-implementation of the recurrence walk used to
-// verify the function under test.  It returns all occurrence date strings
-// within [rangeStart, today] for the given chit.
 var ALL_FREQS = ['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'];
 var ALL_DAYS  = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
 var DAY_MAP   = { SU: 0, MO: 1, TU: 2, WE: 3, TH: 4, FR: 5, SA: 6 };
@@ -182,7 +192,6 @@ function collectOccurrences(chit, rangeStart, rangeEnd) {
       dates.push(_fmtDate(cur));
     }
 
-    // Advance — same logic as the function under test
     if (freq === 'DAILY') {
       cur.setDate(cur.getDate() + interval);
     } else if (freq === 'WEEKLY') {
@@ -219,11 +228,12 @@ function generateRandomChit() {
     byDay = randSubset(ALL_DAYS, 1, 3);
   }
 
-  // Start date: 10 to 120 days in the past (keep window manageable)
   var startDate = randomPastDate(120);
 
   var chit = {
     title: 'Test Habit',
+    habit: true,
+    habit_goal: randInt(1, 5),
     start_datetime: _fmtDate(startDate) + 'T00:00:00',
     recurrence_rule: {
       freq: freq,
@@ -236,36 +246,35 @@ function generateRandomChit() {
   return chit;
 }
 
-// Attach random exceptions to a chit based on its actual occurrences
+// Attach random exceptions — mix of new-style (habit_success/habit_goal) and legacy (completed)
 function attachRandomExceptions(chit, windowDays) {
   var today = new Date();
   today.setHours(0, 0, 0, 0);
 
   var startDate = parseYMD(chit.start_datetime.split('T')[0]);
 
-  var rangeStart;
-  if (windowDays === 'all') {
-    rangeStart = new Date(startDate);
-  } else {
-    var days = parseInt(windowDays, 10) || 30;
-    rangeStart = new Date(today);
-    rangeStart.setDate(rangeStart.getDate() - days);
-  }
-  if (rangeStart < startDate) {
-    rangeStart = new Date(startDate);
-  }
-
-  // Collect all occurrences from start to today (not just in range)
   var allDates = collectOccurrences(chit, startDate, today);
+  var goal = chit.habit_goal || 1;
 
   var exceptions = [];
   for (var i = 0; i < allDates.length; i++) {
     var roll = Math.random();
-    if (roll < 0.35) {
-      // Mark as completed
+    if (roll < 0.25) {
+      // New-style: met goal
+      var successVal = randInt(goal, goal + 2);
+      exceptions.push({ date: allDates[i], completed: true, habit_success: successVal, habit_goal: goal, broken_off: false });
+    } else if (roll < 0.40) {
+      // New-style: missed goal
+      var missVal = randInt(0, Math.max(0, goal - 1));
+      exceptions.push({ date: allDates[i], completed: false, habit_success: missVal, habit_goal: goal, broken_off: false });
+    } else if (roll < 0.50) {
+      // Legacy: completed=true (no habit_success/habit_goal)
       exceptions.push({ date: allDates[i], completed: true, broken_off: false });
-    } else if (roll < 0.55) {
-      // Mark as broken off
+    } else if (roll < 0.60) {
+      // Legacy: completed=false (missed)
+      exceptions.push({ date: allDates[i], completed: false, broken_off: false });
+    } else if (roll < 0.75) {
+      // Broken off
       exceptions.push({ date: allDates[i], completed: false, broken_off: true });
     }
     // else: no exception (missed)
@@ -294,30 +303,39 @@ function oracleSuccessRate(chit, windowDays) {
     rangeStart = new Date(startDate);
   }
 
-  // Collect occurrences within range
   var occurrences = collectOccurrences(chit, rangeStart, today);
 
-  // Build exception lookup
+  // Build exception lookup by date
   var exceptions = chit.recurrence_exceptions || [];
-  var brokenOffSet = {};
-  var completedSet = {};
+  var exMap = {};
   for (var i = 0; i < exceptions.length; i++) {
-    if (exceptions[i].broken_off) brokenOffSet[exceptions[i].date] = true;
-    if (exceptions[i].completed) completedSet[exceptions[i].date] = true;
+    exMap[exceptions[i].date] = exceptions[i];
   }
 
-  // Count, excluding broken-off
   var total = 0;
-  var completed = 0;
+  var met = 0;
   for (var j = 0; j < occurrences.length; j++) {
     var d = occurrences[j];
-    if (brokenOffSet[d]) continue; // exclude broken-off from both counts
+    var ex = exMap[d];
+
+    // Skip broken-off from both counts
+    if (ex && ex.broken_off) continue;
+
     total++;
-    if (completedSet[d]) completed++;
+    if (ex) {
+      if (ex.habit_success !== undefined && ex.habit_goal !== undefined) {
+        // New-style: use habit_success >= habit_goal
+        if (ex.habit_success >= ex.habit_goal) met++;
+      } else {
+        // Legacy: use completed field
+        if (ex.completed) met++;
+      }
+    }
+    // No exception = missed
   }
 
   if (total === 0) return 0;
-  return Math.round((completed / total) * 100);
+  return Math.round((met / total) * 100);
 }
 
 // ── Test runner ──────────────────────────────────────────────────────────────
@@ -410,7 +428,6 @@ if (futureResult !== 0) {
 
 // ── Edge case: all occurrences broken off returns 0 ──
 var allBrokenChit = generateRandomChit();
-// Force start 10 days ago with daily freq for predictable occurrences
 var tenDaysAgo = new Date();
 tenDaysAgo.setHours(0, 0, 0, 0);
 tenDaysAgo.setDate(tenDaysAgo.getDate() - 10);
@@ -428,13 +445,65 @@ if (allBrokenResult !== 0) {
   passed++;
 }
 
+// ── Edge case: new-style entries with habit_success < habit_goal are not met ──
+var partialChit = {
+  title: 'Partial',
+  habit: true,
+  habit_goal: 3,
+  start_datetime: '',
+  recurrence_rule: { freq: 'DAILY', interval: 1, byDay: [] },
+  recurrence_exceptions: []
+};
+var threeDaysAgo = new Date();
+threeDaysAgo.setHours(0, 0, 0, 0);
+threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+partialChit.start_datetime = _fmtDate(threeDaysAgo) + 'T00:00:00';
+var partialDates = collectOccurrences(partialChit, threeDaysAgo, new Date());
+partialChit.recurrence_exceptions = partialDates.map(function(d) {
+  return { date: d, completed: false, habit_success: 2, habit_goal: 3, broken_off: false };
+});
+var partialResult = getHabitSuccessRate(partialChit, 'all');
+if (partialResult !== 0) {
+  failed++;
+  failures.push({ iteration: 'edge-partial', result: partialResult, expected: 0, errors: ['habit_success < habit_goal should not count as met'] });
+} else {
+  passed++;
+}
+
+// ── Edge case: legacy entries with completed=true count as met ──
+var legacyChit = {
+  title: 'Legacy',
+  habit: true,
+  habit_goal: 1,
+  start_datetime: '',
+  recurrence_rule: { freq: 'DAILY', interval: 1, byDay: [] },
+  recurrence_exceptions: []
+};
+var fourDaysAgo = new Date();
+fourDaysAgo.setHours(0, 0, 0, 0);
+fourDaysAgo.setDate(fourDaysAgo.getDate() - 4);
+legacyChit.start_datetime = _fmtDate(fourDaysAgo) + 'T00:00:00';
+var legacyDates = collectOccurrences(legacyChit, fourDaysAgo, new Date());
+legacyChit.recurrence_exceptions = legacyDates.map(function(d) {
+  return { date: d, completed: true, broken_off: false };
+});
+var legacyResult = getHabitSuccessRate(legacyChit, 'all');
+if (legacyResult !== 100) {
+  failed++;
+  failures.push({ iteration: 'edge-legacy', result: legacyResult, expected: 100, errors: ['Legacy completed=true should count as met, expected 100%'] });
+} else {
+  passed++;
+}
+
+var TOTAL_TESTS = ITERATIONS + 6;
+
 // ── Summary ──────────────────────────────────────────────────────────────────
 _log('');
 _log('=== Property Test: getHabitSuccessRate ===');
-_log('Feature: habits-view, Property 4: Success rate calculation correctness');
-_log('Validates: Requirements 4.1, 4.6, 4.7');
+_log('Feature: habits-overhaul, Property 12: Success rate calculation');
+_log('Validates: Requirements 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7');
 _log('');
-_log('Iterations: ' + (ITERATIONS + 4) + ' (including 4 edge cases)');
+_log('Iterations: ' + TOTAL_TESTS + ' (' + ITERATIONS + ' random + 6 edge cases)');
 _log('Passed:     ' + passed);
 _log('Failed:     ' + failed);
 _log('');
@@ -460,7 +529,7 @@ if (failures.length > 0) {
 if (failed === 0) {
   _log('RESULT: ALL PASSED');
 } else {
-  _log('RESULT: FAILED (' + failed + '/' + (ITERATIONS + 4) + ' iterations failed)');
+  _log('RESULT: FAILED (' + failed + '/' + TOTAL_TESTS + ' iterations failed)');
 }
 
 _exit(failed > 0 ? 1 : 0);

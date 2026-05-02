@@ -535,11 +535,22 @@ function displayChits() {
     filteredChits = filteredChits.filter(function(c) { return !_isDeclinedByCurrentUser(c); });
   }
 
+  // Apply hide-habits filter
+  var _hideHabitsCb = document.getElementById('hide-habits');
+  if (_hideHabitsCb && _hideHabitsCb.checked) {
+    filteredChits = filteredChits.filter(function(c) { return !c.habit; });
+  }
+
   // Apply sort
   filteredChits = _applySort(filteredChits);
 
   // Expand recurring chits for Calendar tab
   if (currentTab === "Calendar") {
+    // Exclude habits hidden from calendar (habit=true && show_on_calendar=false)
+    filteredChits = filteredChits.filter(function(c) {
+      return !(c.habit === true && c.show_on_calendar === false);
+    });
+
     const rangeStart = new Date(currentWeekStart || new Date());
     rangeStart.setDate(rangeStart.getDate() - 7); // buffer
     const rangeEnd = new Date(rangeStart);

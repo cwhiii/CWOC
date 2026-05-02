@@ -1,0 +1,1 @@
+Moved habit toggle from a checkbox in the dates zone body to a 🎯 Habit button in the Dates zone header (next to All Day). Button shows active state with teal background and ✓ when habit is on. Repeat row is now fully hidden when habit is active — the habit controls row (Goal per Day/Week/Month/Year) replaces it. Habit Log zone icon updated to 🎯.

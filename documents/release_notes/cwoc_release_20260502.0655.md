@@ -1,0 +1,1 @@
+Rewrote habit success rate calculation in the Habits View — replaced the occurrence-walking approach (which didn't align with period dates) with a direct count from recurrence_exceptions plus the current period's live progress. Added console logging for debugging habit metrics. Habit Log zone confirmed in column-one directly below Dates.

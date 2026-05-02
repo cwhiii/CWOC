@@ -1,0 +1,1 @@
+Fixed habit success rate showing 50% for completed habits — legacy recurrence exceptions (from before the chit was marked as a habit) were being counted as missed periods. Now only entries with habit_success/habit_goal fields from actual period rollover snapshots are counted.

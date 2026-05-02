@@ -134,3 +134,10 @@ On some super long and complex new feature additions, it may be as much as a par
 In the settings page should be a button in the "🔄 Version & Updates" section, which you can click to bring up a model just like the upgrade one. It should show the HTML converted markdown from the file. It should have a simple dismiss button.
 
 I'm sure that the release notes file is emtied, and rebuilt a the completion of every new feature.
+
+## Configurator Script (`install/configurinator.sh`)
+- **Always CONFIRM with the user** before modifying the configurator script. Never edit it silently.
+- **Always OFFER to update it** when a feature introduces backend changes that require new dependencies, system packages, or server configuration. The user should know what needs to change and approve it.
+- The configurator's goal: run a single curl command against a fresh box and CWOC just starts working. Same for click-to-update — it all just works. Every new backend dependency or server-side requirement must be handled by the configurator so the user never has to SSH in and manually install anything.
+- The server uses a Python venv at `/app/venv/`. All pip installs go through `/app/venv/bin/pip` — never system-wide `pip install` (Ubuntu 24.10+ blocks it via PEP 668).
+- The configurator should check whether prerequisites are already installed before attempting to install them (idempotent).

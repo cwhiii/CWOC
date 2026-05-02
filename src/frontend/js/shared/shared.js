@@ -95,7 +95,8 @@ function showQuickEditModal(chit, onRefresh) {
   if (isRecurring) {
     const dateLine = document.createElement('div');
     dateLine.style.cssText = 'margin-bottom:4px;color:#6b4e31;font-size:0.9em;';
-    dateLine.textContent = `🔁 ${formatRecurrenceRule(chit.recurrence_rule)} — ${dateStr}`;
+    var _recIcon = chit.habit ? '🎯' : '🔁';
+    dateLine.textContent = `${_recIcon} ${formatRecurrenceRule(chit.recurrence_rule, !!chit.habit)} — ${dateStr}`;
     if (chit._instanceNum) dateLine.textContent += ` (#${chit._instanceNum})`;
     modal.appendChild(dateLine);
 
@@ -3323,9 +3324,15 @@ function getCurrentPeriodDate(chit) {
 /**
  * Calculate the success rate for a habit chit over a given window.
  *
- * Returns an integer 0–100 representing the percentage of scheduled
- * occurrences that were completed within the window, excluding any
- * broken-off dates from both numerator and denominator.
+ * Uses habit_success/habit_goal from recurrence exceptions to determine
+ * whether each period was met (habit_success >= habit_goal). Falls back
+ * to the legacy completed field for old entries that lack these fields.
+ *
+ * Formula: round((periods where met) / (total non-broken-off periods in window) * 100)
+ * Broken-off periods are excluded from both numerator and denominator.
+ * Returns 0 when no periods exist.
+ *
+ * Respects the habits_success_window setting via the windowDays parameter.
  *
  * @param {object} chit - A chit object with recurrence_rule, recurrence_exceptions, start_datetime
  * @param {number|string} windowDays - Number of days to look back, or "all" for all time
@@ -3341,7 +3348,7 @@ function getHabitSuccessRate(chit, windowDays) {
   var today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  // Parse start date — fallback to today if missing
+  // Parse start date — return 0 if missing
   var startDate;
   if (chit.start_datetime) {
     startDate = new Date(chit.start_datetime);
@@ -3372,18 +3379,16 @@ function getHabitSuccessRate(chit, windowDays) {
   var dayMap = { SU: 0, MO: 1, TU: 2, WE: 3, TH: 4, FR: 5, SA: 6 };
   var byDayNums = byDay.map(function(d) { return dayMap[d]; }).filter(function(n) { return n !== undefined; });
 
-  // Build lookup sets from recurrence_exceptions
+  // Build lookup maps from recurrence_exceptions
   var exceptions = chit.recurrence_exceptions || [];
-  var brokenOffDates = {};
-  var completedDates = {};
+  var exceptionMap = {};
   for (var i = 0; i < exceptions.length; i++) {
-    if (exceptions[i].broken_off) brokenOffDates[exceptions[i].date] = true;
-    if (exceptions[i].completed) completedDates[exceptions[i].date] = true;
+    exceptionMap[exceptions[i].date] = exceptions[i];
   }
 
   // Walk recurrence from start date, collecting occurrences within range
   var total = 0;
-  var completed = 0;
+  var met = 0;
   var current = new Date(startDate);
   var maxIter = 10000; // safety limit
 
@@ -3401,22 +3406,36 @@ function getHabitSuccessRate(chit, windowDays) {
     }
 
     if (dayMatches && current >= rangeStart) {
-      // Skip broken-off dates from both counts
-      if (!brokenOffDates[dateStr]) {
+      var ex = exceptionMap[dateStr];
+
+      // Skip broken-off periods from both numerator and denominator
+      if (ex && ex.broken_off) {
+        // excluded — do nothing
+      } else {
         total++;
-        if (completedDates[dateStr]) {
-          completed++;
+        if (ex) {
+          // New-style entry: use habit_success/habit_goal fields
+          if (ex.habit_success !== undefined && ex.habit_goal !== undefined) {
+            if (ex.habit_success >= ex.habit_goal) {
+              met++;
+            }
+          } else {
+            // Legacy entry: fall back to completed field
+            if (ex.completed) {
+              met++;
+            }
+          }
         }
+        // No exception for this date means it was missed (not met)
       }
     }
 
-    // Advance to next occurrence using the same pattern as _advanceRecurrence
+    // Advance to next occurrence
     if (freq === 'DAILY') {
       current.setDate(current.getDate() + interval);
     } else if (freq === 'WEEKLY') {
       if (byDayNums.length > 0) {
         current.setDate(current.getDate() + 1);
-        // When we wrap to the first byDay of a new week cycle, skip (interval-1) weeks
         if (current.getDay() === byDayNums[0] && interval > 1) {
           current.setDate(current.getDate() + (interval - 1) * 7);
         }
@@ -3433,17 +3452,22 @@ function getHabitSuccessRate(chit, windowDays) {
   }
 
   if (total === 0) return 0;
-  return Math.round((completed / total) * 100);
+  return Math.round((met / total) * 100);
 }
 
 /**
  * Calculate the current streak for a habit chit.
  *
- * Returns the count of consecutive completed periods working backward
- * from the most recent past non-broken-off occurrence.  Broken-off
- * (skipped) dates are treated as neutral — they are skipped entirely
- * and neither contribute to nor break the streak.  The streak stops
- * at the first genuinely missed occurrence (not completed, not broken off).
+ * Returns the count of consecutive periods where habit_success >= habit_goal,
+ * walking backward from the most recent past non-broken-off occurrence.
+ * Uses habit_success/habit_goal from recurrence exceptions; falls back to
+ * the legacy completed field for old entries without those fields.
+ *
+ * Broken-off (skipped) dates are treated as neutral — they are skipped
+ * entirely and neither contribute to nor break the streak. The streak
+ * stops at the first genuinely missed occurrence (not met, not broken off).
+ *
+ * Only counts periods from when habit tracking started (start_datetime).
  *
  * @param {object} chit - A chit object with recurrence_rule, recurrence_exceptions, start_datetime
  * @returns {number} Integer ≥ 0
@@ -3475,17 +3499,15 @@ function getHabitStreak(chit) {
   var dayMap = { SU: 0, MO: 1, TU: 2, WE: 3, TH: 4, FR: 5, SA: 6 };
   var byDayNums = byDay.map(function(d) { return dayMap[d]; }).filter(function(n) { return n !== undefined; });
 
-  // Build lookup sets from recurrence_exceptions
+  // Build lookup map from recurrence_exceptions (keyed by date)
   var exceptions = chit.recurrence_exceptions || [];
-  var brokenOffDates = {};
-  var completedDates = {};
+  var exceptionMap = {};
   for (var i = 0; i < exceptions.length; i++) {
-    if (exceptions[i].broken_off) brokenOffDates[exceptions[i].date] = true;
-    if (exceptions[i].completed) completedDates[exceptions[i].date] = true;
+    exceptionMap[exceptions[i].date] = exceptions[i];
   }
 
-  // Walk recurrence from start date forward, collecting all non-broken-off
-  // occurrence dates up to today
+  // Walk recurrence from start date forward, collecting all occurrence dates
+  // up to today (we need them in order to walk backward)
   var occurrences = [];
   var current = new Date(startDate);
   var maxIter = 10000; // safety limit
@@ -3504,19 +3526,15 @@ function getHabitStreak(chit) {
     }
 
     if (dayMatches) {
-      // Skip broken-off dates entirely — they are neutral
-      if (!brokenOffDates[dateStr]) {
-        occurrences.push(dateStr);
-      }
+      occurrences.push(dateStr);
     }
 
-    // Advance to next occurrence using the same pattern as getHabitSuccessRate
+    // Advance to next occurrence
     if (freq === 'DAILY') {
       current.setDate(current.getDate() + interval);
     } else if (freq === 'WEEKLY') {
       if (byDayNums.length > 0) {
         current.setDate(current.getDate() + 1);
-        // When we wrap to the first byDay of a new week cycle, skip (interval-1) weeks
         if (current.getDay() === byDayNums[0] && interval > 1) {
           current.setDate(current.getDate() + (interval - 1) * 7);
         }
@@ -3532,11 +3550,32 @@ function getHabitStreak(chit) {
     }
   }
 
-  // Walk backward from the most recent non-broken-off occurrence,
-  // counting consecutive completed occurrences
+  // Walk backward from the most recent occurrence, counting consecutive
+  // periods where the goal was met. Broken-off periods are skipped (neutral).
   var streak = 0;
   for (var j = occurrences.length - 1; j >= 0; j--) {
-    if (completedDates[occurrences[j]]) {
+    var dateKey = occurrences[j];
+    var ex = exceptionMap[dateKey];
+
+    // Skip broken-off periods — neutral, neither break nor count
+    if (ex && ex.broken_off) {
+      continue;
+    }
+
+    // Determine if this period was met
+    var wasMet = false;
+    if (ex) {
+      if (ex.habit_success !== undefined && ex.habit_goal !== undefined) {
+        // New-style entry: use habit_success/habit_goal
+        wasMet = ex.habit_success >= ex.habit_goal;
+      } else {
+        // Legacy entry: fall back to completed field
+        wasMet = !!ex.completed;
+      }
+    }
+    // No exception means missed (wasMet stays false)
+
+    if (wasMet) {
       streak++;
     } else {
       // Genuinely missed — stop counting
@@ -3545,6 +3584,163 @@ function getHabitStreak(chit) {
   }
 
   return streak;
+}
+
+// ── Period Rollover (Habits Overhaul) ────────────────────────────────────────
+
+/**
+ * Evaluate whether a habit chit needs period rollover.
+ *
+ * Lazy rollover: called on view load or editor load, not via background process.
+ * If the current period has advanced past the last recorded period, this function:
+ *   1. Snapshots the current habit_success/habit_goal into a recurrence exception
+ *   2. Resets habit_success to 0
+ *   3. Clears "Complete" status if set
+ *
+ * The chit object is modified in-place. Returns true if rollover occurred
+ * (caller is responsible for persisting via PUT).
+ *
+ * @param {object} chit - A chit object with habit, recurrence_rule, recurrence_exceptions, etc.
+ * @returns {boolean} Whether rollover occurred
+ */
+function _evaluateHabitRollover(chit) {
+  if (!chit.habit) return false;
+  var rule = chit.recurrence_rule;
+  if (!rule || !rule.freq) return false;
+
+  var currentPeriod = getCurrentPeriodDate(chit);
+  if (!currentPeriod) return false;
+
+  if (!Array.isArray(chit.recurrence_exceptions)) {
+    chit.recurrence_exceptions = [];
+  }
+
+  var exceptions = chit.recurrence_exceptions;
+  var previousPeriod = _getPreviousPeriodDate(chit, currentPeriod);
+
+  // Find the most recent habit snapshot date
+  var lastSnapshotDate = null;
+  for (var i = 0; i < exceptions.length; i++) {
+    if (exceptions[i].habit_success !== undefined) {
+      if (!lastSnapshotDate || exceptions[i].date > lastSnapshotDate) {
+        lastSnapshotDate = exceptions[i].date;
+      }
+    }
+  }
+
+  // RULE 1: If no previous snapshots exist, never roll over.
+  // The current habit_success belongs to the current period.
+  // Rollover only makes sense when we have history.
+  if (!lastSnapshotDate) return false;
+
+  // RULE 2: If the last snapshot is the previous period or later, no rollover needed.
+  // The current habit_success belongs to the current period.
+  if (lastSnapshotDate >= previousPeriod) return false;
+
+  // RULE 3: The last snapshot is OLDER than the previous period.
+  // This means the period has genuinely changed — snapshot current progress.
+  var habitSuccess = chit.habit_success || 0;
+  var habitGoal = chit.habit_goal || 1;
+  var isComplete = chit.status === 'Complete';
+
+  var snapshot = {
+    date: previousPeriod,
+    completed: habitSuccess >= habitGoal,
+    habit_success: habitSuccess,
+    habit_goal: habitGoal
+  };
+
+  // Check if previous period already has an exception
+  var existingIdx = -1;
+  for (var j = 0; j < exceptions.length; j++) {
+    if (exceptions[j].date === previousPeriod) {
+      existingIdx = j;
+      break;
+    }
+  }
+
+  if (existingIdx >= 0) {
+    if (exceptions[existingIdx].habit_success !== undefined) return false;
+    exceptions[existingIdx].habit_success = habitSuccess;
+    exceptions[existingIdx].habit_goal = habitGoal;
+    exceptions[existingIdx].completed = habitSuccess >= habitGoal;
+  } else {
+    exceptions.push(snapshot);
+  }
+
+  chit.habit_success = 0;
+  if (isComplete) chit.status = '';
+
+  console.log('[Rollover] ' + (chit.title || chit.id) + ': snapshotted ' + habitSuccess + '/' + habitGoal + ' into ' + previousPeriod + ', reset to 0');
+  return true;
+}
+
+/**
+ * Get the previous period date before a given period date for a chit.
+ * Used by _evaluateHabitRollover to determine which period just ended.
+ *
+ * @param {object} chit - A chit with recurrence_rule and start_datetime
+ * @param {string} currentPeriod - YYYY-MM-DD of the current period
+ * @returns {string|null} YYYY-MM-DD of the previous period, or null
+ */
+function _getPreviousPeriodDate(chit, currentPeriod) {
+  var rule = chit.recurrence_rule;
+  if (!rule || !rule.freq) return null;
+
+  function _pad(n) { return n < 10 ? '0' + n : '' + n; }
+  function _fmt(d) { return d.getFullYear() + '-' + _pad(d.getMonth() + 1) + '-' + _pad(d.getDate()); }
+
+  var freq = rule.freq;
+  var interval = rule.interval || 1;
+  var currentDate = new Date(currentPeriod + 'T00:00:00');
+
+  if (freq === 'DAILY') {
+    var prev = new Date(currentDate);
+    prev.setDate(prev.getDate() - interval);
+    return _fmt(prev);
+  }
+
+  if (freq === 'WEEKLY') {
+    var prev = new Date(currentDate);
+    prev.setDate(prev.getDate() - (interval * 7));
+    return _fmt(prev);
+  }
+
+  if (freq === 'MONTHLY') {
+    var prev = new Date(currentDate);
+    prev.setMonth(prev.getMonth() - interval);
+    return _fmt(prev);
+  }
+
+  if (freq === 'YEARLY') {
+    var prev = new Date(currentDate);
+    prev.setFullYear(prev.getFullYear() - interval);
+    return _fmt(prev);
+  }
+
+  return null;
+}
+
+/**
+ * Persist a habit chit after rollover via PUT /api/chits/{id}.
+ * Called in the background — does not block rendering.
+ *
+ * @param {object} chit - The chit object that was modified by _evaluateHabitRollover
+ */
+async function _persistHabitRollover(chit) {
+  if (!chit || !chit.id) return;
+  try {
+    var resp = await fetch('/api/chits/' + chit.id, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(chit)
+    });
+    if (!resp.ok) {
+      console.error('[_persistHabitRollover] Failed to save rollover for chit ' + chit.id + ':', resp.status);
+    }
+  } catch (err) {
+    console.error('[_persistHabitRollover] Error saving rollover for chit ' + chit.id + ':', err);
+  }
 }
 
 // Auto-init on page load

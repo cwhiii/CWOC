@@ -127,21 +127,42 @@ function resetEditorForNewChit() {
   window._alertsData = { alarms: [], timers: [], stopwatches: [], notifications: [] };
   renderAllAlerts();
 
+  // Reset habit state
+  var habitCb = document.getElementById('habitEnabled');
+  if (habitCb) habitCb.checked = false;
+  var habitControlsRow = document.getElementById('habitControlsRow');
+  if (habitControlsRow) habitControlsRow.style.display = 'none';
+  var habitCalendarRow = document.getElementById('habitCalendarRow');
+  if (habitCalendarRow) habitCalendarRow.style.display = 'none';
+  var habitToggleBtn = document.getElementById('habitToggleBtn');
+  if (habitToggleBtn) {
+    habitToggleBtn.style.background = '';
+    habitToggleBtn.style.color = '';
+    habitToggleBtn.style.borderColor = '';
+    habitToggleBtn.textContent = '🎯 Habit';
+  }
+  // Reset All Day button state
+  if (typeof _updateAllDayBtnState === 'function') _updateAllDayBtnState();
+  // Reset recurrence icon
+  var recIcon = document.getElementById('recurrenceIcon');
+  if (recIcon) {
+    recIcon.textContent = '🔁';
+    recIcon.title = 'Recurring chit';
+    recIcon.style.display = 'none';
+  }
+  window._currentHabitSuccess = 0;
+  var habitGoalEl = document.getElementById('habitGoal');
+  if (habitGoalEl) habitGoalEl.value = 1;
+  var showOnCalCb = document.getElementById('showOnCalendar');
+  if (showOnCalCb) showOnCalCb.checked = true;
+  if (typeof _toggleHabitLogZone === 'function') _toggleHabitLogZone(false);
+
   // Show weather placeholder for new chits
   const cws = document.getElementById("compactWeatherSection");
   if (cws) { cws.classList.add('weather-placeholder'); cws.innerHTML = `<div style="padding:8px;font-family:Lora, Georgia, serif;color:#8b5a2b;font-size:0.85em;opacity:0.7;">📍 Date &amp; location needed for weather</div>`; }
 
-  // Auto-apply default saved location to new chits
-  loadSavedLocations().then(function () {
-    var defLoc = getDefaultLocation();
-    if (defLoc && defLoc.address) {
-      var locInput = document.getElementById("location");
-      if (locInput && !locInput.value) {
-        locInput.value = defLoc.address;
-        if (typeof _fetchWeatherData === 'function') _fetchWeatherData(defLoc.address);
-      }
-    }
-  });
+  // Load saved locations for the dropdown (but do NOT auto-populate)
+  loadSavedLocations();
 
   _collapseAllZonesForNewChit();
 
@@ -362,13 +383,81 @@ async function loadChitData(chitId) {
     if (chit.recurrence_rule) {
       _loadRecurrenceRule(chit.recurrence_rule);
       const icon = document.getElementById('recurrenceIcon');
-      if (icon) icon.style.display = '';
+      if (icon) {
+        icon.style.display = '';
+        // Show habit icon instead of repeat icon for habit chits
+        if (chit.habit) {
+          icon.textContent = '🎯';
+          icon.title = 'Habit';
+        } else {
+          icon.textContent = '🔁';
+          icon.title = 'Recurring chit';
+        }
+      }
     }
     window._loadedRecurrenceExceptions = chit.recurrence_exceptions || null;
 
-    // Load hide_when_instance_done checkbox state
-    const hideWhenDoneCb = document.getElementById('hideWhenInstanceDone');
-    if (hideWhenDoneCb) hideWhenDoneCb.checked = !!chit.hide_when_instance_done;
+    // Load habit fields
+    var habitCb = document.getElementById('habitEnabled');
+    if (habitCb) {
+      habitCb.checked = !!chit.habit;
+    }
+    window._currentHabitSuccess = chit.habit_success || 0;
+    var habitGoalEl = document.getElementById('habitGoal');
+    if (habitGoalEl) {
+      habitGoalEl.value = chit.habit_goal || 1;
+    }
+    var showOnCalCb = document.getElementById('showOnCalendar');
+    if (showOnCalCb) {
+      showOnCalCb.checked = chit.show_on_calendar !== false;
+    }
+    // Sync habit frequency dropdown from the chit's recurrence rule
+    var habitFreqSel = document.getElementById('habitFrequency');
+    if (habitFreqSel && chit.recurrence_rule && chit.recurrence_rule.freq) {
+      var freq = chit.recurrence_rule.freq;
+      if (['DAILY','WEEKLY','MONTHLY','YEARLY'].indexOf(freq) !== -1) {
+        habitFreqSel.value = freq;
+      }
+    }
+    // Apply habit toggle state (reveal/hide controls, hide repeat row)
+    // onHabitToggle() toggles the hidden checkbox, so set it to the opposite first
+    // NOTE: This must run AFTER _setDateMode and allDay setup (which happen later in loadChitData)
+    // so we defer it with a flag and call it at the end of date setup.
+
+    // Evaluate period rollover for habit chits (lazy rollover — Task 5.3)
+    if (chit.habit && typeof _evaluateHabitRollover === 'function') {
+      var rolledOver = _evaluateHabitRollover(chit);
+      if (rolledOver) {
+        // Update the UI fields to reflect the reset
+        window._currentHabitSuccess = chit.habit_success || 0;
+        if (habitGoalEl) {
+          habitGoalEl.value = chit.habit_goal || 1;
+        }
+        // Persist the updated chit in the background (Task 5.4)
+        if (typeof _persistHabitRollover === 'function') {
+          _persistHabitRollover(chit);
+        }
+      }
+    }
+
+    if (typeof _updateHabitProgressDisplay === 'function') {
+      _updateHabitProgressDisplay();
+    }
+
+    // Load Habit Log zone (period history + charts) for habit chits
+    if (chit.habit && typeof _loadHabitLog === 'function') {
+      _loadHabitLog(chit);
+      // Expand the Habit Log zone if it has data
+      var habitLogSection = document.getElementById('habitLogSection');
+      var habitLogContent = document.getElementById('habitLogContent');
+      var exceptions = chit.recurrence_exceptions || [];
+      if (habitLogSection && habitLogContent && exceptions.length > 0) {
+        habitLogContent.style.display = '';
+        habitLogSection.classList.remove('collapsed');
+        var hlIcon = habitLogSection.querySelector('.zone-toggle-icon');
+        if (hlIcon) hlIcon.textContent = '🔼';
+      }
+    }
 
     // Populate Audit Log zone for recurring chits
     const auditSection = document.getElementById('auditLogSection');
@@ -448,6 +537,18 @@ async function loadChitData(chitId) {
 
     const _allDayCb = document.getElementById("allDay");
     if (_allDayCb && _allDayCb.checked) toggleAllDay();
+
+    // Sync All Day button appearance from checkbox state
+    if (typeof _updateAllDayBtnState === 'function') _updateAllDayBtnState();
+
+    // Now apply habit toggle (must be after _setDateMode and allDay setup)
+    if (chit.habit) {
+      var _hCb = document.getElementById('habitEnabled');
+      if (_hCb) {
+        _hCb.checked = false; // onHabitToggle will flip to true
+        onHabitToggle();
+      }
+    }
 
     if (window.checklist) {
       if (Array.isArray(chit.checklist)) {

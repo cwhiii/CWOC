@@ -109,7 +109,7 @@
                 <label class="sidebar-section-label">View Mode</label>
                 <div style="display:flex;gap:4px;">
                     <button class="action-button" id="tasks-mode-tasks" onclick="_setTasksMode('tasks')" style="flex:1;margin-bottom:0;font-size:0.8em;padding:6px;background:ivory;">📋 Tasks</button>
-                    <button class="action-button" id="tasks-mode-habits" onclick="_setTasksMode('habits')" style="flex:1;margin-bottom:0;font-size:0.8em;padding:6px;">🔁 Habits</button>
+                    <button class="action-button" id="tasks-mode-habits" onclick="_setTasksMode('habits')" style="flex:1;margin-bottom:0;font-size:0.8em;padding:6px;">🎯 Habits</button>
                     <button class="action-button" id="tasks-mode-assigned" onclick="_setTasksMode('assigned')" style="flex:1;margin-bottom:0;font-size:0.8em;padding:6px;">📌 Assigned</button>
                 </div>
                 <!-- Habits success window (only visible in habits mode) -->
@@ -237,9 +237,7 @@
                             <label><input type="checkbox" id="hide-past-due" onchange="onFilterChange()" /> 🚫 Hide Past-Due</label>
                             <label><input type="checkbox" id="hide-complete" onchange="onFilterChange()" /> ✅ Hide Complete</label>
                             <label><input type="checkbox" id="hide-declined" onchange="onFilterChange()" /> 🚫 Hide Declined</label>
-                            <hr style="border:0;border-top:1px dashed #c4a882;margin:4px 0;" />
-                            <label><input type="checkbox" id="highlight-overdue" onchange="onFilterChange()" checked /> 🚨 Highlight Overdue</label>
-                            <label><input type="checkbox" id="highlight-blocked" onchange="onFilterChange()" checked /> 🚧 Highlight Blocked</label>
+                            <label><input type="checkbox" id="hide-habits" onchange="onFilterChange()" /> 🎯 Hide Habits</label>
                         </div>
                     </div>
                 </div>

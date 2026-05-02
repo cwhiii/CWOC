@@ -1,0 +1,1 @@
+Habit view: debounced saves (1-second delay, resets on each click so you can click multiple times), optimistic UI updates (progress, badges, and status update instantly without waiting for server), animated card movement between On Deck and Accomplished sections (slide out, reposition, slide in). Changed calendar row icon to 🗓️ and label to "Show on calendar views".

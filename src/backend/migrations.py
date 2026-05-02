@@ -1006,3 +1006,97 @@ def migrate_add_user_profile_fields():
     finally:
         if conn:
             conn.close()
+
+
+# ── Habits Overhaul: migration ───────────────────────────────────────────
+
+def migrate_habits_overhaul():
+    """Add habit fields to chits, add setting, remove hide_when_instance_done via table rebuild.
+
+    Steps:
+    1. Add habit (BOOLEAN DEFAULT 0), habit_goal (INTEGER DEFAULT 1),
+       habit_success (INTEGER DEFAULT 0), show_on_calendar (BOOLEAN DEFAULT 1)
+       columns to chits (with existence checks).
+    2. Add default_show_habits_on_calendar (TEXT DEFAULT '1') column to settings.
+    3. Remove hide_when_instance_done column via table rebuild:
+       - Read current columns from PRAGMA table_info
+       - Create chits_backup with all columns except hide_when_instance_done
+       - Copy data from chits to chits_backup
+       - Drop chits
+       - Rename chits_backup to chits
+
+    Fully idempotent — safe to run multiple times.
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        # ── Step 1: Add new habit columns to chits ───────────────────────
+        cursor.execute("PRAGMA table_info(chits)")
+        chit_cols = {row[1] for row in cursor.fetchall()}
+
+        if "habit" not in chit_cols:
+            cursor.execute("ALTER TABLE chits ADD COLUMN habit BOOLEAN DEFAULT 0")
+            logger.info("Added habit column to chits table")
+        if "habit_goal" not in chit_cols:
+            cursor.execute("ALTER TABLE chits ADD COLUMN habit_goal INTEGER DEFAULT 1")
+            logger.info("Added habit_goal column to chits table")
+        if "habit_success" not in chit_cols:
+            cursor.execute("ALTER TABLE chits ADD COLUMN habit_success INTEGER DEFAULT 0")
+            logger.info("Added habit_success column to chits table")
+        if "show_on_calendar" not in chit_cols:
+            cursor.execute("ALTER TABLE chits ADD COLUMN show_on_calendar BOOLEAN DEFAULT 1")
+            logger.info("Added show_on_calendar column to chits table")
+
+        # ── Step 2: Add default_show_habits_on_calendar to settings ──────
+        cursor.execute("PRAGMA table_info(settings)")
+        settings_cols = {row[1] for row in cursor.fetchall()}
+
+        if "default_show_habits_on_calendar" not in settings_cols:
+            cursor.execute("ALTER TABLE settings ADD COLUMN default_show_habits_on_calendar TEXT DEFAULT '1'")
+            logger.info("Added default_show_habits_on_calendar column to settings table")
+
+        # ── Step 3: Remove hide_when_instance_done via table rebuild ─────
+        # Re-read columns after potential additions above
+        cursor.execute("PRAGMA table_info(chits)")
+        all_col_info = cursor.fetchall()
+        all_col_names = [row[1] for row in all_col_info]
+
+        if "hide_when_instance_done" in all_col_names:
+            # Build column list without hide_when_instance_done
+            keep_cols = [row for row in all_col_info if row[1] != "hide_when_instance_done"]
+            keep_col_names = [row[1] for row in keep_cols]
+            col_names_csv = ", ".join(keep_col_names)
+
+            # Build CREATE TABLE statement for backup
+            col_defs = []
+            for row in keep_cols:
+                # row: (cid, name, type, notnull, dflt_value, pk)
+                cid, name, col_type, notnull, dflt_value, pk = row
+                parts = [name, col_type if col_type else "TEXT"]
+                if pk:
+                    parts.append("PRIMARY KEY")
+                if notnull and not pk:
+                    parts.append("NOT NULL")
+                if dflt_value is not None:
+                    parts.append(f"DEFAULT {dflt_value}")
+                col_defs.append(" ".join(parts))
+
+            create_sql = f"CREATE TABLE chits_backup ({', '.join(col_defs)})"
+
+            # Execute the rebuild inside a transaction
+            cursor.execute(create_sql)
+            cursor.execute(f"INSERT INTO chits_backup ({col_names_csv}) SELECT {col_names_csv} FROM chits")
+            cursor.execute("DROP TABLE chits")
+            cursor.execute("ALTER TABLE chits_backup RENAME TO chits")
+            logger.info("Removed hide_when_instance_done column from chits table via table rebuild")
+
+        conn.commit()
+        logger.info("Habits overhaul migration complete")
+    except Exception as e:
+        logger.error(f"Error in migrate_habits_overhaul: {str(e)}")
+        raise
+    finally:
+        if conn:
+            conn.close()

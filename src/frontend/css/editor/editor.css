@@ -455,6 +455,63 @@ input.error {
     border: 2px solid var(--danger-red);
 }
 
+/* Notes modal overlay — used by #notesModal */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 1001;
+}
+
+.modal-overlay .modal-contentFull {
+    background: url("/static/parchment.jpg") center/cover;
+    background-color: var(--parchment-light);
+    border: 2px solid var(--aged-brown-medium);
+    border-radius: 10px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+}
+
+.modal-overlay .modal-header {
+    background: var(--zone-header-bg);
+    border-bottom: 2px solid var(--aged-brown-medium);
+    border-radius: 8px 8px 0 0;
+}
+
+.modal-overlay .modal-header h2 {
+    font-family: 'Lora', Georgia, serif;
+    color: var(--aged-brown-dark);
+}
+
+.modal-overlay .modal-header button {
+    font-family: 'Lora', Georgia, serif;
+    padding: 6px 12px;
+    border: 1px outset var(--aged-brown-medium);
+    border-radius: 4px;
+    background: var(--button-bg);
+    color: var(--aged-brown-dark);
+    cursor: pointer;
+}
+
+.modal-overlay .modal-header button:hover {
+    background: var(--button-hover);
+}
+
+.modal-overlay .modal-header button.cancel {
+    background: var(--danger-red);
+    color: var(--parchment-light);
+}
+
+.modal-overlay .modal-body {
+    background: url("/static/parchment.jpg") center/cover;
+    background-color: var(--parchment-light);
+}
+
 .modal-overlay-new {
     position: fixed;
     top: 0;
@@ -4231,5 +4288,164 @@ input.location {
     .cwoc-pex-col-org,
     .cwoc-pex-col-notes {
         display: none !important;
+    }
+}
+
+/* ── Habit Log Zone ────────────────────────────────────────────────────────── */
+
+.habit-log-period-list {
+    max-height: 300px;
+    overflow-y: auto;
+    margin-bottom: 10px;
+}
+
+.habit-log-period-row {
+    display: grid;
+    grid-template-columns: 1.5em auto 3em auto;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 8px;
+    border-bottom: 1px dotted var(--aged-brown-light);
+    font-size: 0.9em;
+    color: var(--text-color);
+    width: fit-content;
+}
+
+.habit-log-period-row:last-child {
+    border-bottom: none;
+}
+
+.habit-log-period-row.habit-log-broken-off {
+    opacity: 0.5;
+    font-style: italic;
+}
+
+.habit-log-status {
+    font-size: 1em;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.habit-log-date {
+    font-weight: 500;
+    color: var(--aged-brown-dark);
+}
+
+.habit-log-count {
+    font-weight: bold;
+    text-align: center;
+    padding: 1px 4px;
+    border-radius: 3px;
+    border: 1px solid var(--aged-brown-light);
+    background: var(--input-bg);
+    cursor: pointer;
+    transition: border-color 0.2s;
+    min-width: 2em;
+}
+
+.habit-log-count:hover {
+    border-color: var(--accent-teal);
+}
+
+.habit-log-count.habit-log-met {
+    color: var(--accent-teal);
+}
+
+.habit-log-count.habit-log-missed {
+    color: var(--danger-red);
+}
+
+.habit-log-count.habit-log-skipped {
+    color: var(--dark-grey);
+    font-style: italic;
+    font-weight: normal;
+    cursor: default;
+    border-style: none;
+    background: none;
+}
+
+.habit-log-goal {
+    font-size: 0.9em;
+    color: var(--aged-brown-medium);
+    white-space: nowrap;
+}
+
+.habit-log-empty {
+    padding: 12px;
+    text-align: center;
+    color: var(--aged-brown-medium);
+    font-style: italic;
+    font-size: 0.9em;
+}
+
+.habit-log-inline-input {
+    width: 50px;
+    padding: 2px 4px;
+    font-size: 0.9em;
+    border: 1px solid var(--accent-teal);
+    border-radius: 3px;
+    background-color: var(--input-bg);
+    color: var(--text-color);
+    text-align: center;
+}
+
+.habit-log-inline-input:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(0, 128, 128, 0.25);
+}
+
+/* Charts grid — 2-column layout */
+.habit-log-charts-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--aged-brown-light);
+}
+
+.habit-chart-wrapper {
+    background-color: var(--parchment-light);
+    border: 1px solid var(--aged-brown-light);
+    border-radius: 4px;
+    padding: 6px;
+    min-height: 180px;
+}
+
+.habit-chart-wrapper canvas {
+    width: 100%;
+    display: block;
+}
+
+.habit-chart-full-width {
+    grid-column: span 2;
+}
+
+/* Responsive: single column on narrow screens */
+@media (max-width: 768px) {
+    .habit-log-charts-grid {
+        grid-template-columns: 1fr;
+    }
+    .habit-chart-full-width {
+        grid-column: span 1;
+    }
+}
+
+@media (max-width: 480px) {
+    .habit-log-period-row {
+        font-size: 0.85em;
+        gap: 6px;
+        padding: 4px 6px;
+    }
+    .habit-log-date {
+        min-width: 80px;
+        font-size: 0.85em;
+    }
+    .habit-log-charts-grid {
+        grid-template-columns: 1fr;
+        gap: 8px;
+    }
+    .habit-chart-full-width {
+        grid-column: span 1;
     }
 }

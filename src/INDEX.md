@@ -34,7 +34,7 @@ Package marker. No public exports.
 | `AuthMiddleware` | (imported from `middleware.py`) Session-based auth middleware — validates `cwoc_session` cookie, injects user identity into `request.state` |
 | `on_startup()` | Startup event — calls `start_weather_schedulers()` |
 
-Registers all route modules (including `auth_router`, `users_router`, `sharing_router`, `notifications_router`, and `network_access_router`), runs all migrations (including `migrate_add_multi_user()`, `migrate_add_sharing()`, `migrate_add_kiosk_users()`, `migrate_add_network_access()`, and `migrate_add_notifications()`) and `init_db()` at import time, mounts `StaticFiles` for frontend, static, and data directories.
+Registers all route modules (including `auth_router`, `users_router`, `sharing_router`, `notifications_router`, and `network_access_router`), runs all migrations (including `migrate_add_multi_user()`, `migrate_add_sharing()`, `migrate_add_kiosk_users()`, `migrate_add_network_access()`, `migrate_add_notifications()`, and `migrate_habits_overhaul()`) and `init_db()` at import time, mounts `StaticFiles` for frontend, static, and data directories.
 
 ### 1.3 `src/backend/models.py` — Pydantic Models
 
@@ -44,7 +44,7 @@ Registers all route modules (including `auth_router`, `users_router`, `sharing_r
 | `SharedTagEntry` | Tag-level share entry with `tag: str` and `shares: List[ShareEntry]` |
 | `Tag` | Tag with name, color, fontColor, favorite |
 | `Settings` | User settings — time format, tags, colors, indicators, calendar config, audit limits, habits success window, shared_tags, hide_declined, etc. |
-| `Chit` | Core chit model — title, note, dates, status, checklist, alerts, recurrence, location, color, people, hide_when_instance_done, shares, stealth, assigned_to, etc. |
+| `Chit` | Core chit model — title, note, dates, status, checklist, alerts, recurrence, location, color, people, habit, habit_goal, habit_success, show_on_calendar, shares, stealth, assigned_to, etc. |
 | `MultiValueEntry` | Label/value pair for contact multi-value fields (phone, email, etc.) |
 | `Contact` | Contact model — name fields, phones, emails, addresses, social, security, notes, tags, color |
 | `ImportRequest` | Import envelope — mode ("add"/"replace") + data dict |
@@ -66,7 +66,7 @@ Registers all route modules (including `auth_router`, `users_router`, `sharing_r
 | `compute_display_name(contact)` | Build display name from contact name fields |
 | `serialize_json_field(data)` | Serialize a Python object to a JSON string (or None) |
 | `deserialize_json_field(data)` | Deserialize a JSON string to a Python object (or None) |
-| `compute_system_tags(chit)` | Auto-assign system tags (Calendar, Tasks, Notes, etc.) based on chit properties |
+| `compute_system_tags(chit)` | Auto-assign system tags (Calendar, Tasks, Notes, Habits, Habits/[title], etc.) based on chit properties; adds `Habits` and `Habits/[title]` tags when `habit=True` |
 | `get_or_create_instance_id()` | Get or create a persistent instance UUID |
 | `_build_export_envelope(data_type, data)` | Wrap data in an export envelope with metadata |
 | `get_version_info()` | Read version info from the `version_info` table |
@@ -97,7 +97,7 @@ All migrations run at startup. Each checks if the column/table already exists be
 | `migrate_add_standalone_alerts()` | Create the `standalone_alerts` table |
 | `migrate_add_alert_state()` | Create the `alert_states` table |
 | `migrate_contact_images_to_data()` | Move contact images from `/static/contact_images/` to `data/contacts/profile_pictures/` |
-| `migrate_add_habits_fields()` | Add `hide_when_instance_done` column to chits table and `habits_success_window` column to settings table |
+| `migrate_add_habits_fields()` | Add `habits_success_window` column to settings table (legacy — `hide_when_instance_done` removed by `migrate_habits_overhaul`) |
 | `migrate_add_border_color_settings()` | Add `overdue_border_color` and `blocked_border_color` setting columns |
 | `migrate_add_multi_user()` | Create `users` and `sessions` tables, default admin account, add `owner_id`/`owner_display_name`/`owner_username` columns to chits, add `owner_id` to contacts, reassign existing data to admin user |
 | `migrate_add_user_profile_image()` | Add `profile_image_url` column to users table |
@@ -109,6 +109,7 @@ All migrations run at startup. Each checks if the column/table already exists be
 | `migrate_add_hide_declined()` | Add `hide_declined` (TEXT, default '0') column to settings table for hiding declined RSVP chits |
 | `migrate_add_network_access()` | Create `network_access` table with columns: `id` (TEXT PRIMARY KEY), `provider` (TEXT NOT NULL UNIQUE), `enabled` (BOOLEAN DEFAULT 0), `config` (TEXT), `created_datetime` (TEXT), `modified_datetime` (TEXT) |
 | `migrate_add_notifications()` | Create `notifications` table with columns: `id` (TEXT PRIMARY KEY), `user_id` (TEXT NOT NULL), `chit_id` (TEXT NOT NULL), `chit_title` (TEXT), `owner_display_name` (TEXT), `notification_type` (TEXT NOT NULL), `status` (TEXT NOT NULL DEFAULT 'pending'), `created_datetime` (TEXT NOT NULL); creates index `idx_notifications_user_id` on `user_id` |
+| `migrate_habits_overhaul()` | Add `habit` (BOOLEAN DEFAULT 0), `habit_goal` (INTEGER DEFAULT 1), `habit_success` (INTEGER DEFAULT 0), `show_on_calendar` (BOOLEAN DEFAULT 1) columns to chits table; add `default_show_habits_on_calendar` (TEXT DEFAULT '1') column to settings table; remove `hide_when_instance_done` column via table rebuild (copy-to-temp, recreate, copy-back) |
 
 ### 1.6 `src/backend/serializers.py` — vCard & CSV
 
@@ -266,6 +267,19 @@ Property-based tests for the chit invitation RSVP system. Uses Python stdlib onl
 | `TestProperty5OwnerExclusionFromRsvp` | Owner exclusion from RSVP — owner is never in shares with rsvp_status, RSVP update from owner is rejected with 403, owner removal from shares preserves other entries (120+ iterations). **Validates: Requirements 2.8** |
 | `TestProperty6HideDeclinedFilteringCorrectness` | Hide declined filtering correctness — declined chits are removed, non-declined chits preserved, owned chits never filtered, empty shares not filtered, mixed statuses correctly handled (120+ iterations). **Validates: Requirements 5.2, 7.2** |
 | `TestProperty7HideDeclinedSettingRoundTrip` | Hide declined setting round-trip — boolean values survive "0"/"1" string conversion, save and load produce same value, default is "0", only "1" enables hiding (120+ iterations). **Validates: Requirements 5.5** |
+
+### 1.17c `src/backend/test_habits.py` — Habits Overhaul Property Tests
+
+Property-based tests for the habits overhaul feature. Uses Python stdlib only (unittest + random) — no external libraries. Each property test runs 100+ iterations with randomly generated inputs.
+
+| Class / Function | Description |
+|------------------|-------------|
+| `TestProperty4TagComputation` | Habit tag computation — `compute_system_tags` includes `Habits` and `Habits/[title]` tags when `habit=True`, excludes them when `habit=False` (100+ iterations). **Validates: Properties 4, 5** |
+| `TestProperty8HabitSuccessCap` | Habit success cap — `habit_success` never exceeds `habit_goal` after capping logic (100+ iterations). **Validates: Property 8** |
+| `TestProperty12SuccessRate` | Success rate calculation — verifies `(periods where habit_success >= habit_goal) / total non-broken-off periods * 100` formula with random period histories (100+ iterations). **Validates: Property 12** |
+| `TestProperty13Streak` | Streak calculation — verifies consecutive completed periods walking backward, broken-off periods neutral (100+ iterations). **Validates: Property 13** |
+| `TestProperty16MigrationIdempotency` | Migration idempotency — running `migrate_habits_overhaul()` multiple times produces no errors, new columns exist, `hide_when_instance_done` does not exist (100+ iterations). **Validates: Property 16** |
+| `TestProperty17CrudRoundTrip` | CRUD round-trip — saving and loading a chit with random `habit`, `habit_goal`, `habit_success`, `show_on_calendar` values returns the same values (100+ iterations). **Validates: Property 17** |
 
 ---
 
@@ -668,7 +682,7 @@ Recurrence expansion, formatting, series info computation, and date advancement 
 |----------|-------------|
 | `_advanceRecurrence(current, freq, interval, byDayNums)` | Advance a Date by one recurrence interval (minutely through yearly) |
 | `expandRecurrence(chit, rangeStart, rangeEnd)` | Expand a recurring chit into virtual instances for a date range |
-| `formatRecurrenceRule(rule)` | Format a recurrence rule as a human-readable string |
+| `formatRecurrenceRule(rule, isHabit)` | Format a recurrence rule as a human-readable string; when isHabit is true, omits day/date suffixes |
 | `getRecurrenceSeriesInfo(chit, virtualDate)` | Count occurrence number, total past instances, completed count, and success rate for a series |
 
 #### shared-geocoding.js
@@ -767,8 +781,11 @@ Coordinator for shared code between dashboard and editor. Contains glue code for
 | `_showQuickAlertToast(type)` | Show a brief toast confirming alert creation (non-dashboard pages) |
 | `_initSharedHotkeys()` | Register the global keydown listener for !, \`, ~ hotkeys on all pages |
 | `getCurrentPeriodDate(chit)` | Return the current period's date as a `YYYY-MM-DD` string for a recurring chit based on its frequency (daily, weekly, monthly, yearly, custom interval) |
-| `getHabitSuccessRate(chit, windowDays)` | Calculate the percentage of completed occurrences within a rolling window (7, 30, 90 days, or "all"); excludes broken-off dates from both numerator and denominator |
-| `getHabitStreak(chit)` | Count consecutive completed periods working backward from the most recent past occurrence; broken-off dates are neutral and do not break the streak |
+| `_getPreviousPeriodDate(chit)` | Return the previous period's date as a `YYYY-MM-DD` string for a recurring chit, one interval before the current period |
+| `_evaluateHabitRollover(chit)` | Detect period change for a habit chit; if the current period has advanced, snapshot `habit_success`/`habit_goal` into a recurrence exception for the ended period, reset `habit_success` to 0, and clear Complete status. Returns whether rollover occurred |
+| `_persistHabitRollover(chit)` | Persist a habit chit's rollover state to the backend via PUT `/api/chits/{id}` |
+| `getHabitSuccessRate(chit, windowDays)` | Calculate the percentage of periods where `habit_success >= habit_goal` within a rolling window (7, 30, 90 days, or "all"); excludes broken-off dates from both numerator and denominator; falls back to legacy `completed` field for old entries |
+| `getHabitStreak(chit)` | Count consecutive periods where `habit_success >= habit_goal` walking backward from the most recent past period; broken-off dates are neutral and do not break the streak; handles legacy entries |
 
 #### test_habits_helpers.js — Property Test: getCurrentPeriodDate
 
@@ -916,8 +933,9 @@ Coordinator for shared code between dashboard and editor. Contains glue code for
 | `_buildNotePreview(chit, extraStyle)` | Build an expandable note preview element with "show more/less" toggle for mobile |
 | `displayChecklistView(chitsToDisplay)` | Render the Checklists tab — chits with interactive checklist items |
 | `displayTasksView(chitsToDisplay)` | Render the Tasks tab — chits with status dropdowns and note previews; dispatches to `displayHabitsView` when in habits mode |
-| `displayHabitsView(chitsToDisplay)` | Render the Habits view — recurring chits as habit cards with completion toggles, success rate badges, and streak indicators |
-| `_renderHabitCards(container, habitData, showCompleted, windowDays)` | Render habit cards into a container with completion-based sorting and hide-when-done filtering |
+| `displayHabitsView(chitsToDisplay)` | Render the Habits view — filters by `chit.habit === true`, evaluates period rollover, renders habit cards with goal progress, checkbox/counter interactions, success rate badges, and streak indicators |
+| `_renderHabitCards(container, habitChits, windowDays)` | Render habit cards into a container with completion-based sorting (incomplete first, completed last); checkbox interaction for goal=1, counter +/− for goal>1; auto-sets Complete when goal reached |
+| `_persistHabitUpdate(chit)` | Persist a habit chit's updated `habit_success` and status to the backend via PUT `/api/chits/{id}` |
 | `displayNotesView(chitsToDisplay)` | Render the Notes tab — markdown notes in a masonry column layout |
 | `displayAssignedToMeView(chitsToDisplay)` | Render the "Assigned to Me" view — chits where `assigned_to` matches the current user's ID, with owner badges and role indicators |
 | `_setProjectsMode(mode)` | Set Projects view mode (list or kanban) and re-render |
@@ -1117,6 +1135,26 @@ Date mode system, recurrence picker, time picker dropdown, and date-clearing hel
 | `_showTimeDropdown(inputEl)` | Show a snap-aligned time dropdown below a time input element |
 | `clearStartAndEndDates()` | Clear all start/end date and time input fields |
 | `clearDueDate()` | Clear the due date and time input fields |
+| `onHabitToggle()` | Handle "Track as habit" checkbox change — when checked: auto-enable Repeat with Daily if not already on, reveal habit controls, lock Repeat; when unchecked: hide controls, unlock Repeat |
+| `_updateHabitProgressDisplay()` | Update the habit progress "X / Y" display from current `habit_success` and `habit_goal` values |
+| `onHabitGoalChange()` | Handle habit goal input change — enforce minimum of 1, update progress display, mark unsaved |
+| `_toggleAllDayBtn()` | Toggle the All Day button — mirrors the hidden checkbox and calls `toggleAllDay()` |
+| `_updateAllDayBtnState()` | Sync the All Day button appearance (teal active, disabled when habit forces all-day) from the hidden checkbox state |
+
+#### editor-habits.js
+
+Habit Log zone logic: period history display, inline editing of past counts, and canvas-based habit charts. New file created as part of the habits overhaul. Visible only when `habit=true`.
+
+| Symbol | Description |
+|--------|-------------|
+| `_loadHabitLog(chit)` | Build period history from recurrence_exceptions, display in reverse chronological order with editable counts and charts |
+| `_buildPeriodRow(exception, index)` | Build a single period row element showing date and "X / Y" completion count with click-to-edit |
+| `_startInlineEdit(element, exception, index)` | Start inline editing of a past period's habit_success count; saves on Enter/blur, cancels on Escape |
+| `_renderHabitCharts(chit, exceptions, windowDays)` | Render all three habit charts into the charts container using `<canvas>` elements in a 2-column grid |
+| `_drawCompletionChart(canvas, exceptions, goal)` | Draw a completion bar chart showing habit_success per period with a habit_goal reference line |
+| `_drawSuccessRateChart(canvas, exceptions)` | Draw a success rate trend line chart showing rolling percentage over time |
+| `_drawStreakChart(canvas, exceptions)` | Draw a streak timeline visualization showing consecutive completion periods |
+| `_toggleHabitLogZone(visible)` | Show or hide the Habit Log zone based on the habit flag state |
 
 #### editor-tags.js
 

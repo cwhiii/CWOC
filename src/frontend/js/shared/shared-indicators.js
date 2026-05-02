@@ -130,8 +130,10 @@ function _getAllIndicators(chit, settings, context) {
     if (_shouldShow(healthMode, context)) result += '❤️ ';
   }
 
-  // Recurrence indicator
-  if (chit.recurrence_rule && chit.recurrence_rule.freq) {
+  // Habit / Recurrence indicator
+  if (chit.habit) {
+    result += '🎯 ';
+  } else if (chit.recurrence_rule && chit.recurrence_rule.freq) {
     result += '🔁 ';
   }
 

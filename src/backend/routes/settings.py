@@ -53,6 +53,7 @@ def get_settings(user_id: str, request: Request):
         settings["default_notifications"] = deserialize_json_field(settings.get("default_notifications"))
         settings["shared_tags"] = deserialize_json_field(settings.get("shared_tags"))
         settings["kiosk_users"] = deserialize_json_field(settings.get("kiosk_users"))
+        settings["default_show_habits_on_calendar"] = settings.get("default_show_habits_on_calendar", "1")
         return settings
     except Exception as e:
         logger.error(f"Error fetching settings: {str(e)}")
@@ -124,6 +125,7 @@ def save_settings(settings: Settings, request: Request):
             "shared_tags": preserved_shared_tags if settings.shared_tags is None else serialize_json_field(settings.shared_tags),
             "kiosk_users": serialize_json_field(settings.kiosk_users),
             "hide_declined": settings.hide_declined or "0",
+            "default_show_habits_on_calendar": settings.default_show_habits_on_calendar or "1",
         }
 
         cursor.execute(
@@ -135,8 +137,8 @@ def save_settings(settings: Settings, request: Request):
                 all_view_start_hour, all_view_end_hour, day_scroll_to_hour,
                 username, audit_log_max_days, audit_log_max_mb, default_notifications, unit_system,
                 habits_success_window, overdue_border_color, blocked_border_color, shared_tags, kiosk_users,
-                hide_declined
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                hide_declined, default_show_habits_on_calendar
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 new_settings_dict["user_id"],
@@ -172,6 +174,7 @@ def save_settings(settings: Settings, request: Request):
                 new_settings_dict["shared_tags"],
                 new_settings_dict["kiosk_users"],
                 new_settings_dict["hide_declined"],
+                new_settings_dict["default_show_habits_on_calendar"],
             )
         )
 

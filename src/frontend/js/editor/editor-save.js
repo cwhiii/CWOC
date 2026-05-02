@@ -130,7 +130,15 @@ async function buildChitObject() {
   chit.recurrence = repeatEnabled && repeatEnabled.checked ? (document.getElementById('recurrence')?.value || 'DAILY') : null;
   chit.recurrence_rule = _buildRecurrenceRule();
   chit.recurrence_exceptions = window._loadedRecurrenceExceptions || null;
-  chit.hide_when_instance_done = document.getElementById('hideWhenInstanceDone')?.checked || false;
+
+  // Habit fields
+  var habitCb = document.getElementById('habitEnabled');
+  chit.habit = habitCb ? habitCb.checked : false;
+  var habitGoalEl = document.getElementById('habitGoal');
+  chit.habit_goal = habitGoalEl ? (parseInt(habitGoalEl.value) || 1) : 1;
+  chit.habit_success = window._currentHabitSuccess || 0;
+  var showOnCalCb = document.getElementById('showOnCalendar');
+  chit.show_on_calendar = showOnCalCb ? showOnCalCb.checked : true;
 
   const colorInput = document.getElementById("color");
   chit.color = colorInput ? colorInput.value || null : null;

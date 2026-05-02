@@ -142,9 +142,10 @@ function expandRecurrence(chit, rangeStart, rangeEnd) {
 /**
  * Format a recurrence rule as a human-readable string.
  * @param {object} rule - { freq, interval, byDay, until }
+ * @param {boolean} isHabit - If true, return simplified labels without day/date suffixes
  * @returns {string}
  */
-function formatRecurrenceRule(rule) {
+function formatRecurrenceRule(rule, isHabit) {
   if (!rule || !rule.freq) return '';
   const freq = rule.freq;
   const interval = rule.interval || 1;
@@ -155,9 +156,11 @@ function formatRecurrenceRule(rule) {
   else if (freq === 'HOURLY') text = interval === 1 ? 'Hourly' : `Every ${interval} hours`;
   else if (freq === 'DAILY') text = interval === 1 ? 'Daily' : `Every ${interval} days`;
   else if (freq === 'WEEKLY') {
-    const days = (rule.byDay || []).map(d => dayNames[d] || d).join(', ');
     text = interval === 1 ? `Weekly` : `Every ${interval} weeks`;
-    if (days) text += ` on ${days}`;
+    if (!isHabit) {
+      const days = (rule.byDay || []).map(d => dayNames[d] || d).join(', ');
+      if (days) text += ` on ${days}`;
+    }
   }
   else if (freq === 'MONTHLY') text = interval === 1 ? 'Monthly' : `Every ${interval} months`;
   else if (freq === 'YEARLY') text = interval === 1 ? 'Yearly' : `Every ${interval} years`;

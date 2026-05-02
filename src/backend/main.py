@@ -93,6 +93,7 @@ from src.backend.migrations import (
     migrate_add_network_access,
     migrate_add_notifications,
     migrate_add_user_profile_fields,
+    migrate_habits_overhaul,
 )
 
 # Initialize database and run all migrations (same order as before)
@@ -128,6 +129,7 @@ migrate_add_hide_declined()
 migrate_add_network_access()
 migrate_add_notifications()
 migrate_add_user_profile_fields()
+migrate_habits_overhaul()
 seed_version_info()
 
 

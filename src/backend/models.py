@@ -56,6 +56,7 @@ class Settings(BaseModel):
     shared_tags: Optional[Any] = None  # JSON array: [{"tag": "TagName", "shares": [{"user_id": "uuid", "role": "manager"|"viewer"}]}]
     kiosk_users: Optional[Any] = None  # JSON array of usernames for kiosk view
     hide_declined: Optional[str] = "0"  # "0" = show declined (faded), "1" = hide declined
+    default_show_habits_on_calendar: Optional[str] = "1"  # "1" = enabled, "0" = disabled
 
 class Chit(BaseModel):
     id: Optional[str] = None
@@ -92,7 +93,10 @@ class Chit(BaseModel):
     time_estimate: Optional[str] = None        # Free-text time estimate (e.g. "2h 30m")
     weather_data: Optional[str] = None         # JSON string of weather forecast data
     health_data: Optional[str] = None          # JSON string of health indicator readings
-    hide_when_instance_done: Optional[bool] = False  # Hide from Habits view when current period is done
+    habit: Optional[bool] = False                    # Explicit habit opt-in flag
+    habit_goal: Optional[int] = 1                    # Completions per period target
+    habit_success: Optional[int] = 0                 # Current period completion count
+    show_on_calendar: Optional[bool] = True          # Whether habit appears on calendar
     shares: Optional[List[Any]] = None         # JSON array: [{"user_id": "uuid", "role": "manager"|"viewer"}]
     stealth: Optional[bool] = False            # When true, hides chit from all non-owner users
     assigned_to: Optional[str] = None          # UUID of the assigned user

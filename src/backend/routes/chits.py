@@ -73,7 +73,10 @@ def get_all_chits(request: Request):
             chit["recurrence_exceptions"] = deserialize_json_field(chit.get("recurrence_exceptions"))
             chit["weather_data"] = deserialize_json_field(chit.get("weather_data"))
             chit["health_data"] = deserialize_json_field(chit.get("health_data"))
-            chit["hide_when_instance_done"] = bool(chit.get("hide_when_instance_done"))
+            chit["habit"] = bool(chit.get("habit"))
+            chit["habit_goal"] = int(chit.get("habit_goal") or 1)
+            chit["habit_success"] = int(chit.get("habit_success") or 0)
+            chit["show_on_calendar"] = bool(chit.get("show_on_calendar", 1))
             chit["shares"] = deserialize_json_field(chit.get("shares"))
             chit["stealth"] = bool(chit.get("stealth"))
             chit["assigned_to"] = chit.get("assigned_to")
@@ -120,7 +123,10 @@ def search_chits(request: Request, q: Optional[str] = Query(None)):
             chit["recurrence_exceptions"] = deserialize_json_field(chit.get("recurrence_exceptions"))
             chit["weather_data"] = deserialize_json_field(chit.get("weather_data"))
             chit["health_data"] = deserialize_json_field(chit.get("health_data"))
-            chit["hide_when_instance_done"] = bool(chit.get("hide_when_instance_done"))
+            chit["habit"] = bool(chit.get("habit"))
+            chit["habit_goal"] = int(chit.get("habit_goal") or 1)
+            chit["habit_success"] = int(chit.get("habit_success") or 0)
+            chit["show_on_calendar"] = bool(chit.get("show_on_calendar", 1))
             chit["shares"] = deserialize_json_field(chit.get("shares"))
             chit["stealth"] = bool(chit.get("stealth"))
             chit["assigned_to"] = chit.get("assigned_to")
@@ -216,10 +222,11 @@ def create_chit(chit: Chit, request: Request):
                 completed_datetime, status, priority, severity, checklist, alarm, notification,
                 recurrence, recurrence_id, location, color, people, pinned, archived,
                 deleted, created_datetime, modified_datetime, is_project_master, child_chits, all_day, alerts,
-                recurrence_rule, recurrence_exceptions, weather_data, health_data, hide_when_instance_done,
+                recurrence_rule, recurrence_exceptions, weather_data, health_data,
+                habit, habit_goal, habit_success, show_on_calendar,
                 owner_id, owner_display_name, owner_username,
                 shares, stealth, assigned_to
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 chit_id,
@@ -254,7 +261,10 @@ def create_chit(chit: Chit, request: Request):
                 serialize_json_field(chit.recurrence_exceptions),
                 serialize_json_field(chit.weather_data),
                 serialize_json_field(chit.health_data),
-                1 if chit.hide_when_instance_done else 0,
+                1 if chit.habit else 0,
+                chit.habit_goal if chit.habit_goal is not None else 1,
+                chit.habit_success if chit.habit_success is not None else 0,
+                1 if chit.show_on_calendar is None or chit.show_on_calendar else 0,
                 user_id,
                 owner_display_name,
                 owner_username,
@@ -327,7 +337,10 @@ def get_chit(chit_id: str, request: Request):
         chit["recurrence_exceptions"] = deserialize_json_field(chit.get("recurrence_exceptions"))
         chit["weather_data"] = deserialize_json_field(chit.get("weather_data"))
         chit["health_data"] = deserialize_json_field(chit.get("health_data"))
-        chit["hide_when_instance_done"] = bool(chit.get("hide_when_instance_done"))
+        chit["habit"] = bool(chit.get("habit"))
+        chit["habit_goal"] = int(chit.get("habit_goal") or 1)
+        chit["habit_success"] = int(chit.get("habit_success") or 0)
+        chit["show_on_calendar"] = bool(chit.get("show_on_calendar", 1))
         chit["shares"] = deserialize_json_field(chit.get("shares"))
         chit["stealth"] = bool(chit.get("stealth"))
         chit["assigned_to"] = chit.get("assigned_to")
@@ -402,7 +415,7 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                     recurrence = ?, recurrence_id = ?, location = ?, color = ?, people = ?, pinned = ?,
                     archived = ?, deleted = ?, modified_datetime = ?, is_project_master = ?, child_chits = ?, all_day = ?, alerts = ?,
                     recurrence_rule = ?, recurrence_exceptions = ?, weather_data = ?, health_data = ?,
-                    hide_when_instance_done = ?,
+                    habit = ?, habit_goal = ?, habit_success = ?, show_on_calendar = ?,
                     shares = ?, stealth = ?, assigned_to = ?
                 WHERE id = ?
                 """,
@@ -437,7 +450,10 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                     serialize_json_field(chit.recurrence_exceptions),
                     serialize_json_field(chit.weather_data),
                     serialize_json_field(chit.health_data),
-                    1 if chit.hide_when_instance_done else 0,
+                    1 if chit.habit else 0,
+                    chit.habit_goal if chit.habit_goal is not None else 1,
+                    chit.habit_success if chit.habit_success is not None else 0,
+                    1 if chit.show_on_calendar is None or chit.show_on_calendar else 0,
                     serialize_json_field(chit.shares),
                     1 if chit.stealth else 0,
                     chit.assigned_to,
@@ -464,7 +480,10 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                     "recurrence_exceptions": serialize_json_field(chit.recurrence_exceptions),
                     "weather_data": serialize_json_field(chit.weather_data),
                     "health_data": serialize_json_field(chit.health_data),
-                    "hide_when_instance_done": 1 if chit.hide_when_instance_done else 0,
+                    "habit": 1 if chit.habit else 0,
+                    "habit_goal": chit.habit_goal if chit.habit_goal is not None else 1,
+                    "habit_success": chit.habit_success if chit.habit_success is not None else 0,
+                    "show_on_calendar": 1 if chit.show_on_calendar is None or chit.show_on_calendar else 0,
                     "shares": serialize_json_field(chit.shares),
                     "stealth": 1 if chit.stealth else 0,
                     "assigned_to": chit.assigned_to,
@@ -507,10 +526,11 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                     completed_datetime, status, priority, severity, checklist, alarm, notification,
                     recurrence, recurrence_id, location, color, people, pinned, archived,
                     deleted, created_datetime, modified_datetime, is_project_master, child_chits, all_day, alerts,
-                    recurrence_rule, recurrence_exceptions, weather_data, health_data, hide_when_instance_done,
+                    recurrence_rule, recurrence_exceptions, weather_data, health_data,
+                    habit, habit_goal, habit_success, show_on_calendar,
                     owner_id, owner_display_name, owner_username,
                     shares, stealth, assigned_to
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     chit_id,
@@ -545,7 +565,10 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                     serialize_json_field(chit.recurrence_exceptions),
                     serialize_json_field(chit.weather_data),
                     serialize_json_field(chit.health_data),
-                    1 if chit.hide_when_instance_done else 0,
+                    1 if chit.habit else 0,
+                    chit.habit_goal if chit.habit_goal is not None else 1,
+                    chit.habit_success if chit.habit_success is not None else 0,
+                    1 if chit.show_on_calendar is None or chit.show_on_calendar else 0,
                     user_id,
                     owner_display_name,
                     owner_username,
@@ -806,7 +829,10 @@ def export_chits(request: Request):
             chit["deleted"] = bool(chit.get("deleted"))
             chit["is_project_master"] = bool(chit.get("is_project_master"))
             chit["all_day"] = bool(chit.get("all_day"))
-            chit["hide_when_instance_done"] = bool(chit.get("hide_when_instance_done"))
+            chit["habit"] = bool(chit.get("habit"))
+            chit["habit_goal"] = int(chit.get("habit_goal") or 1)
+            chit["habit_success"] = int(chit.get("habit_success") or 0)
+            chit["show_on_calendar"] = bool(chit.get("show_on_calendar", 1))
             chit["shares"] = deserialize_json_field(chit.get("shares"))
             chit["stealth"] = bool(chit.get("stealth"))
             chit["assigned_to"] = chit.get("assigned_to")
@@ -925,10 +951,11 @@ def import_chits(req: ImportRequest, request: Request):
                     created_datetime, modified_datetime, is_project_master,
                     child_chits, all_day, alerts, recurrence_rule,
                     recurrence_exceptions, progress_percent, time_estimate,
-                    weather_data, health_data, hide_when_instance_done,
+                    weather_data, health_data,
+                    habit, habit_goal, habit_success, show_on_calendar,
                     owner_id, owner_display_name, owner_username,
                     shares, stealth, assigned_to
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     new_id,
                     chit.get("title"),
@@ -964,7 +991,10 @@ def import_chits(req: ImportRequest, request: Request):
                     chit.get("time_estimate"),
                     serialize_json_field(chit.get("weather_data")),
                     serialize_json_field(chit.get("health_data")),
-                    1 if chit.get("hide_when_instance_done") else 0,
+                    1 if chit.get("habit") else 0,
+                    chit.get("habit_goal") if chit.get("habit_goal") is not None else 1,
+                    chit.get("habit_success") if chit.get("habit_success") is not None else 0,
+                    1 if chit.get("show_on_calendar", True) else 0,
                     user_id,
                     owner_display_name,
                     owner_username,
@@ -1297,8 +1327,11 @@ def export_all(request: Request):
             for f in ("tags", "checklist", "people", "child_chits", "alerts",
                        "recurrence_rule", "recurrence_exceptions", "weather_data", "health_data", "shares"):
                 chit[f] = deserialize_json_field(chit.get(f))
-            for f in ("alarm", "notification", "pinned", "archived", "deleted", "is_project_master", "all_day", "hide_when_instance_done", "stealth"):
+            for f in ("alarm", "notification", "pinned", "archived", "deleted", "is_project_master", "all_day", "habit", "stealth"):
                 chit[f] = bool(chit.get(f))
+            chit["habit_goal"] = int(chit.get("habit_goal") or 1)
+            chit["habit_success"] = int(chit.get("habit_success") or 0)
+            chit["show_on_calendar"] = bool(chit.get("show_on_calendar", 1))
             chits.append(chit)
 
         # ── Settings ──
@@ -1403,10 +1436,11 @@ def import_all(req: ImportRequest, request: Request):
                     created_datetime, modified_datetime, is_project_master,
                     child_chits, all_day, alerts, recurrence_rule,
                     recurrence_exceptions, progress_percent, time_estimate,
-                    weather_data, health_data, hide_when_instance_done,
+                    weather_data, health_data,
+                    habit, habit_goal, habit_success, show_on_calendar,
                     owner_id, owner_display_name, owner_username,
                     shares, stealth, assigned_to
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     new_id, chit.get("title"), chit.get("note"),
                     serialize_json_field(chit.get("tags")),
@@ -1430,7 +1464,10 @@ def import_all(req: ImportRequest, request: Request):
                     chit.get("progress_percent"), chit.get("time_estimate"),
                     serialize_json_field(chit.get("weather_data")),
                     serialize_json_field(chit.get("health_data")),
-                    1 if chit.get("hide_when_instance_done") else 0,
+                    1 if chit.get("habit") else 0,
+                    chit.get("habit_goal") if chit.get("habit_goal") is not None else 1,
+                    chit.get("habit_success") if chit.get("habit_success") is not None else 0,
+                    1 if chit.get("show_on_calendar", True) else 0,
                     user_id,
                     owner_display_name,
                     owner_username,
@@ -1453,8 +1490,8 @@ def import_all(req: ImportRequest, request: Request):
                     work_start_hour, work_end_hour, work_days, enabled_periods,
                     custom_days_count, all_view_start_hour, all_view_end_hour,
                     day_scroll_to_hour, username, audit_log_max_days, audit_log_max_mb,
-                    default_notifications, unit_system
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    default_notifications, unit_system, default_show_habits_on_calendar
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     s.get("user_id"), s.get("time_format"), s.get("sex"), s.get("snooze_length"),
                     serialize_json_field(s.get("default_filters")),
@@ -1472,6 +1509,7 @@ def import_all(req: ImportRequest, request: Request):
                     s.get("username"), s.get("audit_log_max_days"), s.get("audit_log_max_mb"),
                     serialize_json_field(s.get("default_notifications")),
                     s.get("unit_system"),
+                    s.get("default_show_habits_on_calendar", "1"),
                 ),
             )
             settings_count += 1

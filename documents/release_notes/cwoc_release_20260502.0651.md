@@ -1,0 +1,1 @@
+Fixed habit success rate percentage not updating in the Habits View — the current period's live progress is now temporarily injected into the exceptions for rate/streak calculation, so clicking +/− immediately reflects in the percentage. Moved the Habit Log zone from column-two to directly below the Dates zone in column-one.

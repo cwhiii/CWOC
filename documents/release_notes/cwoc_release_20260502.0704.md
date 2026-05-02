@@ -1,0 +1,1 @@
+Habits View default sort now puts habits closest to missing their goal at the top. Sorts by remaining percentage (remaining / goal) — a habit at 4/5 appears above one at 1/5 since it has less room left to complete.

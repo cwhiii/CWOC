@@ -1,0 +1,1 @@
+Habit period labels now show context-aware dates: "Week of Apr 21" for weekly, "May 2026" for monthly, "Year of 2026" for yearly, and plain dates for daily. Applied to both the Habit Log zone in the editor and the habit cards in the Habits View (replacing the generic "Weekly"/"Daily" frequency label with the current period).

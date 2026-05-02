@@ -711,6 +711,24 @@
                         </div>
                     </div>
                     <div class="setting-group">
+                        <h3>🔁 Habits</h3>
+
+                        <div class="setting-inline">
+                            <label for="habits-success-window">📊 Success rate window</label>
+                            <select id="habits-success-window">
+                                <option value="7">Last 7 days</option>
+                                <option value="30">Last 30 days</option>
+                                <option value="90">Last 90 days</option>
+                                <option value="all">All time</option>
+                            </select>
+                        </div>
+
+                        <div class="setting-inline settings-spacer-top">
+                            <label class="cwoc-checkbox-label"><input type="checkbox" id="default-show-habits-on-calendar" checked /> 📅 Default: show habits on calendar</label>
+                        </div>
+                        <p class="setting-hint">When checked, new habits will appear on the calendar by default. Each habit can override this in its editor.</p>
+                    </div>
+                    <div class="setting-group">
                         <h3>📍 Saved Locations</h3>
                         <div id="locations-list"></div>
                         <button type="button" id="add-location-btn" class="standard-button" style="margin-top:8px;" onclick="addLocationRow()">➕ Add Location</button>

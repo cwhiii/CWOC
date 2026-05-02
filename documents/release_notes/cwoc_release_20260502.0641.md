@@ -1,0 +1,1 @@
+Fixed habit counter buttons not working — the root cause was _evaluateHabitRollover incorrectly resetting habit_success to 0 on every re-render when the previous period was already snapshotted. Also changed Habit Log zone icon to 🎯, added type="button" and preventDefault to counter buttons, and removed auto-population of default location on new chits.

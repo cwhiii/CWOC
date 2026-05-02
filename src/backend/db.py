@@ -85,6 +85,12 @@ def compute_system_tags(chit) -> List[str]:
         system_tags.append("CWOC_System/Tasks")
     if not (chit.due_datetime or chit.start_datetime or chit.end_datetime):
         system_tags.append("CWOC_System/Notes")
+    # Habit auto-tags
+    if getattr(chit, 'habit', False):
+        system_tags.append("Habits")
+        title = getattr(chit, 'title', None)
+        if title:
+            system_tags.append(f"Habits/{title}")
     # Strip old flat system tags from user tags before merging
     old_system = {"Calendar", "Checklists", "Alarms", "Projects", "Tasks", "Notes"}
     user_tags = [t for t in (chit.tags or []) if t not in old_system]

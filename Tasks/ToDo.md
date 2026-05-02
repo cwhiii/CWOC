@@ -3,6 +3,7 @@
 *Completed items are in `done.md`. Deferred items in `parking_lot.md`. Declined in `path_not_traveled.md`.*
 
 ---
+
 ## Manual Tasks
 - `[ ]` Screenshot and video walkthrough of the app
 
@@ -10,45 +11,53 @@
 
 ## Top Priorities
 
-- DO NOTHING. ONLY TALK! I need to undersgtand habit sbetter, it's doing somethign strange I don't get. update the help about it to makal. lthe parts crystal celar: how it works, and hwo to interact with it and the  `[ ]` Goals system (completion %, grading, success/failure/abandoned)???
-
+---
 
 ## Known Bugs
 
-- the reset on teh admin tool for users doesnt actualy cahnge the password.
-- the admin shoul dbe ableo tto update usernsames for existing users.
-- ensure the export all exports everything. (is this safe? are passwords harshed ? what about the key for tailscale?)
-- pruning shiuld be enabled by default. 
-
+- `[ ]` The reset on the admin tool for users doesn't actually change the password
+- `[ ]` The admin should be able to update usernames for existing users
+- `[ ]` Ensure the export-all exports everything (is this safe? Are passwords hashed? What about the key for Tailscale?)
+- `[ ]` Pruning should be enabled by default
+- habits mode: Animation — Ditched the FLIP approach entirely. still doesnt animate after the cahnged compltion values, it jsut instnatly swaps, wihch is hard to follow)
 
 ---
 
-## Easy Fixes / Low-Hanging Fruit
+## Easy / Quick
 
-Add a new button on the checklist zone header. Mark complete when last item checked off.
+- `[ ]` Add a new button on the checklist zone header: mark complete when last item checked off
+- `[ ]` Use consistent system for modals (same styling, same in/out function)
+- `[ ]` Note-to-markdown export option, per chit or all
+- `[ ]` Full-chit-to-markdown export, per chit or all
 
+---
 
+## Medium
 
+### Calculator
+- `[ ]` Calculator popover/movable modal — steal from Pipeulator & add "insert result" value (or Ctrl+I if in an input field). Leave the calculator wired to value? (persist checkbox)?
 
+### Notes
+- `[ ]` Notes links: auto-fill dropdown using name of other chit
+- `[ ]` Side-by-side notes view (2 chits for copy/paste/reference)
+- `[ ]` Auto import/export notes as Markdown to sync with Obsidian
 
+### Calendar & Scheduling
+- `[ ]` Show alarms/notifications/timers on calendar view
+- `[ ]` Jitter for reminders (±X minutes, configurable globally and per-chit)
+- `[ ]` Alarm: chained variable-length intervals (5 min, then 4, then 4…)
+- `[ ]` Busy/Free/Unspecified status for calendar events
+- `[ ]` Declined events view
+- `[ ]` Time zones support on chits with dates
 
-## Medium Features
+### Editor & Chit Management
+- `[ ]` Multi-line checklist items
+- `[ ]` Dependencies (chits that must be completed first)
+- `[ ]` Move checklist into note / note into checklist
 
-On mobile, project view: when rearanging project masters, it jumpt to th erop of the page after each move. 
-
-
-## Calculator
-- CalcUlator popver/movable modal. Steal from pipeulator & add "insert result S value. Or CRTL+I if in a input field.
-¿Leave the calculator with wire to value? (persist checkbox)?
-
-- note to markdown export option, per chit, or all.
-- full-chit to markdown epoort, per chit, or all.  
-- notes links: auto-fill dropdown using anme of other chit.
-
-
-### MISC
-- `[ ]` Use consistent system for modals (same styling, same in/out function
-
+### Templates
+- `[ ]` Save a chit as a template, auto-populate new chits from it
+- `[ ]` New editor mode, Shift+click on new chit button, "Make this a template" in editor, Shift+K hotkey
 
 ### Calendar Import (.ics)
 - `[ ]` Import calendar data from Google, Apple, and Windows/Outlook via .ics files
@@ -59,37 +68,12 @@ On mobile, project view: when rearanging project masters, it jumpt to th erop of
 - Duplicate detection on title + start_datetime
 - Estimate: ~400–600 lines backend, ~50–100 lines frontend
 
-
-### Templates
-- Save a chit as a template, auto-populate new chits from it
-- New editor mode, Shift+click on new chit button, "Make this a template" in editor, Shift+K hotkey
-
-### Calendar & Scheduling
-- `[ ]` Show alarms/notifications/timers on calendar view
-- `[ ]` Jitter for reminders (±X minutes, configurable globally and per-chit)
-- `[ ]` Alarm: chained variable-length intervals (5 min, then 4, then 4...)
-- `[ ]` Busy/Free/Unspecified status for calendar events
-- `[ ]` Declined events view
-- `[ ]` Time zones support on chits with dates
-
-### Location-based functionality
+### Location
 - `[ ]` Proximity-based notifications (your location, someone else's)
 
-### Editor & Chit Management
-- `[ ]` Multi-line checklist items
-- `[ ]` Dependencies (chits that must be completed first)
-- `[ ]` Move checklist into note / note into checklist
+---
 
-### Notes
-- `[ ]` Side-by-side notes view (2 chits for copy/paste/reference)
-- `[ ]` Auto import/export notes as Markdown to sync with Obsidian
-
-
-
-
-
-## Major Features / Overhauls
-
+## Large / Complex
 
 ### Real World Use
 - `[ ]` Establish external access path (Home Assistant? Secured reverse proxy? Mobile platform?)
@@ -106,10 +90,10 @@ On mobile, project view: when rearanging project masters, it jumpt to th erop of
 - `[ ]` Accept/reject invitations
 - `[ ]` Invitation status visible to inviter
 - `[ ]` Accepted invitations appear on invitee's calendar
-- `[ ]` Declined events toggle 
+- `[ ]` Declined events toggle
 
 ### Health Indicators (Enhancements)
-- `[ ]` Symptom tracker (multi-select), wirth the ability to creqte your own list of symptoms in settings.
+- `[ ]` Symptom tracker (multi-select), with the ability to create your own list of symptoms in settings
 - `[ ]` Cycle tracking (show/hide based on gender setting)
 
 ### Data & Infrastructure
@@ -118,7 +102,7 @@ On mobile, project view: when rearanging project masters, it jumpt to th erop of
 - `[ ]` Phone app with offline store + sync
 
 ### UI & Layout
-- `[ ]` Wall/kiosk view for persistent displays
+- `[X]` Wall/kiosk view for persistent displays
 - `[ ]` Rolling circular chits view (next task in project, repeat when done)
 - `[ ]` Context switching (hide chits by time schedule + tags)
 - `[ ]` Show events by map
@@ -127,14 +111,11 @@ On mobile, project view: when rearanging project masters, it jumpt to th erop of
 ---
 
 ## Long-term / Dream
+
 - `[ ]` Email integration (prototype exists)
 - `[ ]` Home Assistant integration
-
-
 - `[ ]` Obsidian sync (auto-export notes as Markdown)
 - `[ ]` Object & Inventory Tracking zone
-
-
 - `[ ]` Reports system
 - `[ ]` Automations (if this, then that)
 - `[ ]` Appointments (from other people)

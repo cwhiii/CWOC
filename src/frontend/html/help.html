@@ -395,29 +395,57 @@
             <h4>Column Reordering</h4>
             <p>On the audit log page, you can drag and drop column headers to reorder them. The detail toggle column (first column) is fixed. Column order is not persisted — it resets on page reload.</p>
             <h3 id="habits-view">Habits View</h3>
-            <p>The Tasks tab includes a <strong>View Mode</strong> toggle in the sidebar that lets you switch between the standard Tasks list and a Habits view. The Habits view surfaces recurring chits as trackable habit cards with completion tracking, success rates, and streaks.</p>
-            <h4>Switching to Habits Mode</h4>
-            <p>When the Tasks tab is active, the sidebar shows a View Mode section with two buttons: <strong>📋 Tasks</strong> (the default list) and <strong>🔁 Habits</strong>. Click "Habits" to enter Habits mode. Your selection is remembered across sessions.</p>
-            <h4>Habit Cards</h4>
-            <p>Each recurring chit appears as a habit card showing:</p>
+            <p>CWOC supports explicit habit tracking via an opt-in model. Any chit can become a habit by checking the <strong>"Track as habit"</strong> checkbox in the editor's Dates zone. Habits have their own goal/progress system, charts, and a dedicated Habits view in the Tasks tab.</p>
+            <h4>Marking a Chit as a Habit</h4>
+            <p>The "🎯 Habit" button is always visible in the editor's Dates zone header. When you click it:</p>
             <ul>
-                <li><strong>Completion checkbox</strong> — Toggle the current period's occurrence as complete or incomplete. Checking the box marks the current occurrence as done via the recurrence exceptions system. Unchecking reverses it.</li>
-                <li><strong>Title</strong> — Clickable link to open the chit in the editor. Double-click or long-press also works, matching the standard Tasks view interactions.</li>
-                <li><strong>Frequency label</strong> — The recurrence pattern (e.g., "Every day", "Every week on Mon, Wed, Fri") displayed after a middle dot separator.</li>
-                <li><strong>Success rate badge</strong> — The percentage of past occurrences completed within the configured success window (e.g., "73%"). Calculated as completed occurrences divided by total scheduled occurrences, excluding broken-off dates from both counts.</li>
-                <li><strong>Streak indicator</strong> — A 🔥 flame icon followed by the count of consecutive completed periods working backward from the most recent past occurrence. Broken-off (skipped) dates are treated as neutral and do not break the streak. A genuinely missed occurrence stops the count.</li>
+                <li><strong>Auto-enables Repeat</strong> — If the chit doesn't already have a recurrence rule, Repeat is automatically turned on with a default of Daily</li>
+                <li><strong>Locks Repeat</strong> — While habit is active, the Repeat checkbox is locked on (you must turn off the habit first to disable Repeat)</li>
+                <li><strong>Reveals habit controls</strong> — A Goal input and progress display (X / Y) appear on a dedicated row. A separate "📅 Calendar" row shows the "Show on calendar" toggle</li>
+                <li><strong>Forces All Day</strong> — Habits are always all-day events. The "📅 All Day" button shows active and is disabled while habit is on</li>
+                <li><strong>Shows 🎯 icon</strong> — Habit chits display the 🎯 target icon instead of the 🔁 repeat icon everywhere: editor title bar, calendar events, quick-edit modal, and tooltips</li>
+                <li><strong>Auto-tags</strong> — The system automatically adds <code>Habits</code> and <code>Habits/[title]</code> tags to the chit</li>
             </ul>
+            <h4>Goal and Progress</h4>
+            <p>Each habit has a <strong>Goal</strong> (how many completions per period you're aiming for, minimum 1) and a <strong>Progress</strong> count (how many you've done this period). When progress reaches the goal, the chit is automatically marked Complete. Progress is capped at the goal value and can never exceed it.</p>
+            <h4>Switching to Habits Mode</h4>
+            <p>When the Tasks tab is active, the sidebar shows a View Mode section with three buttons: <strong>📋 Tasks</strong>, <strong>🎯 Habits</strong>, and <strong>📌 Assigned</strong>. Click "Habits" to enter Habits mode. Your selection is remembered across sessions. Only chits explicitly marked with "Track as habit" appear here — not all recurring chits.</p>
+            <h4>Habit Cards</h4>
+            <p>Each habit appears as a card showing:</p>
+            <ul>
+                <li><strong>Progress</strong> — Displayed as "X / Y" where X is the current period's completion count and Y is the goal</li>
+                <li><strong>Interaction</strong> — For goal=1 habits, a checkbox toggles complete/incomplete. For goal&gt;1 habits, +/− buttons increment or decrement the count</li>
+                <li><strong>Frequency label</strong> — The recurrence pattern (e.g., "Every day", "Every week on Mon, Wed, Fri")</li>
+                <li><strong>Streak</strong> — A 🔥 flame icon followed by the count of consecutive periods where the goal was met, walking backward from the most recent past period. Broken-off (skipped) periods are neutral and don't break the streak</li>
+                <li><strong>Cycle progress</strong> — A teal badge showing the percentage of the way to the goal this period (e.g., 4/5 = 80%)</li>
+                <li><strong>Overall success rate</strong> — A brown badge showing the percentage of past cycles where the goal was fully met, within the configured success window</li>
+                <li><strong>Status badge</strong> — Shows the current status when set</li>
+                <li><strong>Title</strong> — Double-click or long-press to open in the editor, matching standard interaction patterns</li>
+            </ul>
+            <h4>Period Rollover</h4>
+            <p>Habits reset automatically at period boundaries. When a new period starts (e.g., a new day for daily habits, a new week for weekly), the system snapshots the previous period's progress into the recurrence exceptions history, resets progress to 0, and clears the Complete status. Rollover is evaluated lazily — when you open the Habits view or the editor, not via a background process.</p>
+            <h4>Habit Log (Editor)</h4>
+            <p>The chit editor includes a <strong>Habit Log</strong> collapsible zone (visible only when "Track as habit" is checked). It shows:</p>
+            <ul>
+                <li><strong>Period history</strong> — Past periods listed in reverse chronological order with their completion counts (X / Y). Click any count to edit it inline — useful for correcting mistakes or filling in data you forgot to record</li>
+                <li><strong>Charts</strong> — Three canvas-based charts in a 2-column grid: completion over time (bar chart), success rate trend (line chart), and streak history (timeline). Charts update when you edit past period counts. The time range matches your Success Rate Window setting</li>
+            </ul>
+            <h4>Calendar Visibility</h4>
+            <p>Each habit has a <strong>"Show on calendar"</strong> toggle. When off, the habit is hidden from all calendar views but still appears in the Habits view. The default value for new habits is controlled by the <strong>"Default: show habits on calendar"</strong> setting in Settings → Habits.</p>
             <h4>Sorting</h4>
             <p>Habit cards are sorted with incomplete habits first and completed habits pushed to the bottom. Within each group, the existing sort and filter settings are preserved.</p>
-            <h4>Hide from Habits When Done</h4>
-            <p>In the chit editor, recurring chits show a <strong>"🙈 Hide from Habits when done"</strong> checkbox in the recurrence section. When enabled, the habit card is hidden from the Habits view once the current period's occurrence is completed. A <strong>"Show completed"</strong> checkbox at the top of the Habits view reveals all hidden cards when checked.</p>
-            <h4>Success Rate Window</h4>
-            <p>The time window used for success rate calculations is configurable in Settings → Habits. The <strong>"Success rate window"</strong> dropdown offers four options:</p>
+            <h4>Settings</h4>
+            <p>The Settings page includes a Habits section with:</p>
             <ul>
-                <li><strong>Last 7 days</strong> — Only occurrences in the past week</li>
-                <li><strong>Last 30 days</strong> — Past month (default)</li>
-                <li><strong>Last 90 days</strong> — Past quarter</li>
-                <li><strong>All time</strong> — Every occurrence since the chit's start date</li>
+                <li><strong>Success rate window</strong> — Controls the rolling time window for success rate and chart calculations:
+                    <ul>
+                        <li><strong>Last 7 days</strong> — Only periods in the past week</li>
+                        <li><strong>Last 30 days</strong> — Past month (default)</li>
+                        <li><strong>Last 90 days</strong> — Past quarter</li>
+                        <li><strong>All time</strong> — Every period since habit tracking started</li>
+                    </ul>
+                </li>
+                <li><strong>Default: show habits on calendar</strong> — Toggle controlling the default value of "Show on calendar" for newly created habits</li>
             </ul>
             <h3 id="contacts">Contact Editor</h3>
             <p>Contacts have name fields (prefix, given, middle, surname, suffix), phone, email, address, social/web, security (Signal, PGP), and context (organization, social context).</p>

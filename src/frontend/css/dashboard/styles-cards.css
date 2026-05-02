@@ -695,7 +695,14 @@ li.cwoc-dragging {
 
 /* Completed habit: faded with strikethrough title */
 .habit-card.habit-done {
-    opacity: 0.6;
+    opacity: 0.75;
+}
+
+/* Completed habit text gets a readable background */
+.habit-card.habit-done .habit-complete-line {
+    background: #fdf6e3;
+    padding: 1px 6px;
+    border-radius: 4px;
 }
 .habit-card.habit-done .habit-header a {
     text-decoration: line-through;
@@ -708,8 +715,7 @@ li.cwoc-dragging {
     gap: 0.5em;
     font-size: 1em;
     font-weight: bold;
-    flex-wrap: nowrap;
-    overflow: hidden;
+    flex-wrap: wrap;
 }
 .habit-header a {
     color: inherit;
@@ -728,27 +734,68 @@ li.cwoc-dragging {
     cursor: pointer;
 }
 
-/* ── Habit metrics: success badge + streak row ────────────────────────── */
+/* ── Habit metrics: labeled metric boxes row ──────────────────────────── */
 .habit-metrics {
     display: flex;
-    align-items: center;
-    gap: 0.8em;
-    margin-top: 0.3em;
+    align-items: stretch;
+    gap: 8px;
+    margin-top: 0.4em;
     font-size: 0.9em;
     color: #1a1208;
+    flex-wrap: wrap;
 }
 
-/* Success rate percentage badge */
-.habit-success-badge {
-    display: inline-block;
-    padding: 1px 8px;
-    border-radius: 10px;
-    background: rgba(139, 90, 43, 0.15);
-    border: 1px solid #c4a882;
-    font-size: 0.9em;
-    font-weight: bold;
-    color: #4a2c2a;
+/* Individual metric box */
+.habit-metric-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 4px 10px;
+    border: 1px solid #d4c5a9;
+    border-radius: 6px;
+    background: #fdf6e3;
+    min-width: 50px;
+}
+
+.habit-metric-label {
+    font-size: 0.7em;
+    font-weight: 600;
+    color: #8b5a2b;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    margin-bottom: 2px;
     white-space: nowrap;
+}
+
+.habit-metric-value {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-weight: bold;
+    font-size: 1em;
+    color: #4a2c2a;
+}
+
+/* Success rate percentage badge (overall) */
+.habit-success-badge {
+    font-size: 1em;
+    font-weight: bold;
+    color: #6b4e31;
+    white-space: nowrap;
+    background: rgba(139, 90, 43, 0.12);
+    padding: 1px 6px;
+    border-radius: 8px;
+}
+
+/* Cycle progress badge (this period — primary metric) */
+.habit-cycle-badge {
+    font-size: 1.1em;
+    font-weight: bold;
+    color: #006060;
+    white-space: nowrap;
+    background: rgba(0, 128, 128, 0.12);
+    padding: 1px 6px;
+    border-radius: 8px;
 }
 
 /* Streak indicator with flame emoji */
@@ -758,13 +805,165 @@ li.cwoc-dragging {
     white-space: nowrap;
 }
 
-/* ── Show-completed toggle at top of habits view ─────────────────────── */
-.habit-show-completed {
-    padding: 0.4em 0.2em;
-    margin-bottom: 0.3em;
+/* ── Habit progress display (X / Y) ──────────────────────────────────── */
+.habit-progress {
+    font-weight: bold;
+    color: #4a2c2a;
+    white-space: nowrap;
+    font-size: 1em;
+    background: rgba(139, 90, 43, 0.08);
+    padding: 1px 6px;
+    border-radius: 8px;
+}
+
+/* ── Habit counter buttons (+/−) for goal>1 habits ───────────────────── */
+.habit-counter {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.habit-counter-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.6em;
+    height: 1.6em;
+    border: 1px solid #c4a882;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.4);
+    cursor: pointer;
+    font-size: 0.95em;
     font-family: 'Lora', Georgia, serif;
+    font-weight: bold;
+    color: #4a2c2a;
+    padding: 0;
+    line-height: 1;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.habit-counter-btn:hover {
+    background: rgba(139, 90, 43, 0.18);
+    border-color: #8b5a2b;
+}
+
+.habit-counter-btn:active {
+    background: rgba(139, 90, 43, 0.3);
+}
+
+/* ── Habit status badge ──────────────────────────────────────────────── */
+.habit-status-badge {
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 10px;
+    font-size: 0.85em;
+    font-weight: bold;
+    white-space: nowrap;
+    background: rgba(139, 90, 43, 0.1);
+    border: 1px solid #c4a882;
+    color: #4a2c2a;
+}
+
+.habit-status-badge.habit-status-complete {
+    background: rgba(46, 125, 50, 0.15);
+    border-color: #2e7d32;
+    color: #2e7d32;
+}
+
+/* ── Habit complete line (inline with title) ─────────────────────────── */
+.habit-complete-line {
+    font-size: 0.8em;
+    font-weight: normal;
+    color: #2e7d32;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+/* ── Habit card grid: left (title+metrics) + right (note) ─────────────── */
+.habit-card-grid {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 12px;
+    align-items: start;
+}
+
+.habit-card-left {
+    min-width: 0;
+}
+
+.habit-note-preview {
+    font-size: 0.82em;
+    color: #4a2c2a;
+    opacity: 0.65;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 7;
+    -webkit-box-orient: vertical;
+    line-height: 1.3em;
+    word-break: break-word;
+}
+
+.habit-note-preview strong {
+    font-weight: bold;
+}
+
+.habit-note-preview a {
+    color: #008080;
+    text-decoration: underline;
+}
+
+@media (max-width: 600px) {
+    .habit-card-grid {
+        grid-template-columns: 1fr;
+    }
+    .habit-note-preview {
+        display: none;
+    }
+}
+
+/* ── Habit section headers (On Deck / Accomplished) ──────────────────── */
+.habit-section-header {
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.95em;
+    font-weight: bold;
+    color: #4a2c2a;
+    padding: 4px 12px 8px;
+    margin-top: 4px;
+    letter-spacing: 0.3px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.habit-section-header.habit-section-done {
+    margin-top: 16px;
+    color: #6b4e31;
+}
+
+.habit-section-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.6em;
+    height: 1.6em;
+    border: 2px solid #8b5a2b;
+    border-radius: 50%;
+    background: rgba(139, 90, 43, 0.1);
     font-size: 0.9em;
-    color: #1a1208;
+    flex-shrink: 0;
+}
+
+/* ── Habit frequency label ───────────────────────────────────────────── */
+.habit-frequency {
+    font-weight: normal;
+    font-size: 0.85em;
+    color: #6b4e31;
+    white-space: nowrap;
+}
+
+.habit-separator {
+    color: #6b4e31;
+    opacity: 0.6;
 }
 
 /* ── Owner badge on chit cards (multi-user) ───────────────────────────────── */
