@@ -1541,10 +1541,7 @@ function displayProjectsView(chitsToDisplay) {
     });
     box.addEventListener("dragend", function () {
       box.classList.remove('cwoc-dragging');
-      view.querySelectorAll('div[data-chit-id]').forEach(function (b) {
-        b.style.borderTop = '';
-        b.style.borderBottom = '';
-      });
+      _removeListProjectPlaceholder();
       if (typeof _markDragJustEnded === 'function') _markDragJustEnded();
     });
 
@@ -1799,25 +1796,54 @@ function displayProjectsView(chitsToDisplay) {
     view.appendChild(box);
   });
 
+  // ── Shared placeholder for list-view project reorder ─────────────────────
+  var _listProjectPlaceholder = null;
+  function _ensureListProjectPlaceholder() {
+    if (!_listProjectPlaceholder) {
+      _listProjectPlaceholder = document.createElement('div');
+      _listProjectPlaceholder.className = 'cwoc-project-drop-placeholder';
+      _listProjectPlaceholder.style.cssText = 'height:24px;border:2px dashed #8b5a2b;border-radius:6px;background:rgba(139,90,43,0.08);box-sizing:border-box;margin-bottom:0.5em;transition:height 0.15s ease;';
+    }
+    return _listProjectPlaceholder;
+  }
+  function _removeListProjectPlaceholder() {
+    if (_listProjectPlaceholder && _listProjectPlaceholder.parentNode) {
+      _listProjectPlaceholder.remove();
+    }
+  }
+  function _positionListProjectPlaceholder(containerEl, draggedBox, clientY) {
+    var ph = _ensureListProjectPlaceholder();
+    var boxes = Array.from(containerEl.querySelectorAll(':scope > div[data-chit-id]'));
+    var others = boxes.filter(function (b) { return b !== draggedBox; });
+    var insertIdx = others.length;
+    for (var i = 0; i < others.length; i++) {
+      var r = others[i].getBoundingClientRect();
+      if (clientY < r.top + r.height / 2) {
+        insertIdx = i;
+        break;
+      }
+    }
+    if (insertIdx >= others.length) {
+      containerEl.appendChild(ph);
+    } else {
+      containerEl.insertBefore(ph, others[insertIdx]);
+    }
+    return insertIdx;
+  }
+
   // ── Project-level drag-to-reorder (HTML5 desktop) ────────────────────────
   view.addEventListener("dragover", function (e) {
     if (!e.dataTransfer.types.includes("application/x-list-project-reorder")) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
-    var targetBox = e.target.closest('div[data-chit-id]');
-    // Only target top-level project boxes (direct children of view)
-    if (targetBox && targetBox.parentElement !== view) targetBox = null;
-    view.querySelectorAll(':scope > div[data-chit-id]').forEach(function (b) {
-      b.style.borderTop = '';
-      b.style.borderBottom = '';
-    });
-    if (targetBox) {
-      var rect = targetBox.getBoundingClientRect();
-      if (e.clientY < rect.top + rect.height / 2) {
-        targetBox.style.borderTop = '3px solid #8b5a2b';
-      } else {
-        targetBox.style.borderBottom = '3px solid #8b5a2b';
-      }
+    var draggedBox = view.querySelector(':scope > div[data-chit-id].cwoc-dragging');
+    _positionListProjectPlaceholder(view, draggedBox, e.clientY);
+  });
+
+  view.addEventListener("dragleave", function (e) {
+    if (!e.dataTransfer.types.includes("application/x-list-project-reorder")) return;
+    if (!view.contains(e.relatedTarget)) {
+      _removeListProjectPlaceholder();
     }
   });
 
@@ -1825,24 +1851,24 @@ function displayProjectsView(chitsToDisplay) {
     var draggedId = e.dataTransfer.getData("application/x-list-project-reorder");
     if (!draggedId) return;
     e.preventDefault();
-    view.querySelectorAll(':scope > div[data-chit-id]').forEach(function (b) {
-      b.style.borderTop = '';
-      b.style.borderBottom = '';
-    });
-    var targetBox = e.target.closest('div[data-chit-id]');
-    if (targetBox && targetBox.parentElement !== view) targetBox = null;
-    if (!targetBox || targetBox.dataset.chitId === draggedId) return;
+    _removeListProjectPlaceholder();
 
     var boxes = Array.from(view.querySelectorAll(':scope > div[data-chit-id]'));
     var ids = boxes.map(function (b) { return b.dataset.chitId; });
     var fromIdx = ids.indexOf(draggedId);
-    var toIdx = ids.indexOf(targetBox.dataset.chitId);
-    if (fromIdx < 0 || toIdx < 0) return;
+    if (fromIdx < 0) return;
 
-    var rect = targetBox.getBoundingClientRect();
-    if (e.clientY > rect.top + rect.height / 2) toIdx++;
+    var others = boxes.filter(function (b) { return b.dataset.chitId !== draggedId; });
+    var toIdx = others.length;
+    for (var i = 0; i < others.length; i++) {
+      var r = others[i].getBoundingClientRect();
+      if (e.clientY < r.top + r.height / 2) {
+        toIdx = i;
+        break;
+      }
+    }
+
     ids.splice(fromIdx, 1);
-    if (fromIdx < toIdx) toIdx--;
     ids.splice(toIdx, 0, draggedId);
 
     saveManualOrder('Projects', ids);
@@ -1850,12 +1876,24 @@ function displayProjectsView(chitsToDisplay) {
     var sel = document.getElementById('sort-select');
     if (sel) sel.value = 'manual';
     _updateSortUI();
+
+    // Preserve scroll position across the full re-render
+    var scrollEl = document.querySelector('.projects-view');
+    var savedScroll = scrollEl ? scrollEl.scrollTop : 0;
     displayChits();
+    if (savedScroll > 0) {
+      var el = document.querySelector('.projects-view');
+      if (el) {
+        el.scrollTop = savedScroll;
+        requestAnimationFrame(function () { if (el) el.scrollTop = savedScroll; });
+      }
+    }
   });
 
   // ── Touch gesture for project header reorder (mobile) ──────────────────
   if (typeof enableTouchGesture === 'function') {
     var _listHeaderDraggedBox = null;
+    var _listHeaderLastInsertIdx = -1;
     view.querySelectorAll(':scope > div[data-chit-id]').forEach(function (box) {
       var headerEl = box.querySelector('div[style*="cursor:pointer"]');
       if (!headerEl || !box.dataset.chitId) return;
@@ -1864,57 +1902,44 @@ function displayProjectsView(chitsToDisplay) {
       enableTouchGesture(box, {
         onDragStart: function () {
           _listHeaderDraggedBox = box;
+          _listHeaderLastInsertIdx = -1;
           box.classList.add('cwoc-dragging');
+          box.style.opacity = '0.5';
         },
         onDragMove: function (data) {
           if (!_listHeaderDraggedBox) return;
-          // Clear all drop indicators
-          view.querySelectorAll(':scope > div[data-chit-id]').forEach(function (b) {
-            b.style.borderTop = '';
-            b.style.borderBottom = '';
-          });
-          var target = document.elementFromPoint(data.clientX, data.clientY);
-          if (!target) return;
-          var targetBox = target.closest('div[data-chit-id]');
-          if (targetBox && targetBox.parentElement !== view) targetBox = null;
-          if (targetBox && targetBox !== _listHeaderDraggedBox) {
-            var rect = targetBox.getBoundingClientRect();
-            var midY = rect.top + rect.height / 2;
-            if (data.clientY < midY) {
-              targetBox.style.borderTop = '3px solid #8b5a2b';
-            } else {
-              targetBox.style.borderBottom = '3px solid #8b5a2b';
+          var idx = _positionListProjectPlaceholder(view, _listHeaderDraggedBox, data.clientY);
+          _listHeaderLastInsertIdx = idx;
+
+          // Auto-scroll when near edges
+          var scrollEl = document.querySelector('.projects-view');
+          if (scrollEl) {
+            var containerRect = scrollEl.getBoundingClientRect();
+            var edgeZone = 50;
+            var scrollSpeed = 8;
+            if (data.clientY < containerRect.top + edgeZone) {
+              scrollEl.scrollTop -= scrollSpeed;
+            } else if (data.clientY > containerRect.bottom - edgeZone) {
+              scrollEl.scrollTop += scrollSpeed;
             }
           }
         },
         onDragEnd: function (data) {
           if (!_listHeaderDraggedBox) return;
           _listHeaderDraggedBox.classList.remove('cwoc-dragging');
-          // Clear all drop indicators
-          view.querySelectorAll(':scope > div[data-chit-id]').forEach(function (b) {
-            b.style.borderTop = '';
-            b.style.borderBottom = '';
-          });
+          _listHeaderDraggedBox.style.opacity = '';
+          _removeListProjectPlaceholder();
 
-          var target = document.elementFromPoint(data.clientX, data.clientY);
-          if (!target) { _listHeaderDraggedBox = null; return; }
-          var targetBox = target.closest('div[data-chit-id]');
-          if (targetBox && targetBox.parentElement !== view) targetBox = null;
-          if (!targetBox || targetBox === _listHeaderDraggedBox) { _listHeaderDraggedBox = null; return; }
-
-          // Reorder project boxes
           var boxes = Array.from(view.querySelectorAll(':scope > div[data-chit-id]'));
           var ids = boxes.map(function (b) { return b.dataset.chitId; });
           var fromId = _listHeaderDraggedBox.dataset.chitId;
-          var toId = targetBox.dataset.chitId;
           var fromIdx = ids.indexOf(fromId);
-          var toIdx = ids.indexOf(toId);
-          if (fromIdx < 0 || toIdx < 0) { _listHeaderDraggedBox = null; return; }
+          if (fromIdx < 0) { _listHeaderDraggedBox = null; return; }
 
-          var rect = targetBox.getBoundingClientRect();
-          if (data.clientY > rect.top + rect.height / 2) toIdx++;
+          var toIdx = _listHeaderLastInsertIdx;
+          if (toIdx < 0) { _listHeaderDraggedBox = null; return; }
+
           ids.splice(fromIdx, 1);
-          if (fromIdx < toIdx) toIdx--;
           ids.splice(toIdx, 0, fromId);
 
           saveManualOrder('Projects', ids);
@@ -1923,7 +1948,18 @@ function displayProjectsView(chitsToDisplay) {
           if (sel) sel.value = 'manual';
           _updateSortUI();
           _listHeaderDraggedBox = null;
+
+          // Preserve scroll position across the full re-render
+          var scrollEl = document.querySelector('.projects-view');
+          var savedScroll = scrollEl ? scrollEl.scrollTop : 0;
           displayChits();
+          if (savedScroll > 0) {
+            var el = document.querySelector('.projects-view');
+            if (el) {
+              el.scrollTop = savedScroll;
+              requestAnimationFrame(function () { if (el) el.scrollTop = savedScroll; });
+            }
+          }
         },
         onLongPress: function () {
           if (_projectChit && typeof showQuickEditModal === 'function') {
@@ -2050,20 +2086,15 @@ function _displayProjectsKanban(chitsToDisplay) {
         e.preventDefault();
         return;
       }
-      console.log('[KANBAN] dragstart project reorder:', project.id);
       e.dataTransfer.setData("application/x-project-reorder", project.id);
       e.dataTransfer.effectAllowed = "move";
       projectBox.classList.add('cwoc-dragging');
       _kanbanProjectDragActive = true;
     });
     projectBox.addEventListener("dragend", () => {
-      console.log('[KANBAN] dragend project reorder, flag was:', _kanbanProjectDragActive);
       projectBox.classList.remove('cwoc-dragging');
       _kanbanProjectDragActive = false;
-      wrapper.querySelectorAll('.kanban-project-box').forEach(b => {
-        b.style.borderTop = '';
-        b.style.borderBottom = '';
-      });
+      _removeProjectPlaceholder();
       if (typeof _markDragJustEnded === 'function') _markDragJustEnded();
     });
 
@@ -2071,7 +2102,6 @@ function _displayProjectsKanban(chitsToDisplay) {
     // fires even when the cursor is over child columns/cards inside the box)
     projectBox.addEventListener("dragover", e => {
       if (!_kanbanProjectDragActive) return;
-      console.log('[KANBAN] projectBox dragover - accepting');
       e.preventDefault();
       e.dataTransfer.dropEffect = "move";
     });
@@ -2448,49 +2478,83 @@ function _displayProjectsKanban(chitsToDisplay) {
   });
 
   // ── Project-level drag-to-reorder ──────────────────────────────────────
+  // ── Shared placeholder for project-level reorder (desktop & mobile) ─────
+  var _projectReorderPlaceholder = null;
+  function _ensureProjectPlaceholder() {
+    if (!_projectReorderPlaceholder) {
+      _projectReorderPlaceholder = document.createElement('div');
+      _projectReorderPlaceholder.className = 'cwoc-project-drop-placeholder';
+      _projectReorderPlaceholder.style.cssText = 'height:24px;border:2px dashed #8b5a2b;border-radius:6px;background:rgba(139,90,43,0.08);box-sizing:border-box;margin-bottom:1.5em;transition:height 0.15s ease;';
+    }
+    return _projectReorderPlaceholder;
+  }
+  function _removeProjectPlaceholder() {
+    if (_projectReorderPlaceholder && _projectReorderPlaceholder.parentNode) {
+      _projectReorderPlaceholder.remove();
+    }
+  }
+  function _positionProjectPlaceholder(containerEl, draggedBox, clientY) {
+    var ph = _ensureProjectPlaceholder();
+    var boxes = Array.from(containerEl.querySelectorAll('.kanban-project-box[data-chit-id]'));
+    var others = boxes.filter(function (b) { return b !== draggedBox; });
+    var insertIdx = others.length;
+    for (var i = 0; i < others.length; i++) {
+      var r = others[i].getBoundingClientRect();
+      if (clientY < r.top + r.height / 2) {
+        insertIdx = i;
+        break;
+      }
+    }
+    if (insertIdx >= others.length) {
+      containerEl.appendChild(ph);
+    } else {
+      containerEl.insertBefore(ph, others[insertIdx]);
+    }
+    return insertIdx;
+  }
+
   wrapper.addEventListener("dragover", e => {
     // Only handle project reorder drags
     if (!_kanbanProjectDragActive) return;
-    console.log('[KANBAN] wrapper dragover - accepting');
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
-    const box = e.target.closest('.kanban-project-box');
-    wrapper.querySelectorAll('.kanban-project-box').forEach(b => {
-      b.style.borderTop = '';
-      b.style.borderBottom = '';
-    });
-    if (box) {
-      const rect = box.getBoundingClientRect();
-      if (e.clientY < rect.top + rect.height / 2) {
-        box.style.borderTop = '3px solid #8b5a2b';
-      } else {
-        box.style.borderBottom = '3px solid #8b5a2b';
-      }
+    // Find the dragged box
+    var draggedBox = wrapper.querySelector('.kanban-project-box.cwoc-dragging');
+    _positionProjectPlaceholder(wrapper, draggedBox, e.clientY);
+  });
+
+  wrapper.addEventListener("dragleave", e => {
+    if (!_kanbanProjectDragActive) return;
+    // Only remove if leaving the wrapper entirely
+    if (!wrapper.contains(e.relatedTarget)) {
+      _removeProjectPlaceholder();
     }
   });
 
   wrapper.addEventListener("drop", e => {
     const draggedId = e.dataTransfer.getData("application/x-project-reorder");
-    console.log('[KANBAN] wrapper drop - draggedId:', draggedId, 'target:', e.target.tagName, e.target.className);
     if (!draggedId) return;
     e.preventDefault();
-    wrapper.querySelectorAll('.kanban-project-box').forEach(b => {
-      b.style.borderTop = '';
-      b.style.borderBottom = '';
-    });
-    const targetBox = e.target.closest('.kanban-project-box');
-    if (!targetBox || targetBox.dataset.chitId === draggedId) return;
+    _removeProjectPlaceholder();
 
+    // Read order from DOM (dragged box is still in its original position)
     const boxes = Array.from(wrapper.querySelectorAll('.kanban-project-box[data-chit-id]'));
     const ids = boxes.map(b => b.dataset.chitId);
     const fromIdx = ids.indexOf(draggedId);
-    let toIdx = ids.indexOf(targetBox.dataset.chitId);
-    if (fromIdx < 0 || toIdx < 0) return;
 
-    const rect = targetBox.getBoundingClientRect();
-    if (e.clientY > rect.top + rect.height / 2) toIdx++;
+    // Determine insert position from cursor
+    var others = boxes.filter(b => b.dataset.chitId !== draggedId);
+    var toIdx = others.length;
+    for (var i = 0; i < others.length; i++) {
+      var r = others[i].getBoundingClientRect();
+      if (e.clientY < r.top + r.height / 2) {
+        toIdx = i;
+        break;
+      }
+    }
+    if (fromIdx < 0) return;
+
     ids.splice(fromIdx, 1);
-    if (fromIdx < toIdx) toIdx--;
     ids.splice(toIdx, 0, draggedId);
 
     saveManualOrder('Projects', ids);
@@ -2498,12 +2562,24 @@ function _displayProjectsKanban(chitsToDisplay) {
     const sel = document.getElementById('sort-select');
     if (sel) sel.value = 'manual';
     _updateSortUI();
+
+    // Preserve scroll position across the full re-render
+    var scrollEl = document.querySelector('.projects-view');
+    var savedScroll = scrollEl ? scrollEl.scrollTop : 0;
     displayChits();
+    if (savedScroll > 0) {
+      var el = document.querySelector('.projects-view');
+      if (el) {
+        el.scrollTop = savedScroll;
+        requestAnimationFrame(function () { if (el) el.scrollTop = savedScroll; });
+      }
+    }
   });
 
   // ── Touch gesture for project header reorder (mobile) ──────────────────
   if (typeof enableTouchGesture === 'function') {
     var _kanbanHeaderDraggedBox = null;
+    var _kanbanHeaderLastInsertIdx = -1;
     wrapper.querySelectorAll('.kanban-project-header').forEach(function (headerEl) {
       var projectBox = headerEl.closest('.kanban-project-box');
       if (!projectBox || !projectBox.dataset.chitId) return;
@@ -2512,59 +2588,46 @@ function _displayProjectsKanban(chitsToDisplay) {
       enableTouchGesture(headerEl, {
         onDragStart: function () {
           _kanbanHeaderDraggedBox = projectBox;
+          _kanbanHeaderLastInsertIdx = -1;
           projectBox.classList.add('cwoc-dragging');
-          projectBox.style.pointerEvents = 'none';
+          projectBox.style.opacity = '0.5';
         },
         onDragMove: function (data) {
           if (!_kanbanHeaderDraggedBox) return;
-          // Clear all drop indicators
-          wrapper.querySelectorAll('.kanban-project-box').forEach(function (b) {
-            b.style.borderTop = '';
-            b.style.borderBottom = '';
-          });
-          var target = document.elementFromPoint(data.clientX, data.clientY);
-          if (!target) return;
-          var targetBox = target.closest('.kanban-project-box');
-          if (targetBox && targetBox !== _kanbanHeaderDraggedBox) {
-            var rect = targetBox.getBoundingClientRect();
-            var midY = rect.top + rect.height / 2;
-            if (data.clientY < midY) {
-              targetBox.style.borderTop = '3px solid #8b5a2b';
-            } else {
-              targetBox.style.borderBottom = '3px solid #8b5a2b';
+          var idx = _positionProjectPlaceholder(wrapper, _kanbanHeaderDraggedBox, data.clientY);
+          _kanbanHeaderLastInsertIdx = idx;
+
+          // Auto-scroll when near edges of the scroll container
+          var scrollEl = document.querySelector('.projects-view');
+          if (scrollEl) {
+            var containerRect = scrollEl.getBoundingClientRect();
+            var edgeZone = 50;
+            var scrollSpeed = 8;
+            if (data.clientY < containerRect.top + edgeZone) {
+              scrollEl.scrollTop -= scrollSpeed;
+            } else if (data.clientY > containerRect.bottom - edgeZone) {
+              scrollEl.scrollTop += scrollSpeed;
             }
           }
         },
         onDragEnd: function (data) {
           if (!_kanbanHeaderDraggedBox) return;
-          // Find target BEFORE restoring pointer-events
-          var target = document.elementFromPoint(data.clientX, data.clientY);
-
           _kanbanHeaderDraggedBox.classList.remove('cwoc-dragging');
-          _kanbanHeaderDraggedBox.style.pointerEvents = '';
-          // Clear all drop indicators
-          wrapper.querySelectorAll('.kanban-project-box').forEach(function (b) {
-            b.style.borderTop = '';
-            b.style.borderBottom = '';
-          });
+          _kanbanHeaderDraggedBox.style.opacity = '';
+          _removeProjectPlaceholder();
 
-          if (!target) { _kanbanHeaderDraggedBox = null; return; }
-          var targetBox = target.closest('.kanban-project-box');
-          if (!targetBox || targetBox === _kanbanHeaderDraggedBox) { _kanbanHeaderDraggedBox = null; return; }
-
-          // Reorder project boxes
+          // Read order from DOM and compute new position
           var boxes = Array.from(wrapper.querySelectorAll('.kanban-project-box[data-chit-id]'));
           var ids = boxes.map(function (b) { return b.dataset.chitId; });
           var fromId = _kanbanHeaderDraggedBox.dataset.chitId;
-          var toId = targetBox.dataset.chitId;
           var fromIdx = ids.indexOf(fromId);
-          var toIdx = ids.indexOf(toId);
-          if (fromIdx < 0 || toIdx < 0) { _kanbanHeaderDraggedBox = null; return; }
+          if (fromIdx < 0) { _kanbanHeaderDraggedBox = null; return; }
 
-          var rect = targetBox.getBoundingClientRect();
-          if (data.clientY > rect.top + rect.height / 2) toIdx++;
+          // Use the last tracked insert index from onDragMove
+          var toIdx = _kanbanHeaderLastInsertIdx;
+          if (toIdx < 0) { _kanbanHeaderDraggedBox = null; return; }
+
           ids.splice(fromIdx, 1);
-          if (fromIdx < toIdx) toIdx--;
           ids.splice(toIdx, 0, fromId);
 
           saveManualOrder('Projects', ids);
@@ -2573,7 +2636,18 @@ function _displayProjectsKanban(chitsToDisplay) {
           if (sel) sel.value = 'manual';
           _updateSortUI();
           _kanbanHeaderDraggedBox = null;
+
+          // Preserve scroll position across the full re-render
+          var scrollEl = document.querySelector('.projects-view');
+          var savedScroll = scrollEl ? scrollEl.scrollTop : 0;
           displayChits();
+          if (savedScroll > 0) {
+            var el = document.querySelector('.projects-view');
+            if (el) {
+              el.scrollTop = savedScroll;
+              requestAnimationFrame(function () { if (el) el.scrollTop = savedScroll; });
+            }
+          }
         },
         onLongPress: function () {
           storePreviousState();
