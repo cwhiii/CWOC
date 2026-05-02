@@ -638,6 +638,7 @@
     /* ── Notes view: force single column ──────────────────────────────────── */
     .notes-view {
         padding: 4px !important;
+        overscroll-behavior: contain;
     }
     .notes-view .chit-card {
         position: relative !important;

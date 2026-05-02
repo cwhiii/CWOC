@@ -1228,13 +1228,56 @@ function displayNotesView(chitsToDisplay) {
   window._notesResizeHandler = resizeHandler;
   window.addEventListener('resize', resizeHandler);
 
-  enableNotesDragReorder(notesView, 'Notes', () => displayChits());
+  // On mobile (single column), use the same drag system as Tasks/Checklists
+  // which floats the card under the finger with a placeholder.
+  // On desktop, use the masonry-aware notes drag.
+  var _notesMobileMode = (window.innerWidth <= 480);
+  if (_notesMobileMode) {
+    // Build long-press map: inline note editing (same as shift-click)
+    var _notesLpMap = {};
+    sortedChits.forEach(function (chit) {
+      if (_isViewerRole(chit)) return;
+      _notesLpMap[chit.id] = function () {
+        var card = notesView.querySelector('[data-chit-id="' + chit.id + '"]');
+        if (!card) return;
+        var noteEl = card.querySelector('.note-content');
+        if (!noteEl || noteEl.contentEditable === 'true') return;
+        noteEl.contentEditable = 'true';
+        noteEl.style.outline = '2px solid #8b4513';
+        noteEl.style.borderRadius = '4px';
+        noteEl.style.padding = '6px';
+        noteEl.style.whiteSpace = 'pre-wrap';
+        card.style.cursor = 'auto';
+        card.setAttribute('draggable', 'false');
+        noteEl.textContent = chit.note || '';
+        noteEl.focus();
+        var _saveEdit = function () {
+          noteEl.contentEditable = 'false';
+          noteEl.style.outline = '';
+          noteEl.style.padding = '';
+          card.style.cursor = '';
+          card.removeAttribute('draggable');
+          var newNote = noteEl.textContent;
+          if (newNote !== chit.note) {
+            fetch('/api/chits/' + chit.id, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(Object.assign({}, chit, { note: newNote }))
+            }).then(function (r) { if (r.ok) { chit.note = newNote; if (typeof fetchChits === 'function') fetchChits(); } });
+          } else {
+            if (typeof marked !== 'undefined' && chit.note) {
+              noteEl.innerHTML = (typeof resolveChitLinks === 'function') ? resolveChitLinks(marked.parse(chit.note), chits) : marked.parse(chit.note);
+            }
+          }
+        };
+        noteEl.addEventListener('blur', _saveEdit, { once: true });
+      };
+    });
+    enableDragToReorder(notesView, 'Notes', function () { displayChits(); }, _notesLpMap);
+  } else {
+    enableNotesDragReorder(notesView, 'Notes', () => displayChits());
+  }
 }
-
-/**
- * Cap the all-day events area height and add a Show More / Show Less toggle.
- * Places the toggle in the 60px hour-label spacer on the left side.
- */
 
 /* ── Projects View Mode (List vs Kanban) ──────────────────────────────────── */
 // ── Projects View Mode (List vs Kanban) ──────────────────────────────────────
@@ -1665,7 +1708,7 @@ function displayProjectsView(chitsToDisplay) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(projData)
           });
-          fetchChits();
+          _kanbanFetchAndPreserveScroll();
         } catch (err) { console.error('Project child reorder error:', err); }
       });
 
@@ -1735,7 +1778,7 @@ function displayProjectsView(chitsToDisplay) {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(projData)
                   });
-                  fetchChits();
+                  _kanbanFetchAndPreserveScroll();
                 } catch (err) { console.error('Project child touch reorder error:', err); }
               })();
 
@@ -1901,10 +1944,41 @@ function displayProjectsView(chitsToDisplay) {
  * Grandchildren (children of children) appear as sub-items within cards.
  * Supports drag & drop between columns and between projects.
  */
+
+/**
+ * Fetch chits and re-render, preserving the projects-view scroll position.
+ * Wraps the displayChits call to restore scroll after the DOM is rebuilt.
+ */
+function _kanbanFetchAndPreserveScroll() {
+  var scrollEl = document.querySelector('.projects-view');
+  var savedScroll = scrollEl ? scrollEl.scrollTop : 0;
+  if (savedScroll === 0) {
+    // No scroll to preserve, just fetch normally
+    fetchChits();
+    return;
+  }
+
+  // Temporarily wrap displayChits to restore scroll after re-render
+  var _origDisplayChits = window.displayChits;
+  window.displayChits = function () {
+    // Restore original immediately so this only fires once
+    window.displayChits = _origDisplayChits;
+    _origDisplayChits();
+    // Restore scroll on the new .projects-view element
+    var el = document.querySelector('.projects-view');
+    if (el) {
+      el.scrollTop = savedScroll;
+      requestAnimationFrame(function () { if (el) el.scrollTop = savedScroll; });
+    }
+  };
+  fetchChits();
+}
+
 function _displayProjectsKanban(chitsToDisplay) {
   const chitList = document.getElementById("chit-list");
   chitList.innerHTML = "";
   const _viSettings = (window._cwocSettings || {}).visual_indicators || {};
+  var _kanbanProjectDragActive = false; // true during project-level reorder drag
 
   const seenIds = new Set();
   let projects = chits.filter(c => {
@@ -1962,21 +2036,44 @@ function _displayProjectsKanban(chitsToDisplay) {
       window.location.href = `/editor?id=${project.id}`;
     });
 
+    // Track where mousedown originated for dragstart filtering
+    var _projectDragOrigin = null;
+    projectBox.addEventListener("mousedown", function(e) {
+      _projectDragOrigin = e.target;
+    });
+
     // Project-level drag for reorder
     projectBox.addEventListener("dragstart", e => {
       // Only start project reorder drag from the header grip area
-      if (!e.target.closest('.kanban-project-header')) return;
+      var origin = _projectDragOrigin || e.target;
+      if (!origin.closest('.kanban-project-header')) {
+        e.preventDefault();
+        return;
+      }
+      console.log('[KANBAN] dragstart project reorder:', project.id);
       e.dataTransfer.setData("application/x-project-reorder", project.id);
       e.dataTransfer.effectAllowed = "move";
       projectBox.classList.add('cwoc-dragging');
+      _kanbanProjectDragActive = true;
     });
     projectBox.addEventListener("dragend", () => {
+      console.log('[KANBAN] dragend project reorder, flag was:', _kanbanProjectDragActive);
       projectBox.classList.remove('cwoc-dragging');
+      _kanbanProjectDragActive = false;
       wrapper.querySelectorAll('.kanban-project-box').forEach(b => {
         b.style.borderTop = '';
         b.style.borderBottom = '';
       });
       if (typeof _markDragJustEnded === 'function') _markDragJustEnded();
+    });
+
+    // Accept project reorder drags on the projectBox itself (ensures preventDefault
+    // fires even when the cursor is over child columns/cards inside the box)
+    projectBox.addEventListener("dragover", e => {
+      if (!_kanbanProjectDragActive) return;
+      console.log('[KANBAN] projectBox dragover - accepting');
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
     });
 
     projectBox.appendChild(header);
@@ -2149,6 +2246,10 @@ function _displayProjectsKanban(chitsToDisplay) {
             enableTouchGesture(_card, {
               onDragStart: function () {
                 _kanbanTouchDragCard = _card;
+                // Hide from hit testing so elementFromPoint finds the column behind
+                _card.style.pointerEvents = 'none';
+                _card.style.opacity = '0.7';
+                _card.style.zIndex = '100';
               },
               onDragMove: function (data) {
                 if (!_kanbanTouchDragCard) return;
@@ -2166,11 +2267,18 @@ function _displayProjectsKanban(chitsToDisplay) {
               },
               onDragEnd: function (data) {
                 if (!_kanbanTouchDragCard) return;
+
                 wrapper.querySelectorAll('[data-status]').forEach(function (c) {
                   c.style.background = '';
                 });
 
+                // Find target BEFORE restoring pointer-events (card is still hidden from hit testing)
                 var target = document.elementFromPoint(data.clientX, data.clientY);
+
+                // Now restore card styles
+                _card.style.pointerEvents = '';
+                _card.style.opacity = '';
+                _card.style.zIndex = '';
                 if (!target) { _kanbanTouchDragCard = null; return; }
                 var targetCol = target.closest('[data-status]');
                 if (!targetCol) { _kanbanTouchDragCard = null; return; }
@@ -2209,7 +2317,7 @@ function _displayProjectsKanban(chitsToDisplay) {
                       }
                       await fetch('/api/chits/' + _child.id, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(fullChit) });
                     }
-                    fetchChits();
+                    _kanbanFetchAndPreserveScroll();
                   } catch (err) { console.error('Kanban touch drag error:', err); }
                 })();
 
@@ -2228,6 +2336,8 @@ function _displayProjectsKanban(chitsToDisplay) {
 
       // Drop zone for cards
       col.addEventListener("dragover", e => {
+        // Let project-reorder drags pass through to the wrapper
+        if (_kanbanProjectDragActive) return;
         e.preventDefault();
         e.dataTransfer.dropEffect = "move";
         col.style.background = "rgba(139,90,43,0.08)";
@@ -2294,7 +2404,7 @@ function _displayProjectsKanban(chitsToDisplay) {
               });
             }
 
-            fetchChits();
+            _kanbanFetchAndPreserveScroll();
           } catch (err) { console.error("Kanban card drop error:", err); }
           return;
         }
@@ -2325,7 +2435,7 @@ function _displayProjectsKanban(chitsToDisplay) {
             if (!newParent.child_chits.includes(data.chitId)) newParent.child_chits.push(data.chitId);
             await fetch(`/api/chits/${targetParentId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(newParent) });
 
-            fetchChits();
+            _kanbanFetchAndPreserveScroll();
           } catch (err) { console.error("Kanban grandchild drop error:", err); }
         }
       });
@@ -2340,7 +2450,8 @@ function _displayProjectsKanban(chitsToDisplay) {
   // ── Project-level drag-to-reorder ──────────────────────────────────────
   wrapper.addEventListener("dragover", e => {
     // Only handle project reorder drags
-    if (!e.dataTransfer.types.includes("application/x-project-reorder")) return;
+    if (!_kanbanProjectDragActive) return;
+    console.log('[KANBAN] wrapper dragover - accepting');
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
     const box = e.target.closest('.kanban-project-box');
@@ -2360,6 +2471,7 @@ function _displayProjectsKanban(chitsToDisplay) {
 
   wrapper.addEventListener("drop", e => {
     const draggedId = e.dataTransfer.getData("application/x-project-reorder");
+    console.log('[KANBAN] wrapper drop - draggedId:', draggedId, 'target:', e.target.tagName, e.target.className);
     if (!draggedId) return;
     e.preventDefault();
     wrapper.querySelectorAll('.kanban-project-box').forEach(b => {
@@ -2401,6 +2513,7 @@ function _displayProjectsKanban(chitsToDisplay) {
         onDragStart: function () {
           _kanbanHeaderDraggedBox = projectBox;
           projectBox.classList.add('cwoc-dragging');
+          projectBox.style.pointerEvents = 'none';
         },
         onDragMove: function (data) {
           if (!_kanbanHeaderDraggedBox) return;
@@ -2424,14 +2537,17 @@ function _displayProjectsKanban(chitsToDisplay) {
         },
         onDragEnd: function (data) {
           if (!_kanbanHeaderDraggedBox) return;
+          // Find target BEFORE restoring pointer-events
+          var target = document.elementFromPoint(data.clientX, data.clientY);
+
           _kanbanHeaderDraggedBox.classList.remove('cwoc-dragging');
+          _kanbanHeaderDraggedBox.style.pointerEvents = '';
           // Clear all drop indicators
           wrapper.querySelectorAll('.kanban-project-box').forEach(function (b) {
             b.style.borderTop = '';
             b.style.borderBottom = '';
           });
 
-          var target = document.elementFromPoint(data.clientX, data.clientY);
           if (!target) { _kanbanHeaderDraggedBox = null; return; }
           var targetBox = target.closest('.kanban-project-box');
           if (!targetBox || targetBox === _kanbanHeaderDraggedBox) { _kanbanHeaderDraggedBox = null; return; }

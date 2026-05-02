@@ -31,7 +31,12 @@ Add a new button on the checklist zone header. Mark complete when last item chec
 
 
 
+
 ## Medium Features
+
+On mobile, project view: when rearanging project masters, it jumpt to th erop of the page after each move. 
+
+
 ## Calculator
 - CalcUlator popver/movable modal. Steal from pipeulator & add "insert result S value. Or CRTL+I if in a input field.
 ¿Leave the calculator with wire to value? (persist checkbox)?

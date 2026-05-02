@@ -1174,6 +1174,7 @@ function enableNotesDragReorder(container, tab, onReorder) {
     });
 
     // Touch gesture: drag to reorder + long-press for inline edit
+    // (Only used on desktop multi-column; mobile uses enableDragToReorder instead)
     if (typeof enableTouchGesture === 'function') {
       var _notesTouchDragData = null;
 
@@ -1183,7 +1184,6 @@ function enableNotesDragReorder(container, tab, onReorder) {
           if (card.querySelector('[contenteditable="true"]')) return;
 
           var rect = card.getBoundingClientRect();
-          var containerRect = container.getBoundingClientRect();
           var metrics = _notesColMetrics(container);
 
           var allCards = Array.from(container.querySelectorAll('.chit-card'));
@@ -1220,7 +1220,6 @@ function enableNotesDragReorder(container, tab, onReorder) {
         },
         onDragMove: function (data) {
           if (!_notesDragState || !_notesTouchDragData) return;
-          // Reuse the mouse move handler logic
           _onNotesDragMoveXY(data.clientX, data.clientY);
         },
         onDragEnd: function (data) {
@@ -1229,13 +1228,10 @@ function enableNotesDragReorder(container, tab, onReorder) {
           _onNotesDragEnd();
         },
         onLongPress: function (el) {
-          // Never trigger inline edit if a drag just completed
           if (window._dragJustEnded || window._touchDragActive) return;
-          // Inline edit mode (same as shift-click)
           var chitId = card.dataset.chitId;
           var noteEl = card.querySelector('.note-content');
           if (!noteEl) return;
-          // Find the chit data from the global chits array
           var chit = (typeof chits !== 'undefined' && Array.isArray(chits)) ? chits.find(function (c) { return c.id === chitId; }) : null;
           if (!chit) return;
           if (typeof _isViewerRole === 'function' && _isViewerRole(chit)) return;
