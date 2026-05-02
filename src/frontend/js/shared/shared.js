@@ -1320,12 +1320,9 @@ function _onNotesDragMoveXY(clientX, clientY) {
   // Restore pointer-events on the dragged card
   s.card.style.pointerEvents = '';
 
-  // Live preview: re-stack affected columns with a gap where the card will land
-  // Only re-stack source column and target column (if different)
-  const srcCol = parseInt(s.card.dataset.col, 10);
-  const affectedCols = new Set([srcCol, targetCol]);
-
-  affectedCols.forEach(ci => {
+  // Live preview: re-stack ALL columns so intermediate columns don't keep stale gaps
+  // when dragging across more than one column. With 3–4 columns this is trivially cheap.
+  for (let ci = 0; ci < s.colCount; ci++) {
     const col = columns[ci].filter(c => c !== s.card);
     const left = _notesColLeft(ci, s.actualCardWidth);
     let top = NOTES_GAP;
@@ -1347,7 +1344,7 @@ function _onNotesDragMoveXY(clientX, clientY) {
     if (ci === targetCol && insertIdx >= col.length) {
       top += s.card.offsetHeight + NOTES_GAP;
     }
-  });
+  }
 
   // Drop indicator line
   s.container.querySelectorAll('.notes-drop-indicator').forEach(el => el.remove());
