@@ -12,6 +12,19 @@
  * Loaded before: editor-init.js, editor.js
  */
 
+/**
+ * Get the URL to navigate to when exiting the editor.
+ * Uses the 'from' query param if present (e.g. kiosk return), otherwise '/'.
+ */
+function _getEditorReturnUrl() {
+  try {
+    var params = new URLSearchParams(window.location.search);
+    var from = params.get('from');
+    if (from) return from;
+  } catch (e) { /* fallback */ }
+  return '/';
+}
+
 function createISODateTimeString(dateStr, timeStr, isAllDay, isEnd = false) {
   if (!dateStr) return null;
   const formattedDate = convertMonthFormat(dateStr);
@@ -299,7 +312,7 @@ async function _saveInstanceException(dateStr) {
     if (!resp.ok) throw new Error(await resp.text());
 
     markEditorSaved();
-    window.location.href = '/';
+    window.location.href = _getEditorReturnUrl();
   } catch (error) {
     console.error('[_saveInstanceException] Error:', error);
     alert('Failed to save instance changes.');
@@ -348,7 +361,7 @@ async function saveChitData() {
     window.currentChitId = updatedChit.id;
     markEditorSaved();
     if (typeof syncSend === 'function') syncSend('chits_changed', {});
-    window.location.href = "/";
+    window.location.href = _getEditorReturnUrl();
   } catch (error) {
     console.error("[saveChitData] Error saving chit:", error);
     alert("Failed to save chit. Check console for details.");
@@ -481,8 +494,8 @@ function performDeleteChit() {
           time: Date.now()
         }));
       } catch (e) { /* ignore */ }
-      // Exit immediately to dashboard
-      window.location.href = "/";
+      // Exit to the page we came from (kiosk, dashboard, etc.)
+      window.location.href = _getEditorReturnUrl();
     })
     .catch(function (err) {
       console.error("Error deleting chit:", err);
@@ -498,7 +511,7 @@ function cancelOrExit() {
   if (window._cwocSave) {
     window._cwocSave.cancelOrExit();
   } else {
-    window.location.href = "/";
+    window.location.href = _getEditorReturnUrl();
   }
 }
 

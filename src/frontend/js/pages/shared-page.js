@@ -199,13 +199,15 @@ window.CwocSaveSystem = CwocSaveSystem;
   // ── Build footer (matches original .author-info structure) ──
   var footer = document.createElement('div');
   footer.className = 'author-info';
-  footer.innerHTML = '&copy; 2026 <a href="https://www.cwholemaniii.com/pages/home.shtml" target="_blank">C.W.\'s Omni Chits</a> &middot; <span id="cwoc-footer-version"></span>';
+  footer.innerHTML = '<span id="cwoc-footer-copyright" class="cwoc-footer-copyright">&copy; 2026 <a href="https://www.cwholemaniii.com/pages/home.shtml" target="_blank">C.W.\'s Omni Chits</a></span> &middot; <span id="cwoc-footer-version"></span>';
   panel.parentNode.insertBefore(footer, panel.nextSibling);
 
   // Fetch version for footer
   fetch('/api/version').then(function(r) { return r.ok ? r.json() : {}; }).then(function(d) {
     var el = document.getElementById('cwoc-footer-version');
     if (el && d.version) el.textContent = 'v' + d.version;
+    var copy = document.getElementById('cwoc-footer-copyright');
+    if (copy && d.version) copy.title = 'Version ' + d.version;
   }).catch(function() {});
 
   // ── ESC to go back (all secondary pages) ──────────────────────────────

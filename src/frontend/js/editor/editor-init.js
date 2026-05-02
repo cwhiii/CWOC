@@ -687,12 +687,27 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   // Initialize shared save/cancel button system
+  // Detect if we came from the kiosk (or another page) via the 'from' query param
+  var _editorReturnUrl = '/';
+  try {
+    var _editorParams = new URLSearchParams(window.location.search);
+    var _fromParam = _editorParams.get('from');
+    if (_fromParam) {
+      _editorReturnUrl = _fromParam;
+      // Update logo link title to reflect the return destination
+      var _logoLink = document.getElementById('editor-logo-link');
+      if (_logoLink && _fromParam.indexOf('/kiosk') === 0) {
+        _logoLink.title = 'Back to Kiosk';
+      }
+    }
+  } catch (e) { /* fallback to '/' */ }
+
   window._cwocSave = new CwocSaveSystem({
     singleBtnId: 'saveButton',
     stayBtnId: 'saveStayButton',
     exitBtnId: 'saveExitButton',
     cancelSelector: '.cancel',
-    getReturnUrl: () => '/',
+    getReturnUrl: () => _editorReturnUrl,
   });
 
   _initializeChitId();
@@ -1125,4 +1140,10 @@ document.addEventListener("DOMContentLoaded", function () {
     '9': ['colorSection', 'colorContent'],
     '0': ['projectsSection', 'projectsContent'],
   });
+
+  // Fetch version for footer copyright tooltip
+  fetch('/api/version').then(function(r) { return r.ok ? r.json() : {}; }).then(function(d) {
+    var el = document.getElementById('cwoc-footer-copyright');
+    if (el && d.version) el.title = 'Version ' + d.version;
+  }).catch(function() {});
 });

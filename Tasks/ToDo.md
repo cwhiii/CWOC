@@ -8,27 +8,9 @@
 
 ---
 
-- usesrs in roladex: i should be able to view a user like a contact, and view theri values. Should be able to favorite tehem, jsut like a contact. 
-- if stealth is enabled or a chit, all sahring & assiement options should be crewyed out. 
-- I should be able to drag & drop an all-day chit to a different all-day day.
-- change hotkry fir x days from ".-->s" to ".-->x" update help & ref. 
-- make the profile picrures in the rop right corner of each page teh same height as the buttons its next to.
-- in tasks view, the passed-due items getspecial coloring on them, good! Update the text fo rhe psased-due items to have the label: Passed Due: [due date]. Including the year, in format YYYY-MMM-DD. 
-- in the indicators, on the graphs the date overlaps if they are close together,  have it use smarter, shorter lables, or oly day of the month or somehting better to previent this. 
-- in indicators vierw, use a plain red heart fo rhear rate chart & filter. 
-- in indicators view, let me drag & drop the charts to reorganize them just like is impliments in the notes view. 
-- Combine alerts should be honored on all views, it's not in tasks.
-- On mobile, swiping the top bar should cycle through views.
-- on mobile, scrinking and expanding the sieze of the day veiw doen't adjust the size of the events, so they overflow oddly. fix. 
-- on the suer switchter, put th econteol bittons on teh same line. 
-
-
-
 ## Top Priorities
 
-
-- undersgtand habit sbetter, it's doing somethign strange I don't get. 
-- `[ ]` Goals system (completion %, grading, success/failure/abandoned)
+- DO NOTHING. ONLY TALK! I need to undersgtand habit sbetter, it's doing somethign strange I don't get. update the help about it to makal. lthe parts crystal celar: how it works, and hwo to interact with it and the  `[ ]` Goals system (completion %, grading, success/failure/abandoned)???
 
 
 ## Known Bugs
@@ -103,17 +85,6 @@
 
 ## Major Features / Overhauls
 
-### Framework Adoption — Recommendation: Don't
-
-At 67k lines (33k JS, 18k Python, 10k CSS, 7k HTML), the question of whether a frontend framework would help is fair. The answer is: not for this project.
-
-**Pros of a framework (React/Vue/Svelte):** Declarative UI updates instead of manual DOM manipulation, built-in component reuse for repeated patterns (modals, cards, zones), reactive state management, and probably a ~30% reduction in JS line count (down to ~20-22k).
-
-**Cons:** Requires a full frontend rewrite — you can't incrementally adopt a framework into global-function vanilla JS. Introduces a build step (npm, vite/webpack, node_modules, dependency updates), which you currently have zero of. Complicates deployment since FastAPI currently just serves static files. Adds ongoing maintenance burden for framework version upgrades and dependency security patches. Drag-and-drop, calendar rendering, and checklist logic are roughly the same complexity in any framework.
-
-**Scope if you did it anyway:** 4-8 weeks of full-time work to rewrite the frontend. Every HTML page, every JS file, every DOM interaction rebuilt. You'd need to set up a build pipeline, convert all shared utilities to modules, rewrite the editor zones as components, and re-implement all the drag-drop and calendar interactions. High risk of regressions across the six C CAPTN views.
-
-**Better incremental path:** Use native `<template>` elements to replace DOM-building string literals, and lightweight Custom Elements (`class extends HTMLElement`) for repeated patterns like modals and zone panels. No build step, no dependencies, works with the existing architecture, and can be adopted one file at a time.
 
 ### Real World Use
 - `[ ]` Establish external access path (Home Assistant? Secured reverse proxy? Mobile platform?)

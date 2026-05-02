@@ -390,6 +390,12 @@ button.delete:hover {
     background-color: #ddd !important;
 }
 
+/* ── Checklist all done — strike through the title ───────────────────────── */
+.checklist-all-done .chit-header-title {
+    text-decoration: line-through;
+    opacity: 0.6;
+}
+
 /* ── Status filter ──────────────────────────────────────────────────────── */
 .status-filter {
     margin-bottom: 15px;
@@ -535,6 +541,7 @@ button.delete:hover {
 .author-info { font-size: 0.9em; color: #1a1208; text-align: center; margin-top: 10px; padding-bottom: 8px; }
 .author-info a { color: #4a2c2a; text-decoration: underline; }
 .author-info a:hover { color: #1a1208; }
+.cwoc-footer-copyright { cursor: help; }
 
 
 

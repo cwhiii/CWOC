@@ -1785,7 +1785,7 @@ class SettingsManager {
       habits_success_window: (window._cwocSettings && window._cwocSettings.habits_success_window) || '30',
       overdue_border_color: _borderColorOverdue || '#b22222',
       blocked_border_color: _borderColorBlocked || '#DAA520',
-      kiosk_users: _gatherKioskUsers(),
+      kiosk_users: _gatherKioskTags(),
     };
   }
 
@@ -3295,105 +3295,101 @@ if (typeof waitForAuth === 'function') {
   });
 }
 
-// ── Kiosk User Picker ────────────────────────────────────────────────────────
+// ── Kiosk Tag Picker ─────────────────────────────────────────────────────────
 
-var _kioskUsersCache = []; // All system users for the picker
+/** Cached tree and selection state for the kiosk tag picker */
+var _kioskTagTree = [];
+var _kioskSelectedTags = [];
 
 /**
- * Load all system users and render the kiosk user picker checkboxes.
- * Called after auth resolves (admin only section).
+ * Load all tags from settings and render the kiosk tag picker as a tree.
+ * Uses the shared buildTagTree + renderTagTree pattern.
+ * Selecting a parent tag automatically includes all children on the kiosk.
  */
-async function _loadKioskUserPicker() {
-  var container = document.getElementById('kiosk-user-list');
+function _loadKioskTagPicker() {
+  var container = document.getElementById('kiosk-tag-list');
   if (!container) return;
 
-  try {
-    var resp = await fetch('/api/auth/switchable-users');
-    if (!resp.ok) {
-      container.innerHTML = '<span style="opacity:0.5;font-size:0.85em;">Unable to load users.</span>';
-      return;
+  // Get tags from settings
+  var tags = [];
+  if (window.settingsManager && window.settingsManager.settings && window.settingsManager.settings.tags) {
+    tags = window.settingsManager.settings.tags;
+    if (typeof tags === 'string') {
+      try { tags = JSON.parse(tags); } catch (e) { tags = []; }
     }
-    _kioskUsersCache = await resp.json();
-  } catch (e) {
-    container.innerHTML = '<span style="opacity:0.5;font-size:0.85em;">Unable to load users.</span>';
+  }
+  if (!Array.isArray(tags)) tags = [];
+
+  // Filter out system tags
+  var userTags = tags.filter(function(t) {
+    return t.name && typeof isSystemTag === 'function' && !isSystemTag(t.name);
+  });
+
+  if (userTags.length === 0) {
+    container.innerHTML = '<span style="opacity:0.5;font-size:0.85em;">No tags found. Create tags in the Tag Editor above.</span>';
     return;
   }
 
-  // Get saved kiosk_users from settings
-  var savedKioskUsers = [];
+  // Get saved kiosk tags (stored in kiosk_users field for backward compat)
+  _kioskSelectedTags = [];
   if (window.settingsManager && window.settingsManager.settings && window.settingsManager.settings.kiosk_users) {
-    savedKioskUsers = window.settingsManager.settings.kiosk_users;
-    if (typeof savedKioskUsers === 'string') {
-      try { savedKioskUsers = JSON.parse(savedKioskUsers); } catch (e) { savedKioskUsers = []; }
+    _kioskSelectedTags = window.settingsManager.settings.kiosk_users;
+    if (typeof _kioskSelectedTags === 'string') {
+      try { _kioskSelectedTags = JSON.parse(_kioskSelectedTags); } catch (e) { _kioskSelectedTags = []; }
     }
   }
-  if (!Array.isArray(savedKioskUsers)) savedKioskUsers = [];
+  if (!Array.isArray(_kioskSelectedTags)) _kioskSelectedTags = [];
 
-  // Sort users alphabetically by display_name
-  var sorted = _kioskUsersCache.slice().sort(function(a, b) {
-    var na = (a.display_name || a.username || '').toLowerCase();
-    var nb = (b.display_name || b.username || '').toLowerCase();
-    return na.localeCompare(nb);
-  });
+  // Build tree
+  _kioskTagTree = buildTagTree(userTags);
 
-  container.innerHTML = '';
-  sorted.forEach(function(u) {
-    var username = u.username || '';
-    var displayName = u.display_name || username;
-    var isChecked = savedKioskUsers.indexOf(username) !== -1;
-
-    var label = document.createElement('label');
-    label.style.cssText = 'display:flex;align-items:center;gap:6px;padding:3px 0;cursor:pointer;font-size:0.9em;color:#1a1208;';
-
-    var cb = document.createElement('input');
-    cb.type = 'checkbox';
-    cb.checked = isChecked;
-    cb.dataset.username = username;
-    cb.className = 'kiosk-user-cb';
-    cb.addEventListener('change', function() { setSaveButtonUnsaved(); });
-
-    label.appendChild(cb);
-    label.appendChild(document.createTextNode(displayName + (username !== displayName ? ' (' + username + ')' : '')));
-    container.appendChild(label);
-  });
-
-  if (sorted.length === 0) {
-    container.innerHTML = '<span style="opacity:0.5;font-size:0.85em;">No users found.</span>';
-  }
+  // Render
+  _renderKioskTagTree();
 }
 
 /**
- * Gather the selected kiosk usernames from the checkboxes.
- * @returns {Array} Array of username strings
+ * Re-render the kiosk tag tree with current selection state.
  */
-function _gatherKioskUsers() {
-  var checkboxes = document.querySelectorAll('.kiosk-user-cb:checked');
-  var usernames = [];
-  checkboxes.forEach(function(cb) {
-    if (cb.dataset.username) usernames.push(cb.dataset.username);
+function _renderKioskTagTree() {
+  var container = document.getElementById('kiosk-tag-list');
+  if (!container) return;
+
+  renderTagTree(container, _kioskTagTree, _kioskSelectedTags, function(fullPath, isNowSelected) {
+    if (isNowSelected) {
+      if (_kioskSelectedTags.indexOf(fullPath) === -1) _kioskSelectedTags.push(fullPath);
+    } else {
+      _kioskSelectedTags = _kioskSelectedTags.filter(function(t) { return t !== fullPath; });
+    }
+    _renderKioskTagTree();
+    setSaveButtonUnsaved();
   });
-  return usernames;
 }
 
 /**
- * Open the kiosk with the selected users.
+ * Gather the selected kiosk tag names.
+ * @returns {Array} Array of tag name strings
+ */
+function _gatherKioskTags() {
+  return _kioskSelectedTags.slice();
+}
+
+/**
+ * Open the kiosk with the selected tags.
  */
 function _openKiosk() {
-  var selected = _gatherKioskUsers();
+  var selected = _gatherKioskTags();
   if (selected.length === 0) {
-    alert('Please select at least one user for the kiosk view.');
+    alert('Please select at least one tag for the kiosk view.');
     return;
   }
-  window.open('/kiosk?users=' + encodeURIComponent(selected.join(',')), '_blank');
+  window.location.href = '/kiosk?tags=' + encodeURIComponent(selected.join(','));
 }
 
-// Load kiosk user picker after auth resolves (admin section)
+// Load kiosk tag picker after settings are loaded
 if (typeof waitForAuth === 'function') {
   waitForAuth().then(function(user) {
-    if (user && user.is_admin) {
-      // Wait a tick for settingsManager to finish loading
-      setTimeout(_loadKioskUserPicker, 500);
-    }
+    // Wait a tick for settingsManager to finish loading
+    setTimeout(_loadKioskTagPicker, 500);
   });
 }
 

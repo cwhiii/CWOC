@@ -144,6 +144,14 @@
     line-height: 1.5;
 }
 
+/* ── Projects list view child items (draggable) ───────────────────────────── */
+.projects-child-item[draggable="true"] {
+    cursor: grab;
+}
+.projects-child-item[draggable="true"]:active {
+    cursor: grabbing;
+}
+
 /* ── Archived chit transparency ───────────────────────────────────────────── */
 .chit-card.archived-chit {
     opacity: 0.45;
@@ -158,6 +166,60 @@
 }
 .chit-card[draggable="true"]:active {
     cursor: grabbing;
+}
+
+/* ── Touch long-press drag visual feedback ────────────────────────────────── */
+.cwoc-touch-dragging {
+    opacity: 0.7 !important;
+    transform: scale(1.04);
+    box-shadow: 0 6px 24px rgba(107, 66, 38, 0.45), 0 0 0 3px #8b5a2b !important;
+    z-index: 100;
+    outline: 2px dashed #a0522d;
+    outline-offset: 2px;
+    transition: transform 0.15s ease, box-shadow 0.15s ease, outline 0.15s ease;
+    animation: cwoc-drag-pulse 1s ease-in-out infinite;
+}
+
+/* ── Desktop HTML5 drag active feedback ───────────────────────────────────── */
+.chit-card.cwoc-dragging,
+li.cwoc-dragging {
+    opacity: 0.4 !important;
+    outline: 2px dashed #a0522d;
+    outline-offset: 2px;
+    box-shadow: 0 4px 16px rgba(107, 66, 38, 0.3);
+}
+
+/* ── Drag pulse animation ─────────────────────────────────────────────────── */
+@keyframes cwoc-drag-pulse {
+    0%, 100% { outline-color: #a0522d; }
+    50% { outline-color: #d2691e; }
+}
+
+/* ── Expandable note preview on mobile ────────────────────────────────────── */
+.note-preview {
+    flex: 1;
+    min-width: 0;
+    opacity: 0.75;
+    overflow: hidden;
+    max-height: 4.5em;
+    line-height: 1.4em;
+    position: relative;
+    cursor: default;
+}
+.note-preview.note-preview-expanded {
+    max-height: none;
+    overflow: visible;
+}
+.note-preview-toggle {
+    display: none;
+    font-size: 0.8em;
+    color: #8b5a2b;
+    cursor: pointer;
+    padding: 2px 0;
+    text-align: right;
+    font-style: italic;
+    -webkit-user-select: none;
+    user-select: none;
 }
 
 /* ── Notes view styles — column-persistent layout ─────────────────────────── */

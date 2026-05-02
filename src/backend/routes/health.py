@@ -282,24 +282,26 @@ async def editor(id: str = None):
 # ═══════════════════════════════════════════════════════════════════════════
 
 @router.get("/api/kiosk")
-def get_kiosk(user_ids: str = Query("", description="Comma-separated user UUIDs or usernames")):
-    """Return combined non-deleted, non-stealth chits from the specified users.
+def get_kiosk(tags: str = Query("", description="Comma-separated tag names to filter by")):
+    """Return combined non-deleted, non-stealth chits that have any of the specified tags.
 
     Unauthenticated endpoint — no request.state.user_id available.
-    Accepts either UUIDs or usernames. Validates against the users table;
-    returns 400 for invalid identifiers.
+    Filters chits by tag membership (case-insensitive match).
 
     Response: {
         "chits": [ ...chit objects with owner_display_name... ],
-        "users": [ {"id": "uuid", "display_name": "Name"}, ... ]
+        "tags": [ "tag1", "tag2", ... ]
     }
     """
-    if not user_ids or not user_ids.strip():
-        raise HTTPException(status_code=400, detail="No user IDs provided. Pass ?user_ids=username1,username2")
+    if not tags or not tags.strip():
+        raise HTTPException(status_code=400, detail="No tags provided. Pass ?tags=TagName1,TagName2")
 
-    raw_ids = [uid.strip() for uid in user_ids.split(",") if uid.strip()]
-    if not raw_ids:
-        raise HTTPException(status_code=400, detail="No user IDs provided. Pass ?user_ids=username1,username2")
+    raw_tags = [t.strip() for t in tags.split(",") if t.strip()]
+    if not raw_tags:
+        raise HTTPException(status_code=400, detail="No tags provided. Pass ?tags=TagName1,TagName2")
+
+    # Lowercase for case-insensitive matching
+    tag_set_lower = {t.lower() for t in raw_tags}
 
     conn = None
     try:
@@ -307,29 +309,13 @@ def get_kiosk(user_ids: str = Query("", description="Comma-separated user UUIDs 
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 
-        # Try to resolve identifiers — could be UUIDs or usernames
-        placeholders = ",".join("?" for _ in raw_ids)
+        # Fetch all non-deleted, non-stealth chits that have tags
         cursor.execute(
-            f"SELECT id, display_name, username FROM users WHERE id IN ({placeholders}) OR username IN ({placeholders})",
-            raw_ids + raw_ids,
-        )
-        found_rows = cursor.fetchall()
-
-        # If no identifiers matched at all, return an error
-        if not found_rows:
-            raise HTTPException(status_code=400, detail=f"No matching users found for: {', '.join(raw_ids)}")
-
-        resolved_ids = [row["id"] for row in found_rows]
-        users_list = [{"id": row["id"], "display_name": row["display_name"] or ""} for row in found_rows]
-
-        # Fetch non-deleted, non-stealth chits owned by those users that have the "Share" tag
-        id_placeholders = ",".join("?" for _ in resolved_ids)
-        cursor.execute(
-            f"""SELECT * FROM chits
+            """SELECT * FROM chits
                 WHERE (deleted = 0 OR deleted IS NULL)
                   AND (stealth = 0 OR stealth IS NULL)
-                  AND owner_id IN ({id_placeholders})""",
-            resolved_ids,
+                  AND tags IS NOT NULL
+                  AND tags != '' AND tags != '[]' AND tags != 'null'"""
         )
         rows = cursor.fetchall()
 
@@ -339,17 +325,74 @@ def get_kiosk(user_ids: str = Query("", description="Comma-separated user UUIDs 
             _deserialize_chit_fields(chit)
             chit["assigned_to"] = chit.get("assigned_to")
             chit["owner_display_name"] = chit.get("owner_display_name", "")
-            # Only include chits that have the "Share" tag
+            # Check if chit has any of the requested tags (case-insensitive)
+            # Also match child tags: selecting "Work" includes chits tagged "Work/Projects"
             chit_tags = chit.get("tags") or []
-            if isinstance(chit_tags, list) and any(t.lower() == "share" for t in chit_tags):
-                chits.append(chit)
+            if isinstance(chit_tags, list):
+                matched = False
+                for chit_tag in chit_tags:
+                    chit_tag_lower = chit_tag.lower()
+                    for filter_tag_lower in tag_set_lower:
+                        if chit_tag_lower == filter_tag_lower or chit_tag_lower.startswith(filter_tag_lower + '/'):
+                            matched = True
+                            break
+                    if matched:
+                        break
+                if matched:
+                    chits.append(chit)
 
-        return {"chits": chits, "users": users_list}
+        return {"chits": chits, "tags": raw_tags}
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error fetching kiosk data: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch kiosk data: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
+@router.get("/api/kiosk/config")
+def get_kiosk_config():
+    """Return the saved kiosk tag list and week_start_day from settings. Unauthenticated endpoint.
+    Returns { "tags": ["Tag1", "Tag2", ...], "week_start_day": 0 }
+
+    Prioritises the settings row that actually has kiosk tags configured.
+    Falls back to the first row for week_start_day if no row has tags.
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+
+        # Try to find a row that has kiosk_users configured first
+        row = conn.execute(
+            """SELECT kiosk_users, week_start_day FROM settings
+               WHERE kiosk_users IS NOT NULL AND kiosk_users != '' AND kiosk_users != '[]' AND kiosk_users != 'null'
+               LIMIT 1"""
+        ).fetchone()
+
+        # Fall back to any row (for week_start_day)
+        if not row:
+            row = conn.execute("SELECT kiosk_users, week_start_day FROM settings LIMIT 1").fetchone()
+
+        if not row:
+            return {"tags": [], "week_start_day": 0}
+        raw = row["kiosk_users"] if row["kiosk_users"] else None
+        tags = []
+        if raw:
+            tags = json.loads(raw) if isinstance(raw, str) else raw
+            if not isinstance(tags, list):
+                tags = []
+        wsd = 0
+        try:
+            wsd = int(row["week_start_day"]) if row["week_start_day"] else 0
+        except (ValueError, TypeError):
+            pass
+        return {"tags": tags, "week_start_day": wsd}
+    except Exception as e:
+        logger.error(f"Error fetching kiosk config: {e}")
+        return {"tags": [], "week_start_day": 0}
     finally:
         if conn:
             conn.close()

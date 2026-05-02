@@ -61,6 +61,8 @@ def _is_excluded(path: str, method: str) -> bool:
         return True
     if path == "/api/kiosk" and method == "GET":
         return True
+    if path == "/api/kiosk/config" and method == "GET":
+        return True
     # Legacy wall-station redirects
     if path == "/wall-station" and method == "GET":
         return True

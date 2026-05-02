@@ -189,11 +189,13 @@ function openChitForEdit(chit) {
  */
 function attachCalendarChitEvents(el, chit) {
   el.addEventListener("dblclick", function(e) {
+    if (window._dragJustEnded) return;
     e.preventDefault();
     e.stopPropagation();
     openChitForEdit(chit);
   });
   el.addEventListener("click", function(e) {
+    if (window._dragJustEnded) return;
     if (e.shiftKey) {
       e.preventDefault();
       e.stopPropagation();
@@ -204,6 +206,7 @@ function attachCalendarChitEvents(el, chit) {
   });
   if (typeof enableLongPress === 'function') {
     enableLongPress(el, function() {
+      if (window._dragJustEnded) return;
       // Prevent quick-edit for viewer-role shared chits
       if (typeof _isViewerRole === 'function' && _isViewerRole(chit)) return;
       showQuickEditModal(chit, function() { displayChits(); });

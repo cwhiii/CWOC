@@ -9,11 +9,51 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" />
     <style>
         /* ══ Kiosk Page Styles ══ */
+        body { padding: 0.5em; }
 
-        /* ── Override body for wall display ── */
-        body {
-            padding: 0.5em;
+        /* ── Period selector bar ── */
+        .wall-period-bar {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
         }
+        .wall-period-btn {
+            padding: 6px 14px;
+            background: linear-gradient(#d4a373, #c8965a);
+            color: #2b1e0f;
+            border: 1px solid #5a3f2a;
+            border-radius: 5px;
+            font-family: 'Lora', Georgia, serif;
+            font-weight: bold;
+            font-size: 0.9em;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .wall-period-btn:hover { background: linear-gradient(#c8965a, #a86b3e); }
+        .wall-period-btn.active {
+            background: #8b5a2b;
+            color: #fff8e1;
+            border-color: #5a3f2a;
+        }
+        .wall-period-label {
+            font-size: 1em;
+            font-weight: 700;
+            color: #4a2c2a;
+            margin-left: 12px;
+        }
+        .wall-period-nav {
+            font-size: 1.1em;
+            background: none;
+            border: 1px solid #8b5a2b;
+            border-radius: 4px;
+            padding: 4px 10px;
+            cursor: pointer;
+            font-family: 'Lora', Georgia, serif;
+            color: #4a2c2a;
+        }
+        .wall-period-nav:hover { background: rgba(139,90,43,0.1); }
 
         /* ── Two-column layout ── */
         .wall-columns {
@@ -37,13 +77,8 @@
         }
 
         /* ── Calendar section ── */
-        .wall-calendar-section {
-            min-width: 0;
-        }
-
-        .wall-day-group {
-            margin-bottom: 16px;
-        }
+        .wall-calendar-section { min-width: 0; }
+        .wall-day-group { margin-bottom: 16px; }
         .wall-day-label {
             font-size: 16px;
             font-weight: 700;
@@ -65,34 +100,17 @@
             padding: 6px 10px;
             margin-bottom: 4px;
             border-radius: 4px;
-            background: #fff8e1;
             border: 1px solid rgba(139, 90, 43, 0.2);
+            cursor: pointer;
+            transition: box-shadow 0.15s, transform 0.1s;
         }
-        .wall-event-time {
-            font-size: 14px;
-            font-weight: 600;
-            color: #8b4513;
-            white-space: nowrap;
-            min-width: 60px;
-        }
-        .wall-event-title {
-            font-size: 15px;
-            color: #1a1208;
-            flex: 1;
-            min-width: 0;
-            word-break: break-word;
-        }
-        .wall-event-owner {
-            font-size: 13px;
-            color: #8b5a2b;
-            white-space: nowrap;
-        }
+        .wall-event:hover { box-shadow: 0 2px 6px rgba(0,0,0,0.15); transform: translateY(-1px); }
+        .wall-event-time { font-size: 14px; font-weight: 600; white-space: nowrap; min-width: 60px; }
+        .wall-event-title { font-size: 15px; flex: 1; min-width: 0; word-break: break-word; }
+        .wall-event-owner { font-size: 13px; opacity: 0.8; white-space: nowrap; }
 
         /* ── Task section ── */
-        .wall-task-section {
-            min-width: 0;
-        }
-
+        .wall-task-section { min-width: 0; }
         .wall-task {
             display: flex;
             align-items: flex-start;
@@ -100,30 +118,15 @@
             padding: 6px 10px;
             margin-bottom: 4px;
             border-radius: 4px;
-            background: #fff8e1;
             border: 1px solid rgba(139, 90, 43, 0.2);
+            cursor: pointer;
+            transition: box-shadow 0.15s, transform 0.1s;
         }
-        .wall-task-status {
-            font-size: 14px;
-            flex-shrink: 0;
-        }
-        .wall-task-title {
-            font-size: 15px;
-            color: #1a1208;
-            flex: 1;
-            min-width: 0;
-            word-break: break-word;
-        }
-        .wall-task-owner {
-            font-size: 13px;
-            color: #8b5a2b;
-            white-space: nowrap;
-        }
-        .wall-task-due {
-            font-size: 13px;
-            color: #a0522d;
-            white-space: nowrap;
-        }
+        .wall-task:hover { box-shadow: 0 2px 6px rgba(0,0,0,0.15); transform: translateY(-1px); }
+        .wall-task-status { font-size: 14px; flex-shrink: 0; }
+        .wall-task-title { font-size: 15px; flex: 1; min-width: 0; word-break: break-word; }
+        .wall-task-owner { font-size: 13px; opacity: 0.8; white-space: nowrap; }
+        .wall-task-due { font-size: 13px; color: #a0522d; white-space: nowrap; }
 
         /* ── Status icons ── */
         .status-todo { color: #8b4513; }
@@ -131,57 +134,34 @@
         .status-blocked { color: #b22222; }
         .status-complete { color: #2e7d32; }
 
-        /* ── Empty / error / loading states ── */
-        .wall-empty {
-            text-align: center;
-            padding: 2em;
-            color: #4a2c2a;
-            opacity: 0.7;
-            font-size: 1.05em;
-        }
-        .wall-error {
-            text-align: center;
-            padding: 2em;
-            color: #b22222;
-            font-size: 1.05em;
-        }
-        .wall-loading {
-            text-align: center;
-            padding: 2em;
-            color: #4a2c2a;
-            opacity: 0.7;
-        }
+        /* ── States ── */
+        .wall-empty { text-align: center; padding: 2em; color: #4a2c2a; opacity: 0.7; font-size: 1.05em; }
+        .wall-error { text-align: center; padding: 2em; color: #b22222; font-size: 1.05em; }
+        .wall-loading { text-align: center; padding: 2em; color: #4a2c2a; opacity: 0.7; }
 
-        /* ── User legend ── */
-        .wall-user-legend {
+        /* ── Tag legend (bottom) ── */
+        .wall-tag-legend {
             display: flex;
-            gap: 12px;
+            gap: 10px;
             flex-wrap: wrap;
-            margin-bottom: 12px;
-            padding: 6px 10px;
+            margin-top: 16px;
+            padding: 8px 10px;
             background: rgba(139, 90, 43, 0.06);
             border-radius: 4px;
+            border-top: 1px solid rgba(139, 90, 43, 0.2);
         }
-        .wall-user-chip {
-            font-size: 14px;
+        .wall-tag-chip {
+            font-size: 13px;
             color: #4a2c2a;
             font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 4px;
+            background: rgba(139, 90, 43, 0.1);
         }
 
-        /* ── Last updated ── */
-        .wall-last-updated {
-            font-size: 12px;
-            color: #8b7355;
-            text-align: right;
-            margin-top: 8px;
-        }
+        .wall-last-updated { font-size: 12px; color: #8b7355; text-align: right; margin-top: 8px; }
 
-        /* ── Responsive: single column on narrow screens ── */
-        @media (max-width: 768px) {
-            .wall-columns {
-                grid-template-columns: 1fr;
-            }
-        }
+        @media (max-width: 768px) { .wall-columns { grid-template-columns: 1fr; } }
         @media (max-width: 480px) {
             body { padding: 0.25em; }
             .wall-section-header { font-size: 17px; }
@@ -189,9 +169,7 @@
         }
     </style>
 </head>
-<!-- No data-page-title: kiosk does NOT use shared-page.js header injection -->
 <body>
-
     <div class="settings-panel">
         <div class="header-and-buttons">
             <h2>
@@ -200,15 +178,13 @@
             </h2>
         </div>
 
-        <div id="wall-user-legend" class="wall-user-legend" style="display:none;"></div>
+        <div id="wall-period-bar" class="wall-period-bar"></div>
 
         <div id="wall-content">
-            <div class="wall-loading">
-                <div class="loader"></div>
-                Loading kiosk…
-            </div>
+            <div class="wall-loading"><div class="loader"></div>Loading kiosk…</div>
         </div>
 
+        <div id="wall-tag-legend" class="wall-tag-legend" style="display:none;"></div>
         <div id="wall-last-updated" class="wall-last-updated"></div>
     </div>
 
@@ -217,326 +193,339 @@
         &middot; <span id="cwoc-footer-version"></span>
     </div>
 
-    <!-- No shared-auth.js — kiosk is unauthenticated -->
-    <!-- No shared-page.js — no header injection or nav needed -->
-
     <script>
-    /* ═══════════════════════════════════════════════════════════════════════
-       Kiosk — standalone unauthenticated page
-       Reads `users` query parameter, fetches /api/kiosk, renders
-       a combined calendar + task view with owner attribution.
-       Auto-refreshes every 60 seconds.
-       ═══════════════════════════════════════════════════════════════════════ */
     (function() {
         'use strict';
 
-        var REFRESH_INTERVAL_MS = 60000; // 60 seconds
+        var REFRESH_INTERVAL_MS = 60000;
         var _refreshTimer = null;
-        var _userDisplayNames = {}; // id → display_name lookup
+        var _allChits = [];
+        var _currentPeriod = 'week'; // 'day' | 'week' | 'month'
+        var _periodAnchor = new Date(); // anchor date for navigation
+        var _weekStartDay = 0; // 0=Sun, 1=Mon, etc. — loaded from settings
 
-        /* ── Read user identifiers from query string (usernames or UUIDs) ── */
-        function _getUserIds() {
+        /* ── Query params ────────────────────────────────────────────────── */
+        function _getTags() {
             var params = new URLSearchParams(window.location.search);
-            var raw = params.get('users') || '';
+            var raw = params.get('tags') || '';
             return raw.split(',').map(function(s) { return s.trim(); }).filter(Boolean);
         }
 
-        /* ── HTML escaping ───────────────────────────────────────────────── */
+        /* ── Helpers ─────────────────────────────────────────────────────── */
         function _esc(str) {
             var div = document.createElement('div');
             div.appendChild(document.createTextNode(str || ''));
             return div.innerHTML;
         }
 
-        /* ── Date formatting helpers ─────────────────────────────────────── */
-        function _formatDate(dateStr) {
+        var _dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+        var _monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+        function _fmtDate(d) { return _dayNames[d.getDay()] + ', ' + _monthNames[d.getMonth()] + ' ' + d.getDate(); }
+        function _fmtTime(dateStr) {
             if (!dateStr) return '';
             var d = new Date(dateStr);
             if (isNaN(d.getTime())) return '';
-            var days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-            var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-                          'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-            return days[d.getDay()] + ', ' + months[d.getMonth()] + ' ' + d.getDate();
+            var h = d.getHours(), m = d.getMinutes(), ap = h >= 12 ? 'PM' : 'AM';
+            return (h % 12 || 12) + ':' + String(m).padStart(2, '0') + ' ' + ap;
         }
-
-        function _formatTime(dateStr) {
-            if (!dateStr) return '';
-            var d = new Date(dateStr);
-            if (isNaN(d.getTime())) return '';
-            var h = d.getHours();
-            var m = d.getMinutes();
-            var ampm = h >= 12 ? 'PM' : 'AM';
-            h = h % 12 || 12;
-            return h + ':' + String(m).padStart(2, '0') + ' ' + ampm;
+        function _dateKey(d) {
+            return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
         }
+        function _todayKey() { return _dateKey(new Date()); }
+        function _chitDate(c) { return c.start_datetime || c.due_datetime || c.end_datetime || ''; }
+        function _isCalendarEvent(c) { return !!_chitDate(c); }
+        function _isTask(c) { var s = (c.status||'').toLowerCase(); return s==='todo'||s==='in progress'||s==='blocked'||s==='complete'; }
 
-        function _dateKey(dateStr) {
-            if (!dateStr) return '';
-            var d = new Date(dateStr);
-            if (isNaN(d.getTime())) return '';
-            return d.getFullYear() + '-' +
-                   String(d.getMonth() + 1).padStart(2, '0') + '-' +
-                   String(d.getDate()).padStart(2, '0');
-        }
-
-        function _todayKey() {
-            var d = new Date();
-            return d.getFullYear() + '-' +
-                   String(d.getMonth() + 1).padStart(2, '0') + '-' +
-                   String(d.getDate()).padStart(2, '0');
-        }
-
-        function _isToday(key) {
-            return key === _todayKey();
-        }
-
-        function _isFuture(key) {
-            return key >= _todayKey();
-        }
-
-        /* ── Owner display name lookup ───────────────────────────────────── */
-        function _ownerName(chit) {
-            if (chit.owner_display_name) return chit.owner_display_name;
-            if (chit.owner_id && _userDisplayNames[chit.owner_id]) {
-                return _userDisplayNames[chit.owner_id];
-            }
-            return '';
-        }
-
-        /* ── Status icon for tasks ───────────────────────────────────────── */
         function _statusIcon(status) {
-            switch ((status || '').toLowerCase()) {
-                case 'todo':        return '<i class="fa-regular fa-circle status-todo" title="To Do"></i>';
-                case 'in progress': return '<i class="fa-solid fa-spinner status-inprogress" title="In Progress"></i>';
-                case 'blocked':     return '<i class="fa-solid fa-ban status-blocked" title="Blocked"></i>';
-                case 'complete':    return '<i class="fa-solid fa-circle-check status-complete" title="Complete"></i>';
-                default:            return '<i class="fa-regular fa-circle status-todo" title="Task"></i>';
+            switch ((status||'').toLowerCase()) {
+                case 'todo':        return '<i class="fa-regular fa-circle status-todo"></i>';
+                case 'in progress': return '<i class="fa-solid fa-spinner status-inprogress"></i>';
+                case 'blocked':     return '<i class="fa-solid fa-ban status-blocked"></i>';
+                case 'complete':    return '<i class="fa-solid fa-circle-check status-complete"></i>';
+                default:            return '<i class="fa-regular fa-circle status-todo"></i>';
             }
         }
 
-        /* ── Determine the primary date for a chit ───────────────────────── */
-        function _chitDate(chit) {
-            return chit.start_datetime || chit.due_datetime || chit.end_datetime || '';
+        /* ── Color helpers ───────────────────────────────────────────────── */
+        function _chitColor(chit) { return chit.color || '#fff8e1'; }
+        function _isLight(hex) {
+            if (!hex || hex === 'transparent') return true;
+            var c = hex.charAt(0) === '#' ? hex.substring(1) : hex;
+            if (c.length === 3) c = c[0]+c[0]+c[1]+c[1]+c[2]+c[2];
+            var r = parseInt(c.substr(0,2),16), g = parseInt(c.substr(2,2),16), b = parseInt(c.substr(4,2),16);
+            return (0.299*r + 0.587*g + 0.114*b) > 160;
+        }
+        function _colorStyle(chit) {
+            var bg = _chitColor(chit);
+            var fg = _isLight(bg) ? '#1a1208' : '#fff8e1';
+            return 'background:' + bg + ';color:' + fg + ';';
         }
 
-        /* ── Check if a chit is a calendar event (has a date) ────────────── */
-        function _isCalendarEvent(chit) {
-            return !!(chit.start_datetime || chit.due_datetime || chit.end_datetime);
+        /* ── Period date range ───────────────────────────────────────────── */
+        function _getPeriodRange() {
+            var a = new Date(_periodAnchor);
+            var start, end;
+            if (_currentPeriod === 'day') {
+                start = new Date(a.getFullYear(), a.getMonth(), a.getDate());
+                end = new Date(start); end.setDate(end.getDate() + 1);
+            } else if (_currentPeriod === 'week') {
+                var dow = (a.getDay() - _weekStartDay + 7) % 7;
+                start = new Date(a.getFullYear(), a.getMonth(), a.getDate() - dow);
+                end = new Date(start); end.setDate(end.getDate() + 7);
+            } else { // month
+                start = new Date(a.getFullYear(), a.getMonth(), 1);
+                end = new Date(a.getFullYear(), a.getMonth() + 1, 1);
+            }
+            return { start: start, end: end };
         }
 
-        /* ── Check if a chit is a task ───────────────────────────────────── */
-        function _isTask(chit) {
-            var s = (chit.status || '').toLowerCase();
-            return s === 'todo' || s === 'in progress' || s === 'blocked' || s === 'complete';
+        function _getPeriodLabel() {
+            var r = _getPeriodRange();
+            if (_currentPeriod === 'day') return _fmtDate(r.start);
+            if (_currentPeriod === 'week') return _fmtDate(r.start) + ' — ' + _fmtDate(new Date(r.end.getTime() - 86400000));
+            return _monthNames[r.start.getMonth()] + ' ' + r.start.getFullYear();
         }
 
-        /* ── Render calendar events ──────────────────────────────────────── */
+        function _navPeriod(dir) {
+            if (_currentPeriod === 'day') _periodAnchor.setDate(_periodAnchor.getDate() + dir);
+            else if (_currentPeriod === 'week') _periodAnchor.setDate(_periodAnchor.getDate() + dir * 7);
+            else _periodAnchor.setMonth(_periodAnchor.getMonth() + dir);
+            _renderView();
+        }
+
+        function _setPeriod(p) {
+            _currentPeriod = p;
+            _renderView();
+        }
+
+        function _goToday() {
+            _periodAnchor = new Date();
+            _renderView();
+        }
+
+        /* ── Build period bar ────────────────────────────────────────────── */
+        function _buildPeriodBar() {
+            var bar = document.getElementById('wall-period-bar');
+            bar.innerHTML = '';
+            ['day','week','month'].forEach(function(p) {
+                var btn = document.createElement('button');
+                btn.className = 'wall-period-btn' + (_currentPeriod === p ? ' active' : '');
+                btn.textContent = p.charAt(0).toUpperCase() + p.slice(1);
+                btn.addEventListener('click', function() { _setPeriod(p); });
+                bar.appendChild(btn);
+            });
+            var todayBtn = document.createElement('button');
+            todayBtn.className = 'wall-period-btn';
+            todayBtn.textContent = '📍 Today';
+            todayBtn.addEventListener('click', _goToday);
+            bar.appendChild(todayBtn);
+
+            var prevBtn = document.createElement('button');
+            prevBtn.className = 'wall-period-nav';
+            prevBtn.textContent = '◄';
+            prevBtn.addEventListener('click', function() { _navPeriod(-1); });
+            bar.appendChild(prevBtn);
+
+            var label = document.createElement('span');
+            label.className = 'wall-period-label';
+            label.textContent = _getPeriodLabel();
+            bar.appendChild(label);
+
+            var nextBtn = document.createElement('button');
+            nextBtn.className = 'wall-period-nav';
+            nextBtn.textContent = '►';
+            nextBtn.addEventListener('click', function() { _navPeriod(1); });
+            bar.appendChild(nextBtn);
+        }
+
+        /* ── Render calendar ─────────────────────────────────────────────── */
         function _renderCalendar(chits) {
+            var range = _getPeriodRange();
             var events = chits.filter(_isCalendarEvent);
-
-            // Group by date
             var groups = {};
             events.forEach(function(chit) {
-                var key = _dateKey(_chitDate(chit));
-                if (!key) return;
+                var ds = _chitDate(chit);
+                if (!ds) return;
+                var d = new Date(ds);
+                if (isNaN(d.getTime())) return;
+                if (d < range.start || d >= range.end) return;
+                var key = _dateKey(d);
                 if (!groups[key]) groups[key] = [];
                 groups[key].push(chit);
             });
 
-            // Sort date keys, filter to today and future, limit to 14 days
-            var today = _todayKey();
-            var keys = Object.keys(groups).sort();
-            keys = keys.filter(function(k) { return k >= today; });
-            keys = keys.slice(0, 14);
+            // Build all days in range
+            var days = [];
+            var cur = new Date(range.start);
+            while (cur < range.end) { days.push(_dateKey(cur)); cur.setDate(cur.getDate() + 1); }
 
-            if (keys.length === 0) {
-                return '<div class="wall-empty"><i class="fa-regular fa-calendar"></i> No upcoming events</div>';
-            }
+            var todayK = _todayKey();
+            var hasAny = days.some(function(k) { return groups[k] && groups[k].length > 0; });
+            if (!hasAny) return '<div class="wall-empty"><i class="fa-regular fa-calendar"></i> No events in this period</div>';
 
             var html = '';
-            keys.forEach(function(key) {
-                var isT = _isToday(key);
-                var label = isT ? '📌 Today — ' + _formatDate(key + 'T00:00:00') : _formatDate(key + 'T00:00:00');
+            days.forEach(function(key) {
+                var dayEvents = groups[key];
+                if (!dayEvents || dayEvents.length === 0) return;
+                var isT = key === todayK;
+                var label = isT ? '📌 Today — ' + _fmtDate(new Date(key + 'T00:00:00')) : _fmtDate(new Date(key + 'T00:00:00'));
                 html += '<div class="wall-day-group">';
                 html += '<div class="wall-day-label' + (isT ? ' today' : '') + '">' + _esc(label) + '</div>';
-
-                // Sort events by time within the day
-                var dayEvents = groups[key].slice().sort(function(a, b) {
-                    var ta = _chitDate(a) || '';
-                    var tb = _chitDate(b) || '';
-                    return ta.localeCompare(tb);
-                });
-
+                dayEvents.sort(function(a,b) { return (_chitDate(a)||'').localeCompare(_chitDate(b)||''); });
                 dayEvents.forEach(function(chit) {
-                    var time = _formatTime(_chitDate(chit));
-                    var owner = _ownerName(chit);
-                    html += '<div class="wall-event">';
-                    html += '<span class="wall-event-time">' + (time ? _esc(time) : '<i class="fa-regular fa-clock"></i>') + '</span>';
+                    var time = _fmtTime(_chitDate(chit));
+                    var owner = chit.owner_display_name || '';
+                    html += '<div class="wall-event" style="' + _colorStyle(chit) + '" data-chit-id="' + _esc(chit.id) + '">';
+                    html += '<span class="wall-event-time">' + (time || '<i class="fa-regular fa-clock"></i>') + '</span>';
                     html += '<span class="wall-event-title">' + _esc(chit.title || 'Untitled') + '</span>';
-                    if (owner) {
-                        html += '<span class="wall-event-owner">👤 ' + _esc(owner) + '</span>';
-                    }
+                    if (owner) html += '<span class="wall-event-owner">👤 ' + _esc(owner) + '</span>';
                     html += '</div>';
                 });
-
                 html += '</div>';
             });
-
             return html;
         }
 
-        /* ── Render task list ────────────────────────────────────────────── */
+        /* ── Render tasks ────────────────────────────────────────────────── */
         function _renderTasks(chits) {
-            var tasks = chits.filter(function(c) {
-                return _isTask(c) && (c.status || '').toLowerCase() !== 'complete';
-            });
-
-            // Sort: In Progress first, then Blocked, then ToDo; within each group by due date
+            var tasks = chits.filter(function(c) { return _isTask(c) && (c.status||'').toLowerCase() !== 'complete'; });
             var order = { 'in progress': 0, 'blocked': 1, 'todo': 2 };
-            tasks.sort(function(a, b) {
-                var oa = order[(a.status || '').toLowerCase()] || 2;
-                var ob = order[(b.status || '').toLowerCase()] || 2;
+            tasks.sort(function(a,b) {
+                var oa = order[(a.status||'').toLowerCase()] || 2;
+                var ob = order[(b.status||'').toLowerCase()] || 2;
                 if (oa !== ob) return oa - ob;
-                var da = a.due_datetime || '';
-                var db = b.due_datetime || '';
-                return da.localeCompare(db);
+                return (a.due_datetime||'').localeCompare(b.due_datetime||'');
             });
-
-            if (tasks.length === 0) {
-                return '<div class="wall-empty"><i class="fa-solid fa-clipboard-check"></i> No active tasks</div>';
-            }
-
+            if (tasks.length === 0) return '<div class="wall-empty"><i class="fa-solid fa-clipboard-check"></i> No active tasks</div>';
             var html = '';
             tasks.forEach(function(chit) {
-                var owner = _ownerName(chit);
-                var due = chit.due_datetime ? _formatDate(chit.due_datetime) : '';
-                html += '<div class="wall-task">';
+                var owner = chit.owner_display_name || '';
+                var due = chit.due_datetime ? _fmtDate(new Date(chit.due_datetime)) : '';
+                html += '<div class="wall-task" style="' + _colorStyle(chit) + '" data-chit-id="' + _esc(chit.id) + '">';
                 html += '<span class="wall-task-status">' + _statusIcon(chit.status) + '</span>';
                 html += '<span class="wall-task-title">' + _esc(chit.title || 'Untitled') + '</span>';
-                if (due) {
-                    html += '<span class="wall-task-due"><i class="fa-regular fa-calendar"></i> ' + _esc(due) + '</span>';
-                }
-                if (owner) {
-                    html += '<span class="wall-task-owner">👤 ' + _esc(owner) + '</span>';
-                }
+                if (due) html += '<span class="wall-task-due"><i class="fa-regular fa-calendar"></i> ' + _esc(due) + '</span>';
+                if (owner) html += '<span class="wall-task-owner">👤 ' + _esc(owner) + '</span>';
                 html += '</div>';
             });
-
             return html;
         }
 
-        /* ── Render user legend ──────────────────────────────────────────── */
-        function _renderUserLegend(users) {
-            var legendEl = document.getElementById('wall-user-legend');
-            if (!users || users.length === 0) {
-                legendEl.style.display = 'none';
-                return;
-            }
-            legendEl.style.display = '';
-            legendEl.innerHTML = users.map(function(u) {
-                return '<span class="wall-user-chip">👤 ' + _esc(u.display_name || u.id) + '</span>';
-            }).join('');
+        /* ── Tag legend (bottom) ─────────────────────────────────────────── */
+        function _renderTagLegend(tags) {
+            var el = document.getElementById('wall-tag-legend');
+            if (!tags || tags.length === 0) { el.style.display = 'none'; return; }
+            el.style.display = '';
+            el.innerHTML = '<span style="font-size:13px;opacity:0.6;margin-right:4px;">Tags:</span>' +
+                tags.map(function(t) { return '<span class="wall-tag-chip">🏷️ ' + _esc(t) + '</span>'; }).join('');
         }
 
-        /* ── Main fetch and render ───────────────────────────────────────── */
-        function _fetchAndRender() {
-            var userIds = _getUserIds();
-            var contentEl = document.getElementById('wall-content');
-            var updatedEl = document.getElementById('wall-last-updated');
+        /* ── Wire click handlers on chit rows ────────────────────────────── */
+        function _wireClickHandlers() {
+            // Build the kiosk return URL (preserves current tags + period state)
+            var kioskReturnUrl = window.location.pathname + window.location.search;
+            document.querySelectorAll('[data-chit-id]').forEach(function(el) {
+                el.addEventListener('click', function() {
+                    var id = el.dataset.chitId;
+                    if (id) {
+                        // Open editor in same tab, passing kiosk return URL
+                        window.location.href = '/editor?id=' + encodeURIComponent(id) + '&from=' + encodeURIComponent(kioskReturnUrl);
+                    }
+                });
+            });
+        }
 
-            if (userIds.length === 0) {
-                contentEl.innerHTML = '<div class="wall-error">' +
-                    '<i class="fa-solid fa-triangle-exclamation"></i> ' +
-                    'No users specified. Add <code>?users=username1,username2</code> to the URL.' +
-                    '</div>';
+        /* ── Render the full view from cached chits ──────────────────────── */
+        function _renderView() {
+            _buildPeriodBar();
+            var contentEl = document.getElementById('wall-content');
+            var calendarHtml = _renderCalendar(_allChits);
+            var tasksHtml = _renderTasks(_allChits);
+            contentEl.innerHTML =
+                '<div class="wall-columns">' +
+                    '<div class="wall-calendar-section">' +
+                        '<div class="wall-section-header"><i class="fa-regular fa-calendar"></i> Calendar</div>' +
+                        calendarHtml +
+                    '</div>' +
+                    '<div class="wall-task-section">' +
+                        '<div class="wall-section-header"><i class="fa-solid fa-list-check"></i> Tasks</div>' +
+                        tasksHtml +
+                    '</div>' +
+                '</div>';
+            _wireClickHandlers();
+            var now = new Date();
+            document.getElementById('wall-last-updated').textContent = 'Last updated: ' + now.toLocaleTimeString();
+        }
+
+        /* ── Fetch data ──────────────────────────────────────────────────── */
+        function _fetchAndRender() {
+            var tags = _activeTags;
+            var contentEl = document.getElementById('wall-content');
+            if (!tags || tags.length === 0) {
+                contentEl.innerHTML = '<div class="wall-error"><i class="fa-solid fa-triangle-exclamation"></i> No tags configured. Set up kiosk tags in Settings → Kiosk.</div>';
                 return;
             }
-
-            var url = '/api/kiosk?user_ids=' + encodeURIComponent(userIds.join(','));
-
-            fetch(url)
+            fetch('/api/kiosk?tags=' + encodeURIComponent(tags.join(',')))
                 .then(function(r) {
-                    if (!r.ok) {
-                        return r.json().then(function(data) {
-                            throw new Error(data.detail || 'Failed to load data');
-                        }).catch(function(e) {
-                            if (e.message) throw e;
-                            throw new Error('Failed to load data (HTTP ' + r.status + ')');
-                        });
-                    }
+                    if (!r.ok) return r.json().then(function(d) { throw new Error(d.detail || 'Failed'); });
                     return r.json();
                 })
                 .then(function(data) {
-                    var chits = data.chits || [];
-                    var users = data.users || [];
-
-                    // Build display name lookup
-                    _userDisplayNames = {};
-                    users.forEach(function(u) {
-                        _userDisplayNames[u.id] = u.display_name || '';
-                    });
-
-                    // Backfill owner_display_name from lookup if missing
-                    chits.forEach(function(chit) {
-                        if (!chit.owner_display_name && chit.owner_id && _userDisplayNames[chit.owner_id]) {
-                            chit.owner_display_name = _userDisplayNames[chit.owner_id];
-                        }
-                    });
-
-                    _renderUserLegend(users);
-
-                    var calendarHtml = _renderCalendar(chits);
-                    var tasksHtml = _renderTasks(chits);
-
-                    contentEl.innerHTML =
-                        '<div class="wall-columns">' +
-                            '<div class="wall-calendar-section">' +
-                                '<div class="wall-section-header"><i class="fa-regular fa-calendar"></i> Calendar</div>' +
-                                calendarHtml +
-                            '</div>' +
-                            '<div class="wall-task-section">' +
-                                '<div class="wall-section-header"><i class="fa-solid fa-list-check"></i> Tasks</div>' +
-                                tasksHtml +
-                            '</div>' +
-                        '</div>';
-
-                    // Update timestamp
-                    var now = new Date();
-                    updatedEl.textContent = 'Last updated: ' + now.toLocaleTimeString();
+                    _allChits = data.chits || [];
+                    _renderTagLegend(data.tags || tags);
+                    _renderView();
                 })
                 .catch(function(err) {
                     console.error('Kiosk fetch error:', err);
-                    contentEl.innerHTML = '<div class="wall-error">' +
-                        '<i class="fa-solid fa-triangle-exclamation"></i> ' +
-                        _esc(err.message || 'Unable to load data.') + ' Will retry automatically.' +
-                        '</div>';
+                    contentEl.innerHTML = '<div class="wall-error"><i class="fa-solid fa-triangle-exclamation"></i> ' + _esc(err.message || 'Unable to load data.') + ' Will retry automatically.</div>';
                 });
         }
 
-        /* ── Initialize ──────────────────────────────────────────────────── */
+        /* ── Init ────────────────────────────────────────────────────────── */
+        var _activeTags = [];
+
         function _init() {
-            // Fetch version for footer
-            fetch('/api/version')
-                .then(function(r) { return r.ok ? r.json() : {}; })
-                .then(function(d) {
-                    var el = document.getElementById('cwoc-footer-version');
-                    if (el && d.version) el.textContent = 'v' + d.version;
+            fetch('/api/version').then(function(r) { return r.ok ? r.json() : {}; }).then(function(d) {
+                var el = document.getElementById('cwoc-footer-version');
+                if (el && d.version) el.textContent = 'v' + d.version;
+            }).catch(function() {});
+
+            // Always fetch config for week_start_day (and fallback tags)
+            var urlTags = _getTags();
+
+            fetch('/api/kiosk/config')
+                .then(function(r) { return r.ok ? r.json() : { tags: [], week_start_day: 0 }; })
+                .then(function(data) {
+                    // Apply week start day setting
+                    if (data.week_start_day !== undefined) {
+                        _weekStartDay = parseInt(data.week_start_day) || 0;
+                    }
+
+                    // Use URL tags if present, otherwise fall back to saved config
+                    if (urlTags.length > 0) {
+                        _activeTags = urlTags;
+                    } else {
+                        _activeTags = (data.tags && data.tags.length > 0) ? data.tags : [];
+                        if (_activeTags.length > 0) {
+                            var newUrl = '/kiosk?tags=' + encodeURIComponent(_activeTags.join(','));
+                            history.replaceState(null, '', newUrl);
+                        }
+                    }
+
+                    _buildPeriodBar();
+                    _fetchAndRender();
+                    _refreshTimer = setInterval(_fetchAndRender, REFRESH_INTERVAL_MS);
                 })
-                .catch(function() {});
-
-            // Initial fetch
-            _fetchAndRender();
-
-            // Auto-refresh every 60 seconds
-            _refreshTimer = setInterval(_fetchAndRender, REFRESH_INTERVAL_MS);
+                .catch(function() {
+                    _activeTags = urlTags.length > 0 ? urlTags : [];
+                    _buildPeriodBar();
+                    _fetchAndRender();
+                });
         }
 
-        // Start when DOM is ready
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', _init);
-        } else {
-            _init();
-        }
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _init);
+        else _init();
     })();
     </script>
 </body>

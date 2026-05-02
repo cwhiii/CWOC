@@ -1,0 +1,1 @@
+Fixed kiosk direct navigation (`/kiosk`) showing "No tags configured" by making the config endpoint prioritize settings rows with kiosk tags. Added full Kiosk documentation to the Help page covering setup, access methods, display layout, period navigation, and auto-refresh.

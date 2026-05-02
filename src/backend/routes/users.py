@@ -118,9 +118,9 @@ def create_user(body: UserCreate, request: Request):
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
 
-        # Check username uniqueness
+        # Check username uniqueness (case-insensitive)
         existing = conn.execute(
-            "SELECT id FROM users WHERE username = ?",
+            "SELECT id FROM users WHERE LOWER(username) = LOWER(?)",
             (body.username,),
         ).fetchone()
 
@@ -341,9 +341,9 @@ def update_user(user_id: str, body: UserUpdate, request: Request):
         params = []
 
         if body.username is not None and body.username != target["username"]:
-            # Check uniqueness
+            # Check uniqueness (case-insensitive)
             existing = conn.execute(
-                "SELECT id FROM users WHERE username = ? AND id != ?",
+                "SELECT id FROM users WHERE LOWER(username) = LOWER(?) AND id != ?",
                 (body.username, user_id),
             ).fetchone()
             if existing:

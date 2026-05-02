@@ -1,0 +1,3 @@
+# Release 20260501.1744
+
+Checklist editor overhaul: clicking to edit no longer pre-selects all text — cursor is placed at the click position. Edit input now fills the full width from checkbox to trashcan. Added item count (x / y) in the checklist zone header next to "Checklist". Completed items section is now collapsible (collapsed by default) with a toggle indicator and count. Added "Clear Checked" button in the zone header that deletes all checked items after confirmation (with undo support). In the dashboard Checklists view, the progress count now appears inline with the chit title instead of on a separate line.

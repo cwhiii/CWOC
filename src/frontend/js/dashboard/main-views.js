@@ -29,6 +29,43 @@ function _isViewerRole(chit) {
   return chit._shared && chit.effective_role === 'viewer';
 }
 
+/**
+ * Build an expandable note preview element.
+ * On mobile, shows a "show more / show less" toggle when content overflows.
+ * On desktop, behaves as before (truncated with overflow hidden).
+ *
+ * @param {object} chit - The chit object
+ * @param {string} [extraStyle] - Additional inline CSS (e.g. margin-top)
+ * @returns {HTMLElement} - A wrapper div containing the note preview and toggle
+ */
+function _buildNotePreview(chit, extraStyle) {
+  var wrapper = document.createElement('div');
+  wrapper.style.cssText = 'flex:1;min-width:0;' + (extraStyle || '');
+
+  var notePreview = document.createElement('div');
+  notePreview.className = 'note-preview';
+  if (typeof marked !== 'undefined') {
+    notePreview.innerHTML = resolveChitLinks(marked.parse(chit.note.slice(0, 500)), chits);
+  } else {
+    notePreview.textContent = chit.note.slice(0, 300) + (chit.note.length > 300 ? '…' : '');
+  }
+  wrapper.appendChild(notePreview);
+
+  // Toggle button (visible only on mobile via CSS)
+  var toggle = document.createElement('div');
+  toggle.className = 'note-preview-toggle';
+  toggle.textContent = 'show more…';
+  toggle.addEventListener('click', function (e) {
+    e.stopPropagation();
+    e.preventDefault();
+    var expanded = notePreview.classList.toggle('note-preview-expanded');
+    toggle.textContent = expanded ? 'show less' : 'show more…';
+  });
+  wrapper.appendChild(toggle);
+
+  return wrapper;
+}
+
 /** Check if a chit is shared (has an effective_role from the sharing system). */
 function _isSharedChit(chit) {
   return !!chit._shared;
@@ -197,6 +234,18 @@ function _buildChitHeader(chit, titleHtml, settings, opts) {
     title.textContent = chit.title || '(Untitled)';
   }
   left.appendChild(title);
+
+  // Checklist count inline with title (for Checklists view)
+  if (_opts.checklistCount && Array.isArray(chit.checklist) && chit.checklist.length > 0) {
+    var _clItems = chit.checklist;
+    var _clChecked = _clItems.filter(function(i) { return i.checked || i.done; }).length;
+    var countSpan = document.createElement('span');
+    countSpan.className = 'checklist-progress-count';
+    countSpan.dataset.chitId = chit.id;
+    countSpan.style.cssText = 'font-size:0.8em;opacity:0.7;margin-left:0.5em;font-weight:normal;white-space:nowrap;';
+    countSpan.textContent = '(' + _clChecked + '/' + _clItems.length + ' ✓)';
+    left.appendChild(countSpan);
+  }
 
   row.appendChild(left);
 
@@ -457,27 +506,24 @@ function displayChecklistView(chitsToDisplay) {
       if (chit.archived) chitElement.classList.add("archived-chit");
       if (_isDeclinedByCurrentUser(chit)) chitElement.classList.add("declined-chit");
 
-      chitElement.appendChild(_buildChitHeader(chit, `<a href="/editor?id=${chit.id}">${chit.title || '(Untitled)'}</a>`, _viSettings));
+      chitElement.appendChild(_buildChitHeader(chit, `<a href="/editor?id=${chit.id}">${chit.title || '(Untitled)'}</a>`, _viSettings, { checklistCount: true }));
 
-      // Checklist progress count
-      const items = chit.checklist || [];
-      const checked = items.filter(i => i.checked || i.done).length;
-      const progressEl = document.createElement("div");
-      progressEl.style.cssText = "font-size:0.8em;opacity:0.7;margin-bottom:0.3em;";
-      progressEl.textContent = `${checked}/${items.length} ✓`;
-      chitElement.appendChild(progressEl);
-
+      // Strike out the title when every checklist item is checked
+      const _clItems = chit.checklist || [];
+      const _clAllChecked = _clItems.length > 0 && _clItems.every(i => i.checked || i.done);
+      if (_clAllChecked) chitElement.classList.add('checklist-all-done');
       // Interactive checklist from shared.js (disabled for viewer-role shared chits)
       if (!_isViewerRole(chit)) {
         renderInlineChecklist(chitElement, chit, () => fetchChits());
       } else {
-        // Read-only checklist display for viewers
+        // Read-only checklist display for viewers — only show unchecked items
         var roList = document.createElement('div');
         roList.style.cssText = 'opacity:0.8;font-size:0.9em;';
         (chit.checklist || []).forEach(function(item) {
+          if (item.checked || item.done) return;
           var row = document.createElement('div');
           row.style.cssText = 'padding:2px 0;';
-          row.textContent = (item.checked || item.done ? '☑ ' : '☐ ') + (item.text || item.label || '');
+          row.textContent = '☐ ' + (item.text || item.label || '');
           roList.appendChild(row);
         });
         chitElement.appendChild(roList);
@@ -487,17 +533,20 @@ function displayChecklistView(chitsToDisplay) {
         storePreviousState();
         window.location.href = `/editor?id=${chit.id}`;
       });
-      if (typeof enableLongPress === 'function') {
-        enableLongPress(chitElement, function () {
-          if (!_isViewerRole(chit)) showQuickEditModal(chit, () => displayChits());
-        });
-      }
       checklistView.appendChild(chitElement);
     });
   }
 
   chitList.appendChild(checklistView);
-  enableDragToReorder(checklistView, 'Checklists', () => displayChits());
+
+  // Build long-press map for unified touch gesture (drag + quick-edit)
+  var _clLongPressMap = {};
+  sortedChits.forEach(function (chit) {
+    if (!_isViewerRole(chit)) {
+      _clLongPressMap[chit.id] = function () { showQuickEditModal(chit, function () { displayChits(); }); };
+    }
+  });
+  enableDragToReorder(checklistView, 'Checklists', () => displayChits(), _clLongPressMap);
 }
 
 function displayTasksView(chitsToDisplay) {
@@ -613,16 +662,9 @@ function displayTasksView(chitsToDisplay) {
     statusWrap.appendChild(statusDropdown);
     controls.appendChild(statusWrap);
 
-    // Note preview (right, rendered markdown)
+    // Note preview (right, rendered markdown — expandable on mobile)
     if (chit.note && chit.note.trim()) {
-      const notePreview = document.createElement("div");
-      notePreview.style.cssText = "flex:1;min-width:0;opacity:0.75;overflow:hidden;max-height:4.5em;line-height:1.4em;";
-      if (typeof marked !== 'undefined') {
-        notePreview.innerHTML = resolveChitLinks(marked.parse(chit.note.slice(0, 500)), chits);
-      } else {
-        notePreview.textContent = chit.note.slice(0, 300) + (chit.note.length > 300 ? '…' : '');
-      }
-      controls.appendChild(notePreview);
+      controls.appendChild(_buildNotePreview(chit));
     }
 
     chitElement.appendChild(controls);
@@ -631,15 +673,18 @@ function displayTasksView(chitsToDisplay) {
       storePreviousState();
       window.location.href = `/editor?id=${chit.id}`;
     });
-    if (typeof enableLongPress === 'function') {
-      enableLongPress(chitElement, function () {
-        if (!_isViewerRole(chit)) showQuickEditModal(chit, () => displayChits());
-      });
-    }
     tasksContainer.appendChild(chitElement);
   });
   chitList.appendChild(tasksContainer);
-  enableDragToReorder(tasksContainer, 'Tasks', () => displayChits());
+
+  // Build long-press map for unified touch gesture (drag + quick-edit)
+  var _tkLongPressMap = {};
+  taskChits.forEach(function (chit) {
+    if (!_isViewerRole(chit)) {
+      _tkLongPressMap[chit.id] = function () { showQuickEditModal(chit, function () { displayChits(); }); };
+    }
+  });
+  enableDragToReorder(tasksContainer, 'Tasks', () => displayChits(), _tkLongPressMap);
 }
 
 /* ── Habits View ─────────────────────────────────────────────────────────── */
@@ -838,9 +883,12 @@ function _renderHabitCards(container, habitData, showCompleted, windowDays) {
       if (typeof storePreviousState === 'function') storePreviousState();
       window.location.href = '/editor?id=' + chit.id;
     });
-    if (typeof enableLongPress === 'function') {
-      enableLongPress(card, function() {
-        showQuickEditModal(chit, function() { displayChits(); });
+    // Unified touch gesture: long-press for quick edit (no drag for habits)
+    if (typeof enableTouchGesture === 'function') {
+      enableTouchGesture(card, {
+        onLongPress: function () {
+          showQuickEditModal(chit, function () { displayChits(); });
+        },
       });
     }
 
@@ -944,16 +992,9 @@ function displayAssignedToMeView(chitsToDisplay) {
     statusWrap.appendChild(statusDropdown);
     controls.appendChild(statusWrap);
 
-    // Note preview (right, rendered markdown)
+    // Note preview (right, rendered markdown — expandable on mobile)
     if (chit.note && chit.note.trim()) {
-      var notePreview = document.createElement('div');
-      notePreview.style.cssText = 'flex:1;min-width:0;opacity:0.75;overflow:hidden;max-height:4.5em;line-height:1.4em;';
-      if (typeof marked !== 'undefined') {
-        notePreview.innerHTML = resolveChitLinks(marked.parse(chit.note.slice(0, 500)), chits);
-      } else {
-        notePreview.textContent = chit.note.slice(0, 300) + (chit.note.length > 300 ? '…' : '');
-      }
-      controls.appendChild(notePreview);
+      controls.appendChild(_buildNotePreview(chit));
     }
 
     chitElement.appendChild(controls);
@@ -962,16 +1003,19 @@ function displayAssignedToMeView(chitsToDisplay) {
       storePreviousState();
       window.location.href = '/editor?id=' + chit.id;
     });
-    if (typeof enableLongPress === 'function') {
-      enableLongPress(chitElement, function() {
-        if (!_isViewerRole(chit)) showQuickEditModal(chit, function() { displayChits(); });
-      });
-    }
     container.appendChild(chitElement);
   });
 
   chitList.appendChild(container);
-  enableDragToReorder(container, 'AssignedToMe', function() { displayChits(); });
+
+  // Build long-press map for unified touch gesture (drag + quick-edit)
+  var _amLongPressMap = {};
+  assignedChits.forEach(function (chit) {
+    if (!_isViewerRole(chit)) {
+      _amLongPressMap[chit.id] = function () { showQuickEditModal(chit, function () { displayChits(); }); };
+    }
+  });
+  enableDragToReorder(container, 'AssignedToMe', function() { displayChits(); }, _amLongPressMap);
 }
 
 function displayNotesView(chitsToDisplay) {
@@ -1141,42 +1185,8 @@ function displayNotesView(chitsToDisplay) {
         });
       });
       // Long-press on mobile: toggle in-place editing (same as shift-click)
-      if (typeof enableLongPress === 'function') {
-        enableLongPress(chitElement, function () {
-          // Prevent inline editing for viewer-role shared chits
-          if (_isViewerRole(chit)) return;
-          if (noteEl.contentEditable === 'true') return;
-          noteEl.contentEditable = 'true';
-          noteEl.style.outline = '2px solid #8b4513';
-          noteEl.style.borderRadius = '4px';
-          noteEl.style.padding = '6px';
-          noteEl.style.whiteSpace = 'pre-wrap';
-          chitElement.style.cursor = 'auto';
-          chitElement.setAttribute('draggable', 'false');
-          noteEl.textContent = chit.note || '';
-          noteEl.focus();
-          var _lpSaveEdit = function () {
-            noteEl.contentEditable = 'false';
-            noteEl.style.outline = '';
-            noteEl.style.padding = '';
-            chitElement.style.cursor = 'grab';
-            chitElement.removeAttribute('draggable');
-            var newNote = noteEl.textContent;
-            if (newNote !== chit.note) {
-              fetch('/api/chits/' + chit.id, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(Object.assign({}, chit, { note: newNote }))
-              }).then(function (r) { if (r.ok) { chit.note = newNote; fetchChits(); } });
-            } else {
-              if (typeof marked !== 'undefined' && chit.note) {
-                noteEl.innerHTML = resolveChitLinks(marked.parse(chit.note), chits);
-              }
-            }
-          };
-          noteEl.addEventListener('blur', _lpSaveEdit, { once: true });
-        });
-      }
+      // Uses unified touch gesture: drag to reorder, very long press to edit
+      // (enableTouchGesture is attached after all cards are added, via enableNotesDragReorder)
       notesView.appendChild(chitElement);
     });
   }
@@ -1466,6 +1476,8 @@ function displayProjectsView(chitsToDisplay) {
     // Child chits tree
     if (childIds.length > 0) {
       const tree = document.createElement("ul");
+      tree.className = "projects-child-list";
+      tree.dataset.projectId = project.id;
       tree.style.cssText = "list-style:none;margin:0;padding:0 0 0.5em 0;border-top:1px solid rgba(139,90,43,0.2);";
 
       childIds.forEach((childId) => {
@@ -1473,10 +1485,21 @@ function displayProjectsView(chitsToDisplay) {
         const childBg = child ? chitColor(child) : "#fdf6e3";
         const childFont = contrastColorForBg(childBg);
         const li = document.createElement("li");
-        li.style.cssText = `display:flex;flex-direction:column;gap:0.2em;padding:0.5em 0.8em 0.5em 1.5em;border-bottom:1px solid rgba(139,90,43,0.1);background:${childBg};color:${childFont};cursor:pointer;min-height:2.2em;`;
+        li.className = "chit-card projects-child-item";
+        li.draggable = true;
+        li.dataset.chitId = child ? child.id : childId;
+        li.dataset.projectId = project.id;
+        li.style.cssText = `display:flex;flex-direction:column;gap:0.2em;padding:0.5em 0.8em 0.5em 1.5em;border-bottom:1px solid rgba(139,90,43,0.1);background:${childBg};color:${childFont};cursor:grab;min-height:2.2em;`;
 
         const titleRow = document.createElement("div");
         titleRow.style.cssText = "display:flex;align-items:center;gap:0.5em;";
+
+        // Drag grip handle
+        const grip = document.createElement("span");
+        grip.style.cssText = "opacity:0.4;flex-shrink:0;cursor:grab;font-size:0.9em;";
+        grip.textContent = "≡";
+        grip.title = "Drag to reorder";
+        titleRow.appendChild(grip);
 
         const bullet = document.createElement("span");
         bullet.style.cssText = "opacity:0.4;flex-shrink:0;";
@@ -1515,16 +1538,9 @@ function displayProjectsView(chitsToDisplay) {
             li.appendChild(meta);
           }
 
-          // Note preview (rendered markdown, same as Tasks view)
+          // Note preview (rendered markdown, same as Tasks view — expandable on mobile)
           if (child.note && child.note.trim()) {
-            const notePreview = document.createElement("div");
-            notePreview.style.cssText = "opacity:0.75;overflow:hidden;max-height:4.5em;line-height:1.4em;margin-top:3px;";
-            if (typeof marked !== 'undefined') {
-              notePreview.innerHTML = resolveChitLinks(marked.parse(child.note.slice(0, 500)), chits);
-            } else {
-              notePreview.textContent = child.note.slice(0, 300) + (child.note.length > 300 ? '…' : '');
-            }
-            li.appendChild(notePreview);
+            li.appendChild(_buildNotePreview(child, 'margin-top:3px;'));
           }
 
           li.addEventListener("dblclick", () => {
@@ -1533,8 +1549,172 @@ function displayProjectsView(chitsToDisplay) {
           });
         }
 
+        // HTML5 drag for reordering child chits within this project
+        li.addEventListener("dragstart", e => {
+          e.dataTransfer.setData("application/x-project-child-reorder", JSON.stringify({ chitId: child ? child.id : childId, projectId: project.id }));
+          e.dataTransfer.effectAllowed = "move";
+          li.classList.add('cwoc-dragging');
+        });
+        li.addEventListener("dragend", () => {
+          li.classList.remove('cwoc-dragging');
+          if (typeof _markDragJustEnded === 'function') _markDragJustEnded();
+        });
+
         tree.appendChild(li);
       });
+
+      // Drag-over / drop handlers for reordering children within this project
+      tree.addEventListener("dragover", e => {
+        if (!e.dataTransfer.types.includes("application/x-project-child-reorder")) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        const targetLi = e.target.closest('.projects-child-item');
+        tree.querySelectorAll('.projects-child-item').forEach(item => {
+          item.style.borderTop = '';
+          item.style.borderBottom = '';
+        });
+        if (targetLi) {
+          const rect = targetLi.getBoundingClientRect();
+          if (e.clientY < rect.top + rect.height / 2) {
+            targetLi.style.borderTop = '3px solid #8b5a2b';
+          } else {
+            targetLi.style.borderBottom = '3px solid #8b5a2b';
+          }
+        }
+      });
+
+      tree.addEventListener("dragleave", e => {
+        if (!e.relatedTarget || !tree.contains(e.relatedTarget)) {
+          tree.querySelectorAll('.projects-child-item').forEach(item => {
+            item.style.borderTop = '';
+            item.style.borderBottom = '';
+          });
+        }
+      });
+
+      tree.addEventListener("drop", async e => {
+        const rawData = e.dataTransfer.getData("application/x-project-child-reorder");
+        if (!rawData) return;
+        e.preventDefault();
+        tree.querySelectorAll('.projects-child-item').forEach(item => {
+          item.style.borderTop = '';
+          item.style.borderBottom = '';
+        });
+
+        try {
+          const data = JSON.parse(rawData);
+          if (data.projectId !== project.id) return; // Only reorder within same project
+
+          const targetLi = e.target.closest('.projects-child-item');
+          if (!targetLi || targetLi.dataset.chitId === data.chitId) return;
+
+          // Build new child_chits order from DOM
+          const items = Array.from(tree.querySelectorAll('.projects-child-item[data-chit-id]'));
+          const ids = items.map(item => item.dataset.chitId);
+          const fromIdx = ids.indexOf(data.chitId);
+          let toIdx = ids.indexOf(targetLi.dataset.chitId);
+          if (fromIdx < 0 || toIdx < 0) return;
+
+          const rect = targetLi.getBoundingClientRect();
+          if (e.clientY > rect.top + rect.height / 2) toIdx++;
+          ids.splice(fromIdx, 1);
+          if (fromIdx < toIdx) toIdx--;
+          ids.splice(toIdx, 0, data.chitId);
+
+          // Save new child_chits order to backend
+          const resp = await fetch('/api/chit/' + project.id);
+          if (!resp.ok) return;
+          const projData = await resp.json();
+          projData.child_chits = ids;
+          await fetch('/api/chits/' + project.id, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(projData)
+          });
+          fetchChits();
+        } catch (err) { console.error('Project child reorder error:', err); }
+      });
+
+      // Touch drag support for reordering children on mobile
+      if (typeof enableTouchGesture === 'function') {
+        tree.querySelectorAll('.projects-child-item[data-chit-id]').forEach(function (li) {
+          var _childChit = chitMap[li.dataset.chitId];
+          var _touchDragLi = null;
+
+          enableTouchGesture(li, {
+            onDragStart: function () {
+              _touchDragLi = li;
+            },
+            onDragMove: function (data) {
+              if (!_touchDragLi) return;
+              tree.querySelectorAll('.projects-child-item').forEach(function (item) {
+                item.style.borderTop = '';
+                item.style.borderBottom = '';
+              });
+              var target = document.elementFromPoint(data.clientX, data.clientY);
+              if (!target) return;
+              var targetItem = target.closest('.projects-child-item');
+              if (targetItem && targetItem !== _touchDragLi) {
+                var rect = targetItem.getBoundingClientRect();
+                if (data.clientY < rect.top + rect.height / 2) {
+                  targetItem.style.borderTop = '3px solid #8b5a2b';
+                } else {
+                  targetItem.style.borderBottom = '3px solid #8b5a2b';
+                }
+              }
+            },
+            onDragEnd: function (data) {
+              if (!_touchDragLi) return;
+              tree.querySelectorAll('.projects-child-item').forEach(function (item) {
+                item.style.borderTop = '';
+                item.style.borderBottom = '';
+              });
+
+              var target = document.elementFromPoint(data.clientX, data.clientY);
+              if (!target) { _touchDragLi = null; return; }
+              var targetItem = target.closest('.projects-child-item');
+              if (!targetItem || targetItem === _touchDragLi) { _touchDragLi = null; return; }
+
+              var items = Array.from(tree.querySelectorAll('.projects-child-item[data-chit-id]'));
+              var ids = items.map(function (item) { return item.dataset.chitId; });
+              var fromId = _touchDragLi.dataset.chitId;
+              var toId = targetItem.dataset.chitId;
+              var fromIdx = ids.indexOf(fromId);
+              var toIdx = ids.indexOf(toId);
+              if (fromIdx < 0 || toIdx < 0) { _touchDragLi = null; return; }
+
+              var rect = targetItem.getBoundingClientRect();
+              if (data.clientY > rect.top + rect.height / 2) toIdx++;
+              ids.splice(fromIdx, 1);
+              if (fromIdx < toIdx) toIdx--;
+              ids.splice(toIdx, 0, fromId);
+
+              // Save new child_chits order to backend
+              (async function () {
+                try {
+                  var resp = await fetch('/api/chit/' + project.id);
+                  if (!resp.ok) return;
+                  var projData = await resp.json();
+                  projData.child_chits = ids;
+                  await fetch('/api/chits/' + project.id, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(projData)
+                  });
+                  fetchChits();
+                } catch (err) { console.error('Project child touch reorder error:', err); }
+              })();
+
+              _touchDragLi = null;
+            },
+            onLongPress: function () {
+              if (_childChit && typeof showQuickEditModal === 'function' && !(typeof _isViewerRole === 'function' && _isViewerRole(_childChit))) {
+                showQuickEditModal(_childChit, function () { displayChits(); });
+              }
+            },
+          });
+        });
+      }
 
       box.appendChild(tree);
     }
@@ -1619,14 +1799,15 @@ function _displayProjectsKanban(chitsToDisplay) {
       if (!e.target.closest('.kanban-project-header')) return;
       e.dataTransfer.setData("application/x-project-reorder", project.id);
       e.dataTransfer.effectAllowed = "move";
-      projectBox.style.opacity = "0.4";
+      projectBox.classList.add('cwoc-dragging');
     });
     projectBox.addEventListener("dragend", () => {
-      projectBox.style.opacity = "";
+      projectBox.classList.remove('cwoc-dragging');
       wrapper.querySelectorAll('.kanban-project-box').forEach(b => {
         b.style.borderTop = '';
         b.style.borderBottom = '';
       });
+      if (typeof _markDragJustEnded === 'function') _markDragJustEnded();
     });
 
     projectBox.appendChild(header);
@@ -1707,16 +1888,9 @@ function _displayProjectsKanban(chitsToDisplay) {
           card.appendChild(due);
         }
 
-        // Note preview (rendered markdown, same as Tasks view)
+        // Note preview (rendered markdown, same as Tasks view — expandable on mobile)
         if (child.note && child.note.trim()) {
-          const notePreview = document.createElement("div");
-          notePreview.style.cssText = "font-size:0.9em;opacity:0.75;overflow:hidden;max-height:4.5em;line-height:1.4em;margin-top:2px;";
-          if (typeof marked !== 'undefined') {
-            notePreview.innerHTML = resolveChitLinks(marked.parse(child.note.slice(0, 500)), chits);
-          } else {
-            notePreview.textContent = child.note.slice(0, 300) + (child.note.length > 300 ? '…' : '');
-          }
-          card.appendChild(notePreview);
+          card.appendChild(_buildNotePreview(child, 'font-size:0.9em;margin-top:2px;'));
         }
 
         // Owner badge — show only when owner differs from current user
@@ -1770,9 +1944,9 @@ function _displayProjectsKanban(chitsToDisplay) {
               e.stopPropagation();
               e.dataTransfer.setData("application/x-kanban-grandchild", JSON.stringify({ chitId: gc.id, parentChitId: child.id, projectId: project.id }));
               e.dataTransfer.effectAllowed = "move";
-              li.style.opacity = "0.4";
+              li.classList.add('cwoc-dragging');
             });
-            li.addEventListener("dragend", () => { li.style.opacity = gc.status === "Complete" ? "0.5" : "1"; });
+            li.addEventListener("dragend", () => { li.classList.remove('cwoc-dragging'); if (gc.status === "Complete") li.style.opacity = "0.5"; if (typeof _markDragJustEnded === 'function') _markDragJustEnded(); });
 
             li.addEventListener("dblclick", e => {
               e.stopPropagation();
@@ -1790,14 +1964,95 @@ function _displayProjectsKanban(chitsToDisplay) {
           e.stopPropagation();
           e.dataTransfer.setData("application/x-kanban-card", JSON.stringify({ chitId: child.id, projectId: project.id, fromStatus: status }));
           e.dataTransfer.effectAllowed = "move";
-          card.style.opacity = "0.4";
+          card.classList.add('cwoc-dragging');
         });
-        card.addEventListener("dragend", () => { card.style.opacity = ""; });
+        card.addEventListener("dragend", () => { card.classList.remove('cwoc-dragging'); if (typeof _markDragJustEnded === 'function') _markDragJustEnded(); });
 
         card.addEventListener("dblclick", () => {
           storePreviousState();
           window.location.href = `/editor?id=${child.id}`;
         });
+
+        // Touch gesture: drag between columns + long-press for quick edit
+        if (typeof enableTouchGesture === 'function') {
+          (function (_card, _child, _status, _project) {
+            var _kanbanTouchDragCard = null;
+            enableTouchGesture(_card, {
+              onDragStart: function () {
+                _kanbanTouchDragCard = _card;
+              },
+              onDragMove: function (data) {
+                if (!_kanbanTouchDragCard) return;
+                // Highlight the column under the finger
+                wrapper.querySelectorAll('[data-status]').forEach(function (c) {
+                  c.style.background = '';
+                });
+                var target = document.elementFromPoint(data.clientX, data.clientY);
+                if (target) {
+                  var targetCol = target.closest('[data-status]');
+                  if (targetCol) {
+                    targetCol.style.background = 'rgba(139,90,43,0.08)';
+                  }
+                }
+              },
+              onDragEnd: function (data) {
+                if (!_kanbanTouchDragCard) return;
+                wrapper.querySelectorAll('[data-status]').forEach(function (c) {
+                  c.style.background = '';
+                });
+
+                var target = document.elementFromPoint(data.clientX, data.clientY);
+                if (!target) { _kanbanTouchDragCard = null; return; }
+                var targetCol = target.closest('[data-status]');
+                if (!targetCol) { _kanbanTouchDragCard = null; return; }
+
+                var newStatus = targetCol.dataset.status;
+                var targetProjectId = targetCol.dataset.projectId;
+                var isCrossProject = _project.id !== targetProjectId;
+
+                if (!isCrossProject && _status === newStatus) { _kanbanTouchDragCard = null; return; }
+
+                // Perform the move (same logic as HTML5 drop handler)
+                (async function () {
+                  try {
+                    if (isCrossProject) {
+                      var oldProjResp = await fetch('/api/chit/' + _project.id);
+                      if (!oldProjResp.ok) return;
+                      var oldProj = await oldProjResp.json();
+                      oldProj.child_chits = (oldProj.child_chits || []).filter(function (id) { return id !== _child.id; });
+                      await fetch('/api/chits/' + _project.id, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(oldProj) });
+
+                      var newProjResp = await fetch('/api/chit/' + targetProjectId);
+                      if (!newProjResp.ok) return;
+                      var newProj = await newProjResp.json();
+                      if (!Array.isArray(newProj.child_chits)) newProj.child_chits = [];
+                      if (!newProj.child_chits.includes(_child.id)) newProj.child_chits.push(_child.id);
+                      await fetch('/api/chits/' + targetProjectId, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newProj) });
+                    }
+
+                    if (_status !== newStatus || isCrossProject) {
+                      var resp = await fetch('/api/chit/' + _child.id);
+                      if (!resp.ok) return;
+                      var fullChit = await resp.json();
+                      fullChit.status = newStatus;
+                      if (newStatus === 'Complete' && !fullChit.completed_datetime) {
+                        fullChit.completed_datetime = new Date().toISOString();
+                      }
+                      await fetch('/api/chits/' + _child.id, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(fullChit) });
+                    }
+                    fetchChits();
+                  } catch (err) { console.error('Kanban touch drag error:', err); }
+                })();
+
+                _kanbanTouchDragCard = null;
+              },
+              onLongPress: function () {
+                if (typeof _isViewerRole === 'function' && _isViewerRole(_child)) return;
+                showQuickEditModal(_child, function () { displayChits(); });
+              },
+            });
+          })(card, child, status, project);
+        }
 
         col.appendChild(card);
       });
@@ -2032,7 +2287,13 @@ function displayAlarmsView(chitsToDisplay) {
   });
 
   chitList.appendChild(view);
-  enableDragToReorder(view, 'Alarms', () => displayChits());
+
+  // Build long-press map for unified touch gesture (drag + quick-edit)
+  var _alLongPressMap = {};
+  alertChits.forEach(function (chit) {
+    _alLongPressMap[chit.id] = function () { showQuickEditModal(chit, function () { displayChits(); }); };
+  });
+  enableDragToReorder(view, 'Alarms', () => displayChits(), _alLongPressMap);
 }
 
 // ── Independent Alerts Board ─────────────────────────────────────────────────
@@ -3139,6 +3400,7 @@ function _enableIndicatorsDragReorder(container) {
         c.style.borderTop = '';
         c.style.borderBottom = '';
       });
+      if (typeof _markDragJustEnded === 'function') _markDragJustEnded();
     });
 
     chartDiv.addEventListener('dragover', function(e) {

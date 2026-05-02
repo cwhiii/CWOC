@@ -105,7 +105,7 @@ All migrations run at startup. Each checks if the column/table already exists be
 | `migrate_add_login_message()` | Create `login_message` table for instance login welcome message |
 | `migrate_add_instance_name()` | Add `instance_name` column to login_message table |
 | `migrate_add_sharing()` | Add `shares` (TEXT), `stealth` (BOOLEAN, default 0), `assigned_to` (TEXT) columns to chits table; add `shared_tags` (TEXT) column to settings table |
-| `migrate_add_kiosk_users()` | Add `kiosk_users` (TEXT) column to settings table for kiosk user selection |
+| `migrate_add_kiosk_users()` | Add `kiosk_users` (TEXT) column to settings table for kiosk tag selection |
 | `migrate_add_hide_declined()` | Add `hide_declined` (TEXT, default '0') column to settings table for hiding declined RSVP chits |
 | `migrate_add_network_access()` | Create `network_access` table with columns: `id` (TEXT PRIMARY KEY), `provider` (TEXT NOT NULL UNIQUE), `enabled` (BOOLEAN DEFAULT 0), `config` (TEXT), `created_datetime` (TEXT), `modified_datetime` (TEXT) |
 | `migrate_add_notifications()` | Create `notifications` table with columns: `id` (TEXT PRIMARY KEY), `user_id` (TEXT NOT NULL), `chit_id` (TEXT NOT NULL), `chit_title` (TEXT), `owner_display_name` (TEXT), `notification_type` (TEXT NOT NULL), `status` (TEXT NOT NULL DEFAULT 'pending'), `created_datetime` (TEXT NOT NULL); creates index `idx_notifications_user_id` on `user_id` |
@@ -301,11 +301,17 @@ All chit endpoints are scoped by `owner_id` — users can only access their own 
 
 ### 1.20 `src/backend/routes/trash.py` — Trash
 
+All trash endpoints are user-scoped: regular users see/act on only their own deleted chits (`owner_id` match). Admins see and can restore/purge any user's deleted chits.
+
 | Route | Handler | Description |
 |-------|---------|-------------|
-| `GET /api/trash` | `get_trash()` | List all soft-deleted chits |
-| `POST /api/trash/{chit_id}/restore` | `restore_chit(chit_id)` | Restore a soft-deleted chit |
-| `DELETE /api/trash/{chit_id}/purge` | `purge_chit(chit_id)` | Permanently delete a chit |
+| `GET /api/trash` | `get_trash(request)` | List soft-deleted chits (own only; admins see all) |
+| `POST /api/trash/{chit_id}/restore` | `restore_chit(chit_id, request)` | Restore a soft-deleted chit (own only; admins can restore any) |
+| `DELETE /api/trash/{chit_id}/purge` | `purge_chit(chit_id, request)` | Permanently delete a chit (own only; admins can purge any) |
+
+| Helper | Description |
+|--------|-------------|
+| `_is_admin(conn, user_id)` | Check if the given user has admin privileges |
 
 ### 1.21 `src/backend/routes/settings.py` — Settings & Alerts
 
@@ -389,7 +395,8 @@ All contact endpoints are scoped by `owner_id` — users can only access their o
 | `GET /api/update/log` | `get_update_log()` | Get the last update log |
 | `GET /api/release-notes` | `get_release_notes()` | Return all release notes as a list of `{version, content}` objects (newest first), scanned from `cwoc_release_*.md` files |
 | `GET /api/update/run` | `run_update()` | Run upgrade (SSE stream) |
-| `GET /api/kiosk` | `get_kiosk(user_ids)` | Return combined non-deleted, non-stealth chits from specified users (comma-separated usernames or UUIDs) with `owner_display_name` attribution; also returns user display names. Unauthenticated endpoint |
+| `GET /api/kiosk` | `get_kiosk(tags)` | Return combined non-deleted, non-stealth chits matching any of the specified tags (comma-separated, case-insensitive). Unauthenticated endpoint |
+| `GET /api/kiosk/config` | `get_kiosk_config()` | Return saved kiosk tag list and `week_start_day` from settings. Prioritises the row with kiosk tags configured. Unauthenticated endpoint |
 | `GET /kiosk` | `kiosk_page()` | Serve `kiosk.html` page (unauthenticated) |
 | `GET /wall-station` | `wall_station_redirect()` | Legacy redirect → `/kiosk` |
 | `GET /api/wall-station` | `wall_station_api_redirect()` | Legacy redirect → `/api/kiosk` |
@@ -560,11 +567,15 @@ Core utility functions shared across all CWOC pages. Must load after `shared-aut
 
 #### shared-touch.js
 
-Touch event adapter for drag interactions. Maps touch events to mouse-like drag callbacks.
+Unified touch gesture system for drag and long-press interactions.
 
-| Function | Description |
-|----------|-------------|
-| `enableTouchDrag(element, callbacks)` | Attach touch-based drag listeners (onStart, onMove, onEnd) to an element; idempotent |
+| Symbol | Description |
+|--------|-------------|
+| `TOUCH_DRAG_HOLD_MS` | Duration (ms) user must hold before drag activates (400ms) |
+| `TOUCH_LONGPRESS_HOLD_MS` | Duration (ms) user must hold before long-press fires (1200ms) |
+| `TOUCH_DRAG_MOVE_THRESHOLD` | Max finger movement (px) allowed during hold period (10px) |
+| `enableTouchDrag(element, callbacks, options)` | Drag-only touch adapter (onStart, onMove, onEnd); options: { holdMs, moveThreshold, immediate }; idempotent |
+| `enableTouchGesture(element, callbacks, options)` | Unified drag + long-press gesture (onDragStart, onDragMove, onDragEnd, onLongPress); short hold → drag, long hold → action; idempotent |
 
 #### shared-checklist.js
 
@@ -576,18 +587,21 @@ Inline checklist interactions for dashboard views — toggle, move, cross-chit m
 | `moveChecklistItem(chitId, fromIndex, toIndex)` | Move a checklist item within a chit's checklist and save |
 | `moveChecklistItemCrossChit(fromChitId, fromIndex, toChitId, toIndex)` | Move a checklist item between chits (or within the same chit) and save both |
 | `renderInlineChecklist(container, chit, onUpdate)` | Render an interactive checklist with check/uncheck, drag-reorder, and cross-chit drag support |
+| `_updateChecklistProgressCount(container, chit)` | Update the "X/Y ✓" progress count element after a checkbox toggle |
 
 #### shared-sort.js
 
-Manual sort order persistence and drag-to-reorder for chit cards.
+Manual sort order persistence, drag-to-reorder for chit cards, and post-drag click suppression.
 
 | Function | Description |
 |----------|-------------|
+| `_markDragJustEnded()` | Set `window._dragJustEnded` flag to suppress spurious click/dblclick events after a drag operation; auto-clears after the browser's post-drag click fires |
+| *(capture listeners)* | Document-level capture-phase click/dblclick listeners that swallow events on draggable elements while `_dragJustEnded` is true |
 | `MANUAL_ORDER_KEY` | LocalStorage key for persisted manual sort orders |
 | `getManualOrder(tab)` | Get the saved manual sort order (array of chit IDs) for a view tab |
 | `saveManualOrder(tab, ids)` | Save the manual sort order for a view tab to localStorage |
 | `applyManualOrder(tab, chitList)` | Sort a chit list according to the saved manual order; new chits go last |
-| `enableDragToReorder(container, tab, onReorder)` | Enable mouse and touch drag-to-reorder on chit cards within a container |
+| `enableDragToReorder(container, tab, onReorder, longPressMap)` | Enable mouse and touch drag-to-reorder on chit cards; optional longPressMap (chitId → callback) enables unified drag + long-press via enableTouchGesture |
 
 #### shared-indicators.js
 
@@ -696,8 +710,9 @@ Coordinator for shared code between dashboard and editor. Contains glue code for
 | `_buildNoteColumns(cards, colCount)` | Build column groups from cards' `data-col` attributes |
 | `_stackColumn(colCards, colIdx, actualCardWidth, skipCard)` | Position cards in a single column top-to-bottom |
 | `applyNotesLayout(container)` | Apply column-persistent masonry layout to a notes-view container |
-| `enableNotesDragReorder(container, tab, onReorder)` | Enable mouse drag-to-reorder on notes cards with column-aware drop |
+| `enableNotesDragReorder(container, tab, onReorder)` | Enable mouse and touch drag-to-reorder on notes cards with column-aware drop; touch uses enableTouchGesture for unified drag + long-press inline edit |
 | `_onNotesDragMove(e)` | Handle mouse move during notes drag with live preview |
+| `_onNotesDragMoveXY(clientX, clientY)` | Shared drag-move logic for notes reorder (used by both mouse and touch) |
 | `_onNotesDragEnd(e)` | Handle mouse up during notes drag; save new order |
 | `_onNotesDragKey(e)` | Handle ESC key to cancel notes drag |
 | `_ensureSidebarBackdrop()` | Ensure the sidebar backdrop element exists in the DOM |
@@ -708,7 +723,7 @@ Coordinator for shared code between dashboard and editor. Contains glue code for
 | `initMobileSidebar()` | Initialize mobile sidebar overlay behavior with swipe and close button |
 | `initMobileActionsModal()` | On mobile, replace header buttons with a single "☰ Actions" trigger and modal |
 | `_openMobileActionsModal()` | Open the mobile actions modal and populate with cloned header buttons |
-| `enableLongPress(el, callback)` | Attach a long-press handler (~600ms) to an element for mobile quick edit |
+| `enableLongPress(el, callback)` | DEPRECATED: Attach a long-press handler to an element; uses centralized TOUCH_LONGPRESS_HOLD_MS timing. Prefer enableTouchGesture() for new code |
 | `initMobileViewsButton()` | On mobile (≤480px), add a "☰ Views" button with a slide-in panel for C CAPTN tabs |
 | `initMobileReferenceClose()` | Add a close button inside the reference overlay content for mobile |
 | `loadSavedLocations()` | Fetch saved locations from settings and cache for the page lifetime |
@@ -898,6 +913,7 @@ Coordinator for shared code between dashboard and editor. Contains glue code for
 | `_getTagFontColor(tagName)` | Get tag font color from cached settings tags, fallback to dark brown |
 | `_buildChitHeader(chit, titleHtml, settings, opts)` | Build a standard chit card header row with icons, indicators, title, meta, 🔗 shared icon with tooltip (owner, shared users with roles, current user's role) for shared chits, stealth indicator, assignee badge, RSVP status indicators (⏳/✓/✗ per shared user), and RSVP accept/decline action buttons for shared users (calls `PATCH /api/chits/{id}/rsvp`) |
 | `_renderChitMeta(chit, mode)` | Legacy compact meta builder — kept for backward compat |
+| `_buildNotePreview(chit, extraStyle)` | Build an expandable note preview element with "show more/less" toggle for mobile |
 | `displayChecklistView(chitsToDisplay)` | Render the Checklists tab — chits with interactive checklist items |
 | `displayTasksView(chitsToDisplay)` | Render the Tasks tab — chits with status dropdowns and note previews; dispatches to `displayHabitsView` when in habits mode |
 | `displayHabitsView(chitsToDisplay)` | Render the Habits view — recurring chits as habit cards with completion toggles, success rate badges, and streak indicators |
@@ -913,7 +929,7 @@ Coordinator for shared code between dashboard and editor. Contains glue code for
 | `_createIndependentAlert(alertData)` | Create a new independent alert via API and refresh the view |
 | `_updateIndependentAlert(id, alertData)` | Update an existing independent alert via API and refresh |
 | `_deleteIndependentAlert(id)` | Delete an independent alert, clean up runtime state, and refresh |
-| `displayProjectsView(chitsToDisplay)` | Render the Projects tab — tree view of project masters with child chits |
+| `displayProjectsView(chitsToDisplay)` | Render the Projects tab — list view of project masters with draggable child chits (reorder, touch gesture, long-press quick-edit) |
 | `_displayProjectsKanban(chitsToDisplay)` | Render the Projects Kanban view — status columns with drag-and-drop cards |
 | `displayAlarmsView(chitsToDisplay)` | Render the Alarms tab — list of chits with alerts, or independent alerts board |
 | `_displayIndependentAlertsBoard()` | Render the independent alerts board with Alarms, Timers, and Stopwatches columns |
@@ -1326,6 +1342,7 @@ Save system: build chit object, save, delete, pin, archive, QR.
 | `saveChit()` | Convenience wrapper that calls `saveChitData()` |
 | `saveChitAndStay()` | Save the chit and stay on the editor page (no navigation) |
 | `deleteChit()` | Show the delete confirmation modal for the current chit |
+| `_getEditorReturnUrl()` | Get the URL to navigate to when exiting the editor; uses 'from' query param if present (e.g. kiosk), otherwise '/' |
 | `performDeleteChit()` | Execute the chit deletion with undo toast |
 | `setSaveButtonSaved()` | Mark the save button as saved (delegates to CwocSaveSystem) |
 | `cancelOrExit()` | Cancel or exit the editor (delegates to CwocSaveSystem or navigates home) |
@@ -1375,32 +1392,27 @@ Checklist class: nested items, drag-drop, inline editing, undo.
 | Symbol | Description |
 |--------|-------------|
 | `MAX_INDENT_LEVEL` | Maximum nesting depth for checklist items (4) |
-| `Checklist` | Class managing a checklist UI with nested items, drag-drop reorder, inline editing, and undo |
+| `Checklist` | Class managing a checklist UI with nested items, drag-drop reorder, inline editing, and inline undo countdown |
 | `Checklist.constructor(container, initialItems, onChangeCallback)` | Initialize checklist with container, optional items, and change callback |
-| `Checklist.init()` | Create input field and undo button, then render |
+| `Checklist.init()` | Create input field and header buttons, then render |
 | `Checklist.loadItems(itemsArray)` | Load checklist items from an array, replacing current items |
 | `Checklist.getChecklistData()` | Return a deep copy of current checklist items for JSON serialization |
 | `Checklist.createInput()` | Create the "Add new item" text input with Enter/Escape handlers |
-| `Checklist.createUndoButton()` | Create the "Undo Delete" button in the zone header |
+| `Checklist._createHeaderButtons()` | Create "Clear Checked" button and count display in the zone header (with stopPropagation) |
 | `Checklist.addNewItem(text, level, checked, id)` | Add a new checklist item with optional level, checked state, and ID |
 | `Checklist.generateId()` | Generate a random item ID |
-| `Checklist.render()` | Re-render all checklist items — unchecked above, completed below with ghost parents |
+| `Checklist.render()` | Re-render all checklist items — unchecked above, completed below (collapsible, collapsed by default) with ghost parents; updates count |
 | `Checklist.createItemElement(item, isCompleted, isGhost)` | Create a DOM element for a checklist item with checkbox, text, trash, and drag events |
-| `Checklist.startEditing(item, textSpan)` | Start inline editing of a checklist item with Enter/Tab/Arrow key navigation |
+| `Checklist.startEditing(item, textSpan, clickEvent)` | Start inline editing — cursor positioned at click point via canvas measurement; Enter/Tab/Arrow key navigation |
 | `Checklist.toggleCheck(item, checked)` | Toggle an item's checked state and propagate to subtree |
 | `Checklist.updateCheckedStateForSubtree(item, checked)` | Recursively set checked state on all children |
 | `Checklist.getParent(item)` | Find the parent item of a given item |
 | `Checklist.getChildren(item)` | Find all direct children of a given item |
-| `Checklist.deleteItem(item, element)` | Delete an item and its subtree with animation; push to undo stack |
-| `Checklist.undoDelete()` | Restore the last deleted subtree with strobe animation |
+| `Checklist.deleteItem(item, element)` | Delete an item and its subtree with animation; shows inline undo countdown |
 | `Checklist.getSubtree(item)` | Get an item and all its descendants recursively |
-| `Checklist.onDragStart(e, item)` | Handle drag start — store dragged item and subtree |
-| `Checklist.onDragOver(e, item)` | Handle drag over — show above/below/on drop indicators |
-| `Checklist.onDragLeave(e, item)` | Handle drag leave — clear drop indicators |
-| `Checklist.onDrop(e, item)` | Handle drop — reorder items based on drop position (above/below/nest) |
-| `Checklist.clearDropIndicator()` | Remove all drag-over CSS classes from checklist items |
-| `Checklist.updateSubtreeLevels(subtree, rootLevel)` | Adjust indent levels of a subtree after a drag operation |
-| `Checklist.isDescendantOf(item, ancestor)` | Check if an item is a descendant of another item |
+| `Checklist._updateCount()` | Update the count display (x / y) in the zone header and toggle Clear Checked button visibility |
+| `Checklist.clearCheckedItems()` | Async — delete all checked items after cwocConfirm, show inline undo countdown |
+| `Checklist._showUndoCountdown(removedItems, label)` | Show an inline undo countdown bar (8s) with Undo button; restores items if clicked |
 | `Checklist._notifyChange()` | Call the external change callback with current checklist data |
 
 #### editor_projects.js
@@ -1811,6 +1823,8 @@ Body, header, top bar, logo, week navigation, general form elements, and core la
 | Top Bar / Logo | Logo image, header flex layout |
 | Week Navigation | Period nav buttons, week range display |
 | Form Elements | General input/select/button styling for dashboard |
+| Completed Task (`.completed-task`) | Dimmed styling for completed tasks |
+| Checklist All Done (`.checklist-all-done`) | Strikethrough title when all checklist items are checked |
 
 #### styles-sidebar.css
 Sidebar positioning, sections, buttons, scroll, filters, multi-select controls, order controls.
@@ -1862,7 +1876,8 @@ Chit card styling, notes masonry layout, markdown, people chips, view-specific l
 |---------|-------------|
 | Chit Card (`.chit-card`) | Border, padding, hover, cursor, color |
 | Card Header Row | Title, meta info, completed/archived states |
-| Drag Feedback | Visual feedback during card drag operations |
+| Drag Feedback | Visual feedback during card drag operations — `.cwoc-dragging` (desktop HTML5 drag), `.cwoc-touch-dragging` (mobile touch drag with pulse animation), `@keyframes cwoc-drag-pulse` |
+| Projects Child Items (`.projects-child-item`) | Draggable child chit items in non-Kanban projects list view |
 | Notes Masonry | Multi-column masonry layout for notes view |
 | Markdown Styling | Rendered markdown within cards |
 | Weather Indicator | Weather icon/data on cards |
@@ -2236,7 +2251,7 @@ shared-auth.js            ← MUST load first (getCurrentUser, isAdmin, waitForA
   │
   └── shared-utils.js      ← loads after shared-auth.js (getCachedSettings uses waitForAuth)
         │
-        ├── shared-touch.js         (standalone — enableTouchDrag)
+        ├── shared-touch.js         (standalone — enableTouchDrag, enableTouchGesture)
         ├── shared-checklist.js     (uses fetch, DOM — no shared-utils deps)
         ├── shared-sort.js          (uses localStorage — no shared-utils deps)
         ├── shared-indicators.js    (standalone — alert type detection)

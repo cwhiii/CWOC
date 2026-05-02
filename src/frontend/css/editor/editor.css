@@ -11,45 +11,20 @@
     border: 1px solid var(--border-color);
     border-radius: 4px;
     padding: 10px;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
     background-color: var(--zone-body-bg);
 }
 
-.checklist-item {
-    display: flex;
-    align-items: center;
-    padding: 5px;
-    border-bottom: 1px dashed var(--aged-brown-light);
-    position: relative;
-    justify-content: flex-start;
-    gap: 5px;
+/* Override .editor input { flex:1; padding:8px 12px } from shared-editor.css
+   which makes checkboxes expand and get huge padding inside checklist items */
+.checklist-container input[type="checkbox"] {
+    flex: 0 0 auto;
+    padding: 0;
+    width: auto;
+    margin: 0;
 }
-
-.checklist-item > div[contenteditable="true"],
-.checklist-item > div[contenteditable="false"] {
-    flex-grow: 1;
-    min-width: 50px;
-    padding: 2px 5px;
-    border: 1px solid transparent;
-    border-radius: 3px;
-    outline: none;
-    color: var(--text-color);
-}
-
-.checklist-item > div[contenteditable="true"]:focus {
-    border-color: var(--accent-teal);
-    box-shadow: 0 0 0 1px rgba(0, 128, 128, 0.25);
-}
-
-.checklist-item:last-child {
-    border-bottom: none;
-}
-
-.checklist-item.checked {
-    color: var(--aged-brown-medium);
-    text-decoration: line-through;
+.checklist-container textarea,
+.checklist-container input[type="text"] {
+    padding: 2px 4px;
 }
 
 .drag-handle {
@@ -60,17 +35,6 @@
     cursor: move;
     border-radius: 2px;
     border: 1px outset var(--aged-brown-medium);
-}
-
-.checklist-input {
-    display: flex;
-    align-items: center;
-    margin-bottom: 10px;
-    gap: 10px;
-}
-
-.checklist-input input[type="text"] {
-    flex: 1;
 }
 
 .drag-indicator {
@@ -2098,13 +2062,15 @@ hr {
     box-sizing: border-box;
     font-size: 16px;
     font-family: inherit;
+    border: 1px solid var(--border-color, #8b4513);
+    border-radius: 4px;
+    background: var(--input-bg, #fdf5e6);
+    color: var(--text-color, #4a2c2a);
 }
-
-.undo-delete-button {
-    margin-left: 10px;
-    padding: 6px 12px;
-    cursor: pointer;
-    font-family: inherit;
+.checklist-input:focus {
+    outline: none;
+    border-color: var(--accent-teal, #008080);
+    box-shadow: 0 0 0 1px rgba(0, 128, 128, 0.25);
 }
 
 .completed-checklist-container {
@@ -2114,19 +2080,35 @@ hr {
     font-family: inherit;
 }
 
+.completed-section-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+    cursor: pointer;
+    padding: 4px 0;
+    user-select: none;
+}
+
+.completed-section-header:hover {
+    opacity: 0.8;
+}
+
+.completed-section-header h3 {
+    margin: 0;
+    font-size: 0.95em;
+    color: var(--aged-brown-dark);
+}
+
+.completed-section-body {
+    padding-top: 4px;
+}
+
 .checklist-item,
 .completed-checklist-item,
 .ghost-checklist-item {
-    background-color: transparent;
-    border: none;
     display: flex;
-    align-items: center;
-    width: 100%;
-    justify-content: space-between;
-    box-sizing: border-box;
-    padding-left: 0;
-    user-select: none;
-    position: relative;
+    align-items: flex-start;
+    padding: 4px 0;
     font-family: inherit;
 }
 
@@ -2136,46 +2118,62 @@ hr {
     opacity: 0.5;
 }
 
-.checklist-item:hover,
-.completed-checklist-item:hover,
-.ghost-checklist-item:hover {
-    background-color: transparent;
-}
-
 .left-container {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
+    flex: 1;
+    min-width: 0;
+}
+
+.left-container input[type="checkbox"] {
+    flex: 0 0 auto !important;
+    padding: 0 !important;
+    width: auto !important;
+    margin: 3px 0 0 0;
 }
 
 .text-wrapper {
-    width: 100%;
+    flex: 1;
     min-width: 0;
-    margin-left: 8px;
+    margin-left: 6px;
+    cursor: text;
 }
 
 .checklist-text {
     display: block;
-    width: 100%;
-    box-sizing: border-box;
-    padding: 0;
-    border: none;
-    background: transparent;
-    font-size: inherit;
-    font-family: inherit;
+    white-space: pre-wrap;
+    word-break: break-word;
     cursor: text;
+}
+
+.checklist-edit-input {
+    display: block !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: 1px solid var(--accent-teal, #008080) !important;
+    border-radius: 3px;
+    background: transparent !important;
+    font-size: inherit !important;
+    font-family: inherit !important;
+    line-height: inherit !important;
+    color: inherit !important;
     outline: none;
-    user-select: text;
+    resize: none;
+    overflow: hidden;
+    min-height: 1.6em;
+    line-height: 1.4;
 }
 
 .trash-icon {
+    flex-shrink: 0;
     cursor: pointer;
     visibility: hidden;
     user-select: none;
-    padding: 0 6px;
+    padding: 0 4px;
     font-size: 16px;
     line-height: 1;
-    position: relative;
-    z-index: 1;
 }
 
 .checklist-item:hover .trash-icon,
@@ -3213,6 +3211,7 @@ input.location {
 .author-info { font-size: 0.9em; color: #1a1208; text-align: center; margin-top: 10px; padding-bottom: 8px; }
 .author-info a { color: #4a2c2a; text-decoration: underline; }
 .author-info a:hover { color: #1a1208; }
+.cwoc-footer-copyright { cursor: help; }
 
 /* ── Owner info display (multi-user) ───────────────────────────────────── */
 .cwoc-editor-owner-info {

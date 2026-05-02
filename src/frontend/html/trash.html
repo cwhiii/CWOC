@@ -49,6 +49,7 @@
         const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
         const DAYS = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
         let trashData = [], selectedIds = new Set();
+        let _trashIsAdmin = false;
         function fmtDate(iso) { if (!iso) return '—'; const d = new Date(iso); if (isNaN(d.getTime())) return '—'; return `${MONTHS[d.getMonth()]}-${String(d.getDate()).padStart(2,'0')} ${DAYS[d.getDay()]}`; }
         function fmtDateTime(iso) { if (!iso) return '—'; const d = new Date(iso); if (isNaN(d.getTime())) return '—'; return `${MONTHS[d.getMonth()]}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; }
         function updateSelectionUI() {
@@ -65,6 +66,8 @@
         async function loadTrash() {
             const wrap = document.getElementById('trash-table-wrap'), countEl = document.getElementById('trash-count');
             selectedIds.clear(); updateSelectionUI();
+            // Detect admin status for owner column
+            if (typeof isAdmin === 'function') _trashIsAdmin = isAdmin();
             try {
                 const resp = await fetch('/api/trash');
                 if (!resp.ok) { wrap.innerHTML = '<p style="color:#a33;">Failed to load.</p>'; return; }
@@ -77,13 +80,17 @@
         function renderTable(wrap, trash) {
             const table = document.createElement('table'); table.className = 'cwoc-table';
             const thead = document.createElement('thead');
-            thead.innerHTML = '<tr><th class="col-check"><input type="checkbox" id="select-all" onchange="toggleSelectAll()" title="Select All" /></th><th>Title</th><th>Status</th><th>Priority</th><th>Due / Start</th><th>Tags</th><th>Note</th><th>Deleted</th><th class="col-actions">Actions</th></tr>';
+            var headerHtml = '<tr><th class="col-check"><input type="checkbox" id="select-all" onchange="toggleSelectAll()" title="Select All" /></th><th>Title</th>';
+            if (_trashIsAdmin) headerHtml += '<th>Owner</th>';
+            headerHtml += '<th>Status</th><th>Priority</th><th>Due / Start</th><th>Tags</th><th>Note</th><th>Deleted</th><th class="col-actions">Actions</th></tr>';
+            thead.innerHTML = headerHtml;
             table.appendChild(thead);
             const tbody = document.createElement('tbody'), SYS = ['Calendar','Checklists','Alarms','Projects','Tasks','Notes'];
             trash.forEach(chit => {
                 const tr = document.createElement('tr');
                 let td = document.createElement('td'); td.className = 'col-check'; const cb = document.createElement('input'); cb.type = 'checkbox'; cb.className = 'row-check'; cb.checked = selectedIds.has(chit.id); cb.onchange = () => toggleRow(chit.id); td.appendChild(cb); tr.appendChild(td);
                 td = document.createElement('td'); td.className = 'col-title'; td.textContent = chit.title || '(Untitled)'; td.title = chit.title || ''; tr.appendChild(td);
+                if (_trashIsAdmin) { td = document.createElement('td'); td.textContent = chit.owner_display_name || chit.owner_username || '—'; td.title = chit.owner_username || ''; tr.appendChild(td); }
                 td = document.createElement('td'); td.textContent = chit.status || '—'; tr.appendChild(td);
                 td = document.createElement('td'); td.textContent = chit.priority || '—'; tr.appendChild(td);
                 td = document.createElement('td'); td.textContent = fmtDate(chit.due_datetime || chit.start_datetime); tr.appendChild(td);
@@ -98,7 +105,12 @@
             });
             table.appendChild(tbody); wrap.innerHTML = ''; wrap.appendChild(table);
         }
-        loadTrash();
+        // Wait for auth to be ready before loading trash
+        if (typeof waitForAuth === 'function') {
+            waitForAuth().then(function() { loadTrash(); });
+        } else {
+            loadTrash();
+        }
     </script>
 </body>
 </html>

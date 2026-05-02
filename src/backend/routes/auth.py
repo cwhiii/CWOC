@@ -107,8 +107,11 @@ def login(body: LoginRequest):
     username = body.username
     password = body.password
 
+    # Normalize username for case-insensitive comparison
+    username_lower = username.strip().lower()
+
     # Check rate limit before anything else
-    if _check_rate_limit(username):
+    if _check_rate_limit(username_lower):
         raise HTTPException(
             status_code=429,
             detail="Too many login attempts. Please wait before retrying.",
@@ -120,22 +123,22 @@ def login(body: LoginRequest):
         conn.row_factory = sqlite3.Row
         row = conn.execute(
             "SELECT id, username, display_name, email, password_hash, is_admin, is_active "
-            "FROM users WHERE username = ?",
-            (username,),
+            "FROM users WHERE LOWER(username) = ?",
+            (username_lower,),
         ).fetchone()
 
         # Generic error for both bad username and bad password
         if row is None or not verify_password(password, row["password_hash"]):
-            _record_failed_attempt(username)
+            _record_failed_attempt(username_lower)
             raise HTTPException(status_code=401, detail="Invalid username or password")
 
         # Check if account is active
         if not row["is_active"]:
-            _record_failed_attempt(username)
+            _record_failed_attempt(username_lower)
             raise HTTPException(status_code=401, detail="Invalid username or password")
 
         # Success — clear rate limit and create session
-        _clear_attempts(username)
+        _clear_attempts(username_lower)
         token = _create_session(conn, row["id"])
 
         data = {
@@ -420,8 +423,11 @@ def switch_user(body: LoginRequest, request: Request):
     username = body.username
     password = body.password
 
+    # Normalize username for case-insensitive comparison
+    username_lower = username.strip().lower()
+
     # Rate limit applies to switch as well
-    if _check_rate_limit(username):
+    if _check_rate_limit(username_lower):
         raise HTTPException(
             status_code=429,
             detail="Too many login attempts. Please wait before retrying.",
@@ -435,16 +441,16 @@ def switch_user(body: LoginRequest, request: Request):
         # Validate target user credentials
         row = conn.execute(
             "SELECT id, username, display_name, email, password_hash, is_admin, is_active "
-            "FROM users WHERE username = ?",
-            (username,),
+            "FROM users WHERE LOWER(username) = ?",
+            (username_lower,),
         ).fetchone()
 
         if row is None or not verify_password(password, row["password_hash"]):
-            _record_failed_attempt(username)
+            _record_failed_attempt(username_lower)
             raise HTTPException(status_code=401, detail="Invalid username or password")
 
         if not row["is_active"]:
-            _record_failed_attempt(username)
+            _record_failed_attempt(username_lower)
             raise HTTPException(status_code=401, detail="Invalid username or password")
 
         # Invalidate current session
@@ -453,7 +459,7 @@ def switch_user(body: LoginRequest, request: Request):
             conn.execute("DELETE FROM sessions WHERE token = ?", (old_token,))
 
         # Create new session for target user
-        _clear_attempts(username)
+        _clear_attempts(username_lower)
         token = _create_session(conn, row["id"])
 
         data = {

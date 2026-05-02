@@ -1,0 +1,1 @@
+Fixed kiosk direct navigation (`/kiosk`) showing "No tags configured" when kiosk tags were saved. The `/api/kiosk/config` endpoint now prioritizes the settings row that actually has kiosk tags configured, instead of blindly grabbing the first row which could be a different user's empty settings.

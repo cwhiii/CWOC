@@ -878,6 +878,11 @@ document.addEventListener("DOMContentLoaded", function () {
     }
     // Now fetch chits and render with correct settings
     _applyEnabledPeriods();
+
+    // Re-align currentWeekStart to the correct week start day now that settings are loaded
+    if (currentWeekStart && (currentView === 'Week' || currentView === 'Work')) {
+      currentWeekStart = getWeekStart(currentWeekStart);
+    }
     // Check for weather page nav intent BEFORE fetching — overrides view/date state
     _checkWeatherNavIntent();
     // Check for jump-tab intent (from quick alert "Create & View" on other pages)
@@ -1005,28 +1010,32 @@ document.addEventListener("DOMContentLoaded", function () {
     }, { passive: true });
   })();
 
-  // ── Mobile swipe on top bar (tabs) to cycle through views ─────────────
+  // ── Mobile swipe on header bar to cycle through views ──────────────────
   (function() {
-    var tabsEl = document.querySelector('.tabs');
-    if (!tabsEl) return;
+    var headerEl = document.querySelector('.header');
+    if (!headerEl) return;
     var _tbSwStartX = 0, _tbSwStartY = 0;
     var _tbSwiping = false;
     var SWIPE_MIN = 60;
 
     var _tabOrder = ['Calendar', 'Checklists', 'Alarms', 'Projects', 'Tasks', 'Notes', 'Indicators', 'Search'];
 
-    tabsEl.addEventListener('touchstart', function(e) {
+    headerEl.addEventListener('touchstart', function(e) {
       var t = e.touches[0];
       _tbSwStartX = t.clientX;
       _tbSwStartY = t.clientY;
     }, { passive: true });
 
-    tabsEl.addEventListener('touchend', function(e) {
+    headerEl.addEventListener('touchend', function(e) {
       if (_tbSwiping) return;
       var t = e.changedTouches[0];
       var dx = t.clientX - _tbSwStartX;
       var dy = Math.abs(t.clientY - _tbSwStartY);
       if (Math.abs(dx) < SWIPE_MIN || dy > Math.abs(dx)) return;
+
+      // Don't swipe if sidebar is open
+      var sidebar = document.getElementById('sidebar');
+      if (sidebar && sidebar.classList.contains('active')) return;
 
       _tbSwiping = true;
       var goNext = dx < 0;
@@ -1439,4 +1448,10 @@ document.addEventListener("DOMContentLoaded", function () {
       return;
     }
   });
+
+  // Fetch version for footer copyright tooltip
+  fetch('/api/version').then(function(r) { return r.ok ? r.json() : {}; }).then(function(d) {
+    var el = document.getElementById('cwoc-footer-copyright');
+    if (el && d.version) el.title = 'Version ' + d.version;
+  }).catch(function() {});
 });

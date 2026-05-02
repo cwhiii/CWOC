@@ -1,0 +1,1 @@
+Trash is now user-scoped: regular users see only their own deleted chits, while admins see all deleted chits across all users with an Owner column. Restore and purge operations are also permission-checked — non-admins can only act on their own chits.

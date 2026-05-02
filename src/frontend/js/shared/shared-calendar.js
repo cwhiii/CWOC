@@ -262,7 +262,7 @@ function enableCalendarDrag(scrollContainer, dayColumns, days, chitsMap) {
         onEnd: function (data) {
           _onCalDragEnd({ clientX: data.clientX, clientY: data.clientY });
         },
-      });
+      }, { immediate: true });
     } // end if (!info.isDueOnly) — resize only for start/end chits
 
     // Move: mousedown on event (not on handle)
@@ -368,6 +368,9 @@ async function _onCalDragEnd(e) {
   s.el.style.opacity = '';
   s.el.style.zIndex = '';
   _calDragState = null;
+
+  // Suppress any click/dblclick that fires after this mouseup
+  if (typeof _markDragJustEnded === 'function') _markDragJustEnded();
 
   // If mouse didn't actually move, don't save anything
   if (!s.hasMoved) return;
@@ -581,6 +584,7 @@ function enableMonthDrag(monthGrid, onDrop) {
     const ev = e.target.closest('.month-event');
     if (ev) ev.style.opacity = '';
     draggedChitId = null;
+    if (typeof _markDragJustEnded === 'function') _markDragJustEnded();
   });
 
   monthGrid.addEventListener('dragover', (e) => {
@@ -663,6 +667,7 @@ function enableAllDayDrag(allDayEventsRow, days) {
   allDayEventsRow.addEventListener('dragend', () => {
     if (draggedEv) draggedEv.style.opacity = '';
     draggedEv = null;
+    if (typeof _markDragJustEnded === 'function') _markDragJustEnded();
   });
 
   allDayEventsRow.addEventListener('dragover', (e) => {

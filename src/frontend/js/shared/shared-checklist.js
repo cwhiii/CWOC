@@ -104,6 +104,32 @@ async function moveChecklistItemCrossChit(fromChitId, fromIndex, toChitId, toInd
 }
 
 /**
+ * Update the checklist progress count element after a toggle.
+ * Looks for a sibling element with the "X/Y ✓" pattern inside the container
+ * and recalculates from the chit's in-memory checklist data.
+ */
+function _updateChecklistProgressCount(container, chit) {
+  if (!container || !chit || !Array.isArray(chit.checklist)) return;
+  var checked = chit.checklist.filter(function (item) { return item.checked || item.done; }).length;
+  var total = chit.checklist.length;
+  // Look for the inline count span in the header (new location)
+  var countSpan = container.querySelector('.checklist-progress-count[data-chit-id="' + chit.id + '"]');
+  if (countSpan) {
+    countSpan.textContent = '(' + checked + '/' + total + ' ✓)';
+    return;
+  }
+  // Fallback: old-style progress div
+  var children = container.children;
+  for (var i = 0; i < children.length; i++) {
+    var el = children[i];
+    if (el.tagName === 'DIV' && el.textContent.indexOf('✓') !== -1 && /^\d+\/\d+/.test(el.textContent.trim())) {
+      el.textContent = checked + '/' + total + ' ✓';
+      return;
+    }
+  }
+}
+
+/**
  * Render an interactive checklist inside a container element.
  * Supports checking/unchecking, drag-to-reorder within a chit,
  * and drag items between different chits.
@@ -118,6 +144,8 @@ function renderInlineChecklist(container, chit, onUpdate) {
 
   chit.checklist.forEach((item, idx) => {
     if (!item || typeof item !== 'object' || !item.text) return;
+    // Hide checked items in the dashboard view — they're counted in the header
+    if (item.checked === true || item.done === true) return;
 
     const li = document.createElement('li');
     li.style.cssText = `padding-left:${(item.level || 0) * 18 + 4}px;padding-top:4px;padding-bottom:4px;display:flex;align-items:center;gap:6px;cursor:grab;font-size:0.95em;line-height:1.4;min-height:1.8em;`;
@@ -125,24 +153,24 @@ function renderInlineChecklist(container, chit, onUpdate) {
     li.dataset.idx = idx;
     li.dataset.chitId = chit.id;
 
-    const isDone = item.checked === true || item.done === true;
-
     const cb = document.createElement('input');
     cb.type = 'checkbox';
-    cb.checked = isDone;
+    cb.checked = false; // Only unchecked items are rendered
     cb.style.cursor = 'pointer';
     cb.addEventListener('change', async () => {
       await toggleChecklistItem(chit.id, idx, cb.checked);
       item.checked = cb.checked;
-      textSpan.style.textDecoration = cb.checked ? 'line-through' : '';
-      textSpan.style.opacity = cb.checked ? '0.55' : '1';
+      // Hide the item when checked off (it's now in the "completed" count)
+      if (cb.checked) {
+        li.style.display = 'none';
+      }
+      // Update the progress count element if it exists
+      _updateChecklistProgressCount(container, chit);
     });
 
     const textSpan = document.createElement('span');
     textSpan.textContent = item.text;
-    textSpan.style.textDecoration = isDone ? 'line-through' : '';
-    textSpan.style.opacity = isDone ? '0.55' : '1';
-    textSpan.style.flex = '1';
+    textSpan.style.cssText = 'flex:1;white-space:pre-wrap;word-break:break-word;';
 
     li.appendChild(cb);
     li.appendChild(textSpan);
@@ -157,7 +185,7 @@ function renderInlineChecklist(container, chit, onUpdate) {
       e.dataTransfer.effectAllowed = 'move';
       li.style.opacity = '0.4';
     });
-    li.addEventListener('dragend', () => { li.style.opacity = '1'; });
+    li.addEventListener('dragend', () => { li.style.opacity = '1'; if (typeof _markDragJustEnded === 'function') _markDragJustEnded(); });
     li.addEventListener('dragover', (e) => {
       if (!e.dataTransfer.types.includes('application/x-checklist-item')) return;
       e.preventDefault();

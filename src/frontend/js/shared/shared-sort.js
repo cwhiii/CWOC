@@ -7,6 +7,40 @@
  * Depends on: shared-touch.js (for enableTouchDrag)
  */
 
+// ── Drag Suppression Flag ─────────────────────────────────────────────────────
+// After any drag-and-drop completes, the browser fires a click event on the
+// dragged element. This flag lets click/dblclick handlers know to ignore that
+// spurious click so it doesn't open quick-edit, navigate to the editor, etc.
+
+/**
+ * Mark that a drag operation just finished. Clears automatically after the
+ * browser's post-drag click event has had a chance to fire.
+ */
+function _markDragJustEnded() {
+  window._dragJustEnded = true;
+  // Clear after a generous delay — the browser's post-drag click can fire
+  // asynchronously, so we hold the flag for 300ms to be safe.
+  setTimeout(function () { window._dragJustEnded = false; }, 300);
+}
+
+// Capture-phase listener: swallow click/dblclick on chit cards and calendar events
+// that fire immediately after a drag operation ends. This prevents navigation,
+// quick-edit, and link-following that the browser triggers post-drag.
+document.addEventListener('click', function (e) {
+  if (!window._dragJustEnded) return;
+  if (e.target.closest('.chit-card, .timed-event, .month-event, .all-day-event, .day-event, .itinerary-event, .kanban-project-header, .projects-child-item')) {
+    e.stopPropagation();
+    e.preventDefault();
+  }
+}, true);
+document.addEventListener('dblclick', function (e) {
+  if (!window._dragJustEnded) return;
+  if (e.target.closest('.chit-card, .timed-event, .month-event, .all-day-event, .day-event, .itinerary-event, .kanban-project-header, .projects-child-item')) {
+    e.stopPropagation();
+    e.preventDefault();
+  }
+}, true);
+
 // ── Manual Sort Order (per-view, persisted in localStorage) ──────────────────
 
 const MANUAL_ORDER_KEY = 'cwoc_manual_order';
@@ -66,11 +100,17 @@ function applyManualOrder(tab, chitList) {
 /**
  * Enable drag-to-reorder on chit cards within a container.
  * After a drop, saves the new order and calls onReorder.
+ *
+ * Supports an optional onLongPress callback per card. When provided,
+ * uses enableTouchGesture() for unified drag + long-press on mobile.
+ * When not provided, uses enableTouchDrag() for drag-only (backward compat).
+ *
  * @param {HTMLElement} container - The view container with .chit-card children
  * @param {string} tab - The current tab name
  * @param {function} [onReorder] - Callback after reorder (e.g. to re-render)
+ * @param {object} [longPressMap] - Map of chitId → long-press callback function
  */
-function enableDragToReorder(container, tab, onReorder) {
+function enableDragToReorder(container, tab, onReorder, longPressMap) {
   let draggedEl = null;
 
   container.addEventListener('dragstart', (e) => {
@@ -82,16 +122,17 @@ function enableDragToReorder(container, tab, onReorder) {
     draggedEl = card;
     e.dataTransfer.setData('application/x-chit-reorder', card.dataset.chitId);
     e.dataTransfer.effectAllowed = 'move';
-    card.style.opacity = '0.4';
+    card.classList.add('cwoc-dragging');
   });
 
   container.addEventListener('dragend', () => {
-    if (draggedEl) draggedEl.style.opacity = '1';
+    if (draggedEl) draggedEl.classList.remove('cwoc-dragging');
     draggedEl = null;
     container.querySelectorAll('.chit-card').forEach(c => {
       c.style.borderTop = '';
       c.style.borderBottom = '';
     });
+    _markDragJustEnded();
   });
 
   container.addEventListener('dragover', (e) => {
@@ -148,28 +189,28 @@ function enableDragToReorder(container, tab, onReorder) {
     if (onReorder) onReorder();
   });
 
-  // Touch drag support for chit card reorder
+  // Touch drag support for chit card reorder (unified with long-press)
   var _touchDraggedCard = null;
   container.querySelectorAll('.chit-card[data-chit-id]').forEach(function (card) {
     // Skip cards inside checklist areas
     if (card.closest('ul[data-chit-id]')) return;
 
-    enableTouchDrag(card, {
+    var chitId = card.dataset.chitId;
+    var lpCallback = longPressMap ? longPressMap[chitId] : null;
+
+    // Build drag callbacks (shared between both paths)
+    var dragCallbacks = {
       onStart: function (data) {
-        // Don't hijack checklist-item touch drags
         if (data.target && data.target.closest && data.target.closest('li[data-idx]')) return;
         if (data.target && data.target.closest && data.target.closest('ul[data-chit-id]')) return;
         _touchDraggedCard = card;
-        card.style.opacity = '0.4';
       },
       onMove: function (data) {
         if (!_touchDraggedCard) return;
-        // Clear previous highlights
         container.querySelectorAll('.chit-card').forEach(function (c) {
           c.style.borderTop = '';
           c.style.borderBottom = '';
         });
-        // Find the card under the touch point
         var target = document.elementFromPoint(data.clientX, data.clientY);
         if (!target) return;
         var targetCard = target.closest('.chit-card');
@@ -185,19 +226,16 @@ function enableDragToReorder(container, tab, onReorder) {
       },
       onEnd: function (data) {
         if (!_touchDraggedCard) return;
-        _touchDraggedCard.style.opacity = '1';
         container.querySelectorAll('.chit-card').forEach(function (c) {
           c.style.borderTop = '';
           c.style.borderBottom = '';
         });
 
-        // Find drop target
         var target = document.elementFromPoint(data.clientX, data.clientY);
         if (!target) { _touchDraggedCard = null; return; }
         var targetCard = target.closest('.chit-card');
         if (!targetCard || targetCard === _touchDraggedCard) { _touchDraggedCard = null; return; }
 
-        // Compute new order
         var cards = Array.from(container.querySelectorAll('.chit-card[data-chit-id]'));
         var ids = cards.map(function (c) { return c.dataset.chitId; });
         var fromId = _touchDraggedCard.dataset.chitId;
@@ -206,7 +244,6 @@ function enableDragToReorder(container, tab, onReorder) {
         var toIdx = ids.indexOf(toId);
         if (fromIdx < 0 || toIdx < 0) { _touchDraggedCard = null; return; }
 
-        // Determine if dropping above or below
         var rect = targetCard.getBoundingClientRect();
         if (data.clientY > rect.top + rect.height / 2) toIdx++;
 
@@ -222,6 +259,22 @@ function enableDragToReorder(container, tab, onReorder) {
         _touchDraggedCard = null;
         if (onReorder) onReorder();
       },
-    });
+    };
+
+    // Use unified gesture if long-press callback is provided, otherwise drag-only
+    if (lpCallback && typeof enableTouchGesture === 'function') {
+      enableTouchGesture(card, {
+        onDragStart: dragCallbacks.onStart,
+        onDragMove: dragCallbacks.onMove,
+        onDragEnd: dragCallbacks.onEnd,
+        onLongPress: function () { lpCallback(); },
+      });
+    } else {
+      enableTouchDrag(card, {
+        onStart: dragCallbacks.onStart,
+        onMove: dragCallbacks.onMove,
+        onEnd: dragCallbacks.onEnd,
+      });
+    }
   });
 }

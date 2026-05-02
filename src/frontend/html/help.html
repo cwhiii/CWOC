@@ -37,6 +37,7 @@
                     <li><a href="#habits-view">Habits View</a></li>
                     <li><a href="#contacts">Contact Editor</a></li>
                     <li><a href="#sharing">Sharing</a></li>
+                    <li><a href="#kiosk">Kiosk</a></li>
                     <li><a href="#network-access">Network Access</a></li>
                 </ul>
             </div>
@@ -95,6 +96,16 @@
             <ul>
                 <li><strong>Double-click title</strong> — Edit title in place</li>
                 <li><strong>📱 QR</strong> — Data QR (Shift+click for link QR)</li>
+            </ul>
+            <h3 id="mobile">Mobile Touch</h3>
+            <p>On mobile devices, touch interactions use a unified <strong>tap-and-hold</strong> gesture system. All views share the same timing so behavior is consistent everywhere:</p>
+            <ul>
+                <li><strong>Tap</strong> — Normal tap/click behavior (open links, toggle checkboxes)</li>
+                <li><strong>Hold ~0.4s then move</strong> — Drag to reorder. Hold your finger on a card or checklist item until you feel a short vibration, then drag. If you move before the hold completes, the page scrolls normally.</li>
+                <li><strong>Hold ~1.2s without moving</strong> — Opens Quick Edit modal (or inline edit on Notes). A double vibration confirms the long-press activated. Once you start moving (dragging), long-press is cancelled.</li>
+                <li><strong>Double-tap</strong> — Open chit in editor</li>
+                <li><strong>Note previews</strong> — Tap "show more…" to expand truncated note text on cards</li>
+                <li><strong>Kanban (Projects)</strong> — Hold a card then drag it to a different status column. Works in both the dashboard kanban view and the editor's project zone.</li>
             </ul>
             <h3 id="hotkeys">Keyboard Shortcuts</h3>
             <p>Press <kbd>R</kbd> for the full reference overlay. Press <kbd>Shift+R</kbd> to open this Help page.</p>
@@ -155,7 +166,7 @@
             <p>The Order section in the sidebar provides sort options: Title, Start Date, Due Date, Updated, Created, Status, Manual (drag-to-reorder), Random/Shuffle, and Upcoming (due soon first, completed at bottom). Click the ▲/▼ button to toggle ascending/descending.</p>
             <h3 id="notes-view">Notes View</h3>
             <p>Multi-column masonry layout with full rendered markdown. <code>[[chit title]]</code> auto-links to other chits.</p>
-            <p><strong>Shift+click</strong> (or long-press on mobile) a note card to edit it in place. While editing, drag-and-drop reordering is disabled so you can click to position the cursor. Press <kbd>ESC</kbd> or click outside to save and exit edit mode.</p>
+            <p><strong>Shift+click</strong> (or very long-press ~1.2s on mobile) a note card to edit it in place. A short hold (~0.4s) then drag lets you reorder notes between columns. While editing, drag-and-drop reordering is disabled so you can click to position the cursor. Press <kbd>ESC</kbd> or click outside to save and exit edit mode.</p>
             <h3 id="clocks">Clocks</h3>
             <p>Press <kbd>L</kbd> on the dashboard or click the 🕐 Clock button in the sidebar to open the clocks modal. Configure which clocks are displayed and their layout in Settings → Clocks.</p>
             <ul>
@@ -279,6 +290,7 @@
                 <li><strong>Version &amp; Updates</strong> — Current version, upgrade button, update log</li>
                 <li><strong>Data</strong> — Audit log link, trash link, audit log pruning limits</li>
                 <li><strong>Data Management</strong> — JSON export/import for chit data and user data (add or replace modes)</li>
+                <li><strong>Kiosk</strong> — Select which tags to display on the unauthenticated kiosk view, and launch it</li>
                 <li><strong>Network Access</strong> — (Admin only) Configure external network access providers like Tailscale VPN</li>
             </ul>
             <h3 id="data-management">Data Management</h3>
@@ -330,6 +342,14 @@
                 <li><strong>Version Info</strong> — Displays the current version and "Last Updated" timestamp. If no version info is available, a fallback message is shown.</li>
                 <li><strong>Upgrade Omni Chits</strong> — Click this button to trigger an update. A modal opens showing real-time output from the update script.</li>
                 <li><strong>Update Modal</strong> — Streams the update log in a terminal-style display. Log lines are color-coded by prefix: <span style="color:green;">[OK]</span> green, <span style="color:goldenrod;">[WARN]</span> yellow, <span style="color:red;">[ERROR]</span> red, <span style="color:steelblue;">[STEP]</span> blue. The Close button is enabled once the update finishes.</li>
+            </ul>
+            <h3 id="trash">Trash</h3>
+            <p>When you delete a chit, it is soft-deleted and moved to the Trash. You can access the Trash page from the navigation header or from Settings → Data.</p>
+            <ul>
+                <li><strong>User scoping</strong> — Regular users see only their own deleted chits. Admins see all deleted chits across all users, with an extra "Owner" column showing who each chit belongs to.</li>
+                <li><strong>Restore</strong> — Click the Restore button on any row to un-delete the chit and return it to your active views.</li>
+                <li><strong>Permanent delete</strong> — Click the Delete button to permanently remove a chit from the database. This cannot be undone.</li>
+                <li><strong>Bulk actions</strong> — Use the checkboxes to select multiple chits, then use the bulk Restore or Delete buttons in the toolbar.</li>
             </ul>
             <h3 id="audit-log">Audit Log</h3>
             <p>CWOC tracks all changes to your data with a built-in audit log. Every create, update, and delete operation on chits, contacts, settings, and system upgrades is recorded automatically.</p>
@@ -416,6 +436,35 @@
             </ul>
             <h4>Dashboard</h4>
             <p>Shared chits display a 🔗 icon on their dashboard card. Hover over the icon to see a tooltip with the owner's name, the list of shared users and their roles, and your effective role. Non-shared chits show no icon.</p>
+            <h3 id="kiosk">Kiosk</h3>
+            <p>The Kiosk is a read-only, unauthenticated display designed for wall-mounted screens or shared monitors. It shows calendar events and active tasks filtered by the tags you choose — no login required.</p>
+            <h4>Setting Up the Kiosk</h4>
+            <p>Configure which tags appear on the kiosk in <strong>Settings → Tools → Kiosk</strong>:</p>
+            <ul>
+                <li><strong>Tag picker</strong> — A tree of your user-created tags (system tags are excluded). Check the tags you want displayed on the kiosk. Selecting a parent tag automatically includes all child tags.</li>
+                <li><strong>Save</strong> — Click Save to persist your kiosk tag selection. This is required for direct-URL access to work.</li>
+                <li><strong>📺 Open Kiosk →</strong> — Opens the kiosk page with the currently selected tags.</li>
+            </ul>
+            <h4>Accessing the Kiosk</h4>
+            <ul>
+                <li><strong>Direct URL</strong> — Navigate to <code>/kiosk</code> on your server. The page loads the saved tag configuration automatically — no login needed. Ideal for bookmarking on a wall display.</li>
+                <li><strong>With specific tags</strong> — Append tags to the URL: <code>/kiosk?tags=Work,Personal</code>. URL tags override the saved configuration.</li>
+                <li><strong>Launch button</strong> — Use the "📺 Open Kiosk →" button in Settings to open with the currently selected tags.</li>
+            </ul>
+            <h4>Kiosk Display</h4>
+            <p>The kiosk shows a two-column layout:</p>
+            <ul>
+                <li><strong>Calendar</strong> (left) — Upcoming events grouped by day, with time, title, color, and owner name. Today is highlighted with a gold accent.</li>
+                <li><strong>Tasks</strong> (right) — Active tasks (not complete) sorted by status: In Progress first, then Blocked, then ToDo. Each shows status icon, title, due date, and owner.</li>
+            </ul>
+            <h4>Period Navigation</h4>
+            <p>A toolbar at the top lets you switch between Day, Week, and Month views, navigate forward/backward, and jump to Today. The week start day respects your Settings configuration.</p>
+            <h4>Auto-Refresh &amp; Interaction</h4>
+            <ul>
+                <li><strong>Auto-refresh</strong> — The kiosk refreshes data every 60 seconds automatically.</li>
+                <li><strong>Click to edit</strong> — Clicking any event or task opens it in the chit editor. After saving, you're returned to the kiosk.</li>
+            </ul>
+            <p>A tag legend at the bottom shows which tags are active, and a timestamp shows when data was last refreshed.</p>
             <h3 id="network-access">Network Access</h3>
             <p>The Settings page includes a <strong>🌐 Network Access</strong> block (admin only) for configuring external network access providers. Currently supports Tailscale, a WireGuard-based mesh VPN for secure remote access without port forwarding.</p>
             <h4>Tailscale</h4>

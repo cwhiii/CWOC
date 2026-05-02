@@ -1,41 +1,53 @@
 const MAX_INDENT_LEVEL = 4;
+const CHECKLIST_UNDO_DURATION = 8000;
 
 class Checklist {
-  /**
-   * @param {HTMLElement} container - The container element to render the checklist into.
-   * @param {Array} initialItems - Optional initial checklist items to load.
-   * @param {Function} onChangeCallback - Optional callback to notify when checklist data changes.
-   */
   constructor(container, initialItems = [], onChangeCallback = null) {
     this.container = container;
     this.items = [];
-    this.deletedStack = [];
     this.draggedItem = null;
     this.draggedSubtree = [];
     this.dragOverItem = null;
-    this.dragOverPosition = null; // 'above', 'below', 'on'
+    this.dragOverPosition = null;
     this.editingItem = null;
     this.onChangeCallback = onChangeCallback;
+    this._pendingUndo = null;
 
     this.init();
-
-    if (initialItems && Array.isArray(initialItems)) {
-      this.loadItems(initialItems);
-    }
+    if (initialItems && Array.isArray(initialItems)) this.loadItems(initialItems);
   }
 
   init() {
+    this._createCountDisplay();
     this.createInput();
-    this.createUndoButton();
     this.render();
   }
 
-  /**
-   * Load checklist items from an array, replacing current items.
-   * @param {Array} itemsArray
-   */
+  _createCountDisplay() {
+    var header = document.getElementById("checklistSection")?.querySelector(".zone-header");
+    this.countDisplay = document.createElement("span");
+    this.countDisplay.className = "checklist-count-display";
+    this.countDisplay.style.cssText = "font-size:0.85em;opacity:0.8;margin-left:0.5em;font-weight:normal;";
+
+    // Clear Checked button — in the zone header
+    this.clearCheckedButton = document.createElement("button");
+    this.clearCheckedButton.textContent = "Clear Checked";
+    this.clearCheckedButton.className = "zone-button";
+    this.clearCheckedButton.style.display = "none";
+    this.clearCheckedButton.addEventListener("click", (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      this.clearCheckedItems();
+    });
+
+    if (header) {
+      var zoneTitle = header.querySelector('.zone-title');
+      if (zoneTitle) zoneTitle.appendChild(this.countDisplay);
+      header.appendChild(this.clearCheckedButton);
+    }
+  }
+
   loadItems(itemsArray) {
-    // Defensive copy and validation
     this.items = itemsArray.map((item) => ({
       id: item.id || this.generateId(),
       text: item.text || "",
@@ -43,23 +55,12 @@ class Checklist {
       checked: !!item.checked,
       parent: item.parent || null,
     }));
-    this.deletedStack = [];
     this.render();
     this._notifyChange();
   }
 
-  /**
-   * Returns a deep copy of current checklist items suitable for JSON serialization.
-   */
   getChecklistData() {
-    // Return a deep copy to avoid external mutation
-    return this.items.map(({ id, text, level, checked, parent }) => ({
-      id,
-      text,
-      level,
-      checked,
-      parent,
-    }));
+    return this.items.map(({ id, text, level, checked, parent }) => ({ id, text, level, checked, parent }));
   }
 
   createInput() {
@@ -72,323 +73,356 @@ class Checklist {
         this.addNewItem(this.input.value.trim());
         this.input.value = "";
       } else if (e.key === "Escape") {
-        // ESC on the add-item input: same as clicking Cancel/Exit
         if (typeof cancelOrExit === "function") cancelOrExit();
       }
     });
     this.container.insertBefore(this.input, this.container.firstChild);
   }
 
-  createUndoButton() {
-    const header = document
-      .getElementById("checklistSection")
-      ?.querySelector(".zone-header");
-    this.undoButton = document.createElement("button");
-    this.undoButton.textContent = "Undo Delete";
-    this.undoButton.style.display = "none";
-    this.undoButton.className = "undo-delete-button zone-button";
-    this.undoButton.addEventListener("click", () => {
-      this.undoDelete();
-    });
-    if (header) {
-      header.appendChild(this.undoButton);
-    } else {
-      this.container.appendChild(this.undoButton);
-    }
-  }
-
   addNewItem(text, level = 0, checked = false, id = null) {
-    const newItem = {
-      id: id || this.generateId(),
-      text,
-      level: Math.min(level, MAX_INDENT_LEVEL),
-      checked,
-      parent: null,
-    };
-
+    var newItem = { id: id || this.generateId(), text, level: Math.min(level, MAX_INDENT_LEVEL), checked, parent: null };
     if (this.items.length > 0 && newItem.level > 0) {
-      for (let i = this.items.length - 1; i >= 0; i--) {
-        if (this.items[i].level === newItem.level - 1) {
-          newItem.parent = this.items[i].id;
-          break;
-        }
+      for (var i = this.items.length - 1; i >= 0; i--) {
+        if (this.items[i].level === newItem.level - 1) { newItem.parent = this.items[i].id; break; }
       }
     }
-
     this.items.push(newItem);
     this.render();
     this._notifyChange();
   }
 
-  generateId() {
-    return "item-" + Math.random().toString(36).substr(2, 9);
-  }
+  generateId() { return "item-" + Math.random().toString(36).substr(2, 9); }
+
+  /* ── Render ─────────────────────────────────────────────────────────────── */
 
   render() {
-    // Remove all checklist items except input and undo button
-    const existingItems = this.container.querySelectorAll(
-      ".checklist-item, .completed-checklist-item, .ghost-checklist-item",
-    );
-    existingItems.forEach((el) => el.remove());
+    this.container.querySelectorAll(".checklist-item, .completed-checklist-item, .ghost-checklist-item").forEach(el => el.remove());
 
-    // Separate checked and unchecked items
-    const uncheckedItems = this.items.filter((item) => !item.checked);
-    const checkedItems = this.items.filter((item) => item.checked);
+    var uncheckedItems = this.items.filter(i => !i.checked);
+    var checkedItems = this.items.filter(i => i.checked);
 
-    // Render unchecked items in correct order (append after input)
-    let insertAfter = this.input;
-    uncheckedItems.forEach((item) => {
-      const el = this.createItemElement(item);
+    var insertAfter = this.input;
+    uncheckedItems.forEach(item => {
+      var el = this.createItemElement(item);
       insertAfter.insertAdjacentElement("afterend", el);
-      insertAfter = el; // Next item goes after this one
+      insertAfter = el;
     });
 
-    // Prepare completed container
+    // Completed section (collapsible, with Clear Checked button)
     if (!this.completedContainer) {
       this.completedContainer = document.createElement("div");
       this.completedContainer.className = "completed-checklist-container";
-      const header = document.createElement("h3");
-      header.textContent = "Completed";
-      this.completedContainer.appendChild(header);
+
+      var hdr = document.createElement("div");
+      hdr.className = "completed-section-header";
+      hdr.style.cssText = "display:flex;align-items:center;gap:0.5em;cursor:pointer;padding:6px 0;user-select:none;border-top:1px solid var(--aged-brown-light,#a0522d);margin-top:6px;";
+
+      var title = document.createElement("h3");
+      title.textContent = "Completed";
+      title.style.cssText = "margin:0;font-size:0.95em;";
+      hdr.appendChild(title);
+
+      this._completedCountSpan = document.createElement("span");
+      this._completedCountSpan.style.cssText = "font-size:0.85em;opacity:0.7;font-weight:normal;";
+      hdr.appendChild(this._completedCountSpan);
+
+      var spacer = document.createElement("span");
+      spacer.style.flex = "1";
+      hdr.appendChild(spacer);
+
+      this._completedToggleIcon = document.createElement("span");
+      this._completedToggleIcon.textContent = "▶";
+      this._completedToggleIcon.style.cssText = "font-size:0.8em;padding:0 4px;";
+      hdr.appendChild(this._completedToggleIcon);
+
+      this._completedBody = document.createElement("div");
+      this._completedBody.className = "completed-section-body";
+      this._completedExpanded = false;
+      this._completedBody.style.display = "none";
+
+      hdr.addEventListener("click", (e) => {
+        if (e.target.closest('button')) return; // don't toggle when clicking Clear
+        this._completedExpanded = !this._completedExpanded;
+        this._completedBody.style.display = this._completedExpanded ? "" : "none";
+        this._completedToggleIcon.textContent = this._completedExpanded ? "▼" : "▶";
+      });
+
+      this.completedContainer.appendChild(hdr);
+      this.completedContainer.appendChild(this._completedBody);
       this.container.appendChild(this.completedContainer);
     }
 
-    // Clear previous completed items
-    const oldCompletedItems = this.completedContainer.querySelectorAll(
-      ".completed-checklist-item, .ghost-checklist-item",
-    );
-    oldCompletedItems.forEach((el) => el.remove());
+    this._completedBody.querySelectorAll(".completed-checklist-item, .ghost-checklist-item").forEach(el => el.remove());
+    this.completedContainer.style.display = checkedItems.length > 0 ? "" : "none";
+    if (this._completedCountSpan) this._completedCountSpan.textContent = "(" + checkedItems.length + ")";
 
-    // Collect parents of checked items to show as ghosts
-    const ghostParentsMap = new Map();
-    checkedItems.forEach((item) => {
-      let parent = this.getParent(item);
-      while (parent) {
-        if (!checkedItems.find((ci) => ci.id === parent.id)) {
-          ghostParentsMap.set(parent.id, parent);
-        }
-        parent = this.getParent(parent);
-      }
+    var ghostParentsMap = new Map();
+    checkedItems.forEach(item => {
+      var p = this.getParent(item);
+      while (p) { if (!checkedItems.find(ci => ci.id === p.id)) ghostParentsMap.set(p.id, p); p = this.getParent(p); }
     });
 
-    // Create a combined list maintaining original order
-    const completedSectionItems = [];
-
-    this.items.forEach((item) => {
+    this.items.forEach(item => {
       if (item.checked) {
-        completedSectionItems.push({ item, isGhost: false, isCompleted: true });
+        this._completedBody.appendChild(this.createItemElement(item, true, false));
       } else if (ghostParentsMap.has(item.id)) {
-        completedSectionItems.push({ item, isGhost: true, isCompleted: false });
+        this._completedBody.appendChild(this.createItemElement(item, false, true));
       }
     });
 
-    // Render items in the completed section in original order
-    completedSectionItems.forEach(({ item, isGhost, isCompleted }) => {
-      const el = this.createItemElement(item, isCompleted, isGhost);
-      this.completedContainer.appendChild(el);
-    });
+    this._updateCount();
   }
 
-  createItemElement(item, isCompleted = false, isGhost = false) {
-    const el = document.createElement("div");
-    if (isGhost) {
-      el.className = "ghost-checklist-item";
-    } else if (isCompleted) {
-      el.className = "completed-checklist-item";
-    } else {
-      el.className = "checklist-item";
+  _updateCount() {
+    if (this.countDisplay) {
+      var total = this.items.length;
+      var checked = this.items.filter(i => i.checked).length;
+      this.countDisplay.textContent = total > 0 ? "(" + checked + " / " + total + ")" : "";
     }
+    if (this.clearCheckedButton) {
+      var hasChecked = this.items.some(i => i.checked);
+      this.clearCheckedButton.style.display = hasChecked ? "" : "none";
+    }
+  }
+
+  async clearCheckedItems() {
+    var checkedCount = this.items.filter(i => i.checked).length;
+    if (checkedCount === 0) return;
+    var confirmed = false;
+    if (typeof cwocConfirm === 'function') {
+      confirmed = await cwocConfirm("Delete " + checkedCount + " checked item" + (checkedCount > 1 ? "s" : "") + "?", { title: "Clear Checked", danger: true, confirmLabel: "Delete" });
+    } else {
+      confirmed = confirm("Delete " + checkedCount + " checked item" + (checkedCount > 1 ? "s" : "") + "?");
+    }
+    if (!confirmed) return;
+    var removed = this.items.filter(i => i.checked);
+    this.items = this.items.filter(i => !i.checked);
+    this.render();
+    this._notifyChange();
+    this._showUndoCountdown(removed, "Cleared " + removed.length + " item" + (removed.length > 1 ? "s" : ""));
+  }
+
+  /* ── Inline Undo Countdown ──────────────────────────────────────────────── */
+
+  _showUndoCountdown(removedItems, label) {
+    if (this._pendingUndo) {
+      clearInterval(this._pendingUndo.interval);
+      if (this._pendingUndo.el && this._pendingUndo.el.parentNode) this._pendingUndo.el.remove();
+      this._pendingUndo = null;
+    }
+    var self = this;
+    var bar = document.createElement("div");
+    bar.style.cssText = "display:flex;align-items:center;gap:0.6em;padding:6px 10px;margin:6px 0;background:#fff5e6;border:2px solid #8b5a2b;border-radius:6px;font-size:0.9em;";
+    var msg = document.createElement("span");
+    msg.style.cssText = "flex:1;color:#1a1208;";
+    msg.textContent = "🗑️ " + label;
+    bar.appendChild(msg);
+    var undoBtn = document.createElement("button");
+    undoBtn.textContent = "Undo";
+    undoBtn.className = "zone-button";
+    undoBtn.style.cssText = "padding:3px 10px;font-size:0.85em;cursor:pointer;flex-shrink:0;";
+    bar.appendChild(undoBtn);
+    var timerOuter = document.createElement("div");
+    timerOuter.style.cssText = "width:60px;height:6px;background:#f5e6cc;border:1px solid #8b4513;border-radius:3px;overflow:hidden;flex-shrink:0;";
+    var timerFill = document.createElement("div");
+    timerFill.style.cssText = "height:100%;width:100%;background:linear-gradient(90deg,#d4af37,#8b4513);border-radius:2px;";
+    timerOuter.appendChild(timerFill);
+    bar.appendChild(timerOuter);
+    this.input.insertAdjacentElement("afterend", bar);
+    var start = Date.now(), dismissed = false;
+    var interval = setInterval(function() {
+      var pct = Math.max(0, 100 - ((Date.now() - start) / CHECKLIST_UNDO_DURATION) * 100);
+      timerFill.style.width = pct + "%";
+      if (pct <= 0) { clearInterval(interval); if (!dismissed) { dismissed = true; bar.remove(); self._pendingUndo = null; } }
+    }, 50);
+    undoBtn.addEventListener("click", function(e) {
+      e.stopPropagation();
+      if (dismissed) return;
+      dismissed = true; clearInterval(interval); bar.remove(); self._pendingUndo = null;
+      self.items = self.items.concat(removedItems);
+      self.render(); self._notifyChange();
+    });
+    this._pendingUndo = { interval: interval, el: bar, items: removedItems };
+  }
+
+  /* ── Item Element ───────────────────────────────────────────────────────── */
+
+  createItemElement(item, isCompleted, isGhost) {
+    isCompleted = isCompleted || false;
+    isGhost = isGhost || false;
+    var el = document.createElement("div");
+    el.className = isGhost ? "ghost-checklist-item" : isCompleted ? "completed-checklist-item" : "checklist-item";
     el.setAttribute("draggable", "true");
     el.dataset.id = item.id;
 
-    // Left container for checkbox and text
-    const leftContainer = document.createElement("div");
-    leftContainer.style.paddingLeft = item.level * 20 + "px"; // indentation
-    leftContainer.className = "left-container";
+    var left = document.createElement("div");
+    left.className = "left-container";
+    left.style.paddingLeft = item.level * 20 + "px";
 
-    // Checkbox
-    const checkbox = document.createElement("input");
-    checkbox.type = "checkbox";
-    checkbox.checked = item.checked;
-    checkbox.addEventListener("change", () => {
-      this.toggleCheck(item, checkbox.checked);
+    var cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.checked = item.checked;
+    cb.addEventListener("change", () => this.toggleCheck(item, cb.checked));
+    left.appendChild(cb);
+
+    var tw = document.createElement("div");
+    tw.className = "text-wrapper";
+
+    var span = document.createElement("span");
+    span.className = "checklist-text";
+    span.style.whiteSpace = "pre-wrap";
+    span.textContent = item.text;
+    span.addEventListener("click", (e) => { e.stopPropagation(); this.startEditing(item, span, e); });
+    tw.appendChild(span);
+
+    // Click anywhere on the text-wrapper (including empty space) to edit
+    tw.addEventListener("click", (e) => {
+      if (e.target === tw) {
+        e.stopPropagation();
+        // If already editing this item, focus the textarea and put cursor at end
+        var existingTa = tw.querySelector("textarea.checklist-edit-input");
+        if (existingTa) {
+          existingTa.focus();
+          existingTa.setSelectionRange(existingTa.value.length, existingTa.value.length);
+        } else {
+          this.startEditing(item, span, e);
+        }
+      }
     });
-    leftContainer.appendChild(checkbox);
 
-    // Text wrapper to control width
-    const textWrapper = document.createElement("div");
-    textWrapper.className = "text-wrapper";
+    left.appendChild(tw);
+    el.appendChild(left);
 
-    // Text (editable)
-    const textSpan = document.createElement("span");
-    textSpan.textContent = item.text;
-    textSpan.className = "checklist-text";
-    textSpan.addEventListener("click", (e) => {
-      e.stopPropagation();
-      this.startEditing(item, textSpan);
+    // Click on empty space in the left-container (between checkbox and text) to edit
+    left.addEventListener("click", (e) => {
+      if (e.target === left) {
+        e.stopPropagation();
+        var existingTa = tw.querySelector("textarea.checklist-edit-input");
+        if (existingTa) {
+          existingTa.focus();
+          existingTa.setSelectionRange(existingTa.value.length, existingTa.value.length);
+        } else {
+          this.startEditing(item, span, e);
+        }
+      }
     });
-    textWrapper.appendChild(textSpan);
 
-    leftContainer.appendChild(textWrapper);
-    el.appendChild(leftContainer);
-
-    // Trashcan icon (right-aligned)
-    const trash = document.createElement("span");
+    var trash = document.createElement("span");
     trash.className = "trash-icon";
     trash.textContent = "🗑️";
     trash.title = "Delete item";
     trash.style.visibility = "hidden";
-    trash.addEventListener("click", (e) => {
-      e.stopPropagation();
-      this.deleteItem(item, el);
-    });
-    trash.addEventListener("mouseenter", () => {
-      el.classList.add("hovered");
-    });
-    trash.addEventListener("mouseleave", () => {
-      el.classList.remove("hovered");
-    });
+    trash.addEventListener("click", (e) => { e.stopPropagation(); this.deleteItem(item, el); });
     el.appendChild(trash);
 
-    // Show trash icon on item hover
-    el.addEventListener("mouseenter", () => {
-      trash.style.visibility = "visible";
-    });
-    el.addEventListener("mouseleave", () => {
-      trash.style.visibility = "hidden";
-    });
+    el.addEventListener("mouseenter", () => { trash.style.visibility = "visible"; });
+    el.addEventListener("mouseleave", () => { trash.style.visibility = "hidden"; });
 
-    // Drag events only for non-ghost items
     if (!isGhost) {
       el.addEventListener("dragstart", (e) => this.onDragStart(e, item));
       el.addEventListener("dragover", (e) => this.onDragOver(e, item));
       el.addEventListener("dragleave", (e) => this.onDragLeave(e, item));
       el.addEventListener("drop", (e) => this.onDrop(e, item));
     }
-
     return el;
   }
 
-  startEditing(item, textSpan) {
-    if (this.editingItem) {
-      return;
+  /* ── Inline Editing (textarea for multi-line via Shift+Enter) ───────────── */
+
+  startEditing(item, textSpan, clickEvent) {
+    if (this.editingItem) return;
+    this.editingItem = item;
+
+    // Use textarea so Shift+Enter can insert newlines
+    var ta = document.createElement("textarea");
+    ta.value = item.text;
+    ta.className = "checklist-text checklist-edit-input";
+    ta.rows = 1;
+
+    var textWrapper = textSpan.parentNode;
+    textSpan.style.display = "none";
+    textWrapper.appendChild(ta);
+
+    // Auto-size textarea to content
+    var autoSize = function() {
+      ta.style.height = 'auto';
+      ta.style.height = ta.scrollHeight + 'px';
+    };
+    ta.addEventListener('input', autoSize);
+
+    ta.focus();
+    autoSize();
+
+    // Position cursor at click location
+    if (clickEvent) {
+      requestAnimationFrame(function() {
+        var rect = ta.getBoundingClientRect();
+        var clickX = clickEvent.clientX - rect.left - 4;
+        var canvas = document.createElement('canvas');
+        var ctx = canvas.getContext('2d');
+        var style = window.getComputedStyle(ta);
+        ctx.font = style.fontSize + ' ' + style.fontFamily;
+        var bestPos = 0;
+        // Only measure first line for click positioning
+        var firstLine = ta.value.split('\n')[0] || '';
+        for (var i = 0; i <= firstLine.length; i++) {
+          if (ctx.measureText(firstLine.substring(0, i)).width <= clickX) bestPos = i;
+          else break;
+        }
+        ta.setSelectionRange(bestPos, bestPos);
+      });
+    } else {
+      ta.setSelectionRange(ta.value.length, ta.value.length);
     }
 
-    this.editingItem = item;
-    const originalText = item.text;
+    var self = this;
 
-    const input = document.createElement("input");
-    input.type = "text";
-    input.value = originalText;
-    input.className = "checklist-text";
-
-    // Replace text span with input inside the same wrapper
-    const textWrapper = textSpan.parentNode;
-    textSpan.style.display = "none";
-    textWrapper.appendChild(input);
-
-    input.focus();
-    input.select();
-
-    const finishEditing = (save = false) => {
-      if (!this.editingItem) return;
-
-      if (save && input.value.trim() !== "") {
-        item.text = input.value.trim();
-        this._notifyChange();
+    var finishEditing = function(save) {
+      if (!self.editingItem) return;
+      if (save && ta.value.trim() !== "") {
+        item.text = ta.value.trim();
+        self._notifyChange();
       }
-
-      input.remove();
+      ta.remove();
       textSpan.style.display = "";
       textSpan.textContent = item.text;
-      this.editingItem = null;
+      self.editingItem = null;
     };
 
-    const addNewItemBelow = () => {
-      if (input.value.trim() !== "") {
-        item.text = input.value.trim();
-        this._notifyChange();
-      }
-
-      const currentIndex = this.items.findIndex((i) => i.id === item.id);
-
-      const newItem = {
-        id: this.generateId(),
-        text: "",
-        level: item.level,
-        checked: false,
-        parent: item.parent,
-      };
-
-      let insertIndex = currentIndex + 1;
-      while (
-        insertIndex < this.items.length &&
-        this.items[insertIndex].level > item.level
-      ) {
-        insertIndex++;
-      }
-
-      this.items.splice(insertIndex, 0, newItem);
-
-      input.remove();
-      textSpan.style.display = "";
-      textSpan.textContent = item.text;
-      this.editingItem = null;
-
-      this.render();
-
-      setTimeout(() => {
-        const newEl = this.container.querySelector(`[data-id="${newItem.id}"]`);
-        if (newEl) {
-          const newTextSpan = newEl.querySelector(".checklist-text");
-          this.startEditing(newItem, newTextSpan);
-        }
+    var addNewItemBelow = function() {
+      if (ta.value.trim() !== "") { item.text = ta.value.trim(); self._notifyChange(); }
+      var idx = self.items.findIndex(i => i.id === item.id);
+      var newItem = { id: self.generateId(), text: "", level: item.level, checked: false, parent: item.parent };
+      var insertIdx = idx + 1;
+      while (insertIdx < self.items.length && self.items[insertIdx].level > item.level) insertIdx++;
+      self.items.splice(insertIdx, 0, newItem);
+      ta.remove(); textSpan.style.display = ""; textSpan.textContent = item.text; self.editingItem = null;
+      self.render();
+      setTimeout(function() {
+        var newEl = self.container.querySelector('[data-id="' + newItem.id + '"]');
+        if (newEl) { var ns = newEl.querySelector(".checklist-text"); self.startEditing(newItem, ns); }
       }, 0);
     };
 
-    const navigateToItem = (direction) => {
-      const currentIndex = this.items.findIndex((i) => i.id === item.id);
-      let targetItem = null;
-
-      if (direction === "previous" && currentIndex > 0) {
-        targetItem = this.items[currentIndex - 1];
-      } else if (direction === "next" && currentIndex < this.items.length - 1) {
-        targetItem = this.items[currentIndex + 1];
-      }
-
-      if (targetItem && !targetItem.checked) {
-        if (input.value.trim() !== "") {
-          item.text = input.value.trim();
-          this._notifyChange();
-        }
-
-        input.remove();
-        textSpan.style.display = "";
-        textSpan.textContent = item.text;
-        this.editingItem = null;
-
-        this.render();
-
-        setTimeout(() => {
-          const targetEl = this.container.querySelector(
-            `[data-id="${targetItem.id}"]`,
-          );
-          if (targetEl) {
-            const targetTextSpan = targetEl.querySelector(".checklist-text");
-
-            this.startEditing(targetItem, targetTextSpan);
-
-            setTimeout(() => {
-              const newInput = targetEl.querySelector(".checklist-text");
-              if (newInput) {
-                if (direction === "previous") {
-                  newInput.setSelectionRange(
-                    newInput.value.length,
-                    newInput.value.length,
-                  );
-                } else {
-                  newInput.setSelectionRange(0, 0);
-                }
+    var navigateToItem = function(direction) {
+      var idx = self.items.findIndex(i => i.id === item.id);
+      var target = null;
+      if (direction === "previous" && idx > 0) target = self.items[idx - 1];
+      else if (direction === "next" && idx < self.items.length - 1) target = self.items[idx + 1];
+      if (target && !target.checked) {
+        if (ta.value.trim() !== "") { item.text = ta.value.trim(); self._notifyChange(); }
+        ta.remove(); textSpan.style.display = ""; textSpan.textContent = item.text; self.editingItem = null;
+        self.render();
+        setTimeout(function() {
+          var el = self.container.querySelector('[data-id="' + target.id + '"]');
+          if (el) {
+            var ts = el.querySelector(".checklist-text");
+            self.startEditing(target, ts);
+            setTimeout(function() {
+              var inp = el.querySelector("textarea.checklist-edit-input");
+              if (inp) {
+                var pos = direction === "previous" ? inp.value.length : 0;
+                inp.setSelectionRange(pos, pos);
               }
             }, 0);
           }
@@ -396,82 +430,49 @@ class Checklist {
       }
     };
 
-    input.addEventListener("keydown", (e) => {
+    ta.addEventListener("keydown", function(e) {
       e.stopPropagation();
-
-      if (e.key === "Enter") {
+      if (e.key === "Enter" && e.shiftKey) {
+        // Shift+Enter: insert newline (default textarea behavior — do nothing)
+        setTimeout(autoSize, 0);
+        return;
+      }
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
         addNewItemBelow();
       } else if (e.key === "Escape") {
         finishEditing(false);
       } else if (e.key === "Tab") {
         e.preventDefault();
+        var idx = self.items.indexOf(item);
         if (e.shiftKey) {
-          // Unindent
           if (item.level > 0) {
             item.level = Math.max(0, item.level - 1);
             item.parent = null;
-            const idx = this.items.indexOf(item);
-            for (let i = idx - 1; i >= 0; i--) {
-              if (this.items[i].level === item.level - 1) {
-                item.parent = this.items[i].id;
-                break;
-              }
-            }
-            finishEditing(true);
-            this.render();
-            this._notifyChange();
-            // Re-focus by clicking the item's text span after render
-            setTimeout(() => {
-              const el = this.container.querySelector(`[data-id="${item.id}"] .checklist-text`);
-              if (el) el.click();
-            }, 0);
+            for (var i = idx - 1; i >= 0; i--) { if (self.items[i].level === item.level - 1) { item.parent = self.items[i].id; break; } }
+            finishEditing(true); self.render(); self._notifyChange();
+            setTimeout(function() { var el = self.container.querySelector('[data-id="' + item.id + '"] .checklist-text'); if (el) el.click(); }, 0);
           }
         } else {
-          // Indent
-          const idx = this.items.indexOf(item);
           if (idx > 0 && item.level < MAX_INDENT_LEVEL) {
             item.level = Math.min(item.level + 1, MAX_INDENT_LEVEL);
             item.parent = null;
-            for (let i = idx - 1; i >= 0; i--) {
-              if (this.items[i].level === item.level - 1) {
-                item.parent = this.items[i].id;
-                break;
-              }
-            }
-            finishEditing(true);
-            this.render();
-            this._notifyChange();
-            setTimeout(() => {
-              const el = this.container.querySelector(`[data-id="${item.id}"] .checklist-text`);
-              if (el) el.click();
-            }, 0);
+            for (var i = idx - 1; i >= 0; i--) { if (self.items[i].level === item.level - 1) { item.parent = self.items[i].id; break; } }
+            finishEditing(true); self.render(); self._notifyChange();
+            setTimeout(function() { var el = self.container.querySelector('[data-id="' + item.id + '"] .checklist-text'); if (el) el.click(); }, 0);
           }
         }
       } else if (e.key === "ArrowUp") {
-        const cursorPos = input.selectionStart;
-        if (cursorPos === 0) {
-          e.preventDefault();
-          navigateToItem("previous");
-        } else {
-          e.preventDefault();
-          input.setSelectionRange(0, 0);
-        }
+        if (ta.selectionStart === 0) { e.preventDefault(); navigateToItem("previous"); }
       } else if (e.key === "ArrowDown") {
-        const cursorPos = input.selectionStart;
-        if (cursorPos === input.value.length) {
-          e.preventDefault();
-          navigateToItem("next");
-        } else {
-          e.preventDefault();
-          input.setSelectionRange(input.value.length, input.value.length);
-        }
+        if (ta.selectionStart === ta.value.length) { e.preventDefault(); navigateToItem("next"); }
       }
     });
 
-    input.addEventListener("blur", () => {
-      finishEditing(true);
-    });
+    ta.addEventListener("blur", function() { finishEditing(true); });
   }
+
+  /* ── Check / Delete ─────────────────────────────────────────────────────── */
 
   toggleCheck(item, checked) {
     item.checked = checked;
@@ -481,229 +482,85 @@ class Checklist {
   }
 
   updateCheckedStateForSubtree(item, checked) {
-    const children = this.getChildren(item);
-    children.forEach((child) => {
-      child.checked = checked;
-      this.updateCheckedStateForSubtree(child, checked);
-    });
+    this.getChildren(item).forEach(child => { child.checked = checked; this.updateCheckedStateForSubtree(child, checked); });
   }
 
-  getParent(item) {
-    return this.items.find((i) => i.id === item.parent);
-  }
-
-  getChildren(item) {
-    return this.items.filter((i) => i.parent === item.id);
-  }
+  getParent(item) { return this.items.find(i => i.id === item.parent); }
+  getChildren(item) { return this.items.filter(i => i.parent === item.id); }
 
   deleteItem(item, element) {
-    const subtree = this.getSubtree(item);
-    this.deletedStack.push(subtree);
-
+    var subtree = this.getSubtree(item);
+    var label = item.text ? (item.text.length > 30 ? item.text.slice(0, 30) + '…' : item.text) : "(Untitled)";
+    if (subtree.length > 1) label += " +" + (subtree.length - 1);
     element.classList.add("deleting");
-
     setTimeout(() => {
-      this.items = this.items.filter(
-        (i) => !subtree.some((s) => s.id === i.id),
-      );
-      this.undoButton.style.display = "inline-block";
+      this.items = this.items.filter(i => !subtree.some(s => s.id === i.id));
       this.render();
       this._notifyChange();
-    }, 500);
-  }
-
-  undoDelete() {
-    if (this.deletedStack.length === 0) return;
-    const subtree = this.deletedStack.pop();
-
-    // Strobe animation: 3 flashes to red over 1.5 seconds
-    this.undoButton.style.transition = "none";
-    this.undoButton.style.backgroundColor = "red";
-    setTimeout(() => {
-      this.undoButton.style.transition = "background-color 0.25s ease";
-      this.undoButton.style.backgroundColor = "";
-      setTimeout(() => {
-        this.undoButton.style.transition = "none";
-        this.undoButton.style.backgroundColor = "red";
-        setTimeout(() => {
-          this.undoButton.style.transition = "background-color 0.25s ease";
-          this.undoButton.style.backgroundColor = "";
-          setTimeout(() => {
-            this.undoButton.style.transition = "none";
-            this.undoButton.style.backgroundColor = "red";
-            setTimeout(() => {
-              this.undoButton.style.transition = "background-color 0.25s ease";
-              this.undoButton.style.backgroundColor = "";
-            }, 250);
-          }, 250);
-        }, 250);
-      }, 250);
-    }, 0);
-
-    this.items = this.items.concat(subtree);
-    this.undoButton.style.display =
-      this.deletedStack.length > 0 ? "inline-block" : "none";
-    this.render();
-    this._notifyChange();
+      this._showUndoCountdown(subtree, label);
+    }, 300);
   }
 
   getSubtree(item) {
-    let subtree = [item];
-    const children = this.getChildren(item);
-    children.forEach((child) => {
-      subtree = subtree.concat(this.getSubtree(child));
-    });
-    return subtree;
+    var sub = [item];
+    this.getChildren(item).forEach(c => { sub = sub.concat(this.getSubtree(c)); });
+    return sub;
   }
+
+  /* ── Drag & Drop ────────────────────────────────────────────────────────── */
 
   onDragStart(e, item) {
-    this.draggedItem = item;
-    this.draggedSubtree = this.getSubtree(item);
-    e.dataTransfer.effectAllowed = "move";
-    e.dataTransfer.setData("text/plain", item.id);
+    this.draggedItem = item; this.draggedSubtree = this.getSubtree(item);
+    e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", item.id);
     e.currentTarget.classList.add("dragging");
   }
-
   onDragOver(e, item) {
     e.preventDefault();
-    if (this.draggedItem && item.id !== this.draggedItem.id) {
-      const el = e.currentTarget;
-      const bounding = el.getBoundingClientRect();
-      const offset = e.clientY - bounding.top;
-      const height = bounding.height;
-
-      this.clearDropIndicator();
-
-      if (offset < height / 3) {
-        this.dragOverPosition = "above";
-        el.classList.add("drag-over-above");
-      } else if (offset > (2 * height) / 3) {
-        this.dragOverPosition = "below";
-        el.classList.add("drag-over-below");
-      } else {
-        this.dragOverPosition = "on";
-        el.classList.add("drag-over-on");
-      }
-      this.dragOverItem = item;
-    }
-  }
-
-  onDragLeave(e, item) {
+    if (!this.draggedItem || item.id === this.draggedItem.id) return;
+    var el = e.currentTarget, rect = el.getBoundingClientRect(), off = e.clientY - rect.top, h = rect.height;
     this.clearDropIndicator();
+    if (off < h / 3) { this.dragOverPosition = "above"; el.classList.add("drag-over-above"); }
+    else if (off > 2 * h / 3) { this.dragOverPosition = "below"; el.classList.add("drag-over-below"); }
+    else { this.dragOverPosition = "on"; el.classList.add("drag-over-on"); }
+    this.dragOverItem = item;
   }
-
+  onDragLeave() { this.clearDropIndicator(); }
   onDrop(e, item) {
-    e.preventDefault();
-    this.clearDropIndicator();
-
+    e.preventDefault(); this.clearDropIndicator();
     if (!this.draggedItem) return;
-
-    if (this.draggedSubtree.some((subItem) => subItem.id === item.id)) {
-      this.draggedItem = null;
-      this.draggedSubtree = [];
-      this.dragOverItem = null;
-      this.dragOverPosition = null;
-      return;
-    }
-
-    this.items = this.items.filter(
-      (i) => !this.draggedSubtree.some((s) => s.id === i.id),
-    );
-
-    const targetIndex = this.items.findIndex((i) => i.id === item.id);
-
+    if (this.draggedSubtree.some(s => s.id === item.id)) { this.draggedItem = null; this.draggedSubtree = []; return; }
+    this.items = this.items.filter(i => !this.draggedSubtree.some(s => s.id === i.id));
+    var ti = this.items.findIndex(i => i.id === item.id);
     if (this.dragOverPosition === "on") {
-      this.draggedItem.parent = item.id;
-      this.draggedItem.level = item.level + 1;
-      this.updateSubtreeLevels(this.draggedSubtree, this.draggedItem.level);
-
-      let insertIndex = targetIndex + 1;
-      while (
-        insertIndex < this.items.length &&
-        this.isDescendantOf(this.items[insertIndex], item)
-      ) {
-        insertIndex++;
-      }
-
-      this.items.splice(insertIndex, 0, ...this.draggedSubtree);
+      this.draggedItem.parent = item.id; this.draggedItem.level = item.level + 1;
+      this._updateSubLevels(this.draggedSubtree, this.draggedItem.level);
+      var ii = ti + 1; while (ii < this.items.length && this._isDesc(this.items[ii], item)) ii++;
+      this.items.splice(ii, 0, ...this.draggedSubtree);
     } else if (this.dragOverPosition === "above") {
-      this.draggedItem.parent = item.parent;
-      this.draggedItem.level = item.level;
-      this.updateSubtreeLevels(this.draggedSubtree, this.draggedItem.level);
-      this.items.splice(targetIndex, 0, ...this.draggedSubtree);
+      this.draggedItem.parent = item.parent; this.draggedItem.level = item.level;
+      this._updateSubLevels(this.draggedSubtree, this.draggedItem.level);
+      this.items.splice(ti, 0, ...this.draggedSubtree);
     } else if (this.dragOverPosition === "below") {
-      this.draggedItem.parent = item.parent;
-      this.draggedItem.level = item.level;
-      this.updateSubtreeLevels(this.draggedSubtree, this.draggedItem.level);
-      let insertIndex = targetIndex + 1;
-      while (
-        insertIndex < this.items.length &&
-        this.items[insertIndex].level > item.level
-      ) {
-        insertIndex++;
-      }
-      this.items.splice(insertIndex, 0, ...this.draggedSubtree);
+      this.draggedItem.parent = item.parent; this.draggedItem.level = item.level;
+      this._updateSubLevels(this.draggedSubtree, this.draggedItem.level);
+      var ii = ti + 1; while (ii < this.items.length && this.items[ii].level > item.level) ii++;
+      this.items.splice(ii, 0, ...this.draggedSubtree);
     }
-
-    this.draggedItem = null;
-    this.draggedSubtree = [];
-    this.dragOverItem = null;
-    this.dragOverPosition = null;
-
-    this.render();
-    this._notifyChange();
+    this.draggedItem = null; this.draggedSubtree = []; this.dragOverItem = null; this.dragOverPosition = null;
+    this.render(); this._notifyChange();
   }
-
   clearDropIndicator() {
-    const els = this.container.querySelectorAll(
-      ".checklist-item, .completed-checklist-item, .ghost-checklist-item",
-    );
-    els.forEach((el) => {
-      el.classList.remove(
-        "drag-over-above",
-        "drag-over-below",
-        "drag-over-on",
-        "dragging",
-      );
+    this.container.querySelectorAll(".checklist-item, .completed-checklist-item, .ghost-checklist-item").forEach(el => {
+      el.classList.remove("drag-over-above", "drag-over-below", "drag-over-on", "dragging");
     });
   }
+  _updateSubLevels(sub, rootLvl) { var d = rootLvl - sub[0].level; sub.forEach(i => { i.level += d; }); }
+  _isDesc(item, ancestor) { var p = this.getParent(item); while (p) { if (p.id === ancestor.id) return true; p = this.getParent(p); } return false; }
 
-  updateSubtreeLevels(subtree, rootLevel) {
-    const levelDiff = rootLevel - subtree[0].level;
-    subtree.forEach((item) => {
-      item.level += levelDiff;
-    });
-  }
-
-  isDescendantOf(item, ancestor) {
-    let parent = this.getParent(item);
-    while (parent) {
-      if (parent.id === ancestor.id) {
-        return true;
-      }
-      parent = this.getParent(parent);
-    }
-    return false;
-  }
-
-  /**
-   * Internal method to notify external code that checklist data changed.
-   */
   _notifyChange() {
-    if (typeof this.onChangeCallback === "function") {
-      this.onChangeCallback(this.getChecklistData());
-    }
+    this._updateCount();
+    if (typeof this.onChangeCallback === "function") this.onChangeCallback(this.getChecklistData());
   }
 }
 
 window.Checklist = Checklist;
-
-/* Now initialized in the main.
-document.addEventListener("DOMContentLoaded", () => {
-  const container = document.getElementById("checklist-container");
-  if (container && window.Checklist) {
-    // Initialize without initial items here; will be set externally
-    window.checklist = new Checklist(container);
-  }
-});
- */

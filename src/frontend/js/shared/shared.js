@@ -34,6 +34,9 @@
  * Shows editable dropdowns for task fields, plus recurrence options if recurring.
  */
 function showQuickEditModal(chit, onRefresh) {
+  // Never open quick-edit if a drag operation just completed or is in progress
+  if (window._dragJustEnded || window._touchDragActive) return;
+
   document.querySelectorAll('.recurrence-modal-overlay').forEach(el => el.remove());
 
   const isRecurring = !!(chit._isVirtual && chit._parentId);
@@ -1169,22 +1172,127 @@ function enableNotesDragReorder(container, tab, onReorder) {
       document.addEventListener('mouseup', _onNotesDragEnd);
       document.addEventListener('keydown', _onNotesDragKey);
     });
+
+    // Touch gesture: drag to reorder + long-press for inline edit
+    if (typeof enableTouchGesture === 'function') {
+      var _notesTouchDragData = null;
+
+      enableTouchGesture(card, {
+        onDragStart: function (data) {
+          if (data.target && data.target.closest && data.target.closest('input, textarea, select, button, a, [contenteditable="true"]')) return;
+          if (card.querySelector('[contenteditable="true"]')) return;
+
+          var rect = card.getBoundingClientRect();
+          var containerRect = container.getBoundingClientRect();
+          var metrics = _notesColMetrics(container);
+
+          var allCards = Array.from(container.querySelectorAll('.chit-card'));
+          var columns = _buildNoteColumns(allCards, metrics.colCount);
+          var origSnapshot = [];
+          columns.forEach(function (colCards, ci) {
+            colCards.forEach(function (c, ri) {
+              origSnapshot.push({ id: c.dataset.chitId, col: ci, row: ri });
+            });
+          });
+
+          _notesDragState = {
+            card: card,
+            container: container,
+            tab: tab,
+            onReorder: onReorder,
+            origSnapshot: origSnapshot,
+            origCol: parseInt(card.dataset.col, 10),
+            offsetX: data.clientX - rect.left,
+            offsetY: data.clientY - rect.top,
+            colCount: metrics.colCount,
+            actualCardWidth: metrics.actualCardWidth,
+            cancelled: false,
+            targetCol: undefined,
+            targetInsertIdx: undefined,
+          };
+
+          card.style.zIndex = '100';
+          card.style.opacity = '0.85';
+          card.style.boxShadow = '0 8px 24px rgba(0,0,0,0.3)';
+          card.style.cursor = 'grabbing';
+          card.style.transition = 'none';
+          _notesTouchDragData = true;
+        },
+        onDragMove: function (data) {
+          if (!_notesDragState || !_notesTouchDragData) return;
+          // Reuse the mouse move handler logic
+          _onNotesDragMoveXY(data.clientX, data.clientY);
+        },
+        onDragEnd: function (data) {
+          if (!_notesDragState || !_notesTouchDragData) return;
+          _notesTouchDragData = null;
+          _onNotesDragEnd();
+        },
+        onLongPress: function (el) {
+          // Never trigger inline edit if a drag just completed
+          if (window._dragJustEnded || window._touchDragActive) return;
+          // Inline edit mode (same as shift-click)
+          var chitId = card.dataset.chitId;
+          var noteEl = card.querySelector('.note-content');
+          if (!noteEl) return;
+          // Find the chit data from the global chits array
+          var chit = (typeof chits !== 'undefined' && Array.isArray(chits)) ? chits.find(function (c) { return c.id === chitId; }) : null;
+          if (!chit) return;
+          if (typeof _isViewerRole === 'function' && _isViewerRole(chit)) return;
+          if (noteEl.contentEditable === 'true') return;
+          noteEl.contentEditable = 'true';
+          noteEl.style.outline = '2px solid #8b4513';
+          noteEl.style.borderRadius = '4px';
+          noteEl.style.padding = '6px';
+          noteEl.style.whiteSpace = 'pre-wrap';
+          card.style.cursor = 'auto';
+          card.setAttribute('draggable', 'false');
+          noteEl.textContent = chit.note || '';
+          noteEl.focus();
+          var _lpSaveEdit = function () {
+            noteEl.contentEditable = 'false';
+            noteEl.style.outline = '';
+            noteEl.style.padding = '';
+            card.style.cursor = 'grab';
+            card.removeAttribute('draggable');
+            var newNote = noteEl.textContent;
+            if (newNote !== chit.note) {
+              fetch('/api/chits/' + chit.id, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(Object.assign({}, chit, { note: newNote }))
+              }).then(function (r) { if (r.ok) { chit.note = newNote; if (typeof fetchChits === 'function') fetchChits(); } });
+            } else {
+              if (typeof marked !== 'undefined' && chit.note) {
+                noteEl.innerHTML = (typeof resolveChitLinks === 'function') ? resolveChitLinks(marked.parse(chit.note), chits) : marked.parse(chit.note);
+              }
+            }
+          };
+          noteEl.addEventListener('blur', _lpSaveEdit, { once: true });
+        },
+      });
+    }
   });
 }
 
 function _onNotesDragMove(e) {
+  _onNotesDragMoveXY(e.clientX, e.clientY);
+}
+
+/** Shared drag-move logic for notes reorder (used by both mouse and touch). */
+function _onNotesDragMoveXY(clientX, clientY) {
   if (!_notesDragState) return;
   const s = _notesDragState;
   const containerRect = s.container.getBoundingClientRect();
 
   // Float the dragged card under the cursor
-  const newLeft = e.clientX - containerRect.left - s.offsetX + s.container.scrollLeft;
-  const newTop = e.clientY - containerRect.top - s.offsetY + s.container.scrollTop;
+  const newLeft = clientX - containerRect.left - s.offsetX + s.container.scrollLeft;
+  const newTop = clientY - containerRect.top - s.offsetY + s.container.scrollTop;
   s.card.style.left = newLeft + 'px';
   s.card.style.top = newTop + 'px';
 
   // Which column is the cursor over?
-  const cursorX = e.clientX - containerRect.left;
+  const cursorX = clientX - containerRect.left;
   const targetCol = Math.min(
     s.colCount - 1,
     Math.max(0, Math.floor((cursorX - NOTES_GAP) / (s.actualCardWidth + NOTES_GAP)))
@@ -1199,7 +1307,7 @@ function _onNotesDragMove(e) {
   let insertIdx = colCards.length;
   for (let i = 0; i < colCards.length; i++) {
     const r = colCards[i].getBoundingClientRect();
-    if (e.clientY < r.top + r.height / 2) {
+    if (clientY < r.top + r.height / 2) {
       insertIdx = i;
       break;
     }
@@ -1265,6 +1373,10 @@ function _onNotesDragEnd(e) {
   document.removeEventListener('keydown', _onNotesDragKey);
 
   if (!_notesDragState) return;
+
+  // Suppress any click/dblclick that fires after this mouseup
+  if (typeof _markDragJustEnded === 'function') _markDragJustEnded();
+
   const s = _notesDragState;
 
   // Clean up indicator and card styles
@@ -1604,9 +1716,15 @@ function _openMobileActionsModal() {
 // ── Long-press to simulate shift-click (mobile quick edit) ───────────────────
 
 /**
- * Attach a long-press handler to an element. On mobile, a ~500ms press
+ * Attach a long-press handler to an element. On mobile, a long press
  * triggers the callback (used to open quick edit modal, same as shift-click).
  * Cancels if the finger moves (drag) or lifts early (tap).
+ *
+ * DEPRECATED: Prefer enableTouchGesture() from shared-touch.js for new code.
+ * This function remains for elements that only need long-press without drag
+ * (e.g. calendar events which have their own drag system).
+ *
+ * Uses centralized timing from shared-touch.js (TOUCH_LONGPRESS_HOLD_MS).
  *
  * @param {HTMLElement} el - The element to attach to
  * @param {Function} callback - Called on successful long press, receives the element
@@ -1617,8 +1735,8 @@ function enableLongPress(el, callback) {
   var _lpFired = false;
   var _startX = 0;
   var _startY = 0;
-  var HOLD_MS = 600;
-  var MOVE_THRESHOLD = 15;
+  var HOLD_MS = (typeof TOUCH_LONGPRESS_HOLD_MS !== 'undefined') ? TOUCH_LONGPRESS_HOLD_MS : 800;
+  var MOVE_THRESHOLD = (typeof TOUCH_DRAG_MOVE_THRESHOLD !== 'undefined') ? TOUCH_DRAG_MOVE_THRESHOLD : 10;
 
   el.addEventListener('touchstart', function (e) {
     if (e.touches.length !== 1) return;
@@ -1628,9 +1746,15 @@ function enableLongPress(el, callback) {
     _startX = e.touches[0].clientX;
     _startY = e.touches[0].clientY;
     _lpTimer = setTimeout(function () {
+      // Re-check drag state — a drag may have started during the hold period
+      if (window._touchDragActive || window._dragJustEnded) { _lpTimer = null; return; }
       _lpFired = true;
-      // Vibrate if available (haptic feedback)
-      if (navigator.vibrate) navigator.vibrate(30);
+      // Haptic feedback — use _cwocVibrate for Android compat
+      if (typeof _cwocVibrate === 'function') {
+        _cwocVibrate(200);
+      } else if (navigator.vibrate) {
+        navigator.vibrate(200);
+      }
       callback(el);
     }, HOLD_MS);
   }, { passive: true });

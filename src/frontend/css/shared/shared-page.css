@@ -330,6 +330,7 @@ input[type="color"] {
 }
 .author-info a { color: #6b4e31; text-decoration: none; }
 .author-info a:hover { color: #4a2c2a; text-decoration: underline; }
+.cwoc-footer-copyright { cursor: help; }
 
 /* ── Modal ───────────────────────────────────────────────────────────────── */
 .modal {
@@ -436,6 +437,32 @@ input[type="color"] {
     color: #8b5a2b;
     text-align: center;
     opacity: 0.8;
+}
+
+/* ── Touch long-press drag visual feedback ────────────────────────────────── */
+.cwoc-touch-dragging {
+    opacity: 0.7 !important;
+    transform: scale(1.04);
+    box-shadow: 0 6px 24px rgba(107, 66, 38, 0.45), 0 0 0 3px #8b5a2b !important;
+    z-index: 100;
+    outline: 2px dashed #a0522d;
+    outline-offset: 2px;
+    transition: transform 0.15s ease, box-shadow 0.15s ease, outline 0.15s ease;
+    animation: cwoc-drag-pulse 1s ease-in-out infinite;
+}
+
+/* ── Desktop HTML5 drag active feedback ───────────────────────────────────── */
+.cwoc-dragging {
+    opacity: 0.4 !important;
+    outline: 2px dashed #a0522d;
+    outline-offset: 2px;
+    box-shadow: 0 4px 16px rgba(107, 66, 38, 0.3);
+}
+
+/* ── Drag pulse animation ─────────────────────────────────────────────────── */
+@keyframes cwoc-drag-pulse {
+    0%, 100% { outline-color: #a0522d; }
+    50% { outline-color: #d2691e; }
 }
 
 /* ── Tablet Responsive (≤ 768px) ────────────────────────────────────────── */

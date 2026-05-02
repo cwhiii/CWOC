@@ -3,6 +3,23 @@ The user profile is also supposed to include all information found in the contac
 
 
 
+
+- usesrs in roladex: i should be able to view a user like a contact, and view theri values. Should be able to favorite tehem, jsut like a contact. 
+- if stealth is enabled or a chit, all sahring & assiement options should be crewyed out. 
+- I should be able to drag & drop an all-day chit to a different all-day day.
+- change hotkry fir x days from ".-->s" to ".-->x" update help & ref. 
+- make the profile picrures in the rop right corner of each page teh same height as the buttons its next to.
+- in tasks view, the passed-due items getspecial coloring on them, good! Update the text fo rhe psased-due items to have the label: Passed Due: [due date]. Including the year, in format YYYY-MMM-DD. 
+- in the indicators, on the graphs the date overlaps if they are close together,  have it use smarter, shorter lables, or oly day of the month or somehting better to previent this. 
+- in indicators vierw, use a plain red heart fo rhear rate chart & filter. 
+- in indicators view, let me drag & drop the charts to reorganize them just like is impliments in the notes view. 
+- Combine alerts should be honored on all views, it's not in tasks.
+- On mobile, swiping the top bar should cycle through views.
+- on mobile, scrinking and expanding the sieze of the day veiw doen't adjust the size of the events, so they overflow oddly. fix. 
+- on the suer switchter, put th econteol bittons on teh same line. 
+
+
+
 also The background for the favorites header in the expanded people thing in the chat editor is supposed to be darker to make the gold stand out better
 
 

@@ -110,6 +110,12 @@
     .chit-header-row {
         flex-wrap: wrap;
     }
+    .chit-header-title {
+        white-space: normal;
+        overflow: visible;
+        text-overflow: unset;
+        word-break: break-word;
+    }
     .chit-header-meta {
         flex-wrap: wrap;
         white-space: normal;
@@ -209,6 +215,16 @@
     /* ── Views button: visible on mobile ──────────────────────────────────── */
     .mobile-views-btn {
         display: inline-flex !important;
+        margin-left: 0;
+        margin-right: 0;
+        order: 11;
+    }
+
+    /* ── Profile menu: tight against views button on mobile ──────────────── */
+    .cwoc-profile-menu {
+        order: 10;
+        margin-left: auto !important;
+        margin-right: 0 !important;
     }
 
     /* ── Reference overlay: single-column within each section ─────────────── */
@@ -577,6 +593,7 @@
         white-space: normal !important;
         overflow: visible !important;
         text-overflow: unset !important;
+        word-break: break-word;
     }
     .chit-header-meta {
         width: 100%;
@@ -585,6 +602,19 @@
         overflow: visible !important;
         gap: 4px !important;
         font-size: 0.78em;
+    }
+
+    /* ── Note preview: expandable on mobile ───────────────────────────────── */
+    .note-preview {
+        max-height: 4.5em;
+        overflow: hidden;
+    }
+    .note-preview-toggle {
+        display: block;
+    }
+    .note-preview.note-preview-expanded {
+        max-height: none;
+        overflow: visible;
     }
 
     /* ── Task view: stack status + note vertically ────────────────────────── */

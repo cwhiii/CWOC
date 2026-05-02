@@ -19,7 +19,7 @@
     </head>
     <body>
         <div class="header-row">
-            <a href="/" title="Go to Dashboard" style="display:inline-block;flex-shrink:0;"><img src="/static/create_new.png" alt="Logo" class="header-image" /></a>
+            <a href="#" id="editor-logo-link" title="Go to Dashboard" style="display:inline-block;flex-shrink:0;" onclick="window.location.href = _getEditorReturnUrl(); return false;"><img src="/static/create_new.png" alt="Logo" class="header-image" /></a>
             <h1>Chit Editor</h1>
             <div class="buttons">
                 <div class="left-buttons">
@@ -1250,7 +1250,7 @@
                 </div>
             </div>
         </div>
-        <div class="author-info">&copy; 2026 C.W.'s Omni Chits &middot; <a href="https://www.cwholemaniii.com/pages/home.shtml" target="_blank">www.cwholemaniii.com</a></div>
+        <div class="author-info"><span id="cwoc-footer-copyright" class="cwoc-footer-copyright">&copy; 2026 C.W.&rsquo;s Omni Chits</span> &middot; <a href="https://www.cwholemaniii.com/pages/home.shtml" target="_blank">www.cwholemaniii.com</a></div>
         <script src="/frontend/js/editor/editor_checklists.js"></script>
         <script src="/frontend/js/editor/editor_projects.js"></script>
         <script src="/frontend/js/shared/shared-auth.js"></script>

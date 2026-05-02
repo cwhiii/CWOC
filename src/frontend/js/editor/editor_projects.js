@@ -134,6 +134,45 @@ function renderChildChitsByStatus() {
   });
 
   container.appendChild(projectContainer);
+
+  // Touch drag support for project cards between status columns
+  if (typeof enableTouchGesture === 'function') {
+    projectContainer.querySelectorAll('.project-item[data-chit-id]').forEach(function (card) {
+      var chitId = card.dataset.chitId;
+      enableTouchGesture(card, {
+        onDragStart: function () {
+          card.classList.add('dragging');
+          card.style.opacity = '0.4';
+        },
+        onDragMove: function (data) {
+          // Highlight the section under the finger
+          projectContainer.querySelectorAll('.project-status-section').forEach(function (s) {
+            s.classList.remove('drag-over');
+          });
+          var target = document.elementFromPoint(data.clientX, data.clientY);
+          if (target) {
+            var targetSection = target.closest('.project-status-section');
+            if (targetSection) targetSection.classList.add('drag-over');
+          }
+        },
+        onDragEnd: function (data) {
+          card.classList.remove('dragging');
+          card.style.opacity = '';
+          projectContainer.querySelectorAll('.project-status-section').forEach(function (s) {
+            s.classList.remove('drag-over');
+          });
+          var target = document.elementFromPoint(data.clientX, data.clientY);
+          if (!target) return;
+          var targetSection = target.closest('.project-status-section');
+          if (!targetSection) return;
+          var newStatus = targetSection.dataset.status;
+          if (chitId && projectState.childChits[chitId]) {
+            updateChitStatus(chitId, newStatus);
+          }
+        },
+      });
+    });
+  }
 }
 
 function updateChitStatus(chitId, newStatus) {
