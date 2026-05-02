@@ -135,7 +135,7 @@
                                 <div class="date-mode-row" id="startEndRow">
                                     <label class="date-mode-label">
                                         <input type="radio" name="dateMode" value="startend" id="dateModeStartEnd" onchange="onDateModeChange()" />
-                                        Start/End
+                                        🗓️ Start/End
                                     </label>
                                     <div class="date-mode-fields" id="startEndFields">
                                         <input type="text" id="start_datetime" class="date-time date-input" placeholder="Start Date" />
@@ -150,7 +150,7 @@
                                 <div class="date-mode-row" id="dueRow">
                                     <label class="date-mode-label">
                                         <input type="radio" name="dateMode" value="due" id="dateModeDue" onchange="onDateModeChange()" />
-                                        Due
+                                        ⏳ Due
                                     </label>
                                     <div class="date-mode-fields" id="dueFields">
                                         <input type="text" id="due_datetime" class="date-time date-input" placeholder="Due Date" />
@@ -159,13 +159,13 @@
                                     </div>
                                 </div>
 
-                                <!-- Perpetual checkbox (only visible for habits) -->
+                                <!-- Perpetual (only visible for habits — radio option) -->
                                 <div class="date-mode-row" id="perpetualRow" style="display:none;">
-                                    <label class="date-mode-label" style="cursor:pointer;">
-                                        <input type="checkbox" id="perpetualEnabled" onchange="onPerpetualToggle()" />
+                                    <label class="date-mode-label">
+                                        <input type="radio" name="dateMode" value="perpetual" id="dateModePerpetual" onchange="onDateModeChange()" />
                                         ♾️ Perpetual
                                     </label>
-                                    <div class="date-mode-fields">
+                                    <div class="date-mode-fields" id="perpetualFields">
                                         <span id="perpetualDescription" class="cwoc-inline-label-sm" style="color:#6b4e31;">Starts now, continues forever</span>
                                     </div>
                                 </div>

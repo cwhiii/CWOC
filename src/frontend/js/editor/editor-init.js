@@ -170,9 +170,6 @@ function resetEditorForNewChit() {
   // Reset habit hide overall (default: show = checked)
   var hideOverallCb = document.getElementById('habitHideOverall');
   if (hideOverallCb) hideOverallCb.checked = true;
-  // Reset perpetual
-  var perpetualCb = document.getElementById('perpetualEnabled');
-  if (perpetualCb) perpetualCb.checked = false;
   // Re-enable end date inputs
   var endDateInput = document.getElementById('end_datetime');
   if (endDateInput) { endDateInput.disabled = false; endDateInput.title = ''; endDateInput.style.opacity = ''; }
@@ -464,34 +461,10 @@ async function loadChitData(chitId) {
       hideOverallCb.checked = !chit.habit_hide_overall;
     }
 
-    // Load perpetual
-    var perpetualCb = document.getElementById('perpetualEnabled');
-    if (perpetualCb) {
-      perpetualCb.checked = !!chit.perpetual;
-      // Apply perpetual state (disable end date if checked)
-      if (chit.perpetual) {
-        var _endDateInput = document.getElementById('end_datetime');
-        var _endTimeInput = document.getElementById('end_time');
-        if (_endDateInput) {
-          _endDateInput.disabled = true;
-          _endDateInput.title = 'Perpetual — no end date';
-          _endDateInput.style.opacity = '0.5';
-        }
-        if (_endTimeInput) {
-          _endTimeInput.disabled = true;
-          _endTimeInput.style.opacity = '0.5';
-        }
-        // Update perpetual description with start date
-        var _descEl = document.getElementById('perpetualDescription');
-        var _startVal = (document.getElementById('start_datetime') || {}).value || '';
-        if (_descEl && typeof _fmtPerpetualDate === 'function') {
-          var _dateFmt = _fmtPerpetualDate(_startVal);
-          _descEl.textContent = _dateFmt
-            ? 'Starts now, continues forever. (Started ' + _dateFmt + '.)'
-            : 'Starts now, continues forever';
-        }
-      }
-    }
+    // Load perpetual — now a radio option in dateMode
+    // If chit.perpetual is true, override the date mode to 'perpetual'
+    // (this happens BEFORE _setDateMode below, so we store it and apply after)
+    window._chitIsPerpetual = !!chit.perpetual;
 
     // Sync habit frequency dropdown from the chit's recurrence rule
     var habitFreqSel = document.getElementById('habitFrequency');
@@ -607,7 +580,7 @@ async function loadChitData(chitId) {
 
     // Set date mode radio based on chit data
     _dateModeSuppressUnsaved = true;
-    const dateMode = _detectDateMode(chit);
+    var dateMode = window._chitIsPerpetual ? 'perpetual' : _detectDateMode(chit);
     _setDateMode(dateMode);
 
     const allDayCheckbox = document.getElementById("allDay");
@@ -1192,6 +1165,18 @@ document.addEventListener("DOMContentLoaded", function () {
 
     // Clear loading guard for new chits
     setTimeout(() => { window._cwocEditorLoading = false; }, 300);
+
+    // Auto-enable habit mode if coming from Tasks tab in Habits view mode
+    try {
+      var _srcTab = localStorage.getItem('cwoc_source_tab');
+      var _srcMode = localStorage.getItem('cwoc_source_tasks_mode');
+      if (_srcTab === 'Tasks' && _srcMode === 'habits') {
+        var _hCb = document.getElementById('habitEnabled');
+        if (_hCb && !_hCb.checked) {
+          onHabitToggle(); // toggles to true, expands everything
+        }
+      }
+    } catch (e) { /* ignore */ }
 
     // Auto-focus title field for new chits
     const titleInput = document.getElementById('title');

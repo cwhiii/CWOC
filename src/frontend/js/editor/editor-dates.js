@@ -16,21 +16,49 @@ function onDateModeChange() {
   const mode = document.querySelector('input[name="dateMode"]:checked')?.value || 'none';
   const startEndFields = document.getElementById('startEndFields');
   const dueFields = document.getElementById('dueFields');
+  const perpetualFields = document.getElementById('perpetualFields');
   const recurrenceFields = document.getElementById('recurrenceFields');
   const alldayRow = document.getElementById('alldayRepeatRow');
+  const _habitActive = document.getElementById('habitEnabled');
+  const _isHabitOn = _habitActive && _habitActive.checked;
 
-  if (startEndFields) {
-    startEndFields.classList.toggle('greyed-out', mode !== 'startend');
-  }
-  if (dueFields) {
-    dueFields.classList.toggle('greyed-out', mode !== 'due');
-  }
+  // Show/hide input fields based on selected mode (hide non-selected, show selected)
+  if (startEndFields) startEndFields.style.display = (mode === 'startend') ? '' : 'none';
+  if (dueFields) dueFields.style.display = (mode === 'due') ? '' : 'none';
+  if (perpetualFields) perpetualFields.style.display = (mode === 'perpetual') ? '' : 'none';
+
   if (recurrenceFields) {
     recurrenceFields.classList.toggle('greyed-out', mode === 'none');
   }
   if (alldayRow) {
     alldayRow.style.display = (mode === 'none') ? 'none' : '';
   }
+
+  // Handle perpetual mode: set start date to today, clear end date
+  if (mode === 'perpetual') {
+    var startDateInput = document.getElementById('start_datetime');
+    if (startDateInput && !startDateInput.value) {
+      var now = new Date();
+      var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      startDateInput.value = now.getFullYear() + '-' + months[now.getMonth()] + '-' + String(now.getDate()).padStart(2, '0');
+    }
+    var endDateInput = document.getElementById('end_datetime');
+    var endTimeInput = document.getElementById('end_time');
+    if (endDateInput) endDateInput.value = '';
+    if (endTimeInput) endTimeInput.value = '';
+    // Update description with start date
+    var descEl = document.getElementById('perpetualDescription');
+    if (descEl && startDateInput && typeof _fmtPerpetualDate === 'function') {
+      var dateFmt = _fmtPerpetualDate(startDateInput.value);
+      descEl.textContent = dateFmt
+        ? 'Starts now, continues forever. (Started ' + dateFmt + '.)'
+        : 'Starts now, continues forever';
+    }
+  }
+
+  // Always hide None row when habit is active
+  var noneRow = document.getElementById('dateModeNoneRow');
+  if (_isHabitOn && noneRow) noneRow.style.display = 'none';
 
   // Show/hide All Day button based on whether a date mode is active
   var allDayBtn = document.getElementById('allDayToggleBtn');
@@ -39,16 +67,13 @@ function onDateModeChange() {
   // Hide repeat row unless a date mode is active — also keep hidden when habit is active
   const repeatRow = document.getElementById('repeatCheckboxRow');
   const repeatOptions = document.getElementById('repeatOptionsBlock');
-  const _habitActive = document.getElementById('habitEnabled');
-  const _isHabitOn = _habitActive && _habitActive.checked;
   if (repeatRow) repeatRow.style.display = (mode === 'none' || _isHabitOn) ? 'none' : '';
   if ((mode === 'none' || _isHabitOn) && repeatOptions) repeatOptions.style.display = 'none';
 
   // Show Complete checkbox only when Due mode is active AND habit is NOT active
   const dueCompleteLabel = document.getElementById('dueCompleteLabel');
-  const _habitOn = document.getElementById('habitEnabled');
   if (dueCompleteLabel) {
-    dueCompleteLabel.style.display = (mode === 'due' && !(_habitOn && _habitOn.checked)) ? 'inline-flex' : 'none';
+    dueCompleteLabel.style.display = (mode === 'due' && !_isHabitOn) ? 'inline-flex' : 'none';
   }
 
   // Re-apply all-day visibility for the active mode
@@ -106,9 +131,11 @@ function _detectDateMode(chit) {
 
 // Set the radio button and apply greying
 function _setDateMode(mode) {
-  const radio = document.getElementById(
-    mode === 'due' ? 'dateModeDue' : mode === 'startend' ? 'dateModeStartEnd' : 'dateModeNone'
-  );
+  var radioId = 'dateModeNone';
+  if (mode === 'due') radioId = 'dateModeDue';
+  else if (mode === 'startend') radioId = 'dateModeStartEnd';
+  else if (mode === 'perpetual') radioId = 'dateModePerpetual';
+  var radio = document.getElementById(radioId);
   if (radio) radio.checked = true;
   onDateModeChange();
 }
@@ -144,12 +171,14 @@ function _updateRecurrenceLabels() {
   // Get the active date for context
   const mode = document.querySelector('input[name="dateMode"]:checked')?.value || 'none';
   let refDate = null;
-  if (mode === 'startend') {
-    const v = document.getElementById('start_datetime')?.value;
-    if (v) refDate = new Date(convertMonthFormat(v) + 'T12:00:00');
-  } else if (mode === 'due') {
-    const v = document.getElementById('due_datetime')?.value;
-    if (v) refDate = new Date(convertMonthFormat(v) + 'T12:00:00');
+  if (typeof convertMonthFormat === 'function') {
+    if (mode === 'startend') {
+      const v = document.getElementById('start_datetime')?.value;
+      if (v) refDate = new Date(convertMonthFormat(v) + 'T12:00:00');
+    } else if (mode === 'due') {
+      const v = document.getElementById('due_datetime')?.value;
+      if (v) refDate = new Date(convertMonthFormat(v) + 'T12:00:00');
+    }
   }
   if (!refDate || isNaN(refDate.getTime())) refDate = new Date();
 
@@ -455,11 +484,10 @@ function onHabitToggle() {
     var noneRow = document.getElementById('dateModeNoneRow');
     if (noneRow) noneRow.style.display = 'none';
 
-    // Hide the Due row — habits use Start/End
-    var dueRow = document.getElementById('dueRow');
-    if (dueRow) dueRow.style.display = 'none';
+    // Show the Due row for habits — "do X times before date Y"
+    // (Due mode for habits = start now, end on due date)
 
-    // Hide the Due Complete checkbox — habits manage completion via goal
+    // Still hide the Due Complete checkbox — habits manage completion via goal
     var dueCompleteLabel = document.getElementById('dueCompleteLabel');
     if (dueCompleteLabel) dueCompleteLabel.style.display = 'none';
 
@@ -490,9 +518,19 @@ function onHabitToggle() {
     if (controlsRow) controlsRow.style.display = '';
     if (calendarRow) calendarRow.style.display = '';
 
-    // Show perpetual row (only for habits)
+    // Show perpetual radio option (only for habits)
     var perpetualRow = document.getElementById('perpetualRow');
     if (perpetualRow) perpetualRow.style.display = '';
+
+    // Auto-collapse Task zone when habit is toggled on
+    var taskSection = document.getElementById('taskSection');
+    var taskContent = document.getElementById('taskContent');
+    if (taskSection && taskContent) {
+      taskContent.style.display = 'none';
+      taskSection.classList.add('collapsed');
+      var tIcon = taskSection.querySelector('.zone-toggle-icon');
+      if (tIcon) tIcon.textContent = '🔽';
+    }
 
     // Header counter will be built by _updateHabitProgressDisplay
 
@@ -550,11 +588,11 @@ function onHabitToggle() {
     var noneRow = document.getElementById('dateModeNoneRow');
     if (noneRow) noneRow.style.display = '';
 
-    // Show the Due row again
-    var dueRow = document.getElementById('dueRow');
-    if (dueRow) dueRow.style.display = '';
-
-    // Show the repeat row again (if a date mode is active and repeat is on)
+    // Uncheck repeat (habit was managing it) but show the row so user can re-enable manually
+    if (repeatCb) {
+      repeatCb.checked = false;
+      onRepeatToggle();
+    }
     var activeMode = document.querySelector('input[name="dateMode"]:checked');
     if (repeatRow && activeMode && activeMode.value !== 'none') {
       repeatRow.style.display = '';
@@ -777,61 +815,8 @@ function onHabitResetToggle() {
  * When unchecked: re-enable end date input.
  */
 function onPerpetualToggle() {
-  var cb = document.getElementById('perpetualEnabled');
-  if (!cb) return;
-  var isOn = cb.checked;
-
-  var startEndRow = document.getElementById('startEndRow');
-  var dueRow = document.getElementById('dueRow');
-  var dateModeNoneRow = document.getElementById('dateModeNoneRow');
-  var descEl = document.getElementById('perpetualDescription');
-
-  if (isOn) {
-    // Switch to Start/End mode silently
-    var startEndRadio = document.getElementById('dateModeStartEnd');
-    if (startEndRadio) startEndRadio.checked = true;
-    _dateModeSuppressUnsaved = true;
-    onDateModeChange();
-    _dateModeSuppressUnsaved = false;
-
-    // Set start date to today
-    var startDateInput = document.getElementById('start_datetime');
-    if (startDateInput) {
-      var now = new Date();
-      var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-      startDateInput.value = now.getFullYear() + '-' + months[now.getMonth()] + '-' + String(now.getDate()).padStart(2, '0');
-    }
-
-    // Clear end date
-    var endDateInput = document.getElementById('end_datetime');
-    var endTimeInput = document.getElementById('end_time');
-    if (endDateInput) endDateInput.value = '';
-    if (endTimeInput) endTimeInput.value = '';
-
-    // Hide all date rows — perpetual means no visible date controls
-    if (startEndRow) startEndRow.style.display = 'none';
-    if (dueRow) dueRow.style.display = 'none';
-    if (dateModeNoneRow) dateModeNoneRow.style.display = 'none';
-
-    // Update description with start date
-    if (descEl) {
-      var startVal = startDateInput ? startDateInput.value : '';
-      var dateFmt = _fmtPerpetualDate(startVal);
-      descEl.textContent = dateFmt
-        ? 'Starts now, continues forever. (Started ' + dateFmt + '.)'
-        : 'Starts now, continues forever';
-    }
-  } else {
-    // Show date rows again
-    if (startEndRow) startEndRow.style.display = '';
-    if (dueRow) dueRow.style.display = '';
-    if (dateModeNoneRow) dateModeNoneRow.style.display = '';
-
-    // Reset description
-    if (descEl) descEl.textContent = 'Starts now, continues forever';
-  }
-
-  setSaveButtonUnsaved();
+  // Legacy — perpetual is now a radio option handled by onDateModeChange
+  onDateModeChange();
 }
 
 /**

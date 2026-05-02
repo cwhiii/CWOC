@@ -34,7 +34,7 @@
                     <li><a href="#alert-indicators">Visual Indicators</a></li>
                     <li><a href="#version-management">Version & Updates</a></li>
                     <li><a href="#audit-log">Audit Log</a></li>
-                    <li><a href="#habits-view">Habits View</a></li>
+                    <li><a href="#habits-view">Habits</a></li>
                     <li><a href="#contacts">Contact Editor</a></li>
                     <li><a href="#sharing">Sharing</a></li>
                     <li><a href="#kiosk">Kiosk</a></li>
@@ -226,7 +226,7 @@
             </ul>
             <p>Saved locations are used by the editor's Location zone dropdown, the compact 📍 dropdown in the title area, the +Location button, and the dashboard weather modal (<kbd>W</kbd>).</p>
             <h3 id="editor">Chit Editor</h3>
-            <p>Collapsible zones: Title, Dates & Times, Task, Location, Tags, People, Notes, Checklist, Alerts, Health Indicators, Color, Projects, Habits. An "📜 Audit Log" button at the bottom links to the filtered audit log for the current chit. 📱 QR button generates data or link QR codes.</p>
+            <p>Collapsible zones: Title, Dates & Times, Task, Location, Tags, People, Notes, Checklist, Alerts, Health Indicators, Color, Projects, Habits. The 🎯 Habit button in the Task zone header toggles habit mode (see <a href="#habits-view">Habits</a>). An "📜 Audit Log" button at the bottom links to the filtered audit log for the current chit. 📱 QR button generates data or link QR codes.</p>
             <p>When creating a new chit, only the zone relevant to the current view is expanded (e.g., Notes zone when coming from the Notes tab). All other zones start collapsed. The title field is auto-focused. If you have a default saved location, it's auto-applied to new chits.</p>
             <h4>Alerts Zone</h4>
             <p>Add notifications, alarms, timers, and stopwatches. Each alarm has a time, days, and optional "Delete chit after dismissal" checkbox — when checked, dismissing the alarm soft-deletes the chit.</p>
@@ -235,7 +235,7 @@
             <h4>Independent Alerts Board</h4>
             <p>Switch to the <strong>Independent</strong> view mode in the Alarms tab sidebar to access a 3-column board for quick alarms, timers, and stopwatches that aren't connected to any chit. Click the <strong>+</strong> button in each column header to add a new item. Edit names, times, and durations inline — changes save automatically on blur. Delete items with the ❌ button. Timers and stopwatches have Start/Pause, Reset, and Lap controls just like in the chit editor. Timers and stopwatches start immediately when created — no save step needed.</p>
             <h4>Task Zone</h4>
-            <p>Status (ToDo, In Progress, Blocked, Complete), Priority (High, Medium, Low), and Severity (Critical, Major, Normal, Minor). When a chit is shared with other users, an <strong>Assignee</strong> dropdown appears after Severity, listing only the users the chit is currently shared with. Removing a shared user from the People zone automatically updates the Assignee options.</p>
+            <p>Status (ToDo, In Progress, Blocked, Complete), Priority (High, Medium, Low), and Severity (Critical, Major, Normal, Minor). The <strong>🎯 Habit</strong> button is always visible in the Task zone header (even when collapsed) — click it to toggle habit mode on/off. When a chit is shared with other users, an <strong>Assignee</strong> dropdown appears after Severity, listing only the users the chit is currently shared with. Removing a shared user from the People zone automatically updates the Assignee options.</p>
             <p>In the Tasks view, status is shown with matching icons: ● ToDo, ⟳ In Progress, ⊘ Blocked, ✓ Complete.</p>
             <h4>Location Zone</h4>
             <ul>
@@ -289,6 +289,7 @@
                 <li><strong>Clocks</strong> — Choose active clocks, drag to reorder, set orientation (horizontal/vertical)</li>
                 <li><strong>Default Filters</strong> — Per-tab default search text</li>
                 <li><strong>Visual Indicators</strong> — Per-indicator visibility (Always / Never / If Space), combine alerts toggle</li>
+                <li><strong>Habits</strong> — Success rate window (7/30/90 days or all time), default show habits on calendar toggle</li>
                 <li><strong>Version &amp; Updates</strong> — Current version, upgrade button, update log</li>
                 <li><strong>Data</strong> — Audit log link, trash link, audit log pruning limits</li>
                 <li><strong>Data Management</strong> — JSON export/import for chit data and user data (add or replace modes)</li>
@@ -396,54 +397,88 @@
             <p>Auto-pruning runs at startup and after saving settings. Uncheck "Enable Pruning" to disable all automatic pruning.</p>
             <h4>Column Reordering</h4>
             <p>On the audit log page, you can drag and drop column headers to reorder them. The detail toggle column (first column) is fixed. Column order is not persisted — it resets on page reload.</p>
-            <h3 id="habits-view">Habits View</h3>
-            <p>CWOC supports explicit habit tracking via an opt-in model. Any chit can become a habit by checking the <strong>"Track as habit"</strong> checkbox in the editor's Dates zone. Habits have their own goal/progress system, charts, and a dedicated Habits view in the Tasks tab.</p>
-            <h4>Marking a Chit as a Habit</h4>
-            <p>The "🎯 Habit" button is always visible in the editor's Dates zone header. When you click it:</p>
+            <h3 id="habits-view">Habits</h3>
+            <p>CWOC supports explicit habit tracking via an opt-in model. Any chit can become a habit, with its own goal/progress system, charts, reset periods, and a dedicated Habits view in the Tasks tab.</p>
+
+            <h4>Habit Toggle</h4>
+            <p>The <strong>🎯 Habit</strong> button lives in the Task zone header (visible even when the zone is collapsed). Clicking it toggles habit mode on and off. When you enable habit mode:</p>
             <ul>
                 <li><strong>Auto-enables Repeat</strong> — If the chit doesn't already have a recurrence rule, Repeat is automatically turned on with a default of Daily</li>
-                <li><strong>Locks Repeat</strong> — While habit is active, the Repeat checkbox is locked on (you must turn off the habit first to disable Repeat)</li>
+                <li><strong>Locks Repeat</strong> — While habit is active, the Repeat checkbox is locked on (turn off the habit first to disable Repeat)</li>
                 <li><strong>Reveals habit controls</strong> — A Goal input and progress display (X / Y) appear on a dedicated row. A separate "📅 Calendar" row shows the "Show on calendar" toggle</li>
                 <li><strong>Forces All Day</strong> — Habits are always all-day events. The "📅 All Day" button shows active and is disabled while habit is on</li>
                 <li><strong>Shows 🎯 icon</strong> — Habit chits display the 🎯 target icon instead of the 🔁 repeat icon everywhere: editor title bar, calendar events, quick-edit modal, and tooltips</li>
                 <li><strong>Auto-tags</strong> — The system automatically adds <code>Habits</code> and <code>Habits/[title]</code> tags to the chit</li>
+                <li><strong>Auto-enable from Habits mode</strong> — Creating a new chit from the Tasks tab while in Habits mode auto-enables habit mode on the new chit</li>
             </ul>
+
+            <h4>Date Options for Habits</h4>
+            <p>When habit mode is active, the Dates zone offers three radio options (the "None" option is hidden):</p>
+            <ul>
+                <li><strong>🗓️ Start/End</strong> — Set a start and end date range for the habit</li>
+                <li><strong>⏳ Due</strong> — "Do X times before date Y." Translates to start = now, end = the due date</li>
+                <li><strong>♾️ Perpetual</strong> — Starts now, continues forever with no end date. This is a radio option in the date mode selector, not a separate checkbox</li>
+            </ul>
+
             <h4>Goal and Progress</h4>
             <p>Each habit has a <strong>Goal</strong> (how many completions per period you're aiming for, minimum 1) and a <strong>Progress</strong> count (how many you've done this period). When progress reaches the goal, the chit is automatically marked Complete. Progress is capped at the goal value and can never exceed it.</p>
+
+            <h4>Habits Zone (Editor)</h4>
+            <p>The chit editor includes a <strong>🎯 Habits</strong> collapsible zone (visible only when habit mode is on). It contains three collapsible sections:</p>
+            <ul>
+                <li><strong>Settings</strong> — Goal per cycle (Day/Week/Month/Year), Reset period (checkbox to enable, then number + unit), Show on calendar views toggle, Show overall % in view toggle</li>
+                <li><strong>Charts</strong> — Three canvas-based charts: completion over time (bar chart), success rate trend (line chart), and streak timeline. Charts update when you edit past period counts. The time range matches your Success Rate Window setting</li>
+                <li><strong>History</strong> — Past periods in a 2-column layout with [−] X/Y [+] counter widgets for retroactive editing of completion counts</li>
+            </ul>
+            <p>A counter widget also appears in the zone header for quick increment/decrement without expanding the zone.</p>
+
+            <h4>Reset Period (Cooldown)</h4>
+            <p>Each habit can have an optional <strong>Reset Period</strong> — a cooldown after completing one unit. Enable it with the "Enable reset" checkbox, then set "Every [X] [Day(s)/Week(s)]". The available units are limited to one level smaller than the cycle (e.g., a Weekly cycle can only use Day(s) for reset; a Monthly cycle can use Day(s) or Week(s)). When the reset period is active (you've already incremented within the current reset window), the + button or checkbox is disabled and the habit moves to the <strong>😌 Out of Mind</strong> section.</p>
+
             <h4>Switching to Habits Mode</h4>
-            <p>When the Tasks tab is active, the sidebar shows a View Mode section with three buttons: <strong>📋 Tasks</strong>, <strong>🎯 Habits</strong>, and <strong>📌 Assigned</strong>. Click "Habits" to enter Habits mode. Your selection is remembered across sessions. Only chits explicitly marked with "Track as habit" appear here — not all recurring chits.</p>
+            <p>When the Tasks tab is active, the sidebar shows a View Mode section with three buttons: <strong>📋 Tasks</strong>, <strong>🎯 Habits</strong>, and <strong>📌 Assigned</strong>. Click "Habits" to enter Habits mode. Your selection is remembered across sessions. Only chits explicitly marked as habits appear here — not all recurring chits.</p>
+
+            <h4>Habits View Sections</h4>
+            <p>The Habits view organizes habits into three sections:</p>
+            <ul>
+                <li><strong>🔜 On Deck</strong> — Habits ready to be worked on, sorted by urgency (least time per remaining action first)</li>
+                <li><strong>😌 Out of Mind</strong> — Habits with an active reset period (recently completed, waiting for cooldown). Shows "☐ Too soon to complete again. Resets on [date]."</li>
+                <li><strong>✅ Accomplished</strong> — Completed habits for the current cycle. Shows "✅ Complete for this cycle. (Next cycle starts [date].)"</li>
+            </ul>
+            <p>Habits animate with a fade-out when moving between sections.</p>
+
             <h4>Habit Cards</h4>
             <p>Each habit appears as a card showing:</p>
             <ul>
-                <li><strong>Progress</strong> — Displayed as "X / Y" where X is the current period's completion count and Y is the goal</li>
-                <li><strong>Interaction</strong> — For goal=1 habits, a checkbox toggles complete/incomplete. For goal&gt;1 habits, +/− buttons increment or decrement the count</li>
-                <li><strong>Frequency label</strong> — The recurrence pattern (e.g., "Every day", "Every week on Mon, Wed, Fri")</li>
-                <li><strong>Streak</strong> — A 🔥 flame icon followed by the count of consecutive periods where the goal was met, walking backward from the most recent past period. Broken-off (skipped) periods are neutral and don't break the streak</li>
-                <li><strong>Cycle progress</strong> — A teal badge showing the percentage of the way to the goal this period (e.g., 4/5 = 80%)</li>
-                <li><strong>Overall success rate</strong> — A brown badge showing the percentage of past cycles where the goal was fully met, within the configured success window</li>
-                <li><strong>Status badge</strong> — Shows the current status when set</li>
-                <li><strong>Title</strong> — Double-click or long-press to open in the editor, matching standard interaction patterns</li>
+                <li><strong>Title</strong> — With a period label (e.g., "Week of May 5"). Double-click or long-press to open in the editor</li>
+                <li><strong>Metric boxes</strong> — Four inline metrics:
+                    <ul>
+                        <li>📊 <strong>Progress</strong> — X/Y each [unit] with [−] [+] buttons</li>
+                        <li>🎯 <strong>Cycle %</strong> — Percentage of the way to the goal this period</li>
+                        <li>📈 <strong>Overall %</strong> — Percentage of past cycles where the goal was fully met (hideable per-habit)</li>
+                        <li>🔥 <strong>Streak</strong> — Consecutive completed periods walking backward; broken-off periods are neutral</li>
+                    </ul>
+                </li>
+                <li><strong>Note preview</strong> — Rendered markdown on the right side of the card (7-line max)</li>
             </ul>
+
+            <h4>Per-Habit Options</h4>
+            <ul>
+                <li><strong>Show overall % in view</strong> — Default on. When unchecked, the Overall % metric box is hidden from the habit card</li>
+                <li><strong>Show on calendar views</strong> — When off, the habit is hidden from all calendar views but still appears in the Habits view. Default for new habits is controlled by Settings → Habits</li>
+                <li><strong>Reset period</strong> — Optional cooldown (see above)</li>
+                <li><strong>Perpetual mode</strong> — Via the ♾️ Perpetual date radio option</li>
+            </ul>
+
             <h4>Period Rollover</h4>
             <p>Habits reset automatically at period boundaries. When a new period starts (e.g., a new day for daily habits, a new week for weekly), the system snapshots the previous period's progress into the recurrence exceptions history, resets progress to 0, and clears the Complete status. Rollover is evaluated lazily — when you open the Habits view or the editor, not via a background process.</p>
-            <h4>Habits Zone (Editor)</h4>
-            <p>The chit editor includes a <strong>Habits</strong> collapsible zone (visible only when "Track as habit" is checked). It contains a collapsible <strong>Settings</strong> section with habit controls (goal, frequency, reset period, calendar visibility, perpetual mode, and a read-only dates summary), plus:</p>
-            <ul>
-                <li><strong>Period history</strong> — Past periods listed in reverse chronological order with their completion counts (X / Y). Click any count to edit it inline — useful for correcting mistakes or filling in data you forgot to record</li>
-                <li><strong>Charts</strong> — Three canvas-based charts in a 2-column grid: completion over time (bar chart), success rate trend (line chart), and streak history (timeline). Charts update when you edit past period counts. The time range matches your Success Rate Window setting</li>
-            </ul>
-            <h4>Calendar Visibility</h4>
-            <p>Each habit has a <strong>"Show on calendar"</strong> toggle. When off, the habit is hidden from all calendar views but still appears in the Habits view. The default value for new habits is controlled by the <strong>"Default: show habits on calendar"</strong> setting in Settings → Habits.</p>
-            <h4>Sorting</h4>
-            <p>Habit cards are sorted with incomplete habits first and completed habits pushed to the bottom. Within each group, the existing sort and filter settings are preserved.</p>
-            <h4>Reset Period (Cooldown)</h4>
-            <p>Each habit can have an optional <strong>Reset Period</strong> — a cooldown after incrementing. For example, "Clean the shower twice a month" with a weekly reset means you can only increment once per week. Set via the <strong>⏳ Reset</strong> dropdown in the editor (None, Daily, Weekly, Monthly). When the reset period is active (you've already incremented within the current period), the + button or checkbox is disabled and greyed out, and the habit moves to the <strong>😌 Out of Mind</strong> section.</p>
-            <h4>Out of Mind Section</h4>
-            <p>Habits where you've done your part for the reset period but the cycle isn't complete yet appear in a new <strong>"😌 Out of Mind"</strong> section between On Deck and Accomplished. These cards are faded (opacity 0.6) to indicate they're resting. Once the reset period elapses, they return to On Deck.</p>
-            <h4>Hide Overall %</h4>
-            <p>Each habit has a <strong>"Hide overall % in view"</strong> checkbox in the editor. When checked, the Overall success rate percentage badge is hidden from the habit card in the Habits view. Useful for habits where the historical rate isn't meaningful.</p>
-            <h4>Perpetual Checkbox</h4>
-            <p>The <strong>♾️ Perpetual</strong> checkbox at the top of the Dates zone sets the start date to today and disables the end date — "starts now, continues forever." Useful for habits and ongoing chits that have no planned end date.</p>
+
+            <h4>Habit Icon</h4>
+            <p>Habit chits use the 🎯 icon (replacing 🔁) everywhere: calendar chits, visual indicators, editor title bar, and quick-edit modal.</p>
+
+            <h4>Sidebar Filter</h4>
+            <p>The sidebar's Show section includes a <strong>"🎯 Hide Habits"</strong> checkbox that filters habits from all views when checked.</p>
+
             <h4>Settings</h4>
             <p>The Settings page includes a Habits section with:</p>
             <ul>

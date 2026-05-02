@@ -154,9 +154,9 @@ async function buildChitObject() {
   var showOverallCb = document.getElementById('habitHideOverall');
   chit.habit_hide_overall = showOverallCb ? !showOverallCb.checked : false;
 
-  // Perpetual
-  var perpetualCb = document.getElementById('perpetualEnabled');
-  chit.perpetual = perpetualCb ? perpetualCb.checked : false;
+  // Perpetual (now a radio option in dateMode)
+  var dateMode = document.querySelector('input[name="dateMode"]:checked')?.value || 'none';
+  chit.perpetual = (dateMode === 'perpetual');
 
   const colorInput = document.getElementById("color");
   chit.color = colorInput ? colorInput.value || null : null;
@@ -172,7 +172,6 @@ async function buildChitObject() {
   chit.all_day = isAllDay;
 
   // Respect date mode radio — only include active date fields
-  const dateMode = document.querySelector('input[name="dateMode"]:checked')?.value || 'none';
 
   const startDateInput = document.getElementById("start_datetime");
   const startTimeInput = document.getElementById("start_time");
@@ -199,8 +198,21 @@ async function buildChitObject() {
       dueTimeInput ? dueTimeInput.value : "",
       isAllDay, false,
     );
-    chit.start_datetime = null;
+    // For habits in Due mode: "do X times before date Y" = start now, end on due date
+    if (chit.habit) {
+      var now = new Date();
+      chit.start_datetime = now.toISOString();
+      chit.end_datetime = chit.due_datetime;
+    } else {
+      chit.start_datetime = null;
+      chit.end_datetime = null;
+    }
+  } else if (dateMode === 'perpetual') {
+    // Perpetual: start now, no end, no due
+    var now = new Date();
+    chit.start_datetime = now.toISOString();
     chit.end_datetime = null;
+    chit.due_datetime = null;
   } else {
     chit.start_datetime = null;
     chit.end_datetime = null;

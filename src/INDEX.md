@@ -34,7 +34,7 @@ Package marker. No public exports.
 | `AuthMiddleware` | (imported from `middleware.py`) Session-based auth middleware — validates `cwoc_session` cookie, injects user identity into `request.state` |
 | `on_startup()` | Startup event — calls `start_weather_schedulers()` |
 
-Registers all route modules (including `auth_router`, `users_router`, `sharing_router`, `notifications_router`, and `network_access_router`), runs all migrations (including `migrate_add_multi_user()`, `migrate_add_sharing()`, `migrate_add_kiosk_users()`, `migrate_add_network_access()`, `migrate_add_notifications()`, and `migrate_habits_overhaul()`) and `init_db()` at import time, mounts `StaticFiles` for frontend, static, and data directories.
+Registers all route modules (including `auth_router`, `users_router`, `sharing_router`, `notifications_router`, and `network_access_router`), runs all migrations (including `migrate_add_multi_user()`, `migrate_add_sharing()`, `migrate_add_kiosk_users()`, `migrate_add_network_access()`, `migrate_add_notifications()`, `migrate_habits_overhaul()`, and `migrate_habits_phase2()`) and `init_db()` at import time, mounts `StaticFiles` for frontend, static, and data directories.
 
 ### 1.3 `src/backend/models.py` — Pydantic Models
 
@@ -787,6 +787,7 @@ Coordinator for shared code between dashboard and editor. Contains glue code for
 | `_persistHabitRollover(chit)` | Persist a habit chit's rollover state to the backend via PUT `/api/chits/{id}` |
 | `getHabitSuccessRate(chit, windowDays)` | Calculate the percentage of periods where `habit_success >= habit_goal` within a rolling window (7, 30, 90 days, or "all"); excludes broken-off dates from both numerator and denominator; falls back to legacy `completed` field for old entries |
 | `getHabitStreak(chit)` | Count consecutive periods where `habit_success >= habit_goal` walking backward from the most recent past period; broken-off dates are neutral and do not break the streak; handles legacy entries |
+| `_buildHabitCounter(opts)` | Build a reusable habit counter widget (HTMLElement) with [−] progress text [+] buttons; accepts `success`, `goal`, `onIncrement`, `onDecrement` callbacks; used by habit cards, habit zone header, and history rows |
 
 #### test_habits_helpers.js — Property Test: getCurrentPeriodDate
 
@@ -935,10 +936,12 @@ Coordinator for shared code between dashboard and editor. Contains glue code for
 | `_buildNotePreview(chit, extraStyle)` | Build an expandable note preview element with "show more/less" toggle for mobile |
 | `displayChecklistView(chitsToDisplay)` | Render the Checklists tab — chits with interactive checklist items |
 | `displayTasksView(chitsToDisplay)` | Render the Tasks tab — chits with status dropdowns and note previews; dispatches to `displayHabitsView` when in habits mode |
-| `displayHabitsView(chitsToDisplay)` | Render the Habits view — filters by `chit.habit === true`, evaluates period rollover, renders habit cards with goal progress, checkbox/counter interactions, success rate badges, and streak indicators |
+| `displayHabitsView(chitsToDisplay)` | Render the Habits view — filters by `chit.habit === true`, evaluates period rollover, renders habit cards in 3 sections (🔜 On Deck, 😌 Out of Mind, ✅ Accomplished) with metric boxes, note preview, and debounced save |
 | `_isResetPeriodActive(chit)` | Check if a habit's reset period cooldown is currently active (user acted within the current Daily/Weekly/Monthly period) |
+| `_getResetEndDate(chit)` | Calculate the date when a habit's reset period ends based on `habit_reset_period` and `habit_last_action_date`; returns null if no reset period or no last action date |
+| `_habitUrgencyScore(h)` | Calculate urgency score for a habit (lower = more urgent): days until next action needed = time left in cycle / remaining completions; used to sort On Deck habits |
 | `_getTodayISO()` | Get today's date as an ISO string (YYYY-MM-DD) |
-| `_renderHabitCards(container, habitChits, windowDays)` | Render habit cards into a container with 3-section sorting: On Deck (actionable), Out of Mind (reset period active), Accomplished (complete); enforces reset period on +/checkbox; respects habit_hide_overall |
+| `_renderHabitCards(container, habitChits, windowDays)` | Render habit cards into a container with 3-section sorting: 🔜 On Deck (sorted by urgency via `_habitUrgencyScore`), 😌 Out of Mind (reset period active), ✅ Accomplished (complete); cards show metric boxes (📊 Progress with [−][+], 🎯 Cycle %, 📈 Overall %, 🔥 Streak), note preview (markdown, 7-line max), period label; fade-out animation between sections; debounced save on increment/decrement |
 | `_persistHabitUpdate(chit)` | Persist a habit chit's updated `habit_success` and status to the backend via PUT `/api/chits/{id}` |
 | `displayNotesView(chitsToDisplay)` | Render the Notes tab — markdown notes in a masonry column layout |
 | `displayAssignedToMeView(chitsToDisplay)` | Render the "Assigned to Me" view — chits where `assigned_to` matches the current user's ID, with owner badges and role indicators |
@@ -1118,11 +1121,11 @@ Date mode system, recurrence picker, time picker dropdown, and date-clearing hel
 | Symbol | Description |
 |--------|-------------|
 | `_dateModeSuppressUnsaved` | Flag to suppress unsaved marking during init |
-| `onDateModeChange()` | Handle date mode radio button change — show/hide Start/End, Due, or None fields and update dependent UI |
+| `onDateModeChange()` | Handle date mode radio button change — show/hide Start/End, Due, Perpetual, or None fields; handles ♾️ Perpetual radio (sets start=now, disables end date) and updates dependent UI |
 | `onDueCompleteToggle()` | Toggle status to Complete when the Due date Complete checkbox is checked |
 | `onStatusChange()` | Sync the Due Complete checkbox when the status dropdown changes |
 | `_detectDateMode(chit)` | Detect the date mode (`'due'`, `'startend'`, or `'none'`) from a chit object |
-| `_setDateMode(mode)` | Set the date mode radio button and apply field greying |
+| `_setDateMode(mode)` | Set the date mode radio button and apply field greying; supports `'perpetual'` mode (sets start=now, disables end date) |
 | `toggleAllDay()` | Toggle all-day mode — hide/show time inputs for all date modes |
 | `_snapMinutes` | Time picker snap interval in minutes (default 15, loaded from settings) |
 | `_updateRecurrenceLabels()` | Update recurrence dropdown labels with contextual day/month names from the active date |
@@ -1139,14 +1142,15 @@ Date mode system, recurrence picker, time picker dropdown, and date-clearing hel
 | `_showTimeDropdown(inputEl)` | Show a snap-aligned time dropdown below a time input element |
 | `clearStartAndEndDates()` | Clear all start/end date and time input fields |
 | `clearDueDate()` | Clear the due date and time input fields |
-| `onHabitToggle()` | Handle "Track as habit" checkbox change — when checked: auto-enable Repeat with Daily if not already on, reveal habit controls, lock Repeat; when unchecked: hide controls, unlock Repeat |
+| `onHabitToggle()` | Handle 🎯 Habit button toggle in the Task zone header — when checked: auto-enable Repeat with Daily if not already on, reveal habit controls, lock Repeat, force all-day, hide "None" date option; when unchecked: hide controls, unlock Repeat, restore date options |
 | `_updateHabitProgressDisplay()` | Update the habit progress "X / Y" display from current `habit_success` and `habit_goal` values |
 | `onHabitGoalChange()` | Handle habit goal input change — enforce minimum of 1, update progress display, mark unsaved |
 | `_toggleAllDayBtn()` | Toggle the All Day button — mirrors the hidden checkbox and calls `toggleAllDay()` |
 | `_updateAllDayBtnState()` | Sync the All Day button appearance (teal active, disabled when habit forces all-day) from the hidden checkbox state |
-| `onPerpetualToggle()` | Handle Perpetual checkbox — when checked: set start date to today, clear/disable end date, switch to Start/End mode, update description with start date; when unchecked: re-enable end date |
+| `onPerpetualToggle()` | Handle ♾️ Perpetual radio option — sets start date to today, disables end date, continues forever. Perpetual is now a radio option in dateMode, not a separate checkbox |
 | `_fmtPerpetualDate()` | Format a date string for the perpetual description (e.g. "May 2, 2026") |
 | `onHabitResetToggle()` | Handle Reset checkbox toggle — show/hide the number and unit inputs |
+| `_updateResetUnitOptions()` | Update the reset period unit dropdown options based on the habit's cycle frequency — limits units to one level smaller than the cycle (e.g., WEEKLY → Day(s) only, MONTHLY → Day(s)/Week(s), YEARLY → Day(s)/Week(s)/Month(s)) |
 
 #### editor-habits.js
 
@@ -1162,6 +1166,7 @@ Habits zone logic: period history display, inline editing of past counts, and ca
 | `_drawSuccessRateChart(canvas, exceptions)` | Draw a success rate trend line chart showing rolling percentage over time |
 | `_drawStreakChart(canvas, exceptions)` | Draw a streak timeline visualization showing consecutive completion periods |
 | `_toggleHabitLogZone(visible)` | Show or hide the Habits zone based on the habit flag state |
+| `_formatCurrentPeriodLabel(chit)` | Format a human-readable label for the current habit period (e.g., "Week of May 5", "May 2026", "May 2, 2026") based on the recurrence frequency |
 
 #### editor-tags.js
 

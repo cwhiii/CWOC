@@ -219,6 +219,10 @@ function storePreviousState() {
   previousState = { tab: currentTab, view: currentView };
   // Save the current tab separately so the editor knows which view we came from
   localStorage.setItem('cwoc_source_tab', currentTab);
+  // Also save the tasks view mode so the editor can auto-enable habit mode
+  if (typeof _tasksViewMode !== 'undefined') {
+    localStorage.setItem('cwoc_source_tasks_mode', _tasksViewMode);
+  }
   // Save full UI state to localStorage for restoration after editor
   const state = {
     tab: currentTab,
