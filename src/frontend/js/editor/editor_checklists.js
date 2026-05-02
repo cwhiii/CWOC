@@ -333,6 +333,10 @@ class Checklist {
     if (this.editingItem) return;
     this.editingItem = item;
 
+    // Disable draggable on the parent item so clicks work normally in the textarea
+    var itemEl = textSpan.closest('.checklist-item, .completed-checklist-item, .ghost-checklist-item');
+    if (itemEl) itemEl.setAttribute("draggable", "false");
+
     // Use textarea so Shift+Enter can insert newlines
     var ta = document.createElement("textarea");
     ta.value = item.text;
@@ -383,6 +387,8 @@ class Checklist {
         item.text = ta.value.trim();
         self._notifyChange();
       }
+      // Re-enable draggable
+      if (itemEl) itemEl.setAttribute("draggable", "true");
       ta.remove();
       textSpan.style.display = "";
       textSpan.textContent = item.text;

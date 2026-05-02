@@ -166,6 +166,11 @@ function renderInlineChecklist(container, chit, onUpdate) {
       }
       // Update the progress count element if it exists
       _updateChecklistProgressCount(container, chit);
+      // Strike through title if all items are now checked
+      var allDone = chit.checklist.length > 0 && chit.checklist.every(function(i) { return i.checked || i.done; });
+      var card = container.closest('.chit-card') || container;
+      if (allDone) { card.classList.add('checklist-all-done'); }
+      else { card.classList.remove('checklist-all-done'); }
     });
 
     const textSpan = document.createElement('span');

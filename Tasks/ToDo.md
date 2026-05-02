@@ -25,7 +25,7 @@
 
 ## Easy Fixes / Low-Hanging Fruit
 
-
+Add a new button on the checklist zone header. Mark complete when last item checked off.
 
 
 
