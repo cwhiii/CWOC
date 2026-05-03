@@ -424,6 +424,7 @@ All contact endpoints are scoped by `owner_id` — users can only access their o
 | `GET /kiosk` | `kiosk_page()` | Serve `kiosk.html` page (unauthenticated) |
 | `GET /wall-station` | `wall_station_redirect()` | Legacy redirect → `/kiosk` |
 | `GET /api/wall-station` | `wall_station_api_redirect()` | Legacy redirect → `/api/kiosk` |
+| `GET /maps` | `maps_page()` | Serve `maps.html` — interactive Leaflet map of chits with locations |
 
 **Internal helpers:**
 
@@ -912,6 +913,60 @@ Coordinator for shared code between dashboard and editor. Contains glue code for
 |--------|-------------|
 | Property 8 | Completion-based sort ordering (120+ random iterations + edge cases) |
 | **Validates** | Requirements 2.7, 2.8, 9.1, 9.2 |
+
+#### shared-calculator.js
+
+Calculator Popover module — a floating, draggable arithmetic calculator available on every CWOC page via `F4`. Provides basic arithmetic with correct operator precedence (`*`/`/` before `+`/`-`), insert-to-field and persist-mode for the editor page. Loaded after `shared.js` and before `shared-page.js` on all pages.
+
+**Public API:**
+
+| Function | Description |
+|----------|-------------|
+| `cwocToggleCalculator()` | Opens or closes the calculator popover. Captures `document.activeElement` as source field before opening. Creates the popover singleton on first call |
+| `cwocIsCalculatorOpen()` | Returns `true` if the calculator is currently visible. Used by ESC chain handlers in `editor-init.js` and `main-init.js` |
+| `cwocCloseCalculator()` | Closes the calculator, unchecks Persist, deactivates persist mode. Expression and result state are preserved for the next open |
+
+**Internal Functions:**
+
+| Function | Description |
+|----------|-------------|
+| `_calcTokenize(expr)` | Tokenize an arithmetic expression string into NUMBER and OP tokens. Handles multi-digit numbers, decimals, and unary minus. Returns null for malformed expressions |
+| `_calcParse(tokens)` | Recursive-descent parser respecting standard arithmetic precedence (`*`/`/` before `+`/`-`). Returns numeric result or `'Error'` |
+| `_calcEvaluate(expr)` | Evaluate an arithmetic expression string. Tokenizes, parses, and returns a number or `'Error'` for malformed expressions, division by zero, Infinity, or expressions exceeding the 50-character cap |
+| `_calcFormatResult(num)` | Format a numeric result for display — rounds to reasonable decimal places and removes trailing zeros |
+| `_calcCreatePopover()` | Build the full calculator popover DOM (title bar, display, button grid, insert/persist row) and append to `document.body` as a singleton |
+| `_calcOnButton(value)` | Handle a calculator button press — digit, decimal, operator, equals, clear, backspace. Manages expression chaining after equals |
+| `_calcUpdateDisplay()` | Update the calculator display with current expression and result. Triggers persist auto-update if active on the editor page |
+| `_calcInitDrag(titleBar)` | Attach mouse and touch drag handlers to the title bar for repositioning. Converts right-based to left-based positioning on first drag |
+| `_calcClampToViewport(el)` | Clamp the popover element so it stays fully within the visible viewport. Called on every drag move and on window resize |
+| `_calcDragStart(clientX, clientY)` | Begin a drag operation — record offset between pointer and popover top-left corner |
+| `_calcDragMove(clientX, clientY)` | Reposition the popover during drag and clamp to viewport |
+| `_calcDragEnd()` | End the current drag operation |
+| `_calcInitKeyboard(popover)` | Attach keydown listener for keyboard input — digits, operators, Enter (equals), Backspace, Escape (close). Stops propagation for handled keys |
+| `_calcInitFocusTrap(popover)` | Attach focus-trap keydown listener — Tab/Shift+Tab cycle through focusable elements within the popover only |
+| `_calcInsertResult()` | Write the current result into the captured source field (`.value` or `.textContent`). Fires `input` event for dirty-tracking. Silently disables persist if source field is stale |
+| `_calcIsEditorPage()` | Returns `true` if the current page is the chit editor (`editor.html` or `/editor` path) |
+| `_calcSetupHotkey()` | Register the global `F4` keydown listener. Called once on script load |
+
+**Module-level State:**
+
+| Variable | Description |
+|----------|-------------|
+| `_calcExpression` | Current expression string, e.g. `"12+3*4"` |
+| `_calcResult` | Last computed result as a string |
+| `_calcSourceField` | DOM element that had focus when hotkey was pressed |
+| `_calcPersistActive` | Whether persist mode is on |
+| `_calcPopoverEl` | Reference to the popover DOM element (singleton) |
+| `_calcIsOpen` | Whether the popover is currently visible |
+| `_calcLastOperatorWasEquals` | Track if last action was `=` for chaining |
+| `_calcDragState` | Drag state object — `active`, `offsetX`, `offsetY` |
+| `_calcMaxExprLength` | Maximum allowed expression length (50 characters) |
+| `_calcDisplaySymbols` | Map of internal operators to display symbols (`*`→`×`, `/`→`÷`) |
+| `_calcInternalOps` | Map of display symbols back to internal operators |
+
+**ESC Chain Integration:**
+- `editor-init.js`: Calculator check added at the very top of the ESC keydown handler — if `cwocIsCalculatorOpen()`, calls `cwocCloseCalculator()` and returns before all other ESC checks
+- `main-init.js`: Same pattern — calculator check before reference overlay, clock modal, and other ESC handlers
 
 ### 2.2 Dashboard (`src/frontend/js/dashboard/`)
 
@@ -1609,7 +1664,7 @@ Shared page components: save/cancel button system, auto header/footer injection,
 | `_cwocToggleUserDropdown(switcherWrap)` | Toggle the user dropdown on the switcher button |
 | `_cwocShowSwitchPasswordPrompt(targetUser)` | Show a parchment-styled password prompt modal for switching to a user |
 | `_cwocLogout()` | Logout: `POST /api/auth/logout`, then redirect to `/login` |
-| *(IIFE)* Navigate Panel | Creates the V-hotkey navigation overlay on secondary pages (not dashboard); includes Profile and User Admin (admin-only) entries; exports `cwocOpenNavModal`, `cwocCloseNavModal`, `cwocIsNavModalOpen` globally |
+| *(IIFE)* Navigate Panel | Creates the V-hotkey navigation overlay on secondary pages (not dashboard); includes Profile, Maps, and User Admin (admin-only) entries; exports `cwocOpenNavModal`, `cwocCloseNavModal`, `cwocIsNavModalOpen` globally |
 
 #### shared-editor.js
 
@@ -1904,6 +1959,36 @@ Admin-only page for managing user accounts. Provides user table listing, create 
 | `closeResetPasswordModal()` | Close the reset password modal |
 | `submitResetPassword()` | Submit the reset password form via `PUT /api/users/{id}/reset-password` |
 
+#### maps.js
+
+Maps page: interactive Leaflet map displaying chits with location data as color-coded markers, clustered, with date range filtering.
+
+| Symbol | Description |
+|--------|-------------|
+| `_mapsLeafletMap` | Leaflet map instance |
+| `_mapsClusterGroup` | MarkerClusterGroup instance for marker clustering |
+| `_mapsAllChits` | Cached array of all fetched chits |
+| `_mapsGeocodeCache` | In-memory geocode cache keyed by lowercase trimmed address |
+| `_mapsStatusColors` | Object mapping status strings to hex colors |
+| `_mapsNoStatusColor` | Default hex color for chits with no status (`#9E9E9E`) |
+| `_mapsInit()` | Entry point: checks `prefer_google_maps` setting, initializes map or shows warning |
+| `_initLeafletMap()` | Creates Leaflet map instance with OpenStreetMap tile layer |
+| `_fetchAndDisplayChits()` | Fetches chits from `/api/chits`, filters, geocodes, and places markers |
+| `_filterAndRender()` | Applies date filter, geocodes, and places markers (called on load and filter change) |
+| `_filterChitsByDateRange(chits, startDate, endDate)` | Returns chits with non-empty location and at least one date field within the range |
+| `_geocodeChits(chits)` | Geocodes each chit's location via `_geocodeAddress()` with in-memory cache deduplication |
+| `_getMarkerColor(status)` | Returns hex color for a chit status (ToDo=#2196F3, In Progress=#FF9800, Blocked=#F44336, Complete=#4CAF50, no-status=#9E9E9E) |
+| `_buildPopupContent(chit)` | Returns HTML for a marker popup with title, date, status, and editor link |
+| `_placeMarkers(geocodedChits)` | Creates colored circle markers, adds to MarkerClusterGroup, binds popups, fits bounds |
+| `_initDateFilters()` | Sets default date values (±30 days) and wires change handlers |
+| `_onDateFilterChange()` | Handler for date input changes — re-filters and re-renders markers |
+| `_mapsToDateString(date)` | Converts a Date to `YYYY-MM-DD` string |
+| `_showLegend()` | Shows the legend element |
+| `_showInfoMessage(msg)` | Shows info message (e.g., no results) |
+| `_hideInfoMessage()` | Hides info message |
+| `_mapsFormatDate(isoString)` | Formats an ISO datetime string for popup display |
+| `_mapsEsc(str)` | HTML escape for popup content |
+
 
 ## 3. Frontend CSS
 
@@ -1930,7 +2015,7 @@ Shared styles for ALL secondary pages (settings, help, trash, people, contacts, 
 | Empty State (`.cwoc-empty`) | Centered empty-state message |
 | Toolbar (`.cwoc-toolbar`) | Flex toolbar for button rows |
 | Indicator / Checkbox Lists | Flex column lists for settings checkboxes |
-| Help Content (`.help-content`) | Help page typography and spacing — includes Ntfy Notifications section (setup flow, topic subscription, local vs Tailscale access, troubleshooting) |
+| Help Content (`.help-content`) | Help page typography and spacing — includes Ntfy Notifications section (setup flow, topic subscription, local vs Tailscale access, troubleshooting) and Maps View section (date range filter, marker popups, clustering, color-coded status markers, Google Maps preference warning) |
 | Author Footer (`.author-info`) | Page footer with copyright |
 | Modal (`.modal`) | Full-screen modal overlay and content box |
 | Loader Spinner (`.loader`) | CSS spinner animation |
@@ -1939,6 +2024,7 @@ Shared styles for ALL secondary pages (settings, help, trash, people, contacts, 
 | Mobile Responsive (≤480px) | Stacked header, full-width modals |
 | Bold Alert Modal (`.cwoc-alert-overlay`) | Full-screen alarm/timer alert shared across all pages |
 | Shared Chit Card Badges | `.cwoc-owner-badge` — owner attribution badge on shared chit cards; `.cwoc-role-badge` — role indicator (viewer/manager) on shared chit cards; `.cwoc-stealth-indicator` — stealth icon on chit cards (visible to owner only) |
+| Calculator Popover | `.cwoc-calc-popover` — main container (fixed position, z-index 200000, parchment styling); `.cwoc-calc-titlebar` — drag handle with title text and close button; `.cwoc-calc-display` — expression/result display area; `.cwoc-calc-buttons` — 4-column grid layout for calculator buttons; `.cwoc-calc-btn` — individual button styling (digits, operators, special); `.cwoc-calc-btn-op` — operator button variant (accent gold); `.cwoc-calc-btn-eq` — equals button variant (brown); `.cwoc-calc-btn-clear` — clear/backspace variant; `.cwoc-calc-actions` — insert button and persist checkbox row; `.cwoc-calc-persist-indicator` — visual indicator when persist is active |
 
 #### shared-editor.css
 Reusable editor patterns shared by the Chit Editor and Contact Editor. Self-contained `:root` variables (must match shared-page.css).
@@ -2256,6 +2342,7 @@ All HTML pages include the following PWA `<head>` tags: `<link rel="manifest" hr
 <script src="/frontend/js/shared/shared-geocoding.js"></script>
 <script src="/frontend/js/shared/shared-qr.js"></script>
 <script src="/frontend/js/shared/shared.js"></script>
+<script src="/frontend/js/shared/shared-calculator.js"></script>
 
 <!-- 2. Shared page components -->
 <script src="/frontend/js/pages/shared-page.js"></script>
@@ -2310,6 +2397,7 @@ All HTML pages include the following PWA `<head>` tags: `<link rel="manifest" hr
 <script src="/frontend/js/shared/shared-geocoding.js"></script>
 <script src="/frontend/js/shared/shared-qr.js"></script>
 <script src="/frontend/js/shared/shared.js"></script>
+<script src="/frontend/js/shared/shared-calculator.js"></script>
 
 <!-- 3. Shared page + editor components -->
 <script src="/frontend/js/pages/shared-page.js"></script>
@@ -2364,6 +2452,7 @@ All secondary pages follow the same shared pattern. Example from `settings.html`
 <script src="/frontend/js/shared/shared-geocoding.js"></script>
 <script src="/frontend/js/shared/shared-qr.js"></script>
 <script src="/frontend/js/shared/shared.js"></script>
+<script src="/frontend/js/shared/shared-calculator.js"></script>
 
 <!-- 2. Shared page components -->
 <script src="/frontend/js/pages/shared-page.js"></script>
@@ -2378,7 +2467,7 @@ All secondary pages follow the same shared pattern. Example from `settings.html`
 <script src="/pwa/pwa-register.js"></script>
 ```
 
-Pages using this pattern: `settings.html`, `people.html`, `contact-editor.html`, `weather.html`, `trash.html`, `audit-log.html`, `help.html`, `profile.html`, `user-admin.html`.
+Pages using this pattern: `settings.html`, `people.html`, `contact-editor.html`, `weather.html`, `trash.html`, `audit-log.html`, `help.html`, `profile.html`, `user-admin.html`, `maps.html`.
 
 New frontend pages added for multi-user system:
 - `login.html` — Standalone login page (no shared header/footer, no `shared-auth.js`). Parchment-themed centered form with username/password inputs.
@@ -2387,6 +2476,9 @@ New frontend pages added for multi-user system:
 
 New frontend pages added for chit sharing system:
 - `kiosk.html` — Standalone unauthenticated kiosk page. Reads `users` query parameter from the URL, fetches combined data from `/api/kiosk?user_ids=...`, renders a combined calendar view and task list with `owner_display_name` attribution. Auto-refreshes every 60 seconds. Does not require authentication — no `shared-auth.js` dependency. Uses `shared-page.css` for parchment theme plus inline `<style>` for kiosk-specific layout. All JS is inline in a single IIFE.
+
+New frontend pages added for Maps View:
+- `maps.html` — Interactive Leaflet map page displaying chits with location data as color-coded markers. Uses `shared-page.css` for parchment theme plus inline `<style>` for map-specific layout (date filter, map container, legend, Google Maps warning, responsive stacking). Loads Leaflet.js, Leaflet.markercluster (CDN), shared scripts, `shared-page.js`, and `maps.js`. Served at `/maps` via `health.py`.
 
 
 ---
@@ -2521,7 +2613,8 @@ shared-auth.js            ← MUST load first (getCurrentUser, isAdmin, waitForA
                     │     │
                     │     └── [page-specific scripts]
                     │           settings.js, people.js, contact-editor.js,
-                    │           contact-qr.js, weather.js, profile.js, user-admin.js
+                    │           contact-qr.js, weather.js, profile.js, user-admin.js,
+                    │           maps.js
                     │
               ├── [dashboard scripts] — all depend on shared.js + shared-page.js
               │     main-sidebar.js

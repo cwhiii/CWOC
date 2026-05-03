@@ -12,6 +12,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <link rel="stylesheet" href="/frontend/css/shared/shared-page.css" />
+    <link rel="stylesheet" href="/frontend/css/shared/shared-calculator.css" />
 </head>
 <body data-page-title="Help Guide" data-page-icon="❓">
     <div class="settings-panel">
@@ -33,6 +34,7 @@
                     <li><a href="#clocks">Clocks</a></li>
                     <li><a href="#weather">Weather</a></li>
                     <li><a href="#saved-locations">Saved Locations</a></li>
+                    <li><a href="#maps-view">Maps View</a></li>
                     <li><a href="#editor">Chit Editor</a></li>
                     <li><a href="#quick-edit">Quick Edit Modal</a></li>
                     <li><a href="#settings">Settings</a></li>
@@ -43,6 +45,7 @@
                     <li><a href="#habits-view">Habits</a></li>
                     <li><a href="#contacts">Contact Editor</a></li>
                     <li><a href="#sharing">Sharing</a></li>
+                    <li><a href="#calculator">Calculator</a></li>
                     <li><a href="#kiosk">Kiosk</a></li>
                     <li><a href="#network-access">Dependent Apps</a></li>
                     <li><a href="#ntfy-notifications">Ntfy Notifications</a></li>
@@ -131,6 +134,7 @@
                 <li><kbd>!</kbd> — Quick Alert menu (add Alarm, Timer, or Stopwatch). On the dashboard, creates an independent alert and shows Done/View buttons. In the editor, adds to the current chit and expands the alerts zone. On other pages, creates an independent alert</li>
                 <li><kbd>`</kbd> — Toggle sidebar visibility (setting is retained)</li>
                 <li><kbd>~</kbd> (Shift+`) — Toggle topbar visibility (setting is retained)</li>
+                <li><kbd>F4</kbd> — Calculator popover (open/close from any page)</li>
                 <li><kbd>ESC</kbd> — Close modal / exit · <kbd>Backspace</kbd> — Clear filters</li>
             </ul>
             <h4>Submenu Hotkeys</h4>
@@ -233,6 +237,25 @@
                 <li><strong>Saving</strong> — Empty-address rows are cleaned up on save.</li>
             </ul>
             <p>Saved locations are used by the editor's Location zone dropdown, the compact 📍 dropdown in the title area, the +Location button, and the dashboard weather modal (<kbd>W</kbd>).</p>
+            <h3 id="maps-view">Maps View</h3>
+            <p>The Maps View displays chits that have locations as markers on an interactive map. Access it from the navigation menu (🗺️ Maps) or by navigating to <code>/maps</code>.</p>
+            <h4>Date Range Filter</h4>
+            <p>A date range filter above the map controls which chits are shown. It defaults to ±30 days from today. Adjust the start and end dates to narrow or widen the time window — markers update automatically when you change either date. Only chits with a start, due, or created date within the selected range appear on the map.</p>
+            <h4>Markers and Popups</h4>
+            <p>Each chit with a location is placed as a marker at its geocoded coordinates. Click a marker to see a popup with the chit's title, date, and status, plus a link to open the chit in the editor.</p>
+            <h4>Clustering</h4>
+            <p>When many markers are close together, they cluster into numbered group icons. Zoom in or click a cluster to expand it and reveal individual markers. Zooming out re-clusters them to keep the map readable.</p>
+            <h4>Color-Coded Status Markers</h4>
+            <p>Markers are color-coded by chit status so you can tell them apart at a glance. A legend on the map shows the mapping:</p>
+            <ul>
+                <li><strong style="color:#2196F3;">●</strong> <strong>ToDo</strong> — Blue</li>
+                <li><strong style="color:#FF9800;">●</strong> <strong>In Progress</strong> — Orange</li>
+                <li><strong style="color:#F44336;">●</strong> <strong>Blocked</strong> — Red</li>
+                <li><strong style="color:#4CAF50;">●</strong> <strong>Complete</strong> — Green</li>
+                <li><strong style="color:#9E9E9E;">●</strong> <strong>No Status</strong> — Grey</li>
+            </ul>
+            <h4>Google Maps Preference</h4>
+            <p>If "Prefer Google for Maps" is enabled in Settings → Chit Options, the Maps View displays a warning message instead of loading the map. Google Maps is not supported for this feature due to billing restrictions. Disable the preference in Settings to use the Maps View.</p>
             <h3 id="editor">Chit Editor</h3>
             <p>Collapsible zones: Title, Dates & Times, Task, Location, Tags, People, Notes, Checklist, Alerts, Health Indicators, Color, Projects, Habits. The 🎯 Habit button in the Task zone header toggles habit mode (see <a href="#habits-view">Habits</a>). An "📜 Audit Log" button at the bottom links to the filtered audit log for the current chit. 📱 QR button generates data or link QR codes.</p>
             <p>When creating a new chit, only the zone relevant to the current view is expanded (e.g., Notes zone when coming from the Notes tab). All other zones start collapsed. The title field is auto-focused. If you have a default saved location, it's auto-applied to new chits.</p>
@@ -517,6 +540,18 @@
             </ul>
             <h4>Dashboard</h4>
             <p>Shared chits display a 🔗 icon on their dashboard card. Hover over the icon to see a tooltip with the owner's name, the list of shared users and their roles, and your effective role. Non-shared chits show no icon.</p>
+            <h3 id="calculator">Calculator</h3>
+            <p>Press <kbd>F4</kbd> on any page to open a floating calculator popover. Press the same hotkey again (or <kbd>ESC</kbd>) to close it. The calculator provides basic arithmetic with correct operator precedence and can insert results directly into editor fields.</p>
+            <h4>Arithmetic</h4>
+            <p>The calculator supports addition (+), subtraction (−), multiplication (×), and division (÷) with standard operator precedence — multiplication and division are evaluated before addition and subtraction. Press <kbd>=</kbd> or <kbd>Enter</kbd> to evaluate. Press <kbd>C</kbd> to clear, or <kbd>⌫</kbd> / <kbd>Backspace</kbd> to delete the last character. Division by zero shows an error.</p>
+            <h4>Keyboard Input</h4>
+            <p>While the calculator has focus, type digits (0–9), operators (+, -, *, /), press <kbd>Enter</kbd> for equals, <kbd>Backspace</kbd> to delete the last character, and <kbd>ESC</kbd> to close. Keyboard input is captured by the calculator and does not propagate to page hotkeys.</p>
+            <h4>Insert Result</h4>
+            <p>Click <strong>Insert Result</strong> to write the current calculator result into the field you were editing when you opened the calculator. This only works on the chit editor page — the button is disabled on all other pages and when no source field was focused.</p>
+            <h4>Draggable</h4>
+            <p>Drag the calculator's title bar to reposition it anywhere on screen. The calculator stays within the visible viewport. Works with both mouse and touch.</p>
+            <h4>ESC to Close</h4>
+            <p>Pressing <kbd>ESC</kbd> while the calculator is open closes it before any other ESC action (closing modals, exiting the editor, etc.). When the calculator is not open, ESC behaves normally.</p>
             <h3 id="kiosk">Kiosk</h3>
             <p>The Kiosk is a read-only, unauthenticated display designed for wall-mounted screens or shared monitors. It shows calendar events and active tasks filtered by the tags you choose — no login required.</p>
             <h4>Setting Up the Kiosk</h4>
@@ -672,6 +707,7 @@ lxc.mount.entry: /dev/net/tun dev/net/tun none bind,create=file</pre>
     <script src="/frontend/js/shared/shared-geocoding.js"></script>
     <script src="/frontend/js/shared/shared-qr.js"></script>
     <script src="/frontend/js/shared/shared.js"></script>
+    <script src="/frontend/js/shared/shared-calculator.js"></script>
     <script src="/frontend/js/pages/shared-page.js"></script>
     <script>
     document.querySelectorAll('.help-content h3[id]').forEach(function(h3) {

@@ -1,0 +1,157 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   Calculator Popover — floating draggable arithmetic calculator
+   Triggered by F4 hotkey on any page.
+   Standalone file loaded on ALL pages (dashboard, editor, secondary).
+   Uses CSS variables with fallbacks for pages that define them differently.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Calculator Popover ──── */
+
+.cwoc-calc-popover {
+    position: fixed;
+    z-index: 200000;
+    width: 280px;
+    background: var(--parchment-light, #f5f0e1);
+    border: 2px solid var(--border-color, #8b7355);
+    border-radius: 10px;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+    font-family: 'Lora', Georgia, serif;
+    color: var(--text-color, #1a1208);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    user-select: none;
+}
+
+/* ── Title Bar (drag handle) ─────────────────────────────────────────────── */
+.cwoc-calc-titlebar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    background: var(--aged-brown-dark, #4a2c2a);
+    color: var(--parchment-light, #f5f0e1);
+    cursor: grab;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+.cwoc-calc-titlebar:active {
+    cursor: grabbing;
+}
+.cwoc-calc-titlebar .cwoc-calc-close {
+    background: transparent;
+    border: none;
+    color: var(--parchment-light, #f5f0e1);
+    font-size: 18px;
+    cursor: pointer;
+    padding: 0 4px;
+    line-height: 1;
+    font-family: 'Lora', Georgia, serif;
+    opacity: 0.8;
+    transition: opacity 0.15s;
+    margin-left: 4px;
+}
+.cwoc-calc-titlebar .cwoc-calc-close:hover {
+    opacity: 1;
+}
+
+/* ── Display Area ────────────────────────────────────────────────────────── */
+.cwoc-calc-display {
+    padding: 10px 12px;
+    background: #fff8e1;
+    border-bottom: 1px solid var(--border-color, #8b7355);
+    min-height: 48px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    justify-content: center;
+    font-family: 'Lora', Georgia, serif;
+    overflow: hidden;
+    word-break: break-all;
+}
+.cwoc-calc-display .cwoc-calc-expr {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--text-color, #1a1208);
+    min-height: 1.2em;
+}
+.cwoc-calc-display .cwoc-calc-result {
+    font-size: 13px;
+    color: var(--aged-brown-light, #a08060);
+    min-height: 1.2em;
+}
+
+/* ── Button Grid ─────────────────────────────────────────────────────────── */
+.cwoc-calc-buttons {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 4px;
+    padding: 8px;
+}
+
+/* ── Individual Button (base) ────────────────────────────────────────────── */
+.cwoc-calc-btn {
+    padding: 12px 0;
+    font-size: 16px;
+    font-family: 'Lora', Georgia, serif;
+    font-weight: 600;
+    background: var(--button-bg, #e8dcc8);
+    color: var(--text-color, #1a1208);
+    border: 1px solid var(--border-color, #8b7355);
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background 0.15s, transform 0.1s;
+    text-align: center;
+    line-height: 1;
+    min-height: 40px;
+}
+.cwoc-calc-btn:hover {
+    background: var(--button-hover, #d4c8b0);
+    transform: translateY(-1px);
+}
+.cwoc-calc-btn:active {
+    transform: translateY(0);
+}
+
+/* ── Operator Buttons (+, -, x, /) ───────────────────────────────────────── */
+.cwoc-calc-btn-op {
+    background: var(--accent-gold, #d4af37);
+    color: #2b1e0f;
+    border-color: var(--aged-brown-medium, #8b5a2b);
+    font-weight: 700;
+}
+.cwoc-calc-btn-op:hover {
+    background: #c9a430;
+}
+
+/* ── Equals Button ───────────────────────────────────────────────────────── */
+.cwoc-calc-btn-eq {
+    background: var(--aged-brown-dark, #4a2c2a);
+    color: var(--parchment-light, #f5f0e1);
+    border-color: var(--aged-brown-dark, #4a2c2a);
+    font-weight: 700;
+}
+.cwoc-calc-btn-eq:hover {
+    background: #3a1f1d;
+}
+
+/* ── Clear / Backspace Buttons ───────────────────────────────────────────── */
+.cwoc-calc-btn-clear {
+    background: var(--danger-red, #c0392b);
+    color: var(--parchment-light, #f5f0e1);
+    border-color: var(--aged-brown-dark, #4a2c2a);
+    font-weight: 700;
+}
+.cwoc-calc-btn-clear:hover {
+    background: #a01c1c;
+}
+
+/* ── Mobile Responsive ───────────────────────────────────────────────────── */
+@media (max-width: 480px) {
+    .cwoc-calc-popover {
+        width: calc(100% - 24px);
+        max-width: 320px;
+    }
+}

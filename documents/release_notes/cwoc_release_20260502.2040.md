@@ -1,0 +1,1 @@
+Added Calculator Popover — a floating, draggable arithmetic calculator available on every page via F4 hotkey. Supports basic arithmetic with operator precedence, Insert Result and Persist mode for the editor, and integrates into the ESC chain.

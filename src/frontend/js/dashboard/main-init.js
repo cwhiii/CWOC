@@ -1160,6 +1160,12 @@ document.addEventListener("DOMContentLoaded", function () {
     // ── ESC: exit any submenu or close reference ──
     // Shift+ESC: clear all values in the active filter panel
     if (key === "Escape") {
+      // Calculator popover — close before any other ESC action
+      if (typeof cwocIsCalculatorOpen === 'function' && cwocIsCalculatorOpen()) {
+        cwocCloseCalculator();
+        return;
+      }
+
       if (e.shiftKey && (_hotkeyMode === 'FILTER_STATUS' || _hotkeyMode === 'FILTER_LABEL' || _hotkeyMode === 'FILTER_PRIORITY' || _hotkeyMode === 'FILTER_PEOPLE')) {
         if (_hotkeyMode === 'FILTER_PEOPLE') {
           if (window._sidebarPeopleSelection) window._sidebarPeopleSelection.length = 0;
@@ -1252,6 +1258,8 @@ document.addEventListener("DOMContentLoaded", function () {
       var num = parseInt(key);
       if (num >= 1 && num <= _navTargets.length) {
         _pickNav(_navTargets[num - 1]);
+      } else if (key === '0' && _navTargets.length >= 10) {
+        _pickNav(_navTargets[9]);
       }
       return;
     }

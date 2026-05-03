@@ -141,3 +141,5 @@ I'm sure that the release notes file is emtied, and rebuilt a the completion of 
 - The configurator's goal: run a single curl command against a fresh box and CWOC just starts working. Same for click-to-update — it all just works. Every new backend dependency or server-side requirement must be handled by the configurator so the user never has to SSH in and manually install anything.
 - The server uses a Python venv at `/app/venv/`. All pip installs go through `/app/venv/bin/pip` — never system-wide `pip install` (Ubuntu 24.10+ blocks it via PEP 668).
 - The configurator should check whether prerequisites are already installed before attempting to install them (idempotent).
+
+Ensure all new features are mobile-frienldy from the get go.

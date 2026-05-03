@@ -1,0 +1,1 @@
+Added Maps View page at `/maps` with an interactive Leaflet map showing chits with locations as color-coded status markers, date range filtering, marker clustering, popups with chit details and editor links, and navigation integration from the sidebar and dashboard hotkeys.

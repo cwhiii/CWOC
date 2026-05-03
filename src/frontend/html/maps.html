@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <link rel="icon" type="image/x-icon" href="/static/cwod_logo-favicon.png" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Maps View — C.W.'s Omni Chits</title>
+    <!-- PWA -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#8b5a2b" />
+    <link rel="apple-touch-icon" href="/static/cwoc-icon-192.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+
+    <!-- Shared styles -->
+    <link rel="stylesheet" href="/frontend/css/shared/shared-page.css" />
+    <link rel="stylesheet" href="/frontend/css/shared/shared-calculator.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" />
+
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <!-- Leaflet MarkerCluster CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+
+    <style>
+        /* ══ Maps Page Styles ══ */
+
+        /* ── Date range filter ── */
+        .maps-date-filter {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+            padding: 10px 12px;
+            background: linear-gradient(to bottom, #f5e6cc, #ede0c8);
+            border: 1px solid #8b5a2b;
+            border-radius: 6px;
+        }
+        .maps-date-filter label {
+            font-size: 14px;
+            font-weight: bold;
+            color: var(--aged-brown-dark, #4a2c2a);
+        }
+        .maps-date-filter input[type="date"] {
+            font-size: 14px;
+            padding: 4px 6px;
+        }
+
+        /* ── Map container ── */
+        #maps-container {
+            width: 100%;
+            min-height: 400px;
+            flex: 1 1 auto;
+            border: 1px solid #8b5a2b;
+            border-radius: 6px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* ── Legend ── */
+        .maps-legend {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+            padding: 8px 12px;
+            background: linear-gradient(to bottom, #f5e6cc, #ede0c8);
+            border: 1px solid #8b5a2b;
+            border-radius: 6px;
+            font-size: 13px;
+            color: var(--aged-brown-dark, #4a2c2a);
+        }
+        .maps-legend-title {
+            font-weight: bold;
+            margin-right: 4px;
+        }
+        .maps-legend-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .maps-legend-swatch {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            border: 1px solid #5c4033;
+        }
+
+        /* ── Google Maps warning ── */
+        .maps-google-warning {
+            display: none;
+            text-align: center;
+            padding: 3em 1em;
+            color: var(--aged-brown-dark, #4a2c2a);
+            font-size: 1.1em;
+        }
+        .maps-google-warning .warning-icon {
+            font-size: 2em;
+            margin-bottom: 0.5em;
+        }
+
+        /* ── Info message (no results) ── */
+        .maps-info-message {
+            display: none;
+            text-align: center;
+            padding: 1em;
+            color: var(--aged-brown-dark, #4a2c2a);
+            font-size: 0.95em;
+            opacity: 0.8;
+        }
+
+        /* ── Responsive: stack date filter on mobile ── */
+        @media (max-width: 768px) {
+            .maps-date-filter {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .maps-date-filter label {
+                margin-bottom: 2px;
+            }
+        }
+    </style>
+</head>
+<body data-page-title="Maps View" data-page-icon="🗺️">
+
+    <div class="settings-panel">
+
+        <!-- ═══ Google Maps Warning (hidden by default) ═══ -->
+        <div class="maps-google-warning" id="maps-google-warning">
+            <div class="warning-icon">⚠️</div>
+            <p>Google Maps does not support this feature at this time due to billing restrictions.</p>
+        </div>
+
+        <!-- ═══ Date Range Filter ═══ -->
+        <div class="maps-date-filter" id="maps-date-filter">
+            <label for="maps-start-date">From:</label>
+            <input type="date" id="maps-start-date" />
+            <label for="maps-end-date">To:</label>
+            <input type="date" id="maps-end-date" />
+        </div>
+
+        <!-- ═══ Map Container ═══ -->
+        <div id="maps-container"></div>
+
+        <!-- ═══ Info Message (no results) ═══ -->
+        <div class="maps-info-message" id="maps-info-message">
+            No chits with locations found in the selected date range.
+        </div>
+
+        <!-- ═══ Legend ═══ -->
+        <div class="maps-legend" id="maps-legend">
+            <span class="maps-legend-title">Status:</span>
+            <span class="maps-legend-item"><span class="maps-legend-swatch" style="background:#2196F3;"></span> ToDo</span>
+            <span class="maps-legend-item"><span class="maps-legend-swatch" style="background:#FF9800;"></span> In Progress</span>
+            <span class="maps-legend-item"><span class="maps-legend-swatch" style="background:#F44336;"></span> Blocked</span>
+            <span class="maps-legend-item"><span class="maps-legend-swatch" style="background:#4CAF50;"></span> Complete</span>
+            <span class="maps-legend-item"><span class="maps-legend-swatch" style="background:#9E9E9E;"></span> No Status</span>
+        </div>
+
+    </div>
+
+    <!-- ── Leaflet JS ── -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- ── Leaflet MarkerCluster JS ── -->
+    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+
+    <!-- ── 1. Shared sub-scripts (utils first, coordinator last) ─────────── -->
+    <script src="/frontend/js/shared/shared-auth.js"></script>
+    <script src="/frontend/js/shared/shared-utils.js"></script>
+    <script src="/frontend/js/shared/shared-touch.js"></script>
+    <script src="/frontend/js/shared/shared-checklist.js"></script>
+    <script src="/frontend/js/shared/shared-sort.js"></script>
+    <script src="/frontend/js/shared/shared-indicators.js"></script>
+    <script src="/frontend/js/shared/shared-calendar.js"></script>
+    <script src="/frontend/js/shared/shared-tags.js"></script>
+    <script src="/frontend/js/shared/shared-recurrence.js"></script>
+    <script src="/frontend/js/shared/shared-geocoding.js"></script>
+    <script src="/frontend/js/shared/shared-qr.js"></script>
+    <script src="/frontend/js/shared/shared.js"></script>
+    <script src="/frontend/js/shared/shared-calculator.js"></script>
+
+    <!-- ── 2. Shared page components ─────────────────────────────────────── -->
+    <script src="/frontend/js/pages/shared-page.js"></script>
+
+    <!-- ── 3. Page-specific script ───────────────────────────────────────── -->
+    <script src="/frontend/js/pages/maps.js"></script>
+
+    <!-- ── PWA ───────────────────────────────────────────────────────────── -->
+    <script src="/pwa/pwa-register.js"></script>
+</body>
+</html>

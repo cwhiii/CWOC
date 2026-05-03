@@ -398,6 +398,11 @@ def get_kiosk_config():
             conn.close()
 
 
+@router.get("/maps")
+async def maps_page():
+    return FileResponse("/app/src/frontend/html/maps.html")
+
+
 @router.get("/kiosk")
 async def kiosk_page():
     return FileResponse("/app/src/frontend/html/kiosk.html")

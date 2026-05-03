@@ -386,11 +386,11 @@ async function _onCalDragEnd(e) {
   s.el.style.zIndex = '';
   _calDragState = null;
 
-  // Suppress any click/dblclick that fires after this mouseup
-  if (typeof _markDragJustEnded === 'function') _markDragJustEnded();
-
   // If mouse didn't actually move, don't save anything
   if (!s.hasMoved) return;
+
+  // Suppress any click/dblclick that fires after a real drag
+  if (typeof _markDragJustEnded === 'function') _markDragJustEnded();
 
   const newTop = parseInt(s.el.style.top);
   const newHeight = parseInt(s.el.style.height);

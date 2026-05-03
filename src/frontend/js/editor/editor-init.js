@@ -1250,6 +1250,12 @@ document.addEventListener("DOMContentLoaded", function () {
   // ESC key — layered escape chain
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
+      // Calculator popover — close before any other ESC action
+      if (typeof cwocIsCalculatorOpen === 'function' && cwocIsCalculatorOpen()) {
+        cwocCloseCalculator();
+        return;
+      }
+
       const quickAlertOverlay = document.getElementById('cwoc-quick-alert-overlay');
       if (quickAlertOverlay) { _closeQuickAlertModal(); return; }
 

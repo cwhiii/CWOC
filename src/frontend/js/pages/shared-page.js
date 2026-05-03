@@ -524,16 +524,17 @@ window.CwocSaveSystem = CwocSaveSystem;
     { key: '6', icon: '📋', label: 'Audit Log',   href: '/frontend/html/audit-log.html' },
     { key: '7', icon: '🗑️', label: 'Trash',       href: '/frontend/html/trash.html' },
     { key: '8', icon: '👤', label: 'Profile',     href: '/profile' },
+    { key: '9', icon: '🗺️', label: 'Maps',        href: '/maps' },
   ];
 
   // Conditionally add User Admin for admin users
   if (typeof isAdmin === 'function' && isAdmin()) {
-    _navPages.push({ key: '9', icon: '👥', label: 'User Admin', href: '/user-admin' });
+    _navPages.push({ key: '0', icon: '👥', label: 'User Admin', href: '/user-admin' });
   } else if (typeof waitForAuth === 'function') {
     // Auth may not be ready yet — add it once we know
     waitForAuth().then(function(user) {
       if (user && user.is_admin) {
-        _navPages.push({ key: '9', icon: '👥', label: 'User Admin', href: '/user-admin' });
+        _navPages.push({ key: '0', icon: '👥', label: 'User Admin', href: '/user-admin' });
       }
     });
   }
@@ -630,7 +631,7 @@ window.CwocSaveSystem = CwocSaveSystem;
     }
 
     // Number keys navigate when panel is open
-    if (_isNavPanelOpen() && key >= '1' && key <= '9') {
+    if (_isNavPanelOpen() && ((key >= '0' && key <= '9'))) {
       e.preventDefault();
       for (var i = 0; i < _navPages.length; i++) {
         if (_navPages[i].key === key) {
