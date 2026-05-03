@@ -950,6 +950,66 @@ body[data-page-title="Maps View"] ~ .author-info {
     display: none;
 }
 
+/* ── Weather page: same full-viewport layout as Maps ────────────────────── */
+body[data-page-title="Weather Forecast"] {
+    padding: 0;
+    margin: 0;
+    height: 100vh;
+    width: 100vw;
+    max-width: none;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    overflow-x: hidden;
+    overflow-y: hidden;
+}
+body[data-page-title="Weather Forecast"] .settings-panel {
+    max-width: none;
+    width: 100%;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    background: none;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow: visible;
+}
+body[data-page-title="Weather Forecast"] .settings-panel::before {
+    display: none;
+}
+body[data-page-title="Weather Forecast"] ~ .author-info {
+    display: none;
+}
+body[data-page-title="Weather Forecast"] .header-and-buttons {
+    height: 100px;
+    min-height: 100px;
+    width: 100%;
+    padding: 0 12px;
+    box-sizing: border-box;
+    background: linear-gradient(to bottom, #e8dcc8, #d8ccb4);
+    border-bottom: 2px solid #8b5a2b;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+    flex-shrink: 0;
+    z-index: 100;
+    margin-bottom: 0;
+    position: relative;
+}
+body[data-page-title="Weather Forecast"] .header-and-buttons h2 {
+    font-size: 18px;
+    text-transform: none;
+    letter-spacing: 1px;
+    white-space: nowrap;
+}
+body[data-page-title="Weather Forecast"] .weather-page-layout {
+    flex: 1;
+    overflow: auto;
+    min-height: 0;
+}
+
 /* ── Maps page: style the shared header bar ─────────────────────────────── */
 body[data-page-title="Maps View"] .header-and-buttons {
     height: 100px;
@@ -1394,66 +1454,34 @@ body[data-page-title="Maps View"] .maps-mode-toggle-header {
     line-height: 50px;
 }
 
-/* ── Mixed Cluster Icons (circle stacked on top of square) ────────────── */
+/* ── Mixed Cluster Icons (hexagon shape for chit+contact clusters) ─────── */
 .maps-mixed-cluster {
     position: relative;
-    background: transparent;
-    border: none;
-    box-shadow: none;
+    background: linear-gradient(135deg, #7b5ea7, #5a3d7a) !important;
+    border: none !important;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
     display: flex;
     align-items: center;
     justify-content: center;
     font-family: 'Lora', Georgia, serif;
     font-weight: bold;
     color: #fff;
-}
-.maps-mixed-cluster-square {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    width: 70%;
-    height: 70%;
-    border-radius: 5px;
-    background: linear-gradient(135deg, #d4a373, #8b5a2b);
-    border: 2px solid #5a3f2a;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.75em;
-    color: #fff8e1;
-}
-.maps-mixed-cluster-circle {
-    position: absolute;
-    top: 0;
-    right: 0;
-    width: 70%;
-    height: 70%;
-    border-radius: 50%;
-    background: linear-gradient(135deg, #00897b, #00695c);
-    border: 2px solid rgba(0, 77, 64, 0.85);
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.75em;
-    color: #fff;
+    clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
 }
 .maps-mixed-cluster-small {
-    width: 36px;
-    height: 36px;
+    width: 44px;
+    height: 44px;
     font-size: 11px;
 }
 .maps-mixed-cluster-medium {
-    width: 48px;
-    height: 48px;
+    width: 52px;
+    height: 52px;
     font-size: 12px;
 }
 .maps-mixed-cluster-large {
-    width: 56px;
-    height: 56px;
+    width: 60px;
+    height: 60px;
     font-size: 13px;
-    line-height: 50px;
 }
 
 /* ── Fullscreen Control (Leaflet map control, topright) ──────────────────── */

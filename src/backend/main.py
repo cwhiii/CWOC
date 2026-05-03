@@ -110,6 +110,7 @@ from src.backend.migrations import (
     migrate_add_vapid_keys,
     migrate_add_running_timers,
     migrate_add_map_settings,
+    migrate_add_contact_dates,
 )
 
 # Initialize database and run all migrations (same order as before)
@@ -151,6 +152,7 @@ migrate_add_push_subscriptions()
 migrate_add_vapid_keys()
 migrate_add_running_timers()
 migrate_add_map_settings()
+migrate_add_contact_dates()
 seed_version_info()
 
 

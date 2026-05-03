@@ -14,6 +14,10 @@
 
     <link rel="stylesheet" href="/frontend/css/shared/shared-page.css" />
     <link rel="stylesheet" href="/frontend/css/shared/shared-calculator.css" />
+    <!-- Dashboard sidebar styles (variables → layout → sidebar) -->
+    <link rel="stylesheet" href="/frontend/css/dashboard/styles-variables.css" />
+    <link rel="stylesheet" href="/frontend/css/dashboard/styles-layout.css" />
+    <link rel="stylesheet" href="/frontend/css/dashboard/styles-sidebar.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" />
 
     <style>
@@ -271,18 +275,68 @@
                 font-size: 11px;
             }
         }
+
+        /* ══ Shared Sidebar Overrides for Weather Page ══ */
+        .sidebar {
+            top: 100px;
+            height: calc(100% - 100px);
+        }
+
+        /* The weather-page-layout shifts when the shared sidebar is active */
+        .sidebar.active ~ .settings-panel .weather-page-layout {
+            margin-left: 240px;
+        }
+        .weather-page-layout {
+            transition: margin-left 0.3s ease;
+            margin-left: 0;
+        }
+
+        /* On mobile (≤768px), sidebar overlays — no margin shift */
+        @media (max-width: 768px) {
+            .sidebar.active ~ .settings-panel .weather-page-layout {
+                margin-left: 0;
+            }
+        }
+
+        /* Header border stops where it meets the sidebar — hide border under sidebar area */
+        .sidebar.active ~ .settings-panel .header-and-buttons {
+            border-bottom-width: 0;
+            box-shadow: none;
+        }
+        .sidebar.active ~ .settings-panel .header-and-buttons::after {
+            content: '';
+            position: absolute;
+            bottom: -2px;
+            left: 240px;
+            right: 0;
+            height: 2px;
+            background: #8b5a2b;
+        }
+        @media (max-width: 768px) {
+            .sidebar.active ~ .settings-panel .header-and-buttons {
+                border-bottom-width: 2px;
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+            }
+            .sidebar.active ~ .settings-panel .header-and-buttons::after {
+                display: none;
+            }
+        }
     </style>
 </head>
-<body data-page-title="Weather Forecast" data-page-icon="🌤️">
+<body data-page-title="Weather Forecast" data-page-icon="🌤️" data-sidebar="true">
     <div class="settings-panel">
 
+    <!-- ═══ Weather Page Layout (matches maps-page-layout pattern) ═══ -->
+    <div class="weather-page-layout">
         <div id="weather-content">
             <div class="weather-loading">
                 <div class="loader"></div>
                 Loading forecasts…
             </div>
         </div>
-    </div>
+    </div><!-- /.weather-page-layout -->
+
+    </div><!-- /.settings-panel -->
 
     <script src="/frontend/js/shared/shared-auth.js"></script>
     <script src="/frontend/js/shared/shared-utils.js"></script>
@@ -297,6 +351,8 @@
     <script src="/frontend/js/shared/shared-qr.js"></script>
     <script src="/frontend/js/shared/shared.js"></script>
     <script src="/frontend/js/shared/shared-calculator.js"></script>
+    <script src="/frontend/js/shared/shared-sidebar-filter.js"></script>
+    <script src="/frontend/js/shared/shared-sidebar.js"></script>
     <script src="/frontend/js/pages/shared-page.js"></script>
     <script src="/frontend/js/pages/weather.js"></script>
     <script src="/pwa/pwa-register.js"></script>

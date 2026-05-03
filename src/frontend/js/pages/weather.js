@@ -77,9 +77,280 @@ function _wxIsToday(dateStr) {
 
 // ── Main page logic ──────────────────────────────────────────────────────────
 
+/* ── Shared Sidebar Integration ───────────────────────────────────────────── */
+
+function _initWeatherSidebarShared() {
+  _cwocInitSidebar({
+    page: 'weather',
+    currentPage: 'weather',
+    onCreateChit: function() {
+      window.location.href = '/frontend/html/editor.html';
+    },
+    onToday: function() {
+      var periodSelect = document.getElementById('period-select');
+      if (periodSelect) periodSelect.value = 'all';
+      _wxOnFilterChange();
+    },
+    onPeriodChange: function() { _wxOnFilterChange(); },
+    onPreviousPeriod: function() { _wxPrevPeriod(); },
+    onNextPeriod: function() { _wxNextPeriod(); },
+    onFilterChange: function() { _wxOnFilterChange(); },
+    onClearFilters: function() { _wxClearFilters(); },
+    onWeatherClick: function() { /* no-op, already on weather */ },
+    onMapsClick: function() { window.location.href = '/maps'; },
+    onContactsClick: function() { window.location.href = '/frontend/html/people.html'; },
+    onSettingsClick: function() {
+      localStorage.setItem('cwoc_settings_return', '/frontend/html/weather.html');
+      window.location.href = '/frontend/html/settings.html';
+    },
+    onCalculatorClick: function() { if (typeof cwocToggleCalculator === 'function') cwocToggleCalculator(); },
+    onReferenceClick: function() { /* no-op */ },
+    onHelpClick: function() { window.location.href = '/frontend/html/help.html'; },
+    periodOptions: [
+      { value: 'all', label: 'Forecast Max (16 day)', selected: true },
+      { value: 'xdays', label: 'X Days' },
+      { value: 'day', label: 'Day' },
+      { value: 'week', label: 'This Week' },
+      { value: 'month', label: 'This Month' }
+    ]
+  });
+
+  // Hide the author-info footer (sidebar has its own branding)
+  var authorInfo = document.querySelector('.author-info');
+  if (authorInfo) authorInfo.style.display = 'none';
+
+  // Hide sections not relevant to weather page
+  var orderSection = document.getElementById('section-order');
+  if (orderSection) orderSection.style.display = 'none';
+
+  // Hide tab-specific sections
+  var tabSections = ['section-kanban', 'section-alarms-mode', 'section-tasks-mode', 'section-indicators'];
+  tabSections.forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+
+  // Update date display
+  _wxUpdateDateDisplay();
+}
+
+/* ── Weather page filter/period stubs ─────────────────────────────────────── */
+
+var _wxCurrentPeriodOffset = 0; // offset from "now" for prev/next navigation
+var _wxCustomDaysCount = 7;    // X Days count from user settings (capped at 16)
+var _wxAllChits = [];          // all chits, stored for sidebar filter matching
+
+function _wxOnFilterChange() {
+  _wxCurrentPeriodOffset = (_wxCurrentPeriodOffset === undefined) ? 0 : _wxCurrentPeriodOffset;
+  _wxUpdateDateDisplay();
+  _wxApplyDateFilter();
+}
+
+function _wxClearFilters() {
+  var periodSelect = document.getElementById('period-select');
+  if (periodSelect) periodSelect.value = 'all';
+  _wxCurrentPeriodOffset = 0;
+  _wxUpdateDateDisplay();
+  _wxApplyDateFilter();
+}
+
+function _wxPrevPeriod() {
+  _wxCurrentPeriodOffset--;
+  _wxUpdateDateDisplay();
+  _wxApplyDateFilter();
+}
+
+function _wxNextPeriod() {
+  _wxCurrentPeriodOffset++;
+  _wxUpdateDateDisplay();
+  _wxApplyDateFilter();
+}
+
+function _wxApplyDateFilter() {
+  var periodSelect = document.getElementById('period-select');
+  var period = periodSelect ? periodSelect.value : 'all';
+
+  var allBlocks = document.querySelectorAll('.weather-day-block');
+  var allHeaders = document.querySelectorAll('.weather-date-header');
+
+  // Read sidebar filter state
+  var statusFilters = [];
+  document.querySelectorAll('#status-multi input[data-filter="status"]:checked').forEach(function(cb) {
+    if (cb.value) statusFilters.push(cb.value);
+  });
+  var priorityFilters = [];
+  document.querySelectorAll('#priority-multi input[data-filter="priority"]:checked').forEach(function(cb) {
+    if (cb.value) priorityFilters.push(cb.value);
+  });
+  var searchText = '';
+  var searchEl = document.getElementById('search');
+  if (searchEl) searchText = (searchEl.value || '').toLowerCase().trim();
+
+  var hasTagFilter = (window._sidebarTagSelection && window._sidebarTagSelection.length > 0);
+  var hasPeopleFilter = (window._sidebarPeopleSelection && window._sidebarPeopleSelection.length > 0);
+  var hasAnyChitFilter = statusFilters.length > 0 || priorityFilters.length > 0 || searchText || hasTagFilter || hasPeopleFilter;
+
+  // Calculate date range for period filter
+  var startStr = null, endStr = null;
+  if (period !== 'all') {
+    var now = new Date();
+    var start, end;
+    if (period === 'xdays') {
+      var xDays = Math.min(_wxCustomDaysCount || 7, 16);
+      start = new Date(now.getFullYear(), now.getMonth(), now.getDate() + (_wxCurrentPeriodOffset * xDays));
+      end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + xDays - 1);
+    } else if (period === 'day') {
+      start = new Date(now.getFullYear(), now.getMonth(), now.getDate() + _wxCurrentPeriodOffset);
+      end = new Date(start);
+    } else if (period === 'week') {
+      var dayOfWeek = now.getDay();
+      start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek + (_wxCurrentPeriodOffset * 7));
+      end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 6);
+    } else if (period === 'month') {
+      start = new Date(now.getFullYear(), now.getMonth() + _wxCurrentPeriodOffset, 1);
+      end = new Date(start.getFullYear(), start.getMonth() + 1, 0);
+    }
+    if (start && end) {
+      startStr = start.getFullYear() + '-' + String(start.getMonth() + 1).padStart(2, '0') + '-' + String(start.getDate()).padStart(2, '0');
+      endStr = end.getFullYear() + '-' + String(end.getMonth() + 1).padStart(2, '0') + '-' + String(end.getDate()).padStart(2, '0');
+    }
+  }
+
+  // If no chit filters active, just apply date range filter
+  if (!hasAnyChitFilter) {
+    allBlocks.forEach(function(block) {
+      var date = block.getAttribute('data-wx-date');
+      if (!date) { block.style.display = 'none'; return; }
+      if (!startStr) { block.style.display = ''; return; }
+      block.style.display = (date >= startStr && date <= endStr) ? '' : 'none';
+    });
+  } else {
+    // Build a set of dates that have matching chits
+    var matchingDates = {};
+    for (var i = 0; i < _wxAllChits.length; i++) {
+      var chit = _wxAllChits[i];
+      if (chit.deleted) continue;
+      // Status filter
+      if (statusFilters.length > 0 && statusFilters.indexOf(chit.status) === -1) continue;
+      // Priority filter
+      if (priorityFilters.length > 0 && priorityFilters.indexOf(chit.priority) === -1) continue;
+      // Text search
+      if (searchText) {
+        var haystack = ((chit.title || '') + ' ' + (chit.note || '') + ' ' + (chit.location || '')).toLowerCase();
+        if (haystack.indexOf(searchText) === -1) continue;
+      }
+      // Tag filter
+      if (hasTagFilter) {
+        var chitTags = chit.tags;
+        if (typeof chitTags === 'string') { try { chitTags = JSON.parse(chitTags); } catch(e) { chitTags = []; } }
+        if (!Array.isArray(chitTags)) chitTags = [];
+        var tagMatch = false;
+        for (var ti = 0; ti < window._sidebarTagSelection.length; ti++) {
+          if (chitTags.indexOf(window._sidebarTagSelection[ti]) !== -1) { tagMatch = true; break; }
+        }
+        if (!tagMatch) continue;
+      }
+      // People filter
+      if (hasPeopleFilter) {
+        var chitPeople = chit.people;
+        if (typeof chitPeople === 'string') { try { chitPeople = JSON.parse(chitPeople); } catch(e) { chitPeople = []; } }
+        if (!Array.isArray(chitPeople)) chitPeople = [];
+        var peopleMatch = false;
+        for (var pi = 0; pi < window._sidebarPeopleSelection.length; pi++) {
+          if (chitPeople.indexOf(window._sidebarPeopleSelection[pi]) !== -1) { peopleMatch = true; break; }
+        }
+        if (!peopleMatch) continue;
+      }
+      // This chit passes all filters — record its dates
+      var dateFields = ['start_datetime', 'due_datetime', 'created_datetime'];
+      for (var df = 0; df < dateFields.length; df++) {
+        var val = chit[dateFields[df]];
+        if (val && typeof val === 'string') {
+          var dateOnly = val.substring(0, 10);
+          if (/^\d{4}-\d{2}-\d{2}$/.test(dateOnly)) {
+            matchingDates[dateOnly] = true;
+          }
+        }
+      }
+    }
+
+    // Show/hide blocks: must pass BOTH date range AND chit filter
+    allBlocks.forEach(function(block) {
+      var date = block.getAttribute('data-wx-date');
+      if (!date) { block.style.display = 'none'; return; }
+      var inRange = !startStr || (date >= startStr && date <= endStr);
+      var hasMatch = matchingDates[date];
+      block.style.display = (inRange && hasMatch) ? '' : 'none';
+    });
+  }
+
+  // Sync date headers with first row's block visibility
+  var firstRow = document.querySelector('.weather-row');
+  if (firstRow) {
+    var rowBlocks = firstRow.querySelectorAll('.weather-day-block');
+    allHeaders.forEach(function(header, idx) {
+      if (idx < rowBlocks.length) {
+        header.style.display = rowBlocks[idx].style.display;
+      }
+    });
+  }
+}
+
+function _wxUpdateDateDisplay() {
+  var periodSelect = document.getElementById('period-select');
+  var period = periodSelect ? periodSelect.value : 'all';
+  var yearEl = document.getElementById('year-display');
+  var rangeEl = document.getElementById('week-range');
+
+  if (period === 'all') {
+    if (yearEl) yearEl.textContent = '';
+    if (rangeEl) rangeEl.textContent = 'Forecast Max (16 day)';
+    return;
+  }
+
+  // Calculate date range based on period and offset
+  var now = new Date();
+  var start, end;
+  var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+  if (period === 'xdays') {
+    // X Days: use the user's custom_days_count setting (capped at 16)
+    var xDays = Math.min(_wxCustomDaysCount || 7, 16);
+    start = new Date(now.getFullYear(), now.getMonth(), now.getDate() + (_wxCurrentPeriodOffset * xDays));
+    end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + xDays - 1);
+  } else if (period === 'day') {
+    var d = new Date(now);
+    d.setDate(d.getDate() + _wxCurrentPeriodOffset);
+    start = d; end = d;
+  } else if (period === 'week') {
+    var dayOfWeek = now.getDay();
+    start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek + (_wxCurrentPeriodOffset * 7));
+    end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 6);
+  } else if (period === 'month') {
+    start = new Date(now.getFullYear(), now.getMonth() + _wxCurrentPeriodOffset, 1);
+    end = new Date(start.getFullYear(), start.getMonth() + 1, 0);
+  }
+
+  if (!start) return;
+
+  if (yearEl) yearEl.textContent = start.getFullYear();
+  if (rangeEl) {
+    if (period === 'day') {
+      rangeEl.textContent = months[start.getMonth()] + ' ' + start.getDate();
+    } else {
+      var startStr = months[start.getMonth()] + ' ' + start.getDate();
+      var endStr = months[end.getMonth()] + ' ' + end.getDate();
+      rangeEl.textContent = startStr + ' — ' + endStr;
+    }
+  }
+}
+
 (async function _initWeatherPage() {
   var container = document.getElementById('weather-content');
   if (!container) return;
+
+  // Initialize shared sidebar (navigation-only mode for weather page)
+  _initWeatherSidebarShared();
 
   // Load saved locations
   var locations = [];
@@ -117,6 +388,7 @@ function _wxIsToday(dateStr) {
   try {
     var settings = await getCachedSettings();
     weekStartDay = parseInt(settings.week_start_day) || 0;
+    _wxCustomDaysCount = Math.min(parseInt(settings.custom_days_count) || 7, 16);
   } catch (e) { /* default to Sunday */ }
 
   // Fetch forecasts for all locations in parallel
@@ -131,6 +403,7 @@ function _wxIsToday(dateStr) {
     var chitResp = await fetch('/api/chits');
     if (chitResp.ok) {
       allChits = await chitResp.json();
+      _wxAllChits = allChits;
       chitsByLocDate = _wxBuildLocDateMap(allChits, locations);
     }
   } catch (e) {

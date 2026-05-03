@@ -381,9 +381,26 @@
                     margin: 12px 0 6px;
                     padding-bottom: 3px;
                     border-bottom: 1px solid rgba(139, 90, 43, 0.25);
+                    cursor: pointer;
+                    user-select: none;
+                }
+                .setting-subheader::before {
+                    content: '▼ ';
+                    font-size: 0.6em;
+                    vertical-align: middle;
+                }
+                .setting-subheader.collapsed::before {
+                    content: '▶ ';
                 }
                 .setting-subheader:first-child {
                     margin-top: 0;
+                }
+                /* ── Collapsible subsection bodies ── */
+                .setting-subsection-body {
+                    /* content between subheaders */
+                }
+                .setting-subheader.collapsed + .setting-subsection-body {
+                    display: none;
                 }
 
                 /* ── Hint text below a label ── */
@@ -579,16 +596,9 @@
                     <div class="setting-group">
                         <h3>General Settings</h3>
 
-                        <div class="setting-inline">
-                            <label for="time-format">🕰️ Time Format</label>
-                            <select id="time-format" name="time-format">
-                                <option value="24hour">24 Hour</option>
-                                <option value="12hour">12 Hour</option>
-                                <option value="metric">HST</option>
-                            </select>
-                        </div>
+                        <label class="setting-subheader">⚙️ General</label>
 
-                        <div class="setting-inline settings-spacer-top">
+                        <div class="setting-inline">
                             <label>Sex</label>
                             <div id="sex-pill" class="cwoc-pill-toggle" style="display:flex;border:1px solid #8b5a2b;border-radius:4px;overflow:hidden;cursor:pointer;font-size:0.8em;">
                                 <input type="hidden" id="gender-toggle" value="Man" />
@@ -630,11 +640,15 @@
                             </select>
                         </div>
 
-                        <div class="setting-inline settings-spacer-top">
-                            <label class="cwoc-checkbox-label"><input type="checkbox" id="hide-declined-toggle" /> Hide declined chits</label>
+                        <label class="setting-subheader">🕐 Clocks</label>
+                        <div class="setting-inline">
+                            <label for="time-format">🕰️ Time Format</label>
+                            <select id="time-format" name="time-format">
+                                <option value="24hour">24 Hour</option>
+                                <option value="12hour">12 Hour</option>
+                                <option value="metric">HST</option>
+                            </select>
                         </div>
-
-                        <label class="setting-subheader" style="margin-top:14px;">🕐 Clocks</label>
                         <button onclick="toggleOrientation()" class="standard-button" style="margin-bottom:10px">🔄 Orientation</button>
                         <div class="clocks-container" id="clocks-container">
                             <div class="time-format-grid" id="time-format-grid"></div>
@@ -643,6 +657,8 @@
                     </div>
                     <div class="setting-group">
                         <h3>📅 Time Periods</h3>
+
+                        <label class="setting-subheader">Calendar Settings</label>
 
                         <div class="setting-inline">
                             <label for="week-start-day">Week Starts On</label>
@@ -657,7 +673,7 @@
                             </select>
                         </div>
 
-                        <label class="setting-subheader">🕐 View Hours</label>
+                        <label class="setting-subheader" style="font-size:0.9em;">🕐 View Hours</label>
                         <p class="setting-hint">For Day, Week, X Days views.</p>
                         <div class="hour-range-row">
                             <select id="all-view-start-hour" onchange="_syncHourDropdowns('all-view-start-hour','all-view-end-hour')">
@@ -685,8 +701,6 @@
                                 <option value="12">12:00</option>
                             </select>
                         </div>
-
-                        <hr style="border:none;border-top:1px solid rgba(139, 90, 43, 0.3);margin:16px 0;" />
 
                         <label class="setting-subheader">Enabled Periods</label>
                         <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:4px;">
@@ -776,6 +790,7 @@
                             <label><input type="checkbox" id="delete-past" name="delete_past_alarm_chits" /> 🗑️ Delete Past Alarms</label>
                             <label><input type="checkbox" id="show-tab-counts" name="show_tab_counts" /> 🔢 Show Tab Counts</label>
                             <label><input type="checkbox" id="prefer-google-maps" name="prefer_google_maps" /> 🗺️ Prefer Google for Maps</label>
+                            <label><input type="checkbox" id="hide-declined-toggle" /> 🚫 Hide declined chits</label>
                         </div>
                     </div>
                     <div class="setting-group">
@@ -1332,9 +1347,10 @@
             })();
             </script>
             <script>
-            /* ── Collapsible setting-group sections ── */
+            /* ── Collapsible setting-group sections + subsections ── */
             (function() {
               var STORAGE_KEY = 'cwoc_settings_collapsed';
+              var SUB_STORAGE_KEY = 'cwoc_settings_subsections_collapsed';
 
               function _getCollapsedState() {
                 try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; } catch (e) { return {}; }
@@ -1342,10 +1358,17 @@
               function _saveCollapsedState(state) {
                 try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) { /* ignore */ }
               }
+              function _getSubCollapsedState() {
+                try { return JSON.parse(localStorage.getItem(SUB_STORAGE_KEY)) || {}; } catch (e) { return {}; }
+              }
+              function _saveSubCollapsedState(state) {
+                try { localStorage.setItem(SUB_STORAGE_KEY, JSON.stringify(state)); } catch (e) { /* ignore */ }
+              }
 
               function _initCollapsibleGroups() {
                 var groups = document.querySelectorAll('.setting-group');
                 var state = _getCollapsedState();
+                var subState = _getSubCollapsedState();
 
                 for (var i = 0; i < groups.length; i++) {
                   var group = groups[i];
@@ -1372,7 +1395,7 @@
                     group.classList.add('collapsed');
                   }
 
-                  /* Wire click handler */
+                  /* Wire click handler for h3 */
                   (function(g, k) {
                     g.querySelector(':scope > h3').addEventListener('click', function() {
                       g.classList.toggle('collapsed');
@@ -1385,6 +1408,48 @@
                       _saveCollapsedState(s);
                     });
                   })(group, key);
+
+                  /* ── Subsection collapsing within this group-body ── */
+                  var subheaders = body.querySelectorAll('.setting-subheader');
+                  for (var si = 0; si < subheaders.length; si++) {
+                    var subheader = subheaders[si];
+
+                    /* Build a subsection key from group key + subheader text */
+                    var subKey = key + '/' + subheader.textContent.trim().replace(/[^\w\s]/g, '').trim().toLowerCase().replace(/\s+/g, '-');
+
+                    /* Collect all sibling elements between this subheader and the next subheader (or end of body) */
+                    var wrapper = document.createElement('div');
+                    wrapper.className = 'setting-subsection-body';
+                    var nextNode = subheader.nextSibling;
+                    while (nextNode) {
+                      /* Stop if we hit the next .setting-subheader */
+                      if (nextNode.nodeType === 1 && nextNode.classList && nextNode.classList.contains('setting-subheader')) break;
+                      var nextNext = nextNode.nextSibling;
+                      wrapper.appendChild(nextNode);
+                      nextNode = nextNext;
+                    }
+                    /* Insert the wrapper right after the subheader */
+                    subheader.parentNode.insertBefore(wrapper, subheader.nextSibling);
+
+                    /* Restore subsection collapsed state */
+                    if (subState[subKey]) {
+                      subheader.classList.add('collapsed');
+                    }
+
+                    /* Wire click handler for subheader */
+                    (function(sh, sk) {
+                      sh.addEventListener('click', function() {
+                        sh.classList.toggle('collapsed');
+                        var ss = _getSubCollapsedState();
+                        if (sh.classList.contains('collapsed')) {
+                          ss[sk] = true;
+                        } else {
+                          delete ss[sk];
+                        }
+                        _saveSubCollapsedState(ss);
+                      });
+                    })(subheader, subKey);
+                  }
                 }
               }
 

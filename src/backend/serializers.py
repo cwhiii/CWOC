@@ -127,13 +127,23 @@ def vcard_parse(vcard_string: str) -> dict:
         elif prop_name == "X-FAVORITE":
             contact["favorite"] = value.lower() in ("true", "1", "yes")
 
+        elif prop_name == "BDAY":
+            if value:
+                # Normalize BDAY value — strip dashes if compact (e.g. 19900515 → 1990-05-15)
+                bday_val = value.strip()
+                if len(bday_val) == 8 and bday_val.isdigit():
+                    bday_val = bday_val[:4] + '-' + bday_val[4:6] + '-' + bday_val[6:]
+                if "dates" not in contact:
+                    contact["dates"] = []
+                contact["dates"].append({"label": "Birthday", "value": bday_val})
+
     # If given_name is still empty, try to extract from FN as a fallback
     if not contact["given_name"] and fn_value:
         contact["given_name"] = fn_value
 
     # Clean up empty multi-value lists → None for consistency
-    for mv_field in ("phones", "emails", "addresses", "websites", "call_signs", "x_handles"):
-        if not contact[mv_field]:
+    for mv_field in ("phones", "emails", "addresses", "websites", "call_signs", "x_handles", "dates"):
+        if not contact.get(mv_field):
             contact[mv_field] = None
 
     return contact
@@ -231,6 +241,20 @@ def vcard_print(contact) -> str:
     favorite = _get("favorite")
     if favorite:
         lines.append("X-FAVORITE:true")
+
+    # BDAY — output birthday from dates array
+    dates = _get("dates")
+    if dates:
+        for d in dates:
+            if isinstance(d, dict):
+                lbl = (d.get("label") or "").lower()
+                val = d.get("value") or ""
+            else:
+                lbl = (getattr(d, "label", None) or "").lower()
+                val = getattr(d, "value", None) or ""
+            if lbl == "birthday" and val:
+                lines.append(f"BDAY:{val}")
+                break
 
     lines.append("END:VCARD")
     return "\r\n".join(lines)

@@ -38,7 +38,7 @@ Package marker. No public exports.
 | `serve_icon_192()` | `GET /static/cwoc-icon-192.png` — Serve 192×192 PWA icon from `src/pwa/` |
 | `serve_icon_512()` | `GET /static/cwoc-icon-512.png` — Serve 512×512 PWA icon from `src/pwa/` |
 
-Registers all route modules (including `auth_router`, `users_router`, `sharing_router`, `notifications_router`, `network_access_router`, `push_router`, and `ntfy_router`), runs all migrations (including `migrate_add_multi_user()`, `migrate_add_sharing()`, `migrate_add_kiosk_users()`, `migrate_add_network_access()`, `migrate_add_notifications()`, `migrate_habits_overhaul()`, `migrate_habits_phase2()`, `migrate_add_push_subscriptions()`, `migrate_add_vapid_keys()`, and `migrate_add_map_settings()`) and `init_db()` at import time, mounts `StaticFiles` for frontend, static, data, and PWA directories.
+Registers all route modules (including `auth_router`, `users_router`, `sharing_router`, `notifications_router`, `network_access_router`, `push_router`, and `ntfy_router`), runs all migrations (including `migrate_add_multi_user()`, `migrate_add_sharing()`, `migrate_add_kiosk_users()`, `migrate_add_network_access()`, `migrate_add_notifications()`, `migrate_habits_overhaul()`, `migrate_habits_phase2()`, `migrate_add_push_subscriptions()`, `migrate_add_vapid_keys()`, `migrate_add_map_settings()`, and `migrate_add_contact_dates()`) and `init_db()` at import time, mounts `StaticFiles` for frontend, static, data, and PWA directories.
 
 ### 1.3 `src/backend/models.py` — Pydantic Models
 
@@ -50,7 +50,7 @@ Registers all route modules (including `auth_router`, `users_router`, `sharing_r
 | `Settings` | User settings — time format, tags, colors, indicators, calendar config, audit limits, habits success window, shared_tags, hide_declined, map settings (map_default_lat, map_default_lon, map_default_zoom, map_auto_zoom), etc. |
 | `Chit` | Core chit model — title, note, dates, status, checklist, alerts, recurrence, location, color, people, habit, habit_goal, habit_success, show_on_calendar, habit_reset_period, habit_last_action_date, habit_hide_overall, perpetual, shares, stealth, assigned_to, etc. |
 | `MultiValueEntry` | Label/value pair for contact multi-value fields (phone, email, etc.) |
-| `Contact` | Contact model — name fields, phones, emails, addresses, social, security, notes, tags, color |
+| `Contact` | Contact model — name fields, phones, emails, addresses, dates, social, security, notes, tags, color |
 | `ImportRequest` | Import envelope — mode ("add"/"replace") + data dict |
 | `UserCreate` | Create user request — username, display_name, password, email (optional), is_admin (optional, default False) |
 | `UserResponse` | User response — id, username, display_name, email, is_admin, is_active, created_datetime |
@@ -118,6 +118,7 @@ All migrations run at startup. Each checks if the column/table already exists be
 | `migrate_add_push_subscriptions()` | Create `push_subscriptions` table with columns: `id` (TEXT PRIMARY KEY), `user_id` (TEXT NOT NULL), `endpoint` (TEXT NOT NULL UNIQUE), `p256dh` (TEXT NOT NULL), `auth` (TEXT NOT NULL), `device_label` (TEXT), `created_datetime` (TEXT NOT NULL). Uses `CREATE TABLE IF NOT EXISTS` for idempotency |
 | `migrate_add_vapid_keys()` | Ensure `instance_meta` table exists for storing VAPID key pair as key-value rows (`vapid_public_key`, `vapid_private_key`). Uses `CREATE TABLE IF NOT EXISTS` for idempotency |
 | `migrate_add_map_settings()` | Add `map_default_lat` (TEXT), `map_default_lon` (TEXT), `map_default_zoom` (TEXT), `map_auto_zoom` (TEXT DEFAULT '1') columns to settings table for map start view configuration |
+| `migrate_add_contact_dates()` | Add `dates` (TEXT) column to contacts table for multi-value date entries (Birthday, Anniversary, etc.) stored as JSON |
 
 ### 1.6 `src/backend/serializers.py` — vCard & CSV
 
@@ -1939,6 +1940,15 @@ Weather page: 16-day forecasts for all saved locations rendered as a scrollable 
 | `_wxMon` | Array — month abbreviations (Jan–Dec) |
 | `_wxFormatDate(dateStr)` | Format a YYYY-MM-DD string into `{ dow, label }` for the header |
 | `_wxIsToday(dateStr)` | Check if a YYYY-MM-DD string is today |
+| `_initWeatherSidebarShared()` | Initialize shared sidebar for weather page with period/filter/date-nav support |
+| `_wxCurrentPeriodOffset` | Number — offset from "now" for prev/next period navigation |
+| `_wxAllChits` | Array — all chits, stored for sidebar filter matching on weather page |
+| `_wxOnFilterChange()` | Handler for weather filter/period changes — updates date display and applies date filter |
+| `_wxApplyDateFilter()` | Shows/hides weather day blocks and date headers based on period, status, tags, priority, people, and text filters |
+| `_wxClearFilters()` | Reset weather filters and period to defaults |
+| `_wxPrevPeriod()` | Navigate to previous period (decrement offset) |
+| `_wxNextPeriod()` | Navigate to next period (increment offset) |
+| `_wxUpdateDateDisplay()` | Update sidebar year/range display based on current period and offset |
 | `_initWeatherPage()` | IIFE — main page init: load locations, fetch forecasts, render table, add city rows |
 | `_wxFetchForecast(loc)` | Fetch 16-day forecast for a single location (shared cache → fresh fetch fallback) |
 | `_wxDayOfWeek(dateStr)` | Get the day-of-week (0=Sun..6=Sat) for a YYYY-MM-DD string |
@@ -2016,9 +2026,11 @@ Maps page: interactive Leaflet map with two display modes — **Chits** (chit lo
 | `_mapsChitsFilterPriority` | Selected priority filter values (array) |
 | `_mapsChitsFilterPeople` | Selected people filter values (array, mutated by CwocSidebarFilter) |
 | `_mapsChitsFilterText` | Text search query for chits filter |
+| `_mapsPeriodOffset` | Number — period offset for prev/next navigation (0 = current) |
 | `_mapsPeopleFilterText` | Text search query for people filter |
 | `_mapsPeopleFilterFavoritesOnly` | Favorites-only toggle state (boolean) |
 | `_mapsPeopleFilterTags` | Selected tag filter values for people (array, mutated by CwocSidebarFilter) |
+| `_mapsShowAllPeople` | When true, show all people regardless of date filters (boolean) |
 | **Header & Mode Toggle** | |
 | `_injectModeToggle()` | Creates Chits/Both/People mode toggle and sidebar toggle button, injects them into the shared `.header-and-buttons` header created by shared-page.js. Sidebar toggle calls shared sidebar's `toggleSidebar()` |
 | `_getPeriodDateRange(period)` | Returns `{start, end}` Date objects for "week", "month", "quarter", "year", or "all" (null dates) |
@@ -2028,12 +2040,9 @@ Maps page: interactive Leaflet map with two display modes — **Chits** (chit lo
 | `_mapsSetMode(mode)` | Sets mode, persists to localStorage, updates toggle button active states, triggers mode switch |
 | `_mapsRestoreMode()` | Reads mode from localStorage, validates, defaults to `"chits"` |
 | `_onModeToggleChange(e)` | Click handler for mode toggle buttons — reads `data-mode` and calls `_mapsSetMode()` |
-| `_showChitsLegend()` | Shows chits legend (`#maps-legend`), hides people legend |
-| `_showPeopleLegend()` | Shows people legend (`#maps-people-legend`), hides chits legend |
-| `_showBothLegends()` | Shows both chits and people legends |
-| `_switchToChitsMode()` | Transitions to Chits mode — clears people markers, shows chits legend, reloads chit filter data, loads chits |
-| `_switchToPeopleMode()` | Transitions to People mode — clears chit markers, shows people legend, loads contacts |
-| `_switchToBothMode()` | Transitions to Both mode — shows both legends, loads both chits and contacts |
+| `_switchToChitsMode()` | Transitions to Chits mode — clears both marker groups, reloads chit filter data, loads chits |
+| `_switchToPeopleMode()` | Transitions to People mode — clears both marker groups, loads contacts |
+| `_switchToBothMode()` | Transitions to Both mode — clears both marker groups, loads both chits and contacts |
 | **Shared Sidebar Initialization** | |
 | `_initMapsSidebarShared()` | Initializes the shared sidebar for the maps page via `_cwocInitSidebar()` with maps-specific Page_Context (onCreateChit, onToday, onPeriodChange, onFilterChange, onClearFilters, onMapsClick no-op, periodOptions, loadTagFilters, loadPeopleFilters). Hides `.author-info` footer. Wires sidebar `transitionend` to invalidate Leaflet map size. Passes `currentPage: 'maps'` to highlight Maps button |
 | **Chits Filter Panel** | |
@@ -2059,7 +2068,7 @@ Maps page: interactive Leaflet map with two display modes — **Chits** (chit lo
 | `_filterChitsByDateRange(chits, startDate, endDate)` | Returns chits with non-empty location and at least one date field within the range |
 | `_geocodeChits(chits)` | Geocodes each chit's location via `_geocodeAddress()` with in-memory cache deduplication |
 | `_getMarkerColor(status)` | Returns hex color for a chit status (used in popups) |
-| `_buildPopupContent(chit)` | Returns HTML for a chit marker popup with title, date, status, and editor link |
+| `_buildPopupContent(chit)` | Returns HTML for a chit marker popup with title, date, status icon in icons row, and editor link |
 | `_placeMarkers(geocodedChits)` | Creates colored markers using chit's own `color` field (fallback `#d2b48c`), stores `_cwocChit` on each marker for cluster blocked/overdue detection; respects auto-zoom setting |
 | `_mapsToDateString(date)` | Converts a Date to `YYYY-MM-DD` string |
 | **People mode** | |
@@ -2076,7 +2085,8 @@ Maps page: interactive Leaflet map with two display modes — **Chits** (chit lo
 | `_onPeopleFilterChange()` | Handler for people filter changes — re-filters and re-renders contact markers |
 | `_clearPeopleFilters()` | Resets all people filters to defaults, re-renders CwocSidebarFilter tag panel |
 | **Shared UI helpers** | |
-| `_showLegend()` | Shows the legend element |
+| `_mapsShowLoading()` | Shows a floating toast-style loading indicator overlaid on the map |
+| `_mapsHideLoading()` | Hides the floating toast loading indicator |
 | `_showInfoMessage(msg)` | Shows info message (e.g., no results) |
 | `_hideInfoMessage()` | Hides info message |
 | `_mapsFormatDate(isoString)` | Formats an ISO datetime string for popup display |

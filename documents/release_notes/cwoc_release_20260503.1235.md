@@ -1,0 +1,1 @@
+Added multi-value dates field to contacts (Birthday, Anniversary, etc.) with full-stack support: SQLite migration, Pydantic model, API serialization, vCard BDAY import/export, HTML5 date picker in the contact editor, and search across dates in people list, maps, and editor-people views.

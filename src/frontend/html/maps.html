@@ -30,109 +30,7 @@
     <style>
         /* ══ Maps Page Inline Styles (page-specific only) ══ */
 
-        /* ── Legend ── */
-        .maps-legend {
-            display: flex;
-            align-items: center;
-            gap: 14px;
-            flex-wrap: wrap;
-            font-size: 13px;
-            color: var(--aged-brown-dark, #4a2c2a);
-        }
-        .maps-legend-title {
-            font-weight: bold;
-            margin-right: 4px;
-        }
-        .maps-legend-item {
-            display: flex;
-            align-items: center;
-            gap: 5px;
-        }
-        .maps-legend-swatch {
-            display: inline-block;
-            width: 14px;
-            height: 14px;
-            border-radius: 50%;
-            border: 1px solid #5c4033;
-        }
-        /* ── Legend outline indicator swatches ── */
-        .maps-legend-swatch-outline {
-            display: inline-block;
-            width: 14px;
-            height: 14px;
-            border-radius: 3px;
-            background: #d2b48c;
-        }
-
-        /* ── Status Bar (bottom of map area) ── */
-        .maps-status-bar {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 4px 12px;
-            background: linear-gradient(to bottom, #f5e6cc, #ede0c8);
-            border-top: 1px solid #8b5a2b;
-            font-size: 12px;
-            color: var(--aged-brown-dark, #4a2c2a);
-            font-family: 'Lora', Georgia, serif;
-            flex-shrink: 0;
-            min-height: 28px;
-            gap: 12px;
-        }
-        .maps-status-left {
-            display: flex;
-            align-items: center;
-            flex-shrink: 1;
-            min-width: 0;
-            overflow: hidden;
-        }
-        .maps-status-center {
-            flex-shrink: 0;
-            white-space: nowrap;
-        }
-        /* ── Loading indicator — settings-page notification style ── */
-        #maps-loading-indicator {
-            background: #fff8e1;
-            border: 1px solid #d4a373;
-            border-radius: 4px;
-            padding: 2px 10px;
-            color: #6b4e31;
-            font-style: italic;
-            font-size: 12px;
-        }
-        #maps-loading-text {
-            display: inline-block;
-            min-width: 70px;
-            text-align: left;
-        }
-        .maps-status-right {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            flex-shrink: 0;
-            font-size: 11px;
-            opacity: 0.7;
-            white-space: nowrap;
-        }
-        .maps-status-right a {
-            color: var(--aged-brown-dark, #4a2c2a);
-            text-decoration: none;
-        }
-        .maps-status-right a:hover {
-            text-decoration: underline;
-        }
-        .maps-footer-version {
-            font-size: 10px;
-            opacity: 0.6;
-        }
-        .maps-people-legend {
-            display: flex;
-            align-items: center;
-            gap: 14px;
-            flex-wrap: wrap;
-            font-size: 13px;
-            color: var(--aged-brown-dark, #4a2c2a);
-        }
+        /* (Status bar, legends removed — loading uses floating toast) */
 
         /* ── Google Maps warning ── */
         .maps-google-warning {
@@ -193,6 +91,66 @@
                 margin-left: 0;
             }
         }
+
+        /* Header border stops where it meets the sidebar — hide border under sidebar area */
+        .sidebar.active ~ .settings-panel .header-and-buttons {
+            border-bottom-width: 0;
+            box-shadow: none;
+        }
+        .sidebar.active ~ .settings-panel .header-and-buttons::after {
+            content: '';
+            position: absolute;
+            bottom: -2px;
+            left: 240px;
+            right: 0;
+            height: 2px;
+            background: #8b5a2b;
+        }
+        @media (max-width: 768px) {
+            .sidebar.active ~ .settings-panel .header-and-buttons {
+                border-bottom-width: 2px;
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+            }
+            .sidebar.active ~ .settings-panel .header-and-buttons::after {
+                display: none;
+            }
+        }
+
+        /* ── Loading toast spinner ── */
+        #maps-loading-toast .loader {
+            width: 18px;
+            height: 18px;
+            border-width: 2px;
+            margin: 0;
+        }
+
+        /* ── Title tooltip for single markers ── */
+        .maps-title-tooltip {
+            font-family: 'Lora', Georgia, serif;
+            font-size: 12px;
+            padding: 3px 8px;
+            background: #fff8e1;
+            border: 1px solid #8b5a2b;
+            color: #2b1e0f;
+            border-radius: 4px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+        }
+        .maps-title-tooltip::before {
+            border-top-color: #8b5a2b !important;
+        }
+
+        /* ── Mobile: ensure map controls are visible and accessible ── */
+        @media (max-width: 768px) {
+            .maps-fullscreen-control,
+            .maps-default-view-control {
+                margin-right: 6px !important;
+                margin-top: 6px !important;
+            }
+            /* Hide permanent tooltips on mobile to reduce clutter */
+            .maps-title-tooltip {
+                display: none !important;
+            }
+        }
     </style>
 </head>
 <body data-page-title="Maps View" data-page-icon="🗺️" data-sidebar="true">
@@ -218,31 +176,6 @@
             <!-- Info Message (no results — overlaid on map) -->
             <div class="maps-info-message" id="maps-info-message">
                 No chits with locations found for the selected period.
-            </div>
-
-            <!-- ── Status Bar (legend left, loading center, page title right) ── -->
-            <div class="maps-status-bar" id="maps-status-bar">
-                <!-- Left: Legends -->
-                <div class="maps-status-left">
-                    <!-- Chits Legend (chit color + blocked/overdue indicators) -->
-                    <div class="maps-legend" id="maps-legend">
-                        <span class="maps-legend-title">Chits:</span>
-                        <span class="maps-legend-item"><span class="maps-legend-swatch" style="background:#d2b48c;border-radius:3px;"></span> Chit color</span>
-                        <span class="maps-legend-item"><span class="maps-legend-swatch-outline" style="border:2px solid #F44336;border-radius:3px;"></span> Blocked</span>
-                        <span class="maps-legend-item"><span class="maps-legend-swatch-outline" style="border:2px solid #FF9800;border-radius:3px;"></span> Overdue</span>
-                    </div>
-                    <!-- People Legend (hidden by default) -->
-                    <div class="maps-people-legend" id="maps-people-legend" style="display:none">
-                        <span class="maps-legend-title">Contacts:</span>
-                        <span class="maps-legend-item">
-                            <span class="maps-legend-swatch" style="background:#008080; border-radius:50%;"></span> Contact color
-                        </span>
-                    </div>
-                </div>
-                <!-- Center: Loading indicator -->
-                <div class="maps-status-center" id="maps-loading-indicator" style="display:none;">
-                    <span id="maps-loading-text">Loading.</span>
-                </div>
             </div>
         </main>
 

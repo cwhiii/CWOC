@@ -800,6 +800,7 @@ function _contactMatchesFilter(c, filter) {
     (c.call_signs || []).map(function (cs) { return (cs.value || ''); }).join(' '),
     (c.x_handles || []).map(function (x) { return (x.value || ''); }).join(' '),
     (c.websites || []).map(function (w) { return (w.value || ''); }).join(' '),
+    (c.dates || []).map(function (d) { return (d.label || '') + ' ' + (d.value || ''); }).join(' '),
     (c.tags || []).join(' ')
   ];
   return fields.some(function (f) { return f.toLowerCase().includes(filter); });

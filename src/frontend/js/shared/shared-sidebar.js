@@ -295,11 +295,11 @@ function _cwocInjectSidebar() {
   html += '  </div>';
   html += '</div>';
 
-  /* Contacts, Maps, Weather, Clock, Kiosk, Calculator */
+  /* People, Maps, Weather, Clock, Kiosk, Calculator */
   html += '<div class="sidebar-section" id="section-settings">';
   html += '  <button class="action-button" id="sidebar-contacts-btn" style="margin-bottom:6px;">';
   html += '    <i class="fas fa-address-book" style="font-size:1.1em;vertical-align:middle;margin-right:4px;"></i>';
-  html += '    Contacts';
+  html += '    People';
   html += '  </button>';
   html += '  <div style="display:flex;gap:6px;">';
   html += '    <button class="action-button sidebar-compact-btn" id="sidebar-maps-btn" title="Maps View">';

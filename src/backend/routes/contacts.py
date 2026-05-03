@@ -68,6 +68,7 @@ def _serialize_contact_for_db(contact) -> dict:
         "call_signs": serialize_json_field(_mv_to_dicts(_get("call_signs"))),
         "x_handles": serialize_json_field(_mv_to_dicts(_get("x_handles"))),
         "websites": serialize_json_field(_mv_to_dicts(_get("websites"))),
+        "dates": serialize_json_field(_mv_to_dicts(_get("dates"))),
         "has_signal": 1 if _get("has_signal") else 0,
         "signal_username": _get("signal_username"),
         "pgp_key": _get("pgp_key"),
@@ -89,6 +90,7 @@ def _row_to_contact(row: dict) -> dict:
     row["call_signs"] = deserialize_json_field(row.get("call_signs"))
     row["x_handles"] = deserialize_json_field(row.get("x_handles"))
     row["websites"] = deserialize_json_field(row.get("websites"))
+    row["dates"] = deserialize_json_field(row.get("dates"))
     row["has_signal"] = bool(row.get("has_signal"))
     row["favorite"] = bool(row.get("favorite"))
     row.setdefault("nickname", None)
@@ -98,6 +100,7 @@ def _row_to_contact(row: dict) -> dict:
     row.setdefault("social_context", None)
     row.setdefault("image_url", None)
     row.setdefault("notes", None)
+    row.setdefault("dates", None)
     row["tags"] = deserialize_json_field(row.get("tags"))
     return row
 
@@ -141,10 +144,10 @@ def create_contact(contact: Contact, request: Request):
             INSERT INTO contacts (
                 id, given_name, surname, middle_names, prefix, suffix,
                 nickname, display_name, phones, emails, addresses, call_signs,
-                x_handles, websites, has_signal, signal_username, pgp_key, favorite,
+                x_handles, websites, dates, has_signal, signal_username, pgp_key, favorite,
                 color, organization, social_context, image_url, notes, tags,
                 created_datetime, modified_datetime, owner_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 contact_id,
@@ -161,6 +164,7 @@ def create_contact(contact: Contact, request: Request):
                 db_fields["call_signs"],
                 db_fields["x_handles"],
                 db_fields["websites"],
+                db_fields["dates"],
                 db_fields["has_signal"],
                 db_fields["signal_username"],
                 db_fields["pgp_key"],
@@ -218,13 +222,15 @@ def get_contacts(request: Request, q: Optional[str] = Query(None)):
                    OR call_signs LIKE ? COLLATE NOCASE
                    OR x_handles LIKE ? COLLATE NOCASE
                    OR websites LIKE ? COLLATE NOCASE
+                   OR dates LIKE ? COLLATE NOCASE
                    OR notes LIKE ? COLLATE NOCASE
                    OR tags LIKE ? COLLATE NOCASE)
                 ORDER BY favorite DESC, display_name COLLATE NOCASE ASC
                 """,
                 (user_id, like_pattern, like_pattern, like_pattern, like_pattern,
                  like_pattern, like_pattern, like_pattern, like_pattern, like_pattern,
-                 like_pattern, like_pattern, like_pattern, like_pattern, like_pattern),
+                 like_pattern, like_pattern, like_pattern, like_pattern, like_pattern,
+                 like_pattern),
             )
         else:
             cursor.execute(
@@ -400,7 +406,7 @@ def update_contact(contact_id: str, contact: Contact, request: Request):
             UPDATE contacts SET
                 given_name = ?, surname = ?, middle_names = ?, prefix = ?, suffix = ?,
                 nickname = ?, display_name = ?, phones = ?, emails = ?, addresses = ?,
-                call_signs = ?, x_handles = ?, websites = ?,
+                call_signs = ?, x_handles = ?, websites = ?, dates = ?,
                 has_signal = ?, signal_username = ?, pgp_key = ?, favorite = ?,
                 color = ?, organization = ?, social_context = ?, image_url = ?,
                 notes = ?, tags = ?,
@@ -412,7 +418,7 @@ def update_contact(contact_id: str, contact: Contact, request: Request):
                 db_fields["prefix"], db_fields["suffix"], db_fields["nickname"],
                 db_fields["display_name"], db_fields["phones"], db_fields["emails"],
                 db_fields["addresses"], db_fields["call_signs"], db_fields["x_handles"],
-                db_fields["websites"], db_fields["has_signal"], db_fields["signal_username"],
+                db_fields["websites"], db_fields["dates"], db_fields["has_signal"], db_fields["signal_username"],
                 db_fields["pgp_key"], db_fields["favorite"], db_fields["color"],
                 db_fields["organization"], db_fields["social_context"], db_fields["image_url"],
                 db_fields["notes"], db_fields["tags"], current_time, contact_id,
@@ -652,14 +658,14 @@ async def import_contacts(request: Request, file: UploadFile = File(...)):
                     """INSERT INTO contacts (
                         id, given_name, surname, middle_names, prefix, suffix,
                         display_name, phones, emails, addresses, call_signs,
-                        x_handles, websites, has_signal, pgp_key, favorite,
+                        x_handles, websites, dates, has_signal, pgp_key, favorite,
                         created_datetime, modified_datetime, owner_id
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (contact_id, db_fields["given_name"], db_fields["surname"],
                      db_fields["middle_names"], db_fields["prefix"], db_fields["suffix"],
                      db_fields["display_name"], db_fields["phones"], db_fields["emails"],
                      db_fields["addresses"], db_fields["call_signs"], db_fields["x_handles"],
-                     db_fields["websites"], db_fields["has_signal"], db_fields["pgp_key"],
+                     db_fields["websites"], db_fields["dates"], db_fields["has_signal"], db_fields["pgp_key"],
                      db_fields["favorite"], current_time, current_time, user_id),
                 )
                 conn.commit()
@@ -699,14 +705,14 @@ async def import_contacts(request: Request, file: UploadFile = File(...)):
                     """INSERT INTO contacts (
                         id, given_name, surname, middle_names, prefix, suffix,
                         display_name, phones, emails, addresses, call_signs,
-                        x_handles, websites, has_signal, pgp_key, favorite,
+                        x_handles, websites, dates, has_signal, pgp_key, favorite,
                         created_datetime, modified_datetime, owner_id
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (contact_id, db_fields["given_name"], db_fields["surname"],
                      db_fields["middle_names"], db_fields["prefix"], db_fields["suffix"],
                      db_fields["display_name"], db_fields["phones"], db_fields["emails"],
                      db_fields["addresses"], db_fields["call_signs"], db_fields["x_handles"],
-                     db_fields["websites"], db_fields["has_signal"], db_fields["pgp_key"],
+                     db_fields["websites"], db_fields["dates"], db_fields["has_signal"], db_fields["pgp_key"],
                      db_fields["favorite"], current_time, current_time, user_id),
                 )
                 conn.commit()

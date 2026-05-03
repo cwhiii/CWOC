@@ -2,6 +2,8 @@
 
 ## Introduction
 
+
+
 Extract the CWOC dashboard sidebar into a shared component that renders identically on both the dashboard and maps pages. The sidebar HTML structure is currently defined inline in `index.html` and the sidebar JS logic lives in `main-sidebar.js`. This feature extracts both into shared files so both pages get the same sidebar (Create Chit, Today, Period/Date nav, Filters, Contacts, Clock, Weather, Maps, Kiosk, Calculator, Notifications, Settings, Reference, Help, footer) with page-specific behavior driven by a callback/configuration system.
 
 ## Glossary

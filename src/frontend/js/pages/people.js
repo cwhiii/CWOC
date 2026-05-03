@@ -136,6 +136,7 @@
                     (c.call_signs || []).map(cs => (cs.value || '')).join(' '),
                     (c.x_handles || []).map(x => (x.value || '')).join(' '),
                     (c.websites || []).map(w => (w.value || '')).join(' '),
+                    (c.dates || []).map(d => (d.label || '') + ' ' + (d.value || '')).join(' '),
                 ];
                 return fields.some(f => f.toLowerCase().includes(q));
             });

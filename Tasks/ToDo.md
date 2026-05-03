@@ -2,13 +2,23 @@
 
 *Completed items are in `done.md`. Deferred items in `parking_lot.md`. Declined in `path_not_traveled.md`.*
 
+Here values for things like birthdays and anniversaries. These dates should appear on a special birthday chit. These are automatically generated on the anniversary date of the dates in people. But there should be a check box by each one that defaults to turned on or show anual repitition  (or aniversary sor romthieng). If enabled, and there's a valid date, show the person as a value on the all day section of calendars. And searches should find them correctly. So if I have somebody born in 1987, I'm January 14, and I'm viewing the month of January, if I have show on calendar enable, that person's chip (no chit, THIER person tag) should show up on the calendar for January 14. Even if I'm looking at January for 2029.
+
 
 ## Manual Tasks
 - `[ ]` Screenshot and video walkthrough of the app
 
+
+
+Is there any way to cache/remember the locations on the map? It takes a very long time to load everything each time. I'd like to do like we do with the weather, and cache the info we need, and then, as soon as we start the page,, displaying the cached verison while we wait fo rhe currewnt stuff to get fetched? 
 ---
 
 ## Top Priorities
+
+is ther any way cto cache the locatons so they dont have to be fetched from scratch each time? Or to show the previoulsy-loaded values?
+
+
+Add 3 more time periods to the drop-down. The next hour, and today, and next X days which uses the X days setting form th esettings. 
 
 
 fix habit notifications:
@@ -39,20 +49,12 @@ The how it charts are pre-rendering the text. So they're grainy and terrible. Us
 - `[ ]` Pruning should be enabled by default
 - habits mode: Animation — Ditched the FLIP approach entirely. still doesnt animate after the cahnged compltion values, it jsut instnatly swaps, wihch is hard to follow)
 
+
+
+Is there any way to cache/remember the locations on the map? It takes a very long time to load everything each time. I'd like to do like we do with the weather, and cache the info we need, and then, as soon as we start the page,, displaying the cached verison while we wait fo rhe currewnt stuff to get fetched? 
 ---
 
 ## Easy / Quick
-
-- Add birthdate field for people. then it should be a searched, refereeced field in Dashboard, Maps & Weather pages. 
-Chnge the sidebar button from Contacts to People
-
-- Intorduce the SHARED sidebar to the People Page. (lose the  tail in the page): hide the following controls: 
-    - Hide all filters other than: 
-        - tags, and ensure you're looking at oeopl etags, not chit tags (exolain the differece  & ask for inout hewre ebfeore manking any chges to this)
-        - Add a filter for:
-            -  contact/user
-            - Has: XYZ. (true matches person with ANY value in that field). one for each person field.
-            - 
 
 
 

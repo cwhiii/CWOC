@@ -1,4 +1,5 @@
 # Implementation Plan: Shared Sidebar
+see if any of this got missesed in the peicemeal adoption path we took. 
 
 ## Overview
 

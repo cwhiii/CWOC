@@ -1241,6 +1241,31 @@ def migrate_add_running_timers():
             conn.close()
 
 
+# ── Contact Dates: migration ─────────────────────────────────────────────
+
+def migrate_add_contact_dates():
+    """Add 'dates' TEXT column to contacts table for multi-value date entries.
+
+    Stores JSON array of {label, value} objects (e.g. Birthday, Anniversary).
+    Fully idempotent — checks column existence before adding.
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(contacts)")
+        columns = {row[1] for row in cursor.fetchall()}
+        if "dates" not in columns:
+            cursor.execute("ALTER TABLE contacts ADD COLUMN dates TEXT")
+            conn.commit()
+            logger.info("Added dates column to contacts table")
+    except Exception as e:
+        logger.error(f"migrate_add_contact_dates: {e}")
+    finally:
+        if conn:
+            conn.close()
+
+
 # ── Map Settings: migration ──────────────────────────────────────────────
 
 def migrate_add_map_settings():

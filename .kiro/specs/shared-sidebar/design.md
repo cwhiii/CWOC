@@ -1,5 +1,5 @@
 # Design Document: Shared Sidebar
-
+see if any of this got missesed in the peicemeal adoption path we took. 
 ## Overview
 
 This design extracts the CWOC dashboard sidebar into a shared component that can be injected into any page via a `data-sidebar` attribute on `<body>`. The sidebar HTML is built dynamically by a new `shared-sidebar.js` file, and sidebar behavior is driven by a **Page_Context** callback system so each page can wire its own handlers for buttons like "Today", "Period", "Filters", etc.

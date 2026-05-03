@@ -128,6 +128,7 @@ class Contact(BaseModel):
     call_signs: Optional[List[MultiValueEntry]] = None
     x_handles: Optional[List[MultiValueEntry]] = None
     websites: Optional[List[MultiValueEntry]] = None
+    dates: Optional[List[MultiValueEntry]] = None  # [{label: "Birthday", value: "1990-05-15"}, ...]
     has_signal: Optional[bool] = False
     signal_username: Optional[str] = None
     pgp_key: Optional[str] = None

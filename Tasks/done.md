@@ -2,6 +2,18 @@
 
 
 
+
+Is there any way to cache/remember the locations on the map? It takes a very long time to load everything each time. I'd like to do like we do with the weather, and cache the info we need, and then, as soon as we start the page,, displaying the cached verison while we wait fo rhe currewnt stuff to get fetched? 
+
+- Intorduce the SHARED sidebar to the People Page. (lose the  tail in the page): hide the following controls: 
+    - Hide all filters other than: 
+        - tags, and ensure you're looking at oeopl etags, not chit tags (exolain the differece  & ask for inout hewre ebfeore manking any chges to this)
+        - Add a filter for:
+            -  contact/user
+            - Has: XYZ. (true matches person with ANY value in that field). one for each person field.
+            - 
+
+
 ### Calculator
 - `[ ]` Calculator popover/movable modal — steal from Pipeulator & add "insert result" value (or Ctrl+I if in an input field). Leave the calculator wired to value? (persist checkbox)?
 

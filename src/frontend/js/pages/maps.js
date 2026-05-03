@@ -10,6 +10,32 @@ var _mapsLeafletMap = null;
 var _mapsClusterGroup = null;
 var _mapsAllChits = [];
 var _mapsGeocodeCache = {};
+var _GEOCODE_LS_KEY = 'cwoc_maps_geocode_cache';
+
+/** Load geocode cache from localStorage on startup */
+function _loadGeocodeCache() {
+  try {
+    var raw = localStorage.getItem(_GEOCODE_LS_KEY);
+    if (raw) {
+      var parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') {
+        _mapsGeocodeCache = parsed;
+        return;
+      }
+    }
+  } catch (e) { /* ignore */ }
+  _mapsGeocodeCache = {};
+}
+
+/** Save geocode cache to localStorage */
+function _saveGeocodeCache() {
+  try {
+    localStorage.setItem(_GEOCODE_LS_KEY, JSON.stringify(_mapsGeocodeCache));
+  } catch (e) { /* ignore — quota exceeded or private browsing */ }
+}
+
+// Load cache immediately
+_loadGeocodeCache();
 
 // ── People Mode state ────────────────────────────────────────────────────────
 
@@ -17,7 +43,7 @@ var MAPS_MODE_KEY = 'cwoc_maps_mode';
 var _mapsCurrentMode = 'chits';
 var _mapsAllContacts = [];
 var _mapsPeopleClusterGroup = null;
-var _mapsContactGeocodeCache = {};
+var _mapsContactGeocodeCache = _mapsGeocodeCache; // unified — same cache for chits and contacts
 
 // Focus mode flag — when true, skip fitBounds on marker placement
 var _mapsFocusMode = false;
@@ -29,10 +55,14 @@ var _mapsChitsFilterPriority = [];
 var _mapsChitsFilterPeople = [];
 var _mapsChitsFilterText = '';
 
+// Period offset for prev/next navigation
+var _mapsPeriodOffset = 0;
+
 // People filter state
 var _mapsPeopleFilterText = '';
 var _mapsPeopleFilterFavoritesOnly = false;
 var _mapsPeopleFilterTags = [];
+var _mapsShowAllPeople = false;
 
 // ── Status → Color mapping ───────────────────────────────────────────────────
 
@@ -47,38 +77,29 @@ var _mapsNoStatusColor = '#9E9E9E';
 // ── Loading Indicator ────────────────────────────────────────────────────────
 
 var _mapsLoadingInterval = null;
-var _mapsLoadingDotCount = 1;
 
 /**
- * _mapsShowLoading() — Shows the animated "Loading." indicator in the status bar.
- * Cycles through "Loading.", "Loading..", "Loading..." on a 400ms interval.
+ * _mapsShowLoading() — Shows a floating toast with spinner overlaid on the map.
  */
 function _mapsShowLoading() {
-  var el = document.getElementById('maps-loading-indicator');
-  var textEl = document.getElementById('maps-loading-text');
-  if (!el || !textEl) return;
-  el.style.display = '';
-  _mapsLoadingDotCount = 1;
-  textEl.textContent = 'Loading.';
-  if (_mapsLoadingInterval) clearInterval(_mapsLoadingInterval);
-  _mapsLoadingInterval = setInterval(function() {
-    _mapsLoadingDotCount = (_mapsLoadingDotCount % 3) + 1;
-    var dots = '';
-    for (var i = 0; i < _mapsLoadingDotCount; i++) dots += '.';
-    textEl.textContent = 'Loading' + dots;
-  }, 400);
+  var existing = document.getElementById('maps-loading-toast');
+  if (existing) { existing.style.display = ''; return; }
+  var toast = document.createElement('div');
+  toast.id = 'maps-loading-toast';
+  toast.style.cssText = 'position:fixed;top:110px;left:50%;transform:translateX(-50%);background:#fff8e1;border:1px solid #d4a373;border-radius:6px;padding:8px 20px;color:#6b4e31;font-size:14px;font-family:Lora,Georgia,serif;z-index:1000;box-shadow:0 2px 8px rgba(0,0,0,0.15);display:flex;align-items:center;gap:10px;';
+  toast.innerHTML = '<span>Loading…</span><div class="loader" style="width:18px;height:18px;border-width:2px;flex-shrink:0;"></div>';
+  document.body.appendChild(toast);
+  // No interval needed — spinner is CSS-animated
+  if (_mapsLoadingInterval) { clearInterval(_mapsLoadingInterval); _mapsLoadingInterval = null; }
 }
 
 /**
- * _mapsHideLoading() — Hides the loading indicator in the status bar.
+ * _mapsHideLoading() — Hides the floating toast loading indicator.
  */
 function _mapsHideLoading() {
-  var el = document.getElementById('maps-loading-indicator');
-  if (el) el.style.display = 'none';
-  if (_mapsLoadingInterval) {
-    clearInterval(_mapsLoadingInterval);
-    _mapsLoadingInterval = null;
-  }
+  var toast = document.getElementById('maps-loading-toast');
+  if (toast) toast.style.display = 'none';
+  if (_mapsLoadingInterval) { clearInterval(_mapsLoadingInterval); _mapsLoadingInterval = null; }
 }
 
 // ── Mode Management ──────────────────────────────────────────────────────────
@@ -138,6 +159,34 @@ function _injectModeToggle() {
   } else {
     header.appendChild(toggleWrap);
   }
+
+  // Add "All People" checkbox next to the mode toggle
+  var allWrap = document.createElement('label');
+  allWrap.style.cssText = 'display:flex;align-items:center;gap:4px;font-size:13px;font-family:Lora,Georgia,serif;color:#4a2c2a;cursor:pointer;margin-left:12px;white-space:nowrap;';
+  allWrap.title = 'Show all people regardless of date filters';
+  allWrap.innerHTML = '<input type="checkbox" id="maps-people-show-all" style="margin:0;cursor:pointer;" /> All People';
+  allWrap.querySelector('input').addEventListener('change', function() {
+    _mapsShowAllPeople = this.checked;
+    // Grey out people filter section when "All" is checked
+    var peopleGroup = document.getElementById('filter-people');
+    if (peopleGroup) {
+      var body = peopleGroup.querySelector('.filter-group-body');
+      if (body) {
+        body.style.opacity = this.checked ? '0.4' : '';
+        body.style.pointerEvents = this.checked ? 'none' : '';
+      }
+    }
+    if (_mapsCurrentMode === 'people' || _mapsCurrentMode === 'both') {
+      _fetchAndDisplayContacts();
+    }
+  });
+
+  // Insert after the mode toggle
+  if (navButtons) {
+    header.insertBefore(allWrap, navButtons);
+  } else {
+    header.appendChild(allWrap);
+  }
 }
 
 /* ── Period Date Range Helper ─────────────────────────────────────────────── */
@@ -151,26 +200,30 @@ function _injectModeToggle() {
 function _getPeriodDateRange(period) {
   var now = new Date();
   var start, end;
+  var offset = _mapsPeriodOffset || 0;
 
   switch (period) {
+    case 'day':
+      start = new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset);
+      end = new Date(start.getFullYear(), start.getMonth(), start.getDate(), 23, 59, 59);
+      break;
     case 'week':
-      // Start of current week (Sunday) to end of current week (Saturday)
       var dayOfWeek = now.getDay();
-      start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek);
-      end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + (6 - dayOfWeek), 23, 59, 59);
+      start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek + (offset * 7));
+      end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 6, 23, 59, 59);
       break;
     case 'month':
-      start = new Date(now.getFullYear(), now.getMonth(), 1);
-      end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+      start = new Date(now.getFullYear(), now.getMonth() + offset, 1);
+      end = new Date(start.getFullYear(), start.getMonth() + 1, 0, 23, 59, 59);
       break;
     case 'quarter':
       var qMonth = Math.floor(now.getMonth() / 3) * 3;
-      start = new Date(now.getFullYear(), qMonth, 1);
-      end = new Date(now.getFullYear(), qMonth + 3, 0, 23, 59, 59);
+      start = new Date(now.getFullYear(), qMonth + (offset * 3), 1);
+      end = new Date(start.getFullYear(), start.getMonth() + 3, 0, 23, 59, 59);
       break;
     case 'year':
-      start = new Date(now.getFullYear(), 0, 1);
-      end = new Date(now.getFullYear(), 11, 31, 23, 59, 59);
+      start = new Date(now.getFullYear() + offset, 0, 1);
+      end = new Date(start.getFullYear(), 11, 31, 23, 59, 59);
       break;
     case 'all':
     default:
@@ -283,15 +336,19 @@ function _initMapsSidebarShared() {
       window.location.href = '/frontend/html/editor.html';
     },
     onToday: function() {
+      _mapsPeriodOffset = 0;
       var periodSelect = document.getElementById('period-select');
       if (periodSelect) periodSelect.value = 'week';
       _onChitsFilterChange();
     },
-    onPeriodChange: function() { _onChitsFilterChange(); },
+    onPeriodChange: function() { _mapsPeriodOffset = 0; _onChitsFilterChange(); },
+    onPreviousPeriod: function() { _mapsPeriodOffset--; _onChitsFilterChange(); },
+    onNextPeriod: function() { _mapsPeriodOffset++; _onChitsFilterChange(); },
     onFilterChange: function() { _onChitsFilterChange(); },
     onClearFilters: function() { _clearChitsFilters(); },
     onMapsClick: function() { /* no-op, already on maps */ },
     periodOptions: [
+      { value: 'day', label: 'Day', selected: false },
       { value: 'week', label: 'This Week', selected: true },
       { value: 'month', label: 'This Month' },
       { value: 'quarter', label: 'This Quarter' },
@@ -306,6 +363,10 @@ function _initMapsSidebarShared() {
   var authorInfo = document.querySelector('.author-info');
   if (authorInfo) authorInfo.style.display = 'none';
 
+  // Hide the Order section (not applicable for maps)
+  var orderSection = document.getElementById('section-order');
+  if (orderSection) orderSection.style.display = 'none';
+
   // After shared sidebar CSS transition ends, invalidate the Leaflet map size
   var sidebar = document.getElementById('sidebar');
   if (sidebar) {
@@ -315,35 +376,49 @@ function _initMapsSidebarShared() {
       }
     });
   }
+
+  // Show the current period's date range in the sidebar
+  _updateMapsDateDisplay();
 }
 
-/* ── Legend Management ─────────────────────────────────────────────────────── */
-
-/**
- * _showChitsLegend() — Shows the status-color legend (#maps-legend)
- * and hides the people legend (#maps-people-legend).
- */
-function _showChitsLegend() {
-  document.getElementById('maps-legend').style.display = '';
-  document.getElementById('maps-people-legend').style.display = 'none';
-}
+/* ── Maps Date Display ─────────────────────────────────────────────────────── */
 
 /**
- * _showPeopleLegend() — Shows the people legend (#maps-people-legend)
- * and hides the chits legend (#maps-legend).
+ * _updateMapsDateDisplay() — Updates the #year-display and #week-range elements
+ * in the sidebar to show the current period's date range.
  */
-function _showPeopleLegend() {
-  document.getElementById('maps-people-legend').style.display = '';
-  document.getElementById('maps-legend').style.display = 'none';
+function _updateMapsDateDisplay() {
+  var periodSelect = document.getElementById('period-select');
+  var period = periodSelect ? periodSelect.value : 'week';
+  var yearEl = document.getElementById('year-display');
+  var rangeEl = document.getElementById('week-range');
+
+  if (period === 'all') {
+    if (yearEl) yearEl.textContent = '';
+    if (rangeEl) rangeEl.textContent = 'All Time';
+    return;
+  }
+
+  var range = _getPeriodDateRange(period);
+  if (!range.start || !range.end) {
+    if (yearEl) yearEl.textContent = '';
+    if (rangeEl) rangeEl.textContent = '';
+    return;
+  }
+
+  var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  if (yearEl) yearEl.textContent = range.start.getFullYear();
+  if (rangeEl) {
+    var startStr = months[range.start.getMonth()] + ' ' + range.start.getDate();
+    var endStr = months[range.end.getMonth()] + ' ' + range.end.getDate();
+    if (range.start.getFullYear() !== range.end.getFullYear()) {
+      endStr = months[range.end.getMonth()] + ' ' + range.end.getDate() + ', ' + range.end.getFullYear();
+    }
+    rangeEl.textContent = startStr + ' — ' + endStr;
+  }
 }
 
-/**
- * _showBothLegends() — Shows both the chits and people legends.
- */
-function _showBothLegends() {
-  document.getElementById('maps-legend').style.display = '';
-  document.getElementById('maps-people-legend').style.display = '';
-}
+/* ── Legend Management (removed — status bar legends no longer used) ──────── */
 
 /* ── Mode Switching ───────────────────────────────────────────────────────── */
 
@@ -353,11 +428,8 @@ function _showBothLegends() {
  * and loads chit markers. Reloads chit filter data into the shared sidebar.
  */
 function _switchToChitsMode() {
-  // Clear people markers
-  if (_mapsPeopleClusterGroup) _mapsPeopleClusterGroup.clearLayers();
-
-  // Switch legends
-  _showChitsLegend();
+  // Clear all markers before re-rendering
+  if (_mapsClusterGroup) _mapsClusterGroup.clearLayers();
 
   // Hide any lingering info message
   _hideInfoMessage();
@@ -375,11 +447,8 @@ function _switchToChitsMode() {
  * and loads contact markers.
  */
 function _switchToPeopleMode() {
-  // Clear chit markers
+  // Clear all markers before re-rendering
   if (_mapsClusterGroup) _mapsClusterGroup.clearLayers();
-
-  // Switch legends
-  _showPeopleLegend();
 
   // Hide any lingering info message
   _hideInfoMessage();
@@ -394,8 +463,8 @@ function _switchToPeopleMode() {
  * Shows both legends.
  */
 function _switchToBothMode() {
-  // Show both legends
-  _showBothLegends();
+  // Clear all markers before re-rendering
+  if (_mapsClusterGroup) _mapsClusterGroup.clearLayers();
 
   // Hide any lingering info message
   _hideInfoMessage();
@@ -673,6 +742,9 @@ function _onChitsFilterChange() {
 
   // Tags and people are already updated via CwocSidebarFilter chip click handlers
 
+  // Update the date display in the sidebar
+  _updateMapsDateDisplay();
+
   // Re-filter and re-render (only if we have chits loaded and are in chits or both mode)
   if ((_mapsCurrentMode === 'chits' || _mapsCurrentMode === 'both') && _mapsAllChits.length > 0) {
     _filterAndRender();
@@ -690,6 +762,7 @@ function _clearChitsFilters() {
   _mapsChitsFilterPriority = [];
   _mapsChitsFilterPeople = [];
   _mapsChitsFilterText = '';
+  _mapsPeriodOffset = 0;
 
   // Reset period dropdown to "week" (shared sidebar's period-select)
   var periodSelect = document.getElementById('period-select');
@@ -725,6 +798,9 @@ function _clearChitsFilters() {
 
   // Re-render CwocSidebarFilter panels to clear selections
   _loadChitsFilterData();
+
+  // Update the date display in the sidebar
+  _updateMapsDateDisplay();
 
   // Re-filter and re-render
   if (_mapsCurrentMode === 'chits' || _mapsCurrentMode === 'both') {
@@ -785,19 +861,7 @@ async function _mapsInit() {
     // Restore persisted mode from localStorage
     _mapsRestoreMode();
 
-    // Initialize people cluster group with teal styling (circle icons)
-    _mapsPeopleClusterGroup = L.markerClusterGroup({
-      iconCreateFunction: function(cluster) {
-        var count = cluster.getChildCount();
-        var size = count < 10 ? 'small' : (count < 100 ? 'medium' : 'large');
-        return L.divIcon({
-          html: '<div><span>' + count + '</span></div>',
-          className: 'maps-people-cluster maps-people-cluster-' + size,
-          iconSize: L.point(40, 40)
-        });
-      }
-    });
-    _mapsLeafletMap.addLayer(_mapsPeopleClusterGroup);
+    // People markers now use the shared _mapsClusterGroup for proximity-based clustering
 
     // Wire up mode toggle button click handlers
     var modeButtons = document.querySelectorAll('.maps-mode-btn');
@@ -845,7 +909,10 @@ function _initLeafletMap() {
   var container = document.getElementById('maps-container');
   if (!container) return;
 
-  _mapsLeafletMap = L.map('maps-container').setView([20, 0], 2);
+  _mapsLeafletMap = L.map('maps-container', { zoomControl: false }).setView([20, 0], 2);
+
+  // Add zoom control at bottom-right
+  L.control.zoom({ position: 'bottomright' }).addTo(_mapsLeafletMap);
 
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
@@ -896,8 +963,7 @@ function _initLeafletMap() {
           else chitCount++;
         }
         className = 'maps-mixed-cluster maps-mixed-cluster-' + size;
-        html = '<div class="maps-mixed-cluster-square"' + (clusterBorderStyle ? ' style="' + clusterBorderStyle + '"' : '') + '><span>' + chitCount + '</span></div>' +
-               '<div class="maps-mixed-cluster-circle"><span>' + contactCount + '</span></div>';
+        html = '<div style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;"><span style="font-size:12px;font-weight:bold;color:#fff;">' + chitCount + '/' + contactCount + '</span></div>';
       } else {
         // Chit-only cluster: square icon with amber/brown scheme
         className = 'maps-chit-cluster maps-chit-cluster-' + size;
@@ -1193,7 +1259,7 @@ async function _fetchAndDisplayContacts() {
     var filtered = _applyPeopleFilters(_mapsAllContacts);
 
     if (filtered.length === 0) {
-      if (_mapsPeopleClusterGroup) _mapsPeopleClusterGroup.clearLayers();
+      if (_mapsClusterGroup) _mapsClusterGroup.clearLayers();
       if (_mapsAllContacts.length === 0) {
         _showInfoMessage('No contacts found.');
       } else {
@@ -1207,7 +1273,7 @@ async function _fetchAndDisplayContacts() {
     var geocoded = await _geocodeContacts(filtered);
 
     if (geocoded.length === 0) {
-      if (_mapsPeopleClusterGroup) _mapsPeopleClusterGroup.clearLayers();
+      if (_mapsClusterGroup) _mapsClusterGroup.clearLayers();
       _showInfoMessage('No contacts with addresses were found.');
       _mapsHideLoading();
       return;
@@ -1378,6 +1444,7 @@ function _mapsContactMatchesFilter(contact, query) {
     (contact.call_signs || []).map(function (cs) { return (cs.value || ''); }).join(' '),
     (contact.x_handles || []).map(function (x) { return (x.value || ''); }).join(' '),
     (contact.websites || []).map(function (w) { return (w.value || ''); }).join(' '),
+    (contact.dates || []).map(function (d) { return (d.label || '') + ' ' + (d.value || ''); }).join(' '),
     (contact.tags || []).join(' ')
   ];
   return fields.some(function (f) { return f.toLowerCase().indexOf(q) !== -1; });
@@ -1471,6 +1538,7 @@ async function _geocodeContacts(contacts) {
         var coords = await _geocodeAddress(addrStr);
         if (coords && coords.lat && coords.lon) {
           _mapsContactGeocodeCache[cacheKey] = { lat: coords.lat, lon: coords.lon };
+          _saveGeocodeCache();
           results.push({ contact: contact, address: addrStr, lat: coords.lat, lon: coords.lon });
         } else {
           console.warn('Geocoding returned no results for contact address:', addrStr);
@@ -1500,7 +1568,8 @@ function _getContactMarkerColor(contact) {
  * Binds popup via _buildContactPopupContent() and fits map bounds to markers.
  */
 function _placeContactMarkers(geocodedContacts) {
-  if (_mapsPeopleClusterGroup) _mapsPeopleClusterGroup.clearLayers();
+  // Use the shared cluster group so contacts cluster with chits by proximity
+  if (!_mapsClusterGroup) return;
 
   var bounds = [];
 
@@ -1523,8 +1592,25 @@ function _placeContactMarkers(geocodedContacts) {
     // Bind popup
     var popupContent = _buildContactPopupContent(contact, item.address);
     marker.bindPopup(popupContent, { maxWidth: 280 });
+    (function(m, ct) {
+      m.on('click', function(e) {
+        if (e.originalEvent && (e.originalEvent.metaKey || e.originalEvent.ctrlKey)) {
+          e.originalEvent.preventDefault();
+          window.open('/frontend/html/contact-editor.html?id=' + encodeURIComponent(ct.id), '_blank');
+          return;
+        }
+      });
+    })(marker, contact);
+    marker.bindTooltip(_mapsEsc(contact.display_name || contact.given_name || '(Unknown)'), {
+      permanent: true,
+      direction: 'top',
+      offset: [0, -10],
+      className: 'maps-title-tooltip'
+    });
+    marker.on('popupopen', function() { this.closeTooltip(); });
+    marker.on('popupclose', function() { this.openTooltip(); });
 
-    _mapsPeopleClusterGroup.addLayer(marker);
+    _mapsClusterGroup.addLayer(marker);
     bounds.push([item.lat, item.lon]);
   }
 
@@ -1578,7 +1664,7 @@ function _buildContactPopupContent(contact, address) {
   }
 
   // Editor link
-  html += '<br><a href="/frontend/html/contact-editor.html?id=' + encodeURIComponent(contact.id) + '" style="font-size:12px;color:#008080;">Open Contact →</a>';
+  html += '<br><a href="/frontend/html/contact-editor.html?id=' + encodeURIComponent(contact.id) + '" style="font-size:12px;color:#008080;" onclick="if(event.metaKey||event.ctrlKey){window.open(this.href,\'_blank\');event.preventDefault();}">Open Contact →</a>';
 
   html += '</div>';
   return html;
@@ -1684,6 +1770,7 @@ async function _geocodeChits(chits) {
     try {
       var coords = await _geocodeAddress(address);
       _mapsGeocodeCache[cacheKey] = { lat: coords.lat, lon: coords.lon };
+      _saveGeocodeCache();
       results.push({ chit: chit, lat: coords.lat, lon: coords.lon });
     } catch (e) {
       console.warn('Geocoding failed for "' + address + '":', e.message);
@@ -1737,7 +1824,6 @@ function _getMarkerColor(status) {
  */
 function _buildPopupContent(chit) {
   var title = chit.title || '(Untitled)';
-  var status = chit.status || 'No Status';
 
   // Pick the most relevant date to display
   var dateStr = '';
@@ -1749,18 +1835,61 @@ function _buildPopupContent(chit) {
     dateStr = _mapsFormatDate(chit.created_datetime);
   }
 
-  var color = _getMarkerColor(chit.status);
-
   var html = '<div style="min-width:160px;font-family:Lora,Georgia,serif;">';
+
+  // Indicator icons row — all calendar-supported indicators
+  var icons = [];
+  // Alerts (alarm, notification, timer, stopwatch)
+  if (chit.alerts) {
+    var alertsArr = chit.alerts;
+    if (typeof alertsArr === 'string') { try { alertsArr = JSON.parse(alertsArr); } catch (e) { alertsArr = []; } }
+    if (Array.isArray(alertsArr) && alertsArr.length > 0) icons.push('<span title="Has alerts" style="cursor:pointer;">🔔</span>');
+  }
+  // Recurrence
+  if (chit.recurrence_rule && chit.recurrence_rule.freq) icons.push('<span title="Recurring" style="cursor:pointer;">🔁</span>');
+  // Checklist
+  if (chit.checklist) {
+    var cl = chit.checklist;
+    if (typeof cl === 'string') { try { cl = JSON.parse(cl); } catch (e) { cl = []; } }
+    if (Array.isArray(cl) && cl.length > 0) icons.push('<span title="Has checklist" style="cursor:pointer;">✅</span>');
+  }
+  // People
+  if (chit.people) {
+    var ppl = chit.people;
+    if (typeof ppl === 'string') { try { ppl = JSON.parse(ppl); } catch (e) { ppl = []; } }
+    if (Array.isArray(ppl) && ppl.length > 0) icons.push('<span title="Has people" style="cursor:pointer;">👥</span>');
+  }
+  // Health indicators
+  if (chit.health_indicators && typeof chit.health_indicators === 'object' && Object.keys(chit.health_indicators).length > 0) {
+    icons.push('<span title="Health data" style="cursor:pointer;">❤️</span>');
+  }
+  // Habit
+  if (chit.habit) icons.push('<span title="Habit" style="cursor:pointer;">🎯</span>');
+  // Pinned
+  if (chit.pinned) icons.push('<span title="Pinned" style="cursor:pointer;">📌</span>');
+  // Archived
+  if (chit.archived) icons.push('<span title="Archived" style="cursor:pointer;">📦</span>');
+  // Shared
+  if (chit.shares) {
+    var sh = chit.shares;
+    if (typeof sh === 'string') { try { sh = JSON.parse(sh); } catch (e) { sh = []; } }
+    if (Array.isArray(sh) && sh.length > 0) icons.push('<span title="Shared" style="cursor:pointer;">🔗</span>');
+  }
+  // Status icon (only if chit has a real status)
+  if (chit.status && chit.status !== 'No Status') {
+    var statusIcons = { 'ToDo': '📋', 'In Progress': '🔄', 'Blocked': '🚫', 'Complete': '✅' };
+    var statusIcon = statusIcons[chit.status] || '📋';
+    icons.push('<span title="' + _mapsEsc(chit.status) + '" style="cursor:pointer;">' + statusIcon + '</span>');
+  }
+  if (icons.length > 0) {
+    html += '<div style="display:flex;gap:4px;margin-bottom:4px;font-size:14px;">' + icons.join('') + '</div>';
+  }
+
   html += '<strong style="font-size:14px;">' + _mapsEsc(title) + '</strong>';
   if (dateStr) {
     html += '<br><span style="font-size:12px;color:#666;">📅 ' + _mapsEsc(dateStr) + '</span>';
   }
-  html += '<br><span style="font-size:12px;">';
-  html += '<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:' + color + ';margin-right:4px;vertical-align:middle;"></span>';
-  html += _mapsEsc(status);
-  html += '</span>';
-  html += '<br><a href="/editor?id=' + encodeURIComponent(chit.id) + '" style="font-size:12px;color:#2196F3;">Open in Editor →</a>';
+  html += '<br><a href="/editor?id=' + encodeURIComponent(chit.id) + '" style="font-size:12px;color:#2196F3;" onclick="if(event.metaKey||event.ctrlKey){window.open(this.href,\'_blank\');event.preventDefault();}">Open in Editor →</a>';
   html += '</div>';
 
   return html;
@@ -1830,6 +1959,23 @@ function _placeMarkers(geocodedChits) {
     marker._cwocChit = item.chit;
 
     marker.bindPopup(_buildPopupContent(item.chit));
+    (function(m, c) {
+      m.on('click', function(e) {
+        if (e.originalEvent && (e.originalEvent.metaKey || e.originalEvent.ctrlKey)) {
+          e.originalEvent.preventDefault();
+          window.open('/editor?id=' + encodeURIComponent(c.id), '_blank');
+          return;
+        }
+      });
+    })(marker, item.chit);
+    marker.bindTooltip(_mapsEsc(item.chit.title || '(Untitled)'), {
+      permanent: true,
+      direction: 'top',
+      offset: [0, -14],
+      className: 'maps-title-tooltip'
+    });
+    marker.on('popupopen', function() { this.closeTooltip(); });
+    marker.on('popupclose', function() { this.openTooltip(); });
     _mapsClusterGroup.addLayer(marker);
     bounds.push([item.lat, item.lon]);
   }
@@ -1863,16 +2009,7 @@ function _mapsToDateString(d) {
   return year + '-' + month + '-' + day;
 }
 
-// ── Legend display ────────────────────────────────────────────────────────────
-
-/**
- * _showLegend() — Ensures the legend element is visible.
- * The legend HTML is already in maps.html; this just shows it.
- */
-function _showLegend() {
-  var legend = document.getElementById('maps-legend');
-  if (legend) legend.style.display = '';
-}
+// ── Legend display (removed — status bar legends no longer used) ──────────
 
 // ── Info message helpers ─────────────────────────────────────────────────────
 

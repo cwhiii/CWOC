@@ -498,7 +498,8 @@
         addresses: 'addressesEntries',
         callSigns: 'callSignsEntries',
         xHandles:  'xHandlesEntries',
-        websites:  'websitesEntries'
+        websites:  'websitesEntries',
+        dates:     'datesEntries'
     };
 
     var _valuePlaceholders = {
@@ -507,13 +508,14 @@
         addresses: '4 Rolling Mill Way, Canton, MA 02021',
         callSigns: 'KD2ABC',
         xHandles:  '@username',
-        websites:  'https://example.com'
+        websites:  'https://example.com',
+        dates:     'YYYY-MM-DD'
     };
 
     // Fields whose values should be clickable URLs when not focused
     var _urlFields = { websites: true };
 
-    window.addMultiValueEntry = function (fieldName, defaultLabel, defaultValue) {
+    window.addMultiValueEntry = function (fieldName, defaultLabel, defaultValue, inputType) {
         var containerId = _multiValueMap[fieldName];
         if (!containerId) return;
         var container = document.getElementById(containerId);
@@ -529,7 +531,7 @@
         labelInput.value = defaultLabel || '';
 
         var valueInput = document.createElement('input');
-        valueInput.type = 'text';
+        valueInput.type = inputType || 'text';
         valueInput.className = 'mv-value';
         valueInput.placeholder = _valuePlaceholders[fieldName] || 'Value';
         valueInput.value = defaultValue || '';
@@ -660,8 +662,9 @@
         if (!container) return;
         container.innerHTML = '';
         if (!entries || !entries.length) return;
+        var inputType = (fieldName === 'dates') ? 'date' : undefined;
         for (var i = 0; i < entries.length; i++) {
-            addMultiValueEntry(fieldName, entries[i].label || '', entries[i].value || '');
+            addMultiValueEntry(fieldName, entries[i].label || '', entries[i].value || '', inputType);
         }
     }
 
@@ -726,6 +729,7 @@
             call_signs:      _getMultiValueEntries('callSigns'),
             x_handles:       _getMultiValueEntries('xHandles'),
             websites:        _getMultiValueEntries('websites'),
+            dates:           _getMultiValueEntries('dates'),
             has_signal:      document.getElementById('hasSignal').checked,
             signal_username: document.getElementById('signalUsername').value.trim() || null,
             pgp_key:         document.getElementById('pgpKey').value.trim() || null,
@@ -760,6 +764,9 @@
         _setMultiValueEntries('callSigns', contact.call_signs);
         _setMultiValueEntries('xHandles', contact.x_handles);
         _setMultiValueEntries('websites', contact.websites);
+
+        // Dates
+        _setMultiValueEntries('dates', contact.dates || [{ label: 'Birthday', value: '' }]);
 
         document.getElementById('hasSignal').checked = !!contact.has_signal;
         if (contact.has_signal) {
