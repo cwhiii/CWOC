@@ -124,7 +124,7 @@ ALSO: only do this ONCE at the VERY END of any set of work/tasks. Not multiple t
 There is an index. It contains a complete map of where every function is, and what it does. If this is helpful, use it for finding where to do work. Anytime you change something that would impact this, make sure you update the index. But only at the end of the task.
 
 ## Modularity
-CWOC is broken up into a bunch of code files. Each one is very tight and directed. Ensure that code that you ad gets put in the correct file for the applicable functionality. If there is not a good file to place a new functionality into, find the best place to put a new file based on the structure and index, and then make the new file. The point of these is to keep each file relatively small and more maintainable. If you ever create new files, ensure you update the index file.
+CWOC is broken up into a bunch of code files. Each one is very tight and directed. Ensure that code that you ad gets put in the correct file for the applicable functionality. If there is not a good file to place a new functionality into, find the best place to put a new file based on the structure and index, and then make the new file. The point of these is to keep each file relatively small and more maintainable. If you ever create new files, ensure you update the index file. if you are running a series of tasks, only do this one time, at the end of the seies, just before updating the version number. DO NOT do this for each change as you make them.
 
 ## Release Notes
 Every time you complete a new version, update a file called "release_notes-[version#].md". In extremely brief summary of what you did. Most of these should be one sentence. Replace the entire contents of the file with your new version update description.
@@ -133,7 +133,7 @@ On some super long and complex new feature additions, it may be as much as a par
 
 In the settings page should be a button in the "🔄 Version & Updates" section, which you can click to bring up a model just like the upgrade one. It should show the HTML converted markdown from the file. It should have a simple dismiss button.
 
-I'm sure that the release notes file is emtied, and rebuilt a the completion of every new feature.
+Ensure that the release notes file is cleared, and rebuilt a the completion of every new feature.
 
 ## Configurator Script (`install/configurinator.sh`)
 - **Always CONFIRM with the user** before modifying the configurator script. Never edit it silently.

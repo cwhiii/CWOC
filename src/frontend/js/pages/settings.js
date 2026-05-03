@@ -373,6 +373,80 @@ function toggleAuditPruneInputs() {
   if (mbInput) { mbInput.disabled = disabled; mbInput.style.opacity = disabled ? '0.5' : '1'; }
 }
 
+// ── Map Settings ──────────────────────────────────────────────────────────────
+
+/** Toggle disabled/dimmed state of lat/lon/zoom inputs based on auto-zoom checkbox */
+function _toggleMapAutoZoom() {
+  var cb = document.getElementById('map-auto-zoom');
+  var container = document.getElementById('map-custom-view-settings');
+  if (!container) return;
+  var disabled = (cb && cb.checked);
+  var inputs = container.querySelectorAll('input[type="number"]');
+  inputs.forEach(function(inp) {
+    inp.disabled = disabled;
+    inp.style.opacity = disabled ? '0.5' : '1';
+  });
+}
+
+/** Populate map settings UI from the settings object on page load */
+function _loadMapSettings(settings) {
+  var cb = document.getElementById('map-auto-zoom');
+  if (cb) cb.checked = (settings.map_auto_zoom !== '0');
+
+  var latInput = document.getElementById('map-default-lat');
+  if (latInput) latInput.value = (settings.map_default_lat != null && settings.map_default_lat !== '') ? settings.map_default_lat : '';
+
+  var lonInput = document.getElementById('map-default-lon');
+  if (lonInput) lonInput.value = (settings.map_default_lon != null && settings.map_default_lon !== '') ? settings.map_default_lon : '';
+
+  var zoomInput = document.getElementById('map-default-zoom');
+  if (zoomInput) zoomInput.value = (settings.map_default_zoom != null && settings.map_default_zoom !== '') ? settings.map_default_zoom : '';
+
+  _toggleMapAutoZoom();
+}
+
+/** Read map settings UI values for inclusion in the save payload */
+function _collectMapSettings() {
+  var cb = document.getElementById('map-auto-zoom');
+  var latInput = document.getElementById('map-default-lat');
+  var lonInput = document.getElementById('map-default-lon');
+  var zoomInput = document.getElementById('map-default-zoom');
+
+  // Validate lat/lon/zoom ranges
+  var lat = latInput ? latInput.value.trim() : '';
+  var lon = lonInput ? lonInput.value.trim() : '';
+  var zoom = zoomInput ? zoomInput.value.trim() : '';
+
+  if (lat !== '') {
+    var latNum = parseFloat(lat);
+    if (isNaN(latNum) || latNum < -90 || latNum > 90) {
+      lat = '';
+      if (latInput) latInput.value = '';
+    }
+  }
+  if (lon !== '') {
+    var lonNum = parseFloat(lon);
+    if (isNaN(lonNum) || lonNum < -180 || lonNum > 180) {
+      lon = '';
+      if (lonInput) lonInput.value = '';
+    }
+  }
+  if (zoom !== '') {
+    var zoomNum = parseInt(zoom, 10);
+    if (isNaN(zoomNum) || zoomNum < 1 || zoomNum > 18) {
+      zoom = '';
+      if (zoomInput) zoomInput.value = '';
+    }
+  }
+
+  return {
+    map_auto_zoom: (cb && cb.checked) ? '1' : '0',
+    map_default_lat: lat || null,
+    map_default_lon: lon || null,
+    map_default_zoom: zoom || null,
+  };
+}
+
 /** Toggle visibility of Work Week config based on Work Hours period checkbox */
 function _toggleWorkConfig() {
   var workCb = document.querySelector('.period-cb[value="Work"]');
@@ -1704,6 +1778,9 @@ class SettingsManager {
     if (habitsWindowSel) habitsWindowSel.value = this.settings.habits_success_window || '30';
     var defaultShowHabitsCb = document.getElementById('default-show-habits-on-calendar');
     if (defaultShowHabitsCb) defaultShowHabitsCb.checked = (this.settings.default_show_habits_on_calendar !== '0');
+
+    // Map settings
+    _loadMapSettings(this.settings);
   }
 
   gatherSettings() {
@@ -1793,6 +1870,7 @@ class SettingsManager {
       overdue_border_color: _borderColorOverdue || '#b22222',
       blocked_border_color: _borderColorBlocked || '#DAA520',
       kiosk_users: _gatherKioskTags(),
+      ..._collectMapSettings(),
     };
   }
 

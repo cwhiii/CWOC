@@ -54,6 +54,10 @@ def get_settings(user_id: str, request: Request):
         settings["shared_tags"] = deserialize_json_field(settings.get("shared_tags"))
         settings["kiosk_users"] = deserialize_json_field(settings.get("kiosk_users"))
         settings["default_show_habits_on_calendar"] = settings.get("default_show_habits_on_calendar", "1")
+        settings["map_default_lat"] = settings.get("map_default_lat")
+        settings["map_default_lon"] = settings.get("map_default_lon")
+        settings["map_default_zoom"] = settings.get("map_default_zoom")
+        settings["map_auto_zoom"] = settings.get("map_auto_zoom", "1")
         return settings
     except Exception as e:
         logger.error(f"Error fetching settings: {str(e)}")
@@ -126,6 +130,10 @@ def save_settings(settings: Settings, request: Request):
             "kiosk_users": serialize_json_field(settings.kiosk_users),
             "hide_declined": settings.hide_declined or "0",
             "default_show_habits_on_calendar": settings.default_show_habits_on_calendar or "1",
+            "map_default_lat": settings.map_default_lat,
+            "map_default_lon": settings.map_default_lon,
+            "map_default_zoom": settings.map_default_zoom,
+            "map_auto_zoom": settings.map_auto_zoom or "1",
         }
 
         cursor.execute(
@@ -137,8 +145,9 @@ def save_settings(settings: Settings, request: Request):
                 all_view_start_hour, all_view_end_hour, day_scroll_to_hour,
                 username, audit_log_max_days, audit_log_max_mb, default_notifications, unit_system,
                 habits_success_window, overdue_border_color, blocked_border_color, shared_tags, kiosk_users,
-                hide_declined, default_show_habits_on_calendar
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                hide_declined, default_show_habits_on_calendar,
+                map_default_lat, map_default_lon, map_default_zoom, map_auto_zoom
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 new_settings_dict["user_id"],
@@ -175,6 +184,10 @@ def save_settings(settings: Settings, request: Request):
                 new_settings_dict["kiosk_users"],
                 new_settings_dict["hide_declined"],
                 new_settings_dict["default_show_habits_on_calendar"],
+                new_settings_dict["map_default_lat"],
+                new_settings_dict["map_default_lon"],
+                new_settings_dict["map_default_zoom"],
+                new_settings_dict["map_auto_zoom"],
             )
         )
 

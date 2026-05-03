@@ -6,8 +6,8 @@ Extend the existing Maps View page (`maps.html` + `maps.js`) to support two disp
 
 ## Tasks
 
-- [ ] 1. Add mode toggle and People mode CSS
-  - [ ] 1.1 Add Maps People Mode CSS to shared-page.css
+- [x] 1. Add mode toggle and People mode CSS
+  - [x] 1.1 Add Maps People Mode CSS to shared-page.css
     - Add a `/* ── Maps People Mode ──── */` section at the end of `src/frontend/css/shared/shared-page.css`
     - Define classes for: `.maps-mode-toggle` (toggle container), `.maps-mode-btn` (toggle buttons with active state), `.maps-chits-filter-panel`, `.maps-people-filter-panel`, `.maps-people-legend`
     - Style contact markers: `.maps-contact-marker` (28×28px square with rounded corners, 2px dark brown border, contact-colored background)
@@ -18,7 +18,7 @@ Extend the existing Maps View page (`maps.html` + `maps.js`) to support two disp
     - Add smooth transition for filter panel swap on mode switch
     - _Requirements: 1.1, 5.1, 5.2, 5.3, 7.1, 7.2, 7.3, 9.1, 9.2, 9.3, 12.1, 12.2, 12.3_
 
-  - [ ] 1.2 Add mode toggle HTML and filter panel markup to maps.html
+  - [x] 1.2 Add mode toggle HTML and filter panel markup to maps.html
     - Add mode toggle control between the Google Maps warning and the date filter: two buttons ("Chits" and "People") in a `.maps-mode-toggle` container
     - Add Chits filter panel (`#maps-chits-filter-panel`) containing: status checkboxes (ToDo, In Progress, Blocked, Complete), tag filter area, priority checkboxes, people filter area, text search input, and wrap the existing date range filter inside it
     - Add People filter panel (`#maps-people-filter-panel`, hidden by default) containing: text search input, favorites-only toggle, tag filter chip area, and clear-filters button
@@ -26,8 +26,8 @@ Extend the existing Maps View page (`maps.html` + `maps.js`) to support two disp
     - Add `<style>` block additions for any maps-page-specific styles (contact marker, filter panel layout) that don't belong in shared-page.css
     - _Requirements: 1.1, 2.1, 4.1, 8.1, 8.2, 8.3, 9.1, 9.2_
 
-- [ ] 2. Implement mode toggle logic and state management in maps.js
-  - [ ] 2.1 Add module-level state variables and mode management functions
+- [x] 2. Implement mode toggle logic and state management in maps.js
+  - [x] 2.1 Add module-level state variables and mode management functions
     - Add state variables: `_mapsCurrentMode`, `_mapsAllContacts`, `_mapsPeopleClusterGroup`, `_mapsContactGeocodeCache`, chit filter state vars, people filter state vars, `MAPS_MODE_KEY`
     - Implement `_mapsGetMode()` — returns current mode from module state
     - Implement `_mapsSetMode(mode)` — sets mode, persists to localStorage, calls `_switchToChitsMode()` or `_switchToPeopleMode()`
@@ -35,12 +35,12 @@ Extend the existing Maps View page (`maps.html` + `maps.js`) to support two disp
     - Implement `_onModeToggleChange()` — click handler for toggle buttons
     - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5_
 
-  - [ ] 2.2 Implement mode switching functions
+  - [x] 2.2 Implement mode switching functions
     - Implement `_switchToChitsMode()` — clears people cluster group, shows chits filter panel and chits legend, hides people filter panel and people legend, calls `_fetchAndDisplayChits()`
     - Implement `_switchToPeopleMode()` — clears chit cluster group, shows people filter panel and people legend, hides chits filter panel and chits legend, calls `_fetchAndDisplayContacts()`
     - _Requirements: 1.3, 1.4, 9.1, 9.2, 9.3_
 
-  - [ ] 2.3 Update `_mapsInit()` to initialize mode toggle
+  - [x] 2.3 Update `_mapsInit()` to initialize mode toggle
     - After Google Maps preference guard check, call `_mapsRestoreMode()` to set initial mode
     - Initialize both cluster groups (chits and people) with distinct icon styles
     - Wire up mode toggle button click handlers
@@ -48,11 +48,11 @@ Extend the existing Maps View page (`maps.html` + `maps.js`) to support two disp
     - Load the appropriate mode on init
     - _Requirements: 1.2, 1.5, 10.1, 10.2_
 
-- [ ] 3. Checkpoint — Mode toggle works
+- [x] 3. Checkpoint — Mode toggle works
   - Ensure mode toggle switches between Chits and People modes, persists to localStorage, and Google Maps guard hides the toggle. Ask the user if questions arise.
 
-- [ ] 4. Implement Chits filter panel logic
-  - [ ] 4.1 Implement `_initChitsFilters()` and `_loadChitsFilterData()`
+- [x] 4. Implement Chits filter panel logic
+  - [x] 4.1 Implement `_initChitsFilters()` and `_loadChitsFilterData()`
     - Build status checkboxes (ToDo, In Progress, Blocked, Complete) with "Any" default behavior
     - Fetch user tags from settings cache and build tag filter chips
     - Build priority checkboxes
@@ -62,7 +62,7 @@ Extend the existing Maps View page (`maps.html` + `maps.js`) to support two disp
     - Add "Clear Filters" button that calls `_clearChitsFilters()`
     - _Requirements: 2.1, 2.2, 2.4, 2.6_
 
-  - [ ] 4.2 Implement `_applyChitsFilters(chits)` and `_matchesChitTextSearch(chit, query)`
+  - [x] 4.2 Implement `_applyChitsFilters(chits)` and `_matchesChitTextSearch(chit, query)`
     - Filter by status: if any statuses selected, include only matching chits
     - Filter by tags: if any tags selected, include only chits with at least one matching tag
     - Filter by priority: if any priorities selected, include only matching chits
@@ -72,12 +72,12 @@ Extend the existing Maps View page (`maps.html` + `maps.js`) to support two disp
     - All filters are AND-combined
     - _Requirements: 2.2, 2.3, 2.5_
 
-  - [ ] 4.3 Implement `_clearChitsFilters()` and `_onChitsFilterChange()`
+  - [x] 4.3 Implement `_clearChitsFilters()` and `_onChitsFilterChange()`
     - `_clearChitsFilters()` resets all filter state to defaults and updates UI
     - `_onChitsFilterChange()` re-applies filters and re-renders chit markers
     - _Requirements: 2.3, 2.6_
 
-  - [ ] 4.4 Update `_fetchAndDisplayChits()` to use the new filter pipeline
+  - [x] 4.4 Update `_fetchAndDisplayChits()` to use the new filter pipeline
     - After fetching chits, pass through `_applyChitsFilters()` before geocoding and placing markers
     - Show empty state message when no chits match filters
     - _Requirements: 2.3, 11.1_
@@ -91,8 +91,8 @@ Extend the existing Maps View page (`maps.html` + `maps.js`) to support two disp
     - Minimum 100 iterations using fast-check
     - **Validates: Requirements 2.2, 2.3, 2.5**
 
-- [ ] 5. Implement People mode: fetch, geocode, and display contacts
-  - [ ] 5.1 Implement `_fetchAndDisplayContacts()`
+- [x] 5. Implement People mode: fetch, geocode, and display contacts
+  - [x] 5.1 Implement `_fetchAndDisplayContacts()`
     - Fetch all contacts from `/api/contacts`
     - Apply people filters via `_applyPeopleFilters()`
     - Call `_geocodeContacts()` on filtered contacts
@@ -101,7 +101,7 @@ Extend the existing Maps View page (`maps.html` + `maps.js`) to support two disp
     - Handle fetch errors gracefully with console.error and info message
     - _Requirements: 3.1, 3.4, 3.5, 11.2, 11.3_
 
-  - [ ] 5.2 Implement `_geocodeContacts(contacts)` with deduplication cache
+  - [x] 5.2 Implement `_geocodeContacts(contacts)` with deduplication cache
     - For each contact, iterate over their `addresses` array
     - Skip contacts with no addresses (no error)
     - For each address, check `_mapsContactGeocodeCache` first (keyed by lowercase trimmed address)
@@ -110,7 +110,7 @@ Extend the existing Maps View page (`maps.html` + `maps.js`) to support two disp
     - Return array of `{contact, address, lat, lon}` objects
     - _Requirements: 3.2, 3.3, 3.4, 3.5, 3.6_
 
-  - [ ] 5.3 Implement `_placeContactMarkers(geocodedContacts)` and `_getContactMarkerColor(contact)`
+  - [x] 5.3 Implement `_placeContactMarkers(geocodedContacts)` and `_getContactMarkerColor(contact)`
     - `_getContactMarkerColor()` returns contact's color if non-null/non-empty, else default teal (#008080)
     - Create `L.marker` with `L.divIcon` for each geocoded contact (28×28px square, contact-colored, dark brown border)
     - If contact has `image_url`, include small thumbnail in the divIcon
@@ -119,7 +119,7 @@ Extend the existing Maps View page (`maps.html` + `maps.js`) to support two disp
     - Fit map bounds to markers
     - _Requirements: 3.2, 3.3, 5.1, 5.2, 5.3, 5.4, 7.1_
 
-  - [ ] 5.4 Implement `_buildContactPopupContent(contact, address)`
+  - [x] 5.4 Implement `_buildContactPopupContent(contact, address)`
     - Include contact display name (bold)
     - Include the specific address for this marker
     - Include organization if present
@@ -160,18 +160,18 @@ Extend the existing Maps View page (`maps.html` + `maps.js`) to support two disp
     - Minimum 100 iterations using fast-check
     - **Validates: Requirements 6.1, 6.2, 6.3**
 
-- [ ] 6. Checkpoint — People mode displays contacts on map
+- [x] 6. Checkpoint — People mode displays contacts on map
   - Ensure contacts are fetched, geocoded, and displayed as distinct markers with popups. Ask the user if questions arise.
 
-- [ ] 7. Implement People filter panel logic
-  - [ ] 7.1 Implement `_initPeopleFilters()`
+- [x] 7. Implement People filter panel logic
+  - [x] 7.1 Implement `_initPeopleFilters()`
     - Build text search input with debounced filtering
     - Build favorites-only toggle button/checkbox
     - Build tag filter chips from contact tags (collect unique tags across all contacts)
     - Add "Clear Filters" button that calls `_clearPeopleFilters()`
     - _Requirements: 4.1_
 
-  - [ ] 7.2 Implement `_applyPeopleFilters(contacts)` and `_mapsContactMatchesFilter(contact, query)`
+  - [x] 7.2 Implement `_applyPeopleFilters(contacts)` and `_mapsContactMatchesFilter(contact, query)`
     - `_mapsContactMatchesFilter()` replicates `_contactMatchesFilter` logic from editor-people.js: search across display_name, given_name, surname, nickname, organization, social_context, emails, phones, addresses, call_signs, x_handles, websites, notes, and tags (case-insensitive)
     - Filter by favorites: if toggle active, include only contacts with `favorite === true`
     - Filter by tags: if any tags selected, include only contacts with at least one matching tag
@@ -179,7 +179,7 @@ Extend the existing Maps View page (`maps.html` + `maps.js`) to support two disp
     - All filters are AND-combined
     - _Requirements: 4.2, 4.3, 4.4, 4.5_
 
-  - [ ] 7.3 Implement `_clearPeopleFilters()` and `_onPeopleFilterChange()`
+  - [x] 7.3 Implement `_clearPeopleFilters()` and `_onPeopleFilterChange()`
     - `_clearPeopleFilters()` resets all people filter state to defaults and updates UI
     - `_onPeopleFilterChange()` re-applies filters and re-renders contact markers
     - _Requirements: 4.5, 4.6_
@@ -199,23 +199,23 @@ Extend the existing Maps View page (`maps.html` + `maps.js`) to support two disp
     - Minimum 100 iterations using fast-check
     - **Validates: Requirements 1.5**
 
-- [ ] 8. Implement legends and cluster group styling
-  - [ ] 8.1 Implement `_showChitsLegend()` and `_showPeopleLegend()`
+- [x] 8. Implement legends and cluster group styling
+  - [x] 8.1 Implement `_showChitsLegend()` and `_showPeopleLegend()`
     - `_showChitsLegend()` shows the existing status-color legend, hides people legend
     - `_showPeopleLegend()` shows the people legend (contact-color indicator), hides chits legend
     - Wire legend switching into `_switchToChitsMode()` and `_switchToPeopleMode()`
     - _Requirements: 8.1, 8.2, 8.3_
 
-  - [ ] 8.2 Configure separate MarkerClusterGroups with distinct styling
+  - [x] 8.2 Configure separate MarkerClusterGroups with distinct styling
     - Chits cluster group: existing default blue styling
     - People cluster group: teal (#008080) color scheme using `iconCreateFunction` to apply `.maps-people-cluster` class
     - Both groups added to the map, only the active mode's group is visible
     - _Requirements: 7.1, 7.2, 7.3_
 
-- [ ] 9. Checkpoint — Filters, legends, and clusters all working
+- [x] 9. Checkpoint — Filters, legends, and clusters all working
   - Ensure chit filters, people filters, legends, and cluster groups all function correctly per mode. Ask the user if questions arise.
 
-- [ ] 10. Implement empty state messages and Google Maps guard updates
+- [x] 10. Implement empty state messages and Google Maps guard updates
   - Update `_showInfoMessage()` and `_hideInfoMessage()` to support mode-specific messages
   - Show "No chits match the current filters." when chit filters yield no results
   - Show "No contacts with addresses were found." when no contacts have geocodable addresses
@@ -223,17 +223,17 @@ Extend the existing Maps View page (`maps.html` + `maps.js`) to support two disp
   - Ensure Google Maps warning hides mode toggle and both filter panels
   - _Requirements: 10.1, 10.2, 11.1, 11.2, 11.3_
 
-- [ ] 11. Implement responsive layout for mobile
+- [x] 11. Implement responsive layout for mobile
   - Ensure mode toggle displays as compact toggle on viewports ≤768px
   - Make both filter panels collapse into expandable/collapsible sections on mobile (tap to expand/collapse)
   - Stack filter controls vertically on narrow viewports
   - Add responsive CSS rules in the maps.html `<style>` block or shared-page.css as appropriate
   - _Requirements: 12.1, 12.2, 12.3_
 
-- [ ] 12. Checkpoint — Full feature integration test
+- [x] 12. Checkpoint — Full feature integration test
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 13. Update help documentation
+- [x] 13. Update help documentation
   - Update the Maps View section in `src/frontend/html/help.html` to document:
     - Mode toggle between Chits and People modes
     - People mode: how contacts are displayed on the map by address
@@ -243,7 +243,7 @@ Extend the existing Maps View page (`maps.html` + `maps.js`) to support two disp
     - Mode persistence across page loads
   - _Requirements: 13.1_
 
-- [ ] 14. Update INDEX.md, VERSION, and release notes
+- [x] 14. Update INDEX.md, VERSION, and release notes
   - Update `src/INDEX.md` with all new and modified functions added to `maps.js` (mode management, chit filters, people mode, people filters, legend, etc.)
   - Update any shared-page.css section references in INDEX.md
   - Create release notes file in `documents/release_notes/` documenting the Maps People Mode feature

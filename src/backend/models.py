@@ -57,6 +57,10 @@ class Settings(BaseModel):
     kiosk_users: Optional[Any] = None  # JSON array of usernames for kiosk view
     hide_declined: Optional[str] = "0"  # "0" = show declined (faded), "1" = hide declined
     default_show_habits_on_calendar: Optional[str] = "1"  # "1" = enabled, "0" = disabled
+    map_default_lat: Optional[str] = None    # Default map center latitude, e.g. "39.8283"
+    map_default_lon: Optional[str] = None    # Default map center longitude, e.g. "-98.5795"
+    map_default_zoom: Optional[str] = None   # Default map zoom level (1–18), e.g. "4"
+    map_auto_zoom: Optional[str] = "1"       # "1" = auto-zoom to markers, "0" = use custom center/zoom
 
 class Chit(BaseModel):
     id: Optional[str] = None

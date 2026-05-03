@@ -1,0 +1,1 @@
+Added Maps People Mode — the Maps View page now supports two display modes (Chits and People) with a persistent toggle, mode-specific filter panels, contact address markers with popups, separate cluster groups, and responsive mobile layout.

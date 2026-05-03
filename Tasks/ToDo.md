@@ -13,15 +13,22 @@
 
 fix habit notifications:
 
-
-
 The how it charts are pre-rendering the text. So they're grainy and terrible. Use actual text instead of rendered text from an image for those charts.
+
 
 ## Exporting
 - Export chit as markdwon with frontmatter.
 - Export chit as calendar file. (.ics)
 - Export all chits in either of the above, per user, or all users.
 
+
+
+
+### Health Indicators (Enhancements)
+
+- `[ ]` Symptom tracker (multi-select), with the ability to create your own list of symptoms in settings
+
+- `[ ]` Cycle tracking (show/hide based on gender setting)
 ---
 
 ## Known Bugs
@@ -44,9 +51,6 @@ The how it charts are pre-rendering the text. So they're grainy and terrible. Us
 ---
 
 ## Medium
-
-### Calculator
-- `[ ]` Calculator popover/movable modal — steal from Pipeulator & add "insert result" value (or Ctrl+I if in an input field). Leave the calculator wired to value? (persist checkbox)?
 
 ### Notes
 - `[ ]` Notes links: auto-fill dropdown using name of other chit
@@ -109,8 +113,6 @@ The how it charts are pre-rendering the text. So they're grainy and terrible. Us
 ### UI & Layout
 - `[ ]` Rolling circular chits view (next task in project, repeat when done)
 - `[ ]` Automatic Context switching (hide chits by time schedule + tags) via rule
-- `[ ]` Show events by map
-- `[ ]` Schedule appointment hours and days
 
 ---
 

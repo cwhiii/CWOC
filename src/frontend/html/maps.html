@@ -24,39 +24,28 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
 
     <style>
-        /* ══ Maps Page Styles ══ */
+        /* ══ Maps Page Inline Styles (page-specific only) ══ */
 
-        /* ── Date range filter ── */
+        /* ── Date range filter (nested inside chits filter panel) ── */
         .maps-date-filter {
             display: flex;
             align-items: center;
             gap: 10px;
             flex-wrap: wrap;
-            margin-bottom: 12px;
-            padding: 10px 12px;
-            background: linear-gradient(to bottom, #f5e6cc, #ede0c8);
-            border: 1px solid #8b5a2b;
-            border-radius: 6px;
         }
         .maps-date-filter label {
             font-size: 14px;
-            font-weight: bold;
+            font-weight: normal;
             color: var(--aged-brown-dark, #4a2c2a);
         }
         .maps-date-filter input[type="date"] {
             font-size: 14px;
             padding: 4px 6px;
-        }
-
-        /* ── Map container ── */
-        #maps-container {
-            width: 100%;
-            min-height: 400px;
-            flex: 1 1 auto;
+            font-family: 'Lora', Georgia, serif;
             border: 1px solid #8b5a2b;
-            border-radius: 6px;
-            overflow: hidden;
-            position: relative;
+            border-radius: 5px;
+            background: #f5e6cc;
+            color: #1a1208;
         }
 
         /* ── Legend ── */
@@ -65,11 +54,9 @@
             align-items: center;
             gap: 14px;
             flex-wrap: wrap;
-            margin-top: 10px;
-            padding: 8px 12px;
+            padding: 6px 12px;
             background: linear-gradient(to bottom, #f5e6cc, #ede0c8);
-            border: 1px solid #8b5a2b;
-            border-radius: 6px;
+            border-top: 1px solid #8b5a2b;
             font-size: 13px;
             color: var(--aged-brown-dark, #4a2c2a);
         }
@@ -103,6 +90,12 @@
             margin-bottom: 0.5em;
         }
 
+        /* ── Contact marker wrapper (remove default Leaflet icon styling) ── */
+        .maps-contact-marker-wrapper {
+            background: none;
+            border: none;
+        }
+
         /* ── Info message (no results) ── */
         .maps-info-message {
             display: none;
@@ -111,6 +104,13 @@
             color: var(--aged-brown-dark, #4a2c2a);
             font-size: 0.95em;
             opacity: 0.8;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(253, 245, 230, 0.9);
+            border-radius: 8px;
+            z-index: 500;
         }
 
         /* ── Responsive: stack date filter on mobile ── */
@@ -127,41 +127,160 @@
 </head>
 <body data-page-title="Maps View" data-page-icon="🗺️">
 
-    <div class="settings-panel">
-
-        <!-- ═══ Google Maps Warning (hidden by default) ═══ -->
-        <div class="maps-google-warning" id="maps-google-warning">
-            <div class="warning-icon">⚠️</div>
-            <p>Google Maps does not support this feature at this time due to billing restrictions.</p>
-        </div>
-
-        <!-- ═══ Date Range Filter ═══ -->
-        <div class="maps-date-filter" id="maps-date-filter">
-            <label for="maps-start-date">From:</label>
-            <input type="date" id="maps-start-date" />
-            <label for="maps-end-date">To:</label>
-            <input type="date" id="maps-end-date" />
-        </div>
-
-        <!-- ═══ Map Container ═══ -->
-        <div id="maps-container"></div>
-
-        <!-- ═══ Info Message (no results) ═══ -->
-        <div class="maps-info-message" id="maps-info-message">
-            No chits with locations found in the selected date range.
-        </div>
-
-        <!-- ═══ Legend ═══ -->
-        <div class="maps-legend" id="maps-legend">
-            <span class="maps-legend-title">Status:</span>
-            <span class="maps-legend-item"><span class="maps-legend-swatch" style="background:#2196F3;"></span> ToDo</span>
-            <span class="maps-legend-item"><span class="maps-legend-swatch" style="background:#FF9800;"></span> In Progress</span>
-            <span class="maps-legend-item"><span class="maps-legend-swatch" style="background:#F44336;"></span> Blocked</span>
-            <span class="maps-legend-item"><span class="maps-legend-swatch" style="background:#4CAF50;"></span> Complete</span>
-            <span class="maps-legend-item"><span class="maps-legend-swatch" style="background:#9E9E9E;"></span> No Status</span>
-        </div>
-
+    <!-- ═══ Google Maps Warning (hidden by default, shown over everything) ═══ -->
+    <div class="maps-google-warning" id="maps-google-warning">
+        <div class="warning-icon">⚠️</div>
+        <p>Google Maps does not support this feature at this time due to billing restrictions.</p>
     </div>
+
+    <!-- ═══ Maps Header Bar ═══ -->
+    <div class="maps-header" id="maps-header">
+        <div class="maps-header-left">
+            <button id="maps-sidebar-toggle" class="maps-sidebar-toggle-btn" title="Toggle filters">
+                <i class="fa-solid fa-bars"></i>
+            </button>
+            <h2>🗺️ Maps</h2>
+        </div>
+        <div class="maps-mode-toggle" id="maps-mode-toggle">
+            <button class="maps-mode-btn active" data-mode="chits">Chits</button>
+            <button class="maps-mode-btn" data-mode="people">People</button>
+        </div>
+        <div class="maps-header-right" id="maps-header-right">
+            <button class="standard-button" onclick="window.location.href=localStorage.getItem('cwoc_settings_return')||'/';">🏠 Chits</button>
+            <button class="standard-button" onclick="window.location.href='/frontend/html/help.html';">❓ Help</button>
+            <div class="cwoc-profile-menu" id="cwoc-profile-menu">
+                <button class="cwoc-profile-btn" id="cwoc-profile-btn" title="User" onclick="event.stopPropagation(); if(typeof _cwocToggleProfileMenu==='function') _cwocToggleProfileMenu();">
+                    <img src="/static/default-avatar.svg" alt="Profile" class="cwoc-profile-img" id="cwoc-profile-img" />
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ Maps Page Layout (sidebar + main) ═══ -->
+    <div class="maps-page-layout" id="maps-page-layout">
+
+        <!-- ── Sidebar ── -->
+        <aside id="maps-sidebar" class="maps-sidebar">
+            <div class="maps-sidebar-scroll">
+
+                <!-- Chits Filter Panel (shown when mode=chits) -->
+                <div id="maps-chits-filter-panel" class="maps-sidebar-panel">
+
+                    <!-- Date Range Filter -->
+                    <div class="maps-filter-group">
+                        <label>Date Range</label>
+                        <div class="maps-date-filter" id="maps-date-filter">
+                            <label for="maps-start-date">From:</label>
+                            <input type="date" id="maps-start-date" />
+                            <label for="maps-end-date">To:</label>
+                            <input type="date" id="maps-end-date" />
+                        </div>
+                    </div>
+
+                    <!-- Status Checkboxes -->
+                    <div class="maps-filter-group">
+                        <label>Status</label>
+                        <div class="checkbox-list" id="maps-chits-status-list">
+                            <label><input type="checkbox" value="ToDo" /> ToDo</label>
+                            <label><input type="checkbox" value="In Progress" /> In Progress</label>
+                            <label><input type="checkbox" value="Blocked" /> Blocked</label>
+                            <label><input type="checkbox" value="Complete" /> Complete</label>
+                        </div>
+                    </div>
+
+                    <!-- Tag Filter Area (populated by JS) -->
+                    <div class="maps-filter-group">
+                        <label>Tags</label>
+                        <div class="maps-filter-tags" id="maps-chits-tags-area"></div>
+                    </div>
+
+                    <!-- Priority Checkboxes -->
+                    <div class="maps-filter-group">
+                        <label>Priority</label>
+                        <div class="checkbox-list" id="maps-chits-priority-list">
+                            <label><input type="checkbox" value="Low" /> Low</label>
+                            <label><input type="checkbox" value="Medium" /> Medium</label>
+                            <label><input type="checkbox" value="High" /> High</label>
+                            <label><input type="checkbox" value="Critical" /> Critical</label>
+                        </div>
+                    </div>
+
+                    <!-- People Filter Area (populated by JS) -->
+                    <div class="maps-filter-group">
+                        <label>People</label>
+                        <div class="maps-filter-people" id="maps-chits-people-area"></div>
+                    </div>
+
+                    <!-- Text Search -->
+                    <div class="maps-filter-group">
+                        <label>Search</label>
+                        <input type="text" class="maps-filter-search" id="maps-chits-text-search" placeholder="Search chits…" />
+                    </div>
+
+                    <!-- Clear Filters -->
+                    <button class="maps-clear-filters-btn" id="maps-chits-clear-filters">Clear Filters</button>
+
+                </div>
+
+                <!-- People Filter Panel (hidden by default — Chits mode is default) -->
+                <div id="maps-people-filter-panel" class="maps-sidebar-panel" style="display:none">
+
+                    <!-- Text Search -->
+                    <div class="maps-filter-group">
+                        <label>Search</label>
+                        <input type="text" class="maps-filter-search" id="maps-people-text-search" placeholder="Search contacts…" />
+                    </div>
+
+                    <!-- Favorites Toggle -->
+                    <div class="maps-filter-group">
+                        <button class="maps-favorites-toggle" id="maps-people-favorites-toggle">
+                            <i class="fa-solid fa-star"></i> Favorites Only
+                        </button>
+                    </div>
+
+                    <!-- Tag Filter Chip Area (populated by JS) -->
+                    <div class="maps-filter-group">
+                        <label>Tags</label>
+                        <div class="maps-filter-tags" id="maps-people-tags-area"></div>
+                    </div>
+
+                    <!-- Clear Filters -->
+                    <button class="maps-clear-filters-btn" id="maps-people-clear-filters">Clear Filters</button>
+
+                </div>
+
+            </div><!-- /.maps-sidebar-scroll -->
+        </aside>
+
+        <!-- ── Main Map Area ── -->
+        <main class="maps-main">
+            <div id="maps-container"></div>
+
+            <!-- Info Message (no results — overlaid on map) -->
+            <div class="maps-info-message" id="maps-info-message">
+                No chits with locations found in the selected date range.
+            </div>
+
+            <!-- Chits Legend (status colors) -->
+            <div class="maps-legend" id="maps-legend">
+                <span class="maps-legend-title">Status:</span>
+                <span class="maps-legend-item"><span class="maps-legend-swatch" style="background:#2196F3;"></span> ToDo</span>
+                <span class="maps-legend-item"><span class="maps-legend-swatch" style="background:#FF9800;"></span> In Progress</span>
+                <span class="maps-legend-item"><span class="maps-legend-swatch" style="background:#F44336;"></span> Blocked</span>
+                <span class="maps-legend-item"><span class="maps-legend-swatch" style="background:#4CAF50;"></span> Complete</span>
+                <span class="maps-legend-item"><span class="maps-legend-swatch" style="background:#9E9E9E;"></span> No Status</span>
+            </div>
+
+            <!-- People Legend (hidden by default) -->
+            <div class="maps-people-legend" id="maps-people-legend" style="display:none">
+                <span class="maps-legend-title">Contacts:</span>
+                <span class="maps-legend-item">
+                    <span class="maps-legend-swatch" style="background:#008080; border-radius:3px;"></span> Contact color
+                </span>
+            </div>
+        </main>
+
+    </div><!-- /.maps-page-layout -->
 
     <!-- ── Leaflet JS ── -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>

@@ -238,15 +238,35 @@
             </ul>
             <p>Saved locations are used by the editor's Location zone dropdown, the compact 📍 dropdown in the title area, the +Location button, and the dashboard weather modal (<kbd>W</kbd>).</p>
             <h3 id="maps-view">Maps View</h3>
-            <p>The Maps View displays chits that have locations as markers on an interactive map. Access it from the navigation menu (🗺️ Maps) or by navigating to <code>/maps</code>.</p>
-            <h4>Date Range Filter</h4>
-            <p>A date range filter above the map controls which chits are shown. It defaults to ±30 days from today. Adjust the start and end dates to narrow or widen the time window — markers update automatically when you change either date. Only chits with a start, due, or created date within the selected range appear on the map.</p>
-            <h4>Markers and Popups</h4>
-            <p>Each chit with a location is placed as a marker at its geocoded coordinates. Click a marker to see a popup with the chit's title, date, and status, plus a link to open the chit in the editor.</p>
-            <h4>Clustering</h4>
-            <p>When many markers are close together, they cluster into numbered group icons. Zoom in or click a cluster to expand it and reveal individual markers. Zooming out re-clusters them to keep the map readable.</p>
-            <h4>Color-Coded Status Markers</h4>
-            <p>Markers are color-coded by chit status so you can tell them apart at a glance. A legend on the map shows the mapping:</p>
+            <p>The Maps View displays an interactive map with two modes: <strong>Chits</strong> and <strong>People</strong>. Access it from the navigation menu (🗺️ Maps) or by navigating to <code>/maps</code>. The map fills all available viewport space for maximum visibility.</p>
+            <h4>Mode Toggle</h4>
+            <p>A Chits/People toggle in the page header switches between modes. The toggle is always visible regardless of whether the sidebar is open or closed. Your selected mode is saved and restored automatically on the next visit.</p>
+            <ul>
+                <li><strong>Chits</strong> — Shows chits with locations as color-coded markers (the original Maps behavior)</li>
+                <li><strong>People</strong> — Shows contacts from your address book at their addresses</li>
+            </ul>
+            <p>Switching modes swaps the markers, filter panel, and legend. Only one mode is active at a time.</p>
+            <h4>Collapsible Sidebar</h4>
+            <p>All filter controls live in a collapsible left sidebar. Click the <strong>☰</strong> toggle button in the header to expand or collapse it. When collapsed, the map expands to fill the freed space. The sidebar remembers its open/closed state between visits.</p>
+            <p>The sidebar displays the filter panel for the currently active mode — switching between Chits and People swaps the filter panel automatically.</p>
+            <h4>Fullscreen Mode</h4>
+            <p>A fullscreen button in the top-right corner of the map enters true browser fullscreen for maximum map visibility. Click it again to exit fullscreen. You can also press <kbd>Escape</kbd> to exit fullscreen. The button is hidden if your browser does not support the Fullscreen API.</p>
+            <h4>Default View Button</h4>
+            <p>A home button in the top-right corner of the map resets the view to your configured default. The reset behavior depends on your Map Settings:</p>
+            <ul>
+                <li><strong>Auto-zoom enabled</strong> — Fits the map bounds to encompass all visible markers</li>
+                <li><strong>Auto-zoom disabled with custom center/zoom</strong> — Pans and zooms to your configured center point and zoom level</li>
+                <li><strong>No custom settings</strong> — Defaults to a view of the continental United States</li>
+            </ul>
+            <h4>Map Start Settings</h4>
+            <p>Configure how the map opens each time in <strong>Settings → 🗺️ Map Settings</strong>:</p>
+            <ul>
+                <li><strong>Auto-zoom to markers</strong> — When enabled (the default), the map automatically fits all visible markers into view on load</li>
+                <li><strong>Custom center and zoom</strong> — When auto-zoom is disabled, set a default latitude, longitude, and zoom level (1–18). The map will open at this position each time</li>
+            </ul>
+            <p>If auto-zoom is disabled and no custom center/zoom is configured, the map defaults to a view of the continental United States.</p>
+            <h4>Chits Mode</h4>
+            <p>Chits mode displays chits that have locations as markers on the map. Each marker is color-coded by status:</p>
             <ul>
                 <li><strong style="color:#2196F3;">●</strong> <strong>ToDo</strong> — Blue</li>
                 <li><strong style="color:#FF9800;">●</strong> <strong>In Progress</strong> — Orange</li>
@@ -254,6 +274,39 @@
                 <li><strong style="color:#4CAF50;">●</strong> <strong>Complete</strong> — Green</li>
                 <li><strong style="color:#9E9E9E;">●</strong> <strong>No Status</strong> — Grey</li>
             </ul>
+            <p>Click a marker to see a popup with the chit's title, date, and status, plus a link to open the chit in the editor.</p>
+            <h4>Chits Mode Filters</h4>
+            <p>The sidebar filter panel in Chits mode lets you narrow which chits appear on the map:</p>
+            <ul>
+                <li><strong>Status</strong> — Checkboxes for ToDo, In Progress, Blocked, and Complete</li>
+                <li><strong>Tags</strong> — Click tag chips to filter by one or more tags</li>
+                <li><strong>Priority</strong> — Checkboxes for Low, Medium, High, and Critical</li>
+                <li><strong>People</strong> — Click people chips to filter by assigned contacts</li>
+                <li><strong>Text search</strong> — Searches across chit title, note, location, and tags (case-insensitive)</li>
+                <li><strong>Date range</strong> — Start and end date inputs (defaults to ±30 days from today). Only chits with a start, due, or created date within the range appear</li>
+            </ul>
+            <p>All filters combine with AND logic — a chit must match every active filter to appear. Click <strong>Clear Filters</strong> to reset all filters to their defaults.</p>
+            <h4>People Mode</h4>
+            <p>People mode displays your contacts on the map at their addresses. Each contact with an address gets a colored marker using the contact's assigned color (or teal if no color is set). Contact markers have semi-transparent fills so that overlapping markers remain partially visible underneath each other. Contacts with multiple addresses get a separate marker for each address. Contacts without addresses are skipped.</p>
+            <p>Click a contact marker to see a popup with the contact's name, address, organization, phone, and email (when available). Click <strong>"Open Contact"</strong> in the popup to go to the contact editor. Contact markers use a distinct square shape so they're easy to tell apart from chit markers.</p>
+            <h4>People Mode Filters</h4>
+            <p>The sidebar filter panel in People mode lets you narrow which contacts appear on the map:</p>
+            <ul>
+                <li><strong>Text search</strong> — Searches across all contact fields (name, email, phone, address, organization, tags, and more)</li>
+                <li><strong>Favorites Only</strong> — Toggle to show only contacts marked as favorites</li>
+                <li><strong>Tags</strong> — Click tag chips to filter by contact tags</li>
+            </ul>
+            <p>All filters combine with AND logic. Click <strong>Clear Filters</strong> to reset.</p>
+            <h4>Cluster Markers</h4>
+            <p>When many markers are close together, they cluster into numbered group icons. Zoom in or click a cluster to expand it. Clusters use distinct color schemes so you can identify their contents at a glance:</p>
+            <ul>
+                <li><strong>Chit-only clusters</strong> — Amber/brown square icons</li>
+                <li><strong>People-only clusters</strong> — Teal square icons</li>
+                <li><strong>Mixed clusters</strong> — Purple square icons with an inscribed circle, indicating the cluster contains both chits and contacts</li>
+            </ul>
+            <p>Each cluster displays the total count of markers it contains.</p>
+            <h4>Mobile</h4>
+            <p>On mobile devices, the sidebar defaults to collapsed and overlays the map when expanded. Tap the backdrop behind the sidebar to close it. All map controls (fullscreen, default view) have touch-friendly tap targets.</p>
             <h4>Google Maps Preference</h4>
             <p>If "Prefer Google for Maps" is enabled in Settings → Chit Options, the Maps View displays a warning message instead of loading the map. Google Maps is not supported for this feature due to billing restrictions. Disable the preference in Settings to use the Maps View.</p>
             <h3 id="editor">Chit Editor</h3>
@@ -316,6 +369,7 @@
                 <li><strong>Tag Editor</strong> — Tree view, create/edit/delete/favorite, "+" for child tags</li>
                 <li><strong>Saved Locations</strong> — Add, label, and set a default location for use across the editor and dashboard weather</li>
                 <li><strong>Chit Options</strong> — Fade past, highlight overdue, delete past alarms, show tab counts, prefer Google for Maps</li>
+                <li><strong>Map Settings</strong> — Auto-zoom to markers toggle, default center latitude/longitude, default zoom level (used by the Maps View)</li>
                 <li><strong>Custom Colors</strong> — Two sections: Default Colors (7 palette colors plus Overdue Border and Blocked Border swatches) and Custom Colors (user-added with delete buttons). Click any swatch to assign it as the overdue or blocked border color. Ring indicators show which color is assigned to each role. The overdue border highlights chits past their due date; the blocked border highlights chits with Blocked status.</li>
                 <li><strong>Clocks</strong> — Choose active clocks, drag to reorder, set orientation (horizontal/vertical)</li>
                 <li><strong>Default Filters</strong> — Per-tab default search text</li>

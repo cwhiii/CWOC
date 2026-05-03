@@ -38,7 +38,7 @@ Package marker. No public exports.
 | `serve_icon_192()` | `GET /static/cwoc-icon-192.png` — Serve 192×192 PWA icon from `src/pwa/` |
 | `serve_icon_512()` | `GET /static/cwoc-icon-512.png` — Serve 512×512 PWA icon from `src/pwa/` |
 
-Registers all route modules (including `auth_router`, `users_router`, `sharing_router`, `notifications_router`, `network_access_router`, `push_router`, and `ntfy_router`), runs all migrations (including `migrate_add_multi_user()`, `migrate_add_sharing()`, `migrate_add_kiosk_users()`, `migrate_add_network_access()`, `migrate_add_notifications()`, `migrate_habits_overhaul()`, `migrate_habits_phase2()`, `migrate_add_push_subscriptions()`, and `migrate_add_vapid_keys()`) and `init_db()` at import time, mounts `StaticFiles` for frontend, static, data, and PWA directories.
+Registers all route modules (including `auth_router`, `users_router`, `sharing_router`, `notifications_router`, `network_access_router`, `push_router`, and `ntfy_router`), runs all migrations (including `migrate_add_multi_user()`, `migrate_add_sharing()`, `migrate_add_kiosk_users()`, `migrate_add_network_access()`, `migrate_add_notifications()`, `migrate_habits_overhaul()`, `migrate_habits_phase2()`, `migrate_add_push_subscriptions()`, `migrate_add_vapid_keys()`, and `migrate_add_map_settings()`) and `init_db()` at import time, mounts `StaticFiles` for frontend, static, data, and PWA directories.
 
 ### 1.3 `src/backend/models.py` — Pydantic Models
 
@@ -47,7 +47,7 @@ Registers all route modules (including `auth_router`, `users_router`, `sharing_r
 | `ShareEntry` | Share entry with `user_id: str` and `role: str` (manager or viewer) |
 | `SharedTagEntry` | Tag-level share entry with `tag: str` and `shares: List[ShareEntry]` |
 | `Tag` | Tag with name, color, fontColor, favorite |
-| `Settings` | User settings — time format, tags, colors, indicators, calendar config, audit limits, habits success window, shared_tags, hide_declined, etc. |
+| `Settings` | User settings — time format, tags, colors, indicators, calendar config, audit limits, habits success window, shared_tags, hide_declined, map settings (map_default_lat, map_default_lon, map_default_zoom, map_auto_zoom), etc. |
 | `Chit` | Core chit model — title, note, dates, status, checklist, alerts, recurrence, location, color, people, habit, habit_goal, habit_success, show_on_calendar, habit_reset_period, habit_last_action_date, habit_hide_overall, perpetual, shares, stealth, assigned_to, etc. |
 | `MultiValueEntry` | Label/value pair for contact multi-value fields (phone, email, etc.) |
 | `Contact` | Contact model — name fields, phones, emails, addresses, social, security, notes, tags, color |
@@ -117,6 +117,7 @@ All migrations run at startup. Each checks if the column/table already exists be
 | `migrate_habits_phase2()` | Add `habit_reset_period` (TEXT DEFAULT NULL), `habit_last_action_date` (TEXT DEFAULT NULL), `habit_hide_overall` (BOOLEAN DEFAULT 0), `perpetual` (BOOLEAN DEFAULT 0) columns to chits table |
 | `migrate_add_push_subscriptions()` | Create `push_subscriptions` table with columns: `id` (TEXT PRIMARY KEY), `user_id` (TEXT NOT NULL), `endpoint` (TEXT NOT NULL UNIQUE), `p256dh` (TEXT NOT NULL), `auth` (TEXT NOT NULL), `device_label` (TEXT), `created_datetime` (TEXT NOT NULL). Uses `CREATE TABLE IF NOT EXISTS` for idempotency |
 | `migrate_add_vapid_keys()` | Ensure `instance_meta` table exists for storing VAPID key pair as key-value rows (`vapid_public_key`, `vapid_private_key`). Uses `CREATE TABLE IF NOT EXISTS` for idempotency |
+| `migrate_add_map_settings()` | Add `map_default_lat` (TEXT), `map_default_lon` (TEXT), `map_default_zoom` (TEXT), `map_auto_zoom` (TEXT DEFAULT '1') columns to settings table for map start view configuration |
 
 ### 1.6 `src/backend/serializers.py` — vCard & CSV
 
@@ -339,7 +340,7 @@ All trash endpoints are user-scoped: regular users see/act on only their own del
 
 ### 1.21 `src/backend/routes/settings.py` — Settings & Alerts
 
-Settings endpoints use `request.state.user_id` from `AuthMiddleware` to scope data to the authenticated user. Includes `shared_tags` and `hide_declined` serialization in settings read/save paths.
+Settings endpoints use `request.state.user_id` from `AuthMiddleware` to scope data to the authenticated user. Includes `shared_tags`, `hide_declined`, and map settings (`map_default_lat`, `map_default_lon`, `map_default_zoom`, `map_auto_zoom`) serialization in settings read/save paths.
 
 | Route | Handler | Description |
 |-------|---------|-------------|
@@ -1703,6 +1704,9 @@ Settings page logic: tags, colors, clocks, locations, indicators, import/export,
 | `handleDropOnInactive(e)` | Handle drop on the inactive zone — remove clock format from grid |
 | `_toggleCombineAlerts()` | Toggle visibility of combined vs individual alert rows based on Combine Alerts checkbox |
 | `toggleAuditPruneInputs()` | Toggle disabled state of audit prune inputs based on Enable Pruning checkbox |
+| `_toggleMapAutoZoom()` | Toggle disabled/dimmed state of lat/lon/zoom inputs based on auto-zoom checkbox |
+| `_loadMapSettings(settings)` | Populate map settings UI (auto-zoom checkbox, lat/lon/zoom inputs) from the settings object on page load |
+| `_collectMapSettings()` | Read map settings UI values for inclusion in the save payload; validates lat (−90 to 90), lon (−180 to 180), zoom (1–18) |
 | `_toggleWorkConfig()` | Toggle visibility of Work Week config based on Work Hours period checkbox |
 | `_toggleXDaysConfig()` | Toggle visibility of X Days config based on SevenDay period checkbox |
 | `_initHourDropdownPair(startId, endId, defaultStart, defaultEnd)` | Populate a pair of hour dropdowns (start/end) and constrain each based on the other |
@@ -1740,8 +1744,8 @@ Settings page logic: tags, colors, clocks, locations, indicators, import/export,
 | `SettingsService.saveAll(settings)` | Save all settings via POST `/api/settings` |
 | `SettingsManager` | Class — manages settings lifecycle: load, populate form, gather, save |
 | `SettingsManager.initialize()` | Load settings from API and populate the form |
-| `SettingsManager.updateForm()` | Populate all form fields from the loaded settings object |
-| `SettingsManager.gatherSettings()` | Gather all form field values into a settings object for saving |
+| `SettingsManager.updateForm()` | Populate all form fields from the loaded settings object; includes map settings via `_loadMapSettings()` |
+| `SettingsManager.gatherSettings()` | Gather all form field values into a settings object for saving; includes map settings via `_collectMapSettings()` |
 | `SettingsManager.save()` | Save gathered settings to the backend and reload canonical state |
 | `SettingsManager.setupEventListeners()` | Set up additional event listeners (currently a no-op) |
 | `setSaveButtonSaved()` | Mark the save system as saved (delegates to `CwocSaveSystem.markSaved`) |
@@ -1961,28 +1965,90 @@ Admin-only page for managing user accounts. Provides user table listing, create 
 
 #### maps.js
 
-Maps page: interactive Leaflet map displaying chits with location data as color-coded markers, clustered, with date range filtering.
+Maps page: interactive Leaflet map with two display modes — **Chits** (chit locations as color-coded markers) and **People** (contact addresses as markers). Mode toggle with localStorage persistence, mode-specific filter panels, contact markers with distinct styling, separate cluster groups, collapsible sidebar, fullscreen mode, default view reset, semi-transparent people markers, mixed cluster icons, and responsive layout with mobile sidebar overlay.
 
 | Symbol | Description |
 |--------|-------------|
+| **Module-level state** | |
 | `_mapsLeafletMap` | Leaflet map instance |
-| `_mapsClusterGroup` | MarkerClusterGroup instance for marker clustering |
+| `_mapsClusterGroup` | MarkerClusterGroup instance for chit marker clustering |
 | `_mapsAllChits` | Cached array of all fetched chits |
-| `_mapsGeocodeCache` | In-memory geocode cache keyed by lowercase trimmed address |
+| `_mapsGeocodeCache` | In-memory geocode cache keyed by lowercase trimmed address (chits) |
 | `_mapsStatusColors` | Object mapping status strings to hex colors |
 | `_mapsNoStatusColor` | Default hex color for chits with no status (`#9E9E9E`) |
-| `_mapsInit()` | Entry point: checks `prefer_google_maps` setting, initializes map or shows warning |
-| `_initLeafletMap()` | Creates Leaflet map instance with OpenStreetMap tile layer |
-| `_fetchAndDisplayChits()` | Fetches chits from `/api/chits`, filters, geocodes, and places markers |
-| `_filterAndRender()` | Applies date filter, geocodes, and places markers (called on load and filter change) |
+| `MAPS_MODE_KEY` | localStorage key for persisting the current mode (`'cwoc_maps_mode'`) |
+| `MAPS_SIDEBAR_KEY` | localStorage key for persisting sidebar state (`'cwoc_maps_sidebar'`) |
+| `_mapsCurrentMode` | Current mode: `'chits'` or `'people'` |
+| `_mapsAllContacts` | Cached array of all fetched contacts |
+| `_mapsPeopleClusterGroup` | Separate MarkerClusterGroup for people mode (teal styling) |
+| `_mapsContactGeocodeCache` | In-memory geocode cache for contact addresses |
+| `_mapsChitsFilterStatus` | Selected status filter values (array) |
+| `_mapsChitsFilterTags` | Selected tag filter values (array) |
+| `_mapsChitsFilterPriority` | Selected priority filter values (array) |
+| `_mapsChitsFilterPeople` | Selected people filter values (array) |
+| `_mapsChitsFilterText` | Text search query for chits filter |
+| `_mapsPeopleFilterText` | Text search query for people filter |
+| `_mapsPeopleFilterFavoritesOnly` | Favorites-only toggle state (boolean) |
+| `_mapsPeopleFilterTags` | Selected tag filter values for people (array) |
+| **Mode Management** | |
+| `_mapsGetMode()` | Returns current mode (`"chits"` or `"people"`) |
+| `_mapsSetMode(mode)` | Sets mode, persists to localStorage, updates toggle button active states, triggers mode switch; swaps sidebar panel visibility (shows chits or people filter panel) |
+| `_mapsRestoreMode()` | Reads mode from localStorage, validates, defaults to `"chits"` |
+| `_onModeToggleChange(e)` | Click handler for mode toggle buttons — reads `data-mode` and calls `_mapsSetMode()` |
+| `_showChitsLegend()` | Shows chits legend (`#maps-legend`), hides people legend |
+| `_showPeopleLegend()` | Shows people legend (`#maps-people-legend`), hides chits legend |
+| `_switchToChitsMode()` | Transitions to Chits mode — clears people markers, shows chits filter panel/legend, loads chits |
+| `_switchToPeopleMode()` | Transitions to People mode — clears chit markers, shows people filter panel/legend, loads contacts |
+| **Sidebar Management** | |
+| `_initMapsSidebar()` | Initializes sidebar: restores state from localStorage, wires toggle button, sets up resize handling to invalidate Leaflet map after transitions |
+| `_toggleMapsSidebar()` | Toggles sidebar collapsed/expanded state, persists to localStorage (`cwoc_maps_sidebar`), handles mobile backdrop show/hide |
+| `_restoreMapsSidebarState()` | Reads sidebar state from localStorage, applies collapsed class; on mobile (≤768px) always defaults to collapsed |
+| `_isMapsViewMobile()` | Returns true if viewport width is ≤768px |
+| `_showMobileSidebarBackdrop()` | Creates and shows a semi-transparent dark backdrop overlay on mobile when sidebar is expanded; clicking backdrop closes sidebar |
+| `_hideMobileSidebarBackdrop()` | Hides and removes the mobile sidebar backdrop element |
+| **Chits Filter Panel** | |
+| `_initChitsFilters()` | Sets up chits filter panel event handlers (status, priority checkboxes, text search, clear button, dynamic data) |
+| `_loadChitsFilterData()` | Fetches tags from settings and contacts/users for people chips, builds filter chip UI |
+| `_matchesChitTextSearch(chit, query)` | Case-insensitive text search across chit title, note, location, and tags |
+| `_applyChitsFilters(chits)` | Applies all chit filters (status, tags, priority, people, text, date range) — AND-combined |
+| `_onChitsFilterChange()` | Handler for chit filter changes — re-reads UI state, re-filters and re-renders |
+| `_clearChitsFilters()` | Resets all chit filters to defaults and updates UI |
+| **Entry point & map init** | |
+| `_mapsInit()` | Entry point: checks `prefer_google_maps`, reads map settings for initial view (auto-zoom, custom center/zoom, or US default), restores mode, initializes both cluster groups, wires toggle, initializes sidebar, initializes filters, triggers mode |
+| `_initLeafletMap()` | Creates Leaflet map instance with OpenStreetMap tile layer; adds Fullscreen and DefaultView controls; configures chit cluster `iconCreateFunction` with mixed cluster detection via `_cwocMarkerType` |
+| **Utility helpers** | |
+| `_hexToRgba(hex, alpha)` | Converts a hex color string (e.g. `"#FF0000"`) to an `rgba(r, g, b, alpha)` CSS string for semi-transparent fills |
+| **Fullscreen Control** | |
+| `L.Control.Fullscreen` | Leaflet control that toggles browser fullscreen mode via `document.documentElement.requestFullscreen()` / `document.exitFullscreen()`; updates button icon (expand ↔ compress) on `fullscreenchange`; hides itself if `document.fullscreenEnabled` is false; position: topright |
+| **Default View Control** | |
+| `L.Control.DefaultView` | Leaflet control that resets map to user's configured default view; if auto-zoom enabled → fitBounds to visible markers; if auto-zoom disabled with custom center/zoom → setView; otherwise → default US view (39.8283, -98.5795, zoom 4); position: topright |
+| **Chits mode** | |
+| `_fetchAndDisplayChits()` | Fetches chits from `/api/chits`, applies filters, geocodes, and places markers |
+| `_filterAndRender()` | Applies chit filters, geocodes, and places markers (called on load and filter change) |
 | `_filterChitsByDateRange(chits, startDate, endDate)` | Returns chits with non-empty location and at least one date field within the range |
 | `_geocodeChits(chits)` | Geocodes each chit's location via `_geocodeAddress()` with in-memory cache deduplication |
-| `_getMarkerColor(status)` | Returns hex color for a chit status (ToDo=#2196F3, In Progress=#FF9800, Blocked=#F44336, Complete=#4CAF50, no-status=#9E9E9E) |
-| `_buildPopupContent(chit)` | Returns HTML for a marker popup with title, date, status, and editor link |
-| `_placeMarkers(geocodedChits)` | Creates colored circle markers, adds to MarkerClusterGroup, binds popups, fits bounds |
+| `_getMarkerColor(status)` | Returns hex color for a chit status |
+| `_buildPopupContent(chit)` | Returns HTML for a chit marker popup with title, date, status, and editor link |
+| `_placeMarkers(geocodedChits)` | Creates colored circle markers with `_cwocMarkerType = 'chit'`, adds to chits MarkerClusterGroup, binds popups; respects auto-zoom setting (fitBounds only when auto-zoom enabled) |
 | `_initDateFilters()` | Sets default date values (±30 days) and wires change handlers |
 | `_onDateFilterChange()` | Handler for date input changes — re-filters and re-renders markers |
 | `_mapsToDateString(date)` | Converts a Date to `YYYY-MM-DD` string |
+| **People mode** | |
+| `_fetchAndDisplayContacts()` | Fetches contacts from `/api/contacts`, applies people filters, geocodes, places contact markers |
+| `_geocodeContacts(contacts)` | Geocodes contact addresses with deduplication cache (`_mapsContactGeocodeCache`) |
+| `_placeContactMarkers(geocodedContacts)` | Creates contact markers with semi-transparent fills via `_hexToRgba(color, 0.6)` and full-opacity borders; sets `_cwocMarkerType = 'contact'` on each marker; adds to people cluster group, fits bounds |
+| `_buildContactPopupContent(contact, address)` | Builds popup HTML for contact markers (name, address, org, phone, email, editor link) |
+| `_getContactMarkerColor(contact)` | Returns contact's color if non-null/non-empty, else default teal (`#008080`) |
+| **People Filter Panel** | |
+| `_initPeopleFilters()` | Sets up people filter panel event handlers (text search, favorites toggle, clear button) |
+| `_buildPeopleTagChips(contacts)` | Builds tag filter chips from unique tags across all contacts |
+| `_mapsContactMatchesFilter(contact, query)` | Case-insensitive text search across all contact fields (replicates `_contactMatchesFilter` logic) |
+| `_applyPeopleFilters(contacts)` | Applies all people filters (favorites, tags, text) — AND-combined |
+| `_onPeopleFilterChange()` | Handler for people filter changes — re-filters and re-renders contact markers |
+| `_clearPeopleFilters()` | Resets all people filters to defaults and updates UI |
+| **Mobile** | |
+| `_initMobileFilterCollapse()` | Sets up mobile filter panel collapse/expand toggle behavior |
+| **Shared UI helpers** | |
 | `_showLegend()` | Shows the legend element |
 | `_showInfoMessage(msg)` | Shows info message (e.g., no results) |
 | `_hideInfoMessage()` | Hides info message |
@@ -2025,6 +2091,11 @@ Shared styles for ALL secondary pages (settings, help, trash, people, contacts, 
 | Bold Alert Modal (`.cwoc-alert-overlay`) | Full-screen alarm/timer alert shared across all pages |
 | Shared Chit Card Badges | `.cwoc-owner-badge` — owner attribution badge on shared chit cards; `.cwoc-role-badge` — role indicator (viewer/manager) on shared chit cards; `.cwoc-stealth-indicator` — stealth icon on chit cards (visible to owner only) |
 | Calculator Popover | `.cwoc-calc-popover` — main container (fixed position, z-index 200000, parchment styling); `.cwoc-calc-titlebar` — drag handle with title text and close button; `.cwoc-calc-display` — expression/result display area; `.cwoc-calc-buttons` — 4-column grid layout for calculator buttons; `.cwoc-calc-btn` — individual button styling (digits, operators, special); `.cwoc-calc-btn-op` — operator button variant (accent gold); `.cwoc-calc-btn-eq` — equals button variant (brown); `.cwoc-calc-btn-clear` — clear/backspace variant; `.cwoc-calc-actions` — insert button and persist checkbox row; `.cwoc-calc-persist-indicator` — visual indicator when persist is active |
+| Maps People Mode | `.maps-mode-toggle` — mode toggle container; `.maps-mode-btn` — toggle buttons with active state; `.maps-chits-filter-panel` / `.maps-people-filter-panel` — filter panel containers; `.maps-filter-group` — filter section groups; `.maps-filter-tags` — tag chip areas; `.maps-filter-search` — text search inputs; `.maps-clear-filters-btn` — clear filters button; `.maps-favorites-toggle` — favorites-only toggle; `.maps-contact-marker` — semi-transparent contact marker styling (fill via `_hexToRgba`, full-opacity border); `.maps-people-cluster` — square teal cluster icons for people mode; `.maps-people-legend` — people mode legend; responsive rules for ≤768px (collapsible filter panels, stacked layout) |
+| Maps Page Layout | `body[data-page-title="Maps View"]` — full viewport override (padding: 0, overflow: hidden, height: 100vh); `.maps-header` — maps page header bar with mode toggle centered, sidebar toggle left, nav buttons right; `.maps-page-layout` — flexbox row container for sidebar + main content (`height: calc(100vh - header)`); `.maps-sidebar` — collapsible left sidebar (240px width, flex-shrink 0, scrollable); `.maps-sidebar.collapsed` — width collapses to 0, content hidden; `.maps-sidebar-toggle-btn` — parchment-themed hamburger toggle button; `.maps-sidebar-scroll` — scrollable inner area for filter panels; `.maps-sidebar-panel` — container for a mode's filter controls; `.maps-main` — flex-grow container for the map; `.maps-sidebar-backdrop` — semi-transparent mobile sidebar backdrop overlay |
+| Maps Cluster Icons | `.maps-chit-cluster` — square cluster icon with amber/brown gradient (+ `-small`, `-medium`, `-large` size variants); `.maps-people-cluster` — square cluster icon with teal gradient (+ size variants); `.maps-mixed-cluster` — square icon with inscribed circle, purple gradient for mixed chit+contact clusters (+ size variants); `.maps-mixed-cluster-inner` / `.maps-mixed-cluster-circle` — inner structure for mixed cluster icon |
+| Maps Controls | `.maps-fullscreen-control` / `.maps-fullscreen-btn` — fullscreen map control button (44×44px min tap target, topright position); `.maps-default-view-control` / `.maps-default-view-btn` — default view reset map control button (44×44px min tap target, topright position) |
+| Maps Mobile Responsive | At ≤768px: sidebar overlays with `position: fixed`, backdrop shows; mode toggle compact styling; map container fills full viewport width |
 
 #### shared-editor.css
 Reusable editor patterns shared by the Chit Editor and Contact Editor. Self-contained `:root` variables (must match shared-page.css).
@@ -2478,7 +2549,7 @@ New frontend pages added for chit sharing system:
 - `kiosk.html` — Standalone unauthenticated kiosk page. Reads `users` query parameter from the URL, fetches combined data from `/api/kiosk?user_ids=...`, renders a combined calendar view and task list with `owner_display_name` attribution. Auto-refreshes every 60 seconds. Does not require authentication — no `shared-auth.js` dependency. Uses `shared-page.css` for parchment theme plus inline `<style>` for kiosk-specific layout. All JS is inline in a single IIFE.
 
 New frontend pages added for Maps View:
-- `maps.html` — Interactive Leaflet map page displaying chits with location data as color-coded markers. Uses `shared-page.css` for parchment theme plus inline `<style>` for map-specific layout (date filter, map container, legend, Google Maps warning, responsive stacking). Loads Leaflet.js, Leaflet.markercluster (CDN), shared scripts, `shared-page.js`, and `maps.js`. Served at `/maps` via `health.py`.
+- `maps.html` — Interactive Leaflet map page with two display modes: Chits (location-based chit markers) and People (contact address markers). Features mode toggle with localStorage persistence, chits filter panel (status, tags, priority, people, text search, date range), people filter panel (text search, favorites toggle, tag chips), mode-specific legends, separate cluster groups with distinct styling, contact popups with editor links, and responsive mobile layout with collapsible filter panels. Uses `shared-page.css` for parchment theme plus inline `<style>` for map-specific layout. Loads Leaflet.js, Leaflet.markercluster (CDN), shared scripts, `shared-page.js`, and `maps.js`. Served at `/maps` via `health.py`.
 
 
 ---

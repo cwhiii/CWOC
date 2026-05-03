@@ -1,4 +1,13 @@
 # CWOC — Completed Items
+
+
+
+### Calculator
+- `[ ]` Calculator popover/movable modal — steal from Pipeulator & add "insert result" value (or Ctrl+I if in an input field). Leave the calculator wired to value? (persist checkbox)?
+
+- `[X]` Show events by map
+- `[ ]` Schedule appointment hours and days
+
 ### UI & Layout
 - `[X]` Wall/kiosk view for persistent displays
 ### Event Invitations

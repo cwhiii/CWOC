@@ -906,3 +906,688 @@ input[type="color"] {
     line-height: 1.4;
 }
 
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Maps Page — Full-viewport layout with collapsible sidebar
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Body override for Maps page (full viewport, no scroll) ─────────────── */
+body[data-page-title="Maps View"] {
+    padding: 0;
+    overflow: hidden;
+    height: 100vh;
+}
+
+/* ── Maps Header Bar ────────────────────────────────────────────────────── */
+.maps-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: relative;
+    height: var(--maps-header-height, 56px);
+    padding: 0 12px;
+    background: linear-gradient(to bottom, #e8dcc8, #d8ccb4);
+    border-bottom: 2px solid #8b5a2b;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+    flex-shrink: 0;
+    z-index: 100;
+    font-family: 'Lora', Georgia, serif;
+}
+.maps-header-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+    z-index: 1;
+}
+.maps-header-left h2 {
+    margin: 0;
+    padding: 0;
+    border: none;
+    border-bottom: none;
+    font-size: 18px;
+    color: #1a1208;
+    text-align: left;
+    text-transform: none;
+    letter-spacing: 1px;
+    margin-bottom: 0;
+    padding-bottom: 0;
+    white-space: nowrap;
+}
+.maps-header-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+    z-index: 1;
+}
+
+/* ── Maps Header Mode Toggle (centered in header) ──────────────────────── */
+.maps-header .maps-mode-toggle {
+    margin: 0;
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 0;
+}
+
+/* ── Sidebar Toggle Button ──────────────────────────────────────────────── */
+.maps-sidebar-toggle-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    background: linear-gradient(to bottom, #f5e6cc, #e0d4b5);
+    border: 1px solid #8b5a2b;
+    border-radius: 6px;
+    color: #4a2c2a;
+    font-size: 18px;
+    cursor: pointer;
+    transition: background 0.2s, box-shadow 0.2s;
+    flex-shrink: 0;
+}
+.maps-sidebar-toggle-btn:hover {
+    background: linear-gradient(to bottom, #ede0c8, #d2c4a8);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+/* ── Maps Page Layout (sidebar + main) ──────────────────────────────────── */
+.maps-page-layout {
+    display: flex;
+    height: calc(100vh - var(--maps-header-height, 56px));
+    overflow: hidden;
+}
+
+/* ── Maps Sidebar ───────────────────────────────────────────────────────── */
+.maps-sidebar {
+    width: 240px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    background: linear-gradient(to bottom, #fff8e1, #f5e6cc);
+    border-right: 2px solid #8b5a2b;
+    transition: width 0.3s ease;
+    overflow: hidden;
+    z-index: 50;
+}
+.maps-sidebar.collapsed {
+    width: 0;
+    border-right: none;
+}
+.maps-sidebar.collapsed .maps-sidebar-scroll {
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* ── Sidebar Scroll Area ────────────────────────────────────────────────── */
+.maps-sidebar-scroll {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 10px;
+    transition: opacity 0.2s ease;
+}
+
+/* ── Sidebar Panel (container for filter controls) ──────────────────────── */
+.maps-sidebar-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+/* ── Sidebar filter panels: override old flex-wrap row layout ───────────── */
+.maps-sidebar .maps-chits-filter-panel,
+.maps-sidebar .maps-people-filter-panel {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 0;
+    margin: 0;
+    background: none;
+    border: none;
+    border-radius: 0;
+    gap: 10px;
+}
+
+/* ── Maps Main Area ─────────────────────────────────────────────────────── */
+.maps-main {
+    flex: 1;
+    min-width: 0;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+}
+
+/* ── Map Container (fills main area) ────────────────────────────────────── */
+.maps-main #maps-container {
+    width: 100%;
+    height: 100%;
+    flex: 1;
+    min-height: 0;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Maps People Mode — mode toggle, filter panels, contact markers, clusters
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Mode Toggle Container ──────────────────────────────────────────────── */
+.maps-mode-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    margin: 0;
+}
+
+/* ── Mode Toggle Buttons ────────────────────────────────────────────────── */
+.maps-mode-btn {
+    padding: 8px 20px;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--aged-brown-dark, #4a2c2a);
+    background: linear-gradient(to bottom, #f5e6cc, #ede0c8);
+    border: 1px solid #8b5a2b;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s, box-shadow 0.2s;
+}
+.maps-mode-btn:first-child {
+    border-radius: 6px 0 0 6px;
+    border-right: none;
+}
+.maps-mode-btn:last-child {
+    border-radius: 0 6px 6px 0;
+}
+.maps-mode-btn:hover {
+    background: linear-gradient(to bottom, #ede0c8, #e0d4b5);
+}
+.maps-mode-btn.active {
+    background: #8b5a2b;
+    color: #fff8e1;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
+    cursor: default;
+}
+
+/* ── Filter Panel Containers (shared base) ──────────────────────────────── */
+.maps-chits-filter-panel,
+.maps-people-filter-panel {
+    padding: 0;
+    margin-bottom: 0;
+    background: none;
+    border: none;
+    border-radius: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    overflow: visible;
+}
+
+/* Hidden state for filter panel swap animation */
+.maps-chits-filter-panel[hidden],
+.maps-people-filter-panel[hidden] {
+    display: none;
+}
+
+/* ── Filter Panel Section Groups ────────────────────────────────────────── */
+.maps-filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+.maps-filter-group label {
+    font-size: 13px;
+    font-weight: bold;
+    color: var(--aged-brown-dark, #4a2c2a);
+    white-space: nowrap;
+}
+
+/* ── Status & Priority Checkboxes (reuse .checkbox-list pattern) ────────── */
+.maps-filter-group .checkbox-list {
+    gap: 1px;
+}
+.maps-filter-group .checkbox-list label {
+    font-size: 14px;
+    font-weight: normal;
+    padding: 2px 0;
+    cursor: pointer;
+}
+.maps-filter-group .checkbox-list input[type="checkbox"] {
+    margin-right: 5px;
+    accent-color: #8b5a2b;
+}
+
+/* ── Tag Chips in Filter Panels (reuse .cwoc-tag-chip pattern) ──────────── */
+.maps-filter-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+.maps-filter-tags .cwoc-tag-chip {
+    cursor: pointer;
+    padding: 2px 8px;
+    border: 1px solid transparent;
+    transition: background 0.15s, border-color 0.15s;
+    user-select: none;
+}
+.maps-filter-tags .cwoc-tag-chip:hover {
+    background: rgba(139, 90, 43, 0.25);
+}
+.maps-filter-tags .cwoc-tag-chip.active {
+    background: #8b5a2b;
+    color: #fff8e1;
+    border-color: #5a3f2a;
+}
+
+/* ── People Chips in Filter Panels ──────────────────────────────────────── */
+.maps-filter-people {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+.maps-filter-people .cwoc-tag-chip {
+    cursor: pointer;
+    padding: 2px 8px;
+    border: 1px solid transparent;
+    transition: background 0.15s, border-color 0.15s;
+    user-select: none;
+}
+.maps-filter-people .cwoc-tag-chip:hover {
+    background: rgba(139, 90, 43, 0.25);
+}
+.maps-filter-people .cwoc-tag-chip.active {
+    background: #8b5a2b;
+    color: #fff8e1;
+    border-color: #5a3f2a;
+}
+
+/* ── Text Search Input in Filter Panels ─────────────────────────────────── */
+.maps-filter-search {
+    border: 1px solid #8b5a2b;
+    border-radius: 5px;
+    padding: 5px 8px;
+    font-size: 14px;
+    font-family: 'Lora', Georgia, serif;
+    color: #1a1208;
+    background: #f5e6cc;
+    width: 100%;
+    box-sizing: border-box;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+.maps-filter-search::placeholder {
+    color: #8b7355;
+    opacity: 0.7;
+}
+.maps-filter-search:focus {
+    outline: none;
+    border-color: #d4af37;
+    box-shadow: 0 0 0 2px rgba(212, 175, 55, 0.25);
+}
+
+/* ── Favorites Toggle Button ────────────────────────────────────────────── */
+.maps-favorites-toggle {
+    padding: 5px 12px;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--aged-brown-dark, #4a2c2a);
+    background: linear-gradient(to bottom, #f5e6cc, #ede0c8);
+    border: 1px solid #8b5a2b;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+    white-space: nowrap;
+}
+.maps-favorites-toggle:hover {
+    background: linear-gradient(to bottom, #ede0c8, #e0d4b5);
+}
+.maps-favorites-toggle.active {
+    background: #8b5a2b;
+    color: #fff8e1;
+}
+
+/* ── Clear Filters Button ───────────────────────────────────────────────── */
+.maps-clear-filters-btn {
+    padding: 5px 12px;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--danger-red, #b22222);
+    background: transparent;
+    border: 1px solid var(--danger-red, #b22222);
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+    white-space: nowrap;
+    margin-left: auto;
+}
+.maps-clear-filters-btn:hover {
+    background: var(--danger-red, #b22222);
+    color: #fff8e1;
+}
+
+/* ── People Mode Legend ─────────────────────────────────────────────────── */
+.maps-people-legend {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin-top: 10px;
+    padding: 8px 12px;
+    background: linear-gradient(to bottom, #f5e6cc, #ede0c8);
+    border: 1px solid #8b5a2b;
+    border-radius: 6px;
+    font-size: 13px;
+    color: var(--aged-brown-dark, #4a2c2a);
+}
+
+/* ── Contact Markers (28×28px square, rounded corners, semi-transparent fill) ── */
+.maps-contact-marker {
+    width: 28px;
+    height: 28px;
+    border-radius: 4px;
+    border: 2px solid #5c4033;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+.maps-contact-marker img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 2px;
+}
+
+/* ── People Cluster Icons (teal color scheme, square shape) ─────────────── */
+.maps-people-cluster {
+    background: linear-gradient(135deg, #00897b, #00695c);
+    border-radius: 4px;
+    color: #fff;
+    font-family: 'Lora', Georgia, serif;
+    font-weight: bold;
+    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid rgba(0, 77, 64, 0.85);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+}
+.maps-people-cluster div {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+}
+.maps-people-cluster-small {
+    width: 30px;
+    height: 30px;
+    font-size: 12px;
+    line-height: 30px;
+}
+.maps-people-cluster-medium {
+    width: 40px;
+    height: 40px;
+    font-size: 14px;
+    line-height: 40px;
+}
+.maps-people-cluster-large {
+    width: 50px;
+    height: 50px;
+    font-size: 15px;
+    line-height: 50px;
+}
+
+/* ── Chit Cluster Icons (amber/brown color scheme, square shape) ────────── */
+.maps-chit-cluster {
+    background: linear-gradient(135deg, #d4a373, #8b5a2b);
+    border-radius: 4px;
+    color: #fff8e1;
+    font-family: 'Lora', Georgia, serif;
+    font-weight: bold;
+    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid #5a3f2a;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+}
+.maps-chit-cluster div {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+}
+.maps-chit-cluster-small {
+    width: 30px;
+    height: 30px;
+    font-size: 12px;
+    line-height: 30px;
+}
+.maps-chit-cluster-medium {
+    width: 40px;
+    height: 40px;
+    font-size: 14px;
+    line-height: 40px;
+}
+.maps-chit-cluster-large {
+    width: 50px;
+    height: 50px;
+    font-size: 15px;
+    line-height: 50px;
+}
+
+/* ── Mixed Cluster Icons (square with inscribed circle, purple gradient) ── */
+.maps-mixed-cluster {
+    background: linear-gradient(135deg, #7b1fa2, #4a148c);
+    border-radius: 4px;
+    color: #fff;
+    font-family: 'Lora', Georgia, serif;
+    font-weight: bold;
+    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid #38006b;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+}
+.maps-mixed-cluster-inner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+}
+.maps-mixed-cluster-circle {
+    width: 80%;
+    height: 80%;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.1);
+}
+.maps-mixed-cluster-small {
+    width: 30px;
+    height: 30px;
+    font-size: 11px;
+    line-height: 30px;
+}
+.maps-mixed-cluster-medium {
+    width: 40px;
+    height: 40px;
+    font-size: 13px;
+    line-height: 40px;
+}
+.maps-mixed-cluster-large {
+    width: 50px;
+    height: 50px;
+    font-size: 15px;
+    line-height: 50px;
+}
+
+/* ── Fullscreen Control (Leaflet map control, topright) ──────────────────── */
+.maps-fullscreen-control {
+    margin-bottom: 0 !important;
+}
+.maps-fullscreen-btn {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    width: 44px !important;
+    height: 44px !important;
+    min-width: 44px;
+    min-height: 44px;
+    background: linear-gradient(to bottom, #f5e6cc, #e0d4b5) !important;
+    border: 1px solid #8b5a2b !important;
+    color: #4a2c2a !important;
+    font-size: 18px;
+    cursor: pointer;
+    transition: background 0.2s, box-shadow 0.2s;
+    text-decoration: none !important;
+    line-height: 44px !important;
+}
+.maps-fullscreen-btn:hover {
+    background: linear-gradient(to bottom, #ede0c8, #d2c4a8) !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    color: #4a2c2a !important;
+}
+
+/* ── Default View Control (Leaflet map control, topright) ───────────────── */
+.maps-default-view-control {
+    margin-top: 0 !important;
+}
+.maps-default-view-btn {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    width: 44px !important;
+    height: 44px !important;
+    min-width: 44px;
+    min-height: 44px;
+    background: linear-gradient(to bottom, #f5e6cc, #e0d4b5) !important;
+    border: 1px solid #8b5a2b !important;
+    color: #4a2c2a !important;
+    font-size: 18px;
+    cursor: pointer;
+    transition: background 0.2s, box-shadow 0.2s;
+    text-decoration: none !important;
+    line-height: 44px !important;
+}
+.maps-default-view-btn:hover {
+    background: linear-gradient(to bottom, #ede0c8, #d2c4a8) !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    color: #4a2c2a !important;
+}
+
+/* ── Maps Sidebar Backdrop (mobile overlay, created dynamically by JS) ──── */
+.maps-sidebar-backdrop {
+    display: block;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 149;
+    cursor: pointer;
+}
+
+/* ── Responsive: ≤768px — compact toggle, sidebar overlay ───────────────── */
+@media (max-width: 768px) {
+    .maps-mode-toggle {
+        margin: 0;
+    }
+    .maps-mode-btn {
+        padding: 6px 14px;
+        font-size: 14px;
+    }
+
+    .maps-header-left h2 {
+        font-size: 16px;
+        letter-spacing: 0.5px;
+    }
+
+    .maps-filter-group {
+        width: 100%;
+    }
+
+    .maps-clear-filters-btn {
+        margin-left: 0;
+        width: 100%;
+        text-align: center;
+    }
+
+    .maps-people-legend {
+        font-size: 12px;
+        gap: 8px;
+    }
+
+    /* ── Mobile sidebar: fixed overlay instead of pushing map ─────────── */
+    .maps-sidebar {
+        position: fixed;
+        top: var(--maps-header-height, 56px);
+        left: 0;
+        bottom: 0;
+        width: 260px;
+        z-index: 150;
+        transform: translateX(0);
+        transition: transform 0.3s ease, visibility 0.3s ease;
+        visibility: visible;
+        box-shadow: 4px 0 12px rgba(0, 0, 0, 0.3);
+    }
+    .maps-sidebar.collapsed {
+        transform: translateX(-100%);
+        visibility: hidden;
+        width: 260px;
+        border-right: 2px solid #8b5a2b;
+        box-shadow: none;
+    }
+
+    /* ── Map container fills full viewport width on mobile ────────────── */
+    .maps-page-layout {
+        width: 100vw;
+    }
+    .maps-main {
+        width: 100%;
+    }
+
+    /* ── Header mode toggle: more compact on mobile ──────────────────── */
+    .maps-header .maps-mode-toggle {
+        position: static;
+        transform: none;
+    }
+}
+
+/* ── Responsive: ≤480px — further compaction ────────────────────────────── */
+@media (max-width: 480px) {
+    .maps-mode-btn {
+        padding: 5px 10px;
+        font-size: 13px;
+    }
+
+    .maps-filter-tags,
+    .maps-filter-people {
+        gap: 3px;
+    }
+
+    .maps-filter-tags .cwoc-tag-chip,
+    .maps-filter-people .cwoc-tag-chip {
+        font-size: 0.75em;
+        padding: 1px 6px;
+    }
+
+    .maps-header-left h2 {
+        font-size: 14px;
+    }
+
+    .maps-header-right .standard-button {
+        display: none; /* hide nav buttons on small screens, keep profile */
+    }
+}

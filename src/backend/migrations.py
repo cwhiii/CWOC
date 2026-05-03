@@ -1239,3 +1239,42 @@ def migrate_add_running_timers():
     finally:
         if conn:
             conn.close()
+
+
+# ── Map Settings: migration ──────────────────────────────────────────────
+
+def migrate_add_map_settings():
+    """Add map_default_lat, map_default_lon, map_default_zoom, map_auto_zoom columns to settings.
+
+    Stores the user's preferred default map center, zoom level, and auto-zoom behavior.
+    Fully idempotent — checks column existence before adding.
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        cursor.execute("PRAGMA table_info(settings)")
+        existing = {row[1] for row in cursor.fetchall()}
+
+        if "map_default_lat" not in existing:
+            cursor.execute("ALTER TABLE settings ADD COLUMN map_default_lat TEXT")
+            logger.info("Added map_default_lat column to settings table")
+        if "map_default_lon" not in existing:
+            cursor.execute("ALTER TABLE settings ADD COLUMN map_default_lon TEXT")
+            logger.info("Added map_default_lon column to settings table")
+        if "map_default_zoom" not in existing:
+            cursor.execute("ALTER TABLE settings ADD COLUMN map_default_zoom TEXT")
+            logger.info("Added map_default_zoom column to settings table")
+        if "map_auto_zoom" not in existing:
+            cursor.execute("ALTER TABLE settings ADD COLUMN map_auto_zoom TEXT DEFAULT '1'")
+            logger.info("Added map_auto_zoom column to settings table")
+
+        conn.commit()
+        logger.info("Map settings migration complete")
+    except Exception as e:
+        logger.error(f"Error adding map settings columns: {str(e)}")
+        raise
+    finally:
+        if conn:
+            conn.close()
