@@ -173,6 +173,7 @@ from src.backend.routes.notifications import notifications_router
 from src.backend.routes.network_access import router as network_access_router
 from src.backend.routes.push import push_router
 from src.backend.routes.ntfy import ntfy_router
+from src.backend.routes.ics_import import router as ics_import_router
 
 app.include_router(auth_router)
 app.include_router(users_router)
@@ -187,6 +188,7 @@ app.include_router(health_router)
 app.include_router(ntfy_router)
 app.include_router(network_access_router)
 app.include_router(push_router)
+app.include_router(ics_import_router)
 
 
 # ═══════════════════════════════════════════════════════════════════════════

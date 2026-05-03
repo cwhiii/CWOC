@@ -1,11 +1,8 @@
-"""iCalendar (.ics) serialization/deserialization for calendar import.
+"""iCalendar (.ics) parser and printer for CWOC calendar import.
 
-Provides ics_parse() and ics_print() — pure-Python functions using only
-stdlib, following the same architectural pattern as vcard_parse/vcard_print
-in serializers.py.
-
-Handles RFC 5545 line unfolding, VEVENT/VTODO extraction, TZID preservation,
-DATE vs DATE-TIME detection, and RRULE parsing/serialization.
+Provides ics_parse() and ics_print() following the same architectural
+pattern as the vCard serializer in serializers.py.  Uses Python stdlib
+only — no external libraries.
 """
 
 import re
@@ -13,86 +10,49 @@ from typing import List, Dict, Any, Optional
 
 
 def _unfold_lines(text: str) -> List[str]:
-    """Unfold RFC 5545 continuation lines.
-
-    Lines starting with a space or tab are continuations of the previous
-    logical line (RFC 5545 §3.1).
-    """
-    unfolded: List[str] = []
-    for raw_line in text.splitlines():
-        if raw_line.startswith((" ", "\t")) and unfolded:
-            unfolded[-1] += raw_line[1:]
+    """RFC 5545 line unfolding: continuation lines starting with space/tab
+    are appended to the previous logical line."""
+    lines: List[str] = []
+    for raw in text.replace('\r\n', '\n').replace('\r', '\n').splitlines():
+        if raw.startswith((' ', '\t')) and lines:
+            lines[-1] += raw[1:]
         else:
-            unfolded.append(raw_line)
-    return unfolded
+            lines.append(raw)
+    return lines
 
 
-def _parse_property(line: str) -> Optional[tuple]:
-    """Parse a single iCalendar content line into (name, params_dict, value).
+def _parse_datetime(value: str, params: Dict[str, str]) -> dict:
+    """Parse a DTSTART/DTEND/DUE value into a structured dict.
 
-    Returns None if the line has no colon separator.
+    Returns {"value": <iso_str>, "tzid": <str|None>, "all_day": <bool>}
     """
-    # Find the colon that separates property name+params from value.
-    # Colons can appear inside quoted parameter values, so we track quotes.
-    colon_idx = -1
-    in_quotes = False
-    for i, ch in enumerate(line):
-        if ch == '"':
-            in_quotes = not in_quotes
-        elif ch == ':' and not in_quotes:
-            colon_idx = i
-            break
+    tzid = params.get("TZID")
+    raw = value.strip()
 
-    if colon_idx == -1:
-        return None
+    # DATE only: 8 digits, e.g. 20250615
+    if re.match(r'^\d{8}$', raw):
+        iso = f"{raw[:4]}-{raw[4:6]}-{raw[6:8]}"
+        return {"value": iso, "tzid": tzid, "all_day": True}
 
-    prop_part = line[:colon_idx]
-    value = line[colon_idx + 1:]
-
-    # Split property name from parameters on semicolons
-    parts = prop_part.split(";")
-    prop_name = parts[0].upper()
-    params: Dict[str, str] = {}
-    for p in parts[1:]:
-        if "=" in p:
-            pk, pv = p.split("=", 1)
-            params[pk.upper()] = pv.strip('"')
-        else:
-            params["TYPE"] = p
-
-    return (prop_name, params, value)
-
-
-def _parse_datetime_value(value: str) -> tuple:
-    """Parse a DTSTART/DTEND/DUE value string.
-
-    Returns (iso_string, is_all_day).
-    - DATE format (8 digits): returns (YYYY-MM-DD, True)
-    - DATE-TIME format: returns (ISO datetime string, False)
-    """
-    value = value.strip()
-
-    # DATE format: exactly 8 digits like 20250615
-    if re.match(r'^\d{8}$', value):
-        return (f"{value[:4]}-{value[4:6]}-{value[6:8]}", True)
-
-    # DATE-TIME format: 20250615T100000 or 20250615T100000Z
-    m = re.match(r'^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})(Z?)$', value)
+    # DATE-TIME: 20250615T100000 or 20250615T100000Z
+    m = re.match(r'^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})(Z?)$', raw)
     if m:
-        yr, mo, dy, hr, mi, sc, z = m.groups()
-        iso = f"{yr}-{mo}-{dy}T{hr}:{mi}:{sc}"
-        if z:
-            iso += "Z"
-        return (iso, False)
+        iso = f"{m.group(1)}-{m.group(2)}-{m.group(3)}T{m.group(4)}:{m.group(5)}:{m.group(6)}"
+        if m.group(7) == 'Z':
+            iso += 'Z'
+            if not tzid:
+                tzid = "UTC"
+        return {"value": iso, "tzid": tzid, "all_day": False}
 
-    # Already in ISO-ish format — return as-is
-    return (value, False)
+    # Fallback — return as-is
+    return {"value": raw, "tzid": tzid, "all_day": False}
 
 
-def _parse_rrule(value: str) -> Dict[str, Any]:
+def _parse_rrule(value: str) -> dict:
     """Parse an RRULE value string into a structured dict.
 
-    Example input: FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,WE;UNTIL=20251231T235959Z
+    Example: FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,WE;UNTIL=20251231T235959Z
+    Returns: {"freq": "WEEKLY", "interval": 2, "byday": ["MO","WE"], "until": "20251231T235959Z", "count": None}
     """
     result: Dict[str, Any] = {
         "freq": None,
@@ -101,14 +61,12 @@ def _parse_rrule(value: str) -> Dict[str, Any]:
         "until": None,
         "count": None,
     }
-
-    for part in value.split(";"):
-        if "=" not in part:
+    for part in value.split(';'):
+        if '=' not in part:
             continue
-        key, val = part.split("=", 1)
-        key = key.upper().strip()
+        key, val = part.split('=', 1)
+        key = key.strip().upper()
         val = val.strip()
-
         if key == "FREQ":
             result["freq"] = val.upper()
         elif key == "INTERVAL":
@@ -117,282 +75,191 @@ def _parse_rrule(value: str) -> Dict[str, Any]:
             except ValueError:
                 result["interval"] = 1
         elif key == "BYDAY":
-            result["byday"] = [d.strip() for d in val.split(",")]
+            result["byday"] = [d.strip() for d in val.split(',')]
         elif key == "UNTIL":
-            parsed, _ = _parse_datetime_value(val)
-            result["until"] = parsed
+            result["until"] = val
         elif key == "COUNT":
             try:
                 result["count"] = int(val)
             except ValueError:
                 pass
-
     return result
 
 
-def ics_parse(ics_text: str) -> dict:
-    """Parse an iCalendar (.ics) string into structured component dictionaries.
+def _parse_property_line(line: str) -> tuple:
+    """Parse a single iCalendar property line into (name, params_dict, value).
 
-    Returns a dict with structure:
-    {
-        "components": [
-            {
-                "type": "VEVENT" | "VTODO",
-                "summary": str | None,
-                "dtstart": str | None,
-                "dtstart_tzid": str | None,
-                "dtend": str | None,
-                "dtend_tzid": str | None,
-                "due": str | None,
-                "description": str | None,
-                "location": str | None,
-                "categories": [str, ...],
-                "priority": int | None,
-                "uid": str | None,
-                "rrule": dict | None,
-                "status": str | None,
-                "all_day": bool,
-            },
-            ...
-        ],
-        "errors": [str, ...]
+    Handles parameter parsing like DTSTART;TZID=America/New_York:20250615T100000
+    """
+    colon_idx = line.find(':')
+    if colon_idx == -1:
+        return (None, {}, line)
+
+    prop_part = line[:colon_idx]
+    value = line[colon_idx + 1:]
+
+    parts = prop_part.split(';')
+    prop_name = parts[0].upper()
+    params: Dict[str, str] = {}
+    for p in parts[1:]:
+        if '=' in p:
+            pk, pv = p.split('=', 1)
+            params[pk.upper()] = pv
+        else:
+            params[p.upper()] = ""
+    return (prop_name, params, value)
+
+
+def _parse_component(lines: List[str], comp_type: str) -> dict:
+    """Parse the property lines of a single VEVENT or VTODO component."""
+    comp: Dict[str, Any] = {
+        "type": comp_type,
+        "summary": None,
+        "dtstart": None,
+        "dtstart_tzid": None,
+        "dtend": None,
+        "dtend_tzid": None,
+        "due": None,
+        "due_tzid": None,
+        "description": None,
+        "location": None,
+        "categories": [],
+        "priority": None,
+        "uid": None,
+        "rrule": None,
+        "status": None,
+        "all_day": False,
     }
 
-    Returns {"error": "..."} if the content is not valid iCalendar.
+    for line in lines:
+        prop_name, params, value = _parse_property_line(line)
+        if prop_name is None:
+            continue
+
+        if prop_name == "SUMMARY":
+            comp["summary"] = value
+        elif prop_name == "DESCRIPTION":
+            comp["description"] = value
+        elif prop_name == "LOCATION":
+            comp["location"] = value
+        elif prop_name == "UID":
+            comp["uid"] = value
+        elif prop_name == "STATUS":
+            comp["status"] = value.upper()
+        elif prop_name == "PRIORITY":
+            try:
+                comp["priority"] = int(value)
+            except ValueError:
+                pass
+        elif prop_name == "CATEGORIES":
+            # Categories can appear multiple times; each value is comma-separated
+            cats = [c.strip() for c in value.split(',') if c.strip()]
+            comp["categories"].extend(cats)
+        elif prop_name == "DTSTART":
+            dt = _parse_datetime(value, params)
+            comp["dtstart"] = dt["value"]
+            comp["dtstart_tzid"] = dt["tzid"]
+            comp["all_day"] = dt["all_day"]
+        elif prop_name == "DTEND":
+            dt = _parse_datetime(value, params)
+            comp["dtend"] = dt["value"]
+            comp["dtend_tzid"] = dt["tzid"]
+        elif prop_name == "DUE":
+            dt = _parse_datetime(value, params)
+            comp["due"] = dt["value"]
+            comp["due_tzid"] = dt.get("tzid")
+        elif prop_name == "RRULE":
+            comp["rrule"] = _parse_rrule(value)
+
+    return comp
+
+
+
+def ics_parse(ics_text: str) -> dict:
+    """Parse an iCalendar (.ics) file into structured component data.
+
+    Returns a dict with:
+        "components": list of parsed VEVENT/VTODO dicts
+        "errors": list of error description strings
+
+    Returns an error dict (with "error" key) if the content is not valid
+    iCalendar data.
     """
     if not ics_text or not ics_text.strip():
-        return {"error": "Invalid iCalendar file: empty content"}
+        return {"error": "Empty content provided"}
 
     lines = _unfold_lines(ics_text)
 
-    # Validate that the file begins with BEGIN:VCALENDAR
-    # Skip any leading blank lines
-    first_content_line = None
-    for line in lines:
-        stripped = line.strip()
-        if stripped:
-            first_content_line = stripped
-            break
-
-    if not first_content_line or first_content_line.upper() != "BEGIN:VCALENDAR":
-        return {"error": "Invalid iCalendar file: does not begin with BEGIN:VCALENDAR"}
-
-    components: List[Dict[str, Any]] = []
-    errors: List[str] = []
-
-    # Track component blocks
-    current_component: Optional[Dict[str, Any]] = None
-    current_type: Optional[str] = None
-    component_index = 0
-    in_nested = 0  # Track nested components like VALARM inside VEVENT
-
-    # Component types we care about
-    supported_types = {"VEVENT", "VTODO"}
-    # Component types we silently ignore (including nested ones)
-    ignored_types = {"VTIMEZONE", "VJOURNAL", "VFREEBUSY", "VALARM", "DAYLIGHT", "STANDARD"}
-
+    # Validate: must start with BEGIN:VCALENDAR (ignoring blank leading lines)
+    found_vcalendar = False
     for line in lines:
         stripped = line.strip()
         if not stripped:
             continue
+        if stripped.upper() == "BEGIN:VCALENDAR":
+            found_vcalendar = True
+        break
 
+    if not found_vcalendar:
+        return {"error": "Invalid iCalendar file: does not begin with BEGIN:VCALENDAR"}
+
+    # Extract VEVENT and VTODO blocks
+    components: List[dict] = []
+    errors: List[str] = []
+    current_block: Optional[List[str]] = None
+    current_type: Optional[str] = None
+    nested_depth = 0  # track nested components like VALARM inside VEVENT
+    comp_index = 0
+
+    for line in lines:
+        stripped = line.strip()
         upper = stripped.upper()
 
-        # Check for BEGIN markers
-        if upper.startswith("BEGIN:"):
-            comp_type = upper[6:].strip()
-
-            if current_component is not None:
-                # We're inside a component — this is a nested component
-                in_nested += 1
+        if upper in ("BEGIN:VEVENT", "BEGIN:VTODO"):
+            if current_block is not None:
+                # Nested — shouldn't happen normally, but handle gracefully
+                nested_depth += 1
                 continue
-
-            if comp_type in supported_types:
-                current_type = comp_type
-                current_component = {
-                    "type": comp_type,
-                    "summary": None,
-                    "dtstart": None,
-                    "dtstart_tzid": None,
-                    "dtend": None,
-                    "dtend_tzid": None,
-                    "due": None,
-                    "description": None,
-                    "location": None,
-                    "categories": [],
-                    "priority": None,
-                    "uid": None,
-                    "rrule": None,
-                    "status": None,
-                    "all_day": False,
-                }
-                component_index += 1
-            # else: VCALENDAR, VTIMEZONE, etc. — silently ignore
+            current_type = "VEVENT" if upper == "BEGIN:VEVENT" else "VTODO"
+            current_block = []
             continue
 
-        # Check for END markers
-        if upper.startswith("END:"):
-            comp_type = upper[4:].strip()
-
-            if in_nested > 0:
-                in_nested -= 1
+        if upper in ("END:VEVENT", "END:VTODO"):
+            if nested_depth > 0:
+                nested_depth -= 1
                 continue
-
-            if comp_type == current_type and current_component is not None:
-                # Validate: must have SUMMARY
-                if not current_component["summary"]:
-                    errors.append(f"Component {component_index}: Missing SUMMARY property")
+            if current_block is not None and current_type is not None:
+                comp = _parse_component(current_block, current_type)
+                comp_index += 1
+                if comp["summary"] is None:
+                    errors.append(f"Component {comp_index}: Missing SUMMARY property")
                 else:
-                    components.append(current_component)
-                current_component = None
+                    components.append(comp)
+                current_block = None
                 current_type = None
             continue
 
-        # If we're inside a nested component, skip its properties
-        if in_nested > 0:
+        # Skip nested sub-components (VALARM, etc.)
+        if upper.startswith("BEGIN:") and current_block is not None:
+            nested_depth += 1
+            continue
+        if upper.startswith("END:") and nested_depth > 0:
+            nested_depth -= 1
             continue
 
-        # Parse properties only when inside a supported component
-        if current_component is None:
-            continue
+        if current_block is not None and nested_depth == 0:
+            current_block.append(stripped)
 
-        parsed = _parse_property(stripped)
-        if parsed is None:
-            continue
-
-        prop_name, params, value = parsed
-
-        if prop_name == "SUMMARY":
-            current_component["summary"] = value
-
-        elif prop_name == "DESCRIPTION":
-            current_component["description"] = value
-
-        elif prop_name == "LOCATION":
-            current_component["location"] = value
-
-        elif prop_name == "DTSTART":
-            tzid = params.get("TZID")
-            dt_val, is_all_day = _parse_datetime_value(value)
-            current_component["dtstart"] = dt_val
-            current_component["dtstart_tzid"] = tzid
-            if params.get("VALUE", "").upper() == "DATE" or is_all_day:
-                current_component["all_day"] = True
-
-        elif prop_name == "DTEND":
-            tzid = params.get("TZID")
-            dt_val, is_all_day = _parse_datetime_value(value)
-            current_component["dtend"] = dt_val
-            current_component["dtend_tzid"] = tzid
-            if params.get("VALUE", "").upper() == "DATE" or is_all_day:
-                current_component["all_day"] = True
-
-        elif prop_name == "DUE":
-            dt_val, is_all_day = _parse_datetime_value(value)
-            current_component["due"] = dt_val
-            if params.get("VALUE", "").upper() == "DATE" or is_all_day:
-                current_component["all_day"] = True
-
-        elif prop_name == "CATEGORIES":
-            cats = [c.strip() for c in value.split(",") if c.strip()]
-            current_component["categories"].extend(cats)
-
-        elif prop_name == "PRIORITY":
-            try:
-                current_component["priority"] = int(value)
-            except ValueError:
-                pass
-
-        elif prop_name == "UID":
-            current_component["uid"] = value
-
-        elif prop_name == "RRULE":
-            current_component["rrule"] = _parse_rrule(value)
-
-        elif prop_name == "STATUS":
-            current_component["status"] = value.upper()
-
-    # Check if we have any components
     if not components and not errors:
         return {"error": "Invalid iCalendar file: no VEVENT or VTODO components found"}
 
     return {"components": components, "errors": errors}
 
 
-def _format_rrule(rrule: Dict[str, Any]) -> str:
-    """Serialize an RRULE dict back into RFC 5545 RRULE format.
+def ics_print(components: List[dict]) -> str:
+    """Serialize a list of parsed component dicts back into valid iCalendar text.
 
-    Example output: FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,WE;UNTIL=20251231T235959Z
-    """
-    parts = []
-
-    if rrule.get("freq"):
-        parts.append(f"FREQ={rrule['freq']}")
-
-    interval = rrule.get("interval", 1)
-    if interval and interval != 1:
-        parts.append(f"INTERVAL={interval}")
-
-    if rrule.get("byday"):
-        parts.append(f"BYDAY={','.join(rrule['byday'])}")
-
-    if rrule.get("until"):
-        until_val = rrule["until"]
-        # If it's already in compact iCal format (no dashes), use as-is
-        if "T" in until_val and "-" not in until_val:
-            parts.append(f"UNTIL={until_val}")
-        elif "T" in until_val:
-            # ISO datetime like 2025-12-31T23:59:59Z → 20251231T235959Z
-            clean = until_val.replace("-", "").replace(":", "")
-            parts.append(f"UNTIL={clean}")
-        else:
-            # ISO date like 2025-12-31 → 20251231
-            clean = until_val.replace("-", "")
-            parts.append(f"UNTIL={clean}")
-
-    if rrule.get("count"):
-        parts.append(f"COUNT={rrule['count']}")
-
-    return ";".join(parts)
-
-
-def _format_datetime_prop(prop_name: str, value: str, tzid: Optional[str], all_day: bool) -> str:
-    """Format a DTSTART/DTEND/DUE property line with optional TZID and DATE format.
-
-    For all-day events, uses VALUE=DATE parameter and date-only format.
-    For timed events with TZID, includes TZID parameter.
-    """
-    if all_day:
-        # Convert ISO date (YYYY-MM-DD) to compact DATE format (YYYYMMDD)
-        date_val = value.replace("-", "")
-        # Strip any time component if present
-        if "T" in date_val:
-            date_val = date_val.split("T")[0]
-        return f"{prop_name};VALUE=DATE:{date_val}"
-
-    # Timed event — convert ISO datetime to compact format
-    dt_val = value
-    if "-" in dt_val and "T" in dt_val:
-        # ISO format like 2025-06-15T10:00:00 → 20250615T100000
-        dt_val = dt_val.replace("-", "").replace(":", "")
-    elif "-" in dt_val and "T" not in dt_val:
-        # Date-only in ISO but not all_day — treat as date with no time
-        dt_val = dt_val.replace("-", "")
-
-    if tzid:
-        return f"{prop_name};TZID={tzid}:{dt_val}"
-    else:
-        return f"{prop_name}:{dt_val}"
-
-
-def ics_print(components: List[Dict[str, Any]]) -> str:
-    """Serialize a list of component dictionaries into a valid iCalendar string.
-
-    Wraps output in BEGIN:VCALENDAR / END:VCALENDAR with VERSION:2.0
-    and PRODID:-//CWOC//EN.
-
-    Input: list of component dicts (same format as ics_parse output).
-    Output: valid iCalendar string.
+    Wraps output in BEGIN:VCALENDAR / END:VCALENDAR with VERSION:2.0 and PRODID.
     """
     lines: List[str] = []
     lines.append("BEGIN:VCALENDAR")
@@ -401,8 +268,6 @@ def ics_print(components: List[Dict[str, Any]]) -> str:
 
     for comp in components:
         comp_type = comp.get("type", "VEVENT")
-        all_day = comp.get("all_day", False)
-
         lines.append(f"BEGIN:{comp_type}")
 
         # UID
@@ -417,32 +282,32 @@ def ics_print(components: List[Dict[str, Any]]) -> str:
         if comp.get("description"):
             lines.append(f"DESCRIPTION:{comp['description']}")
 
-        # LOCATION (VEVENT)
+        # LOCATION
         if comp.get("location"):
             lines.append(f"LOCATION:{comp['location']}")
 
         # DTSTART
         if comp.get("dtstart"):
-            lines.append(_format_datetime_prop(
-                "DTSTART", comp["dtstart"],
-                comp.get("dtstart_tzid"), all_day
-            ))
+            dtstart_line = _format_dt_property("DTSTART", comp["dtstart"],
+                                                comp.get("dtstart_tzid"),
+                                                comp.get("all_day", False))
+            lines.append(dtstart_line)
 
         # DTEND
         if comp.get("dtend"):
-            lines.append(_format_datetime_prop(
-                "DTEND", comp["dtend"],
-                comp.get("dtend_tzid"), all_day
-            ))
+            dtend_line = _format_dt_property("DTEND", comp["dtend"],
+                                              comp.get("dtend_tzid"),
+                                              comp.get("all_day", False))
+            lines.append(dtend_line)
 
         # DUE (VTODO)
         if comp.get("due"):
-            lines.append(_format_datetime_prop(
-                "DUE", comp["due"],
-                None, all_day
-            ))
+            due_line = _format_dt_property("DUE", comp["due"],
+                                            comp.get("due_tzid"),
+                                            comp.get("all_day", False))
+            lines.append(due_line)
 
-        # STATUS (VTODO)
+        # STATUS
         if comp.get("status"):
             lines.append(f"STATUS:{comp['status']}")
 
@@ -464,3 +329,71 @@ def ics_print(components: List[Dict[str, Any]]) -> str:
 
     lines.append("END:VCALENDAR")
     return "\r\n".join(lines)
+
+
+def _format_dt_property(prop_name: str, value: str, tzid: Optional[str], all_day: bool) -> str:
+    """Format a datetime property (DTSTART, DTEND, DUE) for iCalendar output."""
+    # Convert ISO back to iCalendar format
+    ical_value = _iso_to_ical(value, all_day)
+
+    if all_day:
+        return f"{prop_name};VALUE=DATE:{ical_value}"
+    elif tzid and tzid != "UTC":
+        return f"{prop_name};TZID={tzid}:{ical_value}"
+    elif tzid == "UTC" or value.endswith('Z'):
+        # Ensure Z suffix for UTC
+        if not ical_value.endswith('Z'):
+            ical_value += 'Z'
+        return f"{prop_name}:{ical_value}"
+    else:
+        return f"{prop_name}:{ical_value}"
+
+
+def _iso_to_ical(iso_str: str, all_day: bool) -> str:
+    """Convert an ISO date/datetime string back to iCalendar format.
+
+    '2025-06-15' -> '20250615'
+    '2025-06-15T10:00:00' -> '20250615T100000'
+    '2025-06-15T10:00:00Z' -> '20250615T100000Z'
+    """
+    s = iso_str.strip()
+    has_z = s.endswith('Z')
+    s = s.rstrip('Z')
+
+    if all_day:
+        # Date only
+        return s.replace('-', '')[:8]
+
+    if 'T' in s:
+        date_part, time_part = s.split('T', 1)
+        date_compact = date_part.replace('-', '')
+        time_compact = time_part.replace(':', '')
+        result = f"{date_compact}T{time_compact}"
+        if has_z:
+            result += 'Z'
+        return result
+
+    # Date only fallback
+    return s.replace('-', '')
+
+
+def _format_rrule(rrule: dict) -> Optional[str]:
+    """Serialize an RRULE dict back into RFC 5545 RRULE format string."""
+    if not rrule or not rrule.get("freq"):
+        return None
+
+    parts = [f"FREQ={rrule['freq']}"]
+
+    interval = rrule.get("interval", 1)
+    if interval and interval != 1:
+        parts.append(f"INTERVAL={interval}")
+
+    if rrule.get("byday"):
+        parts.append(f"BYDAY={','.join(rrule['byday'])}")
+
+    if rrule.get("until"):
+        parts.append(f"UNTIL={rrule['until']}")
+    elif rrule.get("count"):
+        parts.append(f"COUNT={rrule['count']}")
+
+    return ";".join(parts)

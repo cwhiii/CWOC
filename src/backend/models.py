@@ -198,6 +198,17 @@ class PasswordChange(BaseModel):
     new_password: str
 
 
+# ── ICS Import Models ────────────────────────────────────────────────────
+
+class ICSImportRequest(BaseModel):
+    ics_content: str
+
+class ICSImportResponse(BaseModel):
+    imported: int
+    skipped: int
+    errors: List[str] = []
+
+
 # ── Notification Model ───────────────────────────────────────────────────
 
 class Notification(BaseModel):

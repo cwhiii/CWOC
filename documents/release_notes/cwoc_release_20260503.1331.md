@@ -1,0 +1,1 @@
+Fixed map cluster icon rendering so contact-only clusters show as teal circles and mixed chit+contact clusters show as purple hexagons. Previously, contact-only clusters fell through to the chit-only branch and rendered as amber/brown squares.

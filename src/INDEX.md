@@ -130,6 +130,21 @@ All migrations run at startup. Each checks if the column/table already exists be
 | `csv_export(contacts)` | Export a list of contacts as a CSV string |
 | `csv_import(csv_text)` | Import contacts from a CSV string; returns (contacts, errors) |
 
+### 1.6b `src/backend/ics_serializer.py` — iCalendar (.ics) Parser & Printer
+
+| Function | Description |
+|----------|-------------|
+| `_unfold_lines(text)` | RFC 5545 line unfolding — continuation lines starting with space/tab are appended to previous line |
+| `_parse_datetime(value, params)` | Parse DTSTART/DTEND/DUE value into structured dict with value, tzid, all_day |
+| `_parse_rrule(value)` | Parse RRULE value string into structured dict (freq, interval, byday, until, count) |
+| `_parse_property_line(line)` | Parse a single iCalendar property line into (name, params_dict, value) |
+| `_parse_component(lines, comp_type)` | Parse property lines of a single VEVENT or VTODO component |
+| `ics_parse(ics_text)` | Parse an iCalendar (.ics) file into structured component data; returns dict with components and errors |
+| `ics_print(components)` | Serialize a list of parsed component dicts back into valid iCalendar text |
+| `_format_dt_property(prop_name, value, tzid, all_day)` | Format a datetime property for iCalendar output |
+| `_iso_to_ical(iso_str, all_day)` | Convert ISO date/datetime string back to iCalendar format |
+| `_format_rrule(rrule)` | Serialize an RRULE dict back into RFC 5545 RRULE format string |
+
 ### 1.7 `src/backend/schedulers.py` — Weather API, Schedulers & Push Notifications
 
 | Function | Description |
@@ -171,6 +186,60 @@ All migrations run at startup. Each checks if the column/table already exists be
 | `test_empty_value_entries_skipped()` | Multi-value entries with empty values are skipped |
 | `test_address_round_trip()` | Address formatting survives a round-trip |
 | `test_favorite_round_trip()` | Favorite flag survives a round-trip |
+
+### 1.9b `src/backend/test_ics.py` — ICS Parser & Printer Unit Tests
+
+| Function | Description |
+|----------|-------------|
+| `test_basic_vevent_parsing()` | Parse a simple VEVENT with core fields |
+| `test_vevent_priority()` | Parse VEVENT with priority value |
+| `test_vevent_categories()` | Parse VEVENT with comma-separated categories |
+| `test_basic_vtodo_parsing()` | Parse a VTODO with core fields |
+| `test_line_unfolding()` | Continuation lines are unfolded |
+| `test_tzid_preservation()` | TZID parameter on DTSTART/DTEND is preserved |
+| `test_all_day_event()` | DATE-only DTSTART marks event as all-day |
+| `test_datetime_event_not_all_day()` | DATE-TIME DTSTART is not all-day |
+| `test_rrule_daily()` | Parse RRULE with FREQ=DAILY |
+| `test_rrule_weekly_byday()` | Parse RRULE with FREQ=WEEKLY and BYDAY |
+| `test_rrule_monthly()` | Parse RRULE with FREQ=MONTHLY |
+| `test_rrule_yearly()` | Parse RRULE with FREQ=YEARLY |
+| `test_rrule_until()` | Parse RRULE with UNTIL clause |
+| `test_rrule_count()` | Parse RRULE with COUNT clause |
+| `test_round_trip_vevent()` | Parse → print → parse produces equivalent data |
+| `test_round_trip_all_day()` | All-day event round-trips correctly |
+| `test_missing_vcalendar()` | Content without BEGIN:VCALENDAR returns error |
+| `test_no_components()` | VCALENDAR with no VEVENT/VTODO returns error |
+| `test_missing_summary_skipped()` | Component without SUMMARY is skipped with error |
+| `test_vtimezone_ignored()` | VTIMEZONE components are silently ignored |
+| `test_vjournal_ignored()` | VJOURNAL components are silently ignored |
+| `test_valarm_inside_vevent_ignored()` | VALARM nested inside VEVENT is ignored |
+| `test_utc_z_suffix()` | DTSTART with Z suffix is parsed correctly |
+| `test_multiple_events()` | Multiple VEVENTs are all parsed |
+| `test_mixed_vevent_vtodo()` | Mix of VEVENT and VTODO are all parsed |
+| `test_print_wraps_vcalendar()` | ics_print wraps output in VCALENDAR |
+| `test_print_vevent_fields()` | ics_print outputs all VEVENT fields |
+
+### 1.9c `src/backend/test_ics_import.py` — ICS Import Unit Tests
+
+| Function | Description |
+|----------|-------------|
+| `test_vevent_basic_mapping()` | VEVENT fields map to correct chit fields |
+| `test_vevent_priority_high/medium/low()` | Priority tier mapping (1-4→High, 5→Medium, 6-9→Low) |
+| `test_vevent_all_day()` | All-day flag propagates from parser to chit |
+| `test_vevent_missing_dtend()` | Missing DTEND defaults to DTSTART |
+| `test_vtodo_basic_mapping()` | VTODO fields map to correct chit fields |
+| `test_vtodo_status_completed/in_process/needs_action()` | VTODO status mapping |
+| `test_rrule_daily/weekly_byday/monthly/yearly()` | Recurrence mapping tests |
+| `test_rrule_until_conversion()` | RRULE UNTIL converted to ISO date |
+| `test_rrule_count_approximation()` | RRULE COUNT approximated to until date |
+| `test_rrule_unsupported_hourly/minutely()` | Unsupported frequencies return None |
+| `test_duplicate_detection_match/no_match/vtodo()` | Duplicate detection tests |
+| `test_all_duplicates_returns_all()` | All-duplicate file returns all indices |
+| `test_deleted_chits_not_considered_duplicates()` | Deleted chits don't trigger duplicates |
+| `test_categories_split_into_tags()` | CATEGORIES split into individual tags |
+| `test_non_vevent_vtodo_ignored()` | Non-VEVENT/VTODO components ignored |
+| `test_missing_summary_skipped_with_error()` | Missing SUMMARY skipped with error |
+| `test_import_tag_always_present()` | cwoc_system/imported tag always added |
 
 ### 1.10 `src/backend/auth_utils.py` — Password Hashing Utilities
 
@@ -380,6 +449,22 @@ All contact endpoints are scoped by `owner_id` — users can only access their o
 | `_serialize_contact_for_db(contact)` | Convert a Contact model to a DB-ready dict |
 | `_row_to_contact(row)` | Convert a DB row dict to an API-ready contact dict |
 | `_write_vcf_file(contact_id, contact)` | Write a .vcf file for a contact |
+
+### 1.22b `src/backend/routes/ics_import.py` — ICS Calendar Import
+
+| Route | Handler | Description |
+|-------|---------|-------------|
+| `POST /api/import/ics` | `import_ics(body, request)` | Import iCalendar (.ics) file content as CWOC chits |
+
+**Internal helpers:**
+
+| Function | Description |
+|----------|-------------|
+| `_map_priority(priority_val)` | Map RFC 5545 priority (1-9) to CWOC priority string (High/Medium/Low) |
+| `_map_vtodo_status(ics_status)` | Map iCalendar VTODO STATUS to CWOC chit status |
+| `map_component_to_chit(component, user_id, display_name, username)` | Map a parsed ICS component to a CWOC chit dict ready for DB insert |
+| `map_rrule_to_recurrence(rrule, start_datetime)` | Translate ICS RRULE dict to CWOC recurrence_rule format |
+| `find_duplicates(cursor, user_id, chits)` | Check which mapped chits already exist in the DB (title + datetime match) |
 
 ### 1.23 `src/backend/routes/audit.py` — Audit Log
 
@@ -1793,6 +1878,7 @@ Settings page logic: tags, colors, clocks, locations, indicators, import/export,
 | `_doImport(type, mode, fileData)` | Perform the actual import POST request to `/api/import/chits`, `/api/import/userdata`, or `/api/import/all` |
 | `importChitData()` | Import chit data: open file picker, read JSON, validate, show mode dialog |
 | `importUserData()` | Import user data: open file picker, read JSON, validate, show mode dialog |
+| `triggerIcsImport()` | Import Calendar (.ics): open file picker, read ICS text, POST to /api/import/ics, display results |
 | `importAllData()` | Import all data: open file picker, read JSON, validate type "all", show mode dialog |
 | `loadVersionInfo()` | Fetch and display the current version and install date from `/api/version` |
 | `_closeUpdateModal()` | Close the update modal; show reopen button if upgrade is still running |
@@ -2687,6 +2773,14 @@ src/backend/migrations.py
 
 src/backend/serializers.py
   └── src.backend.db           (compute_display_name)
+
+src/backend/ics_serializer.py
+  └── (no internal CWOC imports — leaf module, stdlib only)
+
+src/backend/routes/ics_import.py
+  ├── src.backend.db           (DB_PATH, serialize_json_field, compute_system_tags)
+  ├── src.backend.models       (ICSImportRequest, ICSImportResponse, Chit)
+  └── src.backend.ics_serializer (ics_parse)
 
 src/backend/db.py
   └── (no internal CWOC imports — leaf module)

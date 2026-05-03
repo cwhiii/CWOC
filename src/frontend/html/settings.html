@@ -953,6 +953,13 @@
                                 <input type="file" id="importUserFile" accept=".json" style="display:none" />
                             </div>
 
+                            <label class="setting-subheader">📅 Calendar Import</label>
+                            <p class="setting-hint">Import events and tasks from Google Calendar, Apple Calendar, or Outlook.</p>
+                            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+                                <button id="icsImportBtn" onclick="triggerIcsImport()" class="standard-button" style="flex:1;">📅 Import Calendar (.ics)</button>
+                                <input type="file" id="icsImportFile" accept=".ics" style="display:none" />
+                            </div>
+
                             <label class="setting-subheader" style="margin-top:14px;">📋 Audit Log</label>
                             <button onclick="window.location.href='/frontend/html/audit-log.html'" class="standard-button" style="width:100%;margin-bottom:8px;">📋 Audit Log →</button>
 

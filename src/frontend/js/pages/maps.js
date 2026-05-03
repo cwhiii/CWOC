@@ -977,7 +977,7 @@ function _initLeafletMap() {
 
       var className, html;
       if (hasChit && hasContact) {
-        // Mixed cluster: circle stacked on top of square — show dual count (chits/contacts)
+        // Mixed cluster: hexagon shape — show dual count (chits/contacts)
         var chitCount = 0;
         var contactCount = 0;
         for (var j = 0; j < childMarkers.length; j++) {
@@ -986,6 +986,10 @@ function _initLeafletMap() {
         }
         className = 'maps-mixed-cluster maps-mixed-cluster-' + size;
         html = '<div style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;"><span style="font-size:12px;font-weight:bold;color:#fff;">' + chitCount + '/' + contactCount + '</span></div>';
+      } else if (hasContact && !hasChit) {
+        // Contact-only cluster: teal circle
+        className = 'maps-people-cluster maps-people-cluster-' + size;
+        html = '<div><span>' + count + '</span></div>';
       } else {
         // Chit-only cluster: square icon with amber/brown scheme
         className = 'maps-chit-cluster maps-chit-cluster-' + size;

@@ -2205,6 +2205,59 @@ function importUserData() {
 }
 
 /**
+ * Import Calendar (.ics): open file picker, read ICS text, POST to /api/import/ics.
+ */
+function triggerIcsImport() {
+  var fileInput = document.getElementById('icsImportFile');
+  var btn = document.getElementById('icsImportBtn');
+  fileInput.value = '';
+
+  function onChange() {
+    fileInput.removeEventListener('change', onChange);
+    var file = fileInput.files[0];
+    if (!file) return;
+
+    var reader = new FileReader();
+    reader.onload = async function(e) {
+      var icsContent = e.target.result;
+      btn.disabled = true;
+      var originalText = btn.textContent;
+      btn.textContent = 'Importing…';
+
+      try {
+        var response = await fetch('/api/import/ics', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ics_content: icsContent }),
+        });
+
+        if (!response.ok) {
+          var errData = await response.json().catch(function() { return {}; });
+          throw new Error(errData.detail || response.statusText);
+        }
+
+        var result = await response.json();
+        var msg = 'Imported ' + result.imported + ' events';
+        if (result.skipped > 0) msg += ', skipped ' + result.skipped + ' duplicates';
+        if (result.errors && result.errors.length > 0) msg += ', ' + result.errors.length + ' errors';
+        alert(msg);
+      } catch (error) {
+        console.error('ICS import failed:', error);
+        alert('Import failed: ' + error.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = originalText;
+      }
+    };
+    reader.readAsText(file);
+    fileInput.value = '';
+  }
+
+  fileInput.addEventListener('change', onChange);
+  fileInput.click();
+}
+
+/**
  * Export ALL data (chits + settings + contacts + alerts) as a single JSON file.
  */
 async function exportAllData() {

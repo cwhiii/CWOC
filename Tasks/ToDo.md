@@ -2,7 +2,12 @@
 
 *Completed items are in `done.md`. Deferred items in `parking_lot.md`. Declined in `path_not_traveled.md`.*
 
-Here values for things like birthdays and anniversaries. These dates should appear on a special birthday chit. These are automatically generated on the anniversary date of the dates in people. But there should be a check box by each one that defaults to turned on or show anual repitition  (or aniversary sor romthieng). If enabled, and there's a valid date, show the person as a value on the all day section of calendars. And searches should find them correctly. So if I have somebody born in 1987, I'm January 14, and I'm viewing the month of January, if I have show on calendar enable, that person's chip (no chit, THIER person tag) should show up on the calendar for January 14. Even if I'm looking at January for 2029.
+- Here values for things like birthdays and anniversaries. These dates should appear on a special birthday chit. These are automatically generated on the anniversary date of the dates in people. But there should be a check box by each one that defaults to turned on or show anual repitition  (or aniversary sor romthieng). If enabled, and there's a valid date, show the person as a value on the all day section of calendars. And searches should find them correctly. So if I have somebody born in 1987, I'm January 14, and I'm viewing the month of January, if I have show on calendar enable, that person's chip (no chit, THIER person tag) should show up on the calendar for January 14. Even if I'm looking at January for 2029.
+
+- HTML email support (deferred from email MVP)
+- Email: attachment support (deferred from email MVP)
+- Email: full-text search beyond SQLite LIKE (deferred from email MVP)
+- Email: toggle read/unread from Email tab (deferred from email MVP)
 
 
 ## Manual Tasks
@@ -12,6 +17,18 @@ Here values for things like birthdays and anniversaries. These dates should appe
 ---
 
 ## Top Priorities
+
+
+
+
+# Implementation Plan: Data Management Overhaul
+- update to handle new email fields
+- execute
+
+
+- add an item to the todo: see where the new crypto-package could be used to futher secure passwords, and update the system to take advantage of it. 
+
+- Attachemtns: have an attachemnts zone. Be able to add or remove files forom a chit. (keep in mind that this will be a male client in the near future, so they should be able to work with the attachments coming and going through email. So if there's anything special with that, we want to support that out of the gate.)
 
 is ther any way cto cache the locatons so they dont have to be fetched from scratch each time? Or to show the previoulsy-loaded values?
 
@@ -129,7 +146,7 @@ The how it charts are pre-rendering the text. So they're grainy and terrible. Us
 
 ## Long-term / Dream
 
-- `[ ]` Email integration (prototype exists)
+- `[-]` Email integration (prototype exists) — **MVP in progress via spec**
 - `[ ]` Home Assistant integration
 - `[ ]` Obsidian sync (auto-export notes as Markdown)
 - `[ ]` Object & Inventory Tracking zone

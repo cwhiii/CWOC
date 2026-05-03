@@ -39,6 +39,7 @@
                     <li><a href="#quick-edit">Quick Edit Modal</a></li>
                     <li><a href="#settings">Settings</a></li>
                     <li><a href="#data-management">Data Management</a></li>
+                    <li><a href="#calendar-import">Calendar Import (.ics)</a></li>
                     <li><a href="#alert-indicators">Visual Indicators</a></li>
                     <li><a href="#version-management">Version & Updates</a></li>
                     <li><a href="#audit-log">Audit Log</a></li>
@@ -377,7 +378,7 @@
                 <li><strong>Habits</strong> — Success rate window (7/30/90 days or all time), default show habits on calendar toggle</li>
                 <li><strong>Version &amp; Updates</strong> — Current version, upgrade button, update log</li>
                 <li><strong>Data</strong> — Audit log link, trash link, audit log pruning limits</li>
-                <li><strong>Data Management</strong> — JSON export/import for chit data and user data (add or replace modes)</li>
+                <li><strong>Data Management</strong> — JSON export/import for chit data and user data (add or replace modes), plus iCalendar (.ics) import for Google Calendar, Apple Calendar, and Outlook</li>
                 <li><strong>Kiosk</strong> — Select which tags to display on the unauthenticated kiosk view, and launch it</li>
                 <li><strong>Dependent Apps</strong> — (Admin only) Configure external services: Tailscale VPN for remote access, Ntfy for push notifications</li>
             </ul>
@@ -395,6 +396,22 @@
             </ul>
             <h4>File Format</h4>
             <p>Exported files are self-contained JSON with metadata including the CWOC version, export timestamp, and instance ID. Files can be imported into any CWOC instance.</p>
+            <h4 id="calendar-import">📅 Calendar Import (.ics)</h4>
+            <p>Import events and tasks from <strong>Google Calendar</strong>, <strong>Apple Calendar</strong>, or <strong>Outlook</strong> using standard iCalendar (.ics) files. Click the <strong>📅 Import Calendar (.ics)</strong> button in the Data Management section to select a file.</p>
+            <p><strong>What gets imported:</strong></p>
+            <ul>
+                <li><strong>Events (VEVENT)</strong> — Title, description, start/end dates, location, categories (as tags), priority, and recurrence rules</li>
+                <li><strong>Tasks (VTODO)</strong> — Title, description, due date, status (ToDo/In Progress/Complete), priority, and categories</li>
+                <li><strong>Recurrence</strong> — Daily, weekly (with specific days), monthly, and yearly patterns are preserved. Unsupported frequencies (hourly, minutely) are dropped and the event imports as a single occurrence.</li>
+            </ul>
+            <p><strong>How it works:</strong></p>
+            <ul>
+                <li>All imported chits are automatically tagged with <code>cwoc_system/imported</code> so you can easily find or filter them</li>
+                <li><strong>Duplicate detection</strong> — If an event with the same title and start time already exists, it's skipped to prevent duplicates when re-importing</li>
+                <li>Events without a title (SUMMARY) are skipped with an error noted in the results</li>
+                <li>Other calendar components (VTIMEZONE, VJOURNAL, VALARM) are silently ignored</li>
+            </ul>
+            <p>After import, you'll see a summary showing how many events were imported, how many duplicates were skipped, and any errors.</p>
             <h3 id="alert-indicators">Visual Indicators</h3>
             <p>Visual indicators are small icons displayed alongside chit titles in all views to signal key properties. Configure their visibility in Settings → Visual Indicators. Each indicator has three visibility modes:</p>
             <ul>

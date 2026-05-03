@@ -1,0 +1,3 @@
+# CWOC Release 20260503.1433
+
+Added iCalendar (.ics) file import. Users can now import events and tasks from Google Calendar, Apple Calendar, or Outlook via a new "Import Calendar (.ics)" button in the Settings page Data Management section. The import handles VEVENT and VTODO components with field mapping (title, description, dates, location, categories, priority, status), recurrence rule translation (DAILY/WEEKLY/MONTHLY/YEARLY with BYDAY, UNTIL, and COUNT support), and duplicate detection (title + datetime match). All imported chits are tagged with `cwoc_system/imported`. Includes 54 unit tests covering the parser, printer, field mapper, recurrence translator, and duplicate detector.
