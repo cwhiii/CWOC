@@ -20,6 +20,9 @@ var _mapsAllContacts = [];
 var _mapsPeopleClusterGroup = null;
 var _mapsContactGeocodeCache = {};
 
+// Focus mode flag — when true, skip fitBounds on marker placement
+var _mapsFocusMode = false;
+
 // Chits filter state
 var _mapsChitsFilterStatus = [];
 var _mapsChitsFilterTags = [];
@@ -41,6 +44,43 @@ var _mapsStatusColors = {
   'Complete':    '#4CAF50'
 };
 var _mapsNoStatusColor = '#9E9E9E';
+
+// ── Loading Indicator ────────────────────────────────────────────────────────
+
+var _mapsLoadingInterval = null;
+var _mapsLoadingDotCount = 1;
+
+/**
+ * _mapsShowLoading() — Shows the animated "Loading." indicator in the status bar.
+ * Cycles through "Loading.", "Loading..", "Loading..." on a 400ms interval.
+ */
+function _mapsShowLoading() {
+  var el = document.getElementById('maps-loading-indicator');
+  var textEl = document.getElementById('maps-loading-text');
+  if (!el || !textEl) return;
+  el.style.display = '';
+  _mapsLoadingDotCount = 1;
+  textEl.textContent = 'Loading.';
+  if (_mapsLoadingInterval) clearInterval(_mapsLoadingInterval);
+  _mapsLoadingInterval = setInterval(function() {
+    _mapsLoadingDotCount = (_mapsLoadingDotCount % 3) + 1;
+    var dots = '';
+    for (var i = 0; i < _mapsLoadingDotCount; i++) dots += '.';
+    textEl.textContent = 'Loading' + dots;
+  }, 400);
+}
+
+/**
+ * _mapsHideLoading() — Hides the loading indicator in the status bar.
+ */
+function _mapsHideLoading() {
+  var el = document.getElementById('maps-loading-indicator');
+  if (el) el.style.display = 'none';
+  if (_mapsLoadingInterval) {
+    clearInterval(_mapsLoadingInterval);
+    _mapsLoadingInterval = null;
+  }
+}
 
 // ── Mode Management ──────────────────────────────────────────────────────────
 
@@ -78,6 +118,8 @@ function _mapsSetMode(mode) {
   // Trigger the appropriate mode switch
   if (mode === 'people') {
     _switchToPeopleMode();
+  } else if (mode === 'both') {
+    _switchToBothMode();
   } else {
     _switchToChitsMode();
   }
@@ -96,7 +138,7 @@ function _mapsRestoreMode() {
     console.warn('Could not read maps mode from localStorage:', e.message);
   }
 
-  if (stored === 'chits' || stored === 'people') {
+  if (stored === 'chits' || stored === 'people' || stored === 'both') {
     _mapsCurrentMode = stored;
   } else {
     _mapsCurrentMode = 'chits';
@@ -273,6 +315,14 @@ function _showPeopleLegend() {
   document.getElementById('maps-legend').style.display = 'none';
 }
 
+/**
+ * _showBothLegends() — Shows both the chits and people legends.
+ */
+function _showBothLegends() {
+  document.getElementById('maps-legend').style.display = '';
+  document.getElementById('maps-people-legend').style.display = '';
+}
+
 /* ── Mode Switching ───────────────────────────────────────────────────────── */
 
 /**
@@ -318,6 +368,27 @@ function _switchToPeopleMode() {
   _hideInfoMessage();
 
   // Load contact markers
+  _fetchAndDisplayContacts();
+}
+
+/**
+ * _switchToBothMode() — Transitions the map view to Both mode.
+ * Shows both chit and contact markers simultaneously.
+ * Shows both filter panels and both legends.
+ */
+function _switchToBothMode() {
+  // Show both filter panels
+  document.getElementById('maps-chits-filter-panel').style.display = '';
+  document.getElementById('maps-people-filter-panel').style.display = '';
+
+  // Show both legends
+  _showBothLegends();
+
+  // Hide any lingering info message
+  _hideInfoMessage();
+
+  // Load both chit and contact markers
+  _fetchAndDisplayChits();
   _fetchAndDisplayContacts();
 }
 
@@ -672,8 +743,8 @@ function _onChitsFilterChange() {
   // Tags and people are already updated via chip click handlers
   // Text is already updated via the input handler
 
-  // Re-filter and re-render (only if we have chits loaded and are in chits mode)
-  if (_mapsCurrentMode === 'chits' && _mapsAllChits.length > 0) {
+  // Re-filter and re-render (only if we have chits loaded and are in chits or both mode)
+  if ((_mapsCurrentMode === 'chits' || _mapsCurrentMode === 'both') && _mapsAllChits.length > 0) {
     _filterAndRender();
   }
 }
@@ -777,7 +848,7 @@ async function _mapsInit() {
     // Restore persisted mode from localStorage
     _mapsRestoreMode();
 
-    // Initialize people cluster group with teal styling (square icons)
+    // Initialize people cluster group with teal styling (circle icons)
     _mapsPeopleClusterGroup = L.markerClusterGroup({
       iconCreateFunction: function(cluster) {
         var count = cluster.getChildCount();
@@ -811,8 +882,25 @@ async function _mapsInit() {
     _initChitsFilters();
     _initPeopleFilters();
 
-    // Trigger the appropriate mode (replaces direct _fetchAndDisplayChits call)
-    _mapsSetMode(_mapsCurrentMode);
+    // Check for focus query parameter (from "View in Context" buttons)
+    var urlParams = new URLSearchParams(window.location.search);
+    var focusType = urlParams.get('focus');
+    var focusAddress = urlParams.get('address');
+
+    if (focusAddress && focusAddress.trim()) {
+      // Focus mode: geocode the address and center the map on it
+      _handleFocusAddress(focusType, focusAddress.trim());
+    } else {
+      // Normal mode: trigger the appropriate mode
+      _mapsSetMode(_mapsCurrentMode);
+    }
+
+    // Fetch version for status bar footer
+    fetch('/api/version').then(function(r) { return r.ok ? r.json() : {}; }).then(function(d) {
+      var el = document.getElementById('maps-footer-version');
+      if (el && d.version) el.textContent = 'v' + d.version;
+    }).catch(function() {});
+
   } catch (e) {
     console.error('Maps init error:', e);
   }
@@ -851,9 +939,16 @@ function _initLeafletMap() {
 
       var className, html;
       if (hasChit && hasContact) {
-        // Mixed cluster: square with inscribed circle
+        // Mixed cluster: circle stacked on top of square — show dual count (chits/contacts)
+        var chitCount = 0;
+        var contactCount = 0;
+        for (var j = 0; j < childMarkers.length; j++) {
+          if (childMarkers[j]._cwocMarkerType === 'contact') contactCount++;
+          else chitCount++;
+        }
         className = 'maps-mixed-cluster maps-mixed-cluster-' + size;
-        html = '<div class="maps-mixed-cluster-inner"><div class="maps-mixed-cluster-circle"><span>' + count + '</span></div></div>';
+        html = '<div class="maps-mixed-cluster-square"><span>' + chitCount + '</span></div>' +
+               '<div class="maps-mixed-cluster-circle"><span>' + contactCount + '</span></div>';
       } else {
         // Chit-only cluster: square icon with amber/brown scheme
         className = 'maps-chit-cluster maps-chit-cluster-' + size;
@@ -990,14 +1085,14 @@ L.Control.DefaultView = L.Control.extend({
         var bounds = [];
 
         // Collect bounds from chit cluster group
-        if (_mapsCurrentMode === 'chits' && _mapsClusterGroup) {
+        if ((_mapsCurrentMode === 'chits' || _mapsCurrentMode === 'both') && _mapsClusterGroup) {
           _mapsClusterGroup.eachLayer(function(layer) {
             if (layer.getLatLng) bounds.push(layer.getLatLng());
           });
         }
 
         // Collect bounds from people cluster group
-        if (_mapsCurrentMode === 'people' && _mapsPeopleClusterGroup) {
+        if ((_mapsCurrentMode === 'people' || _mapsCurrentMode === 'both') && _mapsPeopleClusterGroup) {
           _mapsPeopleClusterGroup.eachLayer(function(layer) {
             if (layer.getLatLng) bounds.push(layer.getLatLng());
           });
@@ -1031,6 +1126,57 @@ L.Control.DefaultView = L.Control.extend({
   }
 });
 
+// ── Focus Address Handling (View in Context) ─────────────────────────────────
+
+/**
+ * _handleFocusAddress(focusType, address) — Geocodes the given address and
+ * centers the map on it at zoom level 15. Shows a temporary highlight marker
+ * at the focused location. Also loads the appropriate mode markers in the
+ * background. Called when the maps page is opened with ?focus=...&address=...
+ */
+async function _handleFocusAddress(focusType, address) {
+  // Set focus mode flag to prevent fitBounds from overriding our centered view
+  _mapsFocusMode = true;
+
+  // Set the mode based on focus type
+  var mode = (focusType === 'contact') ? 'people' : 'chits';
+  _mapsSetMode(mode);
+
+  try {
+    var coords = await _geocodeAddress(address);
+    if (coords && coords.lat && coords.lon) {
+      // Center the map on the address at zoom 15 (skip fitBounds)
+      _mapsLeafletMap.setView([coords.lat, coords.lon], 15);
+
+      // Add a temporary highlight marker (pulsing circle)
+      var highlightMarker = L.circleMarker([coords.lat, coords.lon], {
+        radius: 18,
+        fillColor: '#d4af37',
+        color: '#8b4513',
+        weight: 3,
+        opacity: 0.9,
+        fillOpacity: 0.35
+      });
+      highlightMarker.addTo(_mapsLeafletMap);
+      highlightMarker.bindPopup(
+        '<div style="font-family:Lora,Georgia,serif;font-size:13px;">' +
+        '<strong>📍 ' + _mapsEsc(address) + '</strong>' +
+        '</div>'
+      ).openPopup();
+
+      // Remove the highlight marker after 8 seconds
+      setTimeout(function() {
+        if (_mapsLeafletMap && highlightMarker) {
+          _mapsLeafletMap.removeLayer(highlightMarker);
+        }
+      }, 8000);
+    }
+  } catch (e) {
+    console.warn('Could not geocode focus address:', address, e);
+    // Fall back to normal mode behavior
+  }
+}
+
 // ── Fetch and display chits ──────────────────────────────────────────────────
 
 /**
@@ -1038,21 +1184,25 @@ L.Control.DefaultView = L.Control.extend({
  * geocodes locations, and places markers on the map.
  */
 async function _fetchAndDisplayChits() {
+  _mapsShowLoading();
   try {
     var resp = await fetch('/api/chits');
     if (!resp.ok) {
       console.error('Failed to fetch chits:', resp.status);
       _showInfoMessage('Could not load chits. Please try again.');
+      _mapsHideLoading();
       return;
     }
     _mapsAllChits = await resp.json();
   } catch (e) {
     console.error('Error fetching chits:', e);
     _showInfoMessage('Could not load chits. Please try again.');
+    _mapsHideLoading();
     return;
   }
 
   await _filterAndRender();
+  _mapsHideLoading();
 }
 
 // ── Fetch and display contacts ───────────────────────────────────────────────
@@ -1063,6 +1213,7 @@ async function _fetchAndDisplayChits() {
  * markers on the map. Shows appropriate empty state messages.
  */
 async function _fetchAndDisplayContacts() {
+  _mapsShowLoading();
   try {
     // Fetch all contacts from /api/contacts
     var resp = await fetch('/api/contacts');
@@ -1082,6 +1233,7 @@ async function _fetchAndDisplayContacts() {
       } else {
         _showInfoMessage('No contacts match the current filters.');
       }
+      _mapsHideLoading();
       return;
     }
 
@@ -1091,6 +1243,7 @@ async function _fetchAndDisplayContacts() {
     if (geocoded.length === 0) {
       if (_mapsPeopleClusterGroup) _mapsPeopleClusterGroup.clearLayers();
       _showInfoMessage('No contacts with addresses were found.');
+      _mapsHideLoading();
       return;
     }
 
@@ -1098,10 +1251,12 @@ async function _fetchAndDisplayContacts() {
 
     // Place contact markers
     _placeContactMarkers(geocoded);
+    _mapsHideLoading();
 
   } catch (e) {
     console.error('Error fetching/displaying contacts:', e);
     _showInfoMessage('Error loading contacts. Please try again.');
+    _mapsHideLoading();
   }
 }
 
@@ -1221,7 +1376,7 @@ function _buildPeopleTagChips(contacts) {
  * Called when any people filter changes (text search, favorites toggle, tag chips).
  */
 function _onPeopleFilterChange() {
-  if (_mapsCurrentMode === 'people' && _mapsAllContacts.length > 0) {
+  if ((_mapsCurrentMode === 'people' || _mapsCurrentMode === 'both') && _mapsAllContacts.length > 0) {
     _fetchAndDisplayContacts();
   }
 }
@@ -1396,9 +1551,9 @@ function _getContactMarkerColor(contact) {
 }
 
 /**
- * _placeContactMarkers(geocodedContacts) — Creates contact markers and adds
- * them to the people cluster group. Each marker is a 28×28px square divIcon
- * colored by the contact's color, with an optional thumbnail image.
+ * _placeContactMarkers(geocodedContacts) — Creates contact markers as circle
+ * markers (L.circleMarker) and adds them to the people cluster group.
+ * Each marker uses the contact's color with semi-transparent fill.
  * Binds popup via _buildContactPopupContent() and fits map bounds to markers.
  */
 function _placeContactMarkers(geocodedContacts) {
@@ -1411,22 +1566,15 @@ function _placeContactMarkers(geocodedContacts) {
     var contact = item.contact;
     var color = _getContactMarkerColor(contact);
 
-    // Build divIcon HTML — 28x28px square with rounded corners, semi-transparent fill, full-opacity border
-    var iconHtml = '<div class="maps-contact-marker" style="background-color:' + _hexToRgba(color, 0.6) + ';border-color:' + color + ';">';
-    if (contact.image_url) {
-      iconHtml += '<img src="' + _mapsEsc(contact.image_url) + '" alt="" style="width:20px;height:20px;border-radius:3px;object-fit:cover;" />';
-    }
-    iconHtml += '</div>';
-
-    var icon = L.divIcon({
-      html: iconHtml,
-      className: 'maps-contact-marker-wrapper',
-      iconSize: [28, 28],
-      iconAnchor: [14, 14],
-      popupAnchor: [0, -14]
+    // Circle marker for contacts
+    var marker = L.circleMarker([item.lat, item.lon], {
+      radius: 10,
+      fillColor: color,
+      color: color,
+      weight: 2,
+      opacity: 1,
+      fillOpacity: 0.6
     });
-
-    var marker = L.marker([item.lat, item.lon], { icon: icon });
     marker._cwocMarkerType = 'contact';
 
     // Bind popup
@@ -1437,8 +1585,8 @@ function _placeContactMarkers(geocodedContacts) {
     bounds.push([item.lat, item.lon]);
   }
 
-  // Fit map bounds to markers (only if auto-zoom is enabled)
-  if (bounds.length > 0 && _mapsLeafletMap) {
+  // Fit map bounds to markers (only if auto-zoom is enabled and not in focus mode)
+  if (bounds.length > 0 && _mapsLeafletMap && !_mapsFocusMode) {
     var settings = window._cwocSettings || {};
     var autoZoom = settings.map_auto_zoom;
     var autoZoomEnabled = (autoZoom === '1' || autoZoom === undefined || autoZoom === null || autoZoom === '');
@@ -1506,7 +1654,7 @@ async function _filterAndRender() {
   if (filtered.length === 0) {
     // Clear existing markers and show empty state
     if (_mapsClusterGroup) _mapsClusterGroup.clearLayers();
-    if (_mapsLeafletMap) _mapsLeafletMap.setView([20, 0], 2);
+    if (_mapsLeafletMap && !_mapsFocusMode) _mapsLeafletMap.setView([20, 0], 2);
     _showInfoMessage('No chits match the current filters.');
     return;
   }
@@ -1695,8 +1843,8 @@ function _mapsEsc(str) {
 // ── Marker placement ─────────────────────────────────────────────────────────
 
 /**
- * _placeMarkers(geocodedChits) — Creates colored circle markers, adds them
- * to the MarkerClusterGroup, binds popups, and fits map bounds.
+ * _placeMarkers(geocodedChits) — Creates colored rounded-square divIcon markers,
+ * adds them to the MarkerClusterGroup, binds popups, and fits map bounds.
  * Shows default world view with info message if no markers.
  * Respects map_auto_zoom setting: only fitBounds when auto-zoom is enabled.
  */
@@ -1722,14 +1870,17 @@ function _placeMarkers(geocodedChits) {
     var item = geocodedChits[i];
     var color = _getMarkerColor(item.chit.status);
 
-    var marker = L.circleMarker([item.lat, item.lon], {
-      radius: 10,
-      fillColor: color,
-      color: '#fff',
-      weight: 2,
-      opacity: 1,
-      fillOpacity: 0.85
+    // Rounded-square divIcon marker for chits
+    var iconHtml = '<div class="maps-chit-marker" style="background-color:' + _hexToRgba(color, 0.85) + ';border-color:#fff;"></div>';
+    var icon = L.divIcon({
+      html: iconHtml,
+      className: 'maps-chit-marker-wrapper',
+      iconSize: [28, 28],
+      iconAnchor: [14, 14],
+      popupAnchor: [0, -14]
     });
+
+    var marker = L.marker([item.lat, item.lon], { icon: icon });
     marker._cwocMarkerType = 'chit';
 
     marker.bindPopup(_buildPopupContent(item.chit));
@@ -1737,8 +1888,8 @@ function _placeMarkers(geocodedChits) {
     bounds.push([item.lat, item.lon]);
   }
 
-  // Fit map to marker bounds (only if auto-zoom is enabled)
-  if (bounds.length > 0) {
+  // Fit map to marker bounds (only if auto-zoom is enabled and not in focus mode)
+  if (bounds.length > 0 && !_mapsFocusMode) {
     var settings = window._cwocSettings || {};
     var autoZoom = settings.map_auto_zoom;
     var autoZoomEnabled = (autoZoom === '1' || autoZoom === undefined || autoZoom === null || autoZoom === '');

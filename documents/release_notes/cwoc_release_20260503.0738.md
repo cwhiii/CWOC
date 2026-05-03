@@ -1,0 +1,1 @@
+Swapped marker and cluster shapes on the maps page: people/contacts are now circles (circleMarker + round clusters), chits are now rounded squares (divIcon + rounded-square clusters). Mixed clusters show a circle stacked on top of a square, each with its own count. Updated legend swatches to match (rounded squares for chit statuses, circle for contacts).

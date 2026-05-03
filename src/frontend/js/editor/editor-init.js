@@ -619,6 +619,7 @@ async function loadChitData(chitId) {
     const locationInput = document.getElementById("location");
     if (locationInput) {
       locationInput.value = chit.location || "";
+      if (typeof _updateViewInContextBtn === 'function') _updateViewInContextBtn();
     }
 
     const peopleArray = Array.isArray(chit.people)
@@ -1208,6 +1209,14 @@ document.addEventListener("DOMContentLoaded", function () {
     if (btns[0]) btns[0].onclick = searchLocationMap;
     if (btns[1]) btns[1].onclick = openLocationInNewTab;
     if (btns[2]) btns[2].onclick = openLocationDirections;
+  }
+
+  // Wire location input to update "View in Context" button visibility
+  var locInput = document.getElementById('location');
+  if (locInput) {
+    locInput.addEventListener('input', function() {
+      if (typeof _updateViewInContextBtn === 'function') _updateViewInContextBtn();
+    });
   }
 
   const notesModal = document.getElementById("notesModal");

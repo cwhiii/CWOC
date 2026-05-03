@@ -54,9 +54,6 @@
             align-items: center;
             gap: 14px;
             flex-wrap: wrap;
-            padding: 6px 12px;
-            background: linear-gradient(to bottom, #f5e6cc, #ede0c8);
-            border-top: 1px solid #8b5a2b;
             font-size: 13px;
             color: var(--aged-brown-dark, #4a2c2a);
         }
@@ -75,6 +72,64 @@
             height: 14px;
             border-radius: 50%;
             border: 1px solid #5c4033;
+        }
+
+        /* ── Status Bar (bottom of map area) ── */
+        .maps-status-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 4px 12px;
+            background: linear-gradient(to bottom, #f5e6cc, #ede0c8);
+            border-top: 1px solid #8b5a2b;
+            font-size: 12px;
+            color: var(--aged-brown-dark, #4a2c2a);
+            font-family: 'Lora', Georgia, serif;
+            flex-shrink: 0;
+            min-height: 28px;
+            gap: 12px;
+        }
+        .maps-status-left {
+            display: flex;
+            align-items: center;
+            flex-shrink: 1;
+            min-width: 0;
+            overflow: hidden;
+        }
+        .maps-status-center {
+            flex-shrink: 0;
+            font-size: 12px;
+            color: #6b4e31;
+            font-style: italic;
+            white-space: nowrap;
+        }
+        .maps-status-right {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-shrink: 0;
+            font-size: 11px;
+            opacity: 0.7;
+            white-space: nowrap;
+        }
+        .maps-status-right a {
+            color: var(--aged-brown-dark, #4a2c2a);
+            text-decoration: none;
+        }
+        .maps-status-right a:hover {
+            text-decoration: underline;
+        }
+        .maps-footer-version {
+            font-size: 10px;
+            opacity: 0.6;
+        }
+        .maps-people-legend {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            flex-wrap: wrap;
+            font-size: 13px;
+            color: var(--aged-brown-dark, #4a2c2a);
         }
 
         /* ── Google Maps warning ── */
@@ -143,6 +198,7 @@
         </div>
         <div class="maps-mode-toggle" id="maps-mode-toggle">
             <button class="maps-mode-btn active" data-mode="chits">Chits</button>
+            <button class="maps-mode-btn" data-mode="both">Both</button>
             <button class="maps-mode-btn" data-mode="people">People</button>
         </div>
         <div class="maps-header-right" id="maps-header-right">
@@ -261,22 +317,36 @@
                 No chits with locations found in the selected date range.
             </div>
 
-            <!-- Chits Legend (status colors) -->
-            <div class="maps-legend" id="maps-legend">
-                <span class="maps-legend-title">Status:</span>
-                <span class="maps-legend-item"><span class="maps-legend-swatch" style="background:#2196F3;"></span> ToDo</span>
-                <span class="maps-legend-item"><span class="maps-legend-swatch" style="background:#FF9800;"></span> In Progress</span>
-                <span class="maps-legend-item"><span class="maps-legend-swatch" style="background:#F44336;"></span> Blocked</span>
-                <span class="maps-legend-item"><span class="maps-legend-swatch" style="background:#4CAF50;"></span> Complete</span>
-                <span class="maps-legend-item"><span class="maps-legend-swatch" style="background:#9E9E9E;"></span> No Status</span>
-            </div>
-
-            <!-- People Legend (hidden by default) -->
-            <div class="maps-people-legend" id="maps-people-legend" style="display:none">
-                <span class="maps-legend-title">Contacts:</span>
-                <span class="maps-legend-item">
-                    <span class="maps-legend-swatch" style="background:#008080; border-radius:3px;"></span> Contact color
-                </span>
+            <!-- ── Status Bar (legend left, loading center, page title right) ── -->
+            <div class="maps-status-bar" id="maps-status-bar">
+                <!-- Left: Legends -->
+                <div class="maps-status-left">
+                    <!-- Chits Legend (status colors — rounded square swatches) -->
+                    <div class="maps-legend" id="maps-legend">
+                        <span class="maps-legend-title">Status:</span>
+                        <span class="maps-legend-item"><span class="maps-legend-swatch" style="background:#2196F3;border-radius:3px;"></span> ToDo</span>
+                        <span class="maps-legend-item"><span class="maps-legend-swatch" style="background:#FF9800;border-radius:3px;"></span> In Progress</span>
+                        <span class="maps-legend-item"><span class="maps-legend-swatch" style="background:#F44336;border-radius:3px;"></span> Blocked</span>
+                        <span class="maps-legend-item"><span class="maps-legend-swatch" style="background:#4CAF50;border-radius:3px;"></span> Complete</span>
+                        <span class="maps-legend-item"><span class="maps-legend-swatch" style="background:#9E9E9E;border-radius:3px;"></span> No Status</span>
+                    </div>
+                    <!-- People Legend (hidden by default) -->
+                    <div class="maps-people-legend" id="maps-people-legend" style="display:none">
+                        <span class="maps-legend-title">Contacts:</span>
+                        <span class="maps-legend-item">
+                            <span class="maps-legend-swatch" style="background:#008080; border-radius:50%;"></span> Contact color
+                        </span>
+                    </div>
+                </div>
+                <!-- Center: Loading indicator -->
+                <div class="maps-status-center" id="maps-loading-indicator" style="display:none;">
+                    <span id="maps-loading-text">Loading.</span>
+                </div>
+                <!-- Right: Page title / copyright -->
+                <div class="maps-status-right">
+                    <span class="maps-footer-copyright" id="maps-footer-copyright">&copy; 2026 <a href="https://www.cwholemaniii.com/pages/home.shtml" target="_blank">C.W.'s Omni Chits</a></span>
+                    <span class="maps-footer-version" id="maps-footer-version"></span>
+                </div>
             </div>
         </main>
 

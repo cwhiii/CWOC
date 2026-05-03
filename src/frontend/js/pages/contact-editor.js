@@ -571,6 +571,25 @@
             });
         }
 
+        // "View in Context" button for address fields — opens maps page focused on address
+        var contextBtn = null;
+        if (fieldName === 'addresses') {
+            contextBtn = document.createElement('button');
+            contextBtn.type = 'button';
+            contextBtn.className = 'zone-button';
+            contextBtn.title = 'View in Context';
+            contextBtn.innerHTML = '<i class="fa-solid fa-circle-nodes"></i>';
+            contextBtn.disabled = !defaultValue;
+            contextBtn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                e.preventDefault();
+                _viewAddressInContext(valueInput.value.trim(), 'contact');
+            });
+            valueInput.addEventListener('input', function() {
+                contextBtn.disabled = !valueInput.value.trim();
+            });
+        }
+
         var removeBtn = document.createElement('button');
         removeBtn.type = 'button';
         removeBtn.className = 'remove-entry-btn';
@@ -588,6 +607,7 @@
         row.appendChild(valueInput);
         row.appendChild(link);
         if (mapBtn) row.appendChild(mapBtn);
+        if (contextBtn) row.appendChild(contextBtn);
         row.appendChild(removeBtn);
         container.appendChild(row);
 
@@ -643,6 +663,20 @@
         for (var i = 0; i < entries.length; i++) {
             addMultiValueEntry(fieldName, entries[i].label || '', entries[i].value || '');
         }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // ── View in Context (Maps) ──────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /**
+     * _viewAddressInContext(address, focusType) — Navigates to the maps page
+     * with focus and address query parameters so the map centers on the address.
+     */
+    function _viewAddressInContext(address, focusType) {
+        if (!address) return;
+        var url = '/frontend/html/maps.html?focus=' + encodeURIComponent(focusType || 'contact') + '&address=' + encodeURIComponent(address);
+        window.location.href = url;
     }
 
     // ═══════════════════════════════════════════════════════════════════════

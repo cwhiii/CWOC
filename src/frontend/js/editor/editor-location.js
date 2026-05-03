@@ -292,10 +292,12 @@ function onSavedLocationSelect() {
   if (!address) {
     // Null option selected — clear the field
     locationInput.value = '';
+    _updateViewInContextBtn();
     return;
   }
 
   locationInput.value = address;
+  _updateViewInContextBtn();
   setSaveButtonUnsaved();
   searchLocationMap();
 }
@@ -313,6 +315,7 @@ function onAddDefaultLocation(event) {
   var locationInput = document.getElementById('location');
   if (locationInput) {
     locationInput.value = defaultLoc.address || '';
+    _updateViewInContextBtn();
     setSaveButtonUnsaved();
     searchLocationMap();
   }
@@ -346,6 +349,7 @@ function onClearLocation(event) {
   var compactDropdown = document.getElementById('compact-location-dropdown');
   if (compactDropdown) compactDropdown.selectedIndex = 0;
 
+  _updateViewInContextBtn();
   setSaveButtonUnsaved();
 }
 
@@ -400,6 +404,7 @@ function onCompactLocationSelect() {
   var locationInput = document.getElementById('location');
   if (locationInput) {
     locationInput.value = address;
+    _updateViewInContextBtn();
     setSaveButtonUnsaved();
     searchLocationMap();
   }
@@ -514,4 +519,31 @@ function openLocationDirections(event) {
     },
     { enableHighAccuracy: false, timeout: 5000, maximumAge: 60000 },
   );
+}
+
+// ── View in Context (Maps page) ──────────────────────────────────────────────
+
+/**
+ * _viewLocationInContext(event) — Navigates to the maps page with focus and
+ * address query parameters so the map centers on the chit's location.
+ * Only works when the location input has a value.
+ */
+function _viewLocationInContext(event) {
+  if (event) { event.stopPropagation(); event.preventDefault(); }
+  var loc = document.getElementById('location');
+  if (!loc || !loc.value.trim()) return;
+  var address = loc.value.trim();
+  var url = '/frontend/html/maps.html?focus=chit&address=' + encodeURIComponent(address);
+  window.location.href = url;
+}
+
+/**
+ * _updateViewInContextBtn() — Shows or hides the "View in Context" button
+ * based on whether the location input has a value.
+ */
+function _updateViewInContextBtn() {
+  var loc = document.getElementById('location');
+  var btn = document.getElementById('viewInContextBtn');
+  if (!btn) return;
+  btn.style.display = (loc && loc.value.trim()) ? '' : 'none';
 }

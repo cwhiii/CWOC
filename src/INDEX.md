@@ -1413,6 +1413,8 @@ Location zone: geocoding, map, weather display, saved locations, and directions.
 | `searchLocationMap(event)` | Search for a location — fetch weather (if date set) and display map |
 | `openLocationInNewTab(event)` | Open the current location in Google Maps or OpenStreetMap in a new tab |
 | `openLocationDirections(event)` | Open directions to the current location (with geolocation for origin) |
+| `_viewLocationInContext(event)` | Navigate to the maps page centered on the chit's location (View in Context) |
+| `_updateViewInContextBtn()` | Show/hide the "View in Context" button based on location input value |
 
 #### editor-notes.js
 
@@ -1883,6 +1885,7 @@ Contact editor page: 3-column zone layout, image upload, multi-value fields, col
 | `closeQrModal()` | Global — close the QR modal overlay |
 | `_contactEditorState` | Global object — exposes `getContactId`, `setContactId`, `isFavorite`, `setFavorite`, `getSaveSystem` |
 | `_showContactAddressMap(addresses)` | Geocode the first address and display an OpenStreetMap embed |
+| `_viewAddressInContext(address, focusType)` | Navigate to the maps page centered on the given address (View in Context) |
 
 #### contact-qr.js
 
@@ -1982,6 +1985,7 @@ Maps page: interactive Leaflet map with two display modes — **Chits** (chit lo
 | `_mapsAllContacts` | Cached array of all fetched contacts |
 | `_mapsPeopleClusterGroup` | Separate MarkerClusterGroup for people mode (teal styling) |
 | `_mapsContactGeocodeCache` | In-memory geocode cache for contact addresses |
+| `_mapsFocusMode` | Boolean flag — when true, skip fitBounds on marker placement (set by focus query param) |
 | `_mapsChitsFilterStatus` | Selected status filter values (array) |
 | `_mapsChitsFilterTags` | Selected tag filter values (array) |
 | `_mapsChitsFilterPriority` | Selected priority filter values (array) |
@@ -2014,8 +2018,8 @@ Maps page: interactive Leaflet map with two display modes — **Chits** (chit lo
 | `_onChitsFilterChange()` | Handler for chit filter changes — re-reads UI state, re-filters and re-renders |
 | `_clearChitsFilters()` | Resets all chit filters to defaults and updates UI |
 | **Entry point & map init** | |
-| `_mapsInit()` | Entry point: checks `prefer_google_maps`, reads map settings for initial view (auto-zoom, custom center/zoom, or US default), restores mode, initializes both cluster groups, wires toggle, initializes sidebar, initializes filters, triggers mode |
-| `_initLeafletMap()` | Creates Leaflet map instance with OpenStreetMap tile layer; adds Fullscreen and DefaultView controls; configures chit cluster `iconCreateFunction` with mixed cluster detection via `_cwocMarkerType` |
+| `_mapsInit()` | Entry point: checks `prefer_google_maps`, reads map settings for initial view (auto-zoom, custom center/zoom, or US default), restores mode, initializes both cluster groups, wires toggle, initializes sidebar, initializes filters, handles focus query parameter, triggers mode |
+| `_initLeafletMap()` | Creates Leaflet map instance with OpenStreetMap tile layer; adds Fullscreen and DefaultView controls; configures chit cluster `iconCreateFunction` with mixed cluster detection via `_cwocMarkerType`; mixed clusters show dual count (chits/contacts) |
 | **Utility helpers** | |
 | `_hexToRgba(hex, alpha)` | Converts a hex color string (e.g. `"#FF0000"`) to an `rgba(r, g, b, alpha)` CSS string for semi-transparent fills |
 | **Fullscreen Control** | |
@@ -2024,6 +2028,7 @@ Maps page: interactive Leaflet map with two display modes — **Chits** (chit lo
 | `L.Control.DefaultView` | Leaflet control that resets map to user's configured default view; if auto-zoom enabled → fitBounds to visible markers; if auto-zoom disabled with custom center/zoom → setView; otherwise → default US view (39.8283, -98.5795, zoom 4); position: topright |
 | **Chits mode** | |
 | `_fetchAndDisplayChits()` | Fetches chits from `/api/chits`, applies filters, geocodes, and places markers |
+| `_handleFocusAddress(focusType, address)` | Geocodes address from query params, centers map at zoom 15, shows temporary highlight marker, loads mode markers |
 | `_filterAndRender()` | Applies chit filters, geocodes, and places markers (called on load and filter change) |
 | `_filterChitsByDateRange(chits, startDate, endDate)` | Returns chits with non-empty location and at least one date field within the range |
 | `_geocodeChits(chits)` | Geocodes each chit's location via `_geocodeAddress()` with in-memory cache deduplication |
