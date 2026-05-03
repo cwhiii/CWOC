@@ -4,7 +4,7 @@
   <img src="src/static/cwod_logo-large.png" alt="CWOC Logo" width="200">
 </p>
 
-A self-hosted multi-user task, note, and calendar management web app with built-in Tailscale support. One flexible record — the **chit** — serves as a task, note, calendar event, alarm, checklist, or project, all in one unified data model.
+A self-hosted multi-user task, note, and calendar management web app. One flexible record — the **chit** — serves as a task, note, calendar event, alarm, checklist, or project, all in one unified data model.
 
 Unlike most productivity tools, CWOC doesn't force you to pick a category up front. Fill in the fields that matter and the system figures out where it belongs — a chit with a date shows up on the calendar, add a checklist and it appears in checklists too. Multiple users get their own accounts with granular sharing — chit-level and tag-level sharing with viewer/manager roles, RSVP, assignment, and stealth mode. No subscriptions, no cloud dependency. Your data lives on your hardware in a single SQLite file, accessible from any device on your network. The entire stack is vanilla Python and vanilla JS with zero build steps — lightweight enough to run on a Raspberry Pi Zero 2, easy to deploy, easy to hack on, and easy to understand.
 
@@ -18,8 +18,7 @@ Unlike most productivity tools, CWOC doesn't force you to pick a category up fro
 | **P**rojects | Kanban-style boards with child chits |
 | **T**asks | Status tracking — ToDo, In Progress, Blocked, Complete |
 | **N**otes | Markdown content |
-
-Plus an **Indicators** tab for health trend charts (heart rate, blood pressure, SpO2, temperature, weight, glucose, and more) with configurable time ranges.
+| **I**ndicators | Health trend charts — heart rate, blood pressure, SpO2, temperature, weight, glucose, and more |
 
 ## Tech Stack
 
@@ -32,7 +31,7 @@ Plus an **Indicators** tab for health trend charts (heart rate, blood pressure, 
 | Service | Purpose |
 |---|---|
 | **[Tailscale](https://tailscale.com/)** | Mesh VPN for secure remote access. Lets you reach your CWOC instance from anywhere without port forwarding or exposing your server to the internet. Configured and managed from Settings → Dependent Apps. |
-| **[Ntfy](https://ntfy.sh/)** | Self-hosted push notification server. Sends alarm, timer, and reminder notifications directly to your phone — even when the browser is closed. Notifications include action buttons (Open, Snooze, Dismiss) with snooze duration pulled from your settings. |
+| **[Ntfy](https://ntfy.sh/)** | Self-hosted push notification server. Sends alarm, timer, and reminder notifications directly to your phone — even when the browser is closed. Notifications include action buttons (Open, Snooze, Dismiss) with snooze duration pulled from your settings. Requires Tailscale or your own VPN/tunnel back to the server for remote delivery. |
 
 Both are optional. CWOC works fully without them — Tailscale adds remote access, Ntfy adds phone push notifications. The `install/configurinator.sh` script handles installing and configuring both automatically.
 

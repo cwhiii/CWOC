@@ -1,8 +1,18 @@
-# ♾️📜♾️ C.W.'s Omni Chits (CWOC)
+# C.W.'s Omni Chits (CWOC)
 
 A multi-user task, note, and calendar management web app. The core concept is a **chit** — a single flexible record that can serve as a task, note, calendar event, alarm, checklist, or project, all using one unified data model.
 
 A single chit can appear in multiple views depending on which fields are filled in. The backend auto-assigns system tags based on chit properties, so you never have to manually categorize anything — just fill in the fields that matter and CWOC figures out where it belongs. Multiple users get their own accounts with granular sharing — chit-level and tag-level sharing with viewer/manager roles, RSVP accept/decline, assignment, and stealth mode for private chits.
+
+## Install
+
+One command on a fresh Debian/Ubuntu or Fedora/RHEL machine:
+
+```bash
+curl -sSL https://your-release-url/configurinator.sh | sudo bash
+```
+
+That's it. Open `https://your-server-ip` in a browser. For technical details, local development setup, and service management, see [technical_details.md](technical_details.md).
 
 ## The C CAPTN Views
 
@@ -16,98 +26,7 @@ Chits are organized into six views called **C CAPTN**:
 | **P**rojects | Project master chits with child chits in Kanban-style boards |
 | **T**asks | Chits with a status — ToDo, In Progress, Blocked, Complete |
 | **N**otes | Chits with markdown content |
-
----
-
-## Setup & Running
-
-### Prerequisites
-
-- Python 3.8+
-- No npm/node required — no build step
-
-### Local Development
-
-```bash
-# Create and activate a virtual environment
-python3 -m venv venv
-source venv/bin/activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Run the server
-uvicorn src.backend.main:app --host 0.0.0.0 --port 3333 --reload --log-level debug
-```
-
-Open `http://localhost:3333` in your browser.
-
-### Production Deployment
-
-The `install/configurinator.sh` script provisions a bare Debian/Ubuntu or Fedora/RHEL machine into a running CWOC server:
-
-```bash
-sudo bash install/configurinator.sh
-```
-
-This script:
-1. Installs system packages (Python 3, SQLite, nginx, OpenSSL)
-2. Downloads and extracts the latest CWOC release
-3. Creates a Python virtual environment and installs dependencies
-4. Configures a systemd service (`cwoc.service`) for auto-start
-5. Sets up an nginx HTTPS reverse proxy with a self-signed certificate
-6. Preserves the existing database across upgrades
-
-### Service Management
-
-```bash
-systemctl restart cwoc       # Restart the app
-systemctl status cwoc        # Check status
-journalctl -u cwoc -f        # Follow logs
-```
-
-### Upgrading
-
-Click **Upgrade Omni Chits** in Settings → Version & Updates. The upgrade streams real-time output in a terminal-style modal. Alternatively, re-run `configurinator.sh` on the server.
-
----
-
-## Dependencies
-
-### Required
-
-- **Python 3.8+** — runtime for the FastAPI backend
-- **SQLite3** — included in Python stdlib; single-file database at `/app/data/app.db`
-- **FastAPI + Uvicorn** — web framework and ASGI server (`pip install fastapi uvicorn`)
-- **Pydantic v1** — request validation (`pip install pydantic`)
-
-No npm, no Node.js, no build step. The frontend is vanilla JS served as static files.
-
-### Optional Services
-
-These are external services that CWOC integrates with. Both are optional — CWOC is fully functional without them. The `install/configurinator.sh` script installs and configures both automatically during provisioning.
-
-#### Tailscale (Remote Access)
-
-[Tailscale](https://tailscale.com/) is a free mesh VPN that lets you securely access your CWOC instance from anywhere — your phone, laptop, or another network — without port forwarding or exposing your server to the internet. Once connected, you reach CWOC via a Tailscale IP address that works the same whether you're at home or away.
-
-- **Configured in:** Settings → Dependent Apps → Tailscale
-- **What it does:** Connects your CWOC server to your Tailscale network. Provides a stable IP and hostname accessible from any device on your tailnet.
-- **Setup:** Generate an auth key from the [Tailscale admin console](https://login.tailscale.com/admin/settings/keys), paste it into Settings, and click Connect. Install the Tailscale app on your phone/laptop and sign in with the same account.
-- **Subnet routing:** The configurator advertises your local subnet so that other local services (like Ntfy) are also reachable through the Tailscale tunnel.
-
-#### Ntfy (Push Notifications)
-
-[Ntfy](https://ntfy.sh/) is a self-hosted push notification server that sends alarm, timer, and reminder notifications directly to your phone — even when the browser is closed. CWOC runs its own ntfy instance on the server (port 2586) so notifications stay on your local network.
-
-- **Configured in:** Settings → Dependent Apps → Ntfy
-- **What it does:** Sends push notifications for chit alarms, timers, reminders, start/due times, and independent alerts. Each notification includes three action buttons:
-  - **Open** — opens the chit editor or independent alerts board
-  - **Snooze** — snoozes based on your configured snooze duration
-  - **Dismiss** — clears the notification
-- **Setup:** The ntfy service auto-enables when detected. Install the [Ntfy app](https://ntfy.sh/) on your phone, subscribe to the topic and server URL shown in Settings, and enable Instant Delivery.
-- **Remote access:** With Tailscale subnet routing, the same ntfy subscription works both at home (WiFi) and remotely (Tailscale tunnel). Only one subscription needed.
-- **Disable/Enable:** An admin can disable ntfy notifications from Settings without losing the configuration. Re-enabling is one click.
+| **I**ndicators | Health trend charts — heart rate, blood pressure, SpO2, temperature, weight, glucose, and more |
 
 ---
 
@@ -117,7 +36,7 @@ These are external services that CWOC integrates with. Both are optional — CWO
 - Tab-based view system with Calendar, Checklists, Alerts, Projects, Tasks, Notes, and Global Search
 - Collapsible sidebar with date navigation, sort controls, period selection, and multi-faceted filtering (text, status, priority, tags, people, show/hide options)
 - Per-tab default filters configurable in Settings
-- Keyboard shortcuts for nearly everything (press `R` for the reference overlay)
+- Full keyboard navigation with hotkeys for virtually every action — press `R` for the reference overlay
 
 ### Calendar
 - Seven period views: Itinerary, Day, Week, Work Hours, X Days, Month, Year
@@ -154,6 +73,16 @@ These are external services that CWOC integrates with. Both are optional — CWO
 - Snooze and dismiss with configurable snooze length
 - Optional "delete chit after dismissal"
 
+### Habits
+- Any chit can become a habit — toggle with the 🎯 button in the Task zone
+- Configurable goal per period (e.g., 3 times per day) with progress tracking (X / Y)
+- Cycle frequencies: Daily, Weekly, Monthly, Yearly — auto-resets at the start of each period
+- Dedicated Habits view in the Tasks tab with progress bars and completion status
+- Per-period history log with inline editing of past entries
+- Charts: completion bar chart, success rate trend, and streak timeline
+- Notifications can fire relative to the end of the habit cycle ("before end of day/week/month") with a "disable if done" option
+- Show/hide habits on the calendar independently of other recurring chits
+
 ### Projects
 - Kanban-style board with four status columns (ToDo, In Progress, Blocked, Complete)
 - Drag-and-drop between columns
@@ -180,7 +109,7 @@ These are external services that CWOC integrates with. Both are optional — CWO
 - People assigned to chits appear in the People filter
 
 ### Weather
-- Dashboard weather modal (press `W`) with default location forecast
+- Dashboard weather modal with default location forecast
 - Dedicated Weather page with 16-day forecast table for all saved locations
 - Chit-level weather: auto-loads when a chit has both a location and a date
 - Server-side automatic weather refresh (hourly for 7-day, daily for 8–16 day)
@@ -235,31 +164,20 @@ These are external services that CWOC integrates with. Both are optional — CWO
 
 ---
 
-## Keyboard Shortcuts
+## Optional Services
 
-Press **R** on the dashboard for the full reference overlay. Press **Shift+R** for the Help page.
-
-| Key | Action |
+| Service | Purpose |
 |---|---|
-| C / H / A / P / T / N | Switch tabs (Calendar, cHecklists, Alerts, Projects, Tasks, Notes) |
-| G | Global Search |
-| K | Create chit |
-| W | Weather modal · Shift+W → Weather page |
-| L | Clock modal |
-| S | Settings |
-| R | Reference overlay · Shift+R → Help page |
-| V | Navigate menu |
-| ESC | Close modal / exit (with save check) |
-| Backspace | Clear filters |
-| . | Period submenu |
-| F | Filter submenu |
-| O | Order submenu |
+| **[Tailscale](https://tailscale.com/)** | Mesh VPN for secure remote access — reach CWOC from anywhere without port forwarding. Configured in Settings → Dependent Apps. |
+| **[Ntfy](https://ntfy.sh/)** | Push notifications to your phone for alarms, timers, and reminders — even when the browser is closed. Each notification has Open, Snooze, and Dismiss buttons. Requires Tailscale or your own VPN/tunnel back to the server for remote delivery. |
+
+Both are optional. CWOC works fully without them. The install script handles both automatically.
 
 ---
 
 ## Visual Theme
 
-1940s parchment/magic aesthetic with brown tones, Courier New font, and parchment background textures.
+1940s parchment/magic aesthetic with brown tones, Lora serif font, and parchment background textures.
 
 ---
 
@@ -269,4 +187,4 @@ MIT License — see [LICENSE](LICENSE) for details.
 
 Created by C.W. Holeman III — [www.cwholemaniii.com](https://www.cwholemaniii.com/pages/home.shtml)
 
-For deep technical details on architecture, database schema, API endpoints, and project structure, see [technical_details.md](technical_details.md).
+For technical details on architecture, database schema, API endpoints, and project structure, see [technical_details.md](technical_details.md).

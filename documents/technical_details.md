@@ -22,7 +22,7 @@ Deep technical reference for C.W.'s Omni Chits. For an overview of what CWOC is,
 └─────────────────────────────────────────────────────┘
 ```
 
-- **Backend:** FastAPI + Uvicorn (Python 3), modular under `src/backend/` — main.py (entry point), routes/ (6 route modules), models.py, db.py, migrations.py, weather.py, serializers.py
+- **Backend:** FastAPI + Uvicorn (Python 3), modular under `src/backend/` — main.py (entry point), routes/ (6 route modules), models.py, db.py, migrations.py, schedulers.py, serializers.py
 - **Database:** SQLite3 via Python stdlib — single file, no ORM
 - **Frontend:** Pure vanilla JS, HTML5, CSS3 — no framework, no build step. All JS loaded via `<script>` tags in HTML (load order matters)
 - **External CDN libs:** Flatpickr (date picker), Font Awesome 6 (icons), marked.js (markdown), qrcode-generator
@@ -53,6 +53,93 @@ Real-time sync between browser tabs uses WebSocket (`/ws/sync`) with a polling f
 | Weather | Open-Meteo API |
 | Reverse Proxy | nginx with self-signed SSL |
 | Process Manager | systemd |
+
+---
+
+## Dependencies
+
+### Required
+
+- **Python 3.8+** — runtime for the FastAPI backend
+- **SQLite3** — included in Python stdlib; single-file database at `/app/data/app.db`
+- **FastAPI + Uvicorn** — web framework and ASGI server (`pip install fastapi uvicorn`)
+- **Pydantic v1** — request validation (`pip install pydantic`)
+
+No npm, no Node.js, no build step. The frontend is vanilla JS served as static files.
+
+### Optional Services
+
+These are external services that CWOC integrates with. Both are optional — CWOC is fully functional without them. The `install/configurinator.sh` script installs and configures both automatically during provisioning.
+
+#### Tailscale (Remote Access)
+
+[Tailscale](https://tailscale.com/) is a free mesh VPN that lets you securely access your CWOC instance from anywhere — your phone, laptop, or another network — without port forwarding or exposing your server to the internet. Once connected, you reach CWOC via a Tailscale IP address that works the same whether you're at home or away.
+
+- **Configured in:** Settings → Dependent Apps → Tailscale
+- **What it does:** Connects your CWOC server to your Tailscale network. Provides a stable IP and hostname accessible from any device on your tailnet.
+- **Setup:** Generate an auth key from the [Tailscale admin console](https://login.tailscale.com/admin/settings/keys), paste it into Settings, and click Connect. Install the Tailscale app on your phone/laptop and sign in with the same account.
+- **Subnet routing:** The configurator advertises your local subnet so that other local services (like Ntfy) are also reachable through the Tailscale tunnel.
+
+#### Ntfy (Push Notifications)
+
+[Ntfy](https://ntfy.sh/) is a self-hosted push notification server that sends alarm, timer, and reminder notifications directly to your phone — even when the browser is closed. CWOC runs its own ntfy instance on the server (port 2586) so notifications stay on your local network.
+
+- **Configured in:** Settings → Dependent Apps → Ntfy
+- **What it does:** Sends push notifications for chit alarms, timers, reminders, start/due times, and independent alerts. Each notification includes three action buttons:
+  - **Open** — opens the chit editor or independent alerts board
+  - **Snooze** — snoozes based on your configured snooze duration
+  - **Dismiss** — clears the notification
+- **Setup:** The ntfy service auto-enables when detected. Install the [Ntfy app](https://ntfy.sh/) on your phone, subscribe to the topic and server URL shown in Settings, and enable Instant Delivery.
+- **Remote access:** With Tailscale subnet routing, the same ntfy subscription works both at home (WiFi) and remotely (Tailscale tunnel). Only one subscription needed. If you don't use Tailscale, any VPN or tunnel that routes traffic back to your server will work — ntfy just needs a path to the server's local IP.
+- **Disable/Enable:** An admin can disable ntfy notifications from Settings without losing the configuration. Re-enabling is one click.
+
+---
+
+## Setup & Running
+
+### Local Development
+
+```bash
+# Create and activate a virtual environment
+python3 -m venv venv
+source venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run the server
+uvicorn src.backend.main:app --host 0.0.0.0 --port 3333 --reload --log-level debug
+```
+
+Open `http://localhost:3333` in your browser.
+
+### Production Deployment
+
+The `install/configurinator.sh` script provisions a bare Debian/Ubuntu or Fedora/RHEL machine into a running CWOC server:
+
+```bash
+sudo bash install/configurinator.sh
+```
+
+This script:
+1. Installs system packages (Python 3, SQLite, nginx, OpenSSL)
+2. Downloads and extracts the latest CWOC release
+3. Creates a Python virtual environment and installs dependencies
+4. Configures a systemd service (`cwoc.service`) for auto-start
+5. Sets up an nginx HTTPS reverse proxy with a self-signed certificate
+6. Preserves the existing database across upgrades
+
+### Service Management
+
+```bash
+systemctl restart cwoc       # Restart the app
+systemctl status cwoc        # Check status
+journalctl -u cwoc -f        # Follow logs
+```
+
+### Upgrading
+
+Click **Upgrade Omni Chits** in Settings → Version & Updates. The upgrade streams real-time output in a terminal-style modal. Alternatively, re-run `configurinator.sh` on the server.
 
 ---
 
