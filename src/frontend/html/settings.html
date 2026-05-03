@@ -1001,11 +1001,10 @@
                                     <button class="standard-button" onclick="tailscaleDown()" id="tailscale-down-btn" disabled style="flex:1;min-width:0;opacity:0.5;">
                                         ⏹️ Disconnect
                                     </button>
-                                    <a href="tailscale://"
-                                       class="standard-button"
-                                       style="flex:1;min-width:0;text-decoration:none;text-align:center;">
+                                    <button class="standard-button" onclick="openTailscaleApp()"
+                                            style="flex:1;min-width:0;">
                                         📱 Open App
-                                    </a>
+                                    </button>
                                 </div>
 
                                 <!-- Inline feedback message -->
@@ -1090,7 +1089,7 @@
                                             style="padding:4px 8px;font-size:0.85em;margin-left:4px;">📋</button>
                                 </div>
 
-                                <!-- Test notification + Open App -->
+                                <!-- Test notification + Open App + Disable -->
                                 <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
                                     <button class="standard-button" id="ntfy-test-btn" onclick="testNtfyNotification()"
                                             style="flex:1;min-width:0;">
@@ -1099,6 +1098,10 @@
                                     <button class="standard-button" onclick="openNtfyApp()"
                                             style="flex:1;min-width:0;">
                                         📱 Open App
+                                    </button>
+                                    <button class="standard-button" id="ntfy-disable-btn" onclick="disableNtfyService()"
+                                            style="flex:1;min-width:0;">
+                                        ⏹️ Disable
                                     </button>
                                 </div>
 

@@ -399,6 +399,7 @@ async function saveChitData() {
     window.currentChitId = updatedChit.id;
     markEditorSaved();
     if (typeof syncSend === 'function') syncSend('chits_changed', {});
+    _editorSavedBeforeLeave = true;
     window.location.href = _getEditorReturnUrl();
   } catch (error) {
     console.error("[saveChitData] Error saving chit:", error);
@@ -549,9 +550,52 @@ function cancelOrExit() {
   if (window._cwocSave) {
     window._cwocSave.cancelOrExit();
   } else {
+    _cancelServerTimersForChit();
     window.location.href = _getEditorReturnUrl();
   }
 }
+
+/**
+ * Cancel all server-registered timer tasks for the current chit.
+ * Called when the user exits the editor without saving, so unsaved
+ * timers don't fire Ntfy notifications for abandoned edits.
+ */
+function _cancelServerTimersForChit() {
+  var _chitId = window.currentChitId;
+  if (!_chitId) {
+    try { _chitId = new URLSearchParams(window.location.search).get('id'); } catch(e) {}
+  }
+  if (!_chitId) return;
+
+  // Check if there are any running timers to cancel
+  if (!window._timerRuntime || typeof window._timerRuntime !== 'object') return;
+
+  Object.keys(window._timerRuntime).forEach(function(k) {
+    var rt = window._timerRuntime[k];
+    if (rt && rt.running) {
+      var idx = parseInt(k);
+      // Use sendBeacon for reliability during page unload
+      var payload = JSON.stringify({ source_type: 'chit', source_id: _chitId, alert_index: idx });
+      if (navigator.sendBeacon) {
+        navigator.sendBeacon('/api/timer-state-cancel', payload);
+      } else {
+        fetch('/api/timer-state', {
+          method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+          body: payload, keepalive: true
+        }).catch(function() {});
+      }
+    }
+  });
+}
+
+// Track whether the chit was saved — if not, cancel timers on page unload
+var _editorSavedBeforeLeave = false;
+
+window.addEventListener('beforeunload', function() {
+  if (!_editorSavedBeforeLeave) {
+    _cancelServerTimersForChit();
+  }
+});
 
 function markEditorUnsaved() {
   setSaveButtonUnsaved();

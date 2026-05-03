@@ -3948,7 +3948,7 @@ function toggleNtfySection() {
 
 /**
  * Update the Ntfy header icon based on service status.
- * @param {string} status - 'active', 'unreachable', 'not_configured'
+ * @param {string} status - 'active', 'unreachable', 'not_configured', 'disabled'
  */
 function _ntfyUpdateHeaderIcon(status) {
   var icon = document.getElementById('ntfy-header-icon');
@@ -3957,6 +3957,7 @@ function _ntfyUpdateHeaderIcon(status) {
   switch (status) {
     case 'active':         icon.textContent = '🟢'; break;
     case 'unreachable':    icon.textContent = '🔴'; break;
+    case 'disabled':       icon.textContent = '⚫'; break;
     case 'not_configured': icon.textContent = '⚪'; break;
     default:               icon.textContent = '⚪'; break;
   }
@@ -3965,6 +3966,7 @@ function _ntfyUpdateHeaderIcon(status) {
 /**
  * Quick status fetch that only updates the header icon — no feedback messages.
  * Used on page load to show service state even when config is collapsed.
+ * Also sets the disable/enable button label based on enabled state.
  */
 async function _ntfyQuickStatusForIcon() {
   try {
@@ -3972,8 +3974,28 @@ async function _ntfyQuickStatusForIcon() {
     if (!response.ok) return;
     var data = await response.json();
     _ntfyUpdateHeaderIcon(data.status);
+    // Set disable/enable button state
+    _ntfyUpdateDisableButton(data.enabled !== false && data.status !== 'not_configured');
   } catch (e) {
     // Silently ignore — icon stays at default
+  }
+}
+
+/**
+ * Update the disable/enable button label based on current ntfy enabled state.
+ * @param {boolean} isEnabled - Whether ntfy is currently enabled
+ */
+function _ntfyUpdateDisableButton(isEnabled) {
+  var btn = document.getElementById('ntfy-disable-btn') || document.getElementById('ntfy-enable-service-btn');
+  if (!btn) return;
+  if (isEnabled) {
+    btn.textContent = '⏹️ Disable';
+    btn.setAttribute('onclick', 'disableNtfyService()');
+    btn.id = 'ntfy-disable-btn';
+  } else {
+    btn.textContent = '▶️ Enable';
+    btn.setAttribute('onclick', 'enableNtfyService()');
+    btn.id = 'ntfy-enable-service-btn';
   }
 }
 
@@ -4005,6 +4027,10 @@ async function checkNtfyStatus() {
         if (badge) badge.textContent = '🟢 Active';
         _ntfyFeedback('Ntfy service is running.', 'success');
         break;
+      case 'disabled':
+        if (badge) badge.textContent = '⚫ Disabled';
+        _ntfyFeedback('Ntfy notifications are disabled.', 'info');
+        break;
       case 'unreachable':
         if (badge) badge.textContent = '🔴 Unreachable';
         _ntfyFeedback('Ntfy service unreachable: ' + (data.message || 'Connection failed'), 'error');
@@ -4024,6 +4050,7 @@ async function checkNtfyStatus() {
   }
 
   _ntfyUpdateHeaderIcon(currentStatus);
+  _ntfyUpdateDisableButton(currentStatus === 'active');
 }
 
 /**
@@ -4063,12 +4090,113 @@ async function testNtfyNotification() {
   }
 }
 
+
+/**
+ * Disable the Ntfy service — sets enabled=0 in the backend.
+ * Preserves config so re-enabling is seamless.
+ */
+async function disableNtfyService() {
+  var disableBtn = document.getElementById('ntfy-disable-btn');
+  if (disableBtn) { disableBtn.disabled = true; disableBtn.style.opacity = '0.5'; }
+
+  _ntfyFeedback('Disabling Ntfy...', 'info');
+
+  try {
+    var response = await fetch('/api/network-access/ntfy/disable', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    var data = await response.json();
+
+    if (data.success) {
+      _ntfyFeedback('Ntfy notifications disabled.', 'success');
+      _ntfyUpdateHeaderIcon('not_configured');
+      var badge = document.getElementById('ntfy-status-badge');
+      if (badge) badge.textContent = '⚪ Disabled';
+      // Swap button to Enable
+      if (disableBtn) {
+        disableBtn.textContent = '▶️ Enable';
+        disableBtn.setAttribute('onclick', 'enableNtfyService()');
+        disableBtn.id = 'ntfy-enable-service-btn';
+        disableBtn.disabled = false;
+        disableBtn.style.opacity = '1';
+      }
+    } else {
+      _ntfyFeedback('Failed to disable: ' + (data.detail || 'Unknown error'), 'error');
+      if (disableBtn) { disableBtn.disabled = false; disableBtn.style.opacity = '1'; }
+    }
+  } catch (error) {
+    console.error('Failed to disable Ntfy:', error);
+    _ntfyFeedback('Failed to disable: ' + error.message, 'error');
+    if (disableBtn) { disableBtn.disabled = false; disableBtn.style.opacity = '1'; }
+  }
+}
+
+
+/**
+ * Re-enable the Ntfy service — sets enabled=1 in the backend.
+ */
+async function enableNtfyService() {
+  var enableBtn = document.getElementById('ntfy-enable-service-btn');
+  if (enableBtn) { enableBtn.disabled = true; enableBtn.style.opacity = '0.5'; }
+
+  _ntfyFeedback('Enabling Ntfy...', 'info');
+
+  try {
+    var response = await fetch('/api/network-access/ntfy/enable', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    var data = await response.json();
+
+    if (data.success) {
+      _ntfyFeedback('Ntfy notifications enabled.', 'success');
+      // Refresh status to get actual service state
+      checkNtfyStatus();
+      // Swap button back to Disable
+      if (enableBtn) {
+        enableBtn.textContent = '⏹️ Disable';
+        enableBtn.setAttribute('onclick', 'disableNtfyService()');
+        enableBtn.id = 'ntfy-disable-btn';
+        enableBtn.disabled = false;
+        enableBtn.style.opacity = '1';
+      }
+    } else {
+      _ntfyFeedback('Failed to enable: ' + (data.detail || 'Unknown error'), 'error');
+      if (enableBtn) { enableBtn.disabled = false; enableBtn.style.opacity = '1'; }
+    }
+  } catch (error) {
+    console.error('Failed to enable Ntfy:', error);
+    _ntfyFeedback('Failed to enable: ' + error.message, 'error');
+    if (enableBtn) { enableBtn.disabled = false; enableBtn.style.opacity = '1'; }
+  }
+}
+
 /**
  * Open the Ntfy app on the phone via deep link.
  * Uses the ntfy:// URL scheme which the Ntfy Android/iOS app registers.
  */
 function openNtfyApp() {
   window.location.href = 'ntfy://';
+}
+
+/**
+ * Open the Tailscale app on the phone via deep link.
+ * Tailscale doesn't register a custom URL scheme on Android, so we use
+ * an intent URI to launch the app's main activity by package name.
+ * Falls back to the Play Store listing if the app isn't installed.
+ * On non-Android platforms, tries tailscale:// then falls back to the
+ * Tailscale admin console.
+ */
+function openTailscaleApp() {
+  var ua = navigator.userAgent || '';
+  if (/android/i.test(ua)) {
+    // Use intent URI to launch the app's main activity directly.
+    // S.browser_fallback_url sends user to Play Store if app not installed.
+    window.open('intent://open#Intent;package=com.tailscale.ipn;action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;S.browser_fallback_url=https%3A%2F%2Fplay.google.com%2Fstore%2Fapps%2Fdetails%3Fid%3Dcom.tailscale.ipn;end', '_blank');
+  } else {
+    window.open('tailscale://', '_blank');
+  }
 }
 
 /**

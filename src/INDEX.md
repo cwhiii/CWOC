@@ -597,9 +597,11 @@ Ntfy push notification sender module. Encapsulates all Ntfy notification logic: 
 | `get_ntfy_topic(user_id)` | Return deterministic topic: `'cwoc-'` + first 12 alphanumeric chars of user_id (hyphens stripped) |
 | `get_ntfy_config()` | Read ntfy provider config from `network_access` table. Returns `{'enabled': bool, 'server_url': str}` with default `http://localhost:2586` |
 | `send_ntfy_notification(user_id, title, body, click_url, tags)` | Send notification via HTTP POST to `{server_url}/{topic}` with X-Title, X-Tags, X-Click headers; 10s timeout; graceful error handling. Returns `{'sent': True, 'topic': str}` or `{'sent': False, 'reason': str}` |
-| `GET /api/network-access/ntfy/status` | `ntfy_status(request)` — Check ntfy service reachability via `{server_url}/v1/health`; returns `active`, `unreachable`, or `not_configured`. Admin only |
+| `GET /api/network-access/ntfy/status` | `ntfy_status(request)` — Check ntfy service reachability via `{server_url}/v1/health`; returns `active`, `disabled`, `unreachable`, or `not_configured` plus `enabled` boolean. Admin only |
 | `POST /api/network-access/ntfy/test` | `ntfy_test(request)` — Send test notification ("CWOC Test") to requesting user's topic. Any authenticated user |
 | `POST /api/network-access/ntfy` | `save_ntfy_config(body, request)` — Save ntfy config with server_url validation (rejects empty/whitespace-only). Admin only. Audit logged |
+| `POST /api/network-access/ntfy/disable` | `disable_ntfy(request)` — Disable ntfy notifications (sets enabled=0, preserves config). Admin only. Audit logged |
+| `POST /api/network-access/ntfy/enable` | `enable_ntfy(request)` — Re-enable ntfy notifications (sets enabled=1, preserves config). Admin only. Audit logged |
 
 **Internal helpers:**
 
@@ -1736,10 +1738,15 @@ Settings page logic: tags, colors, clocks, locations, indicators, import/export,
 | `tailscaleUp()` | POST to `/api/network-access/tailscale/up`, show result, refresh status on success |
 | `tailscaleDown()` | POST to `/api/network-access/tailscale/down`, show result, refresh status on success |
 | `toggleAuthKeyVisibility()` | Toggle auth key input between `type="password"` and `type="text"`, update toggle button label |
+| `openTailscaleApp()` | Open Tailscale app via deep link. Uses `intent://` URI on Android (Firefox-compatible), falls back to `tailscale://` on other platforms |
 | `refreshNtfyStatus()` | Fetch `GET /api/network-access/ntfy/status`, update status badge (🟢 active / ⚪ inactive / 🔴 error) |
 | `loadNtfyConfig()` | Fetch `GET /api/network-access/ntfy`, populate server URL input and enabled checkbox, display user's topic |
 | `saveNtfyConfig()` | Collect server URL and enabled state, POST to `/api/network-access/ntfy`, show success/error feedback |
 | `testNtfyNotification()` | POST to `/api/network-access/ntfy/test`, show success/error feedback |
+| `openNtfyApp()` | Open Ntfy app via deep link using `ntfy://` URL scheme |
+| `disableNtfyService()` | POST to `/api/network-access/ntfy/disable`, disable ntfy notifications, swap button to Enable |
+| `enableNtfyService()` | POST to `/api/network-access/ntfy/enable`, re-enable ntfy notifications, swap button to Disable |
+| `_ntfyUpdateDisableButton(isEnabled)` | Update the disable/enable button label based on current ntfy enabled state |
 | `toggleNtfySection()` | Toggle visibility of the Ntfy config section body |
 
 #### people.js

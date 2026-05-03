@@ -287,14 +287,19 @@ def ntfy_status(request: Request):
     """Check ntfy service reachability via its health endpoint.
 
     Requires admin access. Makes an HTTP GET to {server_url}/v1/health
-    and returns active/unreachable/not_configured.
+    and returns active/unreachable/not_configured/disabled.
+    Also includes 'enabled' boolean so the frontend can set button state.
     """
     _require_admin(request)
 
     config = get_ntfy_config()
 
     if not config.get("server_url"):
-        return {"status": "not_configured"}
+        return {"status": "not_configured", "enabled": False}
+
+    # If explicitly disabled by user, report that without checking health
+    if not config.get("enabled"):
+        return {"status": "disabled", "enabled": False}
 
     server_url = config["server_url"].rstrip("/")
     health_url = f"{server_url}/v1/health"
@@ -305,15 +310,15 @@ def ntfy_status(request: Request):
             if resp.getcode() == 200:
                 # Auto-enable ntfy in the DB when the service is reachable
                 _auto_enable_ntfy(server_url)
-                return {"status": "active"}
+                return {"status": "active", "enabled": True}
             else:
-                return {"status": "unreachable", "message": f"Health check returned HTTP {resp.getcode()}"}
+                return {"status": "unreachable", "enabled": True, "message": f"Health check returned HTTP {resp.getcode()}"}
     except urllib.error.HTTPError as e:
-        return {"status": "unreachable", "message": f"Health check returned HTTP {e.code}"}
+        return {"status": "unreachable", "enabled": True, "message": f"Health check returned HTTP {e.code}"}
     except urllib.error.URLError as e:
-        return {"status": "unreachable", "message": str(e.reason)}
+        return {"status": "unreachable", "enabled": True, "message": str(e.reason)}
     except Exception as e:
-        return {"status": "unreachable", "message": str(e)}
+        return {"status": "unreachable", "enabled": True, "message": str(e)}
 
 
 @ntfy_router.post("/api/network-access/ntfy/test")
@@ -426,6 +431,110 @@ def save_ntfy_config(body: dict, request: Request):
     except Exception as e:
         logger.error(f"Error saving ntfy config: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to save ntfy config: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
+@ntfy_router.post("/api/network-access/ntfy/disable")
+def disable_ntfy(request: Request):
+    """Disable the ntfy provider by setting enabled=0 in the network_access table.
+
+    Preserves the existing config (server_url, etc.) so re-enabling is seamless.
+    Requires admin access. Audit logged.
+    """
+    _require_admin(request)
+
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        now = _utcnow_iso()
+
+        existing = conn.execute(
+            "SELECT id FROM network_access WHERE provider = ?",
+            ("ntfy",),
+        ).fetchone()
+
+        if not existing:
+            return {"success": True, "message": "Ntfy was not configured — nothing to disable."}
+
+        conn.execute(
+            "UPDATE network_access SET enabled = 0, modified_datetime = ? WHERE provider = ?",
+            (now, "ntfy"),
+        )
+
+        # Audit log
+        try:
+            actor = get_actor_from_request(request)
+            insert_audit_entry(
+                conn, "network_access", "ntfy", "disabled", actor,
+                entity_summary="Ntfy notifications disabled",
+            )
+        except Exception as e:
+            logger.error(f"Audit logging failed for ntfy disable: {e}")
+
+        conn.commit()
+        return {"success": True, "message": "Ntfy notifications disabled."}
+
+    except Exception as e:
+        logger.error(f"Error disabling ntfy: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to disable ntfy: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
+@ntfy_router.post("/api/network-access/ntfy/enable")
+def enable_ntfy(request: Request):
+    """Re-enable the ntfy provider by setting enabled=1 in the network_access table.
+
+    Preserves the existing config. If ntfy was never configured, auto-enables
+    with the default server_url. Requires admin access. Audit logged.
+    """
+    _require_admin(request)
+
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        now = _utcnow_iso()
+
+        existing = conn.execute(
+            "SELECT id, config FROM network_access WHERE provider = ?",
+            ("ntfy",),
+        ).fetchone()
+
+        if existing:
+            conn.execute(
+                "UPDATE network_access SET enabled = 1, modified_datetime = ? WHERE provider = ?",
+                (now, "ntfy"),
+            )
+        else:
+            from uuid import uuid4
+            config_json = json.dumps({"server_url": "http://localhost:2586"})
+            conn.execute(
+                """INSERT INTO network_access (id, provider, enabled, config, created_datetime, modified_datetime)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (str(uuid4()), "ntfy", 1, config_json, now, now),
+            )
+
+        # Audit log
+        try:
+            actor = get_actor_from_request(request)
+            insert_audit_entry(
+                conn, "network_access", "ntfy", "enabled", actor,
+                entity_summary="Ntfy notifications enabled",
+            )
+        except Exception as e:
+            logger.error(f"Audit logging failed for ntfy enable: {e}")
+
+        conn.commit()
+        return {"success": True, "message": "Ntfy notifications enabled."}
+
+    except Exception as e:
+        logger.error(f"Error enabling ntfy: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to enable ntfy: {str(e)}")
     finally:
         if conn:
             conn.close()

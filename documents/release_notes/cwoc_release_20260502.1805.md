@@ -1,0 +1,1 @@
+Server-registered timers are now cancelled when the editor is abandoned without saving. If a timer is running and the user exits without saving (cancel, navigate away, close tab), the server-side scheduled task is cancelled via sendBeacon so no Ntfy notification fires for the abandoned timer. Saved timers continue to fire normally.

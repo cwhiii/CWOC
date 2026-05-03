@@ -919,6 +919,30 @@ document.addEventListener("DOMContentLoaded", function () {
         }
       }
     } catch(e) {}
+
+    // Check for ?tab= URL parameter (used by ntfy click URLs and deep links)
+    try {
+      var urlParams = new URLSearchParams(window.location.search);
+      var urlTab = urlParams.get('tab');
+      if (urlTab) {
+        currentTab = urlTab;
+        if (urlTab === 'Alarms') {
+          var urlView = urlParams.get('view');
+          if (urlView === 'independent' && typeof _alarmsViewMode !== 'undefined') {
+            _alarmsViewMode = 'independent';
+            var toggle = document.getElementById('alerts-view-toggle');
+            if (toggle) toggle.value = 'independent';
+          }
+        }
+        // Update tab highlight
+        document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
+        var activeTab = document.querySelector(".tab[onclick=\"filterChits('" + currentTab + "')\"]");
+        if (activeTab) activeTab.classList.add('active');
+        // Clean URL without reloading
+        history.replaceState(null, '', '/');
+      }
+    } catch(e) {}
+
     fetchChits();
     updateDateRange();
     // Check for pending delete-undo from editor

@@ -466,7 +466,8 @@ async def _timer_fire_task(key, delay_seconds, user_id, name, source_type, sourc
         if source_type == "chit" and source_id:
             click_url = f"{base}/frontend/html/editor.html?id={source_id}"
         else:
-            click_url = f"{base}/"
+            # Independent alerts — link to the Alarms tab in independent mode
+            click_url = f"{base}/?tab=Alarms&view=independent"
         icon_url = f"{base}/static/cwoc-icon-192.png"
         send_ntfy_notification(
             user_id=user_id,
@@ -580,5 +581,33 @@ async def cancel_running_timer(request: Request):
     if task and not task.done():
         task.cancel()
         logger.info(f"Timer cancelled: {key}")
+        return {"status": "cancelled"}
+    return {"status": "not_found"}
+
+
+@router.post("/api/timer-state-cancel")
+async def cancel_running_timer_beacon(request: Request):
+    """Cancel a running timer via POST (for sendBeacon on page unload).
+
+    Same as DELETE /api/timer-state but accepts POST since sendBeacon
+    can only send POST requests.
+    """
+    user_id = request.state.user_id
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+    source_type = body.get("source_type")
+    source_id = body.get("source_id")
+
+    if not source_type or not source_id:
+        return {"status": "missing_fields"}
+
+    key = _timer_key(source_type, source_id, body.get("alert_index"))
+    task = _timer_tasks.pop(key, None)
+    if task and not task.done():
+        task.cancel()
+        logger.info(f"Timer cancelled (beacon): {key}")
         return {"status": "cancelled"}
     return {"status": "not_found"}
