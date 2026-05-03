@@ -925,13 +925,35 @@ body[data-page-title="Maps View"] {
     align-items: stretch;
 }
 
-/* ── Maps Header Bar ────────────────────────────────────────────────────── */
-.maps-header {
+/* ── Maps page: override .settings-panel to be full-width, no decoration ── */
+body[data-page-title="Maps View"] .settings-panel {
+    max-width: none;
+    width: 100%;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    background: none;
+    margin: 0;
+    overflow: hidden;
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    position: relative;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+}
+body[data-page-title="Maps View"] .settings-panel::before {
+    display: none;
+}
+
+/* ── Maps page: hide auto-injected footer (maps has its own in status bar) ── */
+body[data-page-title="Maps View"] ~ .author-info {
+    display: none;
+}
+
+/* ── Maps page: style the shared header bar ─────────────────────────────── */
+body[data-page-title="Maps View"] .header-and-buttons {
     height: var(--maps-header-height, 56px);
+    min-height: var(--maps-header-height, 56px);
     width: 100%;
     padding: 0 12px;
     box-sizing: border-box;
@@ -940,43 +962,25 @@ body[data-page-title="Maps View"] {
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
     flex-shrink: 0;
     z-index: 100;
-    font-family: 'Lora', Georgia, serif;
+    margin-bottom: 0;
+    position: relative;
 }
-.maps-header-left {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    flex-shrink: 0;
-    z-index: 1;
-}
-.maps-header-left h2 {
-    margin: 0;
-    padding: 0;
-    border: none;
-    border-bottom: none;
+body[data-page-title="Maps View"] .header-and-buttons h2 {
     font-size: 18px;
-    color: #1a1208;
-    text-align: left;
     text-transform: none;
     letter-spacing: 1px;
-    margin-bottom: 0;
-    padding-bottom: 0;
     white-space: nowrap;
 }
-.maps-header-right {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-shrink: 0;
-    z-index: 1;
-}
 
-/* ── Maps Header Mode Toggle (centered in header) ──────────────────────── */
-.maps-header .maps-mode-toggle {
-    margin: 0;
+/* ── Mode toggle centered in the maps header ────────────────────────────── */
+body[data-page-title="Maps View"] .maps-mode-toggle-header {
     position: absolute;
     left: 50%;
     transform: translateX(-50%);
+    top: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
     z-index: 0;
 }
 
@@ -1005,9 +1009,9 @@ body[data-page-title="Maps View"] {
 .maps-page-layout {
     display: flex;
     width: 100%;
-    height: calc(100vh - var(--maps-header-height, 56px));
-    overflow: hidden;
     flex: 1;
+    overflow: hidden;
+    min-height: 0;
 }
 
 /* ── Maps Sidebar ───────────────────────────────────────────────────────── */
@@ -1529,7 +1533,7 @@ body[data-page-title="Maps View"] {
         font-size: 14px;
     }
 
-    .maps-header-left h2 {
+    body[data-page-title="Maps View"] .header-and-buttons h2 {
         font-size: 16px;
         letter-spacing: 0.5px;
     }
@@ -1579,7 +1583,7 @@ body[data-page-title="Maps View"] {
     }
 
     /* ── Header mode toggle: more compact on mobile ──────────────────── */
-    .maps-header .maps-mode-toggle {
+    body[data-page-title="Maps View"] .maps-mode-toggle-header {
         position: static;
         transform: none;
     }
@@ -1603,11 +1607,11 @@ body[data-page-title="Maps View"] {
         padding: 1px 6px;
     }
 
-    .maps-header-left h2 {
+    body[data-page-title="Maps View"] .header-and-buttons h2 {
         font-size: 14px;
     }
 
-    .maps-header-right .standard-button {
+    body[data-page-title="Maps View"] .header-buttons .standard-button {
         display: none; /* hide nav buttons on small screens, keep profile */
     }
 }

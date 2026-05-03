@@ -792,6 +792,14 @@ Shared geocoding with progressive fallback via the backend Nominatim proxy.
 |----------|-------------|
 | `_geocodeAddress(address)` | Geocode an address with progressive fallback (full → no zip → city/state); returns `{lat, lon}` |
 
+#### shared-sidebar-filter.js
+
+Reusable sidebar filter panel component extracted from `main-sidebar.js`. Used by both the dashboard and maps page for tag and people filters.
+
+| Function | Description |
+|----------|-------------|
+| `CwocSidebarFilter(config)` | Creates a filter panel with search input, hotkey numbers (1-9), favorites-first sorting, and colored badges. Config: `containerId`, `items` (array of `{name, favorite, color?}`), `selection` (mutated array), `onChange`, `searchPlaceholder`, `showColorBadge` |
+
 #### shared-qr.js
 
 QR code display modal — single source of truth for all QR display across the app.
@@ -1968,7 +1976,7 @@ Admin-only page for managing user accounts. Provides user table listing, create 
 
 #### maps.js
 
-Maps page: interactive Leaflet map with two display modes — **Chits** (chit locations as color-coded markers) and **People** (contact addresses as markers). Mode toggle with localStorage persistence, mode-specific filter panels, contact markers with distinct styling, separate cluster groups, collapsible sidebar, fullscreen mode, default view reset, semi-transparent people markers, mixed cluster icons, and responsive layout with mobile sidebar overlay.
+Maps page: interactive Leaflet map with two display modes — **Chits** (chit locations as color-coded markers using chit's own color) and **People** (contact addresses as markers). Uses shared header via `.settings-panel` with mode toggle injected into the header bar. Period dropdown filter (week/month/quarter/year/all), CwocSidebarFilter for tags and people, blocked/overdue cluster indicators, collapsible sidebar, fullscreen mode, default view reset, and responsive layout with mobile sidebar overlay.
 
 | Symbol | Description |
 |--------|-------------|
@@ -1977,32 +1985,38 @@ Maps page: interactive Leaflet map with two display modes — **Chits** (chit lo
 | `_mapsClusterGroup` | MarkerClusterGroup instance for chit marker clustering |
 | `_mapsAllChits` | Cached array of all fetched chits |
 | `_mapsGeocodeCache` | In-memory geocode cache keyed by lowercase trimmed address (chits) |
-| `_mapsStatusColors` | Object mapping status strings to hex colors |
+| `_mapsStatusColors` | Object mapping status strings to hex colors (kept for popup display) |
 | `_mapsNoStatusColor` | Default hex color for chits with no status (`#9E9E9E`) |
 | `MAPS_MODE_KEY` | localStorage key for persisting the current mode (`'cwoc_maps_mode'`) |
 | `MAPS_SIDEBAR_KEY` | localStorage key for persisting sidebar state (`'cwoc_maps_sidebar'`) |
-| `_mapsCurrentMode` | Current mode: `'chits'` or `'people'` |
+| `_mapsCurrentMode` | Current mode: `'chits'`, `'both'`, or `'people'` |
 | `_mapsAllContacts` | Cached array of all fetched contacts |
 | `_mapsPeopleClusterGroup` | Separate MarkerClusterGroup for people mode (teal styling) |
 | `_mapsContactGeocodeCache` | In-memory geocode cache for contact addresses |
 | `_mapsFocusMode` | Boolean flag — when true, skip fitBounds on marker placement (set by focus query param) |
 | `_mapsChitsFilterStatus` | Selected status filter values (array) |
-| `_mapsChitsFilterTags` | Selected tag filter values (array) |
+| `_mapsChitsFilterTags` | Selected tag filter values (array, mutated by CwocSidebarFilter) |
 | `_mapsChitsFilterPriority` | Selected priority filter values (array) |
-| `_mapsChitsFilterPeople` | Selected people filter values (array) |
+| `_mapsChitsFilterPeople` | Selected people filter values (array, mutated by CwocSidebarFilter) |
 | `_mapsChitsFilterText` | Text search query for chits filter |
 | `_mapsPeopleFilterText` | Text search query for people filter |
 | `_mapsPeopleFilterFavoritesOnly` | Favorites-only toggle state (boolean) |
-| `_mapsPeopleFilterTags` | Selected tag filter values for people (array) |
+| `_mapsPeopleFilterTags` | Selected tag filter values for people (array, mutated by CwocSidebarFilter) |
+| **Header & Mode Toggle** | |
+| `_injectModeToggle()` | Creates Chits/Both/People mode toggle and sidebar toggle button, injects them into the shared `.header-and-buttons` header created by shared-page.js |
+| `_getPeriodDateRange(period)` | Returns `{start, end}` Date objects for "week", "month", "quarter", "year", or "all" (null dates) |
+| `_isChitOverdue(chit)` | Returns true if chit has a `due_datetime` in the past and status is not 'Complete' |
 | **Mode Management** | |
-| `_mapsGetMode()` | Returns current mode (`"chits"` or `"people"`) |
+| `_mapsGetMode()` | Returns current mode (`"chits"`, `"both"`, or `"people"`) |
 | `_mapsSetMode(mode)` | Sets mode, persists to localStorage, updates toggle button active states, triggers mode switch; swaps sidebar panel visibility (shows chits or people filter panel) |
 | `_mapsRestoreMode()` | Reads mode from localStorage, validates, defaults to `"chits"` |
 | `_onModeToggleChange(e)` | Click handler for mode toggle buttons — reads `data-mode` and calls `_mapsSetMode()` |
 | `_showChitsLegend()` | Shows chits legend (`#maps-legend`), hides people legend |
 | `_showPeopleLegend()` | Shows people legend (`#maps-people-legend`), hides chits legend |
+| `_showBothLegends()` | Shows both chits and people legends |
 | `_switchToChitsMode()` | Transitions to Chits mode — clears people markers, shows chits filter panel/legend, loads chits |
 | `_switchToPeopleMode()` | Transitions to People mode — clears chit markers, shows people filter panel/legend, loads contacts |
+| `_switchToBothMode()` | Transitions to Both mode — shows both filter panels/legends, loads both chits and contacts |
 | **Sidebar Management** | |
 | `_initMapsSidebar()` | Initializes sidebar: restores state from localStorage, wires toggle button, sets up resize handling to invalidate Leaflet map after transitions |
 | `_toggleMapsSidebar()` | Toggles sidebar collapsed/expanded state, persists to localStorage (`cwoc_maps_sidebar`), handles mobile backdrop show/hide |
@@ -2011,15 +2025,15 @@ Maps page: interactive Leaflet map with two display modes — **Chits** (chit lo
 | `_showMobileSidebarBackdrop()` | Creates and shows a semi-transparent dark backdrop overlay on mobile when sidebar is expanded; clicking backdrop closes sidebar |
 | `_hideMobileSidebarBackdrop()` | Hides and removes the mobile sidebar backdrop element |
 | **Chits Filter Panel** | |
-| `_initChitsFilters()` | Sets up chits filter panel event handlers (status, priority checkboxes, text search, clear button, dynamic data) |
-| `_loadChitsFilterData()` | Fetches tags from settings and contacts/users for people chips, builds filter chip UI |
+| `_initChitsFilters()` | Sets up chits filter panel event handlers (period dropdown, status, priority checkboxes, text search, clear button, dynamic data) |
+| `_loadChitsFilterData()` | Fetches tags from settings and contacts/users, builds CwocSidebarFilter instances for tags and people |
 | `_matchesChitTextSearch(chit, query)` | Case-insensitive text search across chit title, note, location, and tags |
-| `_applyChitsFilters(chits)` | Applies all chit filters (status, tags, priority, people, text, date range) — AND-combined |
+| `_applyChitsFilters(chits)` | Applies all chit filters (status, tags, priority, people, text, period date range) — AND-combined |
 | `_onChitsFilterChange()` | Handler for chit filter changes — re-reads UI state, re-filters and re-renders |
-| `_clearChitsFilters()` | Resets all chit filters to defaults and updates UI |
+| `_clearChitsFilters()` | Resets all chit filters to defaults (period back to "week"), re-renders CwocSidebarFilter panels |
 | **Entry point & map init** | |
-| `_mapsInit()` | Entry point: checks `prefer_google_maps`, reads map settings for initial view (auto-zoom, custom center/zoom, or US default), restores mode, initializes both cluster groups, wires toggle, initializes sidebar, initializes filters, handles focus query parameter, triggers mode |
-| `_initLeafletMap()` | Creates Leaflet map instance with OpenStreetMap tile layer; adds Fullscreen and DefaultView controls; configures chit cluster `iconCreateFunction` with mixed cluster detection via `_cwocMarkerType`; mixed clusters show dual count (chits/contacts) |
+| `_mapsInit()` | Entry point: injects mode toggle, checks `prefer_google_maps`, reads map settings for initial view, restores mode, initializes both cluster groups, wires toggle, initializes sidebar, initializes filters, handles focus query parameter, triggers mode |
+| `_initLeafletMap()` | Creates Leaflet map instance with OpenStreetMap tile layer; adds Fullscreen and DefaultView controls; configures chit cluster `iconCreateFunction` with mixed cluster detection, blocked (red border) and overdue (orange border) cluster indicators |
 | **Utility helpers** | |
 | `_hexToRgba(hex, alpha)` | Converts a hex color string (e.g. `"#FF0000"`) to an `rgba(r, g, b, alpha)` CSS string for semi-transparent fills |
 | **Fullscreen Control** | |
@@ -2032,11 +2046,11 @@ Maps page: interactive Leaflet map with two display modes — **Chits** (chit lo
 | `_filterAndRender()` | Applies chit filters, geocodes, and places markers (called on load and filter change) |
 | `_filterChitsByDateRange(chits, startDate, endDate)` | Returns chits with non-empty location and at least one date field within the range |
 | `_geocodeChits(chits)` | Geocodes each chit's location via `_geocodeAddress()` with in-memory cache deduplication |
-| `_getMarkerColor(status)` | Returns hex color for a chit status |
+| `_getMarkerColor(status)` | Returns hex color for a chit status (used in popups) |
 | `_buildPopupContent(chit)` | Returns HTML for a chit marker popup with title, date, status, and editor link |
-| `_placeMarkers(geocodedChits)` | Creates colored circle markers with `_cwocMarkerType = 'chit'`, adds to chits MarkerClusterGroup, binds popups; respects auto-zoom setting (fitBounds only when auto-zoom enabled) |
-| `_initDateFilters()` | Sets default date values (±30 days) and wires change handlers |
-| `_onDateFilterChange()` | Handler for date input changes — re-filters and re-renders markers |
+| `_placeMarkers(geocodedChits)` | Creates colored markers using chit's own `color` field (fallback `#d2b48c`), stores `_cwocChit` on each marker for cluster blocked/overdue detection; respects auto-zoom setting |
+| `_initDateFilters()` | Wires the period dropdown change handler |
+| `_onDateFilterChange()` | Handler for period dropdown changes — re-filters and re-renders markers |
 | `_mapsToDateString(date)` | Converts a Date to `YYYY-MM-DD` string |
 | **People mode** | |
 | `_fetchAndDisplayContacts()` | Fetches contacts from `/api/contacts`, applies people filters, geocodes, places contact markers |
@@ -2046,13 +2060,11 @@ Maps page: interactive Leaflet map with two display modes — **Chits** (chit lo
 | `_getContactMarkerColor(contact)` | Returns contact's color if non-null/non-empty, else default teal (`#008080`) |
 | **People Filter Panel** | |
 | `_initPeopleFilters()` | Sets up people filter panel event handlers (text search, favorites toggle, clear button) |
-| `_buildPeopleTagChips(contacts)` | Builds tag filter chips from unique tags across all contacts |
+| `_buildPeopleTagChips(contacts)` | Builds tag filter using CwocSidebarFilter from unique tags across all contacts |
 | `_mapsContactMatchesFilter(contact, query)` | Case-insensitive text search across all contact fields (replicates `_contactMatchesFilter` logic) |
 | `_applyPeopleFilters(contacts)` | Applies all people filters (favorites, tags, text) — AND-combined |
 | `_onPeopleFilterChange()` | Handler for people filter changes — re-filters and re-renders contact markers |
-| `_clearPeopleFilters()` | Resets all people filters to defaults and updates UI |
-| **Mobile** | |
-| `_initMobileFilterCollapse()` | Sets up mobile filter panel collapse/expand toggle behavior |
+| `_clearPeopleFilters()` | Resets all people filters to defaults, re-renders CwocSidebarFilter tag panel |
 | **Shared UI helpers** | |
 | `_showLegend()` | Shows the legend element |
 | `_showInfoMessage(msg)` | Shows info message (e.g., no results) |

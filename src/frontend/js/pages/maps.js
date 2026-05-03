@@ -85,6 +85,113 @@ function _mapsHideLoading() {
 // ── Mode Management ──────────────────────────────────────────────────────────
 
 /**
+ * _injectModeToggle() — Creates the Chits/Both/People mode toggle and injects
+ * it into the shared header (.header-and-buttons) created by shared-page.js.
+ * Also injects the sidebar toggle button before the h2.
+ */
+function _injectModeToggle() {
+  var header = document.querySelector('.header-and-buttons');
+  if (!header) return;
+
+  // Inject sidebar toggle button before the h2
+  var h2 = header.querySelector('h2');
+  if (h2) {
+    var sidebarBtn = document.createElement('button');
+    sidebarBtn.id = 'maps-sidebar-toggle';
+    sidebarBtn.className = 'maps-sidebar-toggle-btn';
+    sidebarBtn.title = 'Toggle filters';
+    sidebarBtn.innerHTML = '<i class="fa-solid fa-bars"></i>';
+    header.insertBefore(sidebarBtn, h2);
+  }
+
+  // Create mode toggle wrapper (centered in header via CSS)
+  var toggleWrap = document.createElement('div');
+  toggleWrap.className = 'maps-mode-toggle-header';
+  toggleWrap.id = 'maps-mode-toggle';
+
+  var toggleInner = document.createElement('div');
+  toggleInner.className = 'maps-mode-toggle';
+
+  var modes = [
+    { mode: 'chits', label: 'Chits' },
+    { mode: 'both', label: 'Both' },
+    { mode: 'people', label: 'People' }
+  ];
+
+  modes.forEach(function(m) {
+    var btn = document.createElement('button');
+    btn.className = 'maps-mode-btn' + (m.mode === 'chits' ? ' active' : '');
+    btn.setAttribute('data-mode', m.mode);
+    btn.textContent = m.label;
+    toggleInner.appendChild(btn);
+  });
+
+  toggleWrap.appendChild(toggleInner);
+
+  // Insert after h2, before the nav buttons div
+  var navButtons = header.querySelector('.header-buttons');
+  if (navButtons) {
+    header.insertBefore(toggleWrap, navButtons);
+  } else {
+    header.appendChild(toggleWrap);
+  }
+}
+
+/* ── Period Date Range Helper ─────────────────────────────────────────────── */
+
+/**
+ * _getPeriodDateRange(period) — Returns {start, end} Date objects for the
+ * given period string. Used by the period dropdown filter.
+ * @param {string} period — "week", "month", "quarter", "year", or "all"
+ * @returns {{start: Date|null, end: Date|null}}
+ */
+function _getPeriodDateRange(period) {
+  var now = new Date();
+  var start, end;
+
+  switch (period) {
+    case 'week':
+      // Start of current week (Sunday) to end of current week (Saturday)
+      var dayOfWeek = now.getDay();
+      start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek);
+      end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + (6 - dayOfWeek), 23, 59, 59);
+      break;
+    case 'month':
+      start = new Date(now.getFullYear(), now.getMonth(), 1);
+      end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+      break;
+    case 'quarter':
+      var qMonth = Math.floor(now.getMonth() / 3) * 3;
+      start = new Date(now.getFullYear(), qMonth, 1);
+      end = new Date(now.getFullYear(), qMonth + 3, 0, 23, 59, 59);
+      break;
+    case 'year':
+      start = new Date(now.getFullYear(), 0, 1);
+      end = new Date(now.getFullYear(), 11, 31, 23, 59, 59);
+      break;
+    case 'all':
+    default:
+      return { start: null, end: null };
+  }
+
+  return { start: start, end: end };
+}
+
+/* ── Chit Overdue Helper ──────────────────────────────────────────────────── */
+
+/**
+ * _isChitOverdue(chit) — Returns true if the chit has a due_datetime in the
+ * past and its status is not 'Complete'.
+ */
+function _isChitOverdue(chit) {
+  if (!chit.due_datetime) return false;
+  if (chit.status === 'Complete') return false;
+  var due = new Date(chit.due_datetime);
+  if (isNaN(due.getTime())) return false;
+  return due < new Date();
+}
+
+/**
  * _mapsGetMode() — Returns the current mode ("chits" or "people").
  */
 function _mapsGetMode() {
@@ -398,10 +505,18 @@ var _mapsChitsFilterDebounceTimer = null;
 
 /**
  * _initChitsFilters() — Called once during init to set up the chits filter panel.
- * Wires up status checkboxes, priority checkboxes, text search (debounced),
- * clear filters button, and loads dynamic filter data (tags, people).
+ * Wires up period dropdown, status checkboxes, priority checkboxes, text search
+ * (debounced), clear filters button, and loads dynamic filter data (tags, people).
  */
 function _initChitsFilters() {
+  // Wire up period dropdown
+  var periodSelect = document.getElementById('maps-period-filter');
+  if (periodSelect) {
+    periodSelect.addEventListener('change', function() {
+      _onChitsFilterChange();
+    });
+  }
+
   // Wire up status checkboxes
   var statusList = document.getElementById('maps-chits-status-list');
   if (statusList) {
@@ -444,160 +559,93 @@ function _initChitsFilters() {
 
 /**
  * _loadChitsFilterData() — Fetches data needed for dynamic filter options:
- * tags from user settings, contacts and system users for people chips.
- * Builds tag chips in #maps-chits-tags-area and people chips in #maps-chits-people-area.
+ * tags from user settings, contacts and system users for people.
+ * Uses CwocSidebarFilter for tags (#maps-chits-tags-filter) and people
+ * (#maps-chits-people-filter) panels.
  */
 async function _loadChitsFilterData() {
-  // ── Load tags from settings ──
-  var tagsArea = document.getElementById('maps-chits-tags-area');
-  if (tagsArea) {
-    try {
-      var settings = await getCachedSettings();
-      var rawTags = settings.tags ? (typeof settings.tags === 'string' ? JSON.parse(settings.tags) : settings.tags) : [];
-      var tagObjects = rawTags.map(function(t) {
-        return typeof t === 'string' ? { name: t, color: null, favorite: false } : t;
-      }).filter(function(t) {
-        return t.name && !isSystemTag(t.name);
+  // ── Load tags from settings via CwocSidebarFilter ──
+  try {
+    var settings = await getCachedSettings();
+    var rawTags = settings.tags ? (typeof settings.tags === 'string' ? JSON.parse(settings.tags) : settings.tags) : [];
+    var tagObjects = rawTags.map(function(t) {
+      return typeof t === 'string' ? { name: t, color: null, favorite: false } : t;
+    }).filter(function(t) {
+      return t.name && !isSystemTag(t.name);
+    });
+
+    if (typeof CwocSidebarFilter === 'function') {
+      CwocSidebarFilter({
+        containerId: 'maps-chits-tags-filter',
+        items: tagObjects.map(function(t) { return { name: t.name, favorite: !!t.favorite, color: t.color }; }),
+        selection: _mapsChitsFilterTags,
+        onChange: function() { _onChitsFilterChange(); },
+        searchPlaceholder: 'Search tags…',
+        showColorBadge: true
       });
-
-      // Sort: favorites first, then alphabetical
-      tagObjects.sort(function(a, b) {
-        if (a.favorite && !b.favorite) return -1;
-        if (!a.favorite && b.favorite) return 1;
-        return (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' });
-      });
-
-      tagsArea.innerHTML = '';
-      for (var i = 0; i < tagObjects.length; i++) {
-        var tag = tagObjects[i];
-        var chip = document.createElement('button');
-        chip.type = 'button';
-        chip.className = 'cwoc-tag-chip';
-        chip.textContent = (tag.favorite ? '★ ' : '') + tag.name;
-        chip.dataset.tag = tag.name;
-        var color = tag.color || getPastelColor(tag.name);
-        chip.style.backgroundColor = color;
-        chip.style.color = isLightColor(color) ? '#2b1e0f' : '#fdf5e6';
-        chip.addEventListener('click', function() {
-          var tagName = this.dataset.tag;
-          var idx = _mapsChitsFilterTags.indexOf(tagName);
-          if (idx === -1) {
-            _mapsChitsFilterTags.push(tagName);
-            this.classList.add('active');
-          } else {
-            _mapsChitsFilterTags.splice(idx, 1);
-            this.classList.remove('active');
-          }
-          _onChitsFilterChange();
-        });
-        tagsArea.appendChild(chip);
-      }
-
-      if (tagObjects.length === 0) {
-        tagsArea.innerHTML = '<span style="font-size:0.85em;opacity:0.6;">No tags defined</span>';
-      }
-    } catch (e) {
-      console.warn('Could not load tags for chits filter:', e);
     }
+  } catch (e) {
+    console.warn('Could not load tags for chits filter:', e);
   }
 
-  // ── Load people (contacts + system users) ──
-  var peopleArea = document.getElementById('maps-chits-people-area');
-  if (peopleArea) {
+  // ── Load people (contacts + system users) via CwocSidebarFilter ──
+  try {
+    var contacts = [];
+    var users = [];
+
     try {
-      var contacts = [];
-      var users = [];
-
-      // Fetch contacts
-      try {
-        var contactResp = await fetch('/api/contacts');
-        contacts = contactResp.ok ? await contactResp.json() : [];
-      } catch (e) {
-        console.warn('Could not fetch contacts for people filter:', e);
-      }
-
-      // Fetch system users
-      try {
-        var usersResp = await fetch('/api/auth/switchable-users');
-        users = usersResp.ok ? await usersResp.json() : [];
-      } catch (e) {
-        console.warn('Could not fetch users for people filter:', e);
-      }
-
-      // Build merged list: contacts first (sorted, favorites first), then users (skip dupes)
-      var merged = [];
-      var sortedContacts = contacts.slice().sort(function(a, b) {
-        if (a.favorite && !b.favorite) return -1;
-        if (!a.favorite && b.favorite) return 1;
-        return (a.display_name || '').localeCompare(b.display_name || '');
-      });
-      for (var ci = 0; ci < sortedContacts.length; ci++) {
-        var c = sortedContacts[ci];
-        merged.push({
-          name: c.display_name || c.given_name || '(Unknown)',
-          color: c.color,
-          favorite: c.favorite,
-          isUser: false
-        });
-      }
-
-      var contactNames = {};
-      for (var mi = 0; mi < merged.length; mi++) {
-        contactNames[merged[mi].name.toLowerCase()] = true;
-      }
-
-      var sortedUsers = users.slice().sort(function(a, b) {
-        return (a.display_name || a.username || '').localeCompare(b.display_name || b.username || '');
-      });
-      for (var ui = 0; ui < sortedUsers.length; ui++) {
-        var u = sortedUsers[ui];
-        var uName = u.display_name || u.username || '(Unknown)';
-        if (!contactNames[uName.toLowerCase()]) {
-          merged.push({
-            name: uName,
-            color: u.color,
-            favorite: false,
-            isUser: true
-          });
-        }
-      }
-
-      // Render people chips
-      peopleArea.innerHTML = '';
-      for (var pi = 0; pi < merged.length; pi++) {
-        var person = merged[pi];
-        var pChip = document.createElement('button');
-        pChip.type = 'button';
-        pChip.className = 'cwoc-tag-chip' + (person.isUser ? ' cwoc-user-chip' : '');
-        pChip.textContent = (person.favorite ? '★ ' : '') + person.name;
-        pChip.dataset.person = person.name;
-        var pColor = person.color || '#d2b48c';
-        pChip.style.backgroundColor = pColor;
-        pChip.style.color = isLightColor(pColor) ? '#2b1e0f' : '#fdf5e6';
-        if (person.isUser) {
-          pChip.style.border = '2px solid #1a1208';
-        }
-        pChip.addEventListener('click', function() {
-          var personName = this.dataset.person;
-          var idx = _mapsChitsFilterPeople.indexOf(personName);
-          if (idx === -1) {
-            _mapsChitsFilterPeople.push(personName);
-            this.classList.add('active');
-          } else {
-            _mapsChitsFilterPeople.splice(idx, 1);
-            this.classList.remove('active');
-          }
-          _onChitsFilterChange();
-        });
-        peopleArea.appendChild(pChip);
-      }
-
-      if (merged.length === 0) {
-        peopleArea.innerHTML = '<span style="font-size:0.85em;opacity:0.6;">No contacts or users</span>';
-      }
+      var contactResp = await fetch('/api/contacts');
+      contacts = contactResp.ok ? await contactResp.json() : [];
     } catch (e) {
-      console.warn('Could not load people for chits filter:', e);
+      console.warn('Could not fetch contacts for people filter:', e);
     }
+
+    try {
+      var usersResp = await fetch('/api/auth/switchable-users');
+      users = usersResp.ok ? await usersResp.json() : [];
+    } catch (e) {
+      console.warn('Could not fetch users for people filter:', e);
+    }
+
+    // Build merged list for CwocSidebarFilter
+    var merged = [];
+    var contactNames = {};
+
+    var sortedContacts = contacts.slice().sort(function(a, b) {
+      if (a.favorite && !b.favorite) return -1;
+      if (!a.favorite && b.favorite) return 1;
+      return (a.display_name || '').localeCompare(b.display_name || '');
+    });
+    for (var ci = 0; ci < sortedContacts.length; ci++) {
+      var c = sortedContacts[ci];
+      var cName = c.display_name || c.given_name || '(Unknown)';
+      merged.push({ name: cName, color: c.color, favorite: c.favorite });
+      contactNames[cName.toLowerCase()] = true;
+    }
+
+    var sortedUsers = users.slice().sort(function(a, b) {
+      return (a.display_name || a.username || '').localeCompare(b.display_name || b.username || '');
+    });
+    for (var ui = 0; ui < sortedUsers.length; ui++) {
+      var u = sortedUsers[ui];
+      var uName = u.display_name || u.username || '(Unknown)';
+      if (!contactNames[uName.toLowerCase()]) {
+        merged.push({ name: uName, color: u.color, favorite: false });
+      }
+    }
+
+    if (typeof CwocSidebarFilter === 'function') {
+      CwocSidebarFilter({
+        containerId: 'maps-chits-people-filter',
+        items: merged,
+        selection: _mapsChitsFilterPeople,
+        onChange: function() { _onChitsFilterChange(); },
+        searchPlaceholder: 'Search people…',
+        showColorBadge: false
+      });
+    }
+  } catch (e) {
+    console.warn('Could not load people for chits filter:', e);
   }
 }
 
@@ -711,12 +759,22 @@ function _applyChitsFilters(chits) {
     result.push(chit);
   }
 
-  // ── Date range filter (reuse existing _filterChitsByDateRange) ──
-  var startInput = document.getElementById('maps-start-date');
-  var endInput = document.getElementById('maps-end-date');
-  var startDate = startInput ? startInput.value : '';
-  var endDate = endInput ? endInput.value : '';
-  result = _filterChitsByDateRange(result, startDate, endDate);
+  // ── Date range filter (period dropdown) ──
+  var periodSelect = document.getElementById('maps-period-filter');
+  var period = periodSelect ? periodSelect.value : 'week';
+  var range = _getPeriodDateRange(period);
+  if (range.start || range.end) {
+    var startStr = range.start ? _mapsToDateString(range.start) : '';
+    var endStr = range.end ? _mapsToDateString(range.end) : '';
+    result = _filterChitsByDateRange(result, startStr, endStr);
+  } else {
+    // "all" — still filter out chits without locations and deleted chits
+    result = result.filter(function(chit) {
+      if (!chit.location || !chit.location.trim()) return false;
+      if (chit.deleted) return false;
+      return true;
+    });
+  }
 
   return result;
 }
@@ -751,7 +809,6 @@ function _onChitsFilterChange() {
 
 /**
  * _clearChitsFilters() — Resets all chit filters to defaults and updates UI.
- * (Stub — full implementation in Task 4.3.)
  */
 function _clearChitsFilters() {
   // Reset filter state
@@ -760,6 +817,10 @@ function _clearChitsFilters() {
   _mapsChitsFilterPriority = [];
   _mapsChitsFilterPeople = [];
   _mapsChitsFilterText = '';
+
+  // Reset period dropdown to "week"
+  var periodSelect = document.getElementById('maps-period-filter');
+  if (periodSelect) periodSelect.value = 'week';
 
   // Uncheck all status checkboxes
   var statusCbs = document.querySelectorAll('#maps-chits-status-list input[type="checkbox"]');
@@ -777,20 +838,11 @@ function _clearChitsFilters() {
   var textSearch = document.getElementById('maps-chits-text-search');
   if (textSearch) textSearch.value = '';
 
-  // Deactivate all tag chips
-  var tagChips = document.querySelectorAll('#maps-chits-tags-area .cwoc-tag-chip');
-  for (var k = 0; k < tagChips.length; k++) {
-    tagChips[k].classList.remove('active');
-  }
-
-  // Deactivate all people chips
-  var peopleChips = document.querySelectorAll('#maps-chits-people-area .cwoc-tag-chip');
-  for (var l = 0; l < peopleChips.length; l++) {
-    peopleChips[l].classList.remove('active');
-  }
+  // Re-render CwocSidebarFilter panels to clear selections
+  _loadChitsFilterData();
 
   // Re-filter and re-render
-  if (_mapsCurrentMode === 'chits') {
+  if (_mapsCurrentMode === 'chits' || _mapsCurrentMode === 'both') {
     _filterAndRender();
   }
 }
@@ -804,6 +856,9 @@ function _clearChitsFilters() {
  */
 async function _mapsInit() {
   try {
+    // Inject mode toggle into the shared header (must be early, before mode restore)
+    _injectModeToggle();
+
     var settings = await getCachedSettings();
     var co = (settings && settings.chit_options) || {};
 
@@ -812,10 +867,7 @@ async function _mapsInit() {
       var warning = document.getElementById('maps-google-warning');
       if (warning) warning.style.display = 'block';
 
-      // Hide the maps header and layout
-      var mapsHeader = document.getElementById('maps-header');
-      if (mapsHeader) mapsHeader.style.display = 'none';
-
+      // Hide the maps layout
       var mapsLayout = document.getElementById('maps-page-layout');
       if (mapsLayout) mapsLayout.style.display = 'none';
 
@@ -931,10 +983,29 @@ function _initLeafletMap() {
       var childMarkers = cluster.getAllChildMarkers();
       var hasChit = false;
       var hasContact = false;
+      var hasBlocked = false;
+      var hasOverdue = false;
       for (var i = 0; i < childMarkers.length; i++) {
-        if (childMarkers[i]._cwocMarkerType === 'contact') hasContact = true;
-        else hasChit = true;
-        if (hasChit && hasContact) break;
+        if (childMarkers[i]._cwocMarkerType === 'contact') {
+          hasContact = true;
+        } else {
+          hasChit = true;
+          // Check for blocked/overdue status on chit markers
+          var chit = childMarkers[i]._cwocChit;
+          if (chit) {
+            if (chit.status === 'Blocked') hasBlocked = true;
+            if (_isChitOverdue(chit)) hasOverdue = true;
+          }
+        }
+        if (hasChit && hasContact && hasBlocked) break;
+      }
+
+      // Determine cluster border color: blocked (red) > overdue (orange) > default
+      var clusterBorderStyle = '';
+      if (hasBlocked) {
+        clusterBorderStyle = 'border:2px solid #F44336;';
+      } else if (hasOverdue) {
+        clusterBorderStyle = 'border:2px solid #FF9800;';
       }
 
       var className, html;
@@ -947,19 +1018,36 @@ function _initLeafletMap() {
           else chitCount++;
         }
         className = 'maps-mixed-cluster maps-mixed-cluster-' + size;
-        html = '<div class="maps-mixed-cluster-square"><span>' + chitCount + '</span></div>' +
+        html = '<div class="maps-mixed-cluster-square"' + (clusterBorderStyle ? ' style="' + clusterBorderStyle + '"' : '') + '><span>' + chitCount + '</span></div>' +
                '<div class="maps-mixed-cluster-circle"><span>' + contactCount + '</span></div>';
       } else {
         // Chit-only cluster: square icon with amber/brown scheme
         className = 'maps-chit-cluster maps-chit-cluster-' + size;
         html = '<div><span>' + count + '</span></div>';
+        // Apply blocked/overdue border to the cluster itself
+        if (clusterBorderStyle) {
+          className += ' maps-chit-cluster-alert';
+        }
       }
 
-      return L.divIcon({
+      var iconOpts = {
         html: html,
         className: className,
         iconSize: L.point(40, 40)
-      });
+      };
+
+      // For non-mixed clusters, apply border via inline style on the icon
+      var icon = L.divIcon(iconOpts);
+      if (!hasContact && clusterBorderStyle) {
+        // We'll use a wrapper approach: add style to the html
+        icon = L.divIcon({
+          html: '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;' + clusterBorderStyle + 'border-radius:6px;"><span>' + count + '</span></div>',
+          className: className,
+          iconSize: L.point(40, 40)
+        });
+      }
+
+      return icon;
     }
   });
   _mapsLeafletMap.addLayer(_mapsClusterGroup);
@@ -1304,14 +1392,14 @@ function _initPeopleFilters() {
 }
 
 /**
- * _buildPeopleTagChips(contacts) — Builds tag filter chips from contact tags.
- * Collects unique tags across all contacts, sorts alphabetically, and renders
- * chips in #maps-people-tags-area. Each chip toggles selection and calls
+ * _buildPeopleTagChips(contacts) — Builds tag filter using CwocSidebarFilter
+ * from contact tags. Collects unique tags across all contacts and renders
+ * into #maps-people-tags-filter. Each selection toggles and calls
  * _onPeopleFilterChange().
  */
 function _buildPeopleTagChips(contacts) {
-  var tagsArea = document.getElementById('maps-people-tags-area');
-  if (!tagsArea) return;
+  var container = document.getElementById('maps-people-tags-filter');
+  if (!container) return;
 
   // Collect unique tags across all contacts
   var tagSet = {};
@@ -1328,46 +1416,24 @@ function _buildPeopleTagChips(contacts) {
     }
   }
 
-  // Sort alphabetically
   var sortedTags = Object.keys(tagSet).sort(function(a, b) {
     return a.localeCompare(b, undefined, { sensitivity: 'base' });
   });
 
-  // Build chips
-  tagsArea.innerHTML = '';
-  for (var k = 0; k < sortedTags.length; k++) {
-    var tagName = sortedTags[k];
-    var chip = document.createElement('button');
-    chip.type = 'button';
-    chip.className = 'cwoc-tag-chip';
-    chip.textContent = tagName;
-    chip.dataset.tag = tagName;
-    var color = getPastelColor(tagName);
-    chip.style.backgroundColor = color;
-    chip.style.color = isLightColor(color) ? '#2b1e0f' : '#fdf5e6';
-
-    // Restore active state if tag was previously selected
-    if (_mapsPeopleFilterTags.indexOf(tagName) !== -1) {
-      chip.classList.add('active');
-    }
-
-    chip.addEventListener('click', function() {
-      var clickedTag = this.dataset.tag;
-      var idx = _mapsPeopleFilterTags.indexOf(clickedTag);
-      if (idx === -1) {
-        _mapsPeopleFilterTags.push(clickedTag);
-        this.classList.add('active');
-      } else {
-        _mapsPeopleFilterTags.splice(idx, 1);
-        this.classList.remove('active');
-      }
-      _onPeopleFilterChange();
-    });
-    tagsArea.appendChild(chip);
+  if (sortedTags.length === 0) {
+    container.innerHTML = '<span style="font-size:0.85em;opacity:0.6;">No tags found</span>';
+    return;
   }
 
-  if (sortedTags.length === 0) {
-    tagsArea.innerHTML = '<span style="font-size:0.85em;opacity:0.6;">No tags found</span>';
+  if (typeof CwocSidebarFilter === 'function') {
+    CwocSidebarFilter({
+      containerId: 'maps-people-tags-filter',
+      items: sortedTags.map(function(t) { return { name: t, favorite: false }; }),
+      selection: _mapsPeopleFilterTags,
+      onChange: function() { _onPeopleFilterChange(); },
+      searchPlaceholder: 'Search tags…',
+      showColorBadge: true
+    });
   }
 }
 
@@ -1398,10 +1464,9 @@ function _clearPeopleFilters() {
   var favToggle = document.getElementById('maps-people-favorites-toggle');
   if (favToggle) favToggle.classList.remove('active');
 
-  // Remove .active from all tag chips
-  var tagChips = document.querySelectorAll('#maps-people-tags-area .cwoc-tag-chip');
-  for (var i = 0; i < tagChips.length; i++) {
-    tagChips[i].classList.remove('active');
+  // Re-render tag filter (CwocSidebarFilter will pick up empty selection)
+  if (_mapsAllContacts.length > 0) {
+    _buildPeopleTagChips(_mapsAllContacts);
   }
 
   // Re-filter and re-render
@@ -1843,9 +1908,10 @@ function _mapsEsc(str) {
 // ── Marker placement ─────────────────────────────────────────────────────────
 
 /**
- * _placeMarkers(geocodedChits) — Creates colored rounded-square divIcon markers,
- * adds them to the MarkerClusterGroup, binds popups, and fits map bounds.
- * Shows default world view with info message if no markers.
+ * _placeMarkers(geocodedChits) — Creates colored rounded-square divIcon markers
+ * using the chit's own color field (not status). Adds them to the
+ * MarkerClusterGroup, binds popups, and fits map bounds.
+ * Cluster borders: red if any child is Blocked, orange if any child is overdue.
  * Respects map_auto_zoom setting: only fitBounds when auto-zoom is enabled.
  */
 function _placeMarkers(geocodedChits) {
@@ -1857,7 +1923,7 @@ function _placeMarkers(geocodedChits) {
   if (!geocodedChits || geocodedChits.length === 0) {
     // Show default world view with info message
     _mapsLeafletMap.setView([20, 0], 2);
-    _showInfoMessage('No chits with locations found in the selected date range.');
+    _showInfoMessage('No chits with locations found for the selected period.');
     return;
   }
 
@@ -1868,7 +1934,8 @@ function _placeMarkers(geocodedChits) {
 
   for (var i = 0; i < geocodedChits.length; i++) {
     var item = geocodedChits[i];
-    var color = _getMarkerColor(item.chit.status);
+    // Use the chit's own color, fallback to neutral parchment tan
+    var color = item.chit.color || '#d2b48c';
 
     // Rounded-square divIcon marker for chits
     var iconHtml = '<div class="maps-chit-marker" style="background-color:' + _hexToRgba(color, 0.85) + ';border-color:#fff;"></div>';
@@ -1882,6 +1949,7 @@ function _placeMarkers(geocodedChits) {
 
     var marker = L.marker([item.lat, item.lon], { icon: icon });
     marker._cwocMarkerType = 'chit';
+    marker._cwocChit = item.chit;
 
     marker.bindPopup(_buildPopupContent(item.chit));
     _mapsClusterGroup.addLayer(marker);
@@ -1902,27 +1970,14 @@ function _placeMarkers(geocodedChits) {
 // ── Date filter initialization and handler ───────────────────────────────────
 
 /**
- * _initDateFilters() — Sets default date values (±30 days from today)
- * and wires up change handlers.
+ * _initDateFilters() — Wires the period dropdown change handler.
+ * Default period is "week" (set in HTML).
  */
 function _initDateFilters() {
-  var startInput = document.getElementById('maps-start-date');
-  var endInput = document.getElementById('maps-end-date');
-  if (!startInput || !endInput) return;
+  var periodSelect = document.getElementById('maps-period-filter');
+  if (!periodSelect) return;
 
-  var today = new Date();
-
-  var past = new Date(today);
-  past.setDate(past.getDate() - 30);
-
-  var future = new Date(today);
-  future.setDate(future.getDate() + 30);
-
-  startInput.value = _mapsToDateString(past);
-  endInput.value = _mapsToDateString(future);
-
-  startInput.addEventListener('change', _onDateFilterChange);
-  endInput.addEventListener('change', _onDateFilterChange);
+  periodSelect.addEventListener('change', _onDateFilterChange);
 }
 
 /**
@@ -1971,29 +2026,18 @@ function _hideInfoMessage() {
 
 // _initMobileFilterCollapse() — Removed: sidebar handles collapse now.
 
-/* ── ESC key handler (maps page — no .settings-panel for shared-page.js) ── */
+/* ── ESC key handler (maps page — shared-page.js handles basic ESC) ──────── */
 
 /**
- * Maps page ESC handler. Since the maps page no longer has a .settings-panel,
- * shared-page.js won't inject its ESC handler. We replicate the behavior here:
- * ESC closes modals first, then blurs focused inputs, then navigates back.
+ * Maps page ESC handler. The maps page now uses .settings-panel so shared-page.js
+ * injects its standard ESC handler. We add an additional handler to also check
+ * for the profile dropdown before navigating.
  */
 (function() {
   document.addEventListener('keydown', function(e) {
     if (e.key !== 'Escape') return;
-    // Don't navigate if a modal or nav panel is open
-    if (document.querySelector('.modal[style*="flex"], .qr-modal[style*="flex"], .image-modal[style*="flex"], .import-modal[style*="flex"]')) return;
-    if (document.getElementById('cwoc-nav-overlay')) return;
-    if (document.getElementById('cwoc-confirm-modal')) return;
+    // Close profile dropdown if open (before shared-page.js navigates away)
     if (document.getElementById('cwoc-profile-dropdown')) return;
-    var active = document.activeElement;
-    if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.tagName === 'SELECT')) {
-      active.blur();
-      return;
-    }
-    // Navigate back
-    var returnUrl = localStorage.getItem('cwoc_settings_return') || '/';
-    window.location.href = returnUrl;
   });
 })();
 

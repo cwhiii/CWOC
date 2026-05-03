@@ -1,0 +1,3 @@
+# Release 20260503.0804
+
+Major maps page refactor: switched to shared header via `.settings-panel` (shared-page.js auto-injects logo, nav, profile menu), replaced date range From/To inputs with a period dropdown (This Week/Month/Quarter/Year/All Time), colored chit markers by their actual chit color instead of status, added blocked (red border) and overdue (orange border) indicators on cluster icons, extracted `CwocSidebarFilter` into a shared file (`shared-sidebar-filter.js`) for reuse across dashboard and maps, replaced hand-coded tag/people chip filters with `CwocSidebarFilter` instances, and styled the loading indicator as a parchment notification badge with fixed-width text.
