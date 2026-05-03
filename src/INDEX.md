@@ -787,11 +787,15 @@ Recurrence expansion, formatting, series info computation, and date advancement 
 
 #### shared-geocoding.js
 
-Shared geocoding with progressive fallback via the backend Nominatim proxy.
+Shared geocoding with progressive fallback via the backend Nominatim proxy. Includes a localStorage-backed geocode cache shared across all pages (maps, weather, editor, etc.).
 
 | Function | Description |
 |----------|-------------|
-| `_geocodeAddress(address)` | Geocode an address with progressive fallback (full → no zip → city/state); returns `{lat, lon}` |
+| `_loadGeocodeCache()` | Load geocode cache from localStorage on startup |
+| `_saveGeocodeCache()` | Persist geocode cache to localStorage |
+| `getGeocodeCached(address)` | Get cached `{lat, lon}` for an address, or null if not cached |
+| `setGeocodeCache(address, lat, lon)` | Store a geocode result in the shared cache and persist to localStorage |
+| `_geocodeAddress(address)` | Geocode an address with progressive fallback (full → no zip → city/state); checks shared cache first, caches results; returns `{lat, lon}` |
 
 #### shared-sidebar-filter.js
 
@@ -2012,14 +2016,12 @@ Maps page: interactive Leaflet map with two display modes — **Chits** (chit lo
 | `_mapsLeafletMap` | Leaflet map instance |
 | `_mapsClusterGroup` | MarkerClusterGroup instance for chit marker clustering |
 | `_mapsAllChits` | Cached array of all fetched chits |
-| `_mapsGeocodeCache` | In-memory geocode cache keyed by lowercase trimmed address (chits) |
+| `_mapsGeocodeCache` | *(removed — uses shared cache from shared-geocoding.js)* |
 | `_mapsStatusColors` | Object mapping status strings to hex colors (kept for popup display) |
 | `_mapsNoStatusColor` | Default hex color for chits with no status (`#9E9E9E`) |
 | `MAPS_MODE_KEY` | localStorage key for persisting the current mode (`'cwoc_maps_mode'`) |
 | `_mapsCurrentMode` | Current mode: `'chits'`, `'both'`, or `'people'` |
 | `_mapsAllContacts` | Cached array of all fetched contacts |
-| `_mapsPeopleClusterGroup` | Separate MarkerClusterGroup for people mode (teal styling) |
-| `_mapsContactGeocodeCache` | In-memory geocode cache for contact addresses |
 | `_mapsFocusMode` | Boolean flag — when true, skip fitBounds on marker placement (set by focus query param) |
 | `_mapsChitsFilterStatus` | Selected status filter values (array) |
 | `_mapsChitsFilterTags` | Selected tag filter values (array, mutated by CwocSidebarFilter) |
@@ -2040,9 +2042,11 @@ Maps page: interactive Leaflet map with two display modes — **Chits** (chit lo
 | `_mapsSetMode(mode)` | Sets mode, persists to localStorage, updates toggle button active states, triggers mode switch |
 | `_mapsRestoreMode()` | Reads mode from localStorage, validates, defaults to `"chits"` |
 | `_onModeToggleChange(e)` | Click handler for mode toggle buttons — reads `data-mode` and calls `_mapsSetMode()` |
-| `_switchToChitsMode()` | Transitions to Chits mode — clears both marker groups, reloads chit filter data, loads chits |
-| `_switchToPeopleMode()` | Transitions to People mode — clears both marker groups, loads contacts |
-| `_switchToBothMode()` | Transitions to Both mode — clears both marker groups, loads both chits and contacts |
+| `_switchToChitsMode()` | Transitions to Chits mode — clears all markers, reloads chit filter data, loads chits |
+| `_switchToPeopleMode()` | Transitions to People mode — clears all markers, loads contacts |
+| `_switchToBothMode()` | Transitions to Both mode (async) — clears all markers once, then loads chits and contacts sequentially to prevent race conditions, fits bounds to all markers after both sets are placed |
+| `_removeMarkersByType(type)` | Removes only markers of the given type ('chit' or 'contact') from the shared cluster group, preserving the other type's markers |
+| `_fitBoundsToAllMarkers()` | Fits the map bounds to encompass all markers currently in the cluster group; respects auto-zoom and focus mode settings |
 | **Shared Sidebar Initialization** | |
 | `_initMapsSidebarShared()` | Initializes the shared sidebar for the maps page via `_cwocInitSidebar()` with maps-specific Page_Context (onCreateChit, onToday, onPeriodChange, onFilterChange, onClearFilters, onMapsClick no-op, periodOptions, loadTagFilters, loadPeopleFilters). Hides `.author-info` footer. Wires sidebar `transitionend` to invalidate Leaflet map size. Passes `currentPage: 'maps'` to highlight Maps button |
 | **Chits Filter Panel** | |
@@ -2064,17 +2068,17 @@ Maps page: interactive Leaflet map with two display modes — **Chits** (chit lo
 | **Chits mode** | |
 | `_fetchAndDisplayChits()` | Fetches chits from `/api/chits`, applies filters, geocodes, and places markers |
 | `_handleFocusAddress(focusType, address)` | Geocodes address from query params, centers map at zoom 15, shows temporary highlight marker, loads mode markers |
-| `_filterAndRender()` | Applies chit filters, geocodes, and places markers (called on load and filter change) |
+| `_filterAndRender()` | Applies chit filters, geocodes, and places markers; in "both" mode only removes chit markers (preserving contacts) before re-adding |
 | `_filterChitsByDateRange(chits, startDate, endDate)` | Returns chits with non-empty location and at least one date field within the range |
 | `_geocodeChits(chits)` | Geocodes each chit's location via `_geocodeAddress()` with in-memory cache deduplication |
 | `_getMarkerColor(status)` | Returns hex color for a chit status (used in popups) |
 | `_buildPopupContent(chit)` | Returns HTML for a chit marker popup with title, date, status icon in icons row, and editor link |
-| `_placeMarkers(geocodedChits)` | Creates colored markers using chit's own `color` field (fallback `#d2b48c`), stores `_cwocChit` on each marker for cluster blocked/overdue detection; respects auto-zoom setting |
+| `_placeMarkers(geocodedChits)` | Creates colored markers using chit's own `color` field (fallback `#d2b48c`); removes only existing chit markers before adding new ones (preserves contacts in "both" mode); stores `_cwocChit` on each marker for cluster blocked/overdue detection; respects auto-zoom setting |
 | `_mapsToDateString(date)` | Converts a Date to `YYYY-MM-DD` string |
 | **People mode** | |
-| `_fetchAndDisplayContacts()` | Fetches contacts from `/api/contacts`, applies people filters, geocodes, places contact markers |
-| `_geocodeContacts(contacts)` | Geocodes contact addresses with deduplication cache (`_mapsContactGeocodeCache`) |
-| `_placeContactMarkers(geocodedContacts)` | Creates contact markers with semi-transparent fills via `_hexToRgba(color, 0.6)` and full-opacity borders; sets `_cwocMarkerType = 'contact'` on each marker; adds to people cluster group, fits bounds |
+| `_fetchAndDisplayContacts()` | Fetches contacts from `/api/contacts`, applies people filters (respects `_mapsShowAllPeople` flag to bypass filters), geocodes, places contact markers; removes only contact markers on empty results (preserves chits in "both" mode) |
+| `_geocodeContacts(contacts)` | Geocodes contact addresses via shared `_geocodeAddress()` cache |
+| `_placeContactMarkers(geocodedContacts)` | Removes existing contact markers first, then creates new contact markers with semi-transparent fills; sets `_cwocMarkerType = 'contact'` on each marker; adds to shared cluster group, fits bounds |
 | `_buildContactPopupContent(contact, address)` | Builds popup HTML for contact markers (name, address, org, phone, email, editor link) |
 | `_getContactMarkerColor(contact)` | Returns contact's color if non-null/non-empty, else default teal (`#008080`) |
 | **People Filter Panel** | |

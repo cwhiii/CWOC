@@ -9,16 +9,14 @@ Here values for things like birthdays and anniversaries. These dates should appe
 - `[ ]` Screenshot and video walkthrough of the app
 
 
-
-Is there any way to cache/remember the locations on the map? It takes a very long time to load everything each time. I'd like to do like we do with the weather, and cache the info we need, and then, as soon as we start the page,, displaying the cached verison while we wait fo rhe currewnt stuff to get fetched? 
 ---
 
 ## Top Priorities
 
 is ther any way cto cache the locatons so they dont have to be fetched from scratch each time? Or to show the previoulsy-loaded values?
 
-
-Add 3 more time periods to the drop-down. The next hour, and today, and next X days which uses the X days setting form th esettings. 
+- on map & waether pages:  Add 3 more time periods to the drop-down. The next hour, and today, and next X days which uses the X days setting form th esettings. 
+- on teh map page, cange teh date filter to just "Day" instead of "this day", etc, for all then values in that ONE dropdown.    
 
 
 fix habit notifications:
@@ -27,9 +25,9 @@ The how it charts are pre-rendering the text. So they're grainy and terrible. Us
 
 
 ## Exporting
-- Export chit as markdwon with frontmatter.
-- Export chit as calendar file. (.ics)
-- Export all chits in either of the above, per user, or all users.
+- Export chit as markdwon with frontmatter. (per chit form the chit editor, and from teh data export tool)
+- Export chit as calendar file. (.ics)  (per chit form the chit editor, and from teh data export tool)
+- in either of the above, per user, or all users.
 
 
 
@@ -50,8 +48,6 @@ The how it charts are pre-rendering the text. So they're grainy and terrible. Us
 - habits mode: Animation — Ditched the FLIP approach entirely. still doesnt animate after the cahnged compltion values, it jsut instnatly swaps, wihch is hard to follow)
 
 
-
-Is there any way to cache/remember the locations on the map? It takes a very long time to load everything each time. I'd like to do like we do with the weather, and cache the info we need, and then, as soon as we start the page,, displaying the cached verison while we wait fo rhe currewnt stuff to get fetched? 
 ---
 
 ## Easy / Quick

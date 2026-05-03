@@ -1,0 +1,1 @@
+Moved geocode caching from maps-only localStorage into shared-geocoding.js so all pages (weather, editor, maps, etc.) share a single geocode cache. Weather page now benefits from cached lat/lon lookups instead of hitting the backend geocode proxy on every load. Old maps-only cache is auto-migrated on first load.

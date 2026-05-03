@@ -9,41 +9,14 @@
 var _mapsLeafletMap = null;
 var _mapsClusterGroup = null;
 var _mapsAllChits = [];
-var _mapsGeocodeCache = {};
-var _GEOCODE_LS_KEY = 'cwoc_maps_geocode_cache';
-
-/** Load geocode cache from localStorage on startup */
-function _loadGeocodeCache() {
-  try {
-    var raw = localStorage.getItem(_GEOCODE_LS_KEY);
-    if (raw) {
-      var parsed = JSON.parse(raw);
-      if (parsed && typeof parsed === 'object') {
-        _mapsGeocodeCache = parsed;
-        return;
-      }
-    }
-  } catch (e) { /* ignore */ }
-  _mapsGeocodeCache = {};
-}
-
-/** Save geocode cache to localStorage */
-function _saveGeocodeCache() {
-  try {
-    localStorage.setItem(_GEOCODE_LS_KEY, JSON.stringify(_mapsGeocodeCache));
-  } catch (e) { /* ignore — quota exceeded or private browsing */ }
-}
-
-// Load cache immediately
-_loadGeocodeCache();
+// Geocode cache is now shared via shared-geocoding.js (_geocodeCache, getGeocodeCached, setGeocodeCache)
 
 // ── People Mode state ────────────────────────────────────────────────────────
 
 var MAPS_MODE_KEY = 'cwoc_maps_mode';
 var _mapsCurrentMode = 'chits';
 var _mapsAllContacts = [];
-var _mapsPeopleClusterGroup = null;
-var _mapsContactGeocodeCache = _mapsGeocodeCache; // unified — same cache for chits and contacts
+// Contact geocode cache uses the shared cache from shared-geocoding.js
 
 // Focus mode flag — when true, skip fitBounds on marker placement
 var _mapsFocusMode = false;
@@ -420,11 +393,55 @@ function _updateMapsDateDisplay() {
 
 /* ── Legend Management (removed — status bar legends no longer used) ──────── */
 
+/* ── Marker Type Helpers ───────────────────────────────────────────────────── */
+
+/**
+ * _removeMarkersByType(type) — Removes only markers of the given type
+ * ('chit' or 'contact') from the shared cluster group, preserving the other
+ * type's markers. This prevents "both" mode from accidentally wiping one set
+ * when the other is refreshed.
+ */
+function _removeMarkersByType(type) {
+  if (!_mapsClusterGroup) return;
+  var toRemove = [];
+  _mapsClusterGroup.eachLayer(function(layer) {
+    if (layer._cwocMarkerType === type) {
+      toRemove.push(layer);
+    }
+  });
+  for (var i = 0; i < toRemove.length; i++) {
+    _mapsClusterGroup.removeLayer(toRemove[i]);
+  }
+}
+
+/**
+ * _fitBoundsToAllMarkers() — Fits the map bounds to encompass all markers
+ * currently in the cluster group. Respects auto-zoom and focus mode settings.
+ */
+function _fitBoundsToAllMarkers() {
+  if (!_mapsLeafletMap || !_mapsClusterGroup || _mapsFocusMode) return;
+  var settings = window._cwocSettings || {};
+  var autoZoom = settings.map_auto_zoom;
+  var autoZoomEnabled = (autoZoom === '1' || autoZoom === undefined || autoZoom === null || autoZoom === '');
+  if (!autoZoomEnabled) return;
+
+  var bounds = [];
+  _mapsClusterGroup.eachLayer(function(layer) {
+    if (layer.getLatLng) {
+      var ll = layer.getLatLng();
+      bounds.push([ll.lat, ll.lng]);
+    }
+  });
+  if (bounds.length > 0) {
+    _mapsLeafletMap.fitBounds(bounds, { padding: [40, 40], maxZoom: 14 });
+  }
+}
+
 /* ── Mode Switching ───────────────────────────────────────────────────────── */
 
 /**
  * _switchToChitsMode() — Transitions the map view to Chits mode.
- * Clears people markers, shows chits legend, hides people legend,
+ * Clears all markers, shows chits legend, hides people legend,
  * and loads chit markers. Reloads chit filter data into the shared sidebar.
  */
 function _switchToChitsMode() {
@@ -443,7 +460,7 @@ function _switchToChitsMode() {
 
 /**
  * _switchToPeopleMode() — Transitions the map view to People mode.
- * Clears chit markers, shows people legend, hides chits legend,
+ * Clears all markers, shows people legend, hides chits legend,
  * and loads contact markers.
  */
 function _switchToPeopleMode() {
@@ -460,18 +477,23 @@ function _switchToPeopleMode() {
 /**
  * _switchToBothMode() — Transitions the map view to Both mode.
  * Shows both chit and contact markers simultaneously.
- * Shows both legends.
+ * Clears markers once up front, then loads both sets sequentially
+ * to avoid race conditions where one set clears the other.
  */
-function _switchToBothMode() {
-  // Clear all markers before re-rendering
+async function _switchToBothMode() {
+  // Clear all markers once before loading both sets
   if (_mapsClusterGroup) _mapsClusterGroup.clearLayers();
 
   // Hide any lingering info message
   _hideInfoMessage();
 
-  // Load both chit and contact markers
-  _fetchAndDisplayChits();
-  _fetchAndDisplayContacts();
+  // Load both sequentially to prevent race conditions.
+  // Each function adds to the cluster group without clearing it first (in "both" mode).
+  await _fetchAndDisplayChits();
+  await _fetchAndDisplayContacts();
+
+  // Fit bounds to all markers after both sets are placed
+  _fitBoundsToAllMarkers();
 }
 
 /* ── Chits Filter Panel ───────────────────────────────────────────────────── */
@@ -1116,16 +1138,9 @@ L.Control.DefaultView = L.Control.extend({
         // Auto-zoom enabled: fitBounds to visible markers
         var bounds = [];
 
-        // Collect bounds from chit cluster group
-        if ((_mapsCurrentMode === 'chits' || _mapsCurrentMode === 'both') && _mapsClusterGroup) {
+        // Collect bounds from all markers in the shared cluster group
+        if (_mapsClusterGroup) {
           _mapsClusterGroup.eachLayer(function(layer) {
-            if (layer.getLatLng) bounds.push(layer.getLatLng());
-          });
-        }
-
-        // Collect bounds from people cluster group
-        if ((_mapsCurrentMode === 'people' || _mapsCurrentMode === 'both') && _mapsPeopleClusterGroup) {
-          _mapsPeopleClusterGroup.eachLayer(function(layer) {
             if (layer.getLatLng) bounds.push(layer.getLatLng());
           });
         }
@@ -1255,15 +1270,22 @@ async function _fetchAndDisplayContacts() {
     // Build tag chips from actual contact data
     _buildPeopleTagChips(_mapsAllContacts);
 
-    // Apply people filters
-    var filtered = _applyPeopleFilters(_mapsAllContacts);
+    // Apply people filters (respects _mapsShowAllPeople flag)
+    var filtered;
+    if (_mapsShowAllPeople) {
+      // "All People" bypasses all filters — show every contact
+      filtered = _mapsAllContacts.slice();
+    } else {
+      filtered = _applyPeopleFilters(_mapsAllContacts);
+    }
 
     if (filtered.length === 0) {
-      if (_mapsClusterGroup) _mapsClusterGroup.clearLayers();
+      // Remove only contact markers (preserve chit markers in "both" mode)
+      _removeMarkersByType('contact');
       if (_mapsAllContacts.length === 0) {
-        _showInfoMessage('No contacts found.');
+        if (_mapsCurrentMode !== 'both') _showInfoMessage('No contacts found.');
       } else {
-        _showInfoMessage('No contacts match the current filters.');
+        if (_mapsCurrentMode !== 'both') _showInfoMessage('No contacts match the current filters.');
       }
       _mapsHideLoading();
       return;
@@ -1273,15 +1295,16 @@ async function _fetchAndDisplayContacts() {
     var geocoded = await _geocodeContacts(filtered);
 
     if (geocoded.length === 0) {
-      if (_mapsClusterGroup) _mapsClusterGroup.clearLayers();
-      _showInfoMessage('No contacts with addresses were found.');
+      // Remove only contact markers (preserve chit markers in "both" mode)
+      _removeMarkersByType('contact');
+      if (_mapsCurrentMode !== 'both') _showInfoMessage('No contacts with addresses were found.');
       _mapsHideLoading();
       return;
     }
 
     _hideInfoMessage();
 
-    // Place contact markers
+    // Place contact markers (removes old contact markers first)
     _placeContactMarkers(geocoded);
     _mapsHideLoading();
 
@@ -1505,7 +1528,7 @@ function _applyPeopleFilters(contacts) {
 
 /**
  * _geocodeContacts(contacts) — Geocodes each contact's addresses, returns
- * array of {contact, address, lat, lon}. Uses _mapsContactGeocodeCache for
+ * array of {contact, address, lat, lon}. Uses the shared geocode cache for
  * deduplication (keyed by lowercase trimmed address string).
  */
 async function _geocodeContacts(contacts) {
@@ -1526,19 +1549,10 @@ async function _geocodeContacts(contacts) {
 
       var cacheKey = addrStr.toLowerCase();
 
-      // Check deduplication cache first
-      if (_mapsContactGeocodeCache[cacheKey]) {
-        var cached = _mapsContactGeocodeCache[cacheKey];
-        results.push({ contact: contact, address: addrStr, lat: cached.lat, lon: cached.lon });
-        continue;
-      }
-
-      // Geocode the address using shared-geocoding.js
+      // _geocodeAddress now checks the shared cache internally
       try {
         var coords = await _geocodeAddress(addrStr);
         if (coords && coords.lat && coords.lon) {
-          _mapsContactGeocodeCache[cacheKey] = { lat: coords.lat, lon: coords.lon };
-          _saveGeocodeCache();
           results.push({ contact: contact, address: addrStr, lat: coords.lat, lon: coords.lon });
         } else {
           console.warn('Geocoding returned no results for contact address:', addrStr);
@@ -1570,6 +1584,9 @@ function _getContactMarkerColor(contact) {
 function _placeContactMarkers(geocodedContacts) {
   // Use the shared cluster group so contacts cluster with chits by proximity
   if (!_mapsClusterGroup) return;
+
+  // Remove only existing contact markers (preserve chit markers in "both" mode)
+  _removeMarkersByType('contact');
 
   var bounds = [];
 
@@ -1676,15 +1693,20 @@ function _buildContactPopupContent(contact, address) {
  * _filterAndRender() — Applies all chit filters (including date range),
  * geocodes, and places markers. Called on initial load, when date filters
  * change, and when any chit filter changes.
+ *
+ * In "both" mode, only removes chit markers (preserving contact markers)
+ * before re-adding filtered chits. In single modes, clears everything.
  */
 async function _filterAndRender() {
   var filtered = _applyChitsFilters(_mapsAllChits);
 
   if (filtered.length === 0) {
-    // Clear existing markers and show empty state
-    if (_mapsClusterGroup) _mapsClusterGroup.clearLayers();
-    if (_mapsLeafletMap && !_mapsFocusMode) _mapsLeafletMap.setView([20, 0], 2);
-    _showInfoMessage('No chits match the current filters.');
+    // Remove only chit markers (preserve contacts in "both" mode)
+    _removeMarkersByType('chit');
+    if (_mapsCurrentMode !== 'both') {
+      if (_mapsLeafletMap && !_mapsFocusMode) _mapsLeafletMap.setView([20, 0], 2);
+      _showInfoMessage('No chits match the current filters.');
+    }
     return;
   }
 
@@ -1742,8 +1764,8 @@ function _filterChitsByDateRange(chits, startDate, endDate) {
 
 /**
  * _geocodeChits(chits) — Geocodes each chit's location using _geocodeAddress()
- * from shared-geocoding.js. Uses _mapsGeocodeCache to avoid duplicate calls
- * for identical (case-insensitive, trimmed) addresses.
+ * from shared-geocoding.js. Uses the shared geocode cache to avoid duplicate
+ * calls for identical (case-insensitive, trimmed) addresses.
  * Returns an array of { chit, lat, lon } objects.
  */
 async function _geocodeChits(chits) {
@@ -1754,23 +1776,9 @@ async function _geocodeChits(chits) {
     var address = (chit.location || '').trim();
     if (!address) continue;
 
-    var cacheKey = address.toLowerCase();
-
-    // Check cache first
-    if (_mapsGeocodeCache[cacheKey]) {
-      results.push({
-        chit: chit,
-        lat: _mapsGeocodeCache[cacheKey].lat,
-        lon: _mapsGeocodeCache[cacheKey].lon
-      });
-      continue;
-    }
-
-    // Geocode and cache
+    // _geocodeAddress now checks the shared cache internally
     try {
       var coords = await _geocodeAddress(address);
-      _mapsGeocodeCache[cacheKey] = { lat: coords.lat, lon: coords.lon };
-      _saveGeocodeCache();
       results.push({ chit: chit, lat: coords.lat, lon: coords.lon });
     } catch (e) {
       console.warn('Geocoding failed for "' + address + '":', e.message);
@@ -1924,13 +1932,15 @@ function _mapsEsc(str) {
 function _placeMarkers(geocodedChits) {
   if (!_mapsLeafletMap || !_mapsClusterGroup) return;
 
-  // Clear existing markers
-  _mapsClusterGroup.clearLayers();
+  // Remove only chit markers (preserve contact markers in "both" mode)
+  _removeMarkersByType('chit');
 
   if (!geocodedChits || geocodedChits.length === 0) {
-    // Show default world view with info message
-    _mapsLeafletMap.setView([20, 0], 2);
-    _showInfoMessage('No chits with locations found for the selected period.');
+    if (_mapsCurrentMode !== 'both') {
+      // Show default world view with info message only in chits-only mode
+      _mapsLeafletMap.setView([20, 0], 2);
+      _showInfoMessage('No chits with locations found for the selected period.');
+    }
     return;
   }
 
