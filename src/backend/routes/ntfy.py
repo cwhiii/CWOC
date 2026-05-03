@@ -103,7 +103,7 @@ def get_ntfy_config() -> dict:
 def send_ntfy_notification(user_id: str, title: str, body: str,
                            click_url: str = None, tags: str = None,
                            priority: int = None, icon_url: str = None,
-                           actions: str = None, attach_url: str = None) -> dict:
+                           actions: str = None) -> dict:
     """Send a notification via HTTP POST to the ntfy server.
 
     Reads config from the network_access table on each call so that
@@ -118,7 +118,6 @@ def send_ntfy_notification(user_id: str, title: str, body: str,
         priority:   Optional priority 1-5 (X-Priority header). 5=max/urgent, 4=high, 3=default.
         icon_url:   Optional URL to notification icon (X-Icon header).
         actions:    Optional X-Actions header string for action buttons (up to 3).
-        attach_url: Optional URL to attach as image (X-Attach header). Shows as large image.
 
     Returns:
         {'sent': True, 'topic': str} on success.
@@ -170,8 +169,6 @@ def send_ntfy_notification(user_id: str, title: str, body: str,
             req.add_header("X-Icon", icon_url)
         if actions:
             req.add_header("X-Actions", actions)
-        if attach_url:
-            req.add_header("X-Attach", attach_url)
 
         with urllib.request.urlopen(req, timeout=10) as resp:
             status_code = resp.getcode()
@@ -437,10 +434,9 @@ def ntfy_test(request: Request):
         body="If you see this, Ntfy is working! Tap to open Settings.",
         click_url=click_url,
         tags="white_check_mark",
-        priority=4,
+        priority=5,
         icon_url=f"{base}/static/cwoc-icon-192.png",
         actions=actions,
-        attach_url=f"{base}/static/cwoc-icon-512.png",
     )
 
     if result.get("sent"):

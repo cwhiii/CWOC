@@ -14,7 +14,7 @@ src/
     db.py                  # Database helpers, shared state, JSON serialization
     models.py              # Pydantic models (Chit, Settings, Contact, etc.)
     migrations.py          # Inline DB migrations (ALTER TABLE with existence checks)
-    weather.py             # Weather API integration & background schedulers
+    schedulers.py          # Weather API integration & background schedulers
     serializers.py         # vCard & CSV import/export
     test_audit.py          # Audit diff property tests
     test_vcard.py          # vCard unit tests
@@ -128,5 +128,5 @@ Prototypes/                # Historical prototypes and experiments (not producti
 - `shared-utils.js` must load first among all shared sub-scripts
 - The dashboard (`index.html` + `main.js` + dashboard CSS) has its own independent styling
 - All JS is vanilla — no modules, no imports, just `<script>` tags in HTML load order
-- Backend is modular: `main.py` (entry point) + `routes/` (6 route modules) + `db.py` + `models.py` + `migrations.py` + `weather.py` + `serializers.py`
+- Backend is modular: `main.py` (entry point) + `routes/` (6 route modules) + `db.py` + `models.py` + `migrations.py` + `schedulers.py` + `serializers.py`
 - See `src/INDEX.md` for the complete code index with every function, class, and route

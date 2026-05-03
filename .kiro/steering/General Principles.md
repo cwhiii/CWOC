@@ -89,7 +89,7 @@ When making **substantial changes** to a JS function that builds DOM via string 
 - When in doubt, make text darker and larger rather than lighter and smaller.
 
 ## Backend Architecture
-- The backend is modular under `src/backend/`: `main.py` (entry point), `routes/` (6 route modules), `db.py`, `models.py`, `migrations.py`, `weather.py`, `serializers.py`.
+- The backend is modular under `src/backend/`: `main.py` (entry point), `routes/` (6 route modules), `db.py`, `models.py`, `migrations.py`, `schedulers.py`, `serializers.py`.
 - SQLite3 via Python stdlib. Single database file. No ORM.
 - Pydantic v1 models for request validation. All fields use `Optional` with defaults.
 - Soft delete throughout — chits are never hard-deleted. Use the `deleted` flag and `deleted_datetime` column.

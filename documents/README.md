@@ -72,6 +72,45 @@ Click **Upgrade Omni Chits** in Settings → Version & Updates. The upgrade stre
 
 ---
 
+## Dependencies
+
+### Required
+
+- **Python 3.8+** — runtime for the FastAPI backend
+- **SQLite3** — included in Python stdlib; single-file database at `/app/data/app.db`
+- **FastAPI + Uvicorn** — web framework and ASGI server (`pip install fastapi uvicorn`)
+- **Pydantic v1** — request validation (`pip install pydantic`)
+
+No npm, no Node.js, no build step. The frontend is vanilla JS served as static files.
+
+### Optional Services
+
+These are external services that CWOC integrates with. Both are optional — CWOC is fully functional without them. The `install/configurinator.sh` script installs and configures both automatically during provisioning.
+
+#### Tailscale (Remote Access)
+
+[Tailscale](https://tailscale.com/) is a free mesh VPN that lets you securely access your CWOC instance from anywhere — your phone, laptop, or another network — without port forwarding or exposing your server to the internet. Once connected, you reach CWOC via a Tailscale IP address that works the same whether you're at home or away.
+
+- **Configured in:** Settings → Dependent Apps → Tailscale
+- **What it does:** Connects your CWOC server to your Tailscale network. Provides a stable IP and hostname accessible from any device on your tailnet.
+- **Setup:** Generate an auth key from the [Tailscale admin console](https://login.tailscale.com/admin/settings/keys), paste it into Settings, and click Connect. Install the Tailscale app on your phone/laptop and sign in with the same account.
+- **Subnet routing:** The configurator advertises your local subnet so that other local services (like Ntfy) are also reachable through the Tailscale tunnel.
+
+#### Ntfy (Push Notifications)
+
+[Ntfy](https://ntfy.sh/) is a self-hosted push notification server that sends alarm, timer, and reminder notifications directly to your phone — even when the browser is closed. CWOC runs its own ntfy instance on the server (port 2586) so notifications stay on your local network.
+
+- **Configured in:** Settings → Dependent Apps → Ntfy
+- **What it does:** Sends push notifications for chit alarms, timers, reminders, start/due times, and independent alerts. Each notification includes three action buttons:
+  - **Open** — opens the chit editor or independent alerts board
+  - **Snooze** — snoozes based on your configured snooze duration
+  - **Dismiss** — clears the notification
+- **Setup:** The ntfy service auto-enables when detected. Install the [Ntfy app](https://ntfy.sh/) on your phone, subscribe to the topic and server URL shown in Settings, and enable Instant Delivery.
+- **Remote access:** With Tailscale subnet routing, the same ntfy subscription works both at home (WiFi) and remotely (Tailscale tunnel). Only one subscription needed.
+- **Disable/Enable:** An admin can disable ntfy notifications from Settings without losing the configuration. Re-enabling is one click.
+
+---
+
 ## Features
 
 ### Dashboard

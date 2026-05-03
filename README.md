@@ -27,6 +27,15 @@ Plus an **Indicators** tab for health trend charts (heart rate, blood pressure, 
 - **Frontend:** Vanilla JS, HTML5, CSS3 — no frameworks, no build step
 - **Theme:** 1940s parchment/magic aesthetic
 
+## Optional Dependencies
+
+| Service | Purpose |
+|---|---|
+| **[Tailscale](https://tailscale.com/)** | Mesh VPN for secure remote access. Lets you reach your CWOC instance from anywhere without port forwarding or exposing your server to the internet. Configured and managed from Settings → Dependent Apps. |
+| **[Ntfy](https://ntfy.sh/)** | Self-hosted push notification server. Sends alarm, timer, and reminder notifications directly to your phone — even when the browser is closed. Notifications include action buttons (Open, Snooze, Dismiss) with snooze duration pulled from your settings. |
+
+Both are optional. CWOC works fully without them — Tailscale adds remote access, Ntfy adds phone push notifications. The `install/configurinator.sh` script handles installing and configuring both automatically.
+
 ## Hardware
 
 Lightweight enough to run on minimal hardware like a Raspberry Pi Zero 2 W, though the original Pi Zero would likely be sluggish due to its single-core CPU and Python overhead. Any modern SBC, small VM, or LXC container with 1+ CPU cores and 512MB RAM will run it comfortably.

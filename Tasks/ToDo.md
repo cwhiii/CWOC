@@ -2,10 +2,6 @@
 
 *Completed items are in `done.md`. Deferred items in `parking_lot.md`. Declined in `path_not_traveled.md`.*
 
----
-Add an update to the top level read me. Include a dependency section. Include both tail scale, and NFTY, and explain what each is used for.
-
-
 
 ## Manual Tasks
 - `[ ]` Screenshot and video walkthrough of the app

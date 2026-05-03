@@ -128,7 +128,7 @@ All migrations run at startup. Each checks if the column/table already exists be
 | `csv_export(contacts)` | Export a list of contacts as a CSV string |
 | `csv_import(csv_text)` | Import contacts from a CSV string; returns (contacts, errors) |
 
-### 1.7 `src/backend/weather.py` — Weather API, Schedulers & Push Notifications
+### 1.7 `src/backend/schedulers.py` — Weather API, Schedulers & Push Notifications
 
 | Function | Description |
 |----------|-------------|
@@ -596,7 +596,7 @@ Ntfy push notification sender module. Encapsulates all Ntfy notification logic: 
 |------------------|-------------|
 | `get_ntfy_topic(user_id)` | Return deterministic topic: `'cwoc-'` + first 12 alphanumeric chars of user_id (hyphens stripped) |
 | `get_ntfy_config()` | Read ntfy provider config from `network_access` table. Returns `{'enabled': bool, 'server_url': str}` with default `http://localhost:2586` |
-| `send_ntfy_notification(user_id, title, body, click_url, tags, priority, icon_url, actions, attach_url)` | Send notification via HTTP POST to `{server_url}/{topic}` with X-Title, X-Tags, X-Click, X-Actions, X-Attach headers; 10s timeout; graceful error handling. Returns `{'sent': True, 'topic': str}` or `{'sent': False, 'reason': str}` |
+| `send_ntfy_notification(user_id, title, body, click_url, tags, priority, icon_url, actions)` | Send notification via HTTP POST to `{server_url}/{topic}` with X-Title, X-Tags, X-Click, X-Actions headers; 10s timeout; graceful error handling. Returns `{'sent': True, 'topic': str}` or `{'sent': False, 'reason': str}` |
 | `get_user_snooze_minutes(user_id)` | Read user's `snooze_length` setting and return as integer minutes. Defaults to 5 |
 | `build_ntfy_actions(base_url, chit_id, source_type, snooze_minutes)` | Build X-Actions header string with Open, Snooze, and Dismiss buttons. All `view` type (opens in browser) |
 | `GET /api/network-access/ntfy/status` | `ntfy_status(request)` — Check ntfy service reachability via `{server_url}/v1/health`; returns `active`, `disabled`, `unreachable`, or `not_configured` plus `enabled` boolean. Admin only |
@@ -2470,7 +2470,7 @@ src/backend/middleware.py
 src/backend/auth_utils.py
   └── (no internal CWOC imports — leaf module)
 
-src/backend/weather.py
+src/backend/schedulers.py
   ├── src.backend.db           (DB_PATH, _update_lock, serialize_json_field)
   ├── src.backend.routes.push  (send_push_to_user — imported lazily in _send_chit_push)
   └── src.backend.routes.ntfy  (send_ntfy_notification — imported lazily in _send_chit_ntfy)

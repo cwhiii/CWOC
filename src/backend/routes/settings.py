@@ -461,7 +461,7 @@ async def _timer_fire_task(key, delay_seconds, user_id, name, source_type, sourc
     logger.info(f"Timer expired: {key} — sending Ntfy to user {user_id}")
     try:
         from src.backend.routes.ntfy import send_ntfy_notification, build_ntfy_actions, get_user_snooze_minutes
-        from src.backend.weather import _get_server_base_url
+        from src.backend.schedulers import _get_server_base_url
         base = _get_server_base_url()
         if source_type == "chit" and source_id:
             click_url = f"{base}/frontend/html/editor.html?id={source_id}"
@@ -469,7 +469,6 @@ async def _timer_fire_task(key, delay_seconds, user_id, name, source_type, sourc
             # Independent alerts — link to the Alarms tab in independent mode
             click_url = f"{base}/?tab=Alarms&view=independent"
         icon_url = f"{base}/static/cwoc-icon-192.png"
-        attach_url = f"{base}/static/cwoc-icon-512.png"
 
         # Build action buttons (Open, Snooze, Dismiss)
         snooze_minutes = get_user_snooze_minutes(user_id)
@@ -485,14 +484,13 @@ async def _timer_fire_task(key, delay_seconds, user_id, name, source_type, sourc
             priority=5,
             icon_url=icon_url,
             actions=actions,
-            attach_url=attach_url,
         )
     except Exception as e:
         logger.warning(f"Ntfy failed for timer {key}: {e}")
 
     # Also try Web Push
     try:
-        from src.backend.weather import _send_chit_push
+        from src.backend.schedulers import _send_chit_push
         _send_chit_push(user_id, source_id or "", name or "Timer", "⏱️ Timer done:", "Time's up!")
     except Exception as e:
         logger.debug(f"Web Push failed for timer {key}: {e}")

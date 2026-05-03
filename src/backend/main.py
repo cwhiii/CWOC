@@ -256,7 +256,7 @@ app.mount("/pwa", StaticFiles(directory="/app/src/pwa"), name="pwa")
 # Startup Events
 # ═══════════════════════════════════════════════════════════════════════════
 
-from src.backend.weather import start_weather_schedulers
+from src.backend.schedulers import start_weather_schedulers
 
 @app.on_event("startup")
 async def on_startup():
