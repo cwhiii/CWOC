@@ -491,19 +491,28 @@ async def send_push(request: Request):
 
     # Also send via Ntfy (parallel channel — failures don't affect Web Push result)
     try:
-        from src.backend.routes.ntfy import send_ntfy_notification
+        from src.backend.routes.ntfy import send_ntfy_notification, build_ntfy_actions, get_user_snooze_minutes
+        from src.backend.weather import _get_server_base_url
         ntfy_title = body.get("title", "CWOC")
         ntfy_body = body.get("body", "")
         ntfy_click = None
         data = body.get("data", {})
         if data.get("url"):
             ntfy_click = data["url"]
+        base = _get_server_base_url()
+        chit_id = data.get("chit_id")
+        snooze_minutes = get_user_snooze_minutes(target_user_id)
+        actions = build_ntfy_actions(base, chit_id=chit_id, source_type="chit",
+                                     snooze_minutes=snooze_minutes)
         send_ntfy_notification(
             user_id=target_user_id,
             title=ntfy_title,
             body=ntfy_body,
             click_url=ntfy_click,
             tags="bell",
+            icon_url=f"{base}/static/cwoc-icon-192.png",
+            actions=actions,
+            attach_url=f"{base}/static/cwoc-icon-512.png",
         )
     except Exception as e:
         logger.debug(f"Ntfy send alongside push failed (non-fatal): {e}")

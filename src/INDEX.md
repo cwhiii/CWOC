@@ -133,7 +133,7 @@ All migrations run at startup. Each checks if the column/table already exists be
 | Function | Description |
 |----------|-------------|
 | `_send_chit_push(owner_id, chit_id, chit_title, time_label, time_value)` | Send a push notification for a chit event to the chit owner. Imports `send_push_to_user` from push routes; fails silently if pywebpush unavailable |
-| `_send_chit_ntfy(owner_id, chit_id, chit_title, time_label, time_value)` | Send an ntfy notification for a chit event to the chit owner. Imports `send_ntfy_notification` from ntfy routes; fails silently on error. Defaults title to "CWOC Reminder" if empty |
+| `_send_chit_ntfy(owner_id, chit_id, chit_title, time_label, time_value)` | Send an ntfy notification for a chit event to the chit owner. Includes action buttons (Open, Snooze, Dismiss) and CWOC logo as large image attachment. Snooze duration from user settings. Fails silently on error |
 | `_get_chit_focus_date(chit)` | Determine the relevant date for weather lookup on a chit |
 | `_partition_eligible_chits(chits, now)` | Split chits into 7-day and 8–16 day buckets for weather fetching |
 | `_extract_weather_for_date(forecast_daily, focus_date)` | Pull a single day's forecast from the daily forecast array |
@@ -596,7 +596,9 @@ Ntfy push notification sender module. Encapsulates all Ntfy notification logic: 
 |------------------|-------------|
 | `get_ntfy_topic(user_id)` | Return deterministic topic: `'cwoc-'` + first 12 alphanumeric chars of user_id (hyphens stripped) |
 | `get_ntfy_config()` | Read ntfy provider config from `network_access` table. Returns `{'enabled': bool, 'server_url': str}` with default `http://localhost:2586` |
-| `send_ntfy_notification(user_id, title, body, click_url, tags)` | Send notification via HTTP POST to `{server_url}/{topic}` with X-Title, X-Tags, X-Click headers; 10s timeout; graceful error handling. Returns `{'sent': True, 'topic': str}` or `{'sent': False, 'reason': str}` |
+| `send_ntfy_notification(user_id, title, body, click_url, tags, priority, icon_url, actions, attach_url)` | Send notification via HTTP POST to `{server_url}/{topic}` with X-Title, X-Tags, X-Click, X-Actions, X-Attach headers; 10s timeout; graceful error handling. Returns `{'sent': True, 'topic': str}` or `{'sent': False, 'reason': str}` |
+| `get_user_snooze_minutes(user_id)` | Read user's `snooze_length` setting and return as integer minutes. Defaults to 5 |
+| `build_ntfy_actions(base_url, chit_id, source_type, snooze_minutes)` | Build X-Actions header string with Open, Snooze, and Dismiss buttons. All `view` type (opens in browser) |
 | `GET /api/network-access/ntfy/status` | `ntfy_status(request)` — Check ntfy service reachability via `{server_url}/v1/health`; returns `active`, `disabled`, `unreachable`, or `not_configured` plus `enabled` boolean. Admin only |
 | `POST /api/network-access/ntfy/test` | `ntfy_test(request)` — Send test notification ("CWOC Test") to requesting user's topic. Any authenticated user |
 | `POST /api/network-access/ntfy` | `save_ntfy_config(body, request)` — Save ntfy config with server_url validation (rejects empty/whitespace-only). Admin only. Audit logged |

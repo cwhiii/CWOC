@@ -460,7 +460,7 @@ async def _timer_fire_task(key, delay_seconds, user_id, name, source_type, sourc
     # Timer expired — send notification
     logger.info(f"Timer expired: {key} — sending Ntfy to user {user_id}")
     try:
-        from src.backend.routes.ntfy import send_ntfy_notification
+        from src.backend.routes.ntfy import send_ntfy_notification, build_ntfy_actions, get_user_snooze_minutes
         from src.backend.weather import _get_server_base_url
         base = _get_server_base_url()
         if source_type == "chit" and source_id:
@@ -469,6 +469,13 @@ async def _timer_fire_task(key, delay_seconds, user_id, name, source_type, sourc
             # Independent alerts — link to the Alarms tab in independent mode
             click_url = f"{base}/?tab=Alarms&view=independent"
         icon_url = f"{base}/static/cwoc-icon-192.png"
+        attach_url = f"{base}/static/cwoc-icon-512.png"
+
+        # Build action buttons (Open, Snooze, Dismiss)
+        snooze_minutes = get_user_snooze_minutes(user_id)
+        actions = build_ntfy_actions(base, chit_id=source_id if source_type == "chit" else None,
+                                     source_type=source_type, snooze_minutes=snooze_minutes)
+
         send_ntfy_notification(
             user_id=user_id,
             title=f"{name or 'Timer'} — Time's up!",
@@ -477,6 +484,8 @@ async def _timer_fire_task(key, delay_seconds, user_id, name, source_type, sourc
             tags="timer_clock",
             priority=5,
             icon_url=icon_url,
+            actions=actions,
+            attach_url=attach_url,
         )
     except Exception as e:
         logger.warning(f"Ntfy failed for timer {key}: {e}")

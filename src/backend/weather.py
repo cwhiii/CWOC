@@ -105,7 +105,7 @@ def _send_chit_ntfy(owner_id, chit_id, chit_title, time_label, time_value):
         time_value: Human-readable time string (e.g. "3:00 PM").
     """
     try:
-        from src.backend.routes.ntfy import send_ntfy_notification
+        from src.backend.routes.ntfy import send_ntfy_notification, build_ntfy_actions, get_user_snooze_minutes
     except ImportError:
         logger.debug("Ntfy routes not available — skipping ntfy notification")
         return
@@ -119,6 +119,7 @@ def _send_chit_ntfy(owner_id, chit_id, chit_title, time_label, time_value):
         base = _get_server_base_url()
         click_url = f"{base}/frontend/html/editor.html?id={chit_id}"
         icon_url = f"{base}/static/cwoc-icon-192.png"
+        attach_url = f"{base}/static/cwoc-icon-512.png"
 
         # Set priority and tags based on alert type
         if "Alarm" in time_label:
@@ -134,6 +135,11 @@ def _send_chit_ntfy(owner_id, chit_id, chit_title, time_label, time_value):
             tags = "calendar"
             priority = 4  # high
 
+        # Build action buttons (Open, Snooze, Dismiss)
+        snooze_minutes = get_user_snooze_minutes(owner_id)
+        actions = build_ntfy_actions(base, chit_id=chit_id, source_type="chit",
+                                     snooze_minutes=snooze_minutes)
+
         result = send_ntfy_notification(
             user_id=owner_id,
             title=title,
@@ -142,6 +148,8 @@ def _send_chit_ntfy(owner_id, chit_id, chit_title, time_label, time_value):
             tags=tags,
             priority=priority,
             icon_url=icon_url,
+            actions=actions,
+            attach_url=attach_url,
         )
         if result.get("sent"):
             logger.info(f"Ntfy sent for chit {chit_id} to user {owner_id}: {result}")
@@ -775,10 +783,15 @@ async def _alert_push_loop():
                     continue
                 _fired_keys.add(key)
                 name = data.get("name") or "Independent Alarm"
-                ia_click_url = f"{_get_server_base_url()}/"
-                ia_icon_url = f"{_get_server_base_url()}/static/cwoc-icon-192.png"
+                ia_base = _get_server_base_url()
+                ia_click_url = f"{ia_base}/?tab=Alarms&view=independent"
+                ia_icon_url = f"{ia_base}/static/cwoc-icon-192.png"
+                ia_attach_url = f"{ia_base}/static/cwoc-icon-512.png"
                 try:
-                    from src.backend.routes.ntfy import send_ntfy_notification
+                    from src.backend.routes.ntfy import send_ntfy_notification, build_ntfy_actions, get_user_snooze_minutes
+                    ia_snooze = get_user_snooze_minutes(owner_id)
+                    ia_actions = build_ntfy_actions(ia_base, source_type="independent",
+                                                    snooze_minutes=ia_snooze)
                     send_ntfy_notification(
                         user_id=owner_id,
                         title=name,
@@ -787,6 +800,8 @@ async def _alert_push_loop():
                         tags="alarm_clock",
                         priority=5,
                         icon_url=ia_icon_url,
+                        actions=ia_actions,
+                        attach_url=ia_attach_url,
                     )
                 except Exception as e:
                     logger.warning(f"Ntfy failed for independent alarm {ia_id}: {e}")

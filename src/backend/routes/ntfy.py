@@ -102,20 +102,23 @@ def get_ntfy_config() -> dict:
 
 def send_ntfy_notification(user_id: str, title: str, body: str,
                            click_url: str = None, tags: str = None,
-                           priority: int = None, icon_url: str = None) -> dict:
+                           priority: int = None, icon_url: str = None,
+                           actions: str = None, attach_url: str = None) -> dict:
     """Send a notification via HTTP POST to the ntfy server.
 
     Reads config from the network_access table on each call so that
     configuration changes take effect immediately without server restart.
 
     Args:
-        user_id:   Target user's UUID (used to compute topic).
-        title:     Notification title (X-Title header).
-        body:      Notification body (POST request body).
-        click_url: Optional URL to open on tap (X-Click header).
-        tags:      Optional comma-separated emoji tags (X-Tags header).
-        priority:  Optional priority 1-5 (X-Priority header). 5=max/urgent, 4=high, 3=default.
-        icon_url:  Optional URL to notification icon (X-Icon header).
+        user_id:    Target user's UUID (used to compute topic).
+        title:      Notification title (X-Title header).
+        body:       Notification body (POST request body).
+        click_url:  Optional URL to open on tap (X-Click header).
+        tags:       Optional comma-separated emoji tags (X-Tags header).
+        priority:   Optional priority 1-5 (X-Priority header). 5=max/urgent, 4=high, 3=default.
+        icon_url:   Optional URL to notification icon (X-Icon header).
+        actions:    Optional X-Actions header string for action buttons (up to 3).
+        attach_url: Optional URL to attach as image (X-Attach header). Shows as large image.
 
     Returns:
         {'sent': True, 'topic': str} on success.
@@ -165,6 +168,10 @@ def send_ntfy_notification(user_id: str, title: str, body: str,
             req.add_header("X-Priority", str(priority))
         if icon_url:
             req.add_header("X-Icon", icon_url)
+        if actions:
+            req.add_header("X-Actions", actions)
+        if attach_url:
+            req.add_header("X-Attach", attach_url)
 
         with urllib.request.urlopen(req, timeout=10) as resp:
             status_code = resp.getcode()
@@ -188,6 +195,87 @@ def send_ntfy_notification(user_id: str, title: str, body: str,
         reason = f"ntfy send error: {e}"
         logger.warning(reason)
         return {"sent": False, "reason": reason}
+
+
+def get_user_snooze_minutes(user_id: str) -> int:
+    """Read the user's snooze_length setting and return it as minutes.
+
+    Parses strings like '5 minutes', '10 minutes', '1 hour', '30 seconds'.
+    Defaults to 5 minutes if not set or unparseable.
+    """
+    import re
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        row = conn.execute(
+            "SELECT snooze_length FROM settings WHERE user_id = ?",
+            (user_id,),
+        ).fetchone()
+        if not row or not row["snooze_length"]:
+            return 5
+
+        s = row["snooze_length"]
+        match = re.match(r"(\d+)\s*(minute|hour|second)", s, re.IGNORECASE)
+        if not match:
+            return 5
+
+        val = int(match.group(1))
+        unit = match.group(2).lower()
+        if unit.startswith("hour"):
+            return val * 60
+        elif unit.startswith("second"):
+            return max(1, val // 60)  # at least 1 minute
+        else:
+            return val
+    except Exception:
+        return 5
+    finally:
+        if conn:
+            conn.close()
+
+
+def build_ntfy_actions(base_url: str, chit_id: str = None, source_type: str = "chit",
+                       snooze_minutes: int = 5) -> str:
+    """Build the X-Actions header string with up to 3 action buttons.
+
+    Actions (all 'view' type — opens in browser where user is already logged in):
+      1. Open — opens the chit editor or Alarms tab
+      2. Snooze — opens a snooze URL that triggers the snooze flow
+      3. Dismiss — clears the notification (clear=true, no URL needed)
+
+    Args:
+        base_url:       Server base URL (e.g. http://192.168.1.111:3333)
+        chit_id:        Chit UUID (for chit-based alerts) or None
+        source_type:    'chit' or 'independent'
+        snooze_minutes: Snooze duration from user settings
+
+    Returns:
+        X-Actions header string with semicolon-separated actions.
+    """
+    actions = []
+
+    # Button 1: Open
+    if source_type == "chit" and chit_id:
+        open_url = f"{base_url}/frontend/html/editor.html?id={chit_id}"
+        actions.append(f"view, Open, {open_url}, clear=true")
+    else:
+        open_url = f"{base_url}/?tab=Alarms&view=independent"
+        actions.append(f"view, Open, {open_url}, clear=true")
+
+    # Button 2: Snooze
+    snooze_label = f"Snooze {snooze_minutes}m" if snooze_minutes < 60 else f"Snooze {snooze_minutes // 60}h"
+    # Snooze opens the dashboard which will handle the snooze via the alert system
+    if source_type == "chit" and chit_id:
+        snooze_url = f"{base_url}/?tab=Alarms&snooze={chit_id}&mins={snooze_minutes}"
+    else:
+        snooze_url = f"{base_url}/?tab=Alarms&view=independent&snooze=true&mins={snooze_minutes}"
+    actions.append(f"view, {snooze_label}, {snooze_url}, clear=true")
+
+    # Button 3: Dismiss (just clears the notification)
+    actions.append(f"view, Dismiss, {base_url}/, clear=true")
+
+    return "; ".join(actions)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -335,7 +423,13 @@ def ntfy_test(request: Request):
     # Build the click URL using the request's origin so it works on any host/port
     host = request.headers.get("host", "localhost")
     scheme = request.headers.get("x-forwarded-proto", "https")
-    click_url = f"{scheme}://{host}/frontend/html/settings.html"
+    base = f"{scheme}://{host}"
+    click_url = f"{base}/frontend/html/settings.html"
+
+    # Build action buttons for the test notification
+    snooze_minutes = get_user_snooze_minutes(user_id)
+    actions = build_ntfy_actions(base, source_type="chit", chit_id=None,
+                                 snooze_minutes=snooze_minutes)
 
     result = send_ntfy_notification(
         user_id=user_id,
@@ -344,7 +438,9 @@ def ntfy_test(request: Request):
         click_url=click_url,
         tags="white_check_mark",
         priority=4,
-        icon_url=f"{scheme}://{host}/static/cwoc-icon-192.png",
+        icon_url=f"{base}/static/cwoc-icon-192.png",
+        actions=actions,
+        attach_url=f"{base}/static/cwoc-icon-512.png",
     )
 
     if result.get("sent"):
