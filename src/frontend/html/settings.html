@@ -346,6 +346,32 @@
                     title: 'This tag has active sharing';
                 }
 
+                /* ── Collapsible setting-group headers ── */
+                .setting-group > h3 {
+                    cursor: pointer;
+                    user-select: none;
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                }
+                .setting-group > h3::before {
+                    content: '▼';
+                    font-size: 0.6em;
+                    width: 12px;
+                    text-align: center;
+                    flex-shrink: 0;
+                    transition: transform 0.2s ease;
+                }
+                .setting-group.collapsed > h3::before {
+                    content: '▶';
+                }
+                .setting-group-body {
+                    /* wrapper for all content below h3 */
+                }
+                .setting-group.collapsed .setting-group-body {
+                    display: none;
+                }
+
                 /* ── Sub-section header within a setting group ── */
                 .setting-subheader {
                     display: block;
@@ -771,7 +797,28 @@
                         <p class="setting-hint">When checked, new habits will appear on the calendar by default. Each habit can override this in its editor.</p>
                     </div>
                     <div class="setting-group">
-                        <h3>📍 Saved Locations</h3>
+                        <h3>🌍 Geography</h3>
+
+                        <label class="setting-subheader">🗺️ Map Settings</label>
+                        <div class="setting-inline">
+                            <label class="cwoc-checkbox-label"><input type="checkbox" id="map-auto-zoom" checked onchange="_toggleMapAutoZoom(); setSaveButtonUnsaved();" /> Auto-zoom to markers on load</label>
+                        </div>
+                        <div id="map-custom-view-settings" style="margin-top:8px;">
+                            <div class="setting-inline">
+                                <label for="map-default-lat">Default Latitude</label>
+                                <input type="number" id="map-default-lat" step="any" placeholder="39.8283" style="width:100px;" onchange="setSaveButtonUnsaved();" oninput="setSaveButtonUnsaved();" />
+                            </div>
+                            <div class="setting-inline">
+                                <label for="map-default-lon">Default Longitude</label>
+                                <input type="number" id="map-default-lon" step="any" placeholder="-98.5795" style="width:100px;" onchange="setSaveButtonUnsaved();" oninput="setSaveButtonUnsaved();" />
+                            </div>
+                            <div class="setting-inline">
+                                <label for="map-default-zoom">Default Zoom (1–18)</label>
+                                <input type="number" id="map-default-zoom" min="1" max="18" placeholder="4" style="width:100px;" onchange="setSaveButtonUnsaved();" oninput="setSaveButtonUnsaved();" />
+                            </div>
+                        </div>
+
+                        <label class="setting-subheader">📍 Saved Locations</label>
                         <div id="locations-list"></div>
                         <button type="button" id="add-location-btn" class="standard-button" style="margin-top:8px;" onclick="addLocationRow()">➕ Add Location</button>
                     </div>
@@ -814,26 +861,6 @@
                         </div>
                         <div id="settings-tag-tree" style="max-height:300px;overflow-y:auto;border:1px solid #8b5a2b;border-radius:4px;padding:8px;background:#fffaf0;box-sizing:border-box;"></div>
                         <div id="tag-editor-hidden" style="display:none;"></div>
-                    </div>
-                    <div class="setting-group">
-                        <h3>🗺️ Map Settings</h3>
-                        <div class="setting-inline">
-                            <label class="cwoc-checkbox-label"><input type="checkbox" id="map-auto-zoom" checked onchange="_toggleMapAutoZoom(); setSaveButtonUnsaved();" /> Auto-zoom to markers on load</label>
-                        </div>
-                        <div id="map-custom-view-settings" style="margin-top:8px;">
-                            <div class="setting-inline">
-                                <label for="map-default-lat">Default Latitude</label>
-                                <input type="number" id="map-default-lat" step="any" placeholder="39.8283" style="width:100px;" onchange="setSaveButtonUnsaved();" oninput="setSaveButtonUnsaved();" />
-                            </div>
-                            <div class="setting-inline">
-                                <label for="map-default-lon">Default Longitude</label>
-                                <input type="number" id="map-default-lon" step="any" placeholder="-98.5795" style="width:100px;" onchange="setSaveButtonUnsaved();" oninput="setSaveButtonUnsaved();" />
-                            </div>
-                            <div class="setting-inline">
-                                <label for="map-default-zoom">Default Zoom (1–18)</label>
-                                <input type="number" id="map-default-zoom" min="1" max="18" placeholder="4" style="width:100px;" onchange="setSaveButtonUnsaved();" oninput="setSaveButtonUnsaved();" />
-                            </div>
-                        </div>
                     </div>
                     <div class="setting-group" id="pwa-cert-section">
                         <h3>📱 Install as App</h3>
@@ -1301,6 +1328,70 @@
                 waitForAuth().then(_showAdminSection);
               } else {
                 _showAdminSection();
+              }
+            })();
+            </script>
+            <script>
+            /* ── Collapsible setting-group sections ── */
+            (function() {
+              var STORAGE_KEY = 'cwoc_settings_collapsed';
+
+              function _getCollapsedState() {
+                try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; } catch (e) { return {}; }
+              }
+              function _saveCollapsedState(state) {
+                try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) { /* ignore */ }
+              }
+
+              function _initCollapsibleGroups() {
+                var groups = document.querySelectorAll('.setting-group');
+                var state = _getCollapsedState();
+
+                for (var i = 0; i < groups.length; i++) {
+                  var group = groups[i];
+                  var h3 = group.querySelector(':scope > h3');
+                  if (!h3) continue;
+
+                  /* Build a key from the h3 text content */
+                  var key = h3.textContent.trim().replace(/[^\w\s]/g, '').trim().toLowerCase().replace(/\s+/g, '-');
+                  group.dataset.collapseKey = key;
+
+                  /* Wrap everything after h3 in a .setting-group-body div */
+                  var body = document.createElement('div');
+                  body.className = 'setting-group-body';
+                  var sibling = h3.nextSibling;
+                  while (sibling) {
+                    var next = sibling.nextSibling;
+                    body.appendChild(sibling);
+                    sibling = next;
+                  }
+                  group.appendChild(body);
+
+                  /* Restore collapsed state */
+                  if (state[key]) {
+                    group.classList.add('collapsed');
+                  }
+
+                  /* Wire click handler */
+                  (function(g, k) {
+                    g.querySelector(':scope > h3').addEventListener('click', function() {
+                      g.classList.toggle('collapsed');
+                      var s = _getCollapsedState();
+                      if (g.classList.contains('collapsed')) {
+                        s[k] = true;
+                      } else {
+                        delete s[k];
+                      }
+                      _saveCollapsedState(s);
+                    });
+                  })(group, key);
+                }
+              }
+
+              if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', _initCollapsibleGroups);
+              } else {
+                _initCollapsibleGroups();
               }
             })();
             </script>

@@ -780,11 +780,9 @@ function _applyChitDisplayOptions() {
 document.addEventListener("DOMContentLoaded", function () {
   console.debug("DOM fully loaded, initializing...");
 
-  // Initialize mobile sidebar overlay behavior (backdrop, resize handling)
-  initMobileSidebar();
-
-  // Restore topbar visibility from localStorage
-  _restoreTopbarState();
+  // Initialize the shared sidebar with dashboard-specific callbacks
+  // (handles: mobile sidebar, topbar restore, version fetch, tag/people filters, notifications)
+  _initDashboardSidebar();
 
   // Initialize mobile Views button (replaces tab bar on mobile)
   if (typeof initMobileViewsButton === 'function') initMobileViewsButton();
@@ -794,14 +792,6 @@ document.addEventListener("DOMContentLoaded", function () {
 
   // Restore persisted view mode button highlights
   _restoreViewModeButtons();
-
-  // Fetch version for sidebar footer
-  fetch('/api/version').then(function(r) { return r.ok ? r.json() : {}; }).then(function(d) {
-    var link = document.getElementById('sidebar-version-link');
-    if (link && d.version) {
-      link.title = '\u00A9 2026 C.W.\'s Omni Chits \u00B7 v' + d.version + ' \u00B7 www.cwholemaniii.com';
-    }
-  }).catch(function() {});
 
   // Always fetch independent alerts — needed for the alarm checker regardless of view mode
   _fetchIndependentAlerts();
@@ -840,11 +830,7 @@ document.addEventListener("DOMContentLoaded", function () {
     if (filtersInit) filtersInit.style.display = 'none';
   }
 
-  _loadLabelFilters();
-  _buildPeopleFilterPanel();
   _renderSavedSearches();
-  // Fetch sharing notifications for inbox badge
-  if (typeof _fetchNotifications === 'function') _fetchNotifications();
   _updateSortUI();
   loadSavedLocations().then(function () {
     // Pre-load weather for default location into cache

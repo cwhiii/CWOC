@@ -1,0 +1,3 @@
+# Release 20260503.0930 — Shared Sidebar
+
+Extracted the dashboard sidebar into a shared component (`shared-sidebar.js`) that dynamically injects and initializes the sidebar on any page with `data-sidebar="true"` on `<body>`. The dashboard's `main-sidebar.js` is now a thin wrapper registering dashboard-specific callbacks, and the maps page replaces its custom sidebar with the shared one. Both pages share the same sidebar toggle state via localStorage, the same notification inbox, and the same filter/collapse behavior. No visual changes — the sidebar looks and works identically to before on both pages.

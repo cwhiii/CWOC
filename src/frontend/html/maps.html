@@ -15,6 +15,9 @@
     <!-- Shared styles -->
     <link rel="stylesheet" href="/frontend/css/shared/shared-page.css" />
     <link rel="stylesheet" href="/frontend/css/shared/shared-calculator.css" />
+    <!-- Dashboard sidebar styles (variables → layout → sidebar) -->
+    <link rel="stylesheet" href="/frontend/css/dashboard/styles-variables.css" />
+    <link rel="stylesheet" href="/frontend/css/dashboard/styles-layout.css" />
     <link rel="stylesheet" href="/frontend/css/dashboard/styles-sidebar.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" />
 
@@ -166,9 +169,33 @@
             border-radius: 8px;
             z-index: 500;
         }
+
+        /* ══ Shared Sidebar Overrides for Maps Page ══ */
+
+        /* Match the dashboard header height so the logo isn't truncated */
+        .sidebar {
+            top: 100px;
+            height: calc(100% - 100px);
+        }
+
+        /* The maps-page-layout needs to shift when the shared sidebar is active */
+        .sidebar.active ~ .settings-panel .maps-page-layout {
+            margin-left: 240px;
+        }
+        .maps-page-layout {
+            transition: margin-left 0.3s ease;
+            margin-left: 0;
+        }
+
+        /* On mobile (≤768px), sidebar overlays the map — no margin shift */
+        @media (max-width: 768px) {
+            .sidebar.active ~ .settings-panel .maps-page-layout {
+                margin-left: 0;
+            }
+        }
     </style>
 </head>
-<body data-page-title="Maps View" data-page-icon="🗺️">
+<body data-page-title="Maps View" data-page-icon="🗺️" data-sidebar="true">
 
     <!-- ═══ Google Maps Warning (hidden by default, shown over everything) ═══ -->
     <div class="maps-google-warning" id="maps-google-warning">
@@ -182,99 +209,7 @@
     <!-- ═══ Maps Page Layout (sidebar + main) ═══ -->
     <div class="maps-page-layout" id="maps-page-layout">
 
-        <!-- ── Sidebar ── -->
-        <aside id="maps-sidebar" class="maps-sidebar">
-            <div class="maps-sidebar-scroll">
-
-                <!-- Chits Filter Panel (shown when mode=chits) -->
-                <div id="maps-chits-filter-panel" class="maps-sidebar-panel">
-
-                    <!-- Period Dropdown -->
-                    <div class="maps-filter-group">
-                        <label>Period</label>
-                        <select id="maps-period-filter" class="maps-filter-search">
-                            <option value="week" selected>This Week</option>
-                            <option value="month">This Month</option>
-                            <option value="quarter">This Quarter</option>
-                            <option value="year">This Year</option>
-                            <option value="all">All Time</option>
-                        </select>
-                    </div>
-
-                    <!-- Status Checkboxes -->
-                    <div class="maps-filter-group">
-                        <label>Status</label>
-                        <div class="checkbox-list" id="maps-chits-status-list">
-                            <label><input type="checkbox" value="ToDo" /> ToDo</label>
-                            <label><input type="checkbox" value="In Progress" /> In Progress</label>
-                            <label><input type="checkbox" value="Blocked" /> Blocked</label>
-                            <label><input type="checkbox" value="Complete" /> Complete</label>
-                        </div>
-                    </div>
-
-                    <!-- Tag Filter (CwocSidebarFilter container) -->
-                    <div class="maps-filter-group">
-                        <label>Tags</label>
-                        <div id="maps-chits-tags-filter"></div>
-                    </div>
-
-                    <!-- Priority Checkboxes -->
-                    <div class="maps-filter-group">
-                        <label>Priority</label>
-                        <div class="checkbox-list" id="maps-chits-priority-list">
-                            <label><input type="checkbox" value="Low" /> Low</label>
-                            <label><input type="checkbox" value="Medium" /> Medium</label>
-                            <label><input type="checkbox" value="High" /> High</label>
-                            <label><input type="checkbox" value="Critical" /> Critical</label>
-                        </div>
-                    </div>
-
-                    <!-- People Filter (CwocSidebarFilter container) -->
-                    <div class="maps-filter-group">
-                        <label>People</label>
-                        <div id="maps-chits-people-filter"></div>
-                    </div>
-
-                    <!-- Text Search -->
-                    <div class="maps-filter-group">
-                        <label>Search</label>
-                        <input type="text" class="maps-filter-search" id="maps-chits-text-search" placeholder="Search chits…" />
-                    </div>
-
-                    <!-- Clear Filters -->
-                    <button class="maps-clear-filters-btn" id="maps-chits-clear-filters">Clear Filters</button>
-
-                </div>
-
-                <!-- People Filter Panel (hidden by default — Chits mode is default) -->
-                <div id="maps-people-filter-panel" class="maps-sidebar-panel" style="display:none">
-
-                    <!-- Text Search -->
-                    <div class="maps-filter-group">
-                        <label>Search</label>
-                        <input type="text" class="maps-filter-search" id="maps-people-text-search" placeholder="Search contacts…" />
-                    </div>
-
-                    <!-- Favorites Toggle -->
-                    <div class="maps-filter-group">
-                        <button class="maps-favorites-toggle" id="maps-people-favorites-toggle">
-                            <i class="fa-solid fa-star"></i> Favorites Only
-                        </button>
-                    </div>
-
-                    <!-- Tag Filter (CwocSidebarFilter container) -->
-                    <div class="maps-filter-group">
-                        <label>Tags</label>
-                        <div id="maps-people-tags-filter"></div>
-                    </div>
-
-                    <!-- Clear Filters -->
-                    <button class="maps-clear-filters-btn" id="maps-people-clear-filters">Clear Filters</button>
-
-                </div>
-
-            </div><!-- /.maps-sidebar-scroll -->
-        </aside>
+        <!-- Sidebar is now injected by shared-sidebar.js via data-sidebar attribute -->
 
         <!-- ── Main Map Area ── -->
         <main class="maps-main">
@@ -308,11 +243,6 @@
                 <div class="maps-status-center" id="maps-loading-indicator" style="display:none;">
                     <span id="maps-loading-text">Loading.</span>
                 </div>
-                <!-- Right: Page title / copyright -->
-                <div class="maps-status-right">
-                    <span class="maps-footer-copyright" id="maps-footer-copyright">&copy; 2026 <a href="https://www.cwholemaniii.com/pages/home.shtml" target="_blank">C.W.'s Omni Chits</a></span>
-                    <span class="maps-footer-version" id="maps-footer-version"></span>
-                </div>
             </div>
         </main>
 
@@ -342,6 +272,7 @@
 
     <!-- ── 2. Shared page components ─────────────────────────────────────── -->
     <script src="/frontend/js/shared/shared-sidebar-filter.js"></script>
+    <script src="/frontend/js/shared/shared-sidebar.js"></script>
     <script src="/frontend/js/pages/shared-page.js"></script>
 
     <!-- ── 3. Page-specific script ───────────────────────────────────────── -->

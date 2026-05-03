@@ -800,6 +800,36 @@ Reusable sidebar filter panel component extracted from `main-sidebar.js`. Used b
 |----------|-------------|
 | `CwocSidebarFilter(config)` | Creates a filter panel with search input, hotkey numbers (1-9), favorites-first sorting, and colored badges. Config: `containerId`, `items` (array of `{name, favorite, color?}`), `selection` (mutated array), `onChange`, `searchPlaceholder`, `showColorBadge` |
 
+#### shared-sidebar.js
+
+Shared sidebar component — builds and injects the sidebar DOM, then wires behavior via Page_Context callbacks. Auto-injection runs at parse time if `<body data-sidebar>` is present (mirrors the `shared-page.js` pattern). Each page calls `_cwocInitSidebar(context)` with page-specific callbacks. Contains sidebar toggle, filter section management, notification inbox, topbar toggle, and version footer.
+
+Depends on: `shared.js` (`_isMobileOverlay`, `_showSidebarBackdrop`, `_hideSidebarBackdrop`), `shared-sidebar-filter.js` (`CwocSidebarFilter`, optional).
+
+| Symbol | Description |
+|--------|-------------|
+| `_cwocSidebarContext` | Module-level state — stored Page_Context object |
+| `_notifInboxItems` | Cached notification list for the inbox |
+| `_cwocInjectSidebar()` | IIFE that builds and injects the complete sidebar HTML if `<body>` has `data-sidebar` attribute. Produces identical DOM structure, IDs, and classes as the original inline sidebar. Inserts as first child of `<body>` |
+| `_cwocInitSidebar(context)` | Initializes sidebar behavior with a Page_Context object containing page-specific callbacks. Wires all button onclick handlers with sensible defaults, populates period dropdown from `context.periodOptions`, restores sidebar state, initializes mobile backdrop, loads tag/people filters, fetches notifications, fetches version for footer |
+| `_wireFilterCheckboxes(context)` | Wires filter checkbox `onchange` events (status, priority, display, sharing) to the page's `onFilterChange` callback |
+| `toggleSidebar()` | Sidebar open/close toggle with `localStorage` persistence under `sidebarState` key. Handles mobile backdrop show/hide. Dispatches `resize` event after transition |
+| `restoreSidebarState()` | Restores sidebar open/closed state from `localStorage` on page load; on mobile (≤768px) always defaults to collapsed |
+| `toggleSidebarSection(sectionId)` | Toggle a sidebar section's body visibility (expand/collapse) |
+| `expandSidebarSection(sectionId)` | Expand a sidebar section (used by hotkeys) |
+| `_toggleFiltersSection()` | Toggle the Filters section open/closed; shows/hides the Clear Filters row |
+| `_expandFiltersSection()` | Ensure the Filters section is expanded (used by hotkeys) |
+| `toggleFilterGroup(groupId)` | Toggle a filter sub-group's body visibility |
+| `expandFilterGroup(groupId)` | Expand a filter sub-group (used by hotkeys) |
+| `_toggleTopbar()` | Toggle the topbar (header) visibility with `localStorage` persistence |
+| `_restoreTopbarState()` | Restore topbar visibility from `localStorage` on page load |
+| `_toggleNotifInbox()` | Toggle the notification inbox expanded/collapsed; re-renders on expand |
+| `_fetchNotifications()` | Fetch notifications from `GET /api/notifications` and update the badge + cached list; re-renders inbox if expanded |
+| `_updateNotifBadge()` | Update the notification badge count from `_notifInboxItems` (pending count) |
+| `_renderNotifInbox()` | Render the notification inbox list with chit title links, owner name, and Accept/Decline buttons |
+| `_respondNotification(notifId, status)` | Accept or decline a notification via `PATCH /api/notifications/{id}`; removes from list, updates badge, refreshes chits |
+| `_fetchSidebarVersion()` | Fetch version from `/api/version` and populate the sidebar footer link title |
+
 #### shared-qr.js
 
 QR code display modal — single source of truth for all QR display across the app.
@@ -981,8 +1011,13 @@ Calculator Popover module — a floating, draggable arithmetic calculator availa
 
 #### main-sidebar.js
 
+Dashboard sidebar wrapper — thin layer over `shared-sidebar.js`. Registers dashboard-specific Page_Context callbacks and retains dashboard-only filter, sort, tag, and people panel logic. Shared sidebar functions (`toggleSidebar`, `restoreSidebarState`, `toggleSidebarSection`, `expandSidebarSection`, `_toggleFiltersSection`, `_expandFiltersSection`, `toggleFilterGroup`, `expandFilterGroup`, `_toggleNotifInbox`, `_fetchNotifications`, `_updateNotifBadge`, `_renderNotifInbox`, `_respondNotification`, `_toggleTopbar`, `_restoreTopbarState`) are now in `shared-sidebar.js`.
+
+Depends on: `shared-sidebar.js` (`_cwocInitSidebar`, `toggleSidebar`, `restoreSidebarState`, `_restoreTopbarState`, etc.), `shared.js` (`getPastelColor`, `isSystemTag`, `buildTagTree`, `renderTagTree`, `getCachedSettings`), `main.js` globals (`currentTab`, `currentSortField`, `currentSortDir`, `_cachedTagObjects`, `_chitOptions`, `_defaultFilters`, etc.).
+
 | Function | Description |
 |----------|-------------|
+| `_initDashboardSidebar()` | Registers dashboard-specific Page_Context callbacks with `_cwocInitSidebar()` (onCreateChit, onToday, onPeriodChange, onPreviousPeriod, onNextPeriod, onFilterChange, onClearFilters, onSortChange, onSortDirToggle, onContactsClick, onClockClick, onWeatherClick, onCalculatorClick, onReferenceClick, onHelpClick, periodOptions, loadTagFilters, loadPeopleFilters). Calls `_restoreTopbarState()` after init |
 | `onSortSelectChange()` | Handle sort dropdown change — update sort field and re-render |
 | `toggleSortDir()` | Toggle sort direction between ascending and descending |
 | `_updateSortUI()` | Update the sort direction button text and visibility |
@@ -1002,7 +1037,6 @@ Calculator Popover module — a floating, draggable arithmetic calculator availa
 | `_toggleFilterPinned()` | Toggle the show-pinned checkbox via hotkey |
 | `_filterFocusSearch()` | Exit hotkey mode, expand filters, and focus the search input |
 | `_pickSort(field)` | Set sort field via hotkey and re-render |
-| `CwocSidebarFilter(config)` | Class — reusable sidebar filter panel with search, favorites, and hotkey numbers |
 | `_buildTagFilterPanel()` | Build the tag filter panel using CwocSidebarFilter with colored tag badges |
 | `_syncSidebarTagCheckboxes(container, tagObjects)` | Sync hidden checkbox elements to match the sidebar tag selection array |
 | `_buildPeopleFilterPanel()` | Fetch contacts and system users, then render the people filter panel |
@@ -1010,23 +1044,7 @@ Calculator Popover module — a floating, draggable arithmetic calculator availa
 | `_renderPeopleChipFilter(containerId, contacts, users, selection)` | Render a chip-based people filter into a specific container; user chips get a thicker dark border and user icon |
 | `_isPeopleColorLight(hex)` | Check if a people chip color is light (delegates to isLightColor) |
 | `clearPeopleFilter()` | Clear the people filter selection and re-render |
-| `toggleSidebar()` | Toggle sidebar open/closed and persist state to localStorage |
-| `_toggleTopbar()` | Toggle the topbar (header) visibility and persist to localStorage |
-| `_restoreTopbarState()` | Restore topbar visibility from localStorage on page load |
-| `toggleSidebarSection(sectionId)` | Toggle a sidebar section's body visibility |
-| `expandSidebarSection(sectionId)` | Expand a sidebar section (used by hotkeys) |
-| `_toggleFiltersSection()` | Toggle the entire Filters section open/closed |
-| `_expandFiltersSection()` | Ensure the Filters section is expanded (used by hotkeys) |
-| `toggleFilterGroup(groupId)` | Toggle a filter sub-group's body visibility |
-| `expandFilterGroup(groupId)` | Expand a filter sub-group (used by hotkeys) |
-| `restoreSidebarState()` | Restore sidebar open/closed state from localStorage on page load |
 | `_loadLabelFilters()` | Load tag/label filters from settings API and render the tag tree in the sidebar |
-| `_notifInboxItems` | Cached notification list for the inbox |
-| `_toggleNotifInbox()` | Toggle the notification inbox expanded/collapsed; re-renders on expand |
-| `_fetchNotifications()` | Fetch notifications from `GET /api/notifications` and update the badge + cached list; re-renders inbox if expanded |
-| `_updateNotifBadge()` | Update the notification badge count from `_notifInboxItems` (pending count) |
-| `_renderNotifInbox()` | Render the notification inbox list with chit title links, owner name, and Accept/Decline buttons |
-| `_respondNotification(notifId, status)` | Accept or decline a notification via `PATCH /api/notifications/{id}`; removes from list, updates badge, refreshes chits |
 
 #### main-hotkeys.js
 
@@ -1976,7 +1994,7 @@ Admin-only page for managing user accounts. Provides user table listing, create 
 
 #### maps.js
 
-Maps page: interactive Leaflet map with two display modes — **Chits** (chit locations as color-coded markers using chit's own color) and **People** (contact addresses as markers). Uses shared header via `.settings-panel` with mode toggle injected into the header bar. Period dropdown filter (week/month/quarter/year/all), CwocSidebarFilter for tags and people, blocked/overdue cluster indicators, collapsible sidebar, fullscreen mode, default view reset, and responsive layout with mobile sidebar overlay.
+Maps page: interactive Leaflet map with two display modes — **Chits** (chit locations as color-coded markers using chit's own color) and **People** (contact addresses as markers). Uses shared sidebar via `shared-sidebar.js` with maps-specific Page_Context callbacks. Mode toggle (Chits/Both/People) injected into the shared `.header-and-buttons` header. Period dropdown filter (week/month/quarter/year/all), CwocSidebarFilter for tags and people (using shared sidebar container IDs: `label-multi`, `people-multi`, `status-multi`, `priority-multi`), blocked/overdue cluster indicators, color-coded markers, focus mode for "View in Context" navigation, fullscreen mode, default view reset, and responsive layout with mobile sidebar overlay.
 
 | Symbol | Description |
 |--------|-------------|
@@ -1988,7 +2006,6 @@ Maps page: interactive Leaflet map with two display modes — **Chits** (chit lo
 | `_mapsStatusColors` | Object mapping status strings to hex colors (kept for popup display) |
 | `_mapsNoStatusColor` | Default hex color for chits with no status (`#9E9E9E`) |
 | `MAPS_MODE_KEY` | localStorage key for persisting the current mode (`'cwoc_maps_mode'`) |
-| `MAPS_SIDEBAR_KEY` | localStorage key for persisting sidebar state (`'cwoc_maps_sidebar'`) |
 | `_mapsCurrentMode` | Current mode: `'chits'`, `'both'`, or `'people'` |
 | `_mapsAllContacts` | Cached array of all fetched contacts |
 | `_mapsPeopleClusterGroup` | Separate MarkerClusterGroup for people mode (teal styling) |
@@ -2003,36 +2020,31 @@ Maps page: interactive Leaflet map with two display modes — **Chits** (chit lo
 | `_mapsPeopleFilterFavoritesOnly` | Favorites-only toggle state (boolean) |
 | `_mapsPeopleFilterTags` | Selected tag filter values for people (array, mutated by CwocSidebarFilter) |
 | **Header & Mode Toggle** | |
-| `_injectModeToggle()` | Creates Chits/Both/People mode toggle and sidebar toggle button, injects them into the shared `.header-and-buttons` header created by shared-page.js |
+| `_injectModeToggle()` | Creates Chits/Both/People mode toggle and sidebar toggle button, injects them into the shared `.header-and-buttons` header created by shared-page.js. Sidebar toggle calls shared sidebar's `toggleSidebar()` |
 | `_getPeriodDateRange(period)` | Returns `{start, end}` Date objects for "week", "month", "quarter", "year", or "all" (null dates) |
 | `_isChitOverdue(chit)` | Returns true if chit has a `due_datetime` in the past and status is not 'Complete' |
 | **Mode Management** | |
 | `_mapsGetMode()` | Returns current mode (`"chits"`, `"both"`, or `"people"`) |
-| `_mapsSetMode(mode)` | Sets mode, persists to localStorage, updates toggle button active states, triggers mode switch; swaps sidebar panel visibility (shows chits or people filter panel) |
+| `_mapsSetMode(mode)` | Sets mode, persists to localStorage, updates toggle button active states, triggers mode switch |
 | `_mapsRestoreMode()` | Reads mode from localStorage, validates, defaults to `"chits"` |
 | `_onModeToggleChange(e)` | Click handler for mode toggle buttons — reads `data-mode` and calls `_mapsSetMode()` |
 | `_showChitsLegend()` | Shows chits legend (`#maps-legend`), hides people legend |
 | `_showPeopleLegend()` | Shows people legend (`#maps-people-legend`), hides chits legend |
 | `_showBothLegends()` | Shows both chits and people legends |
-| `_switchToChitsMode()` | Transitions to Chits mode — clears people markers, shows chits filter panel/legend, loads chits |
-| `_switchToPeopleMode()` | Transitions to People mode — clears chit markers, shows people filter panel/legend, loads contacts |
-| `_switchToBothMode()` | Transitions to Both mode — shows both filter panels/legends, loads both chits and contacts |
-| **Sidebar Management** | |
-| `_initMapsSidebar()` | Initializes sidebar: restores state from localStorage, wires toggle button, sets up resize handling to invalidate Leaflet map after transitions |
-| `_toggleMapsSidebar()` | Toggles sidebar collapsed/expanded state, persists to localStorage (`cwoc_maps_sidebar`), handles mobile backdrop show/hide |
-| `_restoreMapsSidebarState()` | Reads sidebar state from localStorage, applies collapsed class; on mobile (≤768px) always defaults to collapsed |
-| `_isMapsViewMobile()` | Returns true if viewport width is ≤768px |
-| `_showMobileSidebarBackdrop()` | Creates and shows a semi-transparent dark backdrop overlay on mobile when sidebar is expanded; clicking backdrop closes sidebar |
-| `_hideMobileSidebarBackdrop()` | Hides and removes the mobile sidebar backdrop element |
+| `_switchToChitsMode()` | Transitions to Chits mode — clears people markers, shows chits legend, reloads chit filter data, loads chits |
+| `_switchToPeopleMode()` | Transitions to People mode — clears chit markers, shows people legend, loads contacts |
+| `_switchToBothMode()` | Transitions to Both mode — shows both legends, loads both chits and contacts |
+| **Shared Sidebar Initialization** | |
+| `_initMapsSidebarShared()` | Initializes the shared sidebar for the maps page via `_cwocInitSidebar()` with maps-specific Page_Context (onCreateChit, onToday, onPeriodChange, onFilterChange, onClearFilters, onMapsClick no-op, periodOptions, loadTagFilters, loadPeopleFilters). Hides `.author-info` footer. Wires sidebar `transitionend` to invalidate Leaflet map size. Passes `currentPage: 'maps'` to highlight Maps button |
 | **Chits Filter Panel** | |
-| `_initChitsFilters()` | Sets up chits filter panel event handlers (period dropdown, status, priority checkboxes, text search, clear button, dynamic data) |
-| `_loadChitsFilterData()` | Fetches tags from settings and contacts/users, builds CwocSidebarFilter instances for tags and people |
+| `_initChitsFilters()` | Sets up chits filter panel — period dropdown, status/priority checkboxes, and text search are wired by `_cwocInitSidebar()` via shared sidebar. Loads dynamic filter data (tags, people) via `_loadChitsFilterData()` |
+| `_loadChitsFilterData()` | Fetches tags from settings and contacts/users, builds CwocSidebarFilter instances for tags (`#label-multi`) and people (`#people-multi`) using the shared sidebar's standard container IDs |
 | `_matchesChitTextSearch(chit, query)` | Case-insensitive text search across chit title, note, location, and tags |
-| `_applyChitsFilters(chits)` | Applies all chit filters (status, tags, priority, people, text, period date range) — AND-combined |
-| `_onChitsFilterChange()` | Handler for chit filter changes — re-reads UI state, re-filters and re-renders |
-| `_clearChitsFilters()` | Resets all chit filters to defaults (period back to "week"), re-renders CwocSidebarFilter panels |
+| `_applyChitsFilters(chits)` | Applies all chit filters (status, tags, priority, people, text, period date range) — AND-combined. Reads from shared sidebar's `#period-select`, `#status-multi`, `#priority-multi`, `#search` |
+| `_onChitsFilterChange()` | Handler for chit filter changes — reads filter state from shared sidebar's standard containers and re-renders |
+| `_clearChitsFilters()` | Resets all chit filters to defaults (period back to "week"), resets shared sidebar's status/priority checkboxes, clears search, re-renders CwocSidebarFilter panels |
 | **Entry point & map init** | |
-| `_mapsInit()` | Entry point: injects mode toggle, checks `prefer_google_maps`, reads map settings for initial view, restores mode, initializes both cluster groups, wires toggle, initializes sidebar, initializes filters, handles focus query parameter, triggers mode |
+| `_mapsInit()` | Entry point: injects mode toggle, checks `prefer_google_maps`, reads map settings for initial view, restores mode, initializes both cluster groups, wires toggle, calls `_initMapsSidebarShared()`, initializes filters, handles focus query parameter, triggers mode |
 | `_initLeafletMap()` | Creates Leaflet map instance with OpenStreetMap tile layer; adds Fullscreen and DefaultView controls; configures chit cluster `iconCreateFunction` with mixed cluster detection, blocked (red border) and overdue (orange border) cluster indicators |
 | **Utility helpers** | |
 | `_hexToRgba(hex, alpha)` | Converts a hex color string (e.g. `"#FF0000"`) to an `rgba(r, g, b, alpha)` CSS string for semi-transparent fills |
@@ -2049,8 +2061,6 @@ Maps page: interactive Leaflet map with two display modes — **Chits** (chit lo
 | `_getMarkerColor(status)` | Returns hex color for a chit status (used in popups) |
 | `_buildPopupContent(chit)` | Returns HTML for a chit marker popup with title, date, status, and editor link |
 | `_placeMarkers(geocodedChits)` | Creates colored markers using chit's own `color` field (fallback `#d2b48c`), stores `_cwocChit` on each marker for cluster blocked/overdue detection; respects auto-zoom setting |
-| `_initDateFilters()` | Wires the period dropdown change handler |
-| `_onDateFilterChange()` | Handler for period dropdown changes — re-filters and re-renders markers |
 | `_mapsToDateString(date)` | Converts a Date to `YYYY-MM-DD` string |
 | **People mode** | |
 | `_fetchAndDisplayContacts()` | Fetches contacts from `/api/contacts`, applies people filters, geocodes, places contact markers |
@@ -2431,6 +2441,8 @@ All HTML pages include the following PWA `<head>` tags: `<link rel="manifest" hr
 <script src="/frontend/js/shared/shared-qr.js"></script>
 <script src="/frontend/js/shared/shared.js"></script>
 <script src="/frontend/js/shared/shared-calculator.js"></script>
+<script src="/frontend/js/shared/shared-sidebar-filter.js"></script>
+<script src="/frontend/js/shared/shared-sidebar.js"></script>
 
 <!-- 2. Shared page components -->
 <script src="/frontend/js/pages/shared-page.js"></script>
@@ -2695,6 +2707,14 @@ shared-auth.js            ← MUST load first (getCurrentUser, isAdmin, waitForA
                     │                    shared-indicators, shared-sort, shared-touch, shared-qr,
                     │                    shared-utils, shared-geocoding)
                     │
+                    ├── shared-calculator.js  ← depends on shared.js (uses cwocToggleCalculator pattern)
+                    │
+                    ├── shared-sidebar-filter.js  ← depends on shared.js (CwocSidebarFilter component)
+                    │
+                    └── shared-sidebar.js    ← depends on shared.js + shared-sidebar-filter.js
+                          │                   (sidebar injection IIFE, _cwocInitSidebar, toggleSidebar,
+                          │                    restoreSidebarState, notifications, topbar toggle)
+                          │
                     ├── shared-page.js    ← depends on shared.js + shared-auth.js (CwocSaveSystem, header/footer injection, user switcher, logout)
                     │     │
                     │     ├── shared-editor.js  ← depends on shared-page.js (zone toggle, dirty tracking)
@@ -2702,10 +2722,10 @@ shared-auth.js            ← MUST load first (getCurrentUser, isAdmin, waitForA
                     │     └── [page-specific scripts]
                     │           settings.js, people.js, contact-editor.js,
                     │           contact-qr.js, weather.js, profile.js, user-admin.js,
-                    │           maps.js
+                    │           maps.js (depends on shared-sidebar.js for _cwocInitSidebar)
                     │
-              ├── [dashboard scripts] — all depend on shared.js + shared-page.js
-              │     main-sidebar.js
+              ├── [dashboard scripts] — all depend on shared.js + shared-sidebar.js + shared-page.js
+              │     main-sidebar.js    (thin wrapper — depends on shared-sidebar.js for _cwocInitSidebar, toggleSidebar, etc.)
               │     main-hotkeys.js
               │     main-calendar.js   (uses shared-calendar, shared-indicators)
               │     main-views.js      (uses shared-tags, shared-sort, shared-indicators)
@@ -2736,9 +2756,12 @@ shared-auth.js            ← MUST load first (getCurrentUser, isAdmin, waitForA
 - `shared-auth.js` must always load first among app scripts (checks auth, provides `getCurrentUser`, `isAdmin`, `waitForAuth`)
 - `shared-utils.js` must load after `shared-auth.js` (uses `waitForAuth()` for user-scoped settings)
 - `shared.js` must load after all other `shared-*.js` sub-scripts
-- `shared-page.js` must load after `shared.js` (uses `getCurrentUser`, `isAdmin` for user switcher and nav)
+- `shared-sidebar-filter.js` must load after `shared.js` (uses DOM utilities)
+- `shared-sidebar.js` must load after `shared-sidebar-filter.js` and `shared.js` (uses `_isMobileOverlay`, `_showSidebarBackdrop`, `CwocSidebarFilter`)
+- `shared-page.js` must load after `shared-sidebar.js` (uses `getCurrentUser`, `isAdmin` for user switcher and nav)
 - `shared-editor.js` must load after `shared-page.js`
 - `editor_checklists.js` and `editor_projects.js` load BEFORE shared scripts in editor.html (they define classes used by shared code)
+- `main-sidebar.js` depends on `shared-sidebar.js` (calls `_cwocInitSidebar`, uses `toggleSidebar`, `restoreSidebarState`, `_restoreTopbarState`)
 - `main-init.js` and `main.js` must load last among dashboard scripts
 - `editor-init.js` must load last among editor scripts
 - `login.html` does NOT load `shared-auth.js` (login page doesn't need auth guard)

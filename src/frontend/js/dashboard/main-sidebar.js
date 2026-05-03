@@ -1,23 +1,83 @@
 /**
- * main-sidebar.js — Dashboard sidebar rendering, filter panels, and toggle logic.
+ * main-sidebar.js — Dashboard sidebar wrapper (thin layer over shared-sidebar.js).
  *
  * Contains:
- *   - CwocSidebarFilter class (reusable filter panel)
+ *   - _initDashboardSidebar() — Registers dashboard Page_Context with shared sidebar
  *   - Tag filter panel (_buildTagFilterPanel, _syncSidebarTagCheckboxes)
  *   - People filter panel (_buildPeopleFilterPanel, _renderPeopleFilterPanel, _renderPeopleChipFilter)
- *   - Sidebar toggle/section expand/collapse (toggleSidebar, toggleSidebarSection, restoreSidebarState)
- *   - Topbar toggle (_toggleTopbar, _restoreTopbarState)
  *   - Filter toggle/clear functions (onFilterChange, onFilterAnyToggle, onFilterSpecificToggle, etc.)
  *   - Archive/pinned/unmarked toggles
  *   - Sort UI helpers (_updateSortUI, onSortSelectChange, toggleSortDir)
- *   - Saved searches (_saveSearch, _loadSavedSearch, _deleteSavedSearch, _renderSavedSearches)
  *   - Label/tag filter loading (_loadLabelFilters)
+ *
+ * Shared sidebar functions (toggleSidebar, restoreSidebarState, toggleSidebarSection,
+ *   expandSidebarSection, _toggleFiltersSection, _expandFiltersSection, toggleFilterGroup,
+ *   expandFilterGroup, _toggleNotifInbox, _fetchNotifications, _updateNotifBadge,
+ *   _renderNotifInbox, _respondNotification, _toggleTopbar, _restoreTopbarState) are now
+ *   in shared-sidebar.js.
  *
  * Depends on globals from main.js: currentTab, currentSortField, currentSortDir,
  *   _cachedTagObjects, _chitOptions, _defaultFilters, _weekStartDay, _enabledPeriods, etc.
  * Depends on shared.js: getPastelColor, isSystemTag, buildTagTree, renderTagTree,
  *   matchesTagFilter, isLightColor, getCachedSettings
+ * Depends on shared-sidebar.js: _cwocInitSidebar, toggleSidebar, restoreSidebarState,
+ *   toggleSidebarSection, expandSidebarSection, _toggleFiltersSection, _expandFiltersSection,
+ *   toggleFilterGroup, expandFilterGroup
  */
+
+/* ── Dashboard Sidebar Initialization ────────────────────────────────────── */
+
+/**
+ * _initDashboardSidebar() — Registers dashboard-specific callbacks with the
+ * shared sidebar. Called from main-init.js during dashboard initialization.
+ */
+function _initDashboardSidebar() {
+  _cwocInitSidebar({
+    page: 'dashboard',
+    currentPage: 'home',
+    onCreateChit: function() {
+      storePreviousState();
+      window.location.href = '/frontend/html/editor.html';
+    },
+    onToday: function() { goToToday(); },
+    onPeriodChange: function() { changePeriod(); },
+    onPreviousPeriod: function() { previousPeriod(); },
+    onNextPeriod: function() { nextPeriod(); },
+    onFilterChange: function() { displayChits(); _updateClearFiltersButton(); },
+    onClearFilters: function() { _clearAllFilters(); },
+    onSortChange: function() { onSortSelectChange(); },
+    onSortDirToggle: function() { toggleSortDir(); },
+    onContactsClick: function() {
+      window.location.href = '/frontend/html/people.html';
+    },
+    onClockClick: function() { _openClockModal(); },
+    onWeatherClick: function(e) {
+      if (e && e.shiftKey) {
+        storePreviousState();
+        window.location.href = '/frontend/html/weather.html';
+      } else {
+        _openWeatherModal();
+      }
+    },
+    onCalculatorClick: function() { cwocToggleCalculator(); },
+    onReferenceClick: function() { _toggleReference(); },
+    onHelpClick: function() { openHelpPage(); },
+    periodOptions: [
+      { value: 'Itinerary', label: 'Itinerary' },
+      { value: 'Day', label: 'Day' },
+      { value: 'Week', label: 'Week', selected: true },
+      { value: 'Work', label: 'Work Hours' },
+      { value: 'SevenDay', label: 'X Days' },
+      { value: 'Month', label: 'Month' },
+      { value: 'Year', label: 'Year' }
+    ],
+    loadTagFilters: function() { _loadLabelFilters(); },
+    loadPeopleFilters: function() { _buildPeopleFilterPanel(); }
+  });
+
+  // Restore topbar (header) visibility from localStorage — dashboard-specific
+  _restoreTopbarState();
+}
 
 /* ── Sort UI ─────────────────────────────────────────────────────────────── */
 
@@ -430,145 +490,11 @@ document.addEventListener('visibilitychange', function() {
 });
 
 /* ── Sidebar toggle / section expand / collapse ──────────────────────────── */
-
-function toggleSidebar() {
-  var sidebar = document.getElementById("sidebar");
-  sidebar.classList.toggle("active");
-  if (sidebar.classList.contains("active")) {
-    localStorage.setItem("sidebarState", "open");
-  } else {
-    localStorage.setItem("sidebarState", "closed");
-  }
-
-  if (_isMobileOverlay()) {
-    if (sidebar.classList.contains("active")) {
-      _showSidebarBackdrop();
-    } else {
-      _hideSidebarBackdrop();
-    }
-  }
-
-  window.dispatchEvent(new Event("resize"));
-  setTimeout(function() { window.dispatchEvent(new Event("resize")); }, 350);
-}
-
-/** Toggle the topbar (header) visibility. Persists to localStorage. */
-function _toggleTopbar() {
-  var header = document.querySelector('.main-content > .header');
-  if (!header) return;
-  var isHidden = header.style.display === 'none';
-  header.style.display = isHidden ? '' : 'none';
-  localStorage.setItem('cwoc_topbar_hidden', isHidden ? 'false' : 'true');
-  // Adjust chit-list to fill the space freed by hiding the header
-  var chitList = document.getElementById('chit-list');
-  if (chitList) {
-    if (!isHidden) {
-      // Hiding header — expand chit-list to fill
-      chitList.style.marginTop = '0';
-      chitList.style.height = '100vh';
-    } else {
-      // Showing header — restore original offset
-      chitList.style.marginTop = '';
-      chitList.style.height = '';
-    }
-  }
-  window.dispatchEvent(new Event("resize"));
-}
-
-/** Restore topbar visibility from localStorage on load. */
-function _restoreTopbarState() {
-  var hidden = localStorage.getItem('cwoc_topbar_hidden') === 'true';
-  if (hidden) {
-    var header = document.querySelector('.main-content > .header');
-    if (header) header.style.display = 'none';
-    var chitList = document.getElementById('chit-list');
-    if (chitList) {
-      chitList.style.marginTop = '0';
-      chitList.style.height = '100vh';
-    }
-  }
-}
-
-/** Toggle a sidebar section's body visibility */
-function toggleSidebarSection(sectionId) {
-  var section = document.getElementById(sectionId);
-  if (!section) return;
-  var body = section.querySelector('.sidebar-section-body');
-  var toggle = section.querySelector('.section-toggle');
-  if (!body) return;
-  var isHidden = body.style.display === 'none';
-  body.style.display = isHidden ? '' : 'none';
-  if (toggle) toggle.textContent = isHidden ? '▼' : '▶';
-}
-
-/** Expand a sidebar section (used by hotkeys) */
-function expandSidebarSection(sectionId) {
-  var section = document.getElementById(sectionId);
-  if (!section) return;
-  var body = section.querySelector('.sidebar-section-body');
-  var toggle = section.querySelector('.section-toggle');
-  if (body) body.style.display = '';
-  if (toggle) toggle.textContent = '▼';
-}
-
-/** Toggle the entire Filters section open/closed */
-function _toggleFiltersSection() {
-  var body = document.getElementById('filters-body');
-  var btn = document.getElementById('filters-toggle-btn');
-  if (!body) return;
-  var isHidden = body.style.display === 'none';
-  body.style.display = isHidden ? '' : 'none';
-  if (btn) btn.classList.toggle('expanded', isHidden);
-}
-
-/** Ensure filters section is expanded (used by hotkeys) */
-function _expandFiltersSection() {
-  var body = document.getElementById('filters-body');
-  var btn = document.getElementById('filters-toggle-btn');
-  if (body) body.style.display = '';
-  if (btn) btn.classList.add('expanded');
-}
-
-/** Toggle a filter sub-group's body */
-function toggleFilterGroup(groupId) {
-  var group = document.getElementById(groupId);
-  if (!group) return;
-  var body = group.querySelector('.filter-group-body');
-  var toggle = group.querySelector('.section-toggle');
-  if (!body) return;
-  var isHidden = body.style.display === 'none';
-  body.style.display = isHidden ? '' : 'none';
-  if (toggle) toggle.textContent = isHidden ? '▼' : '▶';
-}
-
-/** Expand a filter sub-group (used by hotkeys) */
-function expandFilterGroup(groupId) {
-  var group = document.getElementById(groupId);
-  if (!group) return;
-  var body = group.querySelector('.filter-group-body');
-  var toggle = group.querySelector('.section-toggle');
-  if (body) body.style.display = '';
-  if (toggle) toggle.textContent = '▼';
-}
-
-function restoreSidebarState() {
-  var sidebar = document.getElementById("sidebar");
-  if (!sidebar) {
-    console.error("Sidebar element not found");
-    return;
-  }
-  if (window.innerWidth <= 768) {
-    sidebar.classList.remove("active");
-    localStorage.setItem("sidebarState", "closed");
-    return;
-  }
-  var savedState = localStorage.getItem("sidebarState");
-  if (savedState === "closed") {
-    sidebar.classList.remove("active");
-  } else {
-    sidebar.classList.add("active");
-  }
-}
+/* These functions are now in shared-sidebar.js:
+ *   toggleSidebar, restoreSidebarState, toggleSidebarSection, expandSidebarSection,
+ *   _toggleFiltersSection, _expandFiltersSection, toggleFilterGroup, expandFilterGroup,
+ *   _toggleTopbar, _restoreTopbarState
+ */
 
 /* ── Label/tag filter loading from settings ──────────────────────────────── */
 
@@ -645,120 +571,7 @@ async function _loadLabelFilters() {
 /* ── Saved Searches are in main-search.js ────────────────────────────────── */
 
 /* ── Notification Inbox ──────────────────────────────────────────────────── */
-
-/** Cached notification list for the inbox. */
-var _notifInboxItems = [];
-
-/** Toggle the notification inbox expanded/collapsed. */
-function _toggleNotifInbox() {
-  var list = document.getElementById('notif-inbox-list');
-  if (!list) return;
-  var isHidden = list.style.display === 'none';
-  list.style.display = isHidden ? '' : 'none';
-  if (isHidden) _renderNotifInbox();
-}
-
-/** Fetch notifications from the API and update the badge + cached list. */
-async function _fetchNotifications() {
-  try {
-    var resp = await fetch('/api/notifications');
-    if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    var all = await resp.json();
-    _notifInboxItems = Array.isArray(all) ? all.filter(function(n) { return n.status === 'pending'; }) : [];
-    _updateNotifBadge();
-    // If inbox is currently expanded, re-render
-    var list = document.getElementById('notif-inbox-list');
-    if (list && list.style.display !== 'none') _renderNotifInbox();
-  } catch (e) {
-    console.error('Failed to fetch notifications:', e);
-    _notifInboxItems = [];
-    _updateNotifBadge();
-  }
-}
-
-/** Update the badge count on the inbox button. */
-function _updateNotifBadge() {
-  var badge = document.getElementById('notif-badge');
-  if (!badge) return;
-  var count = _notifInboxItems.length;
-  if (count > 0) {
-    badge.textContent = count;
-    badge.style.display = '';
-  } else {
-    badge.style.display = 'none';
-  }
-}
-
-/** Render the expanded notification list. */
-function _renderNotifInbox() {
-  var list = document.getElementById('notif-inbox-list');
-  if (!list) return;
-  list.innerHTML = '';
-
-  if (_notifInboxItems.length === 0) {
-    list.innerHTML = '<div class="cwoc-notif-empty">No pending notifications</div>';
-    return;
-  }
-
-  _notifInboxItems.forEach(function(notif) {
-    var card = document.createElement('div');
-    card.className = 'cwoc-notif-card';
-    card.dataset.notifId = notif.id;
-
-    var titleLink = document.createElement('a');
-    titleLink.className = 'cwoc-notif-title';
-    titleLink.textContent = notif.chit_title || '(Untitled chit)';
-    titleLink.href = '/frontend/html/editor.html?id=' + encodeURIComponent(notif.chit_id);
-    titleLink.title = 'Open chit in editor';
-    titleLink.addEventListener('click', function(e) {
-      e.preventDefault();
-      storePreviousState();
-      window.location.href = this.href;
-    });
-    card.appendChild(titleLink);
-
-    var ownerLine = document.createElement('div');
-    ownerLine.className = 'cwoc-notif-owner';
-    var typeLabel = notif.notification_type === 'assigned' ? 'assigned by' : 'from';
-    ownerLine.textContent = typeLabel + ' ' + (notif.owner_display_name || 'Unknown');
-    card.appendChild(ownerLine);
-
-    var actions = document.createElement('div');
-    actions.className = 'cwoc-notif-actions';
-
-    var acceptBtn = document.createElement('button');
-    acceptBtn.className = 'cwoc-notif-accept-btn';
-    acceptBtn.textContent = 'Accept';
-    acceptBtn.addEventListener('click', function() { _respondNotification(notif.id, 'accepted'); });
-    actions.appendChild(acceptBtn);
-
-    var declineBtn = document.createElement('button');
-    declineBtn.className = 'cwoc-notif-decline-btn';
-    declineBtn.textContent = 'Decline';
-    declineBtn.addEventListener('click', function() { _respondNotification(notif.id, 'declined'); });
-    actions.appendChild(declineBtn);
-
-    card.appendChild(actions);
-    list.appendChild(card);
-  });
-}
-
-/** Accept or decline a notification via PATCH, then remove from list. */
-async function _respondNotification(notifId, status) {
-  try {
-    var resp = await fetch('/api/notifications/' + encodeURIComponent(notifId), {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: status })
-    });
-    if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    // Remove from cached list
-    _notifInboxItems = _notifInboxItems.filter(function(n) { return n.id !== notifId; });
-    _updateNotifBadge();
-    _renderNotifInbox();
-    // Refresh chits to reflect RSVP changes
-    if (typeof fetchChits === 'function') fetchChits();
-  } catch (e) {
-    console.error('Failed to ' + status + ' notification ' + notifId + ':', e);
-  }
-}
+/* These functions are now in shared-sidebar.js:
+ *   _toggleNotifInbox, _fetchNotifications, _updateNotifBadge,
+ *   _renderNotifInbox, _respondNotification
+ */

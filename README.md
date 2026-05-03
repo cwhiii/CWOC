@@ -8,6 +8,18 @@ A self-hosted multi-user task, note, and calendar management web app. One flexib
 
 Unlike most productivity tools, CWOC doesn't force you to pick a category up front. Fill in the fields that matter and the system figures out where it belongs — a chit with a date shows up on the calendar, add a checklist and it appears in checklists too. Multiple users get their own accounts with granular sharing — chit-level and tag-level sharing with viewer/manager roles, RSVP, assignment, and stealth mode. No subscriptions, no cloud dependency. Your data lives on your hardware in a single SQLite file, accessible from any device on your network. The entire stack is vanilla Python and vanilla JS with zero build steps — lightweight enough to run on a Raspberry Pi Zero 2, easy to deploy, easy to hack on, and easy to understand.
 
+## The Power of One System
+
+Most productivity setups are a patchwork — a calendar app, a to-do app, a notes app, a maps app, a checklist app — each siloed, each unaware of the others. CWOC replaces that patchwork with a single unified record. That's not just convenient. It unlocks possibilities that never existed before.
+
+**Shopping day, mapped out.** Create a chit for each grocery store you need to hit. Give each one today's date, a checklist of what to buy, and the store's address. Now open the Map view and filter to today. Every shopping list appears on your map, routed and ready. No toggling between a list app and a maps app — it's one view.
+
+**Pack for the weather you're actually going to.** Your calendar has events in three different cities over the next two weeks. The Weather page pulls forecasts for every city you'll be in over the next 16 days, automatically. You're not checking weather.com for each destination one at a time — you see it all at once and pack accordingly.
+
+**Your contacts, on your map, alongside your plans.** The Map page shows your events *and* your contacts at the same time. You're planning a trip to New York and you can see that Frank lives there now. Maybe you reach out, catch up, save yourself a hotel bill. That kind of organic connection doesn't happen when your contacts live in one app and your calendar lives in another.
+
+These aren't edge cases. They're the natural result of a system where everything — dates, locations, checklists, people, notes — lives on the same record. Every field you fill in makes every view smarter. A chit with a date and a checklist is a scheduled shopping list. Add an address and it's a pin on your map. Tag it and it filters with everything else. The more you use it, the more connections surface on their own.
+
 ## C CAPTN Views
 
 | View | What it shows |

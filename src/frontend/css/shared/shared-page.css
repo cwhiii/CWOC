@@ -952,8 +952,8 @@ body[data-page-title="Maps View"] ~ .author-info {
 
 /* ── Maps page: style the shared header bar ─────────────────────────────── */
 body[data-page-title="Maps View"] .header-and-buttons {
-    height: var(--maps-header-height, 56px);
-    min-height: var(--maps-header-height, 56px);
+    height: 100px;
+    min-height: 100px;
     width: 100%;
     padding: 0 12px;
     box-sizing: border-box;

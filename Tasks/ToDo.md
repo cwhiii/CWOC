@@ -43,6 +43,19 @@ The how it charts are pre-rendering the text. So they're grainy and terrible. Us
 
 ## Easy / Quick
 
+- Add birthdate field for people. then it should be a searched, refereeced field in Dashboard, Maps & Weather pages. 
+Chnge the sidebar button from Contacts to People
+
+- Intorduce the SHARED sidebar to the People Page. (lose the  tail in the page): hide the following controls: 
+    - Hide all filters other than: 
+        - tags, and ensure you're looking at oeopl etags, not chit tags (exolain the differece  & ask for inout hewre ebfeore manking any chges to this)
+        - Add a filter for:
+            -  contact/user
+            - Has: XYZ. (true matches person with ANY value in that field). one for each person field.
+            - 
+
+
+
 - `[ ]` Add a new button on the checklist zone header: mark complete when last item checked off
 - `[ ]` Use consistent system for modals (same styling, same in/out function)
 - `[ ]` Note-to-markdown export option, per chit or all

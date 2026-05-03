@@ -14,7 +14,6 @@ var _mapsGeocodeCache = {};
 // ── People Mode state ────────────────────────────────────────────────────────
 
 var MAPS_MODE_KEY = 'cwoc_maps_mode';
-var MAPS_SIDEBAR_KEY = 'cwoc_maps_sidebar';
 var _mapsCurrentMode = 'chits';
 var _mapsAllContacts = [];
 var _mapsPeopleClusterGroup = null;
@@ -87,21 +86,25 @@ function _mapsHideLoading() {
 /**
  * _injectModeToggle() — Creates the Chits/Both/People mode toggle and injects
  * it into the shared header (.header-and-buttons) created by shared-page.js.
- * Also injects the sidebar toggle button before the h2.
+ * Also injects a sidebar toggle button that calls the shared sidebar's
+ * toggleSidebar() function.
  */
 function _injectModeToggle() {
   var header = document.querySelector('.header-and-buttons');
   if (!header) return;
 
-  // Inject sidebar toggle button before the h2
+  // Inject sidebar toggle button AFTER the h2 — uses shared sidebar's toggleSidebar()
   var h2 = header.querySelector('h2');
   if (h2) {
     var sidebarBtn = document.createElement('button');
     sidebarBtn.id = 'maps-sidebar-toggle';
     sidebarBtn.className = 'maps-sidebar-toggle-btn';
-    sidebarBtn.title = 'Toggle filters';
+    sidebarBtn.title = 'Toggle sidebar';
     sidebarBtn.innerHTML = '<i class="fa-solid fa-bars"></i>';
-    header.insertBefore(sidebarBtn, h2);
+    sidebarBtn.addEventListener('click', function() {
+      if (typeof toggleSidebar === 'function') toggleSidebar();
+    });
+    h2.insertAdjacentElement('afterend', sidebarBtn);
   }
 
   // Create mode toggle wrapper (centered in header via CSS)
@@ -264,141 +267,53 @@ function _onModeToggleChange(e) {
   }
 }
 
-/* ── Sidebar Management ────────────────────────────────────────────────────── */
+/* ── Shared Sidebar Initialization ─────────────────────────────────────────── */
 
 /**
- * _initMapsSidebar() — Initializes the sidebar: restores collapsed/expanded
- * state from localStorage, wires the toggle button click handler, and sets up
- * resize handling to invalidate the Leaflet map after sidebar transitions.
+ * _initMapsSidebarShared() — Initializes the shared sidebar for the maps page.
+ * Calls _cwocInitSidebar() with maps-specific Page_Context callbacks and config.
+ * Hides the Author_Info_Footer since the sidebar footer already displays branding.
+ * Also wires the shared sidebar's transitionend to invalidate the Leaflet map.
  */
-function _initMapsSidebar() {
-  _restoreMapsSidebarState();
+function _initMapsSidebarShared() {
+  _cwocInitSidebar({
+    page: 'maps',
+    currentPage: 'maps',
+    onCreateChit: function() {
+      window.location.href = '/frontend/html/editor.html';
+    },
+    onToday: function() {
+      var periodSelect = document.getElementById('period-select');
+      if (periodSelect) periodSelect.value = 'week';
+      _onChitsFilterChange();
+    },
+    onPeriodChange: function() { _onChitsFilterChange(); },
+    onFilterChange: function() { _onChitsFilterChange(); },
+    onClearFilters: function() { _clearChitsFilters(); },
+    onMapsClick: function() { /* no-op, already on maps */ },
+    periodOptions: [
+      { value: 'week', label: 'This Week', selected: true },
+      { value: 'month', label: 'This Month' },
+      { value: 'quarter', label: 'This Quarter' },
+      { value: 'year', label: 'This Year' },
+      { value: 'all', label: 'All Time' }
+    ],
+    loadTagFilters: function() { _loadChitsFilterData(); },
+    loadPeopleFilters: function() { /* handled by _loadChitsFilterData */ }
+  });
 
-  var toggleBtn = document.getElementById('maps-sidebar-toggle');
-  if (toggleBtn) {
-    toggleBtn.addEventListener('click', _toggleMapsSidebar);
-  }
+  // Hide the author-info footer (sidebar has its own branding)
+  var authorInfo = document.querySelector('.author-info');
+  if (authorInfo) authorInfo.style.display = 'none';
 
-  // After sidebar CSS transition ends, invalidate the Leaflet map size
-  var sidebar = document.getElementById('maps-sidebar');
+  // After shared sidebar CSS transition ends, invalidate the Leaflet map size
+  var sidebar = document.getElementById('sidebar');
   if (sidebar) {
     sidebar.addEventListener('transitionend', function(e) {
       if ((e.propertyName === 'width' || e.propertyName === 'transform') && _mapsLeafletMap) {
         _mapsLeafletMap.invalidateSize();
       }
     });
-  }
-}
-
-/**
- * _toggleMapsSidebar() — Toggles the sidebar between collapsed and expanded.
- * Persists the new state to localStorage under MAPS_SIDEBAR_KEY.
- * On mobile (≤768px), shows/hides a backdrop overlay when the sidebar opens/closes.
- */
-function _toggleMapsSidebar() {
-  var sidebar = document.getElementById('maps-sidebar');
-  if (!sidebar) return;
-
-  var isCollapsed = sidebar.classList.toggle('collapsed');
-
-  // On mobile, show/hide the backdrop overlay
-  if (_isMapsViewMobile()) {
-    if (!isCollapsed) {
-      _showMobileSidebarBackdrop();
-    } else {
-      _hideMobileSidebarBackdrop();
-    }
-  }
-
-  // Persist state
-  try {
-    localStorage.setItem(MAPS_SIDEBAR_KEY, isCollapsed ? 'closed' : 'open');
-  } catch (e) {
-    console.warn('Could not persist sidebar state to localStorage:', e.message);
-  }
-}
-
-/**
- * _isMapsViewMobile() — Returns true if the viewport width is ≤768px.
- */
-function _isMapsViewMobile() {
-  return window.innerWidth <= 768;
-}
-
-/**
- * _showMobileSidebarBackdrop() — Creates and shows a semi-transparent dark
- * backdrop overlay behind the sidebar on mobile. Clicking the backdrop closes
- * the sidebar and hides the backdrop. The backdrop element is created dynamically.
- */
-function _showMobileSidebarBackdrop() {
-  // Don't create duplicate backdrops
-  var existing = document.querySelector('.maps-sidebar-backdrop');
-  if (existing) {
-    existing.style.display = 'block';
-    return;
-  }
-
-  var backdrop = document.createElement('div');
-  backdrop.className = 'maps-sidebar-backdrop';
-  backdrop.addEventListener('click', function() {
-    var sidebar = document.getElementById('maps-sidebar');
-    if (sidebar && !sidebar.classList.contains('collapsed')) {
-      sidebar.classList.add('collapsed');
-      try {
-        localStorage.setItem(MAPS_SIDEBAR_KEY, 'closed');
-      } catch (e) {
-        console.warn('Could not persist sidebar state to localStorage:', e.message);
-      }
-    }
-    _hideMobileSidebarBackdrop();
-  });
-
-  // Insert into the maps-page-layout so it sits between map and sidebar
-  var layout = document.getElementById('maps-page-layout');
-  if (layout) {
-    layout.appendChild(backdrop);
-  } else {
-    document.body.appendChild(backdrop);
-  }
-}
-
-/**
- * _hideMobileSidebarBackdrop() — Hides and removes the mobile sidebar backdrop.
- */
-function _hideMobileSidebarBackdrop() {
-  var backdrop = document.querySelector('.maps-sidebar-backdrop');
-  if (backdrop) {
-    backdrop.parentNode.removeChild(backdrop);
-  }
-}
-
-/**
- * _restoreMapsSidebarState() — Reads the sidebar state from localStorage
- * and applies the collapsed class if the stored value is "closed".
- * On mobile (≤768px), the sidebar always defaults to collapsed regardless
- * of the stored state.
- */
-function _restoreMapsSidebarState() {
-  var sidebar = document.getElementById('maps-sidebar');
-  if (!sidebar) return;
-
-  // On mobile, always default to collapsed
-  if (_isMapsViewMobile()) {
-    sidebar.classList.add('collapsed');
-    return;
-  }
-
-  var stored = null;
-  try {
-    stored = localStorage.getItem(MAPS_SIDEBAR_KEY);
-  } catch (e) {
-    console.warn('Could not read sidebar state from localStorage:', e.message);
-  }
-
-  if (stored === 'closed') {
-    sidebar.classList.add('collapsed');
-  } else {
-    sidebar.classList.remove('collapsed');
   }
 }
 
@@ -434,16 +349,12 @@ function _showBothLegends() {
 
 /**
  * _switchToChitsMode() — Transitions the map view to Chits mode.
- * Clears people markers, shows chits filter panel and legend,
- * hides people filter panel and legend, and loads chit markers.
+ * Clears people markers, shows chits legend, hides people legend,
+ * and loads chit markers. Reloads chit filter data into the shared sidebar.
  */
 function _switchToChitsMode() {
   // Clear people markers
   if (_mapsPeopleClusterGroup) _mapsPeopleClusterGroup.clearLayers();
-
-  // Show chits filter panel, hide people filter panel
-  document.getElementById('maps-chits-filter-panel').style.display = '';
-  document.getElementById('maps-people-filter-panel').style.display = 'none';
 
   // Switch legends
   _showChitsLegend();
@@ -451,22 +362,21 @@ function _switchToChitsMode() {
   // Hide any lingering info message
   _hideInfoMessage();
 
+  // Reload chit filter data into shared sidebar panels
+  _loadChitsFilterData();
+
   // Load chit markers
   _fetchAndDisplayChits();
 }
 
 /**
  * _switchToPeopleMode() — Transitions the map view to People mode.
- * Clears chit markers, shows people filter panel and legend,
- * hides chits filter panel and legend, and loads contact markers.
+ * Clears chit markers, shows people legend, hides chits legend,
+ * and loads contact markers.
  */
 function _switchToPeopleMode() {
   // Clear chit markers
   if (_mapsClusterGroup) _mapsClusterGroup.clearLayers();
-
-  // Show people filter panel, hide chits filter panel
-  document.getElementById('maps-people-filter-panel').style.display = '';
-  document.getElementById('maps-chits-filter-panel').style.display = 'none';
 
   // Switch legends
   _showPeopleLegend();
@@ -481,13 +391,9 @@ function _switchToPeopleMode() {
 /**
  * _switchToBothMode() — Transitions the map view to Both mode.
  * Shows both chit and contact markers simultaneously.
- * Shows both filter panels and both legends.
+ * Shows both legends.
  */
 function _switchToBothMode() {
-  // Show both filter panels
-  document.getElementById('maps-chits-filter-panel').style.display = '';
-  document.getElementById('maps-people-filter-panel').style.display = '';
-
   // Show both legends
   _showBothLegends();
 
@@ -505,63 +411,25 @@ var _mapsChitsFilterDebounceTimer = null;
 
 /**
  * _initChitsFilters() — Called once during init to set up the chits filter panel.
- * Wires up period dropdown, status checkboxes, priority checkboxes, text search
- * (debounced), clear filters button, and loads dynamic filter data (tags, people).
+ * Uses the shared sidebar's filter containers (status-multi, priority-multi,
+ * label-multi, people-multi, period-select, search) instead of old maps-specific IDs.
+ * Loads dynamic filter data (tags, people) via _loadChitsFilterData().
  */
 function _initChitsFilters() {
-  // Wire up period dropdown
-  var periodSelect = document.getElementById('maps-period-filter');
-  if (periodSelect) {
-    periodSelect.addEventListener('change', function() {
-      _onChitsFilterChange();
-    });
-  }
+  // Period dropdown is wired by _cwocInitSidebar via onPeriodChange callback.
+  // Status and priority checkboxes are wired by _wireFilterCheckboxes in shared-sidebar.js.
+  // Text search is wired by _cwocInitSidebar via the search input onkeyup.
+  // Clear filters is wired by _cwocInitSidebar via onClearFilters callback.
 
-  // Wire up status checkboxes
-  var statusList = document.getElementById('maps-chits-status-list');
-  if (statusList) {
-    var statusCbs = statusList.querySelectorAll('input[type="checkbox"]');
-    for (var i = 0; i < statusCbs.length; i++) {
-      statusCbs[i].addEventListener('change', _onChitsFilterChange);
-    }
-  }
-
-  // Wire up priority checkboxes
-  var priorityList = document.getElementById('maps-chits-priority-list');
-  if (priorityList) {
-    var priorityCbs = priorityList.querySelectorAll('input[type="checkbox"]');
-    for (var j = 0; j < priorityCbs.length; j++) {
-      priorityCbs[j].addEventListener('change', _onChitsFilterChange);
-    }
-  }
-
-  // Wire up text search input with 300ms debounce
-  var textSearch = document.getElementById('maps-chits-text-search');
-  if (textSearch) {
-    textSearch.addEventListener('input', function() {
-      _mapsChitsFilterText = textSearch.value;
-      if (_mapsChitsFilterDebounceTimer) clearTimeout(_mapsChitsFilterDebounceTimer);
-      _mapsChitsFilterDebounceTimer = setTimeout(function() {
-        _onChitsFilterChange();
-      }, 300);
-    });
-  }
-
-  // Wire up clear filters button
-  var clearBtn = document.getElementById('maps-chits-clear-filters');
-  if (clearBtn) {
-    clearBtn.addEventListener('click', _clearChitsFilters);
-  }
-
-  // Load dynamic filter data (tags, people)
+  // Load dynamic filter data (tags, people) — populates label-multi and people-multi
   _loadChitsFilterData();
 }
 
 /**
  * _loadChitsFilterData() — Fetches data needed for dynamic filter options:
  * tags from user settings, contacts and system users for people.
- * Uses CwocSidebarFilter for tags (#maps-chits-tags-filter) and people
- * (#maps-chits-people-filter) panels.
+ * Uses CwocSidebarFilter for tags (#label-multi) and people (#people-multi)
+ * panels — the shared sidebar's standard container IDs.
  */
 async function _loadChitsFilterData() {
   // ── Load tags from settings via CwocSidebarFilter ──
@@ -576,7 +444,7 @@ async function _loadChitsFilterData() {
 
     if (typeof CwocSidebarFilter === 'function') {
       CwocSidebarFilter({
-        containerId: 'maps-chits-tags-filter',
+        containerId: 'label-multi',
         items: tagObjects.map(function(t) { return { name: t.name, favorite: !!t.favorite, color: t.color }; }),
         selection: _mapsChitsFilterTags,
         onChange: function() { _onChitsFilterChange(); },
@@ -636,7 +504,7 @@ async function _loadChitsFilterData() {
 
     if (typeof CwocSidebarFilter === 'function') {
       CwocSidebarFilter({
-        containerId: 'maps-chits-people-filter',
+        containerId: 'people-multi',
         items: merged,
         selection: _mapsChitsFilterPeople,
         onChange: function() { _onChitsFilterChange(); },
@@ -759,8 +627,8 @@ function _applyChitsFilters(chits) {
     result.push(chit);
   }
 
-  // ── Date range filter (period dropdown) ──
-  var periodSelect = document.getElementById('maps-period-filter');
+  // ── Date range filter (period dropdown — shared sidebar's period-select) ──
+  var periodSelect = document.getElementById('period-select');
   var period = periodSelect ? periodSelect.value : 'week';
   var range = _getPeriodDateRange(period);
   if (range.start || range.end) {
@@ -781,25 +649,29 @@ function _applyChitsFilters(chits) {
 
 /**
  * _onChitsFilterChange() — Handler for any chit filter change.
- * Re-applies filters and re-renders chit markers.
+ * Reads filter state from the shared sidebar's standard containers
+ * (status-multi, priority-multi, period-select, search) and re-renders.
  */
 function _onChitsFilterChange() {
-  // Read current status selections
+  // Read current status selections from shared sidebar's status-multi
   _mapsChitsFilterStatus = [];
-  var statusCbs = document.querySelectorAll('#maps-chits-status-list input[type="checkbox"]:checked');
+  var statusCbs = document.querySelectorAll('#status-multi input[type="checkbox"][data-filter="status"]:checked');
   for (var i = 0; i < statusCbs.length; i++) {
-    _mapsChitsFilterStatus.push(statusCbs[i].value);
+    if (statusCbs[i].value) _mapsChitsFilterStatus.push(statusCbs[i].value);
   }
 
-  // Read current priority selections
+  // Read current priority selections from shared sidebar's priority-multi
   _mapsChitsFilterPriority = [];
-  var priorityCbs = document.querySelectorAll('#maps-chits-priority-list input[type="checkbox"]:checked');
+  var priorityCbs = document.querySelectorAll('#priority-multi input[type="checkbox"][data-filter="priority"]:checked');
   for (var j = 0; j < priorityCbs.length; j++) {
-    _mapsChitsFilterPriority.push(priorityCbs[j].value);
+    if (priorityCbs[j].value) _mapsChitsFilterPriority.push(priorityCbs[j].value);
   }
 
-  // Tags and people are already updated via chip click handlers
-  // Text is already updated via the input handler
+  // Read text search from shared sidebar's search input
+  var searchInput = document.getElementById('search');
+  if (searchInput) _mapsChitsFilterText = searchInput.value;
+
+  // Tags and people are already updated via CwocSidebarFilter chip click handlers
 
   // Re-filter and re-render (only if we have chits loaded and are in chits or both mode)
   if ((_mapsCurrentMode === 'chits' || _mapsCurrentMode === 'both') && _mapsAllChits.length > 0) {
@@ -809,6 +681,7 @@ function _onChitsFilterChange() {
 
 /**
  * _clearChitsFilters() — Resets all chit filters to defaults and updates UI.
+ * Uses the shared sidebar's standard container IDs.
  */
 function _clearChitsFilters() {
   // Reset filter state
@@ -818,25 +691,37 @@ function _clearChitsFilters() {
   _mapsChitsFilterPeople = [];
   _mapsChitsFilterText = '';
 
-  // Reset period dropdown to "week"
-  var periodSelect = document.getElementById('maps-period-filter');
+  // Reset period dropdown to "week" (shared sidebar's period-select)
+  var periodSelect = document.getElementById('period-select');
   if (periodSelect) periodSelect.value = 'week';
 
-  // Uncheck all status checkboxes
-  var statusCbs = document.querySelectorAll('#maps-chits-status-list input[type="checkbox"]');
-  for (var i = 0; i < statusCbs.length; i++) {
-    statusCbs[i].checked = false;
+  // Reset status checkboxes in shared sidebar's status-multi
+  var statusMulti = document.getElementById('status-multi');
+  if (statusMulti) {
+    statusMulti.querySelectorAll('input[type="checkbox"]').forEach(function(cb) {
+      if (cb.dataset.any === 'true') {
+        cb.checked = true;
+      } else {
+        cb.checked = false;
+      }
+    });
   }
 
-  // Uncheck all priority checkboxes
-  var priorityCbs = document.querySelectorAll('#maps-chits-priority-list input[type="checkbox"]');
-  for (var j = 0; j < priorityCbs.length; j++) {
-    priorityCbs[j].checked = false;
+  // Reset priority checkboxes in shared sidebar's priority-multi
+  var priorityMulti = document.getElementById('priority-multi');
+  if (priorityMulti) {
+    priorityMulti.querySelectorAll('input[type="checkbox"]').forEach(function(cb) {
+      if (cb.dataset.any === 'true') {
+        cb.checked = true;
+      } else {
+        cb.checked = false;
+      }
+    });
   }
 
-  // Clear text search
-  var textSearch = document.getElementById('maps-chits-text-search');
-  if (textSearch) textSearch.value = '';
+  // Clear text search (shared sidebar's search input)
+  var searchInput = document.getElementById('search');
+  if (searchInput) searchInput.value = '';
 
   // Re-render CwocSidebarFilter panels to clear selections
   _loadChitsFilterData();
@@ -929,8 +814,7 @@ async function _mapsInit() {
       }
     }
 
-    _initMapsSidebar();
-    _initDateFilters();
+    _initMapsSidebarShared();
     _initChitsFilters();
     _initPeopleFilters();
 
@@ -946,12 +830,6 @@ async function _mapsInit() {
       // Normal mode: trigger the appropriate mode
       _mapsSetMode(_mapsCurrentMode);
     }
-
-    // Fetch version for status bar footer
-    fetch('/api/version').then(function(r) { return r.ok ? r.json() : {}; }).then(function(d) {
-      var el = document.getElementById('maps-footer-version');
-      if (el && d.version) el.textContent = 'v' + d.version;
-    }).catch(function() {});
 
   } catch (e) {
     console.error('Maps init error:', e);
@@ -1969,24 +1847,11 @@ function _placeMarkers(geocodedChits) {
 
 // ── Date filter initialization and handler ───────────────────────────────────
 
-/**
- * _initDateFilters() — Wires the period dropdown change handler.
- * Default period is "week" (set in HTML).
- */
-function _initDateFilters() {
-  var periodSelect = document.getElementById('maps-period-filter');
-  if (!periodSelect) return;
+// _initDateFilters() — Removed: shared sidebar handles period dropdown wiring
+// via onPeriodChange callback in _initMapsSidebarShared().
 
-  periodSelect.addEventListener('change', _onDateFilterChange);
-}
-
-/**
- * _onDateFilterChange() — Handler for date input changes.
- * Re-filters and re-renders markers using the current date range.
- */
-async function _onDateFilterChange() {
-  await _filterAndRender();
-}
+// _onDateFilterChange() — Removed: period changes are handled by
+// _onChitsFilterChange() via the shared sidebar's onPeriodChange callback.
 
 /**
  * _mapsToDateString(date) — Converts a Date to YYYY-MM-DD string.
