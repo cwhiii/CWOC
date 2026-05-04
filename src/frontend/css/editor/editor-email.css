@@ -523,3 +523,33 @@
     background: #fff;
     min-height: 200px;
 }
+
+/* ── Email Expand Modal — HTML/Text Pill Toggle ────────────────────────── */
+#emailExpandPillToggle {
+    align-self: flex-start;
+    width: auto;
+}
+#emailExpandPillToggle .cwoc-pill-option {
+    display: inline-block;
+    padding: 4px 14px;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.85em;
+    cursor: pointer;
+    border: 1px solid var(--aged-brown-medium, #8b5a2b);
+    background: var(--parchment-medium, #e8dcc8);
+    color: var(--aged-brown-dark, #4a2c2a);
+    transition: background 0.15s, color 0.15s;
+    user-select: none;
+}
+#emailExpandPillToggle .cwoc-pill-option:first-child {
+    border-radius: 4px 0 0 4px;
+    border-right: none;
+}
+#emailExpandPillToggle .cwoc-pill-option:last-child {
+    border-radius: 0 4px 4px 0;
+}
+#emailExpandPillToggle .cwoc-pill-option.cwoc-pill-active {
+    background: var(--aged-brown-light, #a0522d);
+    color: var(--parchment-light, #fff8e1);
+    font-weight: 600;
+}

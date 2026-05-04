@@ -1442,7 +1442,7 @@ document.addEventListener("DOMContentLoaded", function () {
       e.preventDefault();
       storePreviousState();
       if (typeof currentTab !== 'undefined' && currentTab === 'Email') {
-        window.location.href = '/frontend/html/editor.html?new=email';
+        window.location.href = '/frontend/html/editor.html?new=email&expand=email';
       } else {
         window.location.href = '/frontend/html/editor.html';
       }

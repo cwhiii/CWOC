@@ -332,9 +332,10 @@ def create_chit(chit: Chit, request: Request):
                 owner_id, owner_display_name, owner_username,
                 shares, stealth, assigned_to,
                 email_message_id, email_from, email_to, email_cc, email_bcc,
-                email_subject, email_body_text, email_date, email_folder,
-                email_status, email_read, email_in_reply_to, email_references
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                email_subject, email_body_text, email_body_html, email_date, email_folder,
+                email_status, email_read, email_in_reply_to, email_references,
+                attachments
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 chit_id,
@@ -390,12 +391,14 @@ def create_chit(chit: Chit, request: Request):
                 serialize_json_field(chit.email_bcc),
                 chit.email_subject,
                 chit.email_body_text,
+                chit.email_body_html,
                 chit.email_date,
                 chit.email_folder,
                 chit.email_status,
                 1 if chit.email_read else 0 if chit.email_read is not None else None,
                 chit.email_in_reply_to,
                 chit.email_references,
+                serialize_json_field(chit.attachments) if chit.attachments else None,
             )
         )
         # Create notifications for shared users on new chit creation
@@ -555,8 +558,9 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                     habit_reset_period = ?, habit_last_action_date = ?, habit_hide_overall = ?, perpetual = ?,
                     shares = ?, stealth = ?, assigned_to = ?,
                     email_message_id = ?, email_from = ?, email_to = ?, email_cc = ?, email_bcc = ?,
-                    email_subject = ?, email_body_text = ?, email_date = ?, email_folder = ?,
-                    email_status = ?, email_read = ?, email_in_reply_to = ?, email_references = ?
+                    email_subject = ?, email_body_text = ?, email_body_html = ?, email_date = ?, email_folder = ?,
+                    email_status = ?, email_read = ?, email_in_reply_to = ?, email_references = ?,
+                    attachments = ?
                 WHERE id = ?
                 """,
                 (
@@ -608,12 +612,14 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                     serialize_json_field(chit.email_bcc),
                     chit.email_subject,
                     chit.email_body_text,
+                    chit.email_body_html,
                     chit.email_date,
                     chit.email_folder,
                     chit.email_status,
                     1 if chit.email_read else 0 if chit.email_read is not None else None,
                     chit.email_in_reply_to,
                     chit.email_references,
+                    serialize_json_field(chit.attachments) if chit.attachments else None,
                     chit_id,
                 )
             )
@@ -655,12 +661,14 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                     "email_bcc": serialize_json_field(chit.email_bcc),
                     "email_subject": chit.email_subject,
                     "email_body_text": chit.email_body_text,
+                    "email_body_html": chit.email_body_html,
                     "email_date": chit.email_date,
                     "email_folder": chit.email_folder,
                     "email_status": chit.email_status,
                     "email_read": 1 if chit.email_read else 0 if chit.email_read is not None else None,
                     "email_in_reply_to": chit.email_in_reply_to,
                     "email_references": chit.email_references,
+                    "attachments": serialize_json_field(chit.attachments) if chit.attachments else None,
                 }
                 diff = compute_audit_diff(old_chit_dict, new_chit_dict, exclude_fields={"modified_datetime", "created_datetime"})
                 if diff:
@@ -706,9 +714,10 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                     owner_id, owner_display_name, owner_username,
                     shares, stealth, assigned_to,
                     email_message_id, email_from, email_to, email_cc, email_bcc,
-                    email_subject, email_body_text, email_date, email_folder,
-                    email_status, email_read, email_in_reply_to, email_references
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    email_subject, email_body_text, email_body_html, email_date, email_folder,
+                    email_status, email_read, email_in_reply_to, email_references,
+                    attachments
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     chit_id,
@@ -764,12 +773,14 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                     serialize_json_field(chit.email_bcc),
                     chit.email_subject,
                     chit.email_body_text,
+                    chit.email_body_html,
                     chit.email_date,
                     chit.email_folder,
                     chit.email_status,
                     1 if chit.email_read else 0 if chit.email_read is not None else None,
                     chit.email_in_reply_to,
                     chit.email_references,
+                    serialize_json_field(chit.attachments) if chit.attachments else None,
                 )
             )
             # Audit logging for chit creation

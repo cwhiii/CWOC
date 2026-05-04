@@ -250,7 +250,7 @@ function _buildEmailCard(chit, viSettings) {
     card.addEventListener('dblclick', function(e) {
         if (e.target.classList.contains('email-select-cb')) return;
         if (typeof storePreviousState === 'function') storePreviousState();
-        window.location.href = '/frontend/html/editor.html?id=' + chit.id;
+        window.location.href = '/frontend/html/editor.html?id=' + chit.id + '&expand=email';
     });
 
     return card;
@@ -625,7 +625,7 @@ function _checkMail() {
 
 function _composeEmail() {
     if (typeof storePreviousState === 'function') storePreviousState();
-    window.location.href = '/frontend/html/editor.html?new=email';
+    window.location.href = '/frontend/html/editor.html?new=email&expand=email';
 }
 
 function _getUnreadCount() {

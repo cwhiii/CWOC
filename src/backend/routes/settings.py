@@ -184,6 +184,8 @@ def save_settings(settings: Settings, request: Request):
             "map_default_zoom": settings.map_default_zoom,
             "map_auto_zoom": settings.map_auto_zoom or "1",
             "email_account": _final_email_account,
+            "attachment_max_size_mb": settings.attachment_max_size_mb or "10",
+            "attachment_max_storage_mb": settings.attachment_max_storage_mb or "500",
         }
 
         cursor.execute(
@@ -197,8 +199,9 @@ def save_settings(settings: Settings, request: Request):
                 habits_success_window, overdue_border_color, blocked_border_color, shared_tags, kiosk_users,
                 hide_declined, default_show_habits_on_calendar,
                 map_default_lat, map_default_lon, map_default_zoom, map_auto_zoom,
-                email_account
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                email_account,
+                attachment_max_size_mb, attachment_max_storage_mb
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 new_settings_dict["user_id"],
@@ -240,6 +243,8 @@ def save_settings(settings: Settings, request: Request):
                 new_settings_dict["map_default_zoom"],
                 new_settings_dict["map_auto_zoom"],
                 new_settings_dict["email_account"],
+                new_settings_dict["attachment_max_size_mb"],
+                new_settings_dict["attachment_max_storage_mb"],
             )
         )
 

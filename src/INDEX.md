@@ -1795,6 +1795,20 @@ Email zone: populate, collect, reply, forward, send. Handles the Email zone in t
 | `_setupHtmlEmailView(htmlContent, bodyEl)` | Set up HTML email view with toggle button and sandboxed iframe using DOMPurify sanitization |
 | `_switchEmailView(mode)` | Switch between 'html' and 'text' views for email body rendering |
 | `_resizeEmailIframe(iframe)` | Auto-resize an iframe to fit its content height |
+| `_activateEmailZone()` | Activate email mode on a non-email chit — moves zone to top-left, expands it, sets draft status, focuses To field, wires autocomplete |
+| `_deactivateEmailZone()` | Deactivate email mode — confirms if content exists, clears fields, restores original save buttons |
+| `_updateEmailButtons(status)` | Update email zone button visibility based on status (draft/received/sent/none) |
+| `_showEmailSaveButtons(isEmail)` | Toggle between normal and email-specific save buttons; patches CwocSaveSystem |
+| `_emailSaveAndSend()` | Validate To field then delegate to `_emailSend()` |
+| `_openEmailExpandModal()` | Open fullscreen modal for email body with HTML/Text pill toggle, CC/BCC toggles, and action buttons |
+| `_switchExpandView(mode)` | Switch between HTML and Text views in the expand modal |
+| `_closeEmailExpandModal(save)` | Close the email expand modal; if save=true, sync fields back to the zone |
+| `_toggleExpandCcBcc(field)` | Toggle Cc or Bcc field visibility in the expand modal |
+| `_escapeHtmlAttr(str)` | Escape text for safe insertion into HTML attributes |
+| `_emailLoadContacts()` | Fetch contacts for autocomplete (cached after first call) |
+| `_emailSearchContacts(query)` | Search cached contacts by query string, return top 5 matches (favorites first) |
+| `_wireEmailAutocomplete(inputId, dropdownId)` | Wire up autocomplete on an email input field |
+| `_toggleEmailCcBcc(field)` | Toggle Cc or Bcc field visibility in the email zone |
 
 #### editor-attachments.js
 

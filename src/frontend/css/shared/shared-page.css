@@ -310,7 +310,10 @@ input[type="color"] {
     background: #fff8e1; border: 1px solid #8b5a2b; border-radius: 5px;
     padding: 1em 1.5em; margin-bottom: 2em; box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
-.help-content .index ul { columns: 2; column-gap: 2em; list-style: none; padding: 0; margin: 0; }
+.help-content .index ul { list-style: none; padding: 0; margin: 0; }
+.help-content .index-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5em; margin-top: 0.5em; }
+.help-content .index-col { }
+.help-content .index-label { display: block; font-weight: 700; color: #4a2c2a; font-size: 0.95em; letter-spacing: 0.5px; margin-bottom: 0.3em; border-bottom: 1px solid #d4c5a9; padding-bottom: 3px; font-style: normal; }
 .help-content .index li { padding: 2px 0; }
 .help-content .index li a { text-decoration: none; color: #6b4e31; }
 .help-content .index li a:hover { text-decoration: underline; }
@@ -486,8 +489,8 @@ input[type="color"] {
         width: 100%;
         justify-content: flex-start;
     }
-    .help-content .index ul {
-        columns: 1;
+    .help-content .index-columns {
+        grid-template-columns: 1fr;
     }
     .cwoc-table {
         display: block;

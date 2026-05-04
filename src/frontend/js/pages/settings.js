@@ -483,6 +483,9 @@ function _loadEmailAccountSettings(settings) {
     if (el) el.value = acct.max_pull || 50;
     el = document.getElementById('emailCheckInterval');
     if (el) el.value = acct.check_interval || 'manual';
+    // Signature
+    el = document.getElementById('emailSignature');
+    if (el) el.value = acct.signature || '';
   } catch (e) {
     console.error('[Settings] Error loading email account settings:', e);
   }
@@ -504,6 +507,7 @@ function _collectEmailAccountSettings() {
     username: ((document.getElementById('emailAccountUsername') || {}).value || '').trim(),
     max_pull: parseInt((document.getElementById('emailMaxPull') || {}).value, 10) || 50,
     check_interval: ((document.getElementById('emailCheckInterval') || {}).value || 'manual'),
+    signature: ((document.getElementById('emailSignature') || {}).value || ''),
   };
   // Only include password if the user typed a new one (non-empty field)
   if (pw) obj.password = pw;
@@ -522,6 +526,166 @@ function toggleEmailPasswordVisibility() {
     input.type = 'password';
     if (btn) btn.textContent = '👁️';
   }
+}
+
+/** Open the signature editor modal — textarea on top, live preview on bottom */
+function openSignatureModal() {
+  var existing = document.getElementById('signatureModal');
+  if (existing) existing.remove();
+
+  var hiddenTextarea = document.getElementById('emailSignature');
+  var currentVal = hiddenTextarea ? hiddenTextarea.value : '';
+
+  // Use .modal class from shared-page.css (position:fixed, full-screen overlay, z-index:1000)
+  var modal = document.createElement('div');
+  modal.id = 'signatureModal';
+  modal.className = 'modal';
+  modal.style.display = 'flex';
+
+  modal.innerHTML =
+    '<div class="modal-content" style="width:90%;max-width:700px;height:80vh;max-height:600px;display:flex;flex-direction:column;padding:0;overflow:hidden;text-align:left;">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:2px solid #8b5a2b;flex-shrink:0;">' +
+        '<h3 style="margin:0;color:#4a2c2a;">✍️ Email Signature</h3>' +
+        '<div style="display:flex;gap:8px;">' +
+          '<button type="button" class="standard-button" onclick="closeSignatureModal(true)">✅ Done</button>' +
+          '<button type="button" class="standard-button" onclick="closeSignatureModal(false)" style="background:#a0522d;color:#fdf5e6;">✕ Cancel</button>' +
+        '</div>' +
+      '</div>' +
+      '<div style="flex:1;display:flex;flex-direction:column;overflow:hidden;padding:12px 16px;">' +
+        '<p style="margin:0 0 6px;font-size:0.8em;opacity:0.6;">Markdown supported. Ctrl+B bold · Ctrl+I italic · Ctrl+K link</p>' +
+        '<textarea id="signatureModalTextarea" style="flex:1;width:100%;box-sizing:border-box;font-family:Lora,Georgia,serif;font-size:14px;line-height:1.6;padding:10px;border:1px solid #8b5a2b;border-radius:5px;resize:none;background:#f5e6cc;" placeholder="Your email signature..."></textarea>' +
+        '<div style="border-top:1px solid rgba(139,90,43,0.3);margin-top:8px;padding-top:6px;flex-shrink:0;">' +
+          '<strong style="font-size:0.85em;color:#5a4a3a;">Preview</strong>' +
+        '</div>' +
+        '<div id="signatureModalPreview" style="flex:1;overflow-y:auto;padding:10px;background:rgba(139,90,43,0.04);border:1px solid rgba(139,90,43,0.15);border-radius:5px;font-family:Lora,Georgia,serif;font-size:14px;line-height:1.6;min-height:60px;text-align:left;"></div>' +
+      '</div>' +
+    '</div>';
+
+  modal.addEventListener('click', function(e) {
+    if (e.target === modal) closeSignatureModal(false);
+  });
+
+  document.body.appendChild(modal);
+
+  // Set textarea value after DOM insertion (avoids HTML escaping issues)
+  var textarea = document.getElementById('signatureModalTextarea');
+  if (textarea) textarea.value = currentVal;
+
+  var preview = document.getElementById('signatureModalPreview');
+  var debounceTimer = null;
+
+  function updatePreview() {
+    var raw = textarea ? textarea.value : '';
+    if (!raw.trim()) {
+      preview.innerHTML = '<em style="opacity:0.5;">Empty</em>';
+    } else if (typeof marked !== 'undefined' && marked.parse) {
+      preview.innerHTML = marked.parse(raw, { breaks: true });
+    } else {
+      preview.textContent = raw;
+    }
+  }
+
+  if (textarea) {
+    textarea.addEventListener('input', function() {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(updatePreview, 500);
+    });
+    textarea.addEventListener('keydown', function(e) {
+      if (!e.ctrlKey && !e.metaKey) return;
+      var key = e.key.toLowerCase();
+      if (key !== 'b' && key !== 'i' && key !== 'k') return;
+      e.preventDefault();
+      _applyMarkdownShortcut(textarea, key);
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(updatePreview, 300);
+    });
+    textarea.focus();
+  }
+
+  updatePreview();
+
+  function _sigModalEsc(e) {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      closeSignatureModal(false);
+      document.removeEventListener('keydown', _sigModalEsc, true);
+    }
+  }
+  document.addEventListener('keydown', _sigModalEsc, true);
+  modal._escHandler = _sigModalEsc;
+}
+
+/** Close the signature modal */
+function closeSignatureModal(save) {
+  var modal = document.getElementById('signatureModal');
+  if (!modal) return;
+  if (modal._escHandler) document.removeEventListener('keydown', modal._escHandler, true);
+  if (save) {
+    var modalTextarea = document.getElementById('signatureModalTextarea');
+    var hiddenTextarea = document.getElementById('emailSignature');
+    if (modalTextarea && hiddenTextarea) {
+      hiddenTextarea.value = modalTextarea.value;
+      _updateSignatureInlinePreview();
+      setSaveButtonUnsaved();
+    }
+  }
+  modal.remove();
+}
+
+/** Update the inline preview snippet on the settings page */
+function _updateSignatureInlinePreview() {
+  var hiddenTextarea = document.getElementById('emailSignature');
+  var inlinePreview = document.getElementById('emailSignatureInlinePreview');
+  if (!inlinePreview) return;
+  var val = hiddenTextarea ? hiddenTextarea.value.trim() : '';
+  if (!val) {
+    inlinePreview.innerHTML = '<em style="opacity:0.5;">No signature set</em>';
+  } else if (typeof marked !== 'undefined' && marked.parse) {
+    inlinePreview.innerHTML = marked.parse(val, { breaks: true });
+  } else {
+    inlinePreview.textContent = val;
+  }
+}
+
+/** Escape text for textarea insertion */
+function _escapeHtmlForTextarea(str) {
+  if (!str) return '';
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+/** Apply a markdown shortcut (bold/italic/link) to a textarea */
+function _applyMarkdownShortcut(textarea, key) {
+  var start = textarea.selectionStart;
+  var end = textarea.selectionEnd;
+  var text = textarea.value;
+  var selected = text.substring(start, end);
+
+  if (key === 'b') {
+    var replacement = '**' + (selected || 'bold text') + '**';
+    textarea.value = text.substring(0, start) + replacement + text.substring(end);
+    if (selected) { textarea.selectionStart = start; textarea.selectionEnd = start + replacement.length; }
+    else { textarea.selectionStart = start + 2; textarea.selectionEnd = start + 2 + 'bold text'.length; }
+  } else if (key === 'i') {
+    var replacement = '*' + (selected || 'italic text') + '*';
+    textarea.value = text.substring(0, start) + replacement + text.substring(end);
+    if (selected) { textarea.selectionStart = start; textarea.selectionEnd = start + replacement.length; }
+    else { textarea.selectionStart = start + 1; textarea.selectionEnd = start + 1 + 'italic text'.length; }
+  } else if (key === 'k') {
+    var isUrl = selected && /^https?:\/\//i.test(selected.trim());
+    if (isUrl) {
+      var replacement = '[link text](' + selected.trim() + ')';
+      textarea.value = text.substring(0, start) + replacement + text.substring(end);
+      textarea.selectionStart = start + 1; textarea.selectionEnd = start + 1 + 'link text'.length;
+    } else {
+      var linkText = selected || 'link text';
+      var replacement = '[' + linkText + '](url)';
+      textarea.value = text.substring(0, start) + replacement + text.substring(end);
+      var urlStart = start + 1 + linkText.length + 2;
+      textarea.selectionStart = urlStart; textarea.selectionEnd = urlStart + 3;
+    }
+  }
+  textarea.focus();
 }
 
 /** Test email connection — POST /api/email/test-connection */
@@ -2011,6 +2175,7 @@ class SettingsManager {
 
     // Email account settings
     _loadEmailAccountSettings(this.settings);
+    _updateSignatureInlinePreview();
 
     // Attachment size limit
     var attachSizeEl = document.getElementById('attachmentMaxSizeMb');

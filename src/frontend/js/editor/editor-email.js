@@ -14,6 +14,9 @@
 /** Stores the currently loaded chit for reply/forward operations */
 var _emailCurrentChit = null;
 
+/** Tracks whether the email expand modal is currently open */
+var _emailExpandModalOpen = false;
+
 /** Cached contacts for email autocomplete */
 var _emailContactsCache = null;
 
@@ -222,6 +225,9 @@ function _activateEmailZone() {
     _wireEmailAutocomplete('emailBcc', 'emailBccDropdown');
   });
 
+  // Auto-apply signature for new drafts
+  _applySignatureIfEmpty();
+
   // Mark as unsaved
   if (typeof setSaveButtonUnsaved === 'function') setSaveButtonUnsaved();
 }
@@ -389,15 +395,32 @@ function _showEmailSaveButtons(isEmail) {
   var saveBtn = document.getElementById('saveButton');
   var saveDraft = document.getElementById('saveDraftButton');
   var saveSend = document.getElementById('saveSendButton');
+  var saveSendArchive = document.getElementById('saveSendArchiveButton');
 
   if (isEmail) {
-    // Hide normal save buttons
+    // Check if there's actual email content
+    var hasContent = _hasEmailContent();
+
+    if (!hasContent) {
+      // No email content yet — show normal save buttons
+      // (the CwocSaveSystem will manage their visibility)
+      if (saveDraft) saveDraft.style.display = 'none';
+      if (saveSend) saveSend.style.display = 'none';
+      if (saveSendArchive) saveSendArchive.style.display = 'none';
+      // Don't patch the save system — let normal buttons show
+      return;
+    }
+
+    // Has email content — show email save buttons
     if (saveStay) saveStay.style.display = 'none';
     if (saveExit) saveExit.style.display = 'none';
     if (saveBtn) saveBtn.style.display = 'none';
-    // Show email save buttons
     if (saveDraft) saveDraft.style.display = '';
-    if (saveSend) saveSend.style.display = '';
+
+    // Only show Send buttons if To + Subject + Body all have content
+    var hasSendable = _hasEmailSendableContent();
+    if (saveSend) saveSend.style.display = hasSendable ? '' : 'none';
+    if (saveSendArchive) saveSendArchive.style.display = hasSendable ? '' : 'none';
 
     // Patch the save system so markUnsaved keeps showing email buttons
     if (window._cwocSave && !window._cwocSave._emailPatched) {
@@ -405,19 +428,11 @@ function _showEmailSaveButtons(isEmail) {
       window._cwocSave._origMarkSaved = window._cwocSave.markSaved.bind(window._cwocSave);
       window._cwocSave.markUnsaved = function() {
         window._cwocSave._origMarkUnsaved();
-        // Override: hide normal, show email
-        if (saveStay) saveStay.style.display = 'none';
-        if (saveExit) saveExit.style.display = 'none';
-        if (saveBtn) saveBtn.style.display = 'none';
-        if (saveDraft) saveDraft.style.display = '';
-        if (saveSend) saveSend.style.display = '';
+        _updateEmailSaveButtonVisibility();
       };
       window._cwocSave.markSaved = function() {
         window._cwocSave._origMarkSaved();
-        // Override: hide normal single button, keep email buttons
-        if (saveBtn) saveBtn.style.display = 'none';
-        if (saveDraft) saveDraft.style.display = '';
-        if (saveSend) saveSend.style.display = '';
+        _updateEmailSaveButtonVisibility();
       };
       window._cwocSave._emailPatched = true;
     }
@@ -425,7 +440,86 @@ function _showEmailSaveButtons(isEmail) {
     // Hide email save buttons
     if (saveDraft) saveDraft.style.display = 'none';
     if (saveSend) saveSend.style.display = 'none';
+    if (saveSendArchive) saveSendArchive.style.display = 'none';
   }
+}
+
+/**
+ * Apply the email signature (as raw markdown) to the body textarea if empty.
+ * The server converts markdown to HTML when sending — we keep it as markdown
+ * in the textarea so the user can read and edit it naturally.
+ */
+function _applySignatureIfEmpty() {
+  var bodyEl = document.getElementById('emailBody');
+  if (!bodyEl) return;
+  if (bodyEl.value.trim()) return;
+
+  function _doApply() {
+    if (bodyEl.value.trim()) return;
+    if (!window._cwocSettings || !window._cwocSettings.email_account) return;
+    var acct = window._cwocSettings.email_account;
+    if (typeof acct === 'string') { try { acct = JSON.parse(acct); } catch(e) { return; } }
+    var sig = acct && acct.signature;
+    if (!sig) return;
+    // Insert raw markdown — server handles HTML conversion on send
+    bodyEl.value = '\n\n--\n' + sig;
+  }
+
+  if (window._cwocSettings && window._cwocSettings.email_account) {
+    _doApply();
+  } else if (typeof getCachedSettings === 'function') {
+    getCachedSettings().then(function() { _doApply(); });
+  }
+}
+
+/** Check if any email field has content (To, Subject/Title, or Body) */
+function _hasEmailContent() {
+  var toEl = document.getElementById('emailTo');
+  var titleEl = document.getElementById('title');
+  var bodyEl = document.getElementById('emailBody');
+  return (toEl && toEl.value.trim()) ||
+         (titleEl && titleEl.value.trim()) ||
+         (bodyEl && bodyEl.value.trim());
+}
+
+/** Check if email has enough content to send (To + Subject + Body) */
+function _hasEmailSendableContent() {
+  var toEl = document.getElementById('emailTo');
+  var titleEl = document.getElementById('title');
+  var bodyEl = document.getElementById('emailBody');
+  return (toEl && toEl.value.trim()) &&
+         (titleEl && titleEl.value.trim()) &&
+         (bodyEl && bodyEl.value.trim());
+}
+
+/** Update email save button visibility based on current content */
+function _updateEmailSaveButtonVisibility() {
+  var saveStay = document.getElementById('saveStayButton');
+  var saveExit = document.getElementById('saveExitButton');
+  var saveBtn = document.getElementById('saveButton');
+  var saveDraft = document.getElementById('saveDraftButton');
+  var saveSend = document.getElementById('saveSendButton');
+  var saveSendArchive = document.getElementById('saveSendArchiveButton');
+
+  var hasContent = _hasEmailContent();
+  var hasSendable = _hasEmailSendableContent();
+
+  if (!hasContent) {
+    // No email content — show normal buttons, hide email buttons
+    if (saveDraft) saveDraft.style.display = 'none';
+    if (saveSend) saveSend.style.display = 'none';
+    if (saveSendArchive) saveSendArchive.style.display = 'none';
+    // Let normal buttons be visible (don't hide them)
+    return;
+  }
+
+  // Has email content — show draft button, hide normal buttons
+  if (saveStay) saveStay.style.display = 'none';
+  if (saveExit) saveExit.style.display = 'none';
+  if (saveBtn) saveBtn.style.display = 'none';
+  if (saveDraft) saveDraft.style.display = '';
+  if (saveSend) saveSend.style.display = hasSendable ? '' : 'none';
+  if (saveSendArchive) saveSendArchive.style.display = hasSendable ? '' : 'none';
 }
 
 /**
@@ -441,6 +535,39 @@ async function _emailSaveAndSend() {
   }
   // Delegate to the existing _emailSend which already saves first
   await _emailSend();
+}
+
+/**
+ * Save the chit as a draft, send it, then archive the original email
+ * that was being replied to (if this is a reply).
+ */
+async function _emailSaveAndSendArchive() {
+  // Validate To field
+  var toEl = document.getElementById('emailTo');
+  var toVal = toEl ? toEl.value.trim() : '';
+  if (!toVal) {
+    if (typeof cwocToast === 'function') cwocToast('Cannot send: no recipients specified.', 'error');
+    return;
+  }
+  // Send the email first
+  await _emailSend();
+
+  // Archive the original email if this is a reply (has in_reply_to)
+  if (_emailCurrentChit && _emailCurrentChit.email_in_reply_to) {
+    // Find the original chit by matching email_message_id to our in_reply_to
+    try {
+      var resp = await fetch('/api/email/archive-original', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message_id: _emailCurrentChit.email_in_reply_to })
+      });
+      if (resp.ok) {
+        cwocToast('Original email archived.', 'success');
+      }
+    } catch (e) {
+      console.error('[Email] Failed to archive original:', e);
+    }
+  }
 }
 
 /**
@@ -534,6 +661,8 @@ function initEmailZone(chit) {
   if (status === 'draft') {
     _setEmailZoneReadOnly(false);
     _showEmailSaveButtons(true);
+    // Auto-apply signature for new drafts with empty body
+    _applySignatureIfEmpty();
   } else if (status === 'received') {
     _setEmailZoneReadOnly(true);
     _showEmailSaveButtons(false);
@@ -711,7 +840,9 @@ async function _emailReply() {
 
     var created = await response.json();
     cwocToast('Reply draft created.', 'success');
-    window.location.href = '/frontend/html/editor.html?id=' + encodeURIComponent(created.id);
+    // Preserve expand state — use the flag since the modal was already closed
+    var expandParam = _emailExpandModalOpen ? '&expand=email' : '';
+    window.location.href = '/frontend/html/editor.html?id=' + encodeURIComponent(created.id) + expandParam;
   } catch (err) {
     console.error('[_emailReply] Error creating reply:', err);
     cwocToast('Failed to create reply draft.', 'error');
@@ -768,7 +899,9 @@ async function _emailForward() {
 
     var created = await response.json();
     cwocToast('Forward draft created.', 'success');
-    window.location.href = '/frontend/html/editor.html?id=' + encodeURIComponent(created.id);
+    // Preserve expand state — use the flag since the modal was already closed
+    var expandParam = _emailExpandModalOpen ? '&expand=email' : '';
+    window.location.href = '/frontend/html/editor.html?id=' + encodeURIComponent(created.id) + expandParam;
   } catch (err) {
     console.error('[_emailForward] Error creating forward:', err);
     cwocToast('Failed to create forward draft.', 'error');
@@ -859,9 +992,10 @@ function _setEmailZoneReadOnly(readOnly) {
  * Open a fullscreen modal for the email body (expand button).
  */
 function _openEmailExpandModal() {
-  // Remove existing modal if any
   var existing = document.getElementById('emailExpandModal');
   if (existing) existing.remove();
+
+  _emailExpandModalOpen = true;
 
   var bodyEl = document.getElementById('emailBody');
   var toEl = document.getElementById('emailTo');
@@ -871,6 +1005,9 @@ function _openEmailExpandModal() {
   var bodyVal = bodyEl ? bodyEl.value : '';
   var isReadOnly = bodyEl ? bodyEl.readOnly : false;
   var status = (_emailCurrentChit && _emailCurrentChit.email_status) || 'draft';
+  var hasHtml = !!(_emailCurrentChit && _emailCurrentChit.email_body_html);
+
+  // Signature is appended server-side when sending — not shown in compose textarea
 
   var overlay = document.createElement('div');
   overlay.id = 'emailExpandModal';
@@ -879,41 +1016,74 @@ function _openEmailExpandModal() {
 
   var actionBtns = '';
   if (status === 'draft') {
-    actionBtns = '<button class="zone-button" onclick="event.stopPropagation(); _closeEmailExpandModal(true); _emailSend()"><i class="fas fa-paper-plane"></i> Send</button>';
+    actionBtns =
+      '<button type="button" onclick="event.stopPropagation(); _closeEmailExpandModal(true); _emailSend()"><i class="fas fa-paper-plane"></i> Send</button>' +
+      '<button type="button" onclick="event.stopPropagation(); _closeEmailExpandModal(true); _emailSaveAndSendArchive()"><i class="fas fa-paper-plane"></i> Send &amp; Archive</button>';
   } else if (status === 'received') {
     actionBtns =
-      '<button class="zone-button" onclick="event.stopPropagation(); _closeEmailExpandModal(true); _emailReply()"><i class="fas fa-reply"></i> Reply</button>' +
-      '<button class="zone-button" onclick="event.stopPropagation(); _closeEmailExpandModal(true); _emailForward()"><i class="fas fa-share"></i> Forward</button>';
+      '<button type="button" onclick="event.stopPropagation(); _closeEmailExpandModal(true); _emailReply()"><i class="fas fa-reply"></i> Reply</button>' +
+      '<button type="button" onclick="event.stopPropagation(); _closeEmailExpandModal(true); _emailForward()"><i class="fas fa-share"></i> Forward</button>';
   }
 
   var disabledAttr = isReadOnly ? ' readonly disabled' : '';
-  var labelStyle = 'min-width:50px;font-weight:600;color:#5a4a3a;font-family:Lora,Georgia,serif;font-size:14px;text-align:right;';
-  var inputStyle = 'flex:1;padding:6px 10px;border:1px inset #c4a882;border-radius:4px;font-family:Lora,Georgia,serif;font-size:14px;';
 
+  // Build pill toggle if HTML content exists
+  var pillToggleHtml = '';
+  if (hasHtml) {
+    pillToggleHtml =
+      '<div class="cwoc-pill-toggle" style="display:inline-flex;margin-right:auto;" id="emailExpandPillToggle">' +
+        '<span class="cwoc-pill-option cwoc-pill-active" data-value="html" onclick="_switchExpandView(\'html\')">HTML</span>' +
+        '<span class="cwoc-pill-option" data-value="text" onclick="_switchExpandView(\'text\')">Text</span>' +
+      '</div>';
+  }
+
+  // Get the subject/title from the main editor
+  var titleEl = document.getElementById('title');
+  var subjectVal = titleEl ? titleEl.value : '';
+
+  // Use the exact same modal structure as the Notes modal — full viewport with 1em margin
   overlay.innerHTML =
-    '<div class="modal-contentFull" style="max-width:95vw;width:900px;min-height:80vh;display:flex;flex-direction:column;padding:20px;">' +
-      '<div class="modal-header" style="display:flex;justify-content:space-between;align-items:center;padding:10px 15px;margin:-20px -20px 15px -20px;border-radius:8px 8px 0 0;">' +
-        '<h2 style="margin:0;font-family:Lora,Georgia,serif;">✉️ Email</h2>' +
-        '<div style="display:flex;gap:8px;align-items:center;">' +
+    '<div class="modal-contentFull" style="width:calc(100vw - 2em);max-width:calc(100vw - 2em);height:calc(100vh - 2em);display:flex;flex-direction:column;">' +
+      '<div class="modal-header" style="display:flex;align-items:center;justify-content:space-between;padding:0.5em 1em;flex-shrink:0;">' +
+        '<h2 style="margin:0;">✉️ Email</h2>' +
+        '<div style="display:flex;gap:0.5em;flex-wrap:wrap;align-items:center;">' +
+          pillToggleHtml +
           actionBtns +
-          '<button class="zone-button" onclick="_closeEmailExpandModal(true)" title="Close"><i class="fas fa-times"></i> Close</button>' +
+          '<button type="button" class="cancel" onclick="_closeEmailExpandModal(false)"><i class="fas fa-times"></i> Close</button>' +
         '</div>' +
       '</div>' +
-      '<div class="email-field" style="margin-bottom:6px;display:flex;align-items:center;gap:10px;"><label style="' + labelStyle + '">From:</label><span style="flex:1;padding:4px 8px;font-style:italic;color:#5a4a3a;">' + _escapeHtmlAttr(fromEl ? fromEl.textContent : '') + '</span></div>' +
-      '<div class="email-field" style="margin-bottom:6px;display:flex;align-items:center;gap:10px;"><label style="' + labelStyle + '">To:</label><input id="emailExpandTo" type="text" value="' + _escapeHtmlAttr(toEl ? toEl.value : '') + '" style="' + inputStyle + '"' + disabledAttr + '></div>' +
-      '<div class="email-field" style="margin-bottom:6px;display:flex;align-items:center;gap:10px;"><label style="' + labelStyle + '">CC:</label><input id="emailExpandCc" type="text" value="' + _escapeHtmlAttr(ccEl ? ccEl.value : '') + '" style="' + inputStyle + '"' + disabledAttr + '></div>' +
-      '<div class="email-field" style="margin-bottom:10px;display:flex;align-items:center;gap:10px;"><label style="' + labelStyle + '">BCC:</label><input id="emailExpandBcc" type="text" value="' + _escapeHtmlAttr(bccEl ? bccEl.value : '') + '" style="' + inputStyle + '"' + disabledAttr + '></div>' +
-      '<textarea id="emailExpandBody" style="flex:1;min-height:400px;width:100%;box-sizing:border-box;font-family:Lora,Georgia,serif;font-size:14px;line-height:1.6;padding:10px;border:1px inset #c4a882;border-radius:4px;resize:none;"' +
-        disabledAttr +
-      '>' + _escapeHtmlAttr(bodyVal) + '</textarea>' +
+      '<div class="modal-body" style="flex:1;overflow:auto;padding:0.5em 1em;">' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">' +
+          '<div style="display:flex;align-items:center;gap:6px;flex:1;min-width:200px;"><strong style="flex-shrink:0;">From:</strong><span style="font-style:italic;color:#5a4a3a;">' + _escapeHtmlAttr(fromEl ? fromEl.textContent : '') + '</span></div>' +
+          '<div style="display:flex;align-items:center;gap:6px;flex:2;min-width:200px;"><strong style="flex-shrink:0;">To:</strong><input id="emailExpandTo" type="text" value="' + _escapeHtmlAttr(toEl ? toEl.value : '') + '" style="flex:1;padding:4px 8px;border:1px inset #c4a882;border-radius:4px;font-family:Lora,Georgia,serif;"' + disabledAttr + '>' +
+            (isReadOnly ? '' : ' <button type="button" class="email-cc-toggle-btn" id="emailExpandShowCcBtn" onclick="_toggleExpandCcBcc(\'cc\')" title="Add CC">CC</button><button type="button" class="email-cc-toggle-btn" id="emailExpandShowBccBtn" onclick="_toggleExpandCcBcc(\'bcc\')" title="Add BCC">BCC</button>') +
+          '</div>' +
+        '</div>' +
+        '<div class="email-field" id="emailExpandCcRow" style="display:' + (ccEl && ccEl.value.trim() ? '' : 'none') + ';margin-bottom:8px;">' +
+          '<label style="min-width:50px;font-weight:600;color:#5a4a3a;font-family:Lora,Georgia,serif;font-size:14px;flex-shrink:0;text-align:right;">CC:</label>' +
+          '<input id="emailExpandCc" type="text" value="' + _escapeHtmlAttr(ccEl ? ccEl.value : '') + '" style="flex:1;padding:4px 8px;border:1px inset #c4a882;border-radius:4px;font-family:Lora,Georgia,serif;"' + disabledAttr + '>' +
+          '<button type="button" class="email-cc-remove-btn" onclick="_toggleExpandCcBcc(\'cc\')" title="Remove CC">✕</button>' +
+        '</div>' +
+        '<div class="email-field" id="emailExpandBccRow" style="display:' + (bccEl && bccEl.value.trim() ? '' : 'none') + ';margin-bottom:8px;">' +
+          '<label style="min-width:50px;font-weight:600;color:#5a4a3a;font-family:Lora,Georgia,serif;font-size:14px;flex-shrink:0;text-align:right;">BCC:</label>' +
+          '<input id="emailExpandBcc" type="text" value="' + _escapeHtmlAttr(bccEl ? bccEl.value : '') + '" style="flex:1;padding:4px 8px;border:1px inset #c4a882;border-radius:4px;font-family:Lora,Georgia,serif;"' + disabledAttr + '>' +
+          '<button type="button" class="email-cc-remove-btn" onclick="_toggleExpandCcBcc(\'bcc\')" title="Remove BCC">✕</button>' +
+        '</div>' +
+        '<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">' +
+          '<strong style="flex-shrink:0;min-width:50px;text-align:right;">Subject:</strong>' +
+          '<input id="emailExpandSubject" type="text" value="' + _escapeHtmlAttr(subjectVal) + '" style="flex:1;padding:4px 8px;border:1px inset #c4a882;border-radius:4px;font-family:Lora,Georgia,serif;font-size:14px;"' + disabledAttr + '>' +
+        '</div>' +
+        '<div id="emailExpandBodyWrap" style="flex:1;display:flex;flex-direction:column;height:calc(100vh - 2em - 240px);">' +
+          '<textarea id="emailExpandBody" style="flex:1;width:100%;box-sizing:border-box;font-family:Lora,Georgia,serif;font-size:14px;line-height:1.6;padding:10px;border:1px inset #c4a882;border-radius:4px;resize:none;' + (hasHtml ? 'display:none;' : '') + '"' +
+            disabledAttr + '>' + _escapeHtmlAttr(bodyVal) + '</textarea>' +
+        '</div>' +
+      '</div>' +
     '</div>';
 
-  // Close on overlay click (outside modal content)
   overlay.addEventListener('click', function(e) {
     if (e.target === overlay) _closeEmailExpandModal(false);
   });
 
-  // Handle ESC key to close the modal
   function _emailExpandEscHandler(e) {
     if (e.key === 'Escape') {
       e.preventDefault();
@@ -923,10 +1093,73 @@ function _openEmailExpandModal() {
     }
   }
   document.addEventListener('keydown', _emailExpandEscHandler, true);
-  // Store the handler so _closeEmailExpandModal can clean it up
   overlay._escHandler = _emailExpandEscHandler;
 
   document.body.appendChild(overlay);
+
+  // If HTML content exists, render it in an iframe that allows links to open in new tabs
+  if (hasHtml) {
+    var wrap = document.getElementById('emailExpandBodyWrap');
+    if (wrap) {
+      var iframe = document.createElement('iframe');
+      iframe.id = 'emailExpandHtmlIframe';
+      iframe.style.cssText = 'flex:1;width:100%;min-height:300px;border:1px inset #c4a882;border-radius:4px;background:#fff;';
+      // allow-popups lets target="_blank" links work; allow-popups-to-escape-sandbox lets them open normally
+      iframe.sandbox = 'allow-same-origin allow-popups allow-popups-to-escape-sandbox';
+      iframe.setAttribute('frameborder', '0');
+
+      var sanitized = _emailCurrentChit.email_body_html;
+      if (typeof DOMPurify !== 'undefined') {
+        sanitized = DOMPurify.sanitize(sanitized, {
+          FORBID_TAGS: ['script', 'object', 'embed', 'form', 'input', 'button', 'select', 'textarea'],
+          ADD_ATTR: ['target'],
+        });
+      }
+      // Force all links to open in new tab
+      sanitized = sanitized.replace(/<a /gi, '<a target="_blank" rel="noopener noreferrer" ');
+      iframe.srcdoc = sanitized;
+
+      iframe.addEventListener('load', function() {
+        _resizeEmailIframe(iframe);
+        // Also force links inside the iframe to open in new tabs
+        try {
+          var doc = iframe.contentDocument || iframe.contentWindow.document;
+          if (doc) {
+            doc.querySelectorAll('a').forEach(function(a) {
+              a.setAttribute('target', '_blank');
+              a.setAttribute('rel', 'noopener noreferrer');
+            });
+          }
+        } catch(e) { /* cross-origin */ }
+      });
+
+      wrap.insertBefore(iframe, wrap.firstChild);
+    }
+  }
+}
+
+/**
+ * Switch between HTML and Text views in the expand modal.
+ * @param {string} mode — 'html' or 'text'
+ */
+function _switchExpandView(mode) {
+  var iframe = document.getElementById('emailExpandHtmlIframe');
+  var textarea = document.getElementById('emailExpandBody');
+  var toggle = document.getElementById('emailExpandPillToggle');
+
+  if (toggle) {
+    toggle.querySelectorAll('.cwoc-pill-option').forEach(function(opt) {
+      opt.classList.toggle('cwoc-pill-active', opt.dataset.value === mode);
+    });
+  }
+
+  if (mode === 'html' && iframe) {
+    if (iframe) iframe.style.display = '';
+    if (textarea) textarea.style.display = 'none';
+  } else {
+    if (iframe) iframe.style.display = 'none';
+    if (textarea) textarea.style.display = '';
+  }
 }
 
 /**
@@ -937,28 +1170,44 @@ function _closeEmailExpandModal(save) {
   var modal = document.getElementById('emailExpandModal');
   if (!modal) return;
 
+  // Only reset the expand flag when user manually dismisses (Cancel/Close/ESC)
+  // Reply/Forward/Send set save=true to preserve the flag for navigation
+  if (!save) {
+    _emailExpandModalOpen = false;
+  }
+
   // Clean up ESC handler
   if (modal._escHandler) {
     document.removeEventListener('keydown', modal._escHandler, true);
   }
 
   if (save) {
-    var expandBody = document.getElementById('emailExpandBody');
-    var bodyEl = document.getElementById('emailBody');
-    if (expandBody && bodyEl) {
-      bodyEl.value = expandBody.value;
+    // Only sync fields back for editable emails (drafts) — not for received/sent
+    var isEditable = _emailCurrentChit && _emailCurrentChit.email_status === 'draft';
+    if (isEditable) {
+      var expandBody = document.getElementById('emailExpandBody');
+      var bodyEl = document.getElementById('emailBody');
+      if (expandBody && bodyEl) {
+        bodyEl.value = expandBody.value;
+      }
+      // Sync Subject back to the title field
+      var expandSubject = document.getElementById('emailExpandSubject');
+      var titleEl = document.getElementById('title');
+      if (expandSubject && titleEl) {
+        titleEl.value = expandSubject.value;
+      }
+      // Sync To/Cc/Bcc back to the zone fields
+      var expandTo = document.getElementById('emailExpandTo');
+      var toEl = document.getElementById('emailTo');
+      if (expandTo && toEl) toEl.value = expandTo.value;
+      var expandCc = document.getElementById('emailExpandCc');
+      var ccEl = document.getElementById('emailCc');
+      if (expandCc && ccEl) ccEl.value = expandCc.value;
+      var expandBcc = document.getElementById('emailExpandBcc');
+      var bccEl = document.getElementById('emailBcc');
+      if (expandBcc && bccEl) bccEl.value = expandBcc.value;
+      setSaveButtonUnsaved();
     }
-    // Sync To/Cc/Bcc back to the zone fields
-    var expandTo = document.getElementById('emailExpandTo');
-    var toEl = document.getElementById('emailTo');
-    if (expandTo && toEl) toEl.value = expandTo.value;
-    var expandCc = document.getElementById('emailExpandCc');
-    var ccEl = document.getElementById('emailCc');
-    if (expandCc && ccEl) ccEl.value = expandCc.value;
-    var expandBcc = document.getElementById('emailExpandBcc');
-    var bccEl = document.getElementById('emailBcc');
-    if (expandBcc && bccEl) bccEl.value = expandBcc.value;
-    setSaveButtonUnsaved();
   }
   modal.remove();
 }
@@ -967,6 +1216,26 @@ function _closeEmailExpandModal(save) {
 function _escapeHtmlAttr(str) {
   if (!str) return '';
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/**
+ * Toggle Cc or Bcc field visibility in the expand modal.
+ * @param {string} field — 'cc' or 'bcc'
+ */
+function _toggleExpandCcBcc(field) {
+  var rowId = field === 'cc' ? 'emailExpandCcRow' : 'emailExpandBccRow';
+  var btnId = field === 'cc' ? 'emailExpandShowCcBtn' : 'emailExpandShowBccBtn';
+  var row = document.getElementById(rowId);
+  var btn = document.getElementById(btnId);
+  if (!row) return;
+  var isVisible = row.style.display !== 'none';
+  row.style.display = isVisible ? 'none' : '';
+  if (btn) btn.style.display = isVisible ? '' : 'none';
+  if (!isVisible) {
+    var inputId = field === 'cc' ? 'emailExpandCc' : 'emailExpandBcc';
+    var input = document.getElementById(inputId);
+    if (input) setTimeout(function() { input.focus(); }, 50);
+  }
 }
 
 /** Alias for use in autocomplete dropdown rendering */
@@ -994,10 +1263,11 @@ function _setupHtmlEmailView(htmlContent, bodyEl) {
   var bodyField = bodyEl.closest('.email-body-field') || bodyEl.parentNode;
   if (!bodyField) return;
 
-  // Create toggle row
+  // Create toggle row — hidden in the small zone, only shown in expand modal
   var toggleRow = document.createElement('div');
   toggleRow.className = 'email-html-toggle-row';
   toggleRow.id = 'emailHtmlToggleRow';
+  toggleRow.style.display = 'none'; // hidden in small zone
 
   var htmlBtn = document.createElement('button');
   htmlBtn.type = 'button';
@@ -1028,7 +1298,7 @@ function _setupHtmlEmailView(htmlContent, bodyEl) {
   var iframe = document.createElement('iframe');
   iframe.id = 'emailHtmlIframe';
   iframe.className = 'email-html-iframe';
-  iframe.sandbox = 'allow-same-origin';
+  iframe.sandbox = 'allow-same-origin allow-popups allow-popups-to-escape-sandbox';
   iframe.setAttribute('frameborder', '0');
 
   // Sanitize HTML with DOMPurify before rendering
@@ -1054,6 +1324,9 @@ function _setupHtmlEmailView(htmlContent, bodyEl) {
     });
   }
 
+  // Force all links to open in new tab
+  sanitized = sanitized.replace(/<a /gi, '<a target="_blank" rel="noopener noreferrer" ');
+
   iframe.srcdoc = sanitized;
 
   // Insert iframe after the textarea
@@ -1062,6 +1335,16 @@ function _setupHtmlEmailView(htmlContent, bodyEl) {
   // Auto-resize iframe based on content
   iframe.addEventListener('load', function() {
     _resizeEmailIframe(iframe);
+    // Also force links inside the iframe to open in new tabs
+    try {
+      var doc = iframe.contentDocument || iframe.contentWindow.document;
+      if (doc) {
+        doc.querySelectorAll('a').forEach(function(a) {
+          a.setAttribute('target', '_blank');
+          a.setAttribute('rel', 'noopener noreferrer');
+        });
+      }
+    } catch(e) { /* cross-origin */ }
   });
 
   // Default: show HTML, hide textarea
@@ -1192,7 +1475,9 @@ function _renderEmailThread(thread, currentId) {
     if (entry.id !== currentId) {
       item.style.cursor = 'pointer';
       item.addEventListener('click', function() {
-        window.location.href = '/frontend/html/editor.html?id=' + encodeURIComponent(entry.id);
+        // Preserve expand state when navigating within a thread
+        var expandParam = _emailExpandModalOpen ? '&expand=email' : '';
+        window.location.href = '/frontend/html/editor.html?id=' + encodeURIComponent(entry.id) + expandParam;
       });
     }
 

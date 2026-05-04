@@ -47,6 +47,9 @@
                     <button id="saveSendButton" onclick="_emailSaveAndSend()" style="display:none;">
                         <i class="fas fa-paper-plane"></i> ✉️ Save &amp; Send
                     </button>
+                    <button id="saveSendArchiveButton" onclick="_emailSaveAndSendArchive()" style="display:none;">
+                        <i class="fas fa-paper-plane"></i> 📦 Send &amp; Archive
+                    </button>
                     <!-- Shown when no unsaved changes -->
                     <button id="saveButton" onclick="saveChit()" disabled>
                         <i class="fas fa-save"></i> Save
@@ -1025,7 +1028,6 @@
                                 <button type="button" class="email-cc-remove-btn" onclick="_toggleEmailCcBcc('bcc')" title="Remove BCC">✕</button>
                             </div>
                             <div class="email-field email-body-field">
-                                <label>Body:</label>
                                 <textarea id="emailBody" rows="12" placeholder="Compose your message..."></textarea>
                             </div>
                         </div>
@@ -1053,7 +1055,7 @@
 
 
         <div id="notesModal" class="modal-overlay" style="display: none">
-            <div class="modal-contentFull" style="width:92vw;max-width:92vw;height:88vh;display:flex;flex-direction:column;">
+            <div class="modal-contentFull" style="width:calc(100vw - 2em);max-width:calc(100vw - 2em);height:calc(100vh - 2em);display:flex;flex-direction:column;">
                 <div class="modal-header" style="display:flex;align-items:center;justify-content:space-between;padding:0.5em 1em;flex-shrink:0;">
                     <h2 style="margin:0;">📝 Notes</h2>
                     <div style="display:flex;gap:0.5em;flex-wrap:wrap;">
@@ -1071,12 +1073,12 @@
                             class="notes-markdown-inputLarge zone-input"
                             contenteditable="true"
                             placeholder="Enter your notes here..."
-                            style="min-height:calc(88vh - 120px);outline:none;white-space:pre-wrap;"
+                            style="min-height:calc(100vh - 2em - 120px);outline:none;white-space:pre-wrap;"
                         ></div>
                         <div
                             id="notes-rendered-output-modal"
                             class="markdown-output"
-                            style="display:none;min-height:calc(88vh - 120px);cursor:pointer;"
+                            style="display:none;min-height:calc(100vh - 2em - 120px);cursor:pointer;"
                             title="Double-click to edit"
                             ondblclick="toggleModalNotesRender()"
                         ></div>

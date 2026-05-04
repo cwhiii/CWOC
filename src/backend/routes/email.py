@@ -245,7 +245,8 @@ def _fetch_new_messages(imap, since_date: str) -> list:
     messages = []
     for uid in uids:
         # Fetch both the full message and its flags
-        status, msg_data = imap.fetch(uid, "(RFC822 FLAGS)")
+        # Use BODY.PEEK[] instead of RFC822 to avoid setting the \Seen flag
+        status, msg_data = imap.fetch(uid, "(BODY.PEEK[] FLAGS)")
         if status != "OK" or not msg_data:
             logger.warning("Failed to fetch message UID %s", uid)
             continue
@@ -481,7 +482,7 @@ def _create_email_chit(cursor, parsed: dict, owner_id: str) -> str | None:
     # Deduplication: skip if this Message-ID already exists
     if message_id:
         cursor.execute(
-            "SELECT id FROM chits WHERE email_message_id = ?",
+            "SELECT id FROM chits WHERE email_message_id = ? AND (deleted = 0 OR deleted IS NULL)",
             (message_id,),
         )
         if cursor.fetchone():
@@ -520,6 +521,7 @@ def _create_email_chit(cursor, parsed: dict, owner_id: str) -> str | None:
         """INSERT INTO chits (
             id, title, tags, start_datetime,
             created_datetime, modified_datetime,
+            owner_id,
             email_message_id, email_from, email_to, email_cc,
             email_subject, email_body_text, email_body_html, email_date,
             email_folder, email_status, email_read,
@@ -528,6 +530,7 @@ def _create_email_chit(cursor, parsed: dict, owner_id: str) -> str | None:
         ) VALUES (
             ?, ?, ?, ?,
             ?, ?,
+            ?,
             ?, ?, ?, ?,
             ?, ?, ?, ?,
             ?, ?, ?,
@@ -541,6 +544,7 @@ def _create_email_chit(cursor, parsed: dict, owner_id: str) -> str | None:
             parsed.get("start_datetime") or None,
             now,
             now,
+            owner_id,
             message_id,
             parsed.get("email_from", ""),
             email_to_json,
@@ -700,11 +704,55 @@ def _build_rfc2822_message(chit: dict, account: dict) -> email.message.EmailMess
     if references:
         msg["References"] = references
 
-    # Body — plain text
+    # Body — plain text, with optional signature
+    # The frontend inserts the rendered HTML signature into the body.
+    # Only append server-side if the body doesn't already contain a signature separator.
     body = chit.get("email_body_text", "")
+    signature = account.get("signature", "")
+    if signature and "\n--\n" not in body:
+        body = body + "\n\n--\n" + signature
     msg.set_content(body)
 
+    # If there's a signature with markdown, also add an HTML alternative
+    if signature and "\n--\n" in body:
+        try:
+            html_sig = _markdown_to_html(signature)
+            import html as _html_mod
+            # Get the body text before the signature separator
+            body_parts = body.split("\n--\n", 1)
+            body_text = body_parts[0] if body_parts else body
+            escaped_body = _html_mod.escape(body_text)
+            html_body = (
+                '<div style="font-family:sans-serif;font-size:14px;line-height:1.5;">'
+                + escaped_body.replace('\n', '<br>')
+                + '<br><br>--<br>'
+                + html_sig
+                + '</div>'
+            )
+            msg.add_alternative(html_body, subtype='html')
+        except Exception as e:
+            logger.warning("Failed to add HTML signature alternative: %s", e)
+
     return msg
+
+
+def _markdown_to_html(md_text: str) -> str:
+    """Convert a markdown string to HTML using a minimal converter.
+
+    Handles: **bold**, *italic*, [text](url), single newlines as <br>.
+    No external dependencies — uses regex substitution.
+    """
+    import html as _html_mod
+    text = _html_mod.escape(md_text)
+    # Bold: **text**
+    text = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', text)
+    # Italic: *text*
+    text = re.sub(r'\*(.+?)\*', r'<em>\1</em>', text)
+    # Links: [text](url)
+    text = re.sub(r'\[(.+?)\]\((.+?)\)', r'<a href="\2">\1</a>', text)
+    # Single newlines → <br>
+    text = text.replace('\n', '<br>')
+    return text
 
 
 def _send_email(smtp: smtplib.SMTP, message: email.message.EmailMessage, from_addr: str) -> str:
@@ -981,6 +1029,7 @@ def email_sync(request: Request):
         # Parse and store each message (respect max_pull limit)
         max_pull = int(account.get("max_pull", 50) or 50)
         new_count = 0
+        new_email_summaries = []  # Collect subject & sender for ntfy body
         for raw_bytes, flags_bytes in messages:
             if new_count >= max_pull:
                 break
@@ -996,6 +1045,10 @@ def email_sync(request: Request):
                 chit_id = _create_email_chit(cursor, parsed, user_id)
                 if chit_id:
                     new_count += 1
+                    # Collect summary for notification
+                    subj = parsed.get("email_subject", "(No Subject)")
+                    sender = parsed.get("email_from", "Unknown")
+                    new_email_summaries.append(f"{subj} — {sender}")
             except Exception as e:
                 logger.warning("Failed to parse/store email message: %s", e)
                 continue
@@ -1009,7 +1062,14 @@ def email_sync(request: Request):
                 from src.backend.schedulers import _get_server_base_url
                 base = _get_server_base_url()
                 ntfy_title = f"📬 {new_count} new email{'s' if new_count != 1 else ''}"
-                ntfy_body = "You have new mail in CWOC."
+                # Build body with subject & sender for each new email (max 5 lines)
+                if new_email_summaries:
+                    body_lines = new_email_summaries[:5]
+                    if len(new_email_summaries) > 5:
+                        body_lines.append(f"… and {len(new_email_summaries) - 5} more")
+                    ntfy_body = "\n".join(body_lines)
+                else:
+                    ntfy_body = "You have new mail in CWOC."
                 click_url = f"{base}/frontend/html/index.html"
                 icon_url = f"{base}/static/cwoc-icon-192.png"
                 send_ntfy_notification(
@@ -1327,6 +1387,52 @@ def email_thread(chit_id: str, request: Request):
     except Exception as e:
         logger.error("Email thread error: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to load email thread: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
+# ───────────────────────────────────────────────────────────────────────────
+# POST /api/email/archive-original — Archive the original email by Message-ID
+# ───────────────────────────────────────────────────────────────────────────
+
+@email_router.post("/api/email/archive-original")
+async def email_archive_original(request: Request):
+    """Archive the original email chit that was replied to.
+
+    Expects JSON body: ``{"message_id": "<Message-ID>"}``
+
+    Finds the chit with the matching ``email_message_id`` and sets
+    ``archived = 1``.
+    """
+    user_id = request.state.user_id
+    conn = None
+    try:
+        body = await request.json()
+        message_id = body.get("message_id", "").strip()
+        if not message_id:
+            raise HTTPException(status_code=400, detail="message_id required")
+
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        cursor.execute(
+            "UPDATE chits SET archived = 1, modified_datetime = ? WHERE email_message_id = ? AND owner_id = ? AND (deleted = 0 OR deleted IS NULL)",
+            (datetime.now(timezone.utc).isoformat(), message_id, user_id),
+        )
+        affected = cursor.rowcount
+        conn.commit()
+
+        if affected == 0:
+            return {"status": "not_found", "message": "No matching email found to archive."}
+
+        return {"status": "archived", "count": affected}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Archive-original error: %s", e)
+        raise HTTPException(status_code=500, detail=f"Failed to archive original: {str(e)}")
     finally:
         if conn:
             conn.close()

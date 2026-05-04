@@ -731,6 +731,14 @@ async function loadChitData(chitId) {
       initAttachmentsZone(chit);
     }
 
+    // Auto-expand email modal if opened from email view (expand=email param)
+    if (typeof hasEmailData === 'function' && hasEmailData(chit)) {
+      var _urlParams = new URLSearchParams(window.location.search);
+      if (_urlParams.get('expand') === 'email' && typeof _openEmailExpandModal === 'function') {
+        setTimeout(function() { _openEmailExpandModal(); }, 350);
+      }
+    }
+
     // Auto-mark email as read when opening an email chit (Requirement 8.1)
     if (typeof hasEmailData === 'function' && hasEmailData(chit) && chit.email_read === false) {
       fetch('/api/email/' + encodeURIComponent(chit.id) + '/read', {
@@ -1254,6 +1262,16 @@ document.addEventListener("DOMContentLoaded", function () {
       var colOne = document.querySelector('.column-one');
       if (emailSection && colOne) {
         colOne.insertBefore(emailSection, colOne.firstChild);
+      }
+
+      // Auto-expand email modal if expand=email param is present (compose from email view)
+      if (params.get('expand') === 'email' && typeof _openEmailExpandModal === 'function') {
+        setTimeout(function() {
+          // Ensure the email zone is fully rendered before opening the modal
+          if (document.getElementById('emailBody')) {
+            _openEmailExpandModal();
+          }
+        }, 350);
       }
     }
 

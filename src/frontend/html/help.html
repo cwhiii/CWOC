@@ -19,69 +19,68 @@
         <div class="help-content">
             <div class="index">
                 <strong>Contents</strong>
-                <ul>
-                    <li><a href="#what-is-cwoc">What is CWOC?</a></li>
-                    <li><a href="#chits">Chits</a></li>
-                    <li><a href="#views">Views & Tabs</a></li>
-                    <li><a href="#calendar">Calendar View</a></li>
-                    <li><a href="#mouse">Mouse Interactions</a></li>
-                    <li><a href="#hotkeys">Keyboard Shortcuts</a></li>
-                    <li><a href="#recurrence">Recurrence / Repeating</a></li>
-                    <li><a href="#tags">Tags</a></li>
-                    <li><a href="#global-search">Global Search</a></li>
-                    <li><a href="#filters">Filtering & Sorting</a></li>
-                    <li><a href="#notes-view">Notes View</a></li>
-                    <li><a href="#clocks">Clocks</a></li>
-                    <li><a href="#weather">Weather</a></li>
-                    <li><a href="#saved-locations">Saved Locations</a></li>
-                    <li><a href="#maps-view">Maps View</a></li>
-                    <li><a href="#editor">Chit Editor</a></li>
-                    <li><a href="#quick-edit">Quick Edit Modal</a></li>
-                    <li><a href="#settings">Settings</a></li>
-                    <li><a href="#data-management">Data Management</a></li>
-                    <li><a href="#calendar-import">Calendar Import (.ics)</a></li>
-                    <li><a href="#alert-indicators">Visual Indicators</a></li>
-                    <li><a href="#version-management">Version & Updates</a></li>
-                    <li><a href="#audit-log">Audit Log</a></li>
-                    <li><a href="#habits-view">Habits</a></li>
-                    <li><a href="#contacts">Contact Editor</a></li>
-                    <li><a href="#sharing">Sharing</a></li>
-                    <li><a href="#email">Email</a></li>
-                    <li><a href="#attachments">Attachments</a></li>
-                    <li><a href="#calculator">Calculator</a></li>
-                    <li><a href="#kiosk">Kiosk</a></li>
-                    <li><a href="#network-access">Dependent Apps</a></li>
-                    <li><a href="#ntfy-notifications">Ntfy Notifications</a></li>
-                    <li><a href="#install-app">Install as App</a></li>
-                </ul>
+                <div class="index-columns">
+                    <div class="index-col">
+                        <em class="index-label">Views</em>
+                        <ul>
+                            <li><a href="#views">Views</a></li>
+                            <li><a href="#calendar">Calendar</a></li>
+                            <li><a href="#notes-view">Notes</a></li>
+                            <li><a href="#habits-view">Habits</a></li>
+                            <li><a href="#maps-view">Maps</a></li>
+                            <li><a href="#email">Email</a></li>
+                            <li><a href="#global-search">Global Search</a></li>
+                            <li><a href="#trash">Trash</a></li>
+                            <li><a href="#kiosk">Kiosk</a></li>
+                        </ul>
+                    </div>
+                    <div class="index-col">
+                        <em class="index-label">Reference</em>
+                        <ul>
+                            <li><a href="#what-is-cwoc">What is CWOC?</a></li>
+                            <li><a href="#chits">Chits</a></li>
+                            <li><a href="#editor">Chit Editor</a></li>
+                            <li><a href="#quick-edit">Quick Edit Modal</a></li>
+                            <li><a href="#mouse">Mouse Interactions</a></li>
+                            <li><a href="#hotkeys">Keyboard Shortcuts</a></li>
+                            <li><a href="#recurrence">Recurrence</a></li>
+                            <li><a href="#tags">Tags</a></li>
+                            <li><a href="#filters">Filtering & Sorting</a></li>
+                            <li><a href="#contacts">Contact Editor</a></li>
+                            <li><a href="#sharing">Sharing</a></li>
+                            <li><a href="#attachments">Attachments</a></li>
+                            <li><a href="#clocks">Clocks</a></li>
+                            <li><a href="#weather">Weather</a></li>
+                            <li><a href="#saved-locations">Saved Locations</a></li>
+                            <li><a href="#alert-indicators">Visual Indicators</a></li>
+                            <li><a href="#calculator">Calculator</a></li>
+                            <li><a href="#settings">Settings</a></li>
+                            <li><a href="#data-management">Data Management</a></li>
+                            <li><a href="#calendar-import">Calendar Import (.ics)</a></li>
+                            <li><a href="#audit-log">Audit Log</a></li>
+                            <li><a href="#version-management">Version & Updates</a></li>
+                            <li><a href="#network-access">Dependent Apps</a></li>
+                            <li><a href="#ntfy-notifications">Ntfy Notifications</a></li>
+                            <li><a href="#install-app">Install as App</a></li>
+                        </ul>
+                    </div>
+                </div>
             </div>
-            <h3 id="what-is-cwoc">What is CWOC?</h3>
-            <p>C.W.'s Omni Chits is a personal task, note, and calendar management app. The core concept is a <strong>chit</strong> — a flexible record that can be a task, note, calendar event, alarm, checklist, or project, all in one data model.</p>
-            <h3 id="chits">Chits</h3>
-            <p>A chit is the universal unit. What makes it appear in different views is which fields you fill in:</p>
-            <ul>
-                <li><strong>Calendar</strong> — has a start/end date or due date</li>
-                <li><strong>Tasks</strong> — has a status (ToDo, In Progress, Blocked, Complete)</li>
-                <li><strong>Notes</strong> — has note content</li>
-                <li><strong>Checklists</strong> — has checklist items</li>
-                <li><strong>Alerts</strong> — has alarms, timers, or notifications</li>
-                <li><strong>Projects</strong> — marked as a "Project Master" with child chits</li>
-            </ul>
-            <p>A single chit can appear in multiple views if it has the relevant fields.</p>
-            <h3 id="views">Views & Tabs</h3>
-            <p>The top tab bar switches between six views: Calendar, Checklists, Alerts, Projects, Tasks, Notes, plus a Global Search tab (magnifying glass icon). The <strong>sidebar</strong> (toggle by clicking the logo or the ☰ hamburger on mobile) provides date navigation, sorting, period selection, and filters.</p>
+            <!-- ═══ VIEWS ═══════════════════════════════════════════════════════ -->
+            <h3 id="views">Views</h3>
+            <p>The top bar switches between six views: Calendar, Checklists, Alerts, Projects, Tasks, Notes, plus a Global Search view (magnifying glass icon). The <strong>sidebar</strong> (toggle by clicking the logo or the ☰ hamburger on mobile) provides date navigation, sorting, period selection, and filters.</p>
             <h4>Sidebar Layout</h4>
             <p>The sidebar is organized top-to-bottom:</p>
             <ul>
                 <li><strong>Date Navigation</strong> — Year/month display, ◄/► arrows to move between periods, and a compact 📍 Today button to jump back to the current date</li>
-                <li><strong>Create Chit</strong> — Directly below the date arrows. Click to create, middle-click to open in a new tab</li>
+                <li><strong>Create Chit</strong> — Directly below the date arrows. Click to create, middle-click to open in a new window</li>
                 <li><strong>Order</strong> — Sort by title, dates, status, manual drag, random, or upcoming</li>
                 <li><strong>Period</strong> — Switch calendar period (Itinerary, Day, Week, Work Hours, X Days, Month, Year)</li>
                 <li><strong>Filters</strong> — Collapsible filter groups for text, status, priority, tags, people, and show/hide options</li>
                 <li><strong>People &amp; Settings</strong> — Navigation to People and Settings pages</li>
                 <li><strong>Clock, Weather, Reference, Help</strong> — Four compact buttons at the bottom. Clock and Weather open modals (Shift+click Weather for the full page). Reference and Help open their respective overlays/pages</li>
             </ul>
-            <p>The Alerts and Projects tabs have a <strong>View Mode</strong> toggle in the sidebar. Projects switches between List and Kanban; Alerts switches between Chits (showing chits that have alerts) and Independent (a 3-column board for quick alarms, timers, and stopwatches not tied to any chit).</p>
+            <p>The Alerts and Projects views have a <strong>View Mode</strong> toggle in the sidebar. Projects switches between List and Kanban; Alerts switches between Chits (showing chits that have alerts) and Independent (a 3-column board for quick alarms, timers, and stopwatches not tied to any chit).</p>
             <h3 id="calendar">Calendar View</h3>
             <p>Periods: Itinerary, Day, Week, Work Hours, X Days, Month, Year. Switch with the Period dropdown or <kbd>.</kbd> hotkey.</p>
             <ul>
@@ -91,155 +90,104 @@
                 <li><strong>Work Hours</strong> → only configured working hours and days</li>
                 <li><strong>X Days</strong> → configurable count (Settings → Period Options)</li>
             </ul>
-            <h3 id="mouse">Mouse Interactions</h3>
-            <h4>On Calendar Events</h4>
-            <ul>
-                <li><strong>Double-click</strong> — Open in editor</li>
-                <li><strong>Shift+click</strong> — Quick Edit modal</li>
-                <li><strong>Drag up/down</strong> — Move time · <strong>Drag left/right</strong> — Move day</li>
-                <li><strong>Drag bottom edge</strong> — Resize (start/end events only)</li>
-            </ul>
-            <h4>On Empty Space</h4>
-            <ul><li><strong>Double-click</strong> — Create new chit at that time</li></ul>
-            <h4>Notes View</h4>
-            <ul>
-                <li><strong>Double-click</strong> — Open in editor</li>
-                <li><strong>Shift+click</strong> — Edit note in place</li>
-            </ul>
-            <h4>Quick Edit Modal</h4>
-            <ul>
-                <li><strong>Double-click title</strong> — Edit title in place</li>
-                <li><strong>📱 QR</strong> — Data QR (Shift+click for link QR)</li>
-            </ul>
-            <h3 id="mobile">Mobile Touch</h3>
-            <p>On mobile devices, touch interactions use a unified <strong>tap-and-hold</strong> gesture system. All views share the same timing so behavior is consistent everywhere:</p>
-            <ul>
-                <li><strong>Tap</strong> — Normal tap/click behavior (open links, toggle checkboxes)</li>
-                <li><strong>Hold ~0.4s then move</strong> — Drag to reorder. Hold your finger on a card or checklist item until you feel a short vibration, then drag. If you move before the hold completes, the page scrolls normally.</li>
-                <li><strong>Hold ~1.2s without moving</strong> — Opens Quick Edit modal (or inline edit on Notes). A double vibration confirms the long-press activated. Once you start moving (dragging), long-press is cancelled.</li>
-                <li><strong>Double-tap</strong> — Open chit in editor</li>
-                <li><strong>Note previews</strong> — Tap "show more…" to expand truncated note text on cards</li>
-                <li><strong>Kanban (Projects)</strong> — Hold a card then drag it to a different status column. Works in both the dashboard kanban view and the editor's project zone.</li>
-            </ul>
-            <h3 id="hotkeys">Keyboard Shortcuts</h3>
-            <p>Press <kbd>R</kbd> for the full reference overlay. Press <kbd>Shift+R</kbd> to open this Help page.</p>
-            <h4>Tab Switching</h4>
-            <ul>
-                <li><kbd>C</kbd> Calendar · <kbd>H</kbd> Checklists · <kbd>A</kbd> Alerts · <kbd>P</kbd> Projects · <kbd>T</kbd> Tasks · <kbd>N</kbd> Notes</li>
-                <li><kbd>G</kbd> — Global Search</li>
-            </ul>
-            <h4>Actions</h4>
-            <ul>
-                <li><kbd>K</kbd> — Create chit (middle-click → new tab)</li>
-                <li><kbd>W</kbd> — Weather modal (default location forecast) · <kbd>Shift+W</kbd> — Weather page (full forecast)</li>
-                <li><kbd>L</kbd> — Clock modal · <kbd>S</kbd> — Settings · <kbd>V</kbd> — Navigate menu</li>
-                <li><kbd>R</kbd> — Reference overlay · <kbd>Shift+R</kbd> — Help page</li>
-                <li><kbd>!</kbd> — Quick Alert menu (add Alarm, Timer, or Stopwatch). On the dashboard, creates an independent alert and shows Done/View buttons. In the editor, adds to the current chit and expands the alerts zone. On other pages, creates an independent alert</li>
-                <li><kbd>`</kbd> — Toggle sidebar visibility (setting is retained)</li>
-                <li><kbd>~</kbd> (Shift+`) — Toggle topbar visibility (setting is retained)</li>
-                <li><kbd>F4</kbd> — Calculator popover (open/close from any page)</li>
-                <li><kbd>ESC</kbd> — Close modal / exit · <kbd>Backspace</kbd> — Clear filters</li>
-            </ul>
-            <h4>Submenu Hotkeys</h4>
-            <ul>
-                <li><kbd>.</kbd> — Period: <kbd>I</kbd>tinerary <kbd>D</kbd>ay <kbd>W</kbd>eek <kbd>K</kbd> Work <kbd>X</kbd> X-Day <kbd>M</kbd>onth <kbd>Y</kbd>ear</li>
-                <li><kbd>M</kbd> — Mode (per tab): Calendar periods · Tasks: <kbd>T</kbd>asks <kbd>H</kbd>abits <kbd>A</kbd>ssigned · Alarms: <kbd>L</kbd>ist <kbd>I</kbd>ndependent · Projects: <kbd>L</kbd>ist <kbd>K</kbd>anban</li>
-                <li><kbd>F</kbd> — Filter: <kbd>S</kbd>tatus <kbd>T</kbd>ags <kbd>P</kbd>riority <kbd>E</kbd> People <kbd>A</kbd> Archived <kbd>I</kbd> Pinned <kbd>D</kbd> Filter Text</li>
-                <li><kbd>O</kbd> — Order: <kbd>T</kbd>itle <kbd>S</kbd>tart <kbd>D</kbd>ue <kbd>U</kbd>pdated <kbd>C</kbd>reated <kbd>X</kbd> Status <kbd>M</kbd>anual <kbd>R</kbd>andom <kbd>G</kbd> Upcoming · <kbd>↑↓</kbd> Asc/Desc</li>
-            </ul>
-            <h4>Editor Hotkeys</h4>
-            <ul>
-                <li><kbd>Alt+1</kbd> Dates · <kbd>Alt+2</kbd> Task · <kbd>Alt+3</kbd> Tags · <kbd>Alt+4</kbd> Notes · <kbd>Alt+5</kbd> Checklist</li>
-                <li><kbd>Alt+6</kbd> Alerts · <kbd>Alt+7</kbd> Location · <kbd>Alt+8</kbd> People · <kbd>Alt+9</kbd> Color · <kbd>Alt+0</kbd> Projects</li>
-                <li><kbd>ESC</kbd> — Exit editor · <kbd>Ctrl+Shift+S</kbd> — Save &amp; Stay · Type <code>[[</code> in Notes to link to other chits</li>
-            </ul>
-            <h3 id="recurrence">Recurrence / Repeating</h3>
-            <p>Check 🔁 Repeat in the Dates zone. Patterns: Daily, Weekly, Monthly, Yearly, Custom. Optional end date.</p>
-            <h4>Instance Actions (Shift+click)</h4>
-            <ul><li><strong>✏️🔁</strong> Edit series · <strong>✏️1️⃣</strong> Edit instance · <strong>✏️✂️</strong> Break off & edit</li></ul>
-            <p>Drag prompts: This instance only / All in series / All following.</p>
-            <h3 id="tags">Tags</h3>
-            <p>Hierarchical labels with colors. Nesting via <code>/</code> (e.g., <code>Work/Projects/CWOC</code>). Child tags inherit parent color. ★ Favorites appear at top.</p>
-            <h3 id="global-search">Global Search</h3>
-            <p>Press <kbd>G</kbd> or click the magnifying glass tab (last in the C CAPTN tab bar) to open the Global Search view. Unlike the sidebar filter, Global Search queries ALL fields across ALL chits regardless of which tab they belong to.</p>
-            <ul>
-                <li><strong>Search Input + Go</strong> — Type a query in the search input and press Enter or click Go. The search performs case-insensitive substring matching across every chit field (title, note, tags, status, priority, location, people, checklist items, dates, color, alerts, and more).</li>
-                <li><strong>Result Cards</strong> — Each matching chit is displayed as a card showing the chit title and every matched field with the matching text highlighted. Click a result card to open that chit in the editor.</li>
-                <li><strong>Sidebar Filters</strong> — Sidebar filters (Status, Priority, Tags, etc.) remain active during Global Search, narrowing results further.</li>
-            </ul>
-            <h3 id="filters">Filtering & Sorting</h3>
-            <p>The sidebar provides multiple filter groups, each collapsible by clicking its label:</p>
-            <ul>
-                <li><strong>Filter Text</strong> — Free-text search across title, notes, tags, status, people, location, and priority</li>
-                <li><strong>Status</strong> — Multi-select: Any, ToDo, In Progress, Blocked, Complete</li>
-                <li><strong>Priority</strong> — Multi-select: Any, Low, Medium, High</li>
-                <li><strong>Tags</strong> — Multi-select with search. Favorites appear first</li>
-                <li><strong>People</strong> — Multi-select from contacts assigned to chits</li>
-                <li><strong>Show</strong> — Toggle visibility of Pinned, Archived, Unmarked chits, and Hide Past-Due</li>
-            </ul>
-            <p>When any filter is active, a "✕ Clear All" button appears. If the current tab has a default filter (configured in Settings → Default Filters), a "🔄 Defaults" button resets to that filter.</p>
-            <h4>Sorting</h4>
-            <p>The Order section in the sidebar provides sort options: Title, Start Date, Due Date, Updated, Created, Status, Manual (drag-to-reorder), Random/Shuffle, and Upcoming (due soon first, completed at bottom). Click the ▲/▼ button to toggle ascending/descending.</p>
             <h3 id="notes-view">Notes View</h3>
             <p>Multi-column masonry layout with full rendered markdown. <code>[[chit title]]</code> auto-links to other chits.</p>
             <p><strong>Shift+click</strong> (or very long-press ~1.2s on mobile) a note card to edit it in place. A short hold (~0.4s) then drag lets you reorder notes between columns. While editing, drag-and-drop reordering is disabled so you can click to position the cursor. Press <kbd>ESC</kbd> or click outside to save and exit edit mode.</p>
-            <h3 id="clocks">Clocks</h3>
-            <p>Press <kbd>L</kbd> on the dashboard or click the 🕐 Clock button in the sidebar to open the clocks modal. Configure which clocks are displayed and their layout in Settings → Clocks.</p>
+            <h3 id="habits-view">Habits</h3>
+            <p>CWOC supports explicit habit tracking via an opt-in model. Any chit can become a habit, with its own goal/progress system, charts, reset periods, and a dedicated Habits view in the Tasks view.</p>
+
+            <h4>Habit Toggle</h4>
+            <p>The <strong>🎯 Habit</strong> button lives in the Task zone header (visible even when the zone is collapsed). Clicking it toggles habit mode on and off. When you enable habit mode:</p>
             <ul>
-                <li><strong>24 Hour</strong> — Standard 24-hour digital display (HH:MM:SS)</li>
-                <li><strong>12 Hour</strong> — 12-hour digital display with AM/PM</li>
-                <li><strong>12 Hour Analog</strong> — Traditional analog clock face with hour, minute, and second hands</li>
-                <li><strong><a href="https://www.cwholemaniii.com/pages/hss/hst.shtml" target="_blank">HST</a></strong> — Holeman Simplified Time. Represents the day as 0–100 sentidays (sd) shown on a progress bar. Midnight = 0.000 sd, noon = 50.000 sd, end of day = 100.000 sd. "Sentiday" is the Holeman Simplified English spelling of centiday.</li>
+                <li><strong>Auto-enables Repeat</strong> — If the chit doesn't already have a recurrence rule, Repeat is automatically turned on with a default of Daily</li>
+                <li><strong>Locks Repeat</strong> — While habit is active, the Repeat checkbox is locked on (turn off the habit first to disable Repeat)</li>
+                <li><strong>Reveals habit controls</strong> — A Goal input and progress display (X / Y) appear on a dedicated row. A separate "📅 Calendar" row shows the "Show on calendar" toggle</li>
+                <li><strong>Forces All Day</strong> — Habits are always all-day events. The "📅 All Day" button shows active and is disabled while habit is on</li>
+                <li><strong>Shows 🎯 icon</strong> — Habit chits display the 🎯 target icon instead of the 🔁 repeat icon everywhere: editor title bar, calendar events, quick-edit modal, and tooltips</li>
+                <li><strong>Auto-tags</strong> — The system automatically adds <code>Habits</code> and <code>Habits/[title]</code> tags to the chit</li>
+                <li><strong>Auto-enable from Habits mode</strong> — Creating a new chit from the Tasks view while in Habits mode auto-enables habit mode on the new chit</li>
             </ul>
-            <p>Drag clocks between Active and Inactive zones in Settings to choose which appear. Use "Change Orientation" to switch between horizontal and vertical layout.</p>
-            <h3 id="weather">Weather</h3>
-            <p>Press <kbd>W</kbd> on the dashboard to open the weather modal. It shows the current forecast for your default saved location, including weather icon, high/low temperatures, and precipitation. Temperatures display in °F or °C based on your unit system setting (Settings → Unit System). If no default location is configured, the modal will prompt you to set one in Settings. The modal includes a <strong>📊 Full Forecast</strong> button that opens the dedicated Weather page.</p>
-            <p>In the chit editor, weather loads automatically when a chit has both a location and a date. Stored forecast data displays immediately on load, then a live fetch updates it in the background. Placeholder messages appear when either location or date is missing.</p>
-            <h4>Weather Data on Chits</h4>
-            <p>Each chit with a location and date stores its own weather forecast. The stored data includes:</p>
+
+            <h4>Date Options for Habits</h4>
+            <p>When habit mode is active, the Dates zone offers three radio options (the "None" option is hidden):</p>
             <ul>
-                <li><strong>High / Low</strong> — Forecast high and low temperatures (stored in Celsius, displayed in °F or °C based on your unit system setting)</li>
-                <li><strong>Precipitation</strong> — Expected precipitation sum in mm</li>
-                <li><strong>Weather Code</strong> — Determines the weather icon (☀️ sunny, 🌧️ rainy, 🌨️ snowy, etc.)</li>
-                <li><strong>Focus Date</strong> — The date the forecast applies to (earliest of start or due date)</li>
-                <li><strong>Updated Time</strong> — When the forecast was last refreshed</li>
+                <li><strong>🗓️ Start/End</strong> — Set a start and end date range for the habit</li>
+                <li><strong>⏳ Due</strong> — "Do X times before date Y." Translates to start = now, end = the due date</li>
+                <li><strong>♾️ Perpetual</strong> — Starts now, continues forever with no end date. This is a radio option in the date mode selector, not a separate checkbox</li>
             </ul>
-            <p>Weather data is updated automatically by the server — no browser needs to be open. When you save a chit in the editor, any fetched weather data is saved with it.</p>
-            <h4>Calendar View Weather Display</h4>
-            <p>On the calendar, chits with stored weather data show a compact weather summary on their event card:</p>
+
+            <h4>Goal and Progress</h4>
+            <p>Each habit has a <strong>Goal</strong> (how many completions per period you're aiming for, minimum 1) and a <strong>Progress</strong> count (how many you've done this period). When progress reaches the goal, the chit is automatically marked Complete. Progress is capped at the goal value and can never exceed it.</p>
+
+            <h4>Habits Zone (Editor)</h4>
+            <p>The chit editor includes a <strong>🎯 Habits</strong> collapsible zone (visible only when habit mode is on). It contains three collapsible sections:</p>
             <ul>
-                <li><strong>Weather icon</strong> — Derived from the weather code (e.g., ☀️, 🌤️, 🌧️, 🌨️)</li>
-                <li><strong>High / Low temps</strong> — Displayed in °F or °C based on your unit system setting</li>
-                <li><strong>Precipitation</strong> — Shown on Day, Week, Work Hours, and X Days views</li>
-                <li><strong>⏳ Stale indicator</strong> — Appears when the forecast data is more than 24 hours old</li>
+                <li><strong>Settings</strong> — Goal per cycle (Day/Week/Month/Year), Reset period (checkbox to enable, then number + unit), Show on calendar views toggle, Show overall % in view toggle</li>
+                <li><strong>Charts</strong> — Three canvas-based charts: completion over time (bar chart), success rate trend (line chart), and streak timeline. Charts update when you edit past period counts. The time range matches your Success Rate Window setting</li>
+                <li><strong>History</strong> — Past periods in a 2-column layout with [−] X/Y [+] counter widgets for retroactive editing of completion counts</li>
             </ul>
-            <p>If a chit has a location but no stored weather data yet, it falls back to fetching weather in the background. The 🌤️ Weather button in the sidebar opens the weather modal (click) or navigates to the full Weather page (Shift+click).</p>
-            <h4>Weather Page</h4>
-            <p>The Weather page shows a comprehensive forecast table for all your saved locations. Access it via:</p>
+            <p>A counter widget also appears in the zone header for quick increment/decrement without expanding the zone.</p>
+
+            <h4>Reset Period (Cooldown)</h4>
+            <p>Each habit can have an optional <strong>Reset Period</strong> — a cooldown after completing one unit. Enable it with the "Enable reset" checkbox, then set "Every [X] [Day(s)/Week(s)]". The available units are limited to one level smaller than the cycle (e.g., a Weekly cycle can only use Day(s) for reset; a Monthly cycle can use Day(s) or Week(s)). When the reset period is active (you've already incremented within the current reset window), the + button or checkbox is disabled and the habit moves to the <strong>😌 Out of Mind</strong> section.</p>
+
+            <h4>Switching to Habits Mode</h4>
+            <p>When the Tasks view is active, the sidebar shows a View Mode section with three buttons: <strong>📋 Tasks</strong>, <strong>🎯 Habits</strong>, and <strong>📌 Assigned</strong>. Click "Habits" to enter Habits mode. Your selection is remembered across sessions. Only chits explicitly marked as habits appear here — not all recurring chits.</p>
+
+            <h4>Habits View Sections</h4>
+            <p>The Habits view organizes habits into three sections:</p>
             <ul>
-                <li><kbd>Shift+W</kbd> from the dashboard</li>
-                <li>The <strong>📊 Full Forecast</strong> button in the weather modal</li>
-                <li>Shift+click the <strong>🌤️ Weather</strong> button in the sidebar</li>
+                <li><strong>🔜 On Deck</strong> — Habits ready to be worked on, sorted by urgency (least time per remaining action first)</li>
+                <li><strong>😌 Out of Mind</strong> — Habits with an active reset period (recently completed, waiting for cooldown). Shows "☐ Too soon to complete again. Resets on [date]."</li>
+                <li><strong>✅ Accomplished</strong> — Completed habits for the current cycle. Shows "✅ Complete for this cycle. (Next cycle starts [date].)"</li>
             </ul>
-            <p>The page displays one row per saved location, with up to 16 days of forecast data. Each day block shows the weather icon, high/low temperatures, and precipitation. Temperatures respect your unit system setting (°F or °C). Drag rows by the ☰ handle to reorder locations — your arrangement is saved automatically. Days where you have a chit at that location are highlighted with a darker background. Click any day block to jump to that day in the Calendar Day view — any chits at that location will flash briefly to draw your eye. If no saved locations are configured, a message directs you to add them in Settings. Press <kbd>ESC</kbd> to navigate back.</p>
-            <h4>City Rows from Chits</h4>
-            <p>Below the saved-location rows, the Weather page automatically adds rows for cities where you have upcoming chits but no saved location. These rows are labeled with the city name (extracted from the chit's address) and only show weather blocks on days that have chits in that city — other days are left empty. Click a day block to jump to that day in the Calendar, same as saved-location rows.</p>
-            <h4>Weather Update Schedule</h4>
-            <p>The server automatically refreshes weather forecasts on two schedules:</p>
+            <p>Habits animate with a fade-out when moving between sections.</p>
+
+            <h4>Habit Cards</h4>
+            <p>Each habit appears as a card showing:</p>
             <ul>
-                <li><strong>Hourly</strong> — Chits with dates in the next 7 days are updated every 60 minutes for higher accuracy</li>
-                <li><strong>Daily</strong> — Chits with dates 8–16 days out are updated once every 24 hours for a general outlook</li>
+                <li><strong>Title</strong> — With a period label (e.g., "Week of May 5"). Double-click or long-press to open in the editor</li>
+                <li><strong>Metric boxes</strong> — Four inline metrics:
+                    <ul>
+                        <li>📊 <strong>Progress</strong> — X/Y each [unit] with [−] [+] buttons</li>
+                        <li>🎯 <strong>Cycle %</strong> — Percentage of the way to the goal this period</li>
+                        <li>📈 <strong>Overall %</strong> — Percentage of past cycles where the goal was fully met (hideable per-habit)</li>
+                        <li>🔥 <strong>Streak</strong> — Consecutive completed periods walking backward; broken-off periods are neutral</li>
+                    </ul>
+                </li>
+                <li><strong>Note preview</strong> — Rendered markdown on the right side of the card (7-line max)</li>
             </ul>
-            <p>Updates run in the background on the server. Each unique location is geocoded once and reused for all chits at that address. You can also trigger a manual update via the API.</p>
-            <h3 id="saved-locations">Saved Locations</h3>
-            <p>Manage saved locations in Settings → Saved Locations. Each location has a label and an address. Use the radio button to mark one as the default.</p>
+
+            <h4>Per-Habit Options</h4>
             <ul>
-                <li><strong>Adding</strong> — Click ➕ Add Location to add a new row. Fill in a label and address.</li>
-                <li><strong>Default</strong> — Select the radio button next to a location to make it the default. If only one location has an address, it is auto-selected.</li>
-                <li><strong>Removing</strong> — Click ✕ to remove a row. At least one row always remains.</li>
-                <li><strong>Saving</strong> — Empty-address rows are cleaned up on save.</li>
+                <li><strong>Show overall % in view</strong> — Default on. When unchecked, the Overall % metric box is hidden from the habit card</li>
+                <li><strong>Show on calendar views</strong> — When off, the habit is hidden from all calendar views but still appears in the Habits view. Default for new habits is controlled by Settings → Habits</li>
+                <li><strong>Reset period</strong> — Optional cooldown (see above)</li>
+                <li><strong>Perpetual mode</strong> — Via the ♾️ Perpetual date radio option</li>
             </ul>
-            <p>Saved locations are used by the editor's Location zone dropdown, the compact 📍 dropdown in the title area, the +Location button, and the dashboard weather modal (<kbd>W</kbd>).</p>
+
+            <h4>Period Rollover</h4>
+            <p>Habits reset automatically at period boundaries. When a new period starts (e.g., a new day for daily habits, a new week for weekly), the system snapshots the previous period's progress into the recurrence exceptions history, resets progress to 0, and clears the Complete status. Rollover is evaluated lazily — when you open the Habits view or the editor, not via a background process.</p>
+
+            <h4>Habit Icon</h4>
+            <p>Habit chits use the 🎯 icon (replacing 🔁) everywhere: calendar chits, visual indicators, editor title bar, and quick-edit modal.</p>
+
+            <h4>Sidebar Filter</h4>
+            <p>The sidebar's Show section includes a <strong>"🎯 Hide Habits"</strong> checkbox that filters habits from all views when checked.</p>
+
+            <h4>Settings</h4>
+            <p>The Settings page includes a Habits section with:</p>
+            <ul>
+                <li><strong>Success rate window</strong> — Controls the rolling time window for success rate and chart calculations:
+                    <ul>
+                        <li><strong>Last 7 days</strong> — Only periods in the past week</li>
+                        <li><strong>Last 30 days</strong> — Past month (default)</li>
+                        <li><strong>Last 90 days</strong> — Past quarter</li>
+                        <li><strong>All time</strong> — Every period since habit tracking started</li>
+                    </ul>
+                </li>
+                <li><strong>Default: show habits on calendar</strong> — Toggle controlling the default value of "Show on calendar" for newly created habits</li>
+            </ul>
             <h3 id="maps-view">Maps View</h3>
             <p>The Maps View displays an interactive map with two modes: <strong>Chits</strong> and <strong>People</strong>. Access it from the navigation menu (🗺️ Maps) or by navigating to <code>/maps</code>. The map fills all available viewport space for maximum visibility.</p>
             <h4>Mode Toggle</h4>
@@ -312,9 +260,77 @@
             <p>On mobile devices, the sidebar defaults to collapsed and overlays the map when expanded. Tap the backdrop behind the sidebar to close it. All map controls (fullscreen, default view) have touch-friendly tap targets.</p>
             <h4>Google Maps Preference</h4>
             <p>If "Prefer Google for Maps" is enabled in Settings → Chit Options, the Maps View displays a warning message instead of loading the map. Google Maps is not supported for this feature due to billing restrictions. Disable the preference in Settings to use the Maps View.</p>
+            <h3 id="email">Email</h3>
+            <p>CWOC includes a built-in email client. Configure your email account in Settings → Email Account with IMAP/SMTP credentials. Emails are stored as chits with special email fields.</p>
+            <ul>
+                <li><strong>Email View</strong> — View inbox, sent, drafts, and trash folders. Right-click (or long-press on mobile) an email card to toggle read/unread status</li>
+                <li><strong>Compose</strong> — Click Compose to create a new email draft. Fill in To, CC, BCC, and body fields. Save as Draft or Send directly</li>
+                <li><strong>Reply / Forward</strong> — Open a received email and use the Reply or Forward buttons to create a new draft with quoted content</li>
+                <li><strong>Threading</strong> — When viewing an email that's part of a conversation, a Thread section appears below the body showing all related messages sorted chronologically. Click any thread entry to navigate to that email</li>
+                <li><strong>HTML Rendering</strong> — Received emails with HTML content display in a sandboxed iframe. Use the HTML/Text toggle to switch between rendered and plain-text views</li>
+                <li><strong>Auto-check</strong> — Configure automatic mail checking intervals in Settings (5, 15, 30, or 60 minutes)</li>
+            </ul>
+            <h3 id="global-search">Global Search</h3>
+            <p>Press <kbd>G</kbd> or click the magnifying glass icon (last in the C CAPTN view bar) to open the Global Search view. Unlike the sidebar filter, Global Search queries ALL fields across ALL chits regardless of which view they belong to.</p>
+            <ul>
+                <li><strong>Search Input + Go</strong> — Type a query in the search input and press Enter or click Go. The search performs case-insensitive substring matching across every chit field (title, note, tags, status, priority, location, people, checklist items, dates, color, alerts, and more).</li>
+                <li><strong>Result Cards</strong> — Each matching chit is displayed as a card showing the chit title and every matched field with the matching text highlighted. Click a result card to open that chit in the editor.</li>
+                <li><strong>Sidebar Filters</strong> — Sidebar filters (Status, Priority, Tags, etc.) remain active during Global Search, narrowing results further.</li>
+            </ul>
+            <h3 id="trash">Trash</h3>
+            <p>When you delete a chit, it is soft-deleted and moved to the Trash. You can access the Trash page from the navigation header or from Settings → Data.</p>
+            <ul>
+                <li><strong>User scoping</strong> — Regular users see only their own deleted chits. Admins see all deleted chits across all users, with an extra "Owner" column showing who each chit belongs to.</li>
+                <li><strong>Restore</strong> — Click the Restore button on any row to un-delete the chit and return it to your active views.</li>
+                <li><strong>Permanent delete</strong> — Click the Delete button to permanently remove a chit from the database. This cannot be undone.</li>
+                <li><strong>Bulk actions</strong> — Use the checkboxes to select multiple chits, then use the bulk Restore or Delete buttons in the toolbar.</li>
+            </ul>
+            <h3 id="kiosk">Kiosk</h3>
+            <p>The Kiosk is a read-only, unauthenticated display designed for wall-mounted screens or shared monitors. It shows calendar events and active tasks filtered by the tags you choose — no login required.</p>
+            <h4>Setting Up the Kiosk</h4>
+            <p>Configure which tags appear on the kiosk in <strong>Settings → Tools → Kiosk</strong>:</p>
+            <ul>
+                <li><strong>Tag picker</strong> — A tree of your user-created tags (system tags are excluded). Check the tags you want displayed on the kiosk. Selecting a parent tag automatically includes all child tags.</li>
+                <li><strong>Save</strong> — Click Save to persist your kiosk tag selection. This is required for direct-URL access to work.</li>
+                <li><strong>📺 Open Kiosk →</strong> — Opens the kiosk page with the currently selected tags.</li>
+            </ul>
+            <h4>Accessing the Kiosk</h4>
+            <ul>
+                <li><strong>Direct URL</strong> — Navigate to <code>/kiosk</code> on your server. The page loads the saved tag configuration automatically — no login needed. Ideal for bookmarking on a wall display.</li>
+                <li><strong>With specific tags</strong> — Append tags to the URL: <code>/kiosk?tags=Work,Personal</code>. URL tags override the saved configuration.</li>
+                <li><strong>Launch button</strong> — Use the "📺 Open Kiosk →" button in Settings to open with the currently selected tags.</li>
+            </ul>
+            <h4>Kiosk Display</h4>
+            <p>The kiosk shows a two-column layout:</p>
+            <ul>
+                <li><strong>Calendar</strong> (left) — Upcoming events grouped by day, with time, title, color, and owner name. Today is highlighted with a gold accent.</li>
+                <li><strong>Tasks</strong> (right) — Active tasks (not complete) sorted by status: In Progress first, then Blocked, then ToDo. Each shows status icon, title, due date, and owner.</li>
+            </ul>
+            <h4>Period Navigation</h4>
+            <p>A toolbar at the top lets you switch between Day, Week, and Month views, navigate forward/backward, and jump to Today. The week start day respects your Settings configuration.</p>
+            <h4>Auto-Refresh &amp; Interaction</h4>
+            <ul>
+                <li><strong>Auto-refresh</strong> — The kiosk refreshes data every 60 seconds automatically.</li>
+                <li><strong>Click to edit</strong> — Clicking any event or task opens it in the chit editor. After saving, you're returned to the kiosk.</li>
+            </ul>
+            <p>A tag legend at the bottom shows which tags are active, and a timestamp shows when data was last refreshed.</p>
+            <!-- ═══ REFERENCE ══════════════════════════════════════════════════ -->
+            <h3 id="what-is-cwoc">What is CWOC?</h3>
+            <p>C.W.'s Omni Chits is a personal task, note, and calendar management app. The core concept is a <strong>chit</strong> — a flexible record that can be a task, note, calendar event, alarm, checklist, or project, all in one data model.</p>
+            <h3 id="chits">Chits</h3>
+            <p>A chit is the universal unit. What makes it appear in different views is which fields you fill in:</p>
+            <ul>
+                <li><strong>Calendar</strong> — has a start/end date or due date</li>
+                <li><strong>Tasks</strong> — has a status (ToDo, In Progress, Blocked, Complete)</li>
+                <li><strong>Notes</strong> — has note content</li>
+                <li><strong>Checklists</strong> — has checklist items</li>
+                <li><strong>Alerts</strong> — has alarms, timers, or notifications</li>
+                <li><strong>Projects</strong> — marked as a "Project Master" with child chits</li>
+            </ul>
+            <p>A single chit can appear in multiple views if it has the relevant fields.</p>
             <h3 id="editor">Chit Editor</h3>
             <p>Collapsible zones: Title, Dates & Times, Task, Location, Tags, People, Notes, Checklist, Alerts, Health Indicators, Color, Projects, Habits. The 🎯 Habit button in the Task zone header toggles habit mode (see <a href="#habits-view">Habits</a>). An "📜 Audit Log" button at the bottom links to the filtered audit log for the current chit. 📱 QR button generates data or link QR codes.</p>
-            <p>When creating a new chit, only the zone relevant to the current view is expanded (e.g., Notes zone when coming from the Notes tab). All other zones start collapsed. The title field is auto-focused. If you have a default saved location, it's auto-applied to new chits.</p>
+            <p>When creating a new chit, only the zone relevant to the current view is expanded (e.g., Notes zone when coming from the Notes view). All other zones start collapsed. The title field is auto-focused. If you have a default saved location, it's auto-applied to new chits.</p>
             <h4>Alerts Zone</h4>
             <p>Add notifications, alarms, timers, and stopwatches. Each alarm has a time, days, and optional "Delete chit after dismissal" checkbox — when checked, dismissing the alarm soft-deletes the chit.</p>
             <p>Notifications fire relative to a chit's start or due time. Each notification has a combined timing dropdown (before start, after start, before due, after due) to precisely control when the notification fires. For habit chits, the timing changes to "before end of [day/week/month/year]" based on the habit's cycle frequency, and a "disable if done" checkbox suppresses the notification when the habit goal is already met for the current period.</p>
@@ -364,6 +380,211 @@
             <p>The chit owner's display name is shown as a chip in the title zone header, inline with the "Title" label and the pinned icon. The chip uses the same visual style as people chips (background color, thumbnail image or placeholder). The owner chip is always displayed, even when the current user is the owner.</p>
             <h3 id="quick-edit">Quick Edit Modal</h3>
             <p>Shift+click any chit. Edit title (double-click), change Priority/Severity/Status, Pin/Archive/Delete/QR. Recurring chits get per-field "All" checkboxes and series edit options.</p>
+            <h3 id="mouse">Mouse Interactions</h3>
+            <h4>On Calendar Events</h4>
+            <ul>
+                <li><strong>Double-click</strong> — Open in editor</li>
+                <li><strong>Shift+click</strong> — Quick Edit modal</li>
+                <li><strong>Drag up/down</strong> — Move time · <strong>Drag left/right</strong> — Move day</li>
+                <li><strong>Drag bottom edge</strong> — Resize (start/end events only)</li>
+            </ul>
+            <h4>On Empty Space</h4>
+            <ul><li><strong>Double-click</strong> — Create new chit at that time</li></ul>
+            <h4>Notes View</h4>
+            <ul>
+                <li><strong>Double-click</strong> — Open in editor</li>
+                <li><strong>Shift+click</strong> — Edit note in place</li>
+            </ul>
+            <h4>Quick Edit Modal</h4>
+            <ul>
+                <li><strong>Double-click title</strong> — Edit title in place</li>
+                <li><strong>📱 QR</strong> — Data QR (Shift+click for link QR)</li>
+            </ul>
+            <h3 id="mobile">Mobile Touch</h3>
+            <p>On mobile devices, touch interactions use a unified <strong>tap-and-hold</strong> gesture system. All views share the same timing so behavior is consistent everywhere:</p>
+            <ul>
+                <li><strong>Tap</strong> — Normal tap/click behavior (open links, toggle checkboxes)</li>
+                <li><strong>Hold ~0.4s then move</strong> — Drag to reorder. Hold your finger on a card or checklist item until you feel a short vibration, then drag. If you move before the hold completes, the page scrolls normally.</li>
+                <li><strong>Hold ~1.2s without moving</strong> — Opens Quick Edit modal (or inline edit on Notes). A double vibration confirms the long-press activated. Once you start moving (dragging), long-press is cancelled.</li>
+                <li><strong>Double-tap</strong> — Open chit in editor</li>
+                <li><strong>Note previews</strong> — Tap "show more…" to expand truncated note text on cards</li>
+                <li><strong>Kanban (Projects)</strong> — Hold a card then drag it to a different status column. Works in both the dashboard kanban view and the editor's project zone.</li>
+            </ul>
+            <h3 id="hotkeys">Keyboard Shortcuts</h3>
+            <p>Press <kbd>R</kbd> for the full reference overlay. Press <kbd>Shift+R</kbd> to open this Help page.</p>
+            <h4>Tab Switching</h4>
+            <ul>
+                <li><kbd>C</kbd> Calendar · <kbd>H</kbd> Checklists · <kbd>A</kbd> Alerts · <kbd>P</kbd> Projects · <kbd>T</kbd> Tasks · <kbd>N</kbd> Notes</li>
+                <li><kbd>G</kbd> — Global Search</li>
+            </ul>
+            <h4>Actions</h4>
+            <ul>
+                <li><kbd>K</kbd> — Create chit (middle-click → new tab)</li>
+                <li><kbd>W</kbd> — Weather modal (default location forecast) · <kbd>Shift+W</kbd> — Weather page (full forecast)</li>
+                <li><kbd>L</kbd> — Clock modal · <kbd>S</kbd> — Settings · <kbd>V</kbd> — Navigate menu</li>
+                <li><kbd>R</kbd> — Reference overlay · <kbd>Shift+R</kbd> — Help page</li>
+                <li><kbd>!</kbd> — Quick Alert menu (add Alarm, Timer, or Stopwatch). On the dashboard, creates an independent alert and shows Done/View buttons. In the editor, adds to the current chit and expands the alerts zone. On other pages, creates an independent alert</li>
+                <li><kbd>`</kbd> — Toggle sidebar visibility (setting is retained)</li>
+                <li><kbd>~</kbd> (Shift+`) — Toggle topbar visibility (setting is retained)</li>
+                <li><kbd>F4</kbd> — Calculator popover (open/close from any page)</li>
+                <li><kbd>ESC</kbd> — Close modal / exit · <kbd>Backspace</kbd> — Clear filters</li>
+            </ul>
+            <h4>Submenu Hotkeys</h4>
+            <ul>
+                <li><kbd>.</kbd> — Period: <kbd>I</kbd>tinerary <kbd>D</kbd>ay <kbd>W</kbd>eek <kbd>K</kbd> Work <kbd>X</kbd> X-Day <kbd>M</kbd>onth <kbd>Y</kbd>ear</li>
+                <li><kbd>M</kbd> — Mode (per tab): Calendar periods · Tasks: <kbd>T</kbd>asks <kbd>H</kbd>abits <kbd>A</kbd>ssigned · Alarms: <kbd>L</kbd>ist <kbd>I</kbd>ndependent · Projects: <kbd>L</kbd>ist <kbd>K</kbd>anban</li>
+                <li><kbd>F</kbd> — Filter: <kbd>S</kbd>tatus <kbd>T</kbd>ags <kbd>P</kbd>riority <kbd>E</kbd> People <kbd>A</kbd> Archived <kbd>I</kbd> Pinned <kbd>D</kbd> Filter Text</li>
+                <li><kbd>O</kbd> — Order: <kbd>T</kbd>itle <kbd>S</kbd>tart <kbd>D</kbd>ue <kbd>U</kbd>pdated <kbd>C</kbd>reated <kbd>X</kbd> Status <kbd>M</kbd>anual <kbd>R</kbd>andom <kbd>G</kbd> Upcoming · <kbd>↑↓</kbd> Asc/Desc</li>
+            </ul>
+            <h4>Editor Hotkeys</h4>
+            <ul>
+                <li><kbd>Alt+1</kbd> Dates · <kbd>Alt+2</kbd> Task · <kbd>Alt+3</kbd> Tags · <kbd>Alt+4</kbd> Notes · <kbd>Alt+5</kbd> Checklist</li>
+                <li><kbd>Alt+6</kbd> Alerts · <kbd>Alt+7</kbd> Location · <kbd>Alt+8</kbd> People · <kbd>Alt+9</kbd> Color · <kbd>Alt+0</kbd> Projects</li>
+                <li><kbd>ESC</kbd> — Exit editor · <kbd>Ctrl+Shift+S</kbd> — Save &amp; Stay · Type <code>[[</code> in Notes to link to other chits</li>
+            </ul>
+            <h3 id="recurrence">Recurrence / Repeating</h3>
+            <p>Check 🔁 Repeat in the Dates zone. Patterns: Daily, Weekly, Monthly, Yearly, Custom. Optional end date.</p>
+            <h4>Instance Actions (Shift+click)</h4>
+            <ul><li><strong>✏️🔁</strong> Edit series · <strong>✏️1️⃣</strong> Edit instance · <strong>✏️✂️</strong> Break off & edit</li></ul>
+            <p>Drag prompts: This instance only / All in series / All following.</p>
+            <h3 id="tags">Tags</h3>
+            <p>Hierarchical labels with colors. Nesting via <code>/</code> (e.g., <code>Work/Projects/CWOC</code>). Child tags inherit parent color. ★ Favorites appear at top.</p>
+            <h3 id="filters">Filtering & Sorting</h3>
+            <p>The sidebar provides multiple filter groups, each collapsible by clicking its label:</p>
+            <ul>
+                <li><strong>Filter Text</strong> — Free-text search across title, notes, tags, status, people, location, and priority</li>
+                <li><strong>Status</strong> — Multi-select: Any, ToDo, In Progress, Blocked, Complete</li>
+                <li><strong>Priority</strong> — Multi-select: Any, Low, Medium, High</li>
+                <li><strong>Tags</strong> — Multi-select with search. Favorites appear first</li>
+                <li><strong>People</strong> — Multi-select from contacts assigned to chits</li>
+                <li><strong>Show</strong> — Toggle visibility of Pinned, Archived, Unmarked chits, and Hide Past-Due</li>
+            </ul>
+            <p>When any filter is active, a "✕ Clear All" button appears. If the current tab has a default filter (configured in Settings → Default Filters), a "🔄 Defaults" button resets to that filter.</p>
+            <h4>Sorting</h4>
+            <p>The Order section in the sidebar provides sort options: Title, Start Date, Due Date, Updated, Created, Status, Manual (drag-to-reorder), Random/Shuffle, and Upcoming (due soon first, completed at bottom). Click the ▲/▼ button to toggle ascending/descending.</p>
+            <h3 id="contacts">Contact Editor</h3>
+            <p>Contacts have name fields (prefix, given, middle, surname, suffix), phone, email, address, social/web, security (Signal, PGP), and context (organization, social context).</p>
+            <ul>
+                <li><strong>Notes</strong> — Markdown notes field for free-form text about the contact</li>
+                <li><strong>Tags</strong> — Tags for contacts, auto-prefixed with "Contact/" (shared with the general tag system)</li>
+                <li><strong>Suffixes</strong> — Text suffixes (Jr., Sr., Esq., Ph.D., M.D.) listed before numeric suffixes (I–X)</li>
+            </ul>
+            <h3 id="sharing">Sharing</h3>
+            <p>Chits can be shared with other system users, giving them Viewer or Manager access. All sharing controls live in the People zone of the chit editor.</p>
+            <h4>Roles</h4>
+            <ul>
+                <li><strong>Owner</strong> — The user who created the chit. Full control over all fields and sharing</li>
+                <li><strong>Manager</strong> — Can edit the chit and manage sharing (add/remove users, change roles, toggle stealth)</li>
+                <li><strong>Viewer</strong> — Can view the chit but cannot change sharing settings. The People zone appears in read-only mode</li>
+            </ul>
+            <h4>Dashboard</h4>
+            <p>Shared chits display a 🔗 icon on their dashboard card. Hover over the icon to see a tooltip with the owner's name, the list of shared users and their roles, and your effective role. Non-shared chits show no icon.</p>
+            <h3 id="attachments">Attachments</h3>
+            <p>Any chit can have file attachments. The Attachments zone appears in the editor between Notes and Checklist.</p>
+            <ul>
+                <li><strong>Upload</strong> — Click "Add Files" or drag and drop files onto the upload area. Multiple files can be uploaded at once</li>
+                <li><strong>Download</strong> — Click the download icon next to any attachment to download it</li>
+                <li><strong>Delete</strong> — Click the trash icon to remove an attachment (with confirmation)</li>
+                <li><strong>Size Limit</strong> — Configure the maximum file size in Settings → Email Account → Attachments (5, 10, 25, or 50 MB)</li>
+            </ul>
+            <h3 id="clocks">Clocks</h3>
+            <p>Press <kbd>L</kbd> on the dashboard or click the 🕐 Clock button in the sidebar to open the clocks modal. Configure which clocks are displayed and their layout in Settings → Clocks.</p>
+            <ul>
+                <li><strong>24 Hour</strong> — Standard 24-hour digital display (HH:MM:SS)</li>
+                <li><strong>12 Hour</strong> — 12-hour digital display with AM/PM</li>
+                <li><strong>12 Hour Analog</strong> — Traditional analog clock face with hour, minute, and second hands</li>
+                <li><strong><a href="https://www.cwholemaniii.com/pages/hss/hst.shtml" target="_blank">HST</a></strong> — Holeman Simplified Time. Represents the day as 0–100 sentidays (sd) shown on a progress bar. Midnight = 0.000 sd, noon = 50.000 sd, end of day = 100.000 sd. "Sentiday" is the Holeman Simplified English spelling of centiday.</li>
+            </ul>
+            <p>Drag clocks between Active and Inactive zones in Settings to choose which appear. Use "Change Orientation" to switch between horizontal and vertical layout.</p>
+            <h3 id="weather">Weather</h3>
+            <p>Press <kbd>W</kbd> on the dashboard to open the weather modal. It shows the current forecast for your default saved location, including weather icon, high/low temperatures, and precipitation. Temperatures display in °F or °C based on your unit system setting (Settings → Unit System). If no default location is configured, the modal will prompt you to set one in Settings. The modal includes a <strong>📊 Full Forecast</strong> button that opens the dedicated Weather page.</p>
+            <p>In the chit editor, weather loads automatically when a chit has both a location and a date. Stored forecast data displays immediately on load, then a live fetch updates it in the background. Placeholder messages appear when either location or date is missing.</p>
+            <h4>Weather Data on Chits</h4>
+            <p>Each chit with a location and date stores its own weather forecast. The stored data includes:</p>
+            <ul>
+                <li><strong>High / Low</strong> — Forecast high and low temperatures (stored in Celsius, displayed in °F or °C based on your unit system setting)</li>
+                <li><strong>Precipitation</strong> — Expected precipitation sum in mm</li>
+                <li><strong>Weather Code</strong> — Determines the weather icon (☀️ sunny, 🌧️ rainy, 🌨️ snowy, etc.)</li>
+                <li><strong>Focus Date</strong> — The date the forecast applies to (earliest of start or due date)</li>
+                <li><strong>Updated Time</strong> — When the forecast was last refreshed</li>
+            </ul>
+            <p>Weather data is updated automatically by the server — no browser needs to be open. When you save a chit in the editor, any fetched weather data is saved with it.</p>
+            <h4>Calendar View Weather Display</h4>
+            <p>On the calendar, chits with stored weather data show a compact weather summary on their event card:</p>
+            <ul>
+                <li><strong>Weather icon</strong> — Derived from the weather code (e.g., ☀️, 🌤️, 🌧️, 🌨️)</li>
+                <li><strong>High / Low temps</strong> — Displayed in °F or °C based on your unit system setting</li>
+                <li><strong>Precipitation</strong> — Shown on Day, Week, Work Hours, and X Days views</li>
+                <li><strong>⏳ Stale indicator</strong> — Appears when the forecast data is more than 24 hours old</li>
+            </ul>
+            <p>If a chit has a location but no stored weather data yet, it falls back to fetching weather in the background. The 🌤️ Weather button in the sidebar opens the weather modal (click) or navigates to the full Weather page (Shift+click).</p>
+            <h4>Weather Page</h4>
+            <p>The Weather page shows a comprehensive forecast table for all your saved locations. Access it via:</p>
+            <ul>
+                <li><kbd>Shift+W</kbd> from the dashboard</li>
+                <li>The <strong>📊 Full Forecast</strong> button in the weather modal</li>
+                <li>Shift+click the <strong>🌤️ Weather</strong> button in the sidebar</li>
+            </ul>
+            <p>The page displays one row per saved location, with up to 16 days of forecast data. Each day block shows the weather icon, high/low temperatures, and precipitation. Temperatures respect your unit system setting (°F or °C). Drag rows by the ☰ handle to reorder locations — your arrangement is saved automatically. Days where you have a chit at that location are highlighted with a darker background. Click any day block to jump to that day in the Calendar Day view — any chits at that location will flash briefly to draw your eye. If no saved locations are configured, a message directs you to add them in Settings. Press <kbd>ESC</kbd> to navigate back.</p>
+            <h4>City Rows from Chits</h4>
+            <p>Below the saved-location rows, the Weather page automatically adds rows for cities where you have upcoming chits but no saved location. These rows are labeled with the city name (extracted from the chit's address) and only show weather blocks on days that have chits in that city — other days are left empty. Click a day block to jump to that day in the Calendar, same as saved-location rows.</p>
+            <h4>Weather Update Schedule</h4>
+            <p>The server automatically refreshes weather forecasts on two schedules:</p>
+            <ul>
+                <li><strong>Hourly</strong> — Chits with dates in the next 7 days are updated every 60 minutes for higher accuracy</li>
+                <li><strong>Daily</strong> — Chits with dates 8–16 days out are updated once every 24 hours for a general outlook</li>
+            </ul>
+            <p>Updates run in the background on the server. Each unique location is geocoded once and reused for all chits at that address. You can also trigger a manual update via the API.</p>
+            <h3 id="saved-locations">Saved Locations</h3>
+            <p>Manage saved locations in Settings → Saved Locations. Each location has a label and an address. Use the radio button to mark one as the default.</p>
+            <ul>
+                <li><strong>Adding</strong> — Click ➕ Add Location to add a new row. Fill in a label and address.</li>
+                <li><strong>Default</strong> — Select the radio button next to a location to make it the default. If only one location has an address, it is auto-selected.</li>
+                <li><strong>Removing</strong> — Click ✕ to remove a row. At least one row always remains.</li>
+                <li><strong>Saving</strong> — Empty-address rows are cleaned up on save.</li>
+            </ul>
+            <p>Saved locations are used by the editor's Location zone dropdown, the compact 📍 dropdown in the title area, the +Location button, and the dashboard weather modal (<kbd>W</kbd>).</p>
+            <h3 id="alert-indicators">Visual Indicators</h3>
+            <p>Visual indicators are small icons displayed alongside chit titles in all views to signal key properties. Configure their visibility in Settings → Visual Indicators. Each indicator has three visibility modes:</p>
+            <ul>
+                <li><strong>Always</strong> — The indicator icon is always shown</li>
+                <li><strong>Never</strong> — The indicator icon is never shown</li>
+                <li><strong>If Space</strong> — Show the icon on card views and calendar day/week slots, but hide on month cells where space is tight</li>
+            </ul>
+            <h4>Indicator Types</h4>
+            <ul>
+                <li>🔔 <strong>Alarm</strong> — Chit has alarm alerts</li>
+                <li>📢 <strong>Notification</strong> — Chit has notification alerts</li>
+                <li>⏱️ <strong>Timer</strong> — Chit has timer alerts</li>
+                <li>⏲️ <strong>Stopwatch</strong> — Chit has stopwatch alerts</li>
+                <li>🌤️ <strong>Weather</strong> — Chit has a location with weather data</li>
+                <li>👥 <strong>People</strong> — Chit has people assigned</li>
+                <li>❤️ <strong>Health</strong> — Chit has health indicator data</li>
+            </ul>
+            <h4>Combine Alerts Toggle</h4>
+            <p>The <strong>Combine Alerts</strong> checkbox in Visual Indicators switches between two display modes:</p>
+            <ul>
+                <li><strong>Combined mode</strong> (checked) — A single 🛎️ icon represents all alert types. A "Combined Alerts" dropdown controls visibility (Always / Never / If Space).</li>
+                <li><strong>Individual mode</strong> (unchecked) — Separate icons appear per alert type, each with its own visibility dropdown: 🔔 Alarm, 📢 Notification, ⏱️ Timer, ⏲️ Stopwatch.</li>
+            </ul>
+            <h4>Calendar Views</h4>
+            <p>Calendar views (Week, Day, Month, Itinerary, Seven-Day, X-Day) always use combined mode for alerts since calendar cells are space-constrained. Weather, People, and Health indicators still respect their individual settings.</p>
+            <h4>Card Views</h4>
+            <p>Checklists, Tasks, Notes, Alarms, and Projects views respect the Combine Alerts toggle — showing either one combined 🛎️ icon or individual per-type icons depending on the setting.</p>
+            <h4>"If Space" Behavior</h4>
+            <p>When a visibility dropdown is set to "If Space," indicators always appear on card views and calendar day/week slots (sufficient room). On month cells, indicators may be hidden when the title would be truncated.</p>
+            <h3 id="calculator">Calculator</h3>
+            <p>Press <kbd>F4</kbd> on any page to open a floating calculator popover. Press the same hotkey again (or <kbd>ESC</kbd>) to close it. The calculator provides basic arithmetic with correct operator precedence and can insert results directly into editor fields.</p>
+            <h4>Arithmetic</h4>
+            <p>The calculator supports addition (+), subtraction (−), multiplication (×), and division (÷) with standard operator precedence — multiplication and division are evaluated before addition and subtraction. Press <kbd>=</kbd> or <kbd>Enter</kbd> to evaluate. Press <kbd>C</kbd> to clear, or <kbd>⌫</kbd> / <kbd>Backspace</kbd> to delete the last character. Division by zero shows an error.</p>
+            <h4>Keyboard Input</h4>
+            <p>While the calculator has focus, type digits (0–9), operators (+, -, *, /), press <kbd>Enter</kbd> for equals, <kbd>Backspace</kbd> to delete the last character, and <kbd>ESC</kbd> to close. Keyboard input is captured by the calculator and does not propagate to page hotkeys.</p>
+            <h4>Insert Result</h4>
+            <p>Click <strong>Insert Result</strong> to write the current calculator result into the field you were editing when you opened the calculator. This only works on the chit editor page — the button is disabled on all other pages and when no source field was focused.</p>
+            <h4>Draggable</h4>
+            <p>Drag the calculator's title bar to reposition it anywhere on screen. The calculator stays within the visible viewport. Works with both mouse and touch.</p>
+            <h4>ESC to Close</h4>
+            <p>Pressing <kbd>ESC</kbd> while the calculator is open closes it before any other ESC action (closing modals, exiting the editor, etc.). When the calculator is not open, ESC behaves normally.</p>
             <h3 id="settings">Settings</h3>
             <p>Settings are organized into groups. Labels and controls are placed inline where space allows. Sub-sections within a group use small headers with a subtle bottom border.</p>
             <ul>
@@ -414,50 +635,6 @@
                 <li>Other calendar components (VTIMEZONE, VJOURNAL, VALARM) are silently ignored</li>
             </ul>
             <p>After import, you'll see a summary showing how many events were imported, how many duplicates were skipped, and any errors.</p>
-            <h3 id="alert-indicators">Visual Indicators</h3>
-            <p>Visual indicators are small icons displayed alongside chit titles in all views to signal key properties. Configure their visibility in Settings → Visual Indicators. Each indicator has three visibility modes:</p>
-            <ul>
-                <li><strong>Always</strong> — The indicator icon is always shown</li>
-                <li><strong>Never</strong> — The indicator icon is never shown</li>
-                <li><strong>If Space</strong> — Show the icon on card views and calendar day/week slots, but hide on month cells where space is tight</li>
-            </ul>
-            <h4>Indicator Types</h4>
-            <ul>
-                <li>🔔 <strong>Alarm</strong> — Chit has alarm alerts</li>
-                <li>📢 <strong>Notification</strong> — Chit has notification alerts</li>
-                <li>⏱️ <strong>Timer</strong> — Chit has timer alerts</li>
-                <li>⏲️ <strong>Stopwatch</strong> — Chit has stopwatch alerts</li>
-                <li>🌤️ <strong>Weather</strong> — Chit has a location with weather data</li>
-                <li>👥 <strong>People</strong> — Chit has people assigned</li>
-                <li>❤️ <strong>Health</strong> — Chit has health indicator data</li>
-            </ul>
-            <h4>Combine Alerts Toggle</h4>
-            <p>The <strong>Combine Alerts</strong> checkbox in Visual Indicators switches between two display modes:</p>
-            <ul>
-                <li><strong>Combined mode</strong> (checked) — A single 🛎️ icon represents all alert types. A "Combined Alerts" dropdown controls visibility (Always / Never / If Space).</li>
-                <li><strong>Individual mode</strong> (unchecked) — Separate icons appear per alert type, each with its own visibility dropdown: 🔔 Alarm, 📢 Notification, ⏱️ Timer, ⏲️ Stopwatch.</li>
-            </ul>
-            <h4>Calendar Views</h4>
-            <p>Calendar views (Week, Day, Month, Itinerary, Seven-Day, X-Day) always use combined mode for alerts since calendar cells are space-constrained. Weather, People, and Health indicators still respect their individual settings.</p>
-            <h4>Card Views</h4>
-            <p>Checklists, Tasks, Notes, Alarms, and Projects views respect the Combine Alerts toggle — showing either one combined 🛎️ icon or individual per-type icons depending on the setting.</p>
-            <h4>"If Space" Behavior</h4>
-            <p>When a visibility dropdown is set to "If Space," indicators always appear on card views and calendar day/week slots (sufficient room). On month cells, indicators may be hidden when the title would be truncated.</p>
-            <h3 id="version-management">Version Management</h3>
-            <p>The Settings page includes a <strong>Version & Updates</strong> section that shows the currently installed version number and the date/time it was last updated.</p>
-            <ul>
-                <li><strong>Version Info</strong> — Displays the current version and "Last Updated" timestamp. If no version info is available, a fallback message is shown.</li>
-                <li><strong>Upgrade Omni Chits</strong> — Click this button to trigger an update. A modal opens showing real-time output from the update script.</li>
-                <li><strong>Update Modal</strong> — Streams the update log in a terminal-style display. Log lines are color-coded by prefix: <span style="color:green;">[OK]</span> green, <span style="color:goldenrod;">[WARN]</span> yellow, <span style="color:red;">[ERROR]</span> red, <span style="color:steelblue;">[STEP]</span> blue. The Close button is enabled once the update finishes.</li>
-            </ul>
-            <h3 id="trash">Trash</h3>
-            <p>When you delete a chit, it is soft-deleted and moved to the Trash. You can access the Trash page from the navigation header or from Settings → Data.</p>
-            <ul>
-                <li><strong>User scoping</strong> — Regular users see only their own deleted chits. Admins see all deleted chits across all users, with an extra "Owner" column showing who each chit belongs to.</li>
-                <li><strong>Restore</strong> — Click the Restore button on any row to un-delete the chit and return it to your active views.</li>
-                <li><strong>Permanent delete</strong> — Click the Delete button to permanently remove a chit from the database. This cannot be undone.</li>
-                <li><strong>Bulk actions</strong> — Use the checkboxes to select multiple chits, then use the bulk Restore or Delete buttons in the toolbar.</li>
-            </ul>
             <h3 id="audit-log">Audit Log</h3>
             <p>CWOC tracks all changes to your data with a built-in audit log. Every create, update, and delete operation on chits, contacts, settings, and system upgrades is recorded automatically.</p>
             <h4>What Is Tracked</h4>
@@ -501,177 +678,13 @@
             <p>Auto-pruning runs at startup and after saving settings. Uncheck "Enable Pruning" to disable all automatic pruning.</p>
             <h4>Column Reordering</h4>
             <p>On the audit log page, you can drag and drop column headers to reorder them. The detail toggle column (first column) is fixed. Column order is not persisted — it resets on page reload.</p>
-            <h3 id="habits-view">Habits</h3>
-            <p>CWOC supports explicit habit tracking via an opt-in model. Any chit can become a habit, with its own goal/progress system, charts, reset periods, and a dedicated Habits view in the Tasks tab.</p>
-
-            <h4>Habit Toggle</h4>
-            <p>The <strong>🎯 Habit</strong> button lives in the Task zone header (visible even when the zone is collapsed). Clicking it toggles habit mode on and off. When you enable habit mode:</p>
+            <h3 id="version-management">Version Management</h3>
+            <p>The Settings page includes a <strong>Version & Updates</strong> section that shows the currently installed version number and the date/time it was last updated.</p>
             <ul>
-                <li><strong>Auto-enables Repeat</strong> — If the chit doesn't already have a recurrence rule, Repeat is automatically turned on with a default of Daily</li>
-                <li><strong>Locks Repeat</strong> — While habit is active, the Repeat checkbox is locked on (turn off the habit first to disable Repeat)</li>
-                <li><strong>Reveals habit controls</strong> — A Goal input and progress display (X / Y) appear on a dedicated row. A separate "📅 Calendar" row shows the "Show on calendar" toggle</li>
-                <li><strong>Forces All Day</strong> — Habits are always all-day events. The "📅 All Day" button shows active and is disabled while habit is on</li>
-                <li><strong>Shows 🎯 icon</strong> — Habit chits display the 🎯 target icon instead of the 🔁 repeat icon everywhere: editor title bar, calendar events, quick-edit modal, and tooltips</li>
-                <li><strong>Auto-tags</strong> — The system automatically adds <code>Habits</code> and <code>Habits/[title]</code> tags to the chit</li>
-                <li><strong>Auto-enable from Habits mode</strong> — Creating a new chit from the Tasks tab while in Habits mode auto-enables habit mode on the new chit</li>
+                <li><strong>Version Info</strong> — Displays the current version and "Last Updated" timestamp. If no version info is available, a fallback message is shown.</li>
+                <li><strong>Upgrade Omni Chits</strong> — Click this button to trigger an update. A modal opens showing real-time output from the update script.</li>
+                <li><strong>Update Modal</strong> — Streams the update log in a terminal-style display. Log lines are color-coded by prefix: <span style="color:green;">[OK]</span> green, <span style="color:goldenrod;">[WARN]</span> yellow, <span style="color:red;">[ERROR]</span> red, <span style="color:steelblue;">[STEP]</span> blue. The Close button is enabled once the update finishes.</li>
             </ul>
-
-            <h4>Date Options for Habits</h4>
-            <p>When habit mode is active, the Dates zone offers three radio options (the "None" option is hidden):</p>
-            <ul>
-                <li><strong>🗓️ Start/End</strong> — Set a start and end date range for the habit</li>
-                <li><strong>⏳ Due</strong> — "Do X times before date Y." Translates to start = now, end = the due date</li>
-                <li><strong>♾️ Perpetual</strong> — Starts now, continues forever with no end date. This is a radio option in the date mode selector, not a separate checkbox</li>
-            </ul>
-
-            <h4>Goal and Progress</h4>
-            <p>Each habit has a <strong>Goal</strong> (how many completions per period you're aiming for, minimum 1) and a <strong>Progress</strong> count (how many you've done this period). When progress reaches the goal, the chit is automatically marked Complete. Progress is capped at the goal value and can never exceed it.</p>
-
-            <h4>Habits Zone (Editor)</h4>
-            <p>The chit editor includes a <strong>🎯 Habits</strong> collapsible zone (visible only when habit mode is on). It contains three collapsible sections:</p>
-            <ul>
-                <li><strong>Settings</strong> — Goal per cycle (Day/Week/Month/Year), Reset period (checkbox to enable, then number + unit), Show on calendar views toggle, Show overall % in view toggle</li>
-                <li><strong>Charts</strong> — Three canvas-based charts: completion over time (bar chart), success rate trend (line chart), and streak timeline. Charts update when you edit past period counts. The time range matches your Success Rate Window setting</li>
-                <li><strong>History</strong> — Past periods in a 2-column layout with [−] X/Y [+] counter widgets for retroactive editing of completion counts</li>
-            </ul>
-            <p>A counter widget also appears in the zone header for quick increment/decrement without expanding the zone.</p>
-
-            <h4>Reset Period (Cooldown)</h4>
-            <p>Each habit can have an optional <strong>Reset Period</strong> — a cooldown after completing one unit. Enable it with the "Enable reset" checkbox, then set "Every [X] [Day(s)/Week(s)]". The available units are limited to one level smaller than the cycle (e.g., a Weekly cycle can only use Day(s) for reset; a Monthly cycle can use Day(s) or Week(s)). When the reset period is active (you've already incremented within the current reset window), the + button or checkbox is disabled and the habit moves to the <strong>😌 Out of Mind</strong> section.</p>
-
-            <h4>Switching to Habits Mode</h4>
-            <p>When the Tasks tab is active, the sidebar shows a View Mode section with three buttons: <strong>📋 Tasks</strong>, <strong>🎯 Habits</strong>, and <strong>📌 Assigned</strong>. Click "Habits" to enter Habits mode. Your selection is remembered across sessions. Only chits explicitly marked as habits appear here — not all recurring chits.</p>
-
-            <h4>Habits View Sections</h4>
-            <p>The Habits view organizes habits into three sections:</p>
-            <ul>
-                <li><strong>🔜 On Deck</strong> — Habits ready to be worked on, sorted by urgency (least time per remaining action first)</li>
-                <li><strong>😌 Out of Mind</strong> — Habits with an active reset period (recently completed, waiting for cooldown). Shows "☐ Too soon to complete again. Resets on [date]."</li>
-                <li><strong>✅ Accomplished</strong> — Completed habits for the current cycle. Shows "✅ Complete for this cycle. (Next cycle starts [date].)"</li>
-            </ul>
-            <p>Habits animate with a fade-out when moving between sections.</p>
-
-            <h4>Habit Cards</h4>
-            <p>Each habit appears as a card showing:</p>
-            <ul>
-                <li><strong>Title</strong> — With a period label (e.g., "Week of May 5"). Double-click or long-press to open in the editor</li>
-                <li><strong>Metric boxes</strong> — Four inline metrics:
-                    <ul>
-                        <li>📊 <strong>Progress</strong> — X/Y each [unit] with [−] [+] buttons</li>
-                        <li>🎯 <strong>Cycle %</strong> — Percentage of the way to the goal this period</li>
-                        <li>📈 <strong>Overall %</strong> — Percentage of past cycles where the goal was fully met (hideable per-habit)</li>
-                        <li>🔥 <strong>Streak</strong> — Consecutive completed periods walking backward; broken-off periods are neutral</li>
-                    </ul>
-                </li>
-                <li><strong>Note preview</strong> — Rendered markdown on the right side of the card (7-line max)</li>
-            </ul>
-
-            <h4>Per-Habit Options</h4>
-            <ul>
-                <li><strong>Show overall % in view</strong> — Default on. When unchecked, the Overall % metric box is hidden from the habit card</li>
-                <li><strong>Show on calendar views</strong> — When off, the habit is hidden from all calendar views but still appears in the Habits view. Default for new habits is controlled by Settings → Habits</li>
-                <li><strong>Reset period</strong> — Optional cooldown (see above)</li>
-                <li><strong>Perpetual mode</strong> — Via the ♾️ Perpetual date radio option</li>
-            </ul>
-
-            <h4>Period Rollover</h4>
-            <p>Habits reset automatically at period boundaries. When a new period starts (e.g., a new day for daily habits, a new week for weekly), the system snapshots the previous period's progress into the recurrence exceptions history, resets progress to 0, and clears the Complete status. Rollover is evaluated lazily — when you open the Habits view or the editor, not via a background process.</p>
-
-            <h4>Habit Icon</h4>
-            <p>Habit chits use the 🎯 icon (replacing 🔁) everywhere: calendar chits, visual indicators, editor title bar, and quick-edit modal.</p>
-
-            <h4>Sidebar Filter</h4>
-            <p>The sidebar's Show section includes a <strong>"🎯 Hide Habits"</strong> checkbox that filters habits from all views when checked.</p>
-
-            <h4>Settings</h4>
-            <p>The Settings page includes a Habits section with:</p>
-            <ul>
-                <li><strong>Success rate window</strong> — Controls the rolling time window for success rate and chart calculations:
-                    <ul>
-                        <li><strong>Last 7 days</strong> — Only periods in the past week</li>
-                        <li><strong>Last 30 days</strong> — Past month (default)</li>
-                        <li><strong>Last 90 days</strong> — Past quarter</li>
-                        <li><strong>All time</strong> — Every period since habit tracking started</li>
-                    </ul>
-                </li>
-                <li><strong>Default: show habits on calendar</strong> — Toggle controlling the default value of "Show on calendar" for newly created habits</li>
-            </ul>
-            <h3 id="contacts">Contact Editor</h3>
-            <p>Contacts have name fields (prefix, given, middle, surname, suffix), phone, email, address, social/web, security (Signal, PGP), and context (organization, social context).</p>
-            <ul>
-                <li><strong>Notes</strong> — Markdown notes field for free-form text about the contact</li>
-                <li><strong>Tags</strong> — Tags for contacts, auto-prefixed with "Contact/" (shared with the general tag system)</li>
-                <li><strong>Suffixes</strong> — Text suffixes (Jr., Sr., Esq., Ph.D., M.D.) listed before numeric suffixes (I–X)</li>
-            </ul>
-            <h3 id="sharing">Sharing</h3>
-            <p>Chits can be shared with other system users, giving them Viewer or Manager access. All sharing controls live in the People zone of the chit editor.</p>
-            <h4>Roles</h4>
-            <ul>
-                <li><strong>Owner</strong> — The user who created the chit. Full control over all fields and sharing</li>
-                <li><strong>Manager</strong> — Can edit the chit and manage sharing (add/remove users, change roles, toggle stealth)</li>
-                <li><strong>Viewer</strong> — Can view the chit but cannot change sharing settings. The People zone appears in read-only mode</li>
-            </ul>
-            <h4>Dashboard</h4>
-            <p>Shared chits display a 🔗 icon on their dashboard card. Hover over the icon to see a tooltip with the owner's name, the list of shared users and their roles, and your effective role. Non-shared chits show no icon.</p>
-            <h3 id="email">Email</h3>
-            <p>CWOC includes a built-in email client. Configure your email account in Settings → Email Account with IMAP/SMTP credentials. Emails are stored as chits with special email fields.</p>
-            <ul>
-                <li><strong>Email Tab</strong> — View inbox, sent, drafts, and trash folders. Right-click (or long-press on mobile) an email card to toggle read/unread status</li>
-                <li><strong>Compose</strong> — Click Compose to create a new email draft. Fill in To, CC, BCC, and body fields. Save as Draft or Send directly</li>
-                <li><strong>Reply / Forward</strong> — Open a received email and use the Reply or Forward buttons to create a new draft with quoted content</li>
-                <li><strong>Threading</strong> — When viewing an email that's part of a conversation, a Thread section appears below the body showing all related messages sorted chronologically. Click any thread entry to navigate to that email</li>
-                <li><strong>HTML Rendering</strong> — Received emails with HTML content display in a sandboxed iframe. Use the HTML/Text toggle to switch between rendered and plain-text views</li>
-                <li><strong>Auto-check</strong> — Configure automatic mail checking intervals in Settings (5, 15, 30, or 60 minutes)</li>
-            </ul>
-            <h3 id="attachments">Attachments</h3>
-            <p>Any chit can have file attachments. The Attachments zone appears in the editor between Notes and Checklist.</p>
-            <ul>
-                <li><strong>Upload</strong> — Click "Add Files" or drag and drop files onto the upload area. Multiple files can be uploaded at once</li>
-                <li><strong>Download</strong> — Click the download icon next to any attachment to download it</li>
-                <li><strong>Delete</strong> — Click the trash icon to remove an attachment (with confirmation)</li>
-                <li><strong>Size Limit</strong> — Configure the maximum file size in Settings → Email Account → Attachments (5, 10, 25, or 50 MB)</li>
-            </ul>
-            <h3 id="calculator">Calculator</h3>
-            <p>Press <kbd>F4</kbd> on any page to open a floating calculator popover. Press the same hotkey again (or <kbd>ESC</kbd>) to close it. The calculator provides basic arithmetic with correct operator precedence and can insert results directly into editor fields.</p>
-            <h4>Arithmetic</h4>
-            <p>The calculator supports addition (+), subtraction (−), multiplication (×), and division (÷) with standard operator precedence — multiplication and division are evaluated before addition and subtraction. Press <kbd>=</kbd> or <kbd>Enter</kbd> to evaluate. Press <kbd>C</kbd> to clear, or <kbd>⌫</kbd> / <kbd>Backspace</kbd> to delete the last character. Division by zero shows an error.</p>
-            <h4>Keyboard Input</h4>
-            <p>While the calculator has focus, type digits (0–9), operators (+, -, *, /), press <kbd>Enter</kbd> for equals, <kbd>Backspace</kbd> to delete the last character, and <kbd>ESC</kbd> to close. Keyboard input is captured by the calculator and does not propagate to page hotkeys.</p>
-            <h4>Insert Result</h4>
-            <p>Click <strong>Insert Result</strong> to write the current calculator result into the field you were editing when you opened the calculator. This only works on the chit editor page — the button is disabled on all other pages and when no source field was focused.</p>
-            <h4>Draggable</h4>
-            <p>Drag the calculator's title bar to reposition it anywhere on screen. The calculator stays within the visible viewport. Works with both mouse and touch.</p>
-            <h4>ESC to Close</h4>
-            <p>Pressing <kbd>ESC</kbd> while the calculator is open closes it before any other ESC action (closing modals, exiting the editor, etc.). When the calculator is not open, ESC behaves normally.</p>
-            <h3 id="kiosk">Kiosk</h3>
-            <p>The Kiosk is a read-only, unauthenticated display designed for wall-mounted screens or shared monitors. It shows calendar events and active tasks filtered by the tags you choose — no login required.</p>
-            <h4>Setting Up the Kiosk</h4>
-            <p>Configure which tags appear on the kiosk in <strong>Settings → Tools → Kiosk</strong>:</p>
-            <ul>
-                <li><strong>Tag picker</strong> — A tree of your user-created tags (system tags are excluded). Check the tags you want displayed on the kiosk. Selecting a parent tag automatically includes all child tags.</li>
-                <li><strong>Save</strong> — Click Save to persist your kiosk tag selection. This is required for direct-URL access to work.</li>
-                <li><strong>📺 Open Kiosk →</strong> — Opens the kiosk page with the currently selected tags.</li>
-            </ul>
-            <h4>Accessing the Kiosk</h4>
-            <ul>
-                <li><strong>Direct URL</strong> — Navigate to <code>/kiosk</code> on your server. The page loads the saved tag configuration automatically — no login needed. Ideal for bookmarking on a wall display.</li>
-                <li><strong>With specific tags</strong> — Append tags to the URL: <code>/kiosk?tags=Work,Personal</code>. URL tags override the saved configuration.</li>
-                <li><strong>Launch button</strong> — Use the "📺 Open Kiosk →" button in Settings to open with the currently selected tags.</li>
-            </ul>
-            <h4>Kiosk Display</h4>
-            <p>The kiosk shows a two-column layout:</p>
-            <ul>
-                <li><strong>Calendar</strong> (left) — Upcoming events grouped by day, with time, title, color, and owner name. Today is highlighted with a gold accent.</li>
-                <li><strong>Tasks</strong> (right) — Active tasks (not complete) sorted by status: In Progress first, then Blocked, then ToDo. Each shows status icon, title, due date, and owner.</li>
-            </ul>
-            <h4>Period Navigation</h4>
-            <p>A toolbar at the top lets you switch between Day, Week, and Month views, navigate forward/backward, and jump to Today. The week start day respects your Settings configuration.</p>
-            <h4>Auto-Refresh &amp; Interaction</h4>
-            <ul>
-                <li><strong>Auto-refresh</strong> — The kiosk refreshes data every 60 seconds automatically.</li>
-                <li><strong>Click to edit</strong> — Clicking any event or task opens it in the chit editor. After saving, you're returned to the kiosk.</li>
-            </ul>
-            <p>A tag legend at the bottom shows which tags are active, and a timestamp shows when data was last refreshed.</p>
             <h3 id="network-access">Dependent Apps</h3>
             <p>The Settings page includes a <strong>📱 Dependent Apps</strong> block (admin only) for configuring external services that CWOC integrates with. Currently supports Tailscale (mesh VPN for secure remote access) and Ntfy (push notifications to your phone).</p>
             <h4>Tailscale</h4>
