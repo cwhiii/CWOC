@@ -136,6 +136,43 @@ def _decrypt_password(ciphertext: str) -> str:
 # ═══════════════════════════════════════════════════════════════════════════
 
 
+def _unwrap_json_list(val) -> list:
+    """Unwrap a potentially double/triple-encoded JSON list.
+
+    Handles cases like:
+      '["addr@x.com"]'                          → ["addr@x.com"]
+      ["[\\"addr@x.com\\"]"]                     → ["addr@x.com"]
+      ["[\\"Name <addr@x.com>\\"]"]              → ["Name <addr@x.com>"]
+      '[]'                                       → []
+      None                                       → []
+    """
+    import json as _json
+    if val is None:
+        return []
+    # If it's a raw string, try to parse it
+    if isinstance(val, str):
+        try:
+            val = _json.loads(val)
+        except (ValueError, TypeError):
+            return [val] if val.strip() else []
+    if not isinstance(val, list):
+        return [val] if val else []
+    # Unwrap: if every element is a string that looks like a JSON array, parse it
+    # Keep unwrapping until stable
+    changed = True
+    while changed:
+        changed = False
+        if len(val) == 1 and isinstance(val[0], str) and val[0].strip().startswith("["):
+            try:
+                inner = _json.loads(val[0])
+                if isinstance(inner, list):
+                    val = inner
+                    changed = True
+            except (ValueError, TypeError):
+                pass
+    return val
+
+
 def _connect_imap(account: dict) -> imaplib.IMAP4_SSL:
     """Connect and authenticate to the configured IMAP server.
 
@@ -435,6 +472,7 @@ def _create_email_chit(cursor, parsed: dict, owner_id: str) -> str | None:
     proxy.title = parsed.get("email_subject", "")
     proxy.email_message_id = message_id
     proxy.email_status = "received"
+    proxy.email_folder = "inbox"
 
     tags = compute_system_tags(proxy)
     tags_json = serialize_json_field(tags)
@@ -545,7 +583,7 @@ def _connect_smtp(account: dict) -> smtplib.SMTP:
     host = account.get("smtp_host", "smtp.gmail.com")
     port = int(account.get("smtp_port", 587))
 
-    smtp = smtplib.SMTP(host, port)
+    smtp = smtplib.SMTP(host, port, timeout=15)
     smtp.ehlo()
     smtp.starttls()
     smtp.ehlo()
@@ -927,6 +965,28 @@ def email_sync(request: Request):
                 continue
 
         conn.commit()
+
+        # Send push notification if new emails were fetched
+        if new_count > 0:
+            try:
+                from src.backend.routes.ntfy import send_ntfy_notification
+                from src.backend.schedulers import _get_server_base_url
+                base = _get_server_base_url()
+                ntfy_title = f"📬 {new_count} new email{'s' if new_count != 1 else ''}"
+                ntfy_body = "You have new mail in CWOC."
+                click_url = f"{base}/frontend/html/index.html"
+                icon_url = f"{base}/static/cwoc-icon-192.png"
+                send_ntfy_notification(
+                    user_id=user_id,
+                    title=ntfy_title,
+                    body=ntfy_body,
+                    click_url=click_url,
+                    tags="email,incoming_envelope",
+                    icon_url=icon_url,
+                )
+            except Exception as e:
+                logger.warning(f"Ntfy notification failed for new email: {e}")
+
         return {"new_count": new_count}
 
     except HTTPException:
@@ -982,6 +1042,8 @@ def email_send(chit_id: str, request: Request):
         email_to = chit.get("email_to")
         if email_to:
             email_to = deserialize_json_field(email_to)
+        # Unwrap double/triple-encoded JSON: '["[\"addr\"]"]' → ["addr"]
+        email_to = _unwrap_json_list(email_to)
         if not email_to or (isinstance(email_to, list) and len(email_to) == 0):
             raise HTTPException(
                 status_code=422,
@@ -1003,6 +1065,16 @@ def email_send(chit_id: str, request: Request):
         chit_data["email_cc"] = deserialize_json_field(chit.get("email_cc")) or []
         chit_data["email_bcc"] = deserialize_json_field(chit.get("email_bcc")) or []
 
+        # Unwrap any double-encoded JSON arrays
+        for _fld in ("email_to", "email_cc", "email_bcc"):
+            chit_data[_fld] = _unwrap_json_list(chit_data[_fld])
+
+        logger.info(f"Sending email — To: {chit_data['email_to']}, Cc: {chit_data['email_cc']}, Bcc: {chit_data['email_bcc']}")
+        logger.info(f"Sending email — Body length: {len(chit_data.get('email_body_text', '') or '')}, Body preview: {repr((chit_data.get('email_body_text', '') or '')[:200])}")
+        logger.info(f"Sending email — Subject: {chit_data.get('email_subject', '')}, Title: {chit_data.get('title', '')}")
+        logger.info(f"Sending email — note field: {repr((chit_data.get('note', '') or '')[:200])}")
+        logger.info(f"Sending email — raw email_body_text type: {type(chit.get('email_body_text'))}, value: {repr((chit.get('email_body_text') or '')[:200])}")
+
         # Build the RFC 2822 message
         message = _build_rfc2822_message(chit_data, account)
         from_addr = account.get("email", account.get("username", ""))
@@ -1016,10 +1088,12 @@ def email_send(chit_id: str, request: Request):
                 status_code=401,
                 detail="SMTP authentication failed.",
             )
-        except (smtplib.SMTPConnectError, OSError, ConnectionError) as e:
+        except (smtplib.SMTPConnectError, OSError, ConnectionError, TimeoutError) as e:
+            import logging
+            logging.error(f"SMTP connection failed: {type(e).__name__}: {e}")
             raise HTTPException(
                 status_code=502,
-                detail="Cannot reach SMTP server.",
+                detail=f"Cannot reach SMTP server {account.get('smtp_host', '?')}:{account.get('smtp_port', '?')} — {type(e).__name__}: {e}",
             )
         except smtplib.SMTPRecipientsRefused as e:
             refused = ", ".join(e.recipients.keys()) if e.recipients else "unknown"
@@ -1040,14 +1114,27 @@ def email_send(chit_id: str, request: Request):
 
         # On success: update chit status
         now = datetime.now(timezone.utc).isoformat()
+
+        # Recompute system tags for the sent email
+        # Read current tags, strip old email folder tags, add new ones
+        current_tags_raw = chit.get("tags", "[]")
+        current_tags = deserialize_json_field(current_tags_raw) if isinstance(current_tags_raw, str) else (current_tags_raw or [])
+        # Remove old email folder system tags
+        updated_tags = [t for t in current_tags if not (isinstance(t, str) and t.startswith("CWOC_System/Email/"))]
+        updated_tags.append("CWOC_System/Email/Sent")
+        # Ensure base email tag is present
+        if "CWOC_System/Email" not in updated_tags:
+            updated_tags.append("CWOC_System/Email")
+
         cursor.execute(
             """UPDATE chits
                SET email_status = 'sent',
                    email_folder = 'sent',
                    email_message_id = ?,
+                   tags = ?,
                    modified_datetime = ?
                WHERE id = ?""",
-            (sent_message_id, now, chit_id),
+            (sent_message_id, serialize_json_field(updated_tags), now, chit_id),
         )
         conn.commit()
 

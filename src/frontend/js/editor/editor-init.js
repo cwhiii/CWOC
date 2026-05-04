@@ -702,6 +702,24 @@ async function loadChitData(chitId) {
 
     applyZoneStates(chit);
 
+    // For email chits: move email zone to top of column-one (top left) and auto-collapse dates
+    if (typeof hasEmailData === 'function' && hasEmailData(chit)) {
+      var emailSection = document.getElementById('emailSection');
+      var colOne = document.querySelector('.column-one');
+      if (emailSection && colOne) {
+        colOne.insertBefore(emailSection, colOne.firstChild);
+      }
+      // Auto-collapse dates zone for email chits
+      var datesSection = document.getElementById('datesSection');
+      var datesContent = document.getElementById('datesContent');
+      if (datesSection && datesContent) {
+        datesSection.classList.add('collapsed');
+        datesSection.classList.remove('expanded');
+        datesContent.style.display = 'none';
+        var dIcon = datesSection.querySelector('.zone-toggle-icon');
+        if (dIcon) dIcon.textContent = '🔽';
+      }
+    }
     // Initialize email zone with chit data
     if (typeof initEmailZone === 'function') {
       initEmailZone(chit);
@@ -1221,9 +1239,14 @@ document.addEventListener("DOMContentLoaded", function () {
       if (emailSection && emailContent) {
         emailContent.style.display = '';
         emailSection.classList.remove('collapsed');
+        emailSection.classList.add('expanded');
         var eIcon = emailSection.querySelector('.zone-toggle-icon');
         if (eIcon) eIcon.textContent = '🔼';
-        emailSection.querySelectorAll('.zone-button:not(.zone-button-persist)').forEach(function (btn) { btn.style.display = ''; });
+      }
+      // Move email zone to top of column-one for new email drafts
+      var colOne = document.querySelector('.column-one');
+      if (emailSection && colOne) {
+        colOne.insertBefore(emailSection, colOne.firstChild);
       }
     }
 

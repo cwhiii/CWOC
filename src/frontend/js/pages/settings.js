@@ -469,10 +469,15 @@ function _loadEmailAccountSettings(settings) {
     if (el && acct.smtp_port != null) el.value = acct.smtp_port;
     el = document.getElementById('emailAccountUsername');
     if (el) el.value = acct.username || '';
-    // Password is never sent back from the server — leave the field empty.
-    // The placeholder tells the user a password is saved.
+    // Populate password from decrypted value returned by the server.
+    // Clear any browser-autofilled value and track manual input.
     el = document.getElementById('emailAccountPassword');
-    if (el && acct.password_encrypted) el.placeholder = '••••••••  (saved)';
+    if (el) {
+      el.value = acct.password || '';
+      if (acct.password || acct.password_encrypted) el.placeholder = 'App password';
+      el._userTyped = false;
+      el.addEventListener('input', function() { this._userTyped = true; });
+    }
     // Sync settings
     el = document.getElementById('emailMaxPull');
     if (el) el.value = acct.max_pull || 50;

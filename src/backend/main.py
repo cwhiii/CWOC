@@ -157,6 +157,29 @@ migrate_add_contact_dates()
 migrate_add_email_fields()
 seed_version_info()
 
+# One-time cleanup: fix sent emails that still have CWOC_System/Email/Drafts tag
+try:
+    import json as _json_cleanup
+    _cleanup_conn = sqlite3.connect(DB_PATH)
+    _cleanup_cur = _cleanup_conn.cursor()
+    _cleanup_cur.execute("SELECT id, tags FROM chits WHERE email_status = 'sent' AND tags LIKE '%Email/Drafts%'")
+    _cleanup_rows = _cleanup_cur.fetchall()
+    for _cid, _ctags in _cleanup_rows:
+        try:
+            _tag_list = _json_cleanup.loads(_ctags) if _ctags else []
+            _new_tags = [t for t in _tag_list if t != 'CWOC_System/Email/Drafts']
+            if 'CWOC_System/Email/Sent' not in _new_tags:
+                _new_tags.append('CWOC_System/Email/Sent')
+            _cleanup_cur.execute("UPDATE chits SET tags = ? WHERE id = ?", (_json_cleanup.dumps(_new_tags), _cid))
+        except Exception:
+            pass
+    _cleanup_conn.commit()
+    _cleanup_conn.close()
+    if _cleanup_rows:
+        logger.info(f"Cleaned up {len(_cleanup_rows)} sent email(s) with stale Drafts tag")
+except Exception as _ce:
+    logger.warning(f"Email tag cleanup failed: {_ce}")
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Register Route Modules

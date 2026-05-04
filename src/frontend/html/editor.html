@@ -38,6 +38,13 @@
                     <button id="saveExitButton" onclick="saveChit()" style="display:none;">
                         <i class="fas fa-save"></i> 🚪 Save &amp; Exit
                     </button>
+                    <!-- Email-specific save buttons (hidden by default, shown for email chits) -->
+                    <button id="saveDraftButton" onclick="saveChitAndStay()" style="display:none;">
+                        <i class="fas fa-save"></i> 📝 Save as Draft
+                    </button>
+                    <button id="saveSendButton" onclick="_emailSaveAndSend()" style="display:none;">
+                        <i class="fas fa-paper-plane"></i> ✉️ Save &amp; Send
+                    </button>
                     <!-- Shown when no unsaved changes -->
                     <button id="saveButton" onclick="saveChit()" disabled>
                         <i class="fas fa-save"></i> Save
@@ -104,6 +111,7 @@
                                 />
                             </div>
                             <span id="cwoc-owner-chip-container"></span>
+                            <button type="button" id="emailQuickActivateBtn" class="email-quick-btn" onclick="_activateEmailZone()" title="Make this an email"><i class="fas fa-envelope"></i><span class="email-quick-label"> Email</span></button>
                         </label>
                         <input
                             type="text"
@@ -711,8 +719,9 @@
                             onclick="toggleZone(event, 'checklistSection', 'checklistContent')"
                         >
                             <h2 class="zone-title">✅ Checklist</h2>
-                            <!-- Removed old Add Item button because new checklist has its own input -->
-                            <span class="zone-toggle-icon">🔽</span>
+                            <div class="zone-actions">
+                                <span class="zone-toggle-icon">🔽</span>
+                            </div>
                         </div>
                         <div id="checklistContent" class="zone-body">
                             <div
@@ -971,20 +980,48 @@
                         </div>
                     </div>
 
-                    <div id="emailSection" class="zone collapsed">
-                        <div class="zone-header" onclick="cwocToggleZone(event, 'emailSection', 'emailContent')">
+                    <div id="emailSection" class="zone-container" style="display:none;">
+                        <div
+                            class="zone-header"
+                            onclick="toggleZone(event, 'emailSection', 'emailContent')"
+                        >
+                            <h2 class="zone-title">✉️ Email</h2>
+                            <div class="zone-actions" onclick="event.stopPropagation()">
+                                <button type="button" id="emailActivateBtn" class="zone-button zone-button-persist" onclick="_activateEmailZone()" title="Make this an email chit" style="font-size:0.8em;">✉️ Email</button>
+                                <button type="button" class="zone-button" id="emailSendBtn" style="display:none;" onclick="_emailSend()"><i class="fas fa-paper-plane"></i> Send</button>
+                                <button type="button" class="zone-button" id="emailReplyBtn" style="display:none;" onclick="_emailReply()"><i class="fas fa-reply"></i> Reply</button>
+                                <button type="button" class="zone-button" id="emailForwardBtn" style="display:none;" onclick="_emailForward()"><i class="fas fa-share"></i> Forward</button>
+                                <button type="button" class="zone-button" id="emailExpandBtn" style="display:none;" onclick="_openEmailExpandModal()" title="Expand"><i class="fas fa-expand"></i> Expand</button>
+                            </div>
                             <span class="zone-toggle-icon">🔽</span>
-                            <span class="zone-title">✉️ Email</span>
-                            <button class="expand-btn" onclick="event.stopPropagation(); _openEmailExpandModal()" title="Expand email zone">⤢</button>
-                            <button class="zone-button" id="emailSendBtn" style="display:none;" onclick="event.stopPropagation(); _emailSend()">Send</button>
-                            <button class="zone-button" id="emailReplyBtn" style="display:none;" onclick="event.stopPropagation(); _emailReply()">Reply</button>
-                            <button class="zone-button" id="emailForwardBtn" style="display:none;" onclick="event.stopPropagation(); _emailForward()">Forward</button>
                         </div>
-                        <div id="emailContent" class="zone-content" style="display:none;">
+                        <div id="emailContent" class="zone-body">
                             <div class="email-field"><label>From:</label><span id="emailFrom" class="email-from-display"></span></div>
-                            <div class="email-field"><label>To:</label><input id="emailTo" type="text" placeholder="recipient@example.com"></div>
-                            <div class="email-field"><label>Cc:</label><input id="emailCc" type="text" placeholder="cc@example.com"></div>
-                            <div class="email-field"><label>Bcc:</label><input id="emailBcc" type="text" placeholder="bcc@example.com"></div>
+                            <div class="email-field email-to-field">
+                                <label>To:</label>
+                                <div class="email-autocomplete-wrap">
+                                    <input id="emailTo" type="text" placeholder="recipient@example.com" autocomplete="off">
+                                    <div id="emailToDropdown" class="email-autocomplete-dropdown" style="display:none;"></div>
+                                </div>
+                                <button type="button" class="email-cc-toggle-btn" id="emailShowCcBtn" onclick="_toggleEmailCcBcc('cc')" title="Add CC">CC</button>
+                                <button type="button" class="email-cc-toggle-btn" id="emailShowBccBtn" onclick="_toggleEmailCcBcc('bcc')" title="Add BCC">BCC</button>
+                            </div>
+                            <div class="email-field" id="emailCcRow" style="display:none;">
+                                <label>CC:</label>
+                                <div class="email-autocomplete-wrap">
+                                    <input id="emailCc" type="text" placeholder="cc@example.com" autocomplete="off">
+                                    <div id="emailCcDropdown" class="email-autocomplete-dropdown" style="display:none;"></div>
+                                </div>
+                                <button type="button" class="email-cc-remove-btn" onclick="_toggleEmailCcBcc('cc')" title="Remove CC">✕</button>
+                            </div>
+                            <div class="email-field" id="emailBccRow" style="display:none;">
+                                <label>BCC:</label>
+                                <div class="email-autocomplete-wrap">
+                                    <input id="emailBcc" type="text" placeholder="bcc@example.com" autocomplete="off">
+                                    <div id="emailBccDropdown" class="email-autocomplete-dropdown" style="display:none;"></div>
+                                </div>
+                                <button type="button" class="email-cc-remove-btn" onclick="_toggleEmailCcBcc('bcc')" title="Remove BCC">✕</button>
+                            </div>
                             <div class="email-field email-body-field">
                                 <label>Body:</label>
                                 <textarea id="emailBody" rows="12" placeholder="Compose your message..."></textarea>

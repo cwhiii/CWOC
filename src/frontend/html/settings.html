@@ -938,12 +938,12 @@
                         <label class="setting-subheader">Credentials</label>
                         <div class="setting-inline">
                             <label for="emailAccountUsername">Username</label>
-                            <input type="text" id="emailAccountUsername" placeholder="user@gmail.com" style="flex:1;min-width:0;" />
+                            <input type="text" id="emailAccountUsername" placeholder="user@gmail.com" autocomplete="off" style="flex:1;min-width:0;" />
                         </div>
                         <div class="setting-inline">
                             <label for="emailAccountPassword">Password</label>
                             <div style="flex:1;min-width:0;display:flex;gap:4px;">
-                                <input type="password" id="emailAccountPassword" placeholder="App password" style="flex:1;min-width:0;" />
+                                <input type="password" id="emailAccountPassword" placeholder="App password" autocomplete="new-password" data-lpignore="true" data-1p-ignore="true" style="flex:1;min-width:0;" />
                                 <button type="button" id="emailPasswordToggleBtn" class="standard-button" style="flex-shrink:0;padding:4px 8px;font-size:0.85em;" onclick="toggleEmailPasswordVisibility()">👁️</button>
                             </div>
                         </div>

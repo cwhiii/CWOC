@@ -135,6 +135,7 @@ function _injectModeToggle() {
 
   // Add "All People" checkbox next to the mode toggle
   var allWrap = document.createElement('label');
+  allWrap.id = 'maps-all-people-wrap';
   allWrap.style.cssText = 'display:flex;align-items:center;gap:4px;font-size:13px;font-family:Lora,Georgia,serif;color:#4a2c2a;cursor:pointer;margin-left:12px;white-space:nowrap;';
   allWrap.title = 'Show all people regardless of date filters';
   allWrap.innerHTML = '<input type="checkbox" id="maps-people-show-all" style="margin:0;cursor:pointer;" /> All People';
@@ -160,6 +161,9 @@ function _injectModeToggle() {
   } else {
     header.appendChild(allWrap);
   }
+
+  // Start hidden — only shown in people or both modes
+  allWrap.style.display = 'none';
 }
 
 /* ── Period Date Range Helper ─────────────────────────────────────────────── */
@@ -451,6 +455,10 @@ function _switchToChitsMode() {
   // Hide any lingering info message
   _hideInfoMessage();
 
+  // Hide "All People" checkbox — not relevant in chits-only mode
+  var allPeopleWrap = document.getElementById('maps-all-people-wrap');
+  if (allPeopleWrap) allPeopleWrap.style.display = 'none';
+
   // Reload chit filter data into shared sidebar panels
   _loadChitsFilterData();
 
@@ -470,6 +478,10 @@ function _switchToPeopleMode() {
   // Hide any lingering info message
   _hideInfoMessage();
 
+  // Show "All People" checkbox — relevant in people mode
+  var allPeopleWrap = document.getElementById('maps-all-people-wrap');
+  if (allPeopleWrap) allPeopleWrap.style.display = 'flex';
+
   // Load contact markers
   _fetchAndDisplayContacts();
 }
@@ -486,6 +498,10 @@ async function _switchToBothMode() {
 
   // Hide any lingering info message
   _hideInfoMessage();
+
+  // Show "All People" checkbox — relevant in both mode
+  var allPeopleWrap = document.getElementById('maps-all-people-wrap');
+  if (allPeopleWrap) allPeopleWrap.style.display = 'flex';
 
   // Load both sequentially to prevent race conditions.
   // Each function adds to the cluster group without clearing it first (in "both" mode).

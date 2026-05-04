@@ -360,7 +360,7 @@ function _restoreUIState() {
     const orderSection = document.getElementById('section-order');
     if (periodSection) periodSection.style.display = (currentTab === 'Calendar') ? '' : 'none';
     if (yearWeekContainer) yearWeekContainer.style.display = (currentTab === 'Calendar') ? '' : 'none';
-    if (orderSection) orderSection.style.display = (currentTab === 'Calendar' || currentTab === 'Indicators') ? 'none' : '';
+    if (orderSection) orderSection.style.display = (currentTab === 'Calendar' || currentTab === 'Indicators' || currentTab === 'Email') ? 'none' : '';
     const kanbanSectionRestore = document.getElementById('section-kanban');
     if (kanbanSectionRestore) kanbanSectionRestore.style.display = (currentTab === 'Projects') ? '' : 'none';
     const indSectionRestore = document.getElementById('section-indicators');
@@ -371,6 +371,8 @@ function _restoreUIState() {
     if (alarmsSectionRestore) alarmsSectionRestore.style.display = (currentTab === 'Alarms') ? '' : 'none';
     const tasksSectionRestore = document.getElementById('section-tasks-mode');
     if (tasksSectionRestore) tasksSectionRestore.style.display = (currentTab === 'Tasks') ? '' : 'none';
+    // Restore email sidebar visibility
+    if (typeof _updateEmailSidebarVisibility === 'function') _updateEmailSidebarVisibility(currentTab);
 
     return true;
   } catch (e) {
@@ -818,7 +820,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   // Hide Order on Calendar, show date nav + period
   const orderSection = document.getElementById('section-order');
-  if (orderSection) orderSection.style.display = (currentTab === 'Calendar' || currentTab === 'Indicators') ? 'none' : '';
+  if (orderSection) orderSection.style.display = (currentTab === 'Calendar' || currentTab === 'Indicators' || currentTab === 'Email') ? 'none' : '';
   const periodSection = document.getElementById('section-period');
   if (periodSection) periodSection.style.display = (currentTab === 'Calendar') ? '' : 'none';
   const yearWeekContainer = document.getElementById('year-week-container');
@@ -834,6 +836,10 @@ document.addEventListener("DOMContentLoaded", function () {
   if (currentTab === 'Indicators') {
     var filtersInit = document.getElementById('section-filters');
     if (filtersInit) filtersInit.style.display = 'none';
+  }
+  // Show email sidebar controls if restored tab is Email
+  if (typeof _updateEmailSidebarVisibility === 'function') {
+    _updateEmailSidebarVisibility(currentTab);
   }
 
   _renderSavedSearches();
@@ -1435,7 +1441,11 @@ document.addEventListener("DOMContentLoaded", function () {
     if (keyLower === 'k') {
       e.preventDefault();
       storePreviousState();
-      window.location.href = '/frontend/html/editor.html';
+      if (typeof currentTab !== 'undefined' && currentTab === 'Email') {
+        window.location.href = '/frontend/html/editor.html?new=email';
+      } else {
+        window.location.href = '/frontend/html/editor.html';
+      }
       return;
     }
 

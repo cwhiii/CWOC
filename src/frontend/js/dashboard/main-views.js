@@ -306,14 +306,17 @@ function _buildChitHeader(chit, titleHtml, settings, opts) {
   if (chit.start_datetime && !chit.email_message_id && !chit.email_status) addMeta(`Start: ${formatDate(new Date(chit.start_datetime))}`, 'start');
   if (chit.modified_datetime && !chit.email_message_id && !chit.email_status) addMeta(`Updated: ${formatDate(new Date(chit.modified_datetime))}`, 'updated');
   if (chit.created_datetime && !chit.email_message_id && !chit.email_status) addMeta(`Created: ${formatDate(new Date(chit.created_datetime))}`, 'created');
-  const tags = (chit.tags || []).filter(t => !isSystemTag(t));
+  var _rawTags = chit.tags || [];
+  if (typeof _rawTags === 'string') { try { _rawTags = JSON.parse(_rawTags); } catch(e) { _rawTags = []; } }
+  if (!Array.isArray(_rawTags)) _rawTags = [];
+  const tags = _rawTags.filter(t => !isSystemTag(t));
   if (tags.length > 0) {
     tags.forEach(tagName => {
       const tagColor = _getTagColor(tagName);
       const tagFontColor = _getTagFontColor(tagName);
       const chip = document.createElement('span');
       chip.style.cssText = `display:inline-block;padding:1px 6px;border-radius:4px;font-size:0.75em;margin-left:4px;background:${tagColor};color:${tagFontColor};`;
-      chip.textContent = tagName.split('/').pop();
+      chip.textContent = tagName;
       right.appendChild(chip);
     });
   }
@@ -4074,7 +4077,7 @@ function filterChits(tab) {
     yearWeekContainer.style.display = (tab === 'Calendar') ? '' : 'none';
   }
   if (orderSection) {
-    orderSection.style.display = (tab === 'Calendar' || tab === 'Indicators') ? 'none' : '';
+    orderSection.style.display = (tab === 'Calendar' || tab === 'Indicators' || tab === 'Email') ? 'none' : '';
   }
 
   // Show/hide Kanban toggle for Projects tab
@@ -4100,15 +4103,16 @@ function filterChits(tab) {
   if (filtersSection) {
     filtersSection.style.display = (tab === 'Indicators') ? 'none' : '';
   }
-  const clearFiltersSection = document.getElementById('section-clear-filters');
-  if (clearFiltersSection && tab === 'Indicators') {
-    clearFiltersSection.style.display = 'none';
-  }
 
   // Show/hide Indicators time range controls in sidebar
   const indControls = document.getElementById('section-indicators');
   if (indControls) {
     indControls.style.display = (tab === 'Indicators') ? '' : 'none';
+  }
+
+  // Show/hide Email controls in sidebar
+  if (typeof _updateEmailSidebarVisibility === 'function') {
+    _updateEmailSidebarVisibility(tab);
   }
 
   // Pre-fetch independent alerts when switching to Alarms tab in independent mode

@@ -8,49 +8,12 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 /* ── Email Zone Container ──────────────────────────────────────────────── */
-/* The email zone uses class="zone" instead of "zone-container", so we
-   mirror the shared-editor.css zone-container styles here. */
-#emailSection {
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
-    margin-bottom: 20px;
-    background: var(--zone-body-bg);
-    overflow: hidden;
-    transition: height 0.3s ease;
-}
+/* The email zone now uses class="zone-container" matching all other zones.
+   No custom container styles needed — inherits from shared-editor.css. */
 
-#emailSection.collapsed {
-    height: 48px;
-    opacity: 0.55;
-    transition: opacity 0.2s, height 0.3s ease;
-}
+/* ── Email Zone Content uses .zone-body from shared-editor.css ─────────── */
 
-#emailSection.collapsed:hover {
-    opacity: 0.85;
-}
-
-/* ── Email Zone Content Area ───────────────────────────────────────────── */
-.zone-content {
-    padding: 10px;
-    background-color: var(--zone-body-bg);
-}
-
-/* ── Expand Button (⤢) in Zone Header ─────────────────────────────────── */
-.expand-btn {
-    padding: 4px 8px;
-    font-size: 14px;
-    background-color: var(--button-bg);
-    color: var(--aged-brown-dark);
-    border: 1px outset var(--aged-brown-medium);
-    border-radius: 4px;
-    cursor: pointer;
-    transition: background-color 0.2s;
-    line-height: 1;
-}
-
-.expand-btn:hover {
-    background-color: var(--button-hover);
-}
+/* ── Email Zone uses standard .zone-button styling from shared-editor.css ── */
 
 /* ── Email Field Rows (label + input) ──────────────────────────────────── */
 .email-field {
@@ -189,28 +152,7 @@
     color: #ffdddd;
 }
 
-/* ── Email Action Buttons (Send, Reply, Forward) ───────────────────────── */
-#emailSendBtn {
-    background-color: var(--info-blue);
-    color: var(--parchment-light);
-    border: 1px outset var(--aged-brown-medium);
-}
-
-#emailSendBtn:hover {
-    background-color: #3a70a0;
-}
-
-#emailReplyBtn,
-#emailForwardBtn {
-    background-color: var(--aged-brown-light);
-    color: var(--parchment-light);
-    border: 1px outset var(--aged-brown-medium);
-}
-
-#emailReplyBtn:hover,
-#emailForwardBtn:hover {
-    background-color: #924525;
-}
+/* ── Email Action Buttons use standard .zone-button styling ─────────────── */
 
 /* ── Responsive — Tablet (≤768px) ──────────────────────────────────────── */
 @media (max-width: 768px) {
@@ -260,9 +202,195 @@
     .zone-content {
         padding: 6px;
     }
+}
 
-    .expand-btn {
-        min-height: 36px;
-        padding: 4px 8px;
+/* ── Autocomplete Dropdown ─────────────────────────────────────────────── */
+.email-autocomplete-wrap {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+}
+
+.email-autocomplete-wrap input[type="text"] {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px inset var(--aged-brown-medium);
+    border-radius: 4px;
+    font-size: 14px;
+    font-family: 'Lora', Georgia, serif;
+    background-color: var(--input-bg);
+    color: var(--text-color);
+    box-sizing: border-box;
+}
+
+.email-autocomplete-wrap input[type="text"]:focus {
+    outline: none;
+    border-color: var(--accent-teal);
+    box-shadow: 0 0 0 2px rgba(0, 128, 128, 0.25);
+}
+
+.email-autocomplete-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: var(--parchment-light);
+    border: 1px solid var(--aged-brown-medium);
+    border-top: none;
+    border-radius: 0 0 4px 4px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 100;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.email-autocomplete-item {
+    padding: 8px 12px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    border-bottom: 1px solid var(--parchment-medium);
+    transition: background-color 0.15s;
+}
+
+.email-autocomplete-item:last-child {
+    border-bottom: none;
+}
+
+.email-autocomplete-item:hover {
+    background-color: var(--parchment-medium);
+}
+
+.email-ac-name {
+    font-weight: 600;
+    color: var(--aged-brown-dark);
+    font-family: 'Lora', Georgia, serif;
+    font-size: 13px;
+}
+
+.email-ac-email {
+    font-size: 12px;
+    color: var(--aged-brown-light);
+    font-family: 'Lora', Georgia, serif;
+}
+
+/* ── Cc/Bcc Toggle Buttons ─────────────────────────────────────────────── */
+.email-to-field {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.email-cc-toggle-btn {
+    padding: 4px 8px;
+    font-size: 12px;
+    font-family: 'Lora', Georgia, serif;
+    font-weight: 600;
+    background: var(--button-bg);
+    color: var(--aged-brown-dark);
+    border: 1px outset var(--aged-brown-medium);
+    border-radius: 4px;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition: background-color 0.2s;
+}
+
+.email-cc-toggle-btn:hover {
+    background: var(--button-hover);
+}
+
+.email-cc-remove-btn {
+    padding: 4px 8px;
+    font-size: 14px;
+    background: none;
+    color: var(--aged-brown-light);
+    border: 1px solid transparent;
+    border-radius: 4px;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: color 0.2s;
+}
+
+.email-cc-remove-btn:hover {
+    color: var(--danger-red);
+}
+
+/* ── Disabled autocomplete fields ──────────────────────────────────────── */
+.email-autocomplete-wrap input[type="text"]:disabled,
+.email-autocomplete-wrap input[type="text"][readonly] {
+    background-color: var(--parchment-medium);
+    color: var(--aged-brown-dark);
+    border: 1px dotted var(--aged-brown-light);
+    cursor: default;
+    opacity: 0.85;
+}
+
+/* ── Mobile: Cc/Bcc buttons stack ──────────────────────────────────────── */
+@media (max-width: 480px) {
+    .email-to-field {
+        flex-wrap: wrap;
     }
+    .email-cc-toggle-btn {
+        font-size: 11px;
+        padding: 3px 6px;
+    }
+}
+
+/* ── Email Quick-Activate Button (title row, icon-only with hover expand) ── */
+.email-quick-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    padding: 4px 6px;
+    font-size: 0.85em;
+    font-family: 'Lora', Georgia, serif;
+    background: var(--aged-brown-light);
+    color: var(--parchment-light);
+    border: 1px outset var(--aged-brown-medium);
+    border-radius: 4px;
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    transition: background-color 0.2s, max-width 0.25s ease, padding 0.2s;
+    max-width: 30px;
+    vertical-align: middle;
+    line-height: 1;
+}
+
+.email-quick-btn i {
+    flex-shrink: 0;
+}
+
+.email-quick-btn .email-quick-label {
+    opacity: 0;
+    max-width: 0;
+    overflow: hidden;
+    transition: opacity 0.2s, max-width 0.25s ease;
+    white-space: nowrap;
+}
+
+.email-quick-btn:hover {
+    max-width: 120px;
+    padding: 4px 8px;
+    gap: 4px;
+    background: #924525;
+}
+
+.email-quick-btn:hover .email-quick-label {
+    opacity: 1;
+    max-width: 80px;
+}
+
+/* Active state (email chit) */
+.email-quick-btn.email-active {
+    background: #008080;
+    color: #fff8e1;
+    border-color: #006060;
+}
+
+.email-quick-btn.email-active:hover {
+    background: #006060;
 }

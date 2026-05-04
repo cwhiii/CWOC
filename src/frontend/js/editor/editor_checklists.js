@@ -43,7 +43,13 @@ class Checklist {
     if (header) {
       var zoneTitle = header.querySelector('.zone-title');
       if (zoneTitle) zoneTitle.appendChild(this.countDisplay);
-      header.appendChild(this.clearCheckedButton);
+      // Insert clear-checked button into zone-actions, before the toggle icon
+      var zoneActions = header.querySelector('.zone-actions');
+      if (zoneActions) {
+        zoneActions.insertBefore(this.clearCheckedButton, zoneActions.firstChild);
+      } else {
+        header.appendChild(this.clearCheckedButton);
+      }
     }
   }
 

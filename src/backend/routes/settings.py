@@ -55,6 +55,14 @@ def get_settings(user_id: str, request: Request):
         settings["shared_tags"] = deserialize_json_field(settings.get("shared_tags"))
         settings["kiosk_users"] = deserialize_json_field(settings.get("kiosk_users"))
         settings["email_account"] = deserialize_json_field(settings.get("email_account"))
+        # Decrypt the email password so the frontend can populate the field
+        if isinstance(settings.get("email_account"), dict) and settings["email_account"].get("password_encrypted"):
+            try:
+                from src.backend.routes.email import _decrypt_password  # lazy import to avoid circular deps
+                settings["email_account"]["password"] = _decrypt_password(settings["email_account"]["password_encrypted"])
+            except Exception as e:
+                logger.error(f"Failed to decrypt email password: {e}")
+                settings["email_account"]["password"] = ""
         settings["default_show_habits_on_calendar"] = settings.get("default_show_habits_on_calendar", "1")
         settings["map_default_lat"] = settings.get("map_default_lat")
         settings["map_default_lon"] = settings.get("map_default_lon")

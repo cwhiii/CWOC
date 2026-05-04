@@ -214,7 +214,7 @@
 
 /* ── Filters section toggle button ────────────────────────────────────────── */
 .filters-toggle-btn {
-    margin-bottom: 8px !important;
+    margin-bottom: 0 !important;
 }
 .filters-toggle-btn.expanded {
     background-color: #c4a484 !important;

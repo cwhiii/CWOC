@@ -2,6 +2,8 @@
 
 *Completed items are in `done.md`. Deferred items in `parking_lot.md`. Declined in `path_not_traveled.md`.*
 
+- update & impliment the .ics export.
+
 - Here values for things like birthdays and anniversaries. These dates should appear on a special birthday chit. These are automatically generated on the anniversary date of the dates in people. But there should be a check box by each one that defaults to turned on or show anual repitition  (or aniversary sor romthieng). If enabled, and there's a valid date, show the person as a value on the all day section of calendars. And searches should find them correctly. So if I have somebody born in 1987, I'm January 14, and I'm viewing the month of January, if I have show on calendar enable, that person's chip (no chit, THIER person tag) should show up on the calendar for January 14. Even if I'm looking at January for 2029.
 
 - Rules engineL new from x make greeen.
@@ -14,6 +16,10 @@
 
 ## Manual Tasks
 - `[ ]` Screenshot and video walkthrough of the app
+
+the email zone whould show the other chits i the thread. just the sent / received time/dates. , in a normaoil thread like turcture for emails. 
+
+
 
 
 ---
@@ -31,8 +37,6 @@
 - add an item to the todo: see where the new crypto-package could be used to futher secure passwords, and update the system to take advantage of it. 
 
 - Attachemtns: have an attachemnts zone. Be able to add or remove files forom a chit. (keep in mind that this will be a male client in the near future, so they should be able to work with the attachments coming and going through email. So if there's anything special with that, we want to support that out of the gate.)
-
-is ther any way cto cache the locatons so they dont have to be fetched from scratch each time? Or to show the previoulsy-loaded values?
 
 - on map & waether pages:  Add 3 more time periods to the drop-down. The next hour, and today, and next X days which uses the X days setting form th esettings. 
 - on teh map page, cange teh date filter to just "Day" instead of "this day", etc, for all then values in that ONE dropdown.    

@@ -59,6 +59,25 @@ function _cwocInjectSidebar() {
   html += '  </button>';
   html += '</div>';
 
+  /* Email controls — only visible on Email tab */
+  html += '<div class="sidebar-section" id="section-email-controls" style="display:none;">';
+  html += '  <button class="action-button sidebar-compact-btn" id="sidebar-check-mail-btn" style="margin-bottom:6px;">';
+  html += '    <i class="fas fa-sync"></i> Check Mail';
+  html += '  </button>';
+  html += '  <div class="filter-group">';
+  html += '    <label class="filter-group-label" onclick="var b=this.nextElementSibling;b.style.display=b.style.display===\'none\'?\'\':\'none\';this.querySelector(\'.filter-arrow\').textContent=b.style.display===\'none\'?\'▶\':\'▼\';">';
+  html += '      <span class="filter-arrow">▼</span> Folder';
+  html += '    </label>';
+  html += '    <div class="filter-group-body">';
+  html += '      <div class="multi-select" id="email-folder-select" style="max-height:none;">';
+  html += '        <label class="email-folder-opt"><input type="radio" name="emailFolder" value="inbox" checked onchange="_setEmailSubFilter(\'inbox\')"> <i class="fas fa-inbox"></i> Inbox</label>';
+  html += '        <label class="email-folder-opt"><input type="radio" name="emailFolder" value="sent" onchange="_setEmailSubFilter(\'sent\')"> <i class="fas fa-paper-plane"></i> Sent</label>';
+  html += '        <label class="email-folder-opt"><input type="radio" name="emailFolder" value="drafts" onchange="_setEmailSubFilter(\'drafts\')"> <i class="fas fa-file-alt"></i> Drafts</label>';
+  html += '      </div>';
+  html += '    </div>';
+  html += '  </div>';
+  html += '</div>';
+
   /* Date nav */
   html += '<div id="year-week-container">';
   html += '  <button class="action-button today-btn" id="sidebar-today-btn"><i class="fas fa-calendar-days" style="margin-right:6px;"></i>Today</button>';
@@ -175,12 +194,15 @@ function _cwocInjectSidebar() {
 
   /* 4. Filters — collapsible section */
   html += '<div class="sidebar-section" id="section-filters">';
-  html += '  <div style="display:flex;gap:6px;">';
-  html += '    <button class="action-button filters-toggle-btn sidebar-compact-btn" id="filters-toggle-btn" title="Toggle filters" style="margin-bottom:0;">';
-  html += '      <i class="fas fa-filter"></i> Filters';
+  html += '  <div style="display:flex;gap:6px;align-items:center;">';
+  html += '    <label class="filter-group-label" id="filters-toggle-btn" style="flex:1;margin:0;" onclick="var b=document.getElementById(\'filters-body\');b.style.display=b.style.display===\'none\'?\'\':\'none\';this.querySelector(\'.filter-arrow\').textContent=b.style.display===\'none\'?\'▶\':\'▼\';">';
+  html += '      <span class="filter-arrow">▶</span> <i class="fas fa-filter" style="font-size:0.85em;"></i> Filters';
+  html += '    </label>';
+  html += '    <button class="action-button sidebar-compact-btn" id="sidebar-clear-all-btn" title="Clear all filters, search, and sort" style="margin-bottom:0;display:none;flex-shrink:0;font-size:0.75em;padding:4px 8px;">';
+  html += '      <i class="fas fa-times-circle"></i>&nbsp;Clear';
   html += '    </button>';
-  html += '    <button class="action-button clear-filters-btn sidebar-compact-btn" id="sidebar-clear-all-btn" title="Clear all filters, search, and sort" style="margin-bottom:0;font-size:0.8em;padding:6px;display:none;">';
-  html += '      ✕ Clear All';
+  html += '    <button class="action-button sidebar-compact-btn" id="reset-defaults-btn" title="Reset search to this tab\'s default filter" style="margin-bottom:0;display:none;flex-shrink:0;font-size:0.75em;padding:4px 8px;">';
+  html += '      <i class="fas fa-undo"></i>&nbsp;Defaults';
   html += '    </button>';
   html += '  </div>';
   html += '  <div id="filters-body" style="display:none;">';
@@ -282,18 +304,6 @@ function _cwocInjectSidebar() {
 
   html += '  </div>'; /* /filters-body */
   html += '</div>'; /* /section-filters */
-
-  /* Show/Hide + Reset Defaults row (below filters) */
-  html += '<div class="sidebar-section" id="section-clear-filters" style="display:none;">';
-  html += '  <div style="display:flex;gap:6px;">';
-  html += '    <button class="action-button clear-filters-btn sidebar-compact-btn" id="sidebar-filters-showhide-btn" title="Show/Hide filters" style="margin-bottom:0;font-size:0.8em;padding:6px;">';
-  html += '      👁 Show/Hide';
-  html += '    </button>';
-  html += '    <button class="action-button clear-filters-btn sidebar-compact-btn" id="reset-defaults-btn" title="Reset search to this tab\'s default filter" style="margin-bottom:0;font-size:0.8em;padding:6px;display:none;">';
-  html += '      🔄 Defaults';
-  html += '    </button>';
-  html += '  </div>';
-  html += '</div>';
 
   /* People, Maps, Weather, Clock, Kiosk, Calculator */
   html += '<div class="sidebar-section" id="section-settings">';
@@ -429,6 +439,14 @@ function _cwocInitSidebar(context) {
     createBtn.onauxclick = function() { window.open('/frontend/html/editor.html', '_blank'); };
   }
 
+  /* Wire email sidebar Check Mail button */
+  var checkMailBtn = document.getElementById('sidebar-check-mail-btn');
+  if (checkMailBtn) {
+    checkMailBtn.onclick = function() {
+      if (typeof _checkMail === 'function') _checkMail();
+    };
+  }
+
   var todayBtn = document.getElementById('sidebar-today-btn');
   if (todayBtn) todayBtn.onclick = function() { _cb('onToday')(); };
 
@@ -496,9 +514,7 @@ function _cwocInitSidebar(context) {
   var notifBtn = document.getElementById('notif-inbox-btn');
   if (notifBtn) notifBtn.onclick = function() { _cb('onNotificationToggle')(); };
 
-  /* Filters toggle button */
-  var filtersToggleBtn = document.getElementById('filters-toggle-btn');
-  if (filtersToggleBtn) filtersToggleBtn.onclick = function() { _toggleFiltersSection(); };
+  /* Filters toggle is now handled by inline onclick on the label */
 
   /* Search input — wire onkeyup to filter change if page provides searchChits */
   var searchInput = document.getElementById('search');
@@ -518,9 +534,6 @@ function _cwocInitSidebar(context) {
     _cb('onClearFilters')();
     _updateClearAllButton();
   };
-
-  var showHideBtn = document.getElementById('sidebar-filters-showhide-btn');
-  if (showHideBtn) showHideBtn.onclick = function() { _toggleFiltersSection(); };
 
   /* ── Populate period dropdown from context ───────────────────────────── */
   if (context.periodOptions && periodSelect) {
@@ -581,7 +594,10 @@ function _cwocInitSidebar(context) {
  * This replaces the inline onchange="onFilterChange()" from the old HTML.
  */
 function _wireFilterCheckboxes(context) {
-  var cb = (context && context.onFilterChange) || function() {};
+  var cb = function() {
+    if (context && context.onFilterChange) context.onFilterChange();
+    _updateClearAllButton();
+  };
 
   /* Status checkboxes */
   var statusMulti = document.getElementById('status-multi');
@@ -639,7 +655,7 @@ function _updateClearAllButton() {
   var btn = document.getElementById('sidebar-clear-all-btn');
   if (!btn) return;
 
-  /* Check if any status or priority specific filters are checked */
+  /* Check all possible non-default filter states */
   var hasStatusFilter = false;
   var statusCbs = document.querySelectorAll('#status-multi input[data-filter="status"]:checked');
   for (var i = 0; i < statusCbs.length; i++) {
@@ -661,7 +677,31 @@ function _updateClearAllButton() {
   var hasPeopleFilter = (window._sidebarPeopleSelection && window._sidebarPeopleSelection.length > 0)
     || (window._mapsChitsFilterPeople && window._mapsChitsFilterPeople.length > 0);
 
-  var hasAnyFilter = hasStatusFilter || hasPriorityFilter || searchText || hasTagFilter || hasPeopleFilter;
+  /* Display toggles — non-default states */
+  var showPinned = document.getElementById('show-pinned');
+  var showArchived = document.getElementById('show-archived');
+  var showUnmarked = document.getElementById('show-unmarked');
+  var hidePastDue = document.getElementById('hide-past-due');
+  var hideComplete = document.getElementById('hide-complete');
+  var hideDeclined = document.getElementById('hide-declined');
+  var hideHabits = document.getElementById('hide-habits');
+  var hasDisplayFilter = (showPinned && !showPinned.checked)
+    || (showArchived && showArchived.checked)
+    || (showUnmarked && !showUnmarked.checked)
+    || (hidePastDue && hidePastDue.checked)
+    || (hideComplete && hideComplete.checked)
+    || (hideDeclined && hideDeclined.checked)
+    || (hideHabits && hideHabits.checked);
+
+  /* Sharing filters */
+  var hasSharingFilter = (document.getElementById('filter-shared-with-me') || {}).checked
+    || (document.getElementById('filter-shared-by-me') || {}).checked;
+
+  /* Sort */
+  var hasSort = !!(typeof currentSortField !== 'undefined' && currentSortField);
+
+  var hasAnyFilter = hasStatusFilter || hasPriorityFilter || searchText || hasTagFilter
+    || hasPeopleFilter || hasDisplayFilter || hasSharingFilter || hasSort;
 
   btn.style.display = hasAnyFilter ? '' : 'none';
 }
@@ -734,19 +774,25 @@ function expandSidebarSection(sectionId) {
 /** Toggle the entire Filters section open/closed */
 function _toggleFiltersSection() {
   var body = document.getElementById('filters-body');
-  var btn = document.getElementById('filters-toggle-btn');
+  var label = document.getElementById('filters-toggle-btn');
   if (!body) return;
   var isHidden = body.style.display === 'none';
   body.style.display = isHidden ? '' : 'none';
-  if (btn) btn.classList.toggle('expanded', isHidden);
+  if (label) {
+    var arrow = label.querySelector('.filter-arrow');
+    if (arrow) arrow.textContent = isHidden ? '▼' : '▶';
+  }
 }
 
 /** Ensure filters section is expanded (used by hotkeys) */
 function _expandFiltersSection() {
   var body = document.getElementById('filters-body');
-  var btn = document.getElementById('filters-toggle-btn');
+  var label = document.getElementById('filters-toggle-btn');
   if (body) body.style.display = '';
-  if (btn) btn.classList.add('expanded');
+  if (label) {
+    var arrow = label.querySelector('.filter-arrow');
+    if (arrow) arrow.textContent = '▼';
+  }
 }
 
 /** Toggle a filter sub-group's body */

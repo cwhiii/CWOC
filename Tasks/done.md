@@ -1,5 +1,7 @@
 # CWOC — Completed Items
 
+is ther any way cto cache the locatons so they dont have to be fetched from scratch each time? Or to show the previoulsy-loaded values?
+
 
 
 

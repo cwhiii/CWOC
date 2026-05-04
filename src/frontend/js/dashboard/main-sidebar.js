@@ -37,7 +37,12 @@ function _initDashboardSidebar() {
     currentPage: 'home',
     onCreateChit: function() {
       storePreviousState();
-      window.location.href = '/frontend/html/editor.html';
+      // If on the Email tab, auto-open the email zone for the new chit
+      if (typeof currentTab !== 'undefined' && currentTab === 'Email') {
+        window.location.href = '/frontend/html/editor.html?new=email';
+      } else {
+        window.location.href = '/frontend/html/editor.html';
+      }
     },
     onToday: function() { goToToday(); },
     onPeriodChange: function() { changePeriod(); },
@@ -87,12 +92,14 @@ function onSortSelectChange() {
   currentSortDir = 'asc';
   _updateSortUI();
   displayChits();
+  if (typeof _updateClearAllButton === 'function') _updateClearAllButton();
 }
 
 function toggleSortDir() {
   currentSortDir = currentSortDir === 'asc' ? 'desc' : 'asc';
   _updateSortUI();
   displayChits();
+  if (typeof _updateClearAllButton === 'function') _updateClearAllButton();
 }
 
 function _updateSortUI() {
@@ -207,28 +214,7 @@ function _resetDefaultFilters() {
 }
 
 function _updateClearFiltersButton() {
-  var section = document.getElementById('section-clear-filters');
-  if (!section) return;
-  var hasStatusFilter = _getSelectedStatuses().length > 0;
-  var hasLabelFilter = _getSelectedLabels().length > 0;
-  var hasPriorityFilter = _getSelectedPriorities().length > 0;
-  var hasPeopleFilter = (window._sidebarPeopleSelection || []).length > 0;
-  var searchText = document.getElementById('search')?.value || '';
-  var showPinned = document.getElementById('show-pinned')?.checked ?? true;
-  var showArchived = document.getElementById('show-archived')?.checked ?? false;
-  var showUnmarked = document.getElementById('show-unmarked')?.checked ?? true;
-  var hidePastDue = document.getElementById('hide-past-due')?.checked ?? false;
-  var hideComplete = document.getElementById('hide-complete')?.checked ?? false;
-  var hideDeclined = document.getElementById('hide-declined')?.checked ?? false;
-  var highlightOverdue = document.getElementById('highlight-overdue')?.checked ?? true;
-  var highlightBlocked = document.getElementById('highlight-blocked')?.checked ?? true;
-  var hasSharingFilter = (document.getElementById('filter-shared-with-me')?.checked ?? false)
-    || (document.getElementById('filter-shared-by-me')?.checked ?? false);
-  var isDefault = !hasStatusFilter && !hasLabelFilter && !hasPriorityFilter && !hasPeopleFilter
-    && !searchText && showPinned && !showArchived && showUnmarked && !hidePastDue && !hideComplete && !hideDeclined
-    && highlightOverdue && highlightBlocked && !currentSortField && !hasSharingFilter;
-  section.style.display = isDefault ? 'none' : '';
-
+  // Reset Defaults button visibility (now inside the filters section)
   var resetBtn = document.getElementById('reset-defaults-btn');
   if (resetBtn) {
     var tabKey = currentTab.toLowerCase();
