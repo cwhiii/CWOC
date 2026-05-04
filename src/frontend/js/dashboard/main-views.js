@@ -303,9 +303,9 @@ function _buildChitHeader(chit, titleHtml, settings, opts) {
     right.appendChild(s);
   }
 
-  if (chit.start_datetime) addMeta(`Start: ${formatDate(new Date(chit.start_datetime))}`, 'start');
-  if (chit.modified_datetime) addMeta(`Updated: ${formatDate(new Date(chit.modified_datetime))}`, 'updated');
-  if (chit.created_datetime) addMeta(`Created: ${formatDate(new Date(chit.created_datetime))}`, 'created');
+  if (chit.start_datetime && !chit.email_message_id && !chit.email_status) addMeta(`Start: ${formatDate(new Date(chit.start_datetime))}`, 'start');
+  if (chit.modified_datetime && !chit.email_message_id && !chit.email_status) addMeta(`Updated: ${formatDate(new Date(chit.modified_datetime))}`, 'updated');
+  if (chit.created_datetime && !chit.email_message_id && !chit.email_status) addMeta(`Created: ${formatDate(new Date(chit.created_datetime))}`, 'created');
   const tags = (chit.tags || []).filter(t => !isSystemTag(t));
   if (tags.length > 0) {
     tags.forEach(tagName => {

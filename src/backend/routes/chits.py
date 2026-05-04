@@ -186,6 +186,7 @@ def search_chits(request: Request, q: Optional[str] = Query(None)):
                 "location", "color",
                 "start_datetime", "end_datetime", "due_datetime",
                 "created_datetime", "modified_datetime",
+                "email_from", "email_subject", "email_body_text",
             ]:
                 value = chit.get(field_name)
                 if value and query_lower in str(value).lower():

@@ -451,27 +451,36 @@ function _collectMapSettings() {
 
 /** Populate email account form fields from loaded settings */
 function _loadEmailAccountSettings(settings) {
-  var acct = settings.email_account;
-  if (!acct || typeof acct !== 'object') return;
-  var el;
-  el = document.getElementById('emailAccountEmail');
-  if (el) el.value = acct.email || '';
-  el = document.getElementById('emailAccountDisplayName');
-  if (el) el.value = acct.display_name || '';
-  el = document.getElementById('emailAccountImapHost');
-  if (el && acct.imap_host) el.value = acct.imap_host;
-  el = document.getElementById('emailAccountImapPort');
-  if (el && acct.imap_port != null) el.value = acct.imap_port;
-  el = document.getElementById('emailAccountSmtpHost');
-  if (el && acct.smtp_host) el.value = acct.smtp_host;
-  el = document.getElementById('emailAccountSmtpPort');
-  if (el && acct.smtp_port != null) el.value = acct.smtp_port;
-  el = document.getElementById('emailAccountUsername');
-  if (el) el.value = acct.username || '';
-  // Password is never sent back from the server — leave the field empty.
-  // The placeholder tells the user a password is saved.
-  el = document.getElementById('emailAccountPassword');
-  if (el && acct.password_encrypted) el.placeholder = '••••••••  (saved)';
+  try {
+    var acct = settings.email_account;
+    if (!acct || typeof acct !== 'object') return;
+    var el;
+    el = document.getElementById('emailAccountEmail');
+    if (el) el.value = acct.email || '';
+    el = document.getElementById('emailAccountDisplayName');
+    if (el) el.value = acct.display_name || '';
+    el = document.getElementById('emailAccountImapHost');
+    if (el && acct.imap_host) el.value = acct.imap_host;
+    el = document.getElementById('emailAccountImapPort');
+    if (el && acct.imap_port != null) el.value = acct.imap_port;
+    el = document.getElementById('emailAccountSmtpHost');
+    if (el && acct.smtp_host) el.value = acct.smtp_host;
+    el = document.getElementById('emailAccountSmtpPort');
+    if (el && acct.smtp_port != null) el.value = acct.smtp_port;
+    el = document.getElementById('emailAccountUsername');
+    if (el) el.value = acct.username || '';
+    // Password is never sent back from the server — leave the field empty.
+    // The placeholder tells the user a password is saved.
+    el = document.getElementById('emailAccountPassword');
+    if (el && acct.password_encrypted) el.placeholder = '••••••••  (saved)';
+    // Sync settings
+    el = document.getElementById('emailMaxPull');
+    if (el) el.value = acct.max_pull || 50;
+    el = document.getElementById('emailCheckInterval');
+    if (el) el.value = acct.check_interval || 'manual';
+  } catch (e) {
+    console.error('[Settings] Error loading email account settings:', e);
+  }
 }
 
 /** Collect email account form fields into a JSON object for the save payload */
@@ -488,6 +497,8 @@ function _collectEmailAccountSettings() {
     smtp_host: ((document.getElementById('emailAccountSmtpHost') || {}).value || 'smtp.gmail.com').trim(),
     smtp_port: parseInt((document.getElementById('emailAccountSmtpPort') || {}).value, 10) || 587,
     username: ((document.getElementById('emailAccountUsername') || {}).value || '').trim(),
+    max_pull: parseInt((document.getElementById('emailMaxPull') || {}).value, 10) || 50,
+    check_interval: ((document.getElementById('emailCheckInterval') || {}).value || 'manual'),
   };
   // Only include password if the user typed a new one (non-empty field)
   if (pw) obj.password = pw;
@@ -3907,6 +3918,10 @@ function toggleTailscaleEnabled() {
 
   var isVisible = body.style.display !== 'none';
   body.style.display = isVisible ? 'none' : '';
+
+  // Keep the hidden checkbox in sync so _tsApplyEnabledState doesn't fight us
+  var checkbox = document.getElementById('tailscale-enabled');
+  if (checkbox) checkbox.checked = !isVisible;
 
   if (!isVisible) {
     // Expanding — refresh status

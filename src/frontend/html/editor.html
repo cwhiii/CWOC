@@ -975,7 +975,7 @@
                         <div class="zone-header" onclick="cwocToggleZone(event, 'emailSection', 'emailContent')">
                             <span class="zone-toggle-icon">🔽</span>
                             <span class="zone-title">✉️ Email</span>
-                            <button class="expand-btn" onclick="event.stopPropagation(); cwocExpandZone('emailSection', 'emailContent')" title="Expand email zone">⤢</button>
+                            <button class="expand-btn" onclick="event.stopPropagation(); _openEmailExpandModal()" title="Expand email zone">⤢</button>
                             <button class="zone-button" id="emailSendBtn" style="display:none;" onclick="event.stopPropagation(); _emailSend()">Send</button>
                             <button class="zone-button" id="emailReplyBtn" style="display:none;" onclick="event.stopPropagation(); _emailReply()">Reply</button>
                             <button class="zone-button" id="emailForwardBtn" style="display:none;" onclick="event.stopPropagation(); _emailForward()">Forward</button>

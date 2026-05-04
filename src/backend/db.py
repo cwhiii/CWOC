@@ -87,6 +87,20 @@ def compute_system_tags(chit) -> List[str]:
         system_tags.append("CWOC_System/Notes")
     if getattr(chit, 'email_message_id', None) or getattr(chit, 'email_status', None):
         system_tags.append("CWOC_System/Email")
+        # Add email folder sub-tag
+        email_folder = getattr(chit, 'email_folder', None)
+        if email_folder == 'inbox':
+            system_tags.append("CWOC_System/Email/Inbox")
+        elif email_folder == 'sent':
+            system_tags.append("CWOC_System/Email/Sent")
+        elif email_folder == 'drafts':
+            system_tags.append("CWOC_System/Email/Drafts")
+        elif email_folder == 'trash':
+            system_tags.append("CWOC_System/Email/Trash")
+        # Add email status sub-tag for drafts without a folder yet
+        email_status = getattr(chit, 'email_status', None)
+        if email_status == 'draft' and email_folder != 'drafts':
+            system_tags.append("CWOC_System/Email/Drafts")
     # Habit auto-tags
     if getattr(chit, 'habit', False):
         system_tags.append("Habits")

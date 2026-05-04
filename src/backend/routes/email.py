@@ -904,9 +904,12 @@ def email_sync(request: Request):
                 detail=f"Error fetching messages: {str(e)}",
             )
 
-        # Parse and store each message
+        # Parse and store each message (respect max_pull limit)
+        max_pull = int(account.get("max_pull", 50) or 50)
         new_count = 0
         for raw_bytes, flags_bytes in messages:
+            if new_count >= max_pull:
+                break
             try:
                 parsed = _parse_email_message(raw_bytes)
 

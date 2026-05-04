@@ -18,6 +18,7 @@ from src.backend.models import Settings
 from src.backend.routes.audit import (
     insert_audit_entry, compute_audit_diff, get_actor_from_request, _run_auto_prune,
 )
+from src.backend.routes.email import _encrypt_password
 
 
 logger = logging.getLogger(__name__)
@@ -114,6 +115,27 @@ def save_settings(settings: Settings, request: Request):
         if settings.email_account is None and old_settings_dict:
             preserved_email_account = old_settings_dict.get("email_account")
 
+        # If email_account is provided, encrypt the password before storing
+        _final_email_account = preserved_email_account
+        if settings.email_account is not None:
+            try:
+                import json as _json
+                acct = _json.loads(settings.email_account) if isinstance(settings.email_account, str) else settings.email_account
+                if isinstance(acct, dict) and acct.get("password"):
+                    # Encrypt plaintext password → password_encrypted, remove plaintext
+                    acct["password_encrypted"] = _encrypt_password(acct["password"])
+                    del acct["password"]
+                elif isinstance(acct, dict) and not acct.get("password") and not acct.get("password_encrypted"):
+                    # No new password provided — preserve the old encrypted password
+                    if old_settings_dict and old_settings_dict.get("email_account"):
+                        old_acct = deserialize_json_field(old_settings_dict["email_account"])
+                        if isinstance(old_acct, dict) and old_acct.get("password_encrypted"):
+                            acct["password_encrypted"] = old_acct["password_encrypted"]
+                _final_email_account = serialize_json_field(acct) if isinstance(acct, dict) else settings.email_account
+            except Exception as e:
+                logger.error(f"Error processing email_account password: {str(e)}")
+                _final_email_account = settings.email_account
+
         new_settings_dict = {
             "user_id": settings.user_id,
             "time_format": settings.time_format,
@@ -153,7 +175,7 @@ def save_settings(settings: Settings, request: Request):
             "map_default_lon": settings.map_default_lon,
             "map_default_zoom": settings.map_default_zoom,
             "map_auto_zoom": settings.map_auto_zoom or "1",
-            "email_account": preserved_email_account if settings.email_account is None else settings.email_account,
+            "email_account": _final_email_account,
         }
 
         cursor.execute(

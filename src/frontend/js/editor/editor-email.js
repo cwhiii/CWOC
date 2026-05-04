@@ -130,9 +130,9 @@ function getEmailData() {
   var subject = titleEl ? titleEl.value.trim() : '';
 
   var data = {
-    email_to: toArr,
-    email_cc: ccArr,
-    email_bcc: bccArr,
+    email_to: JSON.stringify(toArr),
+    email_cc: JSON.stringify(ccArr),
+    email_bcc: JSON.stringify(bccArr),
     email_body_text: bodyVal,
     email_subject: subject
   };
@@ -189,12 +189,11 @@ async function _emailReply() {
   var quotedBody = separator + originalBody;
 
   var replyChit = {
-    id: generateUniqueId(),
     title: subject,
     email_subject: subject,
-    email_to: original.email_from ? [original.email_from] : [],
-    email_cc: [],
-    email_bcc: [],
+    email_to: JSON.stringify(original.email_from ? [original.email_from] : []),
+    email_cc: JSON.stringify([]),
+    email_bcc: JSON.stringify([]),
     email_body_text: quotedBody,
     email_in_reply_to: original.email_message_id || null,
     email_references: original.email_references
@@ -202,7 +201,7 @@ async function _emailReply() {
       : (original.email_message_id || null),
     email_status: 'draft',
     email_folder: 'drafts',
-    email_from: null, // Will be set by backend from account config
+    email_from: null,
     tags: []
   };
 
@@ -251,12 +250,11 @@ async function _emailForward() {
   var quotedBody = separator + originalBody;
 
   var forwardChit = {
-    id: generateUniqueId(),
     title: subject,
     email_subject: subject,
-    email_to: [],
-    email_cc: [],
-    email_bcc: [],
+    email_to: JSON.stringify([]),
+    email_cc: JSON.stringify([]),
+    email_bcc: JSON.stringify([]),
     email_body_text: quotedBody,
     email_status: 'draft',
     email_folder: 'drafts',
@@ -357,4 +355,59 @@ function _setEmailZoneReadOnly(readOnly) {
   if (ccEl) { ccEl.disabled = readOnly; ccEl.readOnly = readOnly; }
   if (bccEl) { bccEl.disabled = readOnly; bccEl.readOnly = readOnly; }
   if (bodyEl) { bodyEl.disabled = readOnly; bodyEl.readOnly = readOnly; }
+}
+
+/**
+ * Open a fullscreen modal for the email body (expand button).
+ */
+function _openEmailExpandModal() {
+  // Remove existing modal if any
+  var existing = document.getElementById('emailExpandModal');
+  if (existing) existing.remove();
+
+  var bodyEl = document.getElementById('emailBody');
+  var bodyVal = bodyEl ? bodyEl.value : '';
+  var isReadOnly = bodyEl ? bodyEl.readOnly : false;
+
+  var overlay = document.createElement('div');
+  overlay.id = 'emailExpandModal';
+  overlay.className = 'modal';
+  overlay.style.display = 'flex';
+  overlay.innerHTML =
+    '<div class="modal-content" style="max-width:95vw;width:800px;min-height:70vh;display:flex;flex-direction:column;">' +
+      '<h3 style="margin:0 0 10px;">✉️ Email Body</h3>' +
+      '<textarea id="emailExpandBody" style="flex:1;min-height:400px;width:100%;box-sizing:border-box;font-family:Lora,Georgia,serif;font-size:14px;line-height:1.6;padding:10px;border:1px inset #c4a882;border-radius:4px;resize:none;"' +
+        (isReadOnly ? ' readonly disabled' : '') +
+      '>' + _escapeHtmlAttr(bodyVal) + '</textarea>' +
+      '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px;">' +
+        (isReadOnly ? '' : '<button class="zone-button" onclick="_closeEmailExpandModal(true)">Save</button>') +
+        '<button class="zone-button" onclick="_closeEmailExpandModal(false)">Close</button>' +
+      '</div>' +
+    '</div>';
+
+  document.body.appendChild(overlay);
+}
+
+/**
+ * Close the email expand modal.
+ * @param {boolean} save — if true, copy modal text back to the main textarea
+ */
+function _closeEmailExpandModal(save) {
+  var modal = document.getElementById('emailExpandModal');
+  if (!modal) return;
+  if (save) {
+    var expandBody = document.getElementById('emailExpandBody');
+    var bodyEl = document.getElementById('emailBody');
+    if (expandBody && bodyEl) {
+      bodyEl.value = expandBody.value;
+      setSaveButtonUnsaved();
+    }
+  }
+  modal.remove();
+}
+
+/** Escape text for safe insertion into HTML attribute/textarea content */
+function _escapeHtmlAttr(str) {
+  if (!str) return '';
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
