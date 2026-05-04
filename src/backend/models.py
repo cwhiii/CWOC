@@ -62,6 +62,8 @@ class Settings(BaseModel):
     map_default_zoom: Optional[str] = None   # Default map zoom level (1–18), e.g. "4"
     map_auto_zoom: Optional[str] = "1"       # "1" = auto-zoom to markers, "0" = use custom center/zoom
     email_account: Optional[str] = None      # JSON string: {email, display_name, imap_host, imap_port, smtp_host, smtp_port, username, password_encrypted}
+    attachment_max_size_mb: Optional[str] = "10"  # Max attachment file size in MB
+    attachment_max_storage_mb: Optional[str] = "500"  # Max total attachment storage per user in MB (0 = unlimited)
 
 class Chit(BaseModel):
     id: Optional[str] = None
@@ -123,6 +125,8 @@ class Chit(BaseModel):
     email_read: Optional[bool] = None            # Read/unread state
     email_in_reply_to: Optional[str] = None      # In-Reply-To Message-ID
     email_references: Optional[str] = None       # References header (space-separated Message-IDs)
+    email_body_html: Optional[str] = None        # HTML body content for rich rendering
+    attachments: Optional[str] = None            # JSON array of {id, filename, size, mime_type, uploaded_at}
 
 class MultiValueEntry(BaseModel):
     label: Optional[str] = None    # "Work", "Home", "Mobile", custom

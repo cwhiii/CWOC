@@ -1364,3 +1364,154 @@ def migrate_add_email_fields():
     finally:
         if conn:
             conn.close()
+
+
+# ── Attachments: migration ────────────────────────────────────────────────
+
+def migrate_add_attachments():
+    """Add attachments TEXT column to chits table and attachment_max_size_mb to settings.
+
+    The attachments column stores a JSON array of attachment metadata objects:
+    [{id, filename, size, mime_type, uploaded_at}]
+
+    Fully idempotent — checks column existence before adding.
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        # ── chits table ──────────────────────────────────────────────────
+        cursor.execute("PRAGMA table_info(chits)")
+        chit_cols = {row[1] for row in cursor.fetchall()}
+
+        if "attachments" not in chit_cols:
+            cursor.execute("ALTER TABLE chits ADD COLUMN attachments TEXT")
+            logger.info("Added attachments column to chits table")
+
+        # ── settings table ───────────────────────────────────────────────
+        cursor.execute("PRAGMA table_info(settings)")
+        settings_cols = {row[1] for row in cursor.fetchall()}
+
+        if "attachment_max_size_mb" not in settings_cols:
+            cursor.execute("ALTER TABLE settings ADD COLUMN attachment_max_size_mb TEXT DEFAULT '10'")
+            logger.info("Added attachment_max_size_mb column to settings table")
+
+        if "attachment_max_storage_mb" not in settings_cols:
+            cursor.execute("ALTER TABLE settings ADD COLUMN attachment_max_storage_mb TEXT DEFAULT '500'")
+            logger.info("Added attachment_max_storage_mb column to settings table")
+
+        conn.commit()
+        logger.info("Attachments migration complete")
+    except Exception as e:
+        logger.error(f"Error in migrate_add_attachments: {str(e)}")
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+
+# ── HTML Email Body: migration ────────────────────────────────────────────
+
+def migrate_add_email_body_html():
+    """Add email_body_html TEXT column to chits table.
+
+    Stores the HTML version of email bodies for rich rendering.
+
+    Fully idempotent — checks column existence before adding.
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        cursor.execute("PRAGMA table_info(chits)")
+        chit_cols = {row[1] for row in cursor.fetchall()}
+
+        if "email_body_html" not in chit_cols:
+            cursor.execute("ALTER TABLE chits ADD COLUMN email_body_html TEXT")
+            logger.info("Added email_body_html column to chits table")
+
+        conn.commit()
+        logger.info("Email body HTML migration complete")
+    except Exception as e:
+        logger.error(f"Error in migrate_add_email_body_html: {str(e)}")
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+
+# ── FTS5 Full-Text Search: migration ─────────────────────────────────────
+
+def migrate_add_fts5():
+    """Create FTS5 virtual table and triggers for full-text search on chits.
+
+    Creates chits_fts virtual table indexing title, note, email_body_text,
+    and email_subject. Adds INSERT/UPDATE/DELETE triggers to keep the FTS
+    index in sync. Rebuilds the index from existing data.
+
+    Fully idempotent — checks table existence before creating.
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        # Check if FTS table already exists
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='chits_fts'")
+        if cursor.fetchone():
+            logger.info("chits_fts table already exists, skipping FTS5 migration")
+            conn.close()
+            return
+
+        # Create FTS5 virtual table
+        cursor.execute("""
+            CREATE VIRTUAL TABLE IF NOT EXISTS chits_fts USING fts5(
+                title, note, email_body_text, email_subject,
+                content=chits, content_rowid=rowid
+            )
+        """)
+        logger.info("Created chits_fts FTS5 virtual table")
+
+        # Create triggers to keep FTS in sync
+        # INSERT trigger
+        cursor.execute("""
+            CREATE TRIGGER IF NOT EXISTS chits_fts_insert AFTER INSERT ON chits BEGIN
+                INSERT INTO chits_fts(rowid, title, note, email_body_text, email_subject)
+                VALUES (new.rowid, new.title, new.note, new.email_body_text, new.email_subject);
+            END
+        """)
+
+        # DELETE trigger
+        cursor.execute("""
+            CREATE TRIGGER IF NOT EXISTS chits_fts_delete AFTER DELETE ON chits BEGIN
+                INSERT INTO chits_fts(chits_fts, rowid, title, note, email_body_text, email_subject)
+                VALUES ('delete', old.rowid, old.title, old.note, old.email_body_text, old.email_subject);
+            END
+        """)
+
+        # UPDATE trigger
+        cursor.execute("""
+            CREATE TRIGGER IF NOT EXISTS chits_fts_update AFTER UPDATE ON chits BEGIN
+                INSERT INTO chits_fts(chits_fts, rowid, title, note, email_body_text, email_subject)
+                VALUES ('delete', old.rowid, old.title, old.note, old.email_body_text, old.email_subject);
+                INSERT INTO chits_fts(rowid, title, note, email_body_text, email_subject)
+                VALUES (new.rowid, new.title, new.note, new.email_body_text, new.email_subject);
+            END
+        """)
+        logger.info("Created FTS5 sync triggers")
+
+        # Rebuild the FTS index from existing data
+        cursor.execute("INSERT INTO chits_fts(chits_fts) VALUES('rebuild')")
+        logger.info("Rebuilt FTS5 index from existing data")
+
+        conn.commit()
+        logger.info("FTS5 migration complete")
+    except Exception as e:
+        logger.error(f"Error in migrate_add_fts5: {str(e)}")
+        # FTS5 may not be available in all SQLite builds — log but don't crash
+        logger.warning("FTS5 migration failed — full-text search will fall back to LIKE queries")
+    finally:
+        if conn:
+            conn.close()

@@ -315,6 +315,11 @@ async function buildChitObject() {
     }
   }
 
+  // Include attachments data
+  if (typeof getAttachmentsData === 'function') {
+    chit.attachments = getAttachmentsData();
+  }
+
   return chit;
 }
 

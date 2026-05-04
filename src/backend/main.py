@@ -112,6 +112,9 @@ from src.backend.migrations import (
     migrate_add_map_settings,
     migrate_add_contact_dates,
     migrate_add_email_fields,
+    migrate_add_attachments,
+    migrate_add_email_body_html,
+    migrate_add_fts5,
 )
 
 # Initialize database and run all migrations (same order as before)
@@ -155,6 +158,9 @@ migrate_add_running_timers()
 migrate_add_map_settings()
 migrate_add_contact_dates()
 migrate_add_email_fields()
+migrate_add_attachments()
+migrate_add_email_body_html()
+migrate_add_fts5()
 seed_version_info()
 
 # One-time cleanup: fix sent emails that still have CWOC_System/Email/Drafts tag
@@ -200,6 +206,7 @@ from src.backend.routes.push import push_router
 from src.backend.routes.ntfy import ntfy_router
 from src.backend.routes.ics_import import router as ics_import_router
 from src.backend.routes.email import email_router
+from src.backend.routes.attachments import attachments_router
 
 app.include_router(auth_router)
 app.include_router(users_router)
@@ -216,6 +223,7 @@ app.include_router(network_access_router)
 app.include_router(push_router)
 app.include_router(ics_import_router)
 app.include_router(email_router)
+app.include_router(attachments_router)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -280,6 +288,13 @@ app.mount("/data/contacts", StaticFiles(directory="/app/data/contacts"), name="d
 
 # Serve user profile pictures from data/users/
 app.mount("/data/users", StaticFiles(directory="/app/data/users"), name="data_users")
+
+# Serve attachment files from data/attachments/
+try:
+    os.makedirs("/app/data/attachments", exist_ok=True)
+    app.mount("/data/attachments", StaticFiles(directory="/app/data/attachments"), name="data_attachments")
+except Exception:
+    pass  # Directory may not exist in dev environment
 
 # Serve PWA files (pwa-register.js, offline.html, etc.) from src/pwa/
 app.mount("/pwa", StaticFiles(directory="/app/src/pwa"), name="pwa")

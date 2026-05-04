@@ -134,16 +134,55 @@ def get_all_chits(request: Request):
 
 @router.get("/api/chits/search")
 def search_chits(request: Request, q: Optional[str] = Query(None)):
-    """Global search across all chit fields. Returns matching chits with matched field names."""
+    """Global search across all chit fields. Returns matching chits with matched field names.
+
+    Uses FTS5 full-text search when available for relevance-ranked results,
+    falling back to LIKE-based search if FTS5 is not available.
+    """
     if not q or not q.strip():
         return []
 
-    query_lower = q.strip().lower()
+    query_str = q.strip()
+    query_lower = query_str.lower()
     conn = None
     try:
         user_id = request.state.user_id
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
+
+        # Try FTS5 search first
+        fts_ids = None
+        try:
+            # Check if FTS5 table exists
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='chits_fts'")
+            if cursor.fetchone():
+                # Escape FTS5 special characters and build query
+                fts_query = query_str.replace('"', '""')
+                cursor.execute(
+                    """SELECT rowid, rank FROM chits_fts
+                       WHERE chits_fts MATCH ?
+                       ORDER BY rank""",
+                    (f'"{fts_query}"',),
+                )
+                fts_rows = cursor.fetchall()
+                if fts_rows:
+                    # Get the chit IDs from rowids
+                    rowid_rank = {row[0]: row[1] for row in fts_rows}
+                    placeholders = ",".join("?" for _ in rowid_rank)
+                    cursor.execute(
+                        f"SELECT rowid, id FROM chits WHERE rowid IN ({placeholders}) "
+                        f"AND (deleted = 0 OR deleted IS NULL) AND owner_id = ?",
+                        list(rowid_rank.keys()) + [user_id],
+                    )
+                    fts_ids = {}
+                    for row in cursor.fetchall():
+                        fts_ids[row[1]] = rowid_rank.get(row[0], 0)
+                    logger.debug(f"FTS5 search found {len(fts_ids)} results for '{query_str}'")
+        except Exception as fts_err:
+            logger.debug(f"FTS5 search unavailable, falling back to LIKE: {fts_err}")
+            fts_ids = None
+
+        # Fetch all non-deleted chits for this user (for field-level matching)
         cursor.execute("SELECT * FROM chits WHERE (deleted = 0 OR deleted IS NULL) AND owner_id = ?", (user_id,))
         results = []
 
@@ -179,6 +218,9 @@ def search_chits(request: Request, q: Optional[str] = Query(None)):
             chit["email_read"] = bool(chit.get("email_read")) if chit.get("email_read") is not None else None
 
             matched_fields = []
+
+            # If FTS5 found this chit, it's a match — determine which fields matched
+            is_fts_match = fts_ids is not None and chit["id"] in fts_ids
 
             # Simple string fields
             for field_name in [
@@ -231,8 +273,20 @@ def search_chits(request: Request, q: Optional[str] = Query(None)):
                         if "alerts" in matched_fields:
                             break
 
-            if matched_fields:
-                results.append({"chit": chit, "matched_fields": matched_fields})
+            # Include if matched by FTS5 or by field-level LIKE search
+            if matched_fields or is_fts_match:
+                if not matched_fields and is_fts_match:
+                    matched_fields = ["full_text"]
+                rank = fts_ids.get(chit["id"], 0) if fts_ids else 0
+                results.append({"chit": chit, "matched_fields": matched_fields, "_rank": rank})
+
+        # Sort by FTS5 rank (lower = more relevant) when available
+        if fts_ids is not None:
+            results.sort(key=lambda r: r.get("_rank", 0))
+
+        # Remove internal rank field before returning
+        for r in results:
+            r.pop("_rank", None)
 
         # Enrich with assigned_to_display_name
         _enrich_assigned_to_display_names(cursor, [r["chit"] for r in results])

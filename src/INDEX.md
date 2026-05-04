@@ -38,7 +38,7 @@ Package marker. No public exports.
 | `serve_icon_192()` | `GET /static/cwoc-icon-192.png` — Serve 192×192 PWA icon from `src/pwa/` |
 | `serve_icon_512()` | `GET /static/cwoc-icon-512.png` — Serve 512×512 PWA icon from `src/pwa/` |
 
-Registers all route modules (including `auth_router`, `users_router`, `sharing_router`, `notifications_router`, `network_access_router`, `push_router`, `ntfy_router`, and `email_router`), runs all migrations (including `migrate_add_multi_user()`, `migrate_add_sharing()`, `migrate_add_kiosk_users()`, `migrate_add_network_access()`, `migrate_add_notifications()`, `migrate_habits_overhaul()`, `migrate_habits_phase2()`, `migrate_add_push_subscriptions()`, `migrate_add_vapid_keys()`, `migrate_add_map_settings()`, `migrate_add_contact_dates()`, and `migrate_add_email_fields()`) and `init_db()` at import time, mounts `StaticFiles` for frontend, static, data, and PWA directories.
+Registers all route modules (including `auth_router`, `users_router`, `sharing_router`, `notifications_router`, `network_access_router`, `push_router`, `ntfy_router`, `email_router`, and `attachments_router`), runs all migrations (including `migrate_add_multi_user()`, `migrate_add_sharing()`, `migrate_add_kiosk_users()`, `migrate_add_network_access()`, `migrate_add_notifications()`, `migrate_habits_overhaul()`, `migrate_habits_phase2()`, `migrate_add_push_subscriptions()`, `migrate_add_vapid_keys()`, `migrate_add_map_settings()`, `migrate_add_contact_dates()`, `migrate_add_email_fields()`, `migrate_add_attachments()`, `migrate_add_email_body_html()`, and `migrate_add_fts5()`) and `init_db()` at import time, mounts `StaticFiles` for frontend, static, data, and PWA directories.
 
 ### 1.3 `src/backend/models.py` — Pydantic Models
 
@@ -120,6 +120,9 @@ All migrations run at startup. Each checks if the column/table already exists be
 | `migrate_add_map_settings()` | Add `map_default_lat` (TEXT), `map_default_lon` (TEXT), `map_default_zoom` (TEXT), `map_auto_zoom` (TEXT DEFAULT '1') columns to settings table for map start view configuration |
 | `migrate_add_contact_dates()` | Add `dates` (TEXT) column to contacts table for multi-value date entries (Birthday, Anniversary, etc.) stored as JSON |
 | `migrate_add_email_fields()` | Add 13 email columns to chits table: `email_message_id` (TEXT), `email_from` (TEXT), `email_to` (TEXT), `email_cc` (TEXT), `email_bcc` (TEXT), `email_subject` (TEXT), `email_body_text` (TEXT), `email_date` (TEXT), `email_folder` (TEXT), `email_status` (TEXT), `email_read` (BOOLEAN), `email_in_reply_to` (TEXT), `email_references` (TEXT); add `email_account` (TEXT) column to settings table. Uses column-existence-check pattern (`PRAGMA table_info` → check → `ALTER TABLE`) |
+| `migrate_add_attachments()` | Add `attachments` (TEXT) column to chits table for JSON array of attachment metadata; add `attachment_max_size_mb` (TEXT DEFAULT '10') column to settings table |
+| `migrate_add_email_body_html()` | Add `email_body_html` (TEXT) column to chits table for HTML email body rendering |
+| `migrate_add_fts5()` | Create `chits_fts` FTS5 virtual table indexing title, note, email_body_text, email_subject; add INSERT/UPDATE/DELETE triggers for sync; rebuild index from existing data. Gracefully handles missing FTS5 support |
 
 ### 1.6 `src/backend/serializers.py` — vCard & CSV
 
@@ -753,9 +756,11 @@ Provides IMAP sync, SMTP send, email parsing, password encryption, reply/forward
 | Function | Description |
 |----------|-------------|
 | `_decode_header_value(value)` | Decode an RFC 2047 encoded header value into a plain string |
-| `_parse_email_message(raw_bytes)` | Parse a raw RFC 2822 email message into a dict of chit-ready fields (From, To, Cc, Subject, Date, Message-ID, In-Reply-To, References, body text) |
+| `_parse_email_message(raw_bytes)` | Parse a raw RFC 2822 email message into a dict of chit-ready fields (From, To, Cc, Subject, Date, Message-ID, In-Reply-To, References, body text, body HTML) |
 | `_extract_text_from_message(msg)` | Walk MIME parts and extract the best plain-text body; prefers `text/plain`, falls back to stripping HTML tags from `text/html` |
+| `_extract_html_from_message(msg)` | Walk MIME parts and extract the HTML body if present; returns raw HTML string or empty string |
 | `_strip_html_tags(html)` | Remove HTML tags and decode common entities, returning plain text |
+| `_strip_email_prefixes(subject)` | Strip Re:/Fwd:/Fw: prefixes from a subject line for thread matching |
 
 **Chit creation from parsed email:**
 
@@ -791,7 +796,8 @@ Provides IMAP sync, SMTP send, email parsing, password encryption, reply/forward
 |-------|---------|-------------|
 | `POST /api/email/sync` | `email_sync(request)` | Fetch new messages from the configured IMAP server; returns `{new_count: int}`; handles IMAP errors with descriptive messages (401, 502, 504) |
 | `POST /api/email/send/{chit_id}` | `email_send(chit_id, request)` | Send a draft email chit via SMTP; on success updates `email_status` to "sent", `email_folder` to "sent", populates `email_message_id`; validates non-empty `email_to` (422 if empty); rejects non-draft chits (400) |
-| `PATCH /api/email/{chit_id}/read` | `email_mark_read(chit_id, request)` | Set `email_read` to true on the specified email chit |
+| `PATCH /api/email/{chit_id}/read` | `email_toggle_read(chit_id, request)` | Toggle `email_read` on the specified email chit; returns `{email_read: bool}` |
+| `GET /api/email/thread/{chit_id}` | `email_thread(chit_id, request)` | Find all related emails in a conversation thread by Message-ID references and normalized subject matching; returns list sorted by `email_date` ascending |
 | `POST /api/email/test-connection` | `email_test_connection(request)` | Test IMAP and SMTP connectivity with provided or saved credentials; returns `{imap: {success, message}, smtp: {success, message}}` |
 | `POST /api/email/backfill-estimate` | `email_backfill_estimate(request)` | Query IMAP for total message count and estimated storage size; returns `{message_count, estimated_mb}` |
 
@@ -800,6 +806,25 @@ Provides IMAP sync, SMTP send, email parsing, password encryption, reply/forward
 | Function | Description |
 |----------|-------------|
 | `_get_email_account(cursor, user_id)` | Load and return the `email_account` config for the given user; raises HTTPException(400) if no email account is configured |
+
+---
+
+### 1.36 `src/backend/routes/attachments.py` — Attachment Management Routes
+
+Provides upload, download, and delete endpoints for chit file attachments. Files are stored on disk at `/app/data/attachments/{chit_id}/{uuid}_{filename}`. Metadata is stored as a JSON array in the chit's `attachments` column.
+
+| Function | Description |
+|----------|-------------|
+| `_get_attachments_dir()` | Return the appropriate attachments directory for the current environment |
+| `_get_max_size_bytes(cursor, user_id)` | Load the max attachment size from settings (default 10 MB) |
+| `_load_attachments(cursor, chit_id)` | Load the attachments JSON array from a chit |
+| `_save_attachments(cursor, chit_id, attachments)` | Save the attachments JSON array back to the chit |
+
+| Route | Handler | Description |
+|-------|---------|-------------|
+| `POST /api/chits/{chit_id}/attachments` | `upload_attachment(chit_id, request, file)` | Upload a file attachment; validates size limit; stores file on disk and updates chit metadata |
+| `GET /api/chits/{chit_id}/attachments/{attachment_id}` | `download_attachment(chit_id, attachment_id, request)` | Download an attachment file by its ID |
+| `DELETE /api/chits/{chit_id}/attachments/{attachment_id}` | `delete_attachment(chit_id, attachment_id, request)` | Delete an attachment file and remove it from the chit's metadata |
 
 ---
 
@@ -1387,6 +1412,8 @@ Email tab view — renders the Email dashboard tab with inbox-style list view. L
 | `_emailEmptyState(container)` | Show empty state for the email tab with Compose and Check Mail buttons |
 | `_escHtml(str)` | Simple HTML escape helper |
 | `_showToast(msg, type)` | Simple toast helper — delegates to shared `showToast` if available |
+| `_toggleEmailReadStatus(chit, card)` | Toggle read/unread status via `PATCH /api/email/{id}/read` and update card visual state |
+| `_emailBulkToggleRead()` | Bulk toggle read/unread for all selected emails via PATCH |
 
 #### main-modals.js
 
@@ -1763,6 +1790,26 @@ Email zone: populate, collect, reply, forward, send. Handles the Email zone in t
 | `_emailForward()` | Create a forward draft chit via `POST /api/chits` and navigate to the editor; empty `email_to`, subject prefixed with "Fwd: " (no doubling), body quoted below separator |
 | `_emailSend()` | Send the current draft email via `POST /api/email/send/{id}`; validates non-empty To field; shows success/error toast; updates local state and UI to reflect sent status |
 | `_setEmailZoneReadOnly(readOnly)` | Toggle field editability for the email zone (To, Cc, Bcc, Body) — sets `disabled` and `readOnly` properties |
+| `_fetchEmailThread(chitId)` | Fetch the email thread for a chit via `GET /api/email/thread/{chit_id}` and render it below the body |
+| `_renderEmailThread(thread, currentId)` | Render the email thread section with sender, date, preview for each message; current email highlighted |
+| `_setupHtmlEmailView(htmlContent, bodyEl)` | Set up HTML email view with toggle button and sandboxed iframe using DOMPurify sanitization |
+| `_switchEmailView(mode)` | Switch between 'html' and 'text' views for email body rendering |
+| `_resizeEmailIframe(iframe)` | Auto-resize an iframe to fit its content height |
+
+#### editor-attachments.js
+
+Attachments zone: upload, list, download, delete. Handles the Attachments zone in the chit editor: populating from chit data, file upload via drag-drop or file picker, listing attached files with download/delete actions, and upload progress indication. Depends on: `shared-utils.js` (`cwocToast`), `editor-save.js` (`setSaveButtonUnsaved`). Loaded before: `editor-save.js`, `editor-init.js`.
+
+| Symbol | Description |
+|--------|-------------|
+| `_attachmentsData` | Module-level state — current attachments list (parsed from chit.attachments JSON) |
+| `initAttachmentsZone(chit)` | Initialize the attachments zone from chit data; parse attachments JSON, render list, wire upload |
+| `getAttachmentsData()` | Return current attachments data for save as JSON string, or null if empty |
+| `hasAttachmentData(chit)` | Check if a chit has attachment data (used by `applyZoneStates` for auto-expand) |
+| `_renderAttachmentsList()` | Render the list of attached files with icon, name, size, download link, and delete button |
+| `_wireAttachmentUpload()` | Wire up the file upload area (button click + drag-drop events) |
+| `_uploadFiles(files)` | Upload one or more files to the current chit via `POST /api/chits/{id}/attachments` |
+| `_deleteAttachment(attachmentId, filename)` | Delete an attachment via `DELETE /api/chits/{id}/attachments/{id}` with confirmation |
 
 #### editor-save.js
 
@@ -2533,6 +2580,18 @@ Email zone styles for the chit editor. Uses the parchment theme variables from `
 | Email Action Buttons | `#emailSendBtn` (info-blue), `#emailReplyBtn` / `#emailForwardBtn` (aged-brown) with hover states |
 | Responsive — Tablet (≤768px) | Reduced gap and font sizes for email fields |
 | Responsive — Mobile (≤480px) | Stacked column layout for email fields, full-width inputs, 16px font to prevent iOS zoom |
+| Email Thread Section (`.email-thread-*`) | Thread conversation view below email body: header, list, items with sender/date/preview, current-email highlight |
+| HTML Email Rendering (`.email-html-*`) | Toggle buttons for HTML/Text view, sandboxed iframe styling |
+
+#### editor-attachments.css
+Attachments zone styles for the chit editor. Uses the parchment theme variables from `shared-editor.css`. Load AFTER `shared-editor.css` and `editor.css`.
+
+| Section | Description |
+|---------|-------------|
+| Attachment List (`.attachment-item`) | Flex layout for icon, name, size, download/delete actions |
+| Upload Area (`.attachment-upload-area`) | Dashed border drop zone with drag-over highlight |
+| Upload Progress (`.attachment-progress`) | Pulsing animation for upload status |
+| Responsive — Mobile (≤480px) | Stacked layout for upload area |
 
 ### 3.4 Settings HTML — Network Access Block (`settings.html`)
 
@@ -2709,6 +2768,7 @@ All HTML pages include the following PWA `<head>` tags: `<link rel="manifest" hr
 <link rel="stylesheet" href="/frontend/css/shared/shared-editor.css" />
 <link rel="stylesheet" href="/frontend/css/editor/editor.css" />
 <link rel="stylesheet" href="/frontend/css/editor/editor-email.css" />
+<link rel="stylesheet" href="/frontend/css/editor/editor-attachments.css" />
 ```
 
 **CDN scripts (in `<head>`):**
@@ -2751,6 +2811,7 @@ All HTML pages include the following PWA `<head>` tags: `<link rel="manifest" hr
 <script src="/frontend/js/editor/editor-color.js"></script>
 <script src="/frontend/js/editor/editor-health.js"></script>
 <script src="/frontend/js/editor/editor-email.js"></script>
+<script src="/frontend/js/editor/editor-attachments.js"></script>
 <script src="/frontend/js/editor/editor-save.js"></script>
 <script src="/frontend/js/editor/editor-sharing.js"></script>
 <script src="/frontend/js/editor/editor-people.js"></script>
@@ -2829,10 +2890,10 @@ New frontend pages added for Maps View:
 ```
 src/backend/main.py
   ├── src.backend.db          (init_db, seed_version_info)
-  ├── src.backend.migrations  (all migrate_* functions, including migrate_add_multi_user, migrate_add_sharing, migrate_add_push_subscriptions, migrate_add_vapid_keys, migrate_add_email_fields)
+  ├── src.backend.migrations  (all migrate_* functions, including migrate_add_multi_user, migrate_add_sharing, migrate_add_push_subscriptions, migrate_add_vapid_keys, migrate_add_email_fields, migrate_add_attachments, migrate_add_email_body_html, migrate_add_fts5)
   ├── src.backend.middleware   (AuthMiddleware)
   ├── src.backend.weather     (start_weather_schedulers)
-  └── src.backend.routes.*    (all 13 route modules, including auth_router, users_router, sharing_router, notifications_router, network_access_router, push_router, ntfy_router, and email_router)
+  └── src.backend.routes.*    (all 14 route modules, including auth_router, users_router, sharing_router, notifications_router, network_access_router, push_router, ntfy_router, email_router, and attachments_router)
 
 src/backend/routes/chits.py
   ├── src.backend.db           (DB_PATH, serialize/deserialize, compute_system_tags, _build_export_envelope)
@@ -2884,6 +2945,9 @@ src/backend/routes/ntfy.py
 
 src/backend/routes/email.py
   └── src.backend.db           (DB_PATH, serialize_json_field, deserialize_json_field, compute_system_tags)
+
+src/backend/routes/attachments.py
+  └── src.backend.db           (DB_PATH, serialize_json_field, deserialize_json_field)
 
 src/backend/sharing.py
   └── src.backend.db           (DB_PATH, deserialize_json_field)
@@ -2998,7 +3062,8 @@ shared-auth.js            ← MUST load first (getCurrentUser, isAdmin, waitForA
                     editor-alerts.js      (alerts zone)
                     editor-color.js       (color zone)
                     editor-health.js      (health indicators zone)
-                    editor-email.js       (email zone — depends on shared-utils, shared-editor, editor-save)
+                    editor-email.js       (email zone — depends on shared-utils, shared-editor, editor-save; includes thread view and HTML rendering)
+                    editor-attachments.js (attachments zone — depends on shared-utils, editor-save)
                     editor-save.js        (save/exit logic)
                     editor-sharing.js     (sharing data-layer — uses shared-auth; provides _sharingUserList, getSharingData, hasSharingData for editor-people.js and editor-init.js)
                     editor-init.js        (entry point — calls init functions)

@@ -2011,6 +2011,17 @@ class SettingsManager {
 
     // Email account settings
     _loadEmailAccountSettings(this.settings);
+
+    // Attachment size limit
+    var attachSizeEl = document.getElementById('attachmentMaxSizeMb');
+    if (attachSizeEl && this.settings.attachment_max_size_mb) {
+      attachSizeEl.value = this.settings.attachment_max_size_mb;
+    }
+    // Attachment storage limit per user
+    var attachStorageEl = document.getElementById('attachmentMaxStorageMb');
+    if (attachStorageEl && this.settings.attachment_max_storage_mb) {
+      attachStorageEl.value = this.settings.attachment_max_storage_mb;
+    }
   }
 
   gatherSettings() {
@@ -2102,6 +2113,8 @@ class SettingsManager {
       kiosk_users: _gatherKioskTags(),
       ..._collectMapSettings(),
       email_account: (function() { var a = _collectEmailAccountSettings(); return a ? JSON.stringify(a) : null; })(),
+      attachment_max_size_mb: ((document.getElementById('attachmentMaxSizeMb') || {}).value || '10'),
+      attachment_max_storage_mb: ((document.getElementById('attachmentMaxStorageMb') || {}).value || '500'),
     };
   }
 

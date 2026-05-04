@@ -298,7 +298,18 @@ async function _deactivateEmailZone() {
   _updateEmailButtons('');
   _showEmailSaveButtons(false);
 
-  // Mark as unsaved
+  // Unpatch the CwocSaveSystem — restore original markUnsaved/markSaved
+  if (window._cwocSave && window._cwocSave._emailPatched) {
+    if (window._cwocSave._origMarkUnsaved) {
+      window._cwocSave.markUnsaved = window._cwocSave._origMarkUnsaved;
+    }
+    if (window._cwocSave._origMarkSaved) {
+      window._cwocSave.markSaved = window._cwocSave._origMarkSaved;
+    }
+    window._cwocSave._emailPatched = false;
+  }
+
+  // Mark as unsaved (now uses the restored original markUnsaved)
   if (typeof setSaveButtonUnsaved === 'function') setSaveButtonUnsaved();
 }
 
@@ -390,10 +401,10 @@ function _showEmailSaveButtons(isEmail) {
 
     // Patch the save system so markUnsaved keeps showing email buttons
     if (window._cwocSave && !window._cwocSave._emailPatched) {
-      var origMarkUnsaved = window._cwocSave.markUnsaved.bind(window._cwocSave);
-      var origMarkSaved = window._cwocSave.markSaved.bind(window._cwocSave);
+      window._cwocSave._origMarkUnsaved = window._cwocSave.markUnsaved.bind(window._cwocSave);
+      window._cwocSave._origMarkSaved = window._cwocSave.markSaved.bind(window._cwocSave);
       window._cwocSave.markUnsaved = function() {
-        origMarkUnsaved();
+        window._cwocSave._origMarkUnsaved();
         // Override: hide normal, show email
         if (saveStay) saveStay.style.display = 'none';
         if (saveExit) saveExit.style.display = 'none';
@@ -402,7 +413,7 @@ function _showEmailSaveButtons(isEmail) {
         if (saveSend) saveSend.style.display = '';
       };
       window._cwocSave.markSaved = function() {
-        origMarkSaved();
+        window._cwocSave._origMarkSaved();
         // Override: hide normal single button, keep email buttons
         if (saveBtn) saveBtn.style.display = 'none';
         if (saveDraft) saveDraft.style.display = '';
@@ -440,6 +451,8 @@ async function _emailSaveAndSend() {
  */
 function initEmailZone(chit) {
   _emailCurrentChit = chit;
+
+  console.log('[Email] email_body_html:', chit.email_body_html ? 'present (' + chit.email_body_html.length + ' chars)' : 'missing');
 
   var fromEl = document.getElementById('emailFrom');
   var toEl = document.getElementById('emailTo');
@@ -500,6 +513,12 @@ function initEmailZone(chit) {
     bodyEl.value = chit.email_body_text || '';
   }
 
+  // HTML email rendering: if email_body_html exists and this is a received email,
+  // show HTML/Text toggle and render HTML in a sandboxed iframe
+  if (chit.email_body_html && (chit.email_status === 'received' || chit.email_status === 'sent')) {
+    _setupHtmlEmailView(chit.email_body_html, bodyEl);
+  }
+
   var status = chit.email_status || '';
   var isEmailChit = !!(chit.email_message_id || status);
 
@@ -551,6 +570,11 @@ function initEmailZone(chit) {
   if (bccEl && bccEl.value.trim()) {
     if (bccRow) bccRow.style.display = '';
     if (showBccBtn) showBccBtn.style.display = 'none';
+  }
+
+  // Fetch and render email thread
+  if (chit.id && chit.email_message_id) {
+    _fetchEmailThread(chit.id);
   }
 }
 
@@ -613,6 +637,9 @@ function getEmailData() {
     if (_emailCurrentChit.email_references) data.email_references = _emailCurrentChit.email_references;
     if (_emailCurrentChit.email_read !== undefined && _emailCurrentChit.email_read !== null) {
       data.email_read = _emailCurrentChit.email_read;
+    }
+    if (_emailCurrentChit.email_body_html) {
+      data.email_body_html = _emailCurrentChit.email_body_html;
     }
   }
 
@@ -944,3 +971,234 @@ function _escapeHtmlAttr(str) {
 
 /** Alias for use in autocomplete dropdown rendering */
 var _escHtml = _escapeHtmlAttr;
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// HTML Email Rendering — sandboxed iframe with DOMPurify
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** Current view mode: 'html' or 'text' */
+var _emailViewMode = 'html';
+
+/**
+ * Set up HTML email view with toggle button and sandboxed iframe.
+ * @param {string} htmlContent — the raw HTML body
+ * @param {HTMLElement} bodyEl — the plain-text textarea element
+ */
+function _setupHtmlEmailView(htmlContent, bodyEl) {
+  if (!bodyEl || !htmlContent) return;
+
+  console.log('[Email HTML] Setting up HTML view, content length:', htmlContent.length);
+  console.log('[Email HTML] DOMPurify available:', typeof DOMPurify !== 'undefined');
+
+  var bodyField = bodyEl.closest('.email-body-field') || bodyEl.parentNode;
+  if (!bodyField) return;
+
+  // Create toggle row
+  var toggleRow = document.createElement('div');
+  toggleRow.className = 'email-html-toggle-row';
+  toggleRow.id = 'emailHtmlToggleRow';
+
+  var htmlBtn = document.createElement('button');
+  htmlBtn.type = 'button';
+  htmlBtn.className = 'email-html-toggle-btn active';
+  htmlBtn.id = 'emailHtmlBtn';
+  htmlBtn.textContent = 'HTML';
+  htmlBtn.addEventListener('click', function() { _switchEmailView('html'); });
+
+  var textBtn = document.createElement('button');
+  textBtn.type = 'button';
+  textBtn.className = 'email-html-toggle-btn';
+  textBtn.id = 'emailTextBtn';
+  textBtn.textContent = 'Text';
+  textBtn.addEventListener('click', function() { _switchEmailView('text'); });
+
+  toggleRow.appendChild(htmlBtn);
+  toggleRow.appendChild(textBtn);
+
+  // Insert toggle row before the body label
+  var bodyLabel = bodyField.querySelector('label');
+  if (bodyLabel) {
+    bodyLabel.parentNode.insertBefore(toggleRow, bodyLabel.nextSibling);
+  } else {
+    bodyField.insertBefore(toggleRow, bodyField.firstChild);
+  }
+
+  // Create iframe for HTML rendering
+  var iframe = document.createElement('iframe');
+  iframe.id = 'emailHtmlIframe';
+  iframe.className = 'email-html-iframe';
+  iframe.sandbox = 'allow-same-origin';
+  iframe.setAttribute('frameborder', '0');
+
+  // Sanitize HTML with DOMPurify before rendering
+  var sanitized = htmlContent;
+  if (typeof DOMPurify !== 'undefined') {
+    sanitized = DOMPurify.sanitize(htmlContent, {
+      ALLOW_TAGS: ['html', 'head', 'body', 'div', 'span', 'p', 'br', 'hr',
+        'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'a', 'img', 'table', 'thead',
+        'tbody', 'tr', 'td', 'th', 'ul', 'ol', 'li', 'b', 'i', 'u', 'em',
+        'strong', 'blockquote', 'pre', 'code', 'style', 'font', 'center',
+        'small', 'big', 'sub', 'sup', 'dl', 'dt', 'dd', 'abbr', 'cite',
+        'del', 'ins', 'mark', 's', 'strike', 'caption', 'col', 'colgroup',
+        'details', 'summary', 'figure', 'figcaption', 'header', 'footer',
+        'main', 'nav', 'section', 'article', 'aside', 'address'],
+      ALLOW_ATTR: ['href', 'src', 'alt', 'title', 'class', 'id', 'style',
+        'width', 'height', 'border', 'cellpadding', 'cellspacing', 'align',
+        'valign', 'bgcolor', 'color', 'face', 'size', 'target', 'colspan',
+        'rowspan', 'dir', 'lang', 'role', 'aria-label', 'aria-hidden',
+        'data-x', 'name'],
+      FORBID_TAGS: ['script', 'iframe', 'object', 'embed', 'form', 'input',
+        'button', 'select', 'textarea'],
+      ADD_ATTR: ['target'],
+    });
+  }
+
+  iframe.srcdoc = sanitized;
+
+  // Insert iframe after the textarea
+  bodyEl.parentNode.insertBefore(iframe, bodyEl.nextSibling);
+
+  // Auto-resize iframe based on content
+  iframe.addEventListener('load', function() {
+    _resizeEmailIframe(iframe);
+  });
+
+  // Default: show HTML, hide textarea
+  bodyEl.style.display = 'none';
+  _emailViewMode = 'html';
+}
+
+/**
+ * Switch between HTML and Text views.
+ * @param {string} mode — 'html' or 'text'
+ */
+function _switchEmailView(mode) {
+  var bodyEl = document.getElementById('emailBody');
+  var iframe = document.getElementById('emailHtmlIframe');
+  var htmlBtn = document.getElementById('emailHtmlBtn');
+  var textBtn = document.getElementById('emailTextBtn');
+
+  if (mode === 'html' && iframe) {
+    if (bodyEl) bodyEl.style.display = 'none';
+    iframe.style.display = '';
+    if (htmlBtn) htmlBtn.classList.add('active');
+    if (textBtn) textBtn.classList.remove('active');
+  } else {
+    if (bodyEl) bodyEl.style.display = '';
+    if (iframe) iframe.style.display = 'none';
+    if (htmlBtn) htmlBtn.classList.remove('active');
+    if (textBtn) textBtn.classList.add('active');
+  }
+  _emailViewMode = mode;
+}
+
+/**
+ * Auto-resize an iframe to fit its content height.
+ * @param {HTMLIFrameElement} iframe
+ */
+function _resizeEmailIframe(iframe) {
+  try {
+    var doc = iframe.contentDocument || iframe.contentWindow.document;
+    if (doc && doc.body) {
+      var height = doc.body.scrollHeight + 20;
+      iframe.style.height = Math.max(200, Math.min(height, 800)) + 'px';
+    }
+  } catch (e) {
+    // Cross-origin restriction — use default height
+    iframe.style.height = '400px';
+  }
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Email Thread — conversation view below the body
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Fetch the email thread for a chit and render it below the body textarea.
+ * @param {string} chitId — the current chit's ID
+ */
+async function _fetchEmailThread(chitId) {
+  try {
+    var resp = await fetch('/api/email/thread/' + encodeURIComponent(chitId));
+    if (!resp.ok) return;
+    var thread = await resp.json();
+
+    // Only show thread section if there are related emails (more than just the current one)
+    if (!thread || thread.length <= 1) return;
+
+    _renderEmailThread(thread, chitId);
+  } catch (err) {
+    console.error('[Email Thread] Error fetching thread:', err);
+  }
+}
+
+/**
+ * Render the email thread section below the email body.
+ * @param {Array} thread — array of thread entries from the API
+ * @param {string} currentId — the current chit's ID (highlighted)
+ */
+function _renderEmailThread(thread, currentId) {
+  // Remove existing thread section if any
+  var existing = document.getElementById('emailThreadSection');
+  if (existing) existing.remove();
+
+  var emailContent = document.getElementById('emailContent');
+  if (!emailContent) return;
+
+  var section = document.createElement('div');
+  section.id = 'emailThreadSection';
+  section.className = 'email-thread-section';
+
+  var header = document.createElement('div');
+  header.className = 'email-thread-header';
+  header.innerHTML = '<span class="email-thread-icon">🧵</span> Thread (' + thread.length + ' messages)';
+  section.appendChild(header);
+
+  var list = document.createElement('div');
+  list.className = 'email-thread-list';
+
+  thread.forEach(function(entry) {
+    var item = document.createElement('div');
+    item.className = 'email-thread-item' + (entry.id === currentId ? ' email-thread-current' : '');
+
+    var sender = document.createElement('div');
+    sender.className = 'email-thread-sender';
+    sender.textContent = entry.email_from || '(Unknown)';
+    item.appendChild(sender);
+
+    var dateStr = '';
+    if (entry.email_date) {
+      try {
+        var d = new Date(entry.email_date);
+        dateStr = d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) +
+                  ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      } catch (e) {
+        dateStr = entry.email_date;
+      }
+    }
+    var dateLine = document.createElement('div');
+    dateLine.className = 'email-thread-date';
+    dateLine.textContent = dateStr;
+    item.appendChild(dateLine);
+
+    var preview = document.createElement('div');
+    preview.className = 'email-thread-preview';
+    preview.textContent = entry.email_body_text_preview || '';
+    item.appendChild(preview);
+
+    // Click to navigate to that email (unless it's the current one)
+    if (entry.id !== currentId) {
+      item.style.cursor = 'pointer';
+      item.addEventListener('click', function() {
+        window.location.href = '/frontend/html/editor.html?id=' + encodeURIComponent(entry.id);
+      });
+    }
+
+    list.appendChild(item);
+  });
+
+  section.appendChild(list);
+  emailContent.appendChild(section);
+}

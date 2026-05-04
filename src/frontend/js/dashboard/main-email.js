@@ -148,6 +148,7 @@ function displayEmailView(chitsToDisplay) {
         '<span id="emailBulkCount">0 selected</span>' +
         '<button class="cwoc-btn" onclick="_emailBulkArchive()"><i class="fas fa-archive"></i> Archive</button>' +
         '<button class="cwoc-btn" onclick="_emailBulkTag()"><i class="fas fa-tag"></i> Tag</button>' +
+        '<button class="cwoc-btn" onclick="_emailBulkToggleRead()"><i class="fas fa-envelope-open"></i> Mark Read/Unread</button>' +
         '<button class="cwoc-btn" id="emailBulkSelectAllBtn" onclick="_emailBulkSelectAll()" style="margin-left:auto;">Select All</button>' +
         '<button class="cwoc-btn" onclick="_emailBulkClear()">Clear</button>';
     container.appendChild(bulkBar);
@@ -234,6 +235,16 @@ function _buildEmailCard(chit, viSettings) {
     }
 
     card.appendChild(content);
+
+    // Shift+click to toggle read/unread; plain click does nothing (dblclick navigates)
+    card.addEventListener('click', function(e) {
+        if (e.target.classList.contains('email-select-cb')) return;
+        if (e.shiftKey) {
+            e.preventDefault();
+            e.stopPropagation();
+            _toggleEmailReadStatus(chit, card);
+        }
+    });
 
     // Double-click handler: navigate to editor (consistent with all other views)
     card.addEventListener('dblclick', function(e) {
@@ -405,6 +416,56 @@ async function _emailBulkArchive() {
     }
     _emailSelectedIds = [];
     if (typeof fetchChits === 'function') fetchChits();
+}
+
+/** Bulk toggle read/unread for all selected emails */
+async function _emailBulkToggleRead() {
+    if (_emailSelectedIds.length === 0) {
+        console.warn('[Email Bulk Read] No items selected');
+        return;
+    }
+    var count = _emailSelectedIds.length;
+    console.log('[Email Bulk Read] Toggling ' + count + ' items:', _emailSelectedIds);
+    var successCount = 0;
+    var failCount = 0;
+    for (var i = 0; i < _emailSelectedIds.length; i++) {
+        var chitId = _emailSelectedIds[i];
+        try {
+            var resp = await fetch('/api/email/' + encodeURIComponent(chitId) + '/read', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            if (!resp.ok) {
+                failCount++;
+                continue;
+            }
+            var data = await resp.json();
+            // Update the global chits array
+            if (typeof chits !== 'undefined' && Array.isArray(chits)) {
+                var found = chits.find(function(c) { return c.id === chitId; });
+                if (found) found.email_read = data.email_read;
+            }
+            // Update card visual state
+            var card = document.querySelector('.email-card[data-chit-id="' + chitId + '"]');
+            if (card) {
+                if (data.email_read) card.classList.remove('email-unread');
+                else card.classList.add('email-unread');
+            }
+            successCount++;
+        } catch (e) {
+            console.error('[Email Bulk Read] Exception for ' + chitId + ':', e);
+            failCount++;
+        }
+    }
+    if (typeof _updateEmailBadge === 'function') _updateEmailBadge();
+    if (failCount > 0) {
+        _showToast(successCount + ' toggled, ' + failCount + ' failed', failCount === count ? 'error' : 'info');
+    } else {
+        _showToast(count + ' email(s) read status toggled', 'success');
+    }
+    _emailSelectedIds = [];
+    document.querySelectorAll('.email-select-cb').forEach(function(cb) { cb.checked = false; });
+    _emailUpdateBulkBar();
 }
 
 /** Bulk tag selected emails — show a prompt for the tag name */
@@ -609,5 +670,49 @@ function _showToast(msg, type) {
         showToast(msg, type);
     } else {
         console.log('[Toast]', type, msg);
+    }
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Read/unread toggle
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Toggle read/unread status via PATCH and update the card visually.
+ */
+async function _toggleEmailReadStatus(chit, card) {
+    try {
+        var resp = await fetch('/api/email/' + encodeURIComponent(chit.id) + '/read', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        if (!resp.ok) {
+            _showToast('Failed to toggle read status', 'error');
+            return;
+        }
+        var data = await resp.json();
+        chit.email_read = data.email_read;
+
+        // Update card visual state
+        if (data.email_read) {
+            card.classList.remove('email-unread');
+        } else {
+            card.classList.add('email-unread');
+        }
+
+        // Update the global chits array so badge count stays in sync
+        if (typeof chits !== 'undefined' && Array.isArray(chits)) {
+            var found = chits.find(function(c) { return c.id === chit.id; });
+            if (found) found.email_read = data.email_read;
+        }
+
+        // Update unread badge
+        if (typeof _updateEmailBadge === 'function') _updateEmailBadge();
+
+        _showToast(data.email_read ? 'Marked as read' : 'Marked as unread', 'success');
+    } catch (err) {
+        console.error('[Email] Toggle read error:', err);
+        _showToast('Failed to toggle read status', 'error');
     }
 }

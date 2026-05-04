@@ -211,6 +211,7 @@ function _collapseAllZonesForNewChit() {
     ['alertsSection', 'alertsContent'],
     ['healthIndicatorsSection', 'healthIndicatorsContent'],
     ['emailSection', 'emailContent'],
+    ['attachmentsSection', 'attachmentsContent'],
     ['colorSection', 'colorContent'],
     ['projectsSection', 'projectsContent'],
   ];
@@ -725,6 +726,11 @@ async function loadChitData(chitId) {
       initEmailZone(chit);
     }
 
+    // Initialize attachments zone
+    if (typeof initAttachmentsZone === 'function') {
+      initAttachmentsZone(chit);
+    }
+
     // Auto-mark email as read when opening an email chit (Requirement 8.1)
     if (typeof hasEmailData === 'function' && hasEmailData(chit) && chit.email_read === false) {
       fetch('/api/email/' + encodeURIComponent(chit.id) + '/read', {
@@ -834,6 +840,7 @@ function applyZoneStates(chit) {
     ["alertsSection", "alertsContent", () => !!(chit.alarm || chit.notification || (Array.isArray(chit.alerts) && chit.alerts.length > 0))],
     ["healthIndicatorsSection", "healthIndicatorsContent", () => false],
     ["emailSection", "emailContent", () => typeof hasEmailData === 'function' && hasEmailData(chit)],
+    ["attachmentsSection", "attachmentsContent", () => typeof hasAttachmentData === 'function' && hasAttachmentData(chit)],
     ["colorSection", "colorContent", () => !!(chit.color && chit.color !== "#C66B6B")],
     ["projectsSection", "projectsContent", () => !!(chit.is_project_master || (Array.isArray(chit.child_chits) && chit.child_chits.length > 0))],
   ];

@@ -1,0 +1,167 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   CWOC Attachments Zone Styles — Chit Editor
+
+   Styles for the Attachments zone: file list, upload area, drag-drop.
+   Uses the parchment theme variables from shared-editor.css.
+
+   Load AFTER shared-editor.css and editor.css.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Attachment List ───────────────────────────────────────────────────── */
+.attachment-empty {
+    padding: 8px 0;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.88em;
+    color: #8b7355;
+    font-style: italic;
+}
+
+.attachment-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border: 1px solid rgba(139, 90, 43, 0.15);
+    border-radius: 6px;
+    background: rgba(253, 246, 227, 0.4);
+    margin-bottom: 6px;
+    transition: background 0.15s;
+}
+
+.attachment-item:hover {
+    background: rgba(139, 90, 43, 0.06);
+}
+
+.attachment-icon {
+    font-size: 1.3em;
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    border-radius: 4px;
+}
+
+.attachment-thumbnail {
+    width: 40px;
+    height: 40px;
+    object-fit: cover;
+    border-radius: 4px;
+    border: 1px solid rgba(139, 90, 43, 0.2);
+}
+
+.attachment-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.attachment-name {
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.9em;
+    font-weight: 600;
+    color: #3a2a1a;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.attachment-size {
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.78em;
+    color: #8b7355;
+}
+
+.attachment-actions {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.attachment-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border: 1px solid rgba(139, 90, 43, 0.25);
+    border-radius: 4px;
+    background: rgba(212, 197, 169, 0.5);
+    color: #5a4a3a;
+    cursor: pointer;
+    font-size: 0.85em;
+    transition: background 0.15s, color 0.15s;
+    text-decoration: none;
+}
+
+.attachment-btn:hover {
+    background: rgba(139, 90, 43, 0.15);
+}
+
+.attachment-delete:hover {
+    color: #a0522d;
+    border-color: #a0522d;
+}
+
+/* ── Upload Area ───────────────────────────────────────────────────────── */
+.attachment-upload-area {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px;
+    border: 2px dashed rgba(139, 90, 43, 0.25);
+    border-radius: 8px;
+    margin-top: 8px;
+    transition: border-color 0.2s, background 0.2s;
+}
+
+.attachment-upload-area.attachment-drag-over {
+    border-color: #008080;
+    background: rgba(0, 128, 128, 0.06);
+}
+
+.attachment-hint {
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.82em;
+    color: #8b7355;
+    font-style: italic;
+}
+
+/* ── Upload Progress ───────────────────────────────────────────────────── */
+.attachment-progress {
+    padding: 8px 12px;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.88em;
+    color: #008080;
+    font-style: italic;
+    animation: attachment-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes attachment-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* ── Responsive — Mobile ───────────────────────────────────────────────── */
+@media (max-width: 480px) {
+    .attachment-item {
+        padding: 6px 8px;
+        gap: 8px;
+    }
+
+    .attachment-upload-area {
+        flex-direction: column;
+        align-items: stretch;
+        text-align: center;
+        padding: 10px;
+    }
+
+    .attachment-hint {
+        font-size: 0.78em;
+    }
+}

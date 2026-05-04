@@ -6,13 +6,14 @@
 
 ## 1. What Is This Project?
 
-**C.W.'s Omni Chits (CWOC)** is a personal task/note management web app. The core concept is a "chit" — a flexible record that can be a task, note, calendar event, alarm, checklist, or project, all in one data model. The app organizes chits into six functional views called **C CAPTN**:
+**C.W.'s Omni Chits (CWOC)** is a personal task/note management web app with a built-in email client. The core concept is a "chit" — a flexible record that can be a task, note, calendar event, alarm, checklist, project, or email, all in one data model. The app organizes chits into seven functional views called **C CAPTN E**:
 
 - **C**alendar — chits with dates/times
 - **A**larms — chits with alarm flags
 - **P**rojects — chits that are "project masters" with child chits (Kanban-style)
 - **T**asks — chits with a status (ToDo / In Progress / Blocked / Complete)
 - **N**otes — chits with note content and no dates
+- **E**mail — emails synced via IMAP and treated as chits
 
 Deployed on a **Proxmox LXC container** (ID 111, host: Zamonia) at `http://192.168.1.111:3333`.
 
@@ -30,6 +31,9 @@ Deployed on a **Proxmox LXC container** (ID 111, host: Zamonia) at `http://192.1
 │  frontend/editor.js   ← editor logic                │
 │  frontend/editor_checklists.js ← Checklist class    │
 │  frontend/editor_projects.js   ← Projects Zone      │
+│  frontend/editor-email.js      ← Email Zone         │
+│  frontend/editor-attachments.js ← Attachments Zone  │
+│  frontend/main-email.js        ← Email tab          │
 │  frontend/settings.js ← settings logic              │
 │  frontend/styles.css / editor.css                   │
 └────────────────────┬────────────────────────────────┘
@@ -38,6 +42,7 @@ Deployed on a **Proxmox LXC container** (ID 111, host: Zamonia) at `http://192.1
 │  FastAPI (Python 3) — backend/main.py               │
 │  Uvicorn on port 3333                               │
 │  SQLite — /app/data/app.db                          │
+│  Email — IMAP/SMTP via Python stdlib                │
 └─────────────────────────────────────────────────────┘
 ```
 
@@ -47,10 +52,15 @@ Deployed on a **Proxmox LXC container** (ID 111, host: Zamonia) at `http://192.1
 - Flatpickr (date/time picker)
 - Font Awesome 6 (icons)
 - marked.js (markdown rendering in notes)
+- DOMPurify 3.0.6 (HTML email sanitization)
+
+**Server-only dependencies:**
+- cryptography (Fernet encryption for email passwords; base64 fallback on dev)
 
 **External APIs:**
 - OpenStreetMap Nominatim — geocoding (address → lat/lon)
 - Open-Meteo — weather forecast (free, no API key)
+- Gmail IMAP/SMTP — email sync and send (configured per-user in Settings)
 
 ---
 
@@ -60,11 +70,15 @@ Deployed on a **Proxmox LXC container** (ID 111, host: Zamonia) at `http://192.1
 |---|---|
 | Backend | FastAPI + Uvicorn (Python 3) |
 | Database | SQLite3 (stdlib) |
+| Full-Text Search | SQLite FTS5 (virtual table with sync triggers) |
 | Validation | Pydantic v1 |
+| Email | Python stdlib (imaplib, smtplib, email) |
+| Encryption | cryptography.fernet.Fernet (server-only) |
 | Frontend | Vanilla JS, HTML5, CSS3 |
 | Date picker | Flatpickr (CDN) |
 | Icons | Font Awesome 6 (CDN) |
 | Markdown | marked.js (CDN) |
+| HTML Sanitization | DOMPurify 3.0.6 (CDN) |
 | Geocoding | OpenStreetMap Nominatim |
 | Weather | Open-Meteo API |
 
@@ -102,6 +116,21 @@ Deployed on a **Proxmox LXC container** (ID 111, host: Zamonia) at `http://192.1
 | modified_datetime | TEXT | ISO 8601, updated on save |
 | is_project_master | BOOLEAN | Marks chit as a project container |
 | child_chits | TEXT | JSON array of child chit IDs |
+| email_message_id | TEXT | RFC 2822 Message-ID |
+| email_from | TEXT | Sender address |
+| email_to | TEXT | JSON array of recipient addresses |
+| email_cc | TEXT | JSON array of CC addresses |
+| email_bcc | TEXT | JSON array of BCC addresses |
+| email_subject | TEXT | Subject line (also mapped to chit title) |
+| email_body_text | TEXT | Plain-text body content |
+| email_body_html | TEXT | HTML body content for rich rendering |
+| email_date | TEXT | ISO 8601 date from email Date header |
+| email_folder | TEXT | inbox / sent / drafts |
+| email_status | TEXT | draft / sent / received |
+| email_read | BOOLEAN | Read/unread state |
+| email_in_reply_to | TEXT | In-Reply-To Message-ID |
+| email_references | TEXT | References header (space-separated Message-IDs) |
+| attachments | TEXT | JSON array of `{id, filename, size, mime_type, uploaded_at}` |
 
 ### `settings` table
 
@@ -117,6 +146,8 @@ Deployed on a **Proxmox LXC container** (ID 111, host: Zamonia) at `http://192.1
 | custom_colors | TEXT | JSON array of hex strings |
 | visual_indicators | TEXT | JSON object |
 | chit_options | TEXT | JSON object of booleans |
+| email_account | TEXT | JSON: IMAP/SMTP host, port, username, encrypted password |
+| attachment_max_size_mb | TEXT | Max attachment file size in MB (default 10) |
 
 ---
 

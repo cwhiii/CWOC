@@ -334,6 +334,9 @@ def _parse_email_message(raw_bytes: bytes) -> dict:
     # Extract body text
     body_text = _extract_text_from_message(msg)
 
+    # Extract HTML body (for rich rendering)
+    body_html = _extract_html_from_message(msg)
+
     return {
         "email_from": from_addr,
         "email_to": email_to,
@@ -344,6 +347,7 @@ def _parse_email_message(raw_bytes: bytes) -> dict:
         "email_in_reply_to": in_reply_to.strip() if in_reply_to else "",
         "email_references": references.strip() if references else "",
         "email_body_text": body_text,
+        "email_body_html": body_html,
         "start_datetime": start_datetime,
     }
 
@@ -397,6 +401,37 @@ def _extract_text_from_message(msg) -> str:
         return _strip_html_tags(html_text)
 
     return ""
+
+
+def _extract_html_from_message(msg) -> str:
+    """Walk MIME parts and extract the HTML body if present.
+
+    Returns the raw HTML string, or empty string if no HTML part found.
+    """
+    html_parts = []
+
+    if msg.is_multipart():
+        for part in msg.walk():
+            content_type = part.get_content_type()
+            disposition = str(part.get("Content-Disposition", ""))
+            if "attachment" in disposition:
+                continue
+            if content_type == "text/html":
+                payload = part.get_content()
+                if isinstance(payload, bytes):
+                    charset = part.get_content_charset() or "utf-8"
+                    payload = payload.decode(charset, errors="replace")
+                html_parts.append(payload)
+    else:
+        content_type = msg.get_content_type()
+        if content_type == "text/html":
+            payload = msg.get_content()
+            if isinstance(payload, bytes):
+                charset = msg.get_content_charset() or "utf-8"
+                payload = payload.decode(charset, errors="replace")
+            html_parts.append(payload)
+
+    return "\n".join(html_parts) if html_parts else ""
 
 
 def _strip_html_tags(html: str) -> str:
@@ -486,7 +521,7 @@ def _create_email_chit(cursor, parsed: dict, owner_id: str) -> str | None:
             id, title, tags, start_datetime,
             created_datetime, modified_datetime,
             email_message_id, email_from, email_to, email_cc,
-            email_subject, email_body_text, email_date,
+            email_subject, email_body_text, email_body_html, email_date,
             email_folder, email_status, email_read,
             email_in_reply_to, email_references,
             deleted, archived, pinned
@@ -494,7 +529,7 @@ def _create_email_chit(cursor, parsed: dict, owner_id: str) -> str | None:
             ?, ?, ?, ?,
             ?, ?,
             ?, ?, ?, ?,
-            ?, ?, ?,
+            ?, ?, ?, ?,
             ?, ?, ?,
             ?, ?,
             ?, ?, ?
@@ -512,6 +547,7 @@ def _create_email_chit(cursor, parsed: dict, owner_id: str) -> str | None:
             email_cc_json,
             parsed.get("email_subject", ""),
             parsed.get("email_body_text", ""),
+            parsed.get("email_body_html", "") or None,
             parsed.get("email_date", ""),
             "inbox",
             "received",
@@ -1156,33 +1192,186 @@ def email_send(chit_id: str, request: Request):
 
 
 # ───────────────────────────────────────────────────────────────────────────
-# PATCH /api/email/{chit_id}/read — Mark email as read
+# GET /api/email/thread/{chit_id} — Get email conversation thread
+# ───────────────────────────────────────────────────────────────────────────
+
+def _strip_email_prefixes(subject: str) -> str:
+    """Strip Re:/Fwd:/Fw: prefixes from a subject line for thread matching."""
+    if not subject:
+        return ""
+    cleaned = subject.strip()
+    while True:
+        match = re.match(r'^(Re|Fwd|Fw)\s*:\s*', cleaned, re.IGNORECASE)
+        if match:
+            cleaned = cleaned[match.end():].strip()
+        else:
+            break
+    return cleaned
+
+
+@email_router.get("/api/email/thread/{chit_id}")
+def email_thread(chit_id: str, request: Request):
+    """Find all related emails in a conversation thread.
+
+    Matches by email_in_reply_to, email_references, email_message_id,
+    and by normalized subject line (stripping Re:/Fwd: prefixes).
+
+    Returns a list sorted by email_date ascending (oldest first).
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        # Load the anchor chit
+        cursor.execute("SELECT * FROM chits WHERE id = ?", (chit_id,))
+        anchor = cursor.fetchone()
+        if not anchor:
+            raise HTTPException(status_code=404, detail="Email chit not found.")
+        anchor = dict(anchor)
+
+        # Collect all message IDs related to this thread
+        message_ids = set()
+        if anchor.get("email_message_id"):
+            message_ids.add(anchor["email_message_id"].strip())
+        if anchor.get("email_in_reply_to"):
+            message_ids.add(anchor["email_in_reply_to"].strip())
+        if anchor.get("email_references"):
+            for ref in anchor["email_references"].split():
+                ref = ref.strip()
+                if ref:
+                    message_ids.add(ref)
+
+        logger.info(f"[Thread] Anchor chit {chit_id}: message_id={anchor.get('email_message_id')!r}, "
+                     f"in_reply_to={anchor.get('email_in_reply_to')!r}, "
+                     f"references={anchor.get('email_references')!r}, "
+                     f"subject={anchor.get('email_subject') or anchor.get('title')!r}")
+        logger.info(f"[Thread] Collected {len(message_ids)} message_ids: {message_ids}")
+
+        # Normalized subject for fallback matching
+        anchor_subject = _strip_email_prefixes(anchor.get("email_subject") or anchor.get("title") or "")
+
+        # Find all email chits that share any of these message IDs or have matching subject
+        thread_ids = {chit_id}  # always include the anchor
+        thread_chits = {}
+
+        # Query all email chits (non-deleted)
+        cursor.execute(
+            "SELECT id, email_from, email_date, email_status, title, email_body_text, "
+            "email_message_id, email_in_reply_to, email_references, email_subject "
+            "FROM chits WHERE (deleted = 0 OR deleted IS NULL) AND email_message_id IS NOT NULL"
+        )
+        for row in cursor.fetchall():
+            row_dict = dict(row)
+            rid = row_dict["id"]
+            r_msg_id = (row_dict.get("email_message_id") or "").strip()
+            r_reply_to = (row_dict.get("email_in_reply_to") or "").strip()
+            r_refs = (row_dict.get("email_references") or "").strip()
+            r_subject = _strip_email_prefixes(row_dict.get("email_subject") or row_dict.get("title") or "")
+
+            # Check message ID overlap
+            row_ids = set()
+            if r_msg_id:
+                row_ids.add(r_msg_id)
+            if r_reply_to:
+                row_ids.add(r_reply_to)
+            if r_refs:
+                for ref in r_refs.split():
+                    ref = ref.strip()
+                    if ref:
+                        row_ids.add(ref)
+
+            matched = bool(message_ids & row_ids)
+
+            # Fallback: match by normalized subject
+            if not matched and anchor_subject and r_subject and anchor_subject.lower() == r_subject.lower():
+                matched = True
+
+            if matched:
+                thread_ids.add(rid)
+                thread_chits[rid] = row_dict
+
+        logger.info(f"[Thread] Found {len(thread_ids)} matches (including anchor) for chit {chit_id}")
+
+        # Ensure anchor is in the result
+        if chit_id not in thread_chits:
+            thread_chits[chit_id] = {
+                "id": anchor["id"],
+                "email_from": anchor.get("email_from", ""),
+                "email_date": anchor.get("email_date", ""),
+                "email_status": anchor.get("email_status", ""),
+                "title": anchor.get("title", ""),
+                "email_body_text": anchor.get("email_body_text", ""),
+            }
+
+        # Build response list sorted by email_date ascending
+        result = []
+        for rid, row_dict in thread_chits.items():
+            body_text = row_dict.get("email_body_text") or ""
+            preview = body_text[:100].replace("\n", " ").strip()
+            result.append({
+                "id": rid,
+                "email_from": row_dict.get("email_from", ""),
+                "email_date": row_dict.get("email_date", ""),
+                "email_status": row_dict.get("email_status", ""),
+                "title": row_dict.get("title", ""),
+                "email_body_text_preview": preview,
+            })
+
+        result.sort(key=lambda x: x.get("email_date") or "")
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Email thread error: %s", e)
+        raise HTTPException(status_code=500, detail=f"Failed to load email thread: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
+# ───────────────────────────────────────────────────────────────────────────
+# PATCH /api/email/{chit_id}/read — Toggle email read state
 # ───────────────────────────────────────────────────────────────────────────
 
 @email_router.patch("/api/email/{chit_id}/read")
-def email_mark_read(chit_id: str, request: Request):
-    """Set ``email_read`` to true on the specified email chit."""
+def email_toggle_read(chit_id: str, request: Request):
+    """Toggle ``email_read`` on the specified email chit.
+
+    If the chit is currently unread, marks it as read. If already read,
+    marks it as unread. Returns the new state.
+    """
     conn = None
     try:
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
 
         cursor.execute(
-            "UPDATE chits SET email_read = 1 WHERE id = ?", (chit_id,)
+            "SELECT email_read FROM chits WHERE id = ?", (chit_id,)
         )
-        if cursor.rowcount == 0:
+        row = cursor.fetchone()
+        if not row:
             raise HTTPException(status_code=404, detail="Email chit not found.")
 
+        current_read = bool(row[0])
+        new_read = not current_read
+
+        cursor.execute(
+            "UPDATE chits SET email_read = ? WHERE id = ?", (int(new_read), chit_id)
+        )
         conn.commit()
-        return {"message": "Email marked as read."}
+        return {"email_read": new_read}
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Mark-as-read error: %s", e)
-        raise HTTPException(status_code=500, detail=f"Failed to mark email as read: {str(e)}")
+        logger.error("Toggle-read error: %s", e)
+        raise HTTPException(status_code=500, detail=f"Failed to toggle email read state: {str(e)}")
     finally:
         if conn:
+            conn.close()
             conn.close()
 
 

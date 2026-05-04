@@ -1178,6 +1178,24 @@ li.cwoc-dragging {
     border-left: 4px solid var(--aged-brown-medium, #8b4513);
 }
 
+/* ── Read email — subdued appearance ──────────────────────────────────────── */
+.email-card:not(.email-unread) {
+    opacity: 0.7;
+}
+.email-card:not(.email-unread) .chit-header-title {
+    font-weight: normal;
+    color: #8b7355;
+}
+.email-card:not(.email-unread) .email-card-meta {
+    color: #a09080;
+}
+.email-card:not(.email-unread) .email-card-preview {
+    color: #a09080;
+}
+.email-card:not(.email-unread):hover {
+    opacity: 0.85;
+}
+
 /* ── Sender column ────────────────────────────────────────────────────────── */
 .email-row-sender {
     flex: 0 0 180px;
@@ -1483,4 +1501,38 @@ li.cwoc-dragging {
         gap: 4px;
         font-size: 0.9em;
     }
+}
+
+/* ── Email context menu (right-click / long-press) ────────────────────────── */
+.email-context-menu {
+    position: fixed;
+    z-index: 9999;
+    background: #fdf5e6;
+    border: 1px solid #8b5a2b;
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+    min-width: 180px;
+    padding: 4px 0;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.9em;
+}
+
+.email-context-item {
+    padding: 8px 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #3a2a1a;
+    transition: background 0.15s;
+}
+
+.email-context-item:hover {
+    background: rgba(139, 90, 43, 0.12);
+}
+
+.email-context-item i {
+    width: 16px;
+    text-align: center;
+    color: #8b5a2b;
 }

@@ -1,6 +1,6 @@
 # C.W.'s Omni Chits (CWOC)
 
-A multi-user task, note, and calendar management web app. The core concept is a **chit** — a single flexible record that can serve as a task, note, calendar event, alarm, checklist, or project, all using one unified data model.
+A multi-user task, note, and calendar management web app with a built-in email client. The core concept is a **chit** — a single flexible record that can serve as a task, note, calendar event, alarm, checklist, project, or email, all using one unified data model.
 
 A single chit can appear in multiple views depending on which fields are filled in. The backend auto-assigns system tags based on chit properties, so you never have to manually categorize anything — just fill in the fields that matter and CWOC figures out where it belongs. Multiple users get their own accounts with granular sharing — chit-level and tag-level sharing with viewer/manager roles, RSVP accept/decline, assignment, and stealth mode for private chits.
 
@@ -14,9 +14,9 @@ curl -sSL https://your-release-url/configurinator.sh | sudo bash
 
 That's it. Open `https://your-server-ip` in a browser. For technical details, local development setup, and service management, see [technical_details.md](technical_details.md).
 
-## The C CAPTN Views
+## The C CAPTN E Views
 
-Chits are organized into six views called **C CAPTN**:
+Chits are organized into seven views called **C CAPTN E**:
 
 | View | What it shows |
 |---|---|
@@ -26,6 +26,7 @@ Chits are organized into six views called **C CAPTN**:
 | **P**rojects | Project master chits with child chits in Kanban-style boards |
 | **T**asks | Chits with a status — ToDo, In Progress, Blocked, Complete |
 | **N**otes | Chits with markdown content |
+| **E**mail | Emails synced via IMAP and treated as chits — inbox, sent, drafts with compose, reply, and forward |
 | **I**ndicators | Health trend charts — heart rate, blood pressure, SpO2, temperature, weight, glucose, and more |
 
 ---
@@ -33,7 +34,7 @@ Chits are organized into six views called **C CAPTN**:
 ## Features
 
 ### Dashboard
-- Tab-based view system with Calendar, Checklists, Alerts, Projects, Tasks, Notes, and Global Search
+- Tab-based view system with Calendar, Checklists, Alerts, Projects, Tasks, Notes, Email, and Global Search
 - Collapsible sidebar with date navigation, sort controls, period selection, and multi-faceted filtering (text, status, priority, tags, people, show/hide options)
 - Per-tab default filters configurable in Settings
 - Full keyboard navigation with hotkeys for virtually every action — press `R` for the reference overlay
@@ -82,6 +83,31 @@ Chits are organized into six views called **C CAPTN**:
 - Charts: completion bar chart, success rate trend, and streak timeline
 - Notifications can fire relative to the end of the habit cycle ("before end of day/week/month") with a "disable if done" option
 - Show/hide habits on the calendar independently of other recurring chits
+
+### Email
+- Built-in email client that treats emails as chits — every email is a first-class chit with email-specific fields
+- Connects to Gmail via IMAP/SMTP using Python stdlib (`imaplib`, `smtplib`, `email`)
+- Email account configuration in Settings: IMAP host/port, SMTP host/port, username, Gmail App Password
+- Password encryption using `cryptography.fernet.Fernet` (base64 fallback on dev); encryption key stored at `data/email.key`
+- Emails auto-tagged with `CWOC_System/Email` and folder sub-tags (`CWOC_System/Email/Inbox`, `/Sent`, `/Drafts`); the `CWOC_System/` tag prefix is reserved
+- Email dashboard tab with inbox-style list view sorted by date descending
+- Folder sidebar: Inbox, Sent, Drafts
+- Check Mail button for manual IMAP sync; auto-check on configurable interval (manual, 5/15/30/60 min)
+- Unread count badge on the Email tab
+- Multi-select with bulk archive and bulk tag (shared tag picker)
+- Shift+click to toggle read/unread on email cards; bulk Mark Read/Unread in the selection bar
+- Email editor zone in the chit editor with To/CC/BCC fields, contact autocomplete, and email body textarea with expand modal
+- CC/BCC hidden by default with toggle buttons
+- Reply and Forward buttons create new draft chits with proper threading headers (In-Reply-To, References)
+- Send button saves then sends via SMTP; Save as Draft / Save & Send replace normal save buttons for email chits
+- HTML email rendering in a sandboxed iframe with DOMPurify sanitization; HTML/Text toggle for switching views
+- Thread view below the email body showing related emails matched by headers and normalized subject line
+
+### Attachments
+- File attachments zone in the chit editor with drag-drop upload or file picker
+- File list with filename, size, download link, and delete button
+- Files stored on disk at `/app/data/attachments/{chit_id}/`; metadata stored as JSON in the chit's `attachments` column
+- Configurable max file size (5/10/25/50 MB) in Settings
 
 ### Projects
 - Kanban-style board with four status columns (ToDo, In Progress, Blocked, Complete)
@@ -133,6 +159,8 @@ Chits are organized into six views called **C CAPTN**:
 - Visual Indicators: per-indicator visibility (Always / Never / If Space), combine alerts toggle
 - Version & Updates: current version, one-click upgrade with streaming log
 - Data Management: JSON export/import for chit data and user data (add or replace modes)
+- Email Account: IMAP/SMTP server configuration, username, encrypted app password, auto-check interval
+- Attachments: configurable max file size (5/10/25/50 MB)
 - Audit Log: link to audit log page, pruning limits (max age, max size)
 
 ### Audit Log
@@ -154,7 +182,7 @@ Chits are organized into six views called **C CAPTN**:
 - Files include metadata: CWOC version, export timestamp, instance ID
 
 ### Other
-- Global Search across all chit fields with highlighted matches
+- Global Search across all chit fields with highlighted matches — powered by SQLite FTS5 full-text search with relevance ranking (falls back to LIKE queries if FTS5 unavailable)
 - Visual indicators on chit cards (alarm, notification, timer, stopwatch, weather, people, health)
 - Color-coded chits with custom color palette
 - Pinned and archived chit filtering

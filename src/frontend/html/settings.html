@@ -975,6 +975,7 @@
                             <button type="button" id="emailBackfillBtn" class="standard-button" onclick="emailBackfill()">📥 Backfill</button>
                             <span id="emailBackfillResult" style="font-size:0.85em;"></span>
                         </div>
+
                     </div>
                 </div>
 
@@ -1052,6 +1053,31 @@
                                 <input type="number" id="audit-max-mb" min="1" step="1" placeholder="1" style="width:80px;" />
                             </div>
                             <p class="setting-hint">Uncheck to disable pruning. When either limit is reached, oldest entries are pruned first.</p>
+
+                            <label class="setting-subheader" style="margin-top:14px;">📎 Attachment Limits</label>
+                            <p class="setting-hint">Controls file attachment storage for all users. Applies to any chit (email or otherwise).</p>
+                            <div class="setting-inline">
+                                <label for="attachmentMaxSizeMb">Max File Size</label>
+                                <select id="attachmentMaxSizeMb" style="width:auto;">
+                                    <option value="5">5 MB</option>
+                                    <option value="10" selected>10 MB</option>
+                                    <option value="25">25 MB</option>
+                                    <option value="50">50 MB</option>
+                                </select>
+                            </div>
+                            <div class="setting-inline">
+                                <label for="attachmentMaxStorageMb">Max Storage Per User</label>
+                                <select id="attachmentMaxStorageMb" style="width:auto;">
+                                    <option value="100">100 MB</option>
+                                    <option value="250">250 MB</option>
+                                    <option value="500" selected>500 MB</option>
+                                    <option value="1024">1 GB</option>
+                                    <option value="2048">2 GB</option>
+                                    <option value="5120">5 GB</option>
+                                    <option value="0">Unlimited</option>
+                                </select>
+                            </div>
+                            <p class="setting-hint" id="attachmentSizeWarning" style="color:#a0522d;">⚠️ Larger limits consume more disk space. "Unlimited" is not recommended for shared servers.</p>
                         </div>
                         <div class="setting-group" id="network-access-block">
                             <h3>📱 Dependent Apps</h3>

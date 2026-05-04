@@ -394,3 +394,132 @@
 .email-quick-btn.email-active:hover {
     background: #006060;
 }
+
+/* ── Email Thread Section ──────────────────────────────────────────────── */
+.email-thread-section {
+    margin-top: 16px;
+    border-top: 2px solid rgba(139, 90, 43, 0.25);
+    padding-top: 12px;
+}
+
+.email-thread-header {
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.95em;
+    font-weight: 600;
+    color: #5a4a3a;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.email-thread-icon {
+    font-size: 1.1em;
+}
+
+.email-thread-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.email-thread-item {
+    padding: 8px 12px;
+    border: 1px solid rgba(139, 90, 43, 0.2);
+    border-radius: 6px;
+    background: rgba(253, 246, 227, 0.5);
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.email-thread-item:hover {
+    background: rgba(139, 90, 43, 0.08);
+    border-color: rgba(139, 90, 43, 0.35);
+}
+
+.email-thread-current {
+    background: rgba(0, 128, 128, 0.08);
+    border-color: rgba(0, 128, 128, 0.3);
+    cursor: default !important;
+}
+
+.email-thread-current:hover {
+    background: rgba(0, 128, 128, 0.08);
+    border-color: rgba(0, 128, 128, 0.3);
+}
+
+.email-thread-sender {
+    font-family: 'Lora', Georgia, serif;
+    font-weight: 600;
+    font-size: 0.88em;
+    color: #3a2a1a;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.email-thread-date {
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.78em;
+    color: #8b7355;
+    margin-top: 2px;
+}
+
+.email-thread-preview {
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.82em;
+    color: #5a4a3a;
+    margin-top: 4px;
+    line-height: 1.4;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ── Thread responsive — mobile ────────────────────────────────────────── */
+@media (max-width: 480px) {
+    .email-thread-item {
+        padding: 6px 8px;
+    }
+    .email-thread-sender {
+        font-size: 0.85em;
+    }
+}
+
+/* ── HTML Email Rendering ──────────────────────────────────────────────── */
+.email-html-toggle-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.email-html-toggle-btn {
+    padding: 4px 10px;
+    font-size: 0.82em;
+    font-family: 'Lora', Georgia, serif;
+    font-weight: 600;
+    background: var(--button-bg, #d4c5a9);
+    color: var(--aged-brown-dark, #4a2c2a);
+    border: 1px outset var(--aged-brown-medium, #8b5a2b);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.email-html-toggle-btn:hover {
+    background: var(--button-hover, #c4b599);
+}
+
+.email-html-toggle-btn.active {
+    background: var(--accent-teal, #008080);
+    color: #fff8e1;
+    border-color: #006060;
+}
+
+.email-html-iframe {
+    width: 100%;
+    border: 1px solid rgba(139, 90, 43, 0.2);
+    border-radius: 4px;
+    background: #fff;
+    min-height: 200px;
+}
