@@ -62,6 +62,7 @@ class Settings(BaseModel):
     map_default_zoom: Optional[str] = None   # Default map zoom level (1–18), e.g. "4"
     map_auto_zoom: Optional[str] = "1"       # "1" = auto-zoom to markers, "0" = use custom center/zoom
     email_account: Optional[str] = None      # JSON string: {email, display_name, imap_host, imap_port, smtp_host, smtp_port, username, password_encrypted}
+    email_accounts: Optional[str] = None     # JSON array of account objects: [{id, email, display_name, imap_host, imap_port, smtp_host, smtp_port, username, password_encrypted}]
     attachment_max_size_mb: Optional[str] = "10"  # Max attachment file size in MB
     attachment_max_storage_mb: Optional[str] = "500"  # Max total attachment storage per user in MB (0 = unlimited)
     default_share_contacts: Optional[str] = "0"  # "1" = new contacts default to shared vault, "0" = private
@@ -127,6 +128,7 @@ class Chit(BaseModel):
     email_in_reply_to: Optional[str] = None      # In-Reply-To Message-ID
     email_references: Optional[str] = None       # References header (space-separated Message-IDs)
     email_body_html: Optional[str] = None        # HTML body content for rich rendering
+    email_account_id: Optional[str] = None       # ID of the email account this email belongs to
     attachments: Optional[str] = None            # JSON array of {id, filename, size, mime_type, uploaded_at}
 
 class MultiValueEntry(BaseModel):
@@ -241,3 +243,31 @@ class Notification(BaseModel):
     notification_type: str  # "invited" or "assigned"
     status: str = "pending"  # "pending", "accepted", "declined"
     created_datetime: Optional[str] = None
+
+
+# ── Rules Engine Models ──────────────────────────────────────────────────
+
+class RuleCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    enabled: Optional[bool] = True
+    priority: Optional[int] = 0
+    trigger_type: str
+    conditions: Optional[dict] = None      # Condition_Tree JSON
+    actions: Optional[list] = None         # Array of action objects
+    confirm_before_apply: Optional[bool] = True
+    schedule_config: Optional[dict] = None # For scheduled triggers
+
+class RuleUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    enabled: Optional[bool] = None
+    priority: Optional[int] = None
+    trigger_type: Optional[str] = None
+    conditions: Optional[dict] = None
+    actions: Optional[list] = None
+    confirm_before_apply: Optional[bool] = None
+    schedule_config: Optional[dict] = None
+
+class RuleReorder(BaseModel):
+    rule_ids: List[str]  # Ordered list of rule IDs

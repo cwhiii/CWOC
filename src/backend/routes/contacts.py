@@ -8,6 +8,7 @@ import logging
 import os
 import re
 import sqlite3
+import threading
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 from uuid import uuid4
@@ -21,6 +22,7 @@ from src.backend.db import (
 from src.backend.models import Contact
 from src.backend.serializers import vcard_parse, vcard_print, csv_export, csv_import
 from src.backend.routes.audit import insert_audit_entry, compute_audit_diff, get_actor_from_request
+from src.backend.rules_engine import dispatch_trigger
 
 
 logger = logging.getLogger(__name__)
@@ -191,6 +193,16 @@ def create_contact(contact: Contact, request: Request):
         except Exception as e:
             logger.error(f"Audit logging failed for contact creation (best-effort): {str(e)}")
         conn.commit()
+        # Fire-and-forget: dispatch rules engine trigger for contact creation
+        try:
+            logger.info("Firing rules engine trigger: contact_created for contact %s, owner %s", contact_id, user_id)
+            threading.Thread(
+                target=dispatch_trigger,
+                args=("contact_created", "contact", contact_dict, user_id),
+                daemon=True,
+            ).start()
+        except Exception:
+            pass  # Never block the API response for rules engine
         return contact_dict
     except Exception as e:
         logger.error(f"Error creating contact: {str(e)}")
@@ -449,6 +461,16 @@ def update_contact(contact_id: str, contact: Contact, request: Request):
         except Exception as e:
             logger.error(f"Audit logging failed for contact update (best-effort): {str(e)}")
         conn.commit()
+        # Fire-and-forget: dispatch rules engine trigger for contact update
+        try:
+            logger.info("Firing rules engine trigger: contact_updated for contact %s, owner %s", contact_id, user_id)
+            threading.Thread(
+                target=dispatch_trigger,
+                args=("contact_updated", "contact", contact_dict, user_id),
+                daemon=True,
+            ).start()
+        except Exception:
+            pass  # Never block the API response for rules engine
         return contact_dict
     except HTTPException:
         raise

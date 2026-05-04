@@ -1,0 +1,1 @@
+Email deletion sync: when you delete an email in Gmail (or any IMAP provider), the deletion now propagates to CWOC on the next mail check. The sync compares local inbox email chits against the IMAP server by Message-ID and soft-deletes any that are no longer present. The check-mail toast and settings sync status now show both new and removed counts.

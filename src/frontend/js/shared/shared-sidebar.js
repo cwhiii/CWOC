@@ -331,6 +331,9 @@ function _cwocInjectSidebar() {
   html += '    <button class="action-button sidebar-compact-btn" id="sidebar-calculator-btn" title="Calculator (F4)">';
   html += '      🧮 Calculator';
   html += '    </button>';
+  html += '    <button class="action-button sidebar-compact-btn" id="sidebar-rules-btn" title="Rules Engine (F10)">';
+  html += '      🤖 Rules';
+  html += '    </button>';
   html += '  </div>';
   html += '</div>';
 
@@ -415,6 +418,7 @@ function _cwocInitSidebar(context) {
     onMapsClick: function() { window.location.href = '/maps'; },
     onKioskClick: function() { window.location.href = '/kiosk'; },
     onCalculatorClick: function() { if (typeof cwocToggleCalculator === 'function') cwocToggleCalculator(); },
+    onRulesClick: function() { window.location.href = '/frontend/html/rules-manager.html'; },
     onSettingsClick: function() {
       if (typeof storePreviousState === 'function') storePreviousState();
       localStorage.setItem('cwoc_settings_return', '/');
@@ -497,6 +501,10 @@ function _cwocInitSidebar(context) {
   /* Calculator */
   var calcBtn = document.getElementById('sidebar-calculator-btn');
   if (calcBtn) calcBtn.onclick = function() { _cb('onCalculatorClick')(); };
+
+  /* Rules */
+  var rulesBtn = document.getElementById('sidebar-rules-btn');
+  if (rulesBtn) rulesBtn.onclick = function() { _cb('onRulesClick')(); };
 
   /* Settings */
   var settingsBtn = document.getElementById('sidebar-settings-btn');

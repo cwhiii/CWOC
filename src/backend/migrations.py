@@ -9,6 +9,8 @@ import logging
 import os
 import sqlite3
 
+from uuid import uuid4
+
 from src.backend.db import DB_PATH, serialize_json_field
 
 
@@ -1551,6 +1553,150 @@ def migrate_add_contact_vault():
     except Exception as e:
         logger.error(f"Error in migrate_add_contact_vault: {str(e)}")
         raise
+    finally:
+        if conn:
+            conn.close()
+
+
+# ── Rules Engine: migration ──────────────────────────────────────────────
+
+def migrate_create_rules_tables():
+    """Create rules, rule_confirmations, and rule_execution_log tables if they don't exist.
+
+    The rules table stores user-defined automation rules with triggers,
+    conditions (JSON condition tree), and actions (JSON array).
+
+    The rule_confirmations table stores pending actions awaiting user approval
+    when a rule has confirm_before_apply enabled.
+
+    The rule_execution_log table records every rule evaluation for
+    troubleshooting and audit purposes.
+
+    Fully idempotent — uses CREATE TABLE IF NOT EXISTS.
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS rules (
+                id TEXT PRIMARY KEY,
+                owner_id TEXT,
+                name TEXT,
+                description TEXT,
+                enabled BOOLEAN DEFAULT 1,
+                priority INTEGER DEFAULT 0,
+                trigger_type TEXT,
+                conditions TEXT,
+                actions TEXT,
+                confirm_before_apply BOOLEAN DEFAULT 1,
+                schedule_config TEXT,
+                created_datetime TEXT,
+                modified_datetime TEXT,
+                last_run_datetime TEXT,
+                run_count INTEGER DEFAULT 0,
+                last_run_result TEXT
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS rule_confirmations (
+                id TEXT PRIMARY KEY,
+                rule_id TEXT,
+                rule_name TEXT,
+                owner_id TEXT,
+                action_description TEXT,
+                action_data TEXT,
+                target_entity_type TEXT,
+                target_entity_id TEXT,
+                created_datetime TEXT
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS rule_execution_log (
+                id TEXT PRIMARY KEY,
+                rule_id TEXT,
+                owner_id TEXT,
+                trigger_event TEXT,
+                entities_evaluated INTEGER DEFAULT 0,
+                entities_matched INTEGER DEFAULT 0,
+                actions_executed INTEGER DEFAULT 0,
+                actions_failed INTEGER DEFAULT 0,
+                result_summary TEXT,
+                executed_datetime TEXT
+            )
+        """)
+
+        conn.commit()
+        logger.info("Rules tables created/verified")
+    except Exception as e:
+        logger.error(f"Error creating rules tables: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
+# ── Multi-Account Email: migration ───────────────────────────────────────
+
+def migrate_add_email_accounts():
+    """Add email_accounts column to settings and email_account_id to chits.
+
+    email_accounts (TEXT) stores a JSON array of account objects, each with:
+    {id, email, display_name, imap_host, imap_port, smtp_host, smtp_port,
+     username, password_encrypted}
+
+    email_account_id (TEXT) on chits tracks which account an email belongs to.
+
+    Migrates existing email_account (single object) into email_accounts array.
+
+    Fully idempotent — checks column existence before adding.
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        # ── settings table: add email_accounts column ────────────────────
+        cursor.execute("PRAGMA table_info(settings)")
+        settings_cols = {row[1] for row in cursor.fetchall()}
+
+        if "email_accounts" not in settings_cols:
+            cursor.execute("ALTER TABLE settings ADD COLUMN email_accounts TEXT")
+            logger.info("Added email_accounts column to settings table")
+
+            # Migrate existing email_account → email_accounts array
+            cursor.execute("SELECT user_id, email_account FROM settings WHERE email_account IS NOT NULL AND email_account != ''")
+            rows = cursor.fetchall()
+            for user_id, old_acct_json in rows:
+                try:
+                    import json as _json
+                    old_acct = _json.loads(old_acct_json) if isinstance(old_acct_json, str) else old_acct_json
+                    if isinstance(old_acct, dict) and old_acct.get("email"):
+                        # Assign a stable ID to the migrated account
+                        old_acct["id"] = str(uuid4())
+                        new_accounts = [old_acct]
+                        cursor.execute(
+                            "UPDATE settings SET email_accounts = ? WHERE user_id = ?",
+                            (_json.dumps(new_accounts), user_id)
+                        )
+                        logger.info(f"Migrated email_account to email_accounts for user {user_id}")
+                except Exception as e:
+                    logger.warning(f"Failed to migrate email_account for user {user_id}: {e}")
+
+        # ── chits table: add email_account_id column ─────────────────────
+        cursor.execute("PRAGMA table_info(chits)")
+        chit_cols = {row[1] for row in cursor.fetchall()}
+
+        if "email_account_id" not in chit_cols:
+            cursor.execute("ALTER TABLE chits ADD COLUMN email_account_id TEXT")
+            logger.info("Added email_account_id column to chits table")
+
+        conn.commit()
+        logger.info("Multi-account email migration complete")
+    except Exception as e:
+        logger.error(f"Error in migrate_add_email_accounts: {str(e)}")
     finally:
         if conn:
             conn.close()

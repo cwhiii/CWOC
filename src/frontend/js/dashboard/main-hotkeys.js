@@ -265,3 +265,22 @@ function _closeReference() {
   var overlay = document.getElementById('reference-overlay');
   if (overlay) overlay.classList.remove('active');
 }
+
+/* ── F10 → Rules Manager ────────────────────────────────────────────────── */
+
+/**
+ * Register the global F10 keydown listener to navigate to the Rules Manager.
+ * Follows the same pattern as F4 (Calculator) in shared-calculator.js.
+ * Called once at script load time.
+ */
+function _rulesSetupHotkey() {
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'F10' && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
+      e.preventDefault();
+      if (typeof storePreviousState === 'function') storePreviousState();
+      window.location.href = '/frontend/html/rules-manager.html';
+    }
+  });
+}
+
+_rulesSetupHotkey();

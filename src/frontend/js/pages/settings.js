@@ -447,85 +447,301 @@ function _collectMapSettings() {
   };
 }
 
-// ── Email Account Settings ────────────────────────────────────────────────────
+// ── Email Account Settings (Multi-Account) ───────────────────────────────
 
-/** Populate email account form fields from loaded settings */
+/** Internal counter for generating unique DOM IDs for new account cards */
+var _emailAccountCounter = 0;
+
+/** Populate email account cards from loaded settings */
 function _loadEmailAccountSettings(settings) {
   try {
-    var acct = settings.email_account;
-    if (!acct || typeof acct !== 'object') return;
-    var el;
-    el = document.getElementById('emailAccountEmail');
-    if (el) el.value = acct.email || '';
-    el = document.getElementById('emailAccountDisplayName');
-    if (el) el.value = acct.display_name || '';
-    el = document.getElementById('emailAccountImapHost');
-    if (el && acct.imap_host) el.value = acct.imap_host;
-    el = document.getElementById('emailAccountImapPort');
-    if (el && acct.imap_port != null) el.value = acct.imap_port;
-    el = document.getElementById('emailAccountSmtpHost');
-    if (el && acct.smtp_host) el.value = acct.smtp_host;
-    el = document.getElementById('emailAccountSmtpPort');
-    if (el && acct.smtp_port != null) el.value = acct.smtp_port;
-    el = document.getElementById('emailAccountUsername');
-    if (el) el.value = acct.username || '';
-    // Populate password from decrypted value returned by the server.
-    // Clear any browser-autofilled value and track manual input.
-    el = document.getElementById('emailAccountPassword');
-    if (el) {
-      el.value = acct.password || '';
-      if (acct.password || acct.password_encrypted) el.placeholder = 'App password';
-      el._userTyped = false;
-      el.addEventListener('input', function() { this._userTyped = true; });
+    var accounts = settings.email_accounts;
+    if (!Array.isArray(accounts) || accounts.length === 0) {
+      // Fall back to legacy single account
+      var legacy = settings.email_account;
+      if (legacy && typeof legacy === 'object' && legacy.email) {
+        if (!legacy.id) legacy.id = _generateAccountId();
+        accounts = [legacy];
+      } else {
+        accounts = [];
+      }
     }
-    // Sync settings
+    _renderEmailAccountsList(accounts);
+
+    // Shared sync settings — read from first account or defaults
+    var firstAcct = accounts[0] || {};
+    var el;
     el = document.getElementById('emailMaxPull');
-    if (el) el.value = acct.max_pull || 50;
+    if (el) el.value = firstAcct.max_pull || 50;
     el = document.getElementById('emailCheckInterval');
-    if (el) el.value = acct.check_interval || 'manual';
+    if (el) el.value = firstAcct.check_interval || 'manual';
     // Signature
     el = document.getElementById('emailSignature');
-    if (el) el.value = acct.signature || '';
+    if (el) el.value = firstAcct.signature || '';
   } catch (e) {
     console.error('[Settings] Error loading email account settings:', e);
   }
 }
 
-/** Collect email account form fields into a JSON object for the save payload */
-function _collectEmailAccountSettings() {
-  var email = (document.getElementById('emailAccountEmail') || {}).value || '';
-  // If no email address entered, don't include email_account at all
-  if (!email.trim()) return null;
-  var pw = (document.getElementById('emailAccountPassword') || {}).value || '';
-  var obj = {
-    email: email.trim(),
-    display_name: ((document.getElementById('emailAccountDisplayName') || {}).value || '').trim(),
-    imap_host: ((document.getElementById('emailAccountImapHost') || {}).value || 'imap.gmail.com').trim(),
-    imap_port: parseInt((document.getElementById('emailAccountImapPort') || {}).value, 10) || 993,
-    smtp_host: ((document.getElementById('emailAccountSmtpHost') || {}).value || 'smtp.gmail.com').trim(),
-    smtp_port: parseInt((document.getElementById('emailAccountSmtpPort') || {}).value, 10) || 587,
-    username: ((document.getElementById('emailAccountUsername') || {}).value || '').trim(),
-    max_pull: parseInt((document.getElementById('emailMaxPull') || {}).value, 10) || 50,
-    check_interval: ((document.getElementById('emailCheckInterval') || {}).value || 'manual'),
-    signature: ((document.getElementById('emailSignature') || {}).value || ''),
-  };
-  // Only include password if the user typed a new one (non-empty field)
-  if (pw) obj.password = pw;
-  return obj;
+/** Generate a simple unique ID for a new email account */
+function _generateAccountId() {
+  return 'acct_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 6);
 }
 
-/** Toggle email password field visibility */
-function toggleEmailPasswordVisibility() {
-  var input = document.getElementById('emailAccountPassword');
-  var btn = document.getElementById('emailPasswordToggleBtn');
+/** Render all email account cards into #emailAccountsList */
+function _renderEmailAccountsList(accounts) {
+  var container = document.getElementById('emailAccountsList');
+  if (!container) return;
+  container.innerHTML = '';
+  _emailAccountCounter = 0;
+  if (!accounts || accounts.length === 0) {
+    container.innerHTML = '<div style="opacity:0.5;font-size:0.85em;padding:4px;">No email accounts configured. Click "Add Account" below.</div>';
+    return;
+  }
+  accounts.forEach(function(acct, idx) {
+    _appendEmailAccountCard(container, acct, idx);
+  });
+}
+
+/** Append a single email account card to the container */
+function _appendEmailAccountCard(container, acct, idx) {
+  var n = _emailAccountCounter++;
+  var card = document.createElement('div');
+  card.className = 'email-account-card';
+  card.dataset.accountId = acct.id || '';
+  card.dataset.idx = n;
+
+  var label = acct.email || 'New Account';
+  var hasPassword = !!(acct.password || acct.password_encrypted);
+
+  card.innerHTML =
+    '<div class="email-account-header" onclick="_toggleEmailAccountCard(this.parentNode)">' +
+      '<span class="email-account-toggle">▼</span>' +
+      '<span class="email-account-label">' + _escapeHtml(label) + '</span>' +
+    '</div>' +
+    '<button type="button" class="email-account-remove" onclick="_removeEmailAccount(this.closest(\'.email-account-card\'))" title="Remove account">✕</button>' +
+    '<div class="email-account-body">' +
+      '<div class="setting-inline">' +
+        '<label>Email Address</label>' +
+        '<input type="text" class="ea-email" placeholder="user@gmail.com" value="' + _escapeAttr(acct.email || '') + '" style="flex:1;min-width:0;" />' +
+      '</div>' +
+      '<div class="setting-inline">' +
+        '<label>Display Name</label>' +
+        '<input type="text" class="ea-display-name" placeholder="Your Name" value="' + _escapeAttr(acct.display_name || '') + '" style="flex:1;min-width:0;" />' +
+      '</div>' +
+      '<div class="setting-inline">' +
+        '<label>Username</label>' +
+        '<input type="text" class="ea-username" placeholder="user@gmail.com" autocomplete="off" value="' + _escapeAttr(acct.username || '') + '" style="flex:1;min-width:0;" />' +
+      '</div>' +
+      '<div class="setting-inline">' +
+        '<label>Password</label>' +
+        '<div style="flex:1;min-width:0;display:flex;gap:4px;">' +
+          '<input type="password" class="ea-password" placeholder="' + (hasPassword ? '••••••••' : 'App password') + '" autocomplete="new-password" data-lpignore="true" data-1p-ignore="true" style="flex:1;min-width:0;" value="' + _escapeAttr(acct.password || '') + '" />' +
+          '<button type="button" class="standard-button ea-pw-toggle" style="flex-shrink:0;padding:4px 8px;font-size:0.85em;" onclick="_toggleEmailAcctPwVisibility(this)">👁️</button>' +
+        '</div>' +
+      '</div>' +
+      '<p class="setting-hint">For Gmail, use an App Password. Go to Google Account → Security → App Passwords.</p>' +
+      '<div class="setting-inline" style="margin-top:6px;">' +
+        '<label>IMAP Host</label>' +
+        '<input type="text" class="ea-imap-host" value="' + _escapeAttr(acct.imap_host || 'imap.gmail.com') + '" style="flex:1;min-width:0;" />' +
+      '</div>' +
+      '<div class="setting-inline">' +
+        '<label>IMAP Port</label>' +
+        '<input type="number" class="ea-imap-port" value="' + (acct.imap_port || 993) + '" style="width:80px;" />' +
+      '</div>' +
+      '<div class="setting-inline">' +
+        '<label>SMTP Host</label>' +
+        '<input type="text" class="ea-smtp-host" value="' + _escapeAttr(acct.smtp_host || 'smtp.gmail.com') + '" style="flex:1;min-width:0;" />' +
+      '</div>' +
+      '<div class="setting-inline">' +
+        '<label>SMTP Port</label>' +
+        '<input type="number" class="ea-smtp-port" value="' + (acct.smtp_port || 587) + '" style="width:80px;" />' +
+      '</div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px;">' +
+        '<button type="button" class="standard-button" onclick="_testEmailAccountConnection(this.closest(\'.email-account-card\'))">🔌 Test Connection</button>' +
+        '<span class="email-test-result"></span>' +
+      '</div>' +
+    '</div>';
+
+  // Update label when email changes
+  var emailInput = card.querySelector('.ea-email');
+  emailInput.addEventListener('input', function() {
+    var lbl = card.querySelector('.email-account-label');
+    if (lbl) lbl.textContent = this.value || 'New Account';
+    setSaveButtonUnsaved();
+  });
+
+  // Mark dirty on any input change
+  card.querySelectorAll('input').forEach(function(inp) {
+    inp.addEventListener('input', function() { setSaveButtonUnsaved(); });
+  });
+
+  container.appendChild(card);
+}
+
+/** Toggle collapse/expand of an email account card */
+function _toggleEmailAccountCard(card) {
+  card.classList.toggle('collapsed');
+}
+
+/** Remove an email account card */
+function _removeEmailAccount(card) {
+  if (!card) return;
+  var container = document.getElementById('emailAccountsList');
+  card.remove();
+  setSaveButtonUnsaved();
+  // Show empty message if no accounts left
+  if (container && container.children.length === 0) {
+    container.innerHTML = '<div style="opacity:0.5;font-size:0.85em;padding:4px;">No email accounts configured. Click "Add Account" below.</div>';
+  }
+}
+
+/** Add a new empty email account card */
+function addEmailAccount() {
+  var container = document.getElementById('emailAccountsList');
+  if (!container) return;
+  // Remove empty message if present
+  var emptyMsg = container.querySelector('div[style*="opacity"]');
+  if (emptyMsg && !emptyMsg.classList.contains('email-account-card')) emptyMsg.remove();
+
+  var newAcct = {
+    id: _generateAccountId(),
+    email: '',
+    display_name: '',
+    imap_host: 'imap.gmail.com',
+    imap_port: 993,
+    smtp_host: 'smtp.gmail.com',
+    smtp_port: 587,
+    username: '',
+    password: '',
+  };
+  _appendEmailAccountCard(container, newAcct, container.children.length);
+  setSaveButtonUnsaved();
+}
+
+/** Toggle password visibility for an account card */
+function _toggleEmailAcctPwVisibility(btn) {
+  var input = btn.closest('.setting-inline').querySelector('.ea-password');
   if (!input) return;
   if (input.type === 'password') {
     input.type = 'text';
-    if (btn) btn.textContent = '🙈';
+    btn.textContent = '🙈';
   } else {
     input.type = 'password';
-    if (btn) btn.textContent = '👁️';
+    btn.textContent = '👁️';
   }
+}
+
+/** Test connection for a specific email account card */
+async function _testEmailAccountConnection(card) {
+  if (!card) return;
+  var resultSpan = card.querySelector('.email-test-result');
+  var btn = card.querySelector('button[onclick*="testEmailAccountConnection"]');
+  if (resultSpan) { resultSpan.textContent = '⏳ Testing...'; resultSpan.style.color = '#8b5a2b'; }
+  if (btn) btn.disabled = true;
+
+  var payload = {
+    email: (card.querySelector('.ea-email') || {}).value || '',
+    imap_host: (card.querySelector('.ea-imap-host') || {}).value || 'imap.gmail.com',
+    imap_port: parseInt((card.querySelector('.ea-imap-port') || {}).value, 10) || 993,
+    smtp_host: (card.querySelector('.ea-smtp-host') || {}).value || 'smtp.gmail.com',
+    smtp_port: parseInt((card.querySelector('.ea-smtp-port') || {}).value, 10) || 587,
+    username: (card.querySelector('.ea-username') || {}).value || '',
+    password: (card.querySelector('.ea-password') || {}).value || '',
+  };
+
+  try {
+    var resp = await fetch('/api/email/test-connection', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    var data = await resp.json();
+    if (!resp.ok) {
+      var msg = data.detail || data.error || 'Connection failed';
+      if (resultSpan) { resultSpan.textContent = '❌ ' + msg; resultSpan.style.color = '#b22222'; }
+    } else if (data.imap && data.smtp) {
+      var imapOk = data.imap.success;
+      var smtpOk = data.smtp.success;
+      if (imapOk && smtpOk) {
+        if (resultSpan) { resultSpan.textContent = '✅ IMAP & SMTP connected'; resultSpan.style.color = '#1a7a4c'; }
+      } else {
+        var parts = [];
+        if (imapOk) parts.push('✅ IMAP OK');
+        else parts.push('❌ IMAP: ' + (data.imap.message || 'failed'));
+        if (smtpOk) parts.push('✅ SMTP OK');
+        else parts.push('❌ SMTP: ' + (data.smtp.message || 'failed'));
+        if (resultSpan) {
+          resultSpan.innerHTML = parts.join('<br>');
+          resultSpan.style.color = '#b22222';
+        }
+      }
+    } else {
+      if (resultSpan) { resultSpan.textContent = '❌ Unexpected response'; resultSpan.style.color = '#b22222'; }
+    }
+  } catch (e) {
+    console.error('Test connection error:', e);
+    if (resultSpan) { resultSpan.textContent = '❌ Network error'; resultSpan.style.color = '#b22222'; }
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+/** Collect all email account cards into a JSON array for the save payload */
+function _collectEmailAccountsSettings() {
+  var container = document.getElementById('emailAccountsList');
+  if (!container) return [];
+  var cards = container.querySelectorAll('.email-account-card');
+  var accounts = [];
+  var sharedMaxPull = parseInt((document.getElementById('emailMaxPull') || {}).value, 10) || 50;
+  var sharedCheckInterval = ((document.getElementById('emailCheckInterval') || {}).value || 'manual');
+  var sharedSignature = ((document.getElementById('emailSignature') || {}).value || '');
+
+  cards.forEach(function(card) {
+    var emailVal = (card.querySelector('.ea-email') || {}).value || '';
+    if (!emailVal.trim()) return; // Skip empty accounts
+    var pw = (card.querySelector('.ea-password') || {}).value || '';
+    var obj = {
+      id: card.dataset.accountId || _generateAccountId(),
+      email: emailVal.trim(),
+      display_name: ((card.querySelector('.ea-display-name') || {}).value || '').trim(),
+      imap_host: ((card.querySelector('.ea-imap-host') || {}).value || 'imap.gmail.com').trim(),
+      imap_port: parseInt((card.querySelector('.ea-imap-port') || {}).value, 10) || 993,
+      smtp_host: ((card.querySelector('.ea-smtp-host') || {}).value || 'smtp.gmail.com').trim(),
+      smtp_port: parseInt((card.querySelector('.ea-smtp-port') || {}).value, 10) || 587,
+      username: ((card.querySelector('.ea-username') || {}).value || '').trim(),
+      // Shared sync settings stored on each account for backend compatibility
+      max_pull: sharedMaxPull,
+      check_interval: sharedCheckInterval,
+      signature: sharedSignature,
+    };
+    if (pw) obj.password = pw;
+    accounts.push(obj);
+  });
+  return accounts;
+}
+
+/** Escape HTML for safe insertion */
+function _escapeHtml(str) {
+  if (!str) return '';
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/** Escape for HTML attribute values */
+function _escapeAttr(str) {
+  if (!str) return '';
+  return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+/** Legacy single-account collect — still used for backward compat in save payload */
+function _collectEmailAccountSettings() {
+  // Return the first account as the legacy email_account for backward compat
+  var accounts = _collectEmailAccountsSettings();
+  if (accounts.length === 0) return null;
+  // Return first account as legacy format
+  var first = Object.assign({}, accounts[0]);
+  delete first.id; // Legacy format doesn't have id
+  return first;
 }
 
 /** Open the signature editor modal — textarea on top, live preview on bottom */
@@ -688,60 +904,7 @@ function _applyMarkdownShortcut(textarea, key) {
   textarea.focus();
 }
 
-/** Test email connection — POST /api/email/test-connection */
-async function testEmailConnection() {
-  var resultSpan = document.getElementById('emailTestResult');
-  var btn = document.getElementById('emailTestConnectionBtn');
-  if (resultSpan) { resultSpan.textContent = '⏳ Testing...'; resultSpan.style.color = '#8b5a2b'; }
-  if (btn) btn.disabled = true;
-
-  var payload = {
-    email: ((document.getElementById('emailAccountEmail') || {}).value || '').trim(),
-    imap_host: ((document.getElementById('emailAccountImapHost') || {}).value || 'imap.gmail.com').trim(),
-    imap_port: parseInt((document.getElementById('emailAccountImapPort') || {}).value, 10) || 993,
-    smtp_host: ((document.getElementById('emailAccountSmtpHost') || {}).value || 'smtp.gmail.com').trim(),
-    smtp_port: parseInt((document.getElementById('emailAccountSmtpPort') || {}).value, 10) || 587,
-    username: ((document.getElementById('emailAccountUsername') || {}).value || '').trim(),
-    password: (document.getElementById('emailAccountPassword') || {}).value || '',
-  };
-
-  try {
-    var resp = await fetch('/api/email/test-connection', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    var data = await resp.json();
-    if (!resp.ok) {
-      var msg = data.detail || data.error || 'Connection failed';
-      if (resultSpan) { resultSpan.textContent = '❌ ' + msg; resultSpan.style.color = '#b22222'; }
-    } else if (data.imap && data.smtp) {
-      // Both IMAP and SMTP results returned
-      var imapOk = data.imap.success;
-      var smtpOk = data.smtp.success;
-      if (imapOk && smtpOk) {
-        if (resultSpan) { resultSpan.textContent = '✅ IMAP & SMTP connected'; resultSpan.style.color = '#1a7a4c'; }
-      } else {
-        var parts = [];
-        if (imapOk) parts.push('✅ IMAP OK');
-        else parts.push('❌ IMAP: ' + (data.imap.message || 'failed'));
-        if (smtpOk) parts.push('✅ SMTP OK');
-        else parts.push('❌ SMTP: ' + (data.smtp.message || 'failed'));
-        if (resultSpan) {
-          resultSpan.innerHTML = parts.join('<br>');
-          resultSpan.style.color = '#b22222';
-        }
-      }
-    } else {
-      if (resultSpan) { resultSpan.textContent = '❌ Unexpected response'; resultSpan.style.color = '#b22222'; }
-    }
-  } catch (e) {
-    console.error('Test connection error:', e);
-    if (resultSpan) { resultSpan.textContent = '❌ Network error'; resultSpan.style.color = '#b22222'; }
-  } finally {
-    if (btn) btn.disabled = false;
-  }
-}
+/** Test email connection — now handled per-account via _testEmailAccountConnection */
 
 /** Backfill — first estimate, then confirm, then sync */
 async function emailBackfill() {
@@ -788,7 +951,12 @@ async function emailBackfill() {
     var syncData = await syncResp.json();
     if (syncResp.ok) {
       var newCount = syncData.new_count || 0;
-      if (resultSpan) { resultSpan.textContent = '✅ ' + newCount + ' emails imported'; resultSpan.style.color = '#1a7a4c'; }
+      var delCount = syncData.deleted_count || 0;
+      var parts = [];
+      if (newCount > 0) parts.push(newCount + ' imported');
+      if (delCount > 0) parts.push(delCount + ' removed');
+      var msg = parts.length ? parts.join(', ') : 'No new emails';
+      if (resultSpan) { resultSpan.textContent = '✅ ' + msg; resultSpan.style.color = '#1a7a4c'; }
     } else {
       var syncErr = syncData.detail || syncData.error || 'Sync failed';
       if (resultSpan) { resultSpan.textContent = '❌ ' + syncErr; resultSpan.style.color = '#b22222'; }
@@ -2282,6 +2450,7 @@ class SettingsManager {
       kiosk_users: _gatherKioskTags(),
       ..._collectMapSettings(),
       email_account: (function() { var a = _collectEmailAccountSettings(); return a ? JSON.stringify(a) : null; })(),
+      email_accounts: (function() { var a = _collectEmailAccountsSettings(); return a.length > 0 ? JSON.stringify(a) : null; })(),
       attachment_max_size_mb: ((document.getElementById('attachmentMaxSizeMb') || {}).value || '10'),
       attachment_max_storage_mb: ((document.getElementById('attachmentMaxStorageMb') || {}).value || '500'),
       default_share_contacts: (document.getElementById('default-share-contacts') && document.getElementById('default-share-contacts').checked) ? '1' : '0',

@@ -828,3 +828,363 @@ async def start_weather_schedulers():
     asyncio.create_task(_weather_daily_loop())
     asyncio.create_task(_alert_push_loop())
     logger.info("Weather scheduler tasks started (hourly + daily + alert push)")
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Rules Engine — Scheduled Rule Execution
+# ══════════════════════════════════════════════════════════════════════════
+
+from src.backend.db import deserialize_json_field
+
+
+def _is_scheduled_rule_due(rule: dict, now: datetime) -> bool:
+    """Check whether a scheduled rule is due for execution based on its
+    schedule_config and last_run_datetime.
+
+    schedule_config JSON shape:
+        {"frequency": "daily"|"hourly", "interval": int, "time_of_day": "HH:MM"}
+
+    Returns True when enough time has elapsed since the last run.
+    """
+    config_raw = rule.get("schedule_config")
+    if not config_raw:
+        return False
+
+    if isinstance(config_raw, str):
+        try:
+            config = json.loads(config_raw)
+        except (json.JSONDecodeError, TypeError):
+            return False
+    else:
+        config = config_raw
+
+    if not isinstance(config, dict):
+        return False
+
+    frequency = config.get("frequency", "daily")
+    interval = int(config.get("interval", 1) or 1)
+    time_of_day = config.get("time_of_day")  # "HH:MM" or None
+
+    last_run_raw = rule.get("last_run_datetime")
+    last_run = None
+    if last_run_raw and isinstance(last_run_raw, str) and last_run_raw.strip():
+        try:
+            last_run = datetime.fromisoformat(last_run_raw.replace("Z", "+00:00")).replace(tzinfo=None)
+        except (ValueError, TypeError):
+            last_run = None
+
+    if frequency == "daily":
+        # Daily rules: check if the current time matches time_of_day (HH:MM)
+        # and that we haven't already run today.
+        if time_of_day:
+            current_hhmm = now.strftime("%H:%M")
+            if current_hhmm != time_of_day:
+                # Not the right time yet — but check if we're within the
+                # 60-second polling window (scheduler runs every 60s).
+                try:
+                    target_h, target_m = int(time_of_day.split(":")[0]), int(time_of_day.split(":")[1])
+                    target_today = now.replace(hour=target_h, minute=target_m, second=0, microsecond=0)
+                    diff = abs((now - target_today).total_seconds())
+                    if diff > 90:  # outside the polling window
+                        return False
+                except (ValueError, IndexError):
+                    return False
+
+        # Check interval (every N days)
+        if last_run:
+            elapsed = (now - last_run).total_seconds()
+            required = interval * 86400  # days in seconds
+            if elapsed < required - 90:  # 90s grace for scheduler jitter
+                return False
+
+        return True
+
+    elif frequency == "hourly":
+        # Hourly rules: check if enough hours have elapsed since last run.
+        if last_run:
+            elapsed = (now - last_run).total_seconds()
+            required = interval * 3600  # hours in seconds
+            if elapsed < required - 90:  # 90s grace for scheduler jitter
+                return False
+        return True
+
+    # Unknown frequency — don't run
+    return False
+
+
+async def _rules_scheduled_loop():
+    """Background task: check for due scheduled rules every 60 seconds.
+
+    For each due rule:
+    1. Query all matching entities (chits for chit-scoped, contacts for contact-scoped)
+    2. Evaluate the condition tree against each entity
+    3. Execute or queue actions based on confirm_before_apply
+    4. Update rule metadata (last_run_datetime, run_count, last_run_result)
+    5. Insert execution log entry
+    """
+    from src.backend.rules_engine import (
+        evaluate_condition_tree,
+        execute_action,
+        _build_action_description,
+    )
+    from uuid import uuid4
+
+    # On first iteration, run immediately to catch overdue rules after restart
+    first_run = True
+
+    while True:
+        try:
+            if first_run:
+                # Short delay to let the server fully start
+                await asyncio.sleep(5)
+                first_run = False
+            else:
+                await asyncio.sleep(60)
+
+            now = datetime.utcnow()
+            current_time = now.isoformat()
+
+            conn = None
+            try:
+                conn = sqlite3.connect(DB_PATH)
+                cursor = conn.cursor()
+
+                # ── 1. Load all enabled scheduled rules ──────────
+                cursor.execute(
+                    "SELECT * FROM rules WHERE trigger_type = 'scheduled' AND enabled = 1 "
+                    "ORDER BY priority ASC"
+                )
+                columns = [col[0] for col in cursor.description]
+                rules = [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+                if not rules:
+                    continue
+
+                for rule in rules:
+                    rule_id = rule.get("id", "")
+                    rule_name = rule.get("name", "")
+                    owner_id = rule.get("owner_id", "")
+                    confirm = rule.get("confirm_before_apply", 1)
+
+                    if not owner_id:
+                        continue
+
+                    # ── 2. Check if rule is due ──────────────────
+                    if not _is_scheduled_rule_due(rule, now):
+                        continue
+
+                    logger.info("Scheduled rule '%s' (%s) is due — executing", rule_name, rule_id)
+
+                    # ── 3. Parse conditions and actions ──────────
+                    conditions_raw = rule.get("conditions")
+                    if isinstance(conditions_raw, str):
+                        conditions = deserialize_json_field(conditions_raw)
+                    else:
+                        conditions = conditions_raw
+
+                    actions_raw = rule.get("actions")
+                    if isinstance(actions_raw, str):
+                        actions_list = deserialize_json_field(actions_raw)
+                    else:
+                        actions_list = actions_raw
+                    actions_list = actions_list or []
+
+                    # ── 4. Determine entity scope and load entities
+                    # Scheduled rules evaluate against all entities of the
+                    # appropriate type for the owner.
+                    # Heuristic: if conditions reference contact fields, scope
+                    # to contacts; otherwise default to chits.
+                    cond_str = json.dumps(conditions or {}).lower()
+                    act_str = json.dumps(actions_list or []).lower()
+                    contact_fields = {"given_name", "surname", "organization", "display_name"}
+                    is_contact_scoped = any(f in cond_str for f in contact_fields)
+
+                    entities = []
+                    entity_type = "contact" if is_contact_scoped else "chit"
+
+                    if entity_type == "chit":
+                        cursor.execute(
+                            "SELECT * FROM chits WHERE owner_id = ? AND (deleted = 0 OR deleted IS NULL)",
+                            (owner_id,),
+                        )
+                    else:
+                        cursor.execute(
+                            "SELECT * FROM contacts WHERE owner_id = ?",
+                            (owner_id,),
+                        )
+
+                    ent_columns = [col[0] for col in cursor.description]
+                    entities = [dict(zip(ent_columns, row)) for row in cursor.fetchall()]
+
+                    # ── 5. Pre-load contacts for cross-ref if needed
+                    contacts = None
+                    if "contact" in cond_str or "add_matching_contacts" in act_str:
+                        cursor.execute(
+                            "SELECT * FROM contacts WHERE owner_id = ?", (owner_id,)
+                        )
+                        contact_cols = [col[0] for col in cursor.description]
+                        contacts = [dict(zip(contact_cols, r)) for r in cursor.fetchall()]
+
+                    # ── 6. Evaluate and execute ──────────────────
+                    entities_evaluated = len(entities)
+                    entities_matched = 0
+                    total_actions_executed = 0
+                    total_actions_failed = 0
+
+                    for entity in entities:
+                        matched = False
+                        try:
+                            if conditions and isinstance(conditions, dict):
+                                matched = evaluate_condition_tree(conditions, entity, contacts)
+                            elif not conditions:
+                                # No conditions = match all entities
+                                matched = True
+                        except Exception as eval_err:
+                            logger.error(
+                                "Scheduled rule %s condition eval failed on entity %s: %s",
+                                rule_id, entity.get("id", "?"), eval_err,
+                            )
+                            continue
+
+                        if not matched:
+                            continue
+
+                        entities_matched += 1
+
+                        if confirm:
+                            # Queue each action for confirmation
+                            for act in actions_list:
+                                try:
+                                    act_type = act.get("type", "unknown")
+                                    act_params = act.get("params", {})
+                                    description = _build_action_description(act_type, act_params, entity)
+                                    confirmation_id = str(uuid4())
+                                    cursor.execute(
+                                        "INSERT INTO rule_confirmations "
+                                        "(id, rule_id, rule_name, owner_id, action_description, "
+                                        " action_data, target_entity_type, target_entity_id, created_datetime) "
+                                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                                        (
+                                            confirmation_id,
+                                            rule_id,
+                                            rule_name,
+                                            owner_id,
+                                            description,
+                                            serialize_json_field(act),
+                                            entity_type,
+                                            entity.get("id", ""),
+                                            current_time,
+                                        ),
+                                    )
+                                    total_actions_executed += 1
+                                except Exception as q_err:
+                                    logger.error(
+                                        "Failed to queue confirmation for scheduled rule %s: %s",
+                                        rule_id, q_err,
+                                    )
+                                    total_actions_failed += 1
+                        else:
+                            # Execute actions immediately
+                            for act in actions_list:
+                                result = execute_action(
+                                    act, entity_type, entity.get("id", ""),
+                                    owner_id, rule_name, rule_id,
+                                )
+                                if result.get("success"):
+                                    total_actions_executed += 1
+                                else:
+                                    total_actions_failed += 1
+
+                    # ── 7. Build result summary ──────────────────
+                    if total_actions_failed > 0 and total_actions_executed > 0:
+                        result_summary = (
+                            f"partial: {total_actions_executed} of "
+                            f"{total_actions_executed + total_actions_failed} actions "
+                            f"{'queued' if confirm else 'applied'} "
+                            f"({entities_matched}/{entities_evaluated} entities matched)"
+                        )
+                    elif entities_matched > 0 and total_actions_executed > 0:
+                        result_summary = (
+                            f"success: {total_actions_executed} actions "
+                            f"{'queued for confirmation' if confirm else 'applied'} "
+                            f"({entities_matched}/{entities_evaluated} entities matched)"
+                        )
+                    elif entities_matched > 0 and total_actions_executed == 0 and total_actions_failed > 0:
+                        result_summary = (
+                            f"failed: all {total_actions_failed} actions failed "
+                            f"({entities_matched}/{entities_evaluated} entities matched)"
+                        )
+                    elif entities_matched > 0 and not actions_list:
+                        result_summary = (
+                            f"matched {entities_matched}/{entities_evaluated} entities "
+                            f"but no actions configured"
+                        )
+                    elif entities_matched == 0:
+                        result_summary = f"no match (0/{entities_evaluated} entities)"
+                    else:
+                        result_summary = "completed"
+
+                    # ── 8. Insert execution log entry ────────────
+                    log_id = str(uuid4())
+                    try:
+                        cursor.execute(
+                            "INSERT INTO rule_execution_log "
+                            "(id, rule_id, owner_id, trigger_event, entities_evaluated, "
+                            " entities_matched, actions_executed, actions_failed, "
+                            " result_summary, executed_datetime) "
+                            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                            (
+                                log_id,
+                                rule_id,
+                                owner_id,
+                                "scheduled",
+                                entities_evaluated,
+                                entities_matched,
+                                total_actions_executed,
+                                total_actions_failed,
+                                result_summary,
+                                current_time,
+                            ),
+                        )
+                    except Exception as log_err:
+                        logger.error(
+                            "Failed to insert execution log for scheduled rule %s: %s",
+                            rule_id, log_err,
+                        )
+
+                    # ── 9. Update rule metadata ──────────────────
+                    try:
+                        run_count = (rule.get("run_count") or 0) + 1
+                        cursor.execute(
+                            "UPDATE rules SET last_run_datetime = ?, run_count = ?, "
+                            "last_run_result = ? WHERE id = ?",
+                            (current_time, run_count, result_summary, rule_id),
+                        )
+                    except Exception as meta_err:
+                        logger.error(
+                            "Failed to update scheduled rule %s metadata: %s",
+                            rule_id, meta_err,
+                        )
+
+                    logger.info(
+                        "Scheduled rule '%s' complete: %s", rule_name, result_summary
+                    )
+
+                conn.commit()
+
+            except Exception as db_err:
+                logger.error("Rules scheduler DB error: %s", db_err)
+            finally:
+                if conn:
+                    conn.close()
+
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logger.error("Rules scheduler unexpected error: %s", e)
+
+
+async def start_rules_scheduler():
+    """Register the background rules scheduler task. Called from main.py on startup."""
+    asyncio.create_task(_rules_scheduled_loop())
+    logger.info("Rules scheduler task started (60-second polling loop)")

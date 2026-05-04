@@ -55,7 +55,18 @@ def get_settings(user_id: str, request: Request):
         settings["shared_tags"] = deserialize_json_field(settings.get("shared_tags"))
         settings["kiosk_users"] = deserialize_json_field(settings.get("kiosk_users"))
         settings["email_account"] = deserialize_json_field(settings.get("email_account"))
-        # Decrypt the email password so the frontend can populate the field
+        # Multi-account email: deserialize and decrypt passwords
+        settings["email_accounts"] = deserialize_json_field(settings.get("email_accounts"))
+        if isinstance(settings.get("email_accounts"), list):
+            for acct in settings["email_accounts"]:
+                if isinstance(acct, dict) and acct.get("password_encrypted"):
+                    try:
+                        from src.backend.routes.email import _decrypt_password
+                        acct["password"] = _decrypt_password(acct["password_encrypted"])
+                    except Exception as e:
+                        logger.error(f"Failed to decrypt email password for account {acct.get('email', '?')}: {e}")
+                        acct["password"] = ""
+        # Decrypt the email password so the frontend can populate the field (legacy single account)
         if isinstance(settings.get("email_account"), dict) and settings["email_account"].get("password_encrypted"):
             try:
                 from src.backend.routes.email import _decrypt_password  # lazy import to avoid circular deps
@@ -124,6 +135,11 @@ def save_settings(settings: Settings, request: Request):
         if settings.email_account is None and old_settings_dict:
             preserved_email_account = old_settings_dict.get("email_account")
 
+        # Preserve email_accounts if not provided
+        preserved_email_accounts = None
+        if settings.email_accounts is None and old_settings_dict:
+            preserved_email_accounts = old_settings_dict.get("email_accounts")
+
         # If email_account is provided, encrypt the password before storing
         _final_email_account = preserved_email_account
         if settings.email_account is not None:
@@ -144,6 +160,38 @@ def save_settings(settings: Settings, request: Request):
             except Exception as e:
                 logger.error(f"Error processing email_account password: {str(e)}")
                 _final_email_account = settings.email_account
+
+        # If email_accounts (multi-account) is provided, encrypt passwords
+        _final_email_accounts = preserved_email_accounts
+        if settings.email_accounts is not None:
+            try:
+                import json as _json
+                accounts = _json.loads(settings.email_accounts) if isinstance(settings.email_accounts, str) else settings.email_accounts
+                if isinstance(accounts, list):
+                    # Build a lookup of old accounts by ID for password preservation
+                    old_accounts_by_id = {}
+                    if old_settings_dict and old_settings_dict.get("email_accounts"):
+                        old_list = deserialize_json_field(old_settings_dict["email_accounts"])
+                        if isinstance(old_list, list):
+                            for oa in old_list:
+                                if isinstance(oa, dict) and oa.get("id"):
+                                    old_accounts_by_id[oa["id"]] = oa
+
+                    for acct in accounts:
+                        if not isinstance(acct, dict):
+                            continue
+                        if acct.get("password"):
+                            acct["password_encrypted"] = _encrypt_password(acct["password"])
+                            del acct["password"]
+                        elif not acct.get("password_encrypted"):
+                            # Preserve old encrypted password by account ID
+                            old_acct = old_accounts_by_id.get(acct.get("id"))
+                            if old_acct and old_acct.get("password_encrypted"):
+                                acct["password_encrypted"] = old_acct["password_encrypted"]
+                    _final_email_accounts = serialize_json_field(accounts)
+            except Exception as e:
+                logger.error(f"Error processing email_accounts passwords: {str(e)}")
+                _final_email_accounts = settings.email_accounts
 
         new_settings_dict = {
             "user_id": settings.user_id,
@@ -185,6 +233,7 @@ def save_settings(settings: Settings, request: Request):
             "map_default_zoom": settings.map_default_zoom,
             "map_auto_zoom": settings.map_auto_zoom or "1",
             "email_account": _final_email_account,
+            "email_accounts": _final_email_accounts,
             "attachment_max_size_mb": settings.attachment_max_size_mb or "10",
             "attachment_max_storage_mb": settings.attachment_max_storage_mb or "500",
             "default_share_contacts": settings.default_share_contacts or "0",
@@ -201,10 +250,10 @@ def save_settings(settings: Settings, request: Request):
                 habits_success_window, overdue_border_color, blocked_border_color, shared_tags, kiosk_users,
                 hide_declined, default_show_habits_on_calendar,
                 map_default_lat, map_default_lon, map_default_zoom, map_auto_zoom,
-                email_account,
+                email_account, email_accounts,
                 attachment_max_size_mb, attachment_max_storage_mb,
                 default_share_contacts
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 new_settings_dict["user_id"],
@@ -246,6 +295,7 @@ def save_settings(settings: Settings, request: Request):
                 new_settings_dict["map_default_zoom"],
                 new_settings_dict["map_auto_zoom"],
                 new_settings_dict["email_account"],
+                new_settings_dict["email_accounts"],
                 new_settings_dict["attachment_max_size_mb"],
                 new_settings_dict["attachment_max_storage_mb"],
                 new_settings_dict["default_share_contacts"],

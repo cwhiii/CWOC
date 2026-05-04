@@ -1,0 +1,606 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   CWOC Shared Rules Styles — Condition Tree, Action Rows, Rules Table
+   
+   Used by rules-manager.html and rule-editor.html.
+   Depends on CSS variables from shared-page.css.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Pending Confirmations Section ──────────────────────────────────────── */
+.rules-confirmations {
+    margin-bottom: 16px;
+    background: #fff8e1;
+    border: 2px solid var(--accent-gold);
+    border-radius: 6px;
+    overflow: hidden;
+}
+.rules-confirmations.hidden {
+    display: none;
+}
+.rules-confirmations-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    background: rgba(212, 175, 55, 0.15);
+    cursor: pointer;
+    user-select: none;
+    font-weight: bold;
+    color: var(--aged-brown-dark);
+}
+.rules-confirmations-header:hover {
+    background: rgba(212, 175, 55, 0.25);
+}
+.rules-confirmations-toggle {
+    font-size: 0.85em;
+    transition: transform 0.2s;
+}
+.rules-confirmations-toggle.collapsed {
+    transform: rotate(-90deg);
+}
+.rules-confirmations-body {
+    padding: 10px 14px;
+}
+.rules-confirmations-body.collapsed {
+    display: none;
+}
+.confirmation-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    background: #fffaf0;
+    border: 1px solid #d4c5a9;
+    border-radius: 5px;
+}
+.confirmation-card:last-child {
+    margin-bottom: 0;
+}
+.confirmation-info {
+    flex: 1;
+    min-width: 0;
+}
+.confirmation-rule-name {
+    font-weight: bold;
+    color: var(--aged-brown-dark);
+    font-size: 0.95em;
+}
+.confirmation-description {
+    font-size: 0.88em;
+    color: #1a1208;
+    margin-top: 2px;
+    word-break: break-word;
+}
+.confirmation-time {
+    font-size: 0.8em;
+    color: var(--aged-brown-light);
+    margin-top: 2px;
+}
+.confirmation-actions {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+}
+.confirmation-actions .cwoc-btn {
+    font-size: 0.85em;
+    height: 34px;
+    padding: 6px 10px;
+}
+
+/* ── Rules Table Enhancements ───────────────────────────────────────────── */
+.rules-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+}
+.rules-toolbar .toolbar-spacer {
+    flex: 1;
+}
+
+/* Enabled toggle switch */
+.rule-enabled-toggle {
+    position: relative;
+    display: inline-block;
+    width: 40px;
+    height: 22px;
+    flex-shrink: 0;
+}
+.rule-enabled-toggle input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+.rule-enabled-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: #c4a484;
+    border-radius: 22px;
+    transition: background 0.2s;
+}
+.rule-enabled-slider::before {
+    content: "";
+    position: absolute;
+    height: 16px;
+    width: 16px;
+    left: 3px;
+    bottom: 3px;
+    background: #fff8e1;
+    border-radius: 50%;
+    transition: transform 0.2s;
+}
+.rule-enabled-toggle input:checked + .rule-enabled-slider {
+    background: var(--aged-brown-medium);
+}
+.rule-enabled-toggle input:checked + .rule-enabled-slider::before {
+    transform: translateX(18px);
+}
+
+/* Trigger type badge */
+.trigger-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 0.82em;
+    font-weight: bold;
+    white-space: nowrap;
+    background: rgba(139, 90, 43, 0.12);
+    color: var(--aged-brown-dark);
+    border: 1px solid rgba(139, 90, 43, 0.25);
+}
+.trigger-badge.chit_created   { background: #c8e6c9; color: #2e7d32; border-color: #a5d6a7; }
+.trigger-badge.chit_updated   { background: #fff3cd; color: #856404; border-color: #ffeeba; }
+.trigger-badge.email_received  { background: #d1ecf1; color: #0c5460; border-color: #bee5eb; }
+.trigger-badge.contact_created { background: #e2d9f3; color: #4a2c8a; border-color: #d0c4e8; }
+.trigger-badge.contact_updated { background: #fde2e4; color: #842029; border-color: #f5c2c7; }
+.trigger-badge.scheduled       { background: #e8dcc8; color: var(--aged-brown-dark); border-color: #c4a484; }
+
+/* Rule name link */
+.rule-name-link {
+    color: var(--aged-brown-dark);
+    text-decoration: underline;
+    cursor: pointer;
+    font-weight: 600;
+}
+.rule-name-link:hover {
+    color: var(--aged-brown-medium);
+}
+
+/* Drag handle */
+.rule-drag-handle {
+    cursor: grab;
+    opacity: 0.5;
+    font-size: 1.1em;
+    user-select: none;
+    padding: 0 4px;
+}
+.rule-drag-handle:hover {
+    opacity: 1;
+}
+
+/* Rule row dragging states */
+.cwoc-table tr.rule-dragging {
+    opacity: 0.4;
+    outline: 2px dashed var(--aged-brown-light);
+}
+.cwoc-table tr.rule-drag-over td {
+    border-top: 3px solid var(--aged-brown-medium);
+}
+
+/* Delete button in table */
+.rule-delete-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1.1em;
+    opacity: 0.6;
+    padding: 4px;
+    color: var(--danger-red);
+    transition: opacity 0.2s;
+}
+.rule-delete-btn:hover {
+    opacity: 1;
+}
+
+/* ── Condition Tree Builder ─────────────────────────────────────────────── */
+.condition-tree {
+    padding: 0;
+    margin: 0;
+}
+
+.condition-group {
+    margin-left: 16px;
+    padding: 10px 0 10px 14px;
+    border-left: 3px solid rgba(139, 90, 43, 0.3);
+    position: relative;
+}
+.condition-group.root-group {
+    margin-left: 0;
+    border-left: none;
+    padding-left: 0;
+}
+
+.condition-group-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+/* AND/OR toggle button */
+.condition-operator-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0;
+    border: 2px solid var(--aged-brown-medium);
+    border-radius: 4px;
+    overflow: hidden;
+    font-size: 0.85em;
+    font-weight: bold;
+}
+.condition-operator-toggle button {
+    padding: 4px 10px;
+    border: none;
+    background: #f5e6cc;
+    color: var(--aged-brown-dark);
+    cursor: pointer;
+    font-family: 'Lora', Georgia, serif;
+    font-weight: bold;
+    font-size: inherit;
+    transition: background 0.15s, color 0.15s;
+}
+.condition-operator-toggle button.active {
+    background: var(--aged-brown-medium);
+    color: #fff8e1;
+}
+.condition-operator-toggle button:hover:not(.active) {
+    background: #e0d4b5;
+}
+
+/* Condition group action buttons */
+.condition-group-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 6px;
+}
+.condition-group-actions button {
+    font-size: 0.82em;
+    padding: 4px 10px;
+    background: #f5e6cc;
+    border: 1px solid var(--aged-brown-medium);
+    border-radius: 3px;
+    cursor: pointer;
+    font-family: 'Lora', Georgia, serif;
+    color: var(--aged-brown-dark);
+    transition: background 0.15s;
+}
+.condition-group-actions button:hover {
+    background: #e0d4b5;
+}
+
+/* Leaf condition row */
+.condition-leaf {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+    flex-wrap: wrap;
+}
+.condition-leaf select,
+.condition-leaf input[type="text"] {
+    font-size: 0.9em;
+    padding: 5px 8px;
+    max-width: 200px;
+}
+.condition-leaf select {
+    min-width: 120px;
+}
+.condition-leaf input[type="text"] {
+    min-width: 100px;
+    flex: 1;
+    max-width: 220px;
+}
+
+/* Remove node button */
+.condition-remove-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1.1em;
+    color: var(--danger-red);
+    opacity: 0.6;
+    padding: 2px 6px;
+    line-height: 1;
+    transition: opacity 0.2s;
+}
+.condition-remove-btn:hover {
+    opacity: 1;
+}
+
+/* ── Action Rows ────────────────────────────────────────────────────────── */
+.action-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.action-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    background: #fffaf0;
+    border: 1px solid #d4c5a9;
+    border-radius: 5px;
+    flex-wrap: wrap;
+}
+.action-row select {
+    font-size: 0.9em;
+    padding: 5px 8px;
+    min-width: 140px;
+}
+.action-row input[type="text"],
+.action-row input[type="color"],
+.action-row input[type="number"],
+.action-row input[type="time"] {
+    font-size: 0.9em;
+    padding: 5px 8px;
+    max-width: 200px;
+}
+.action-row input[type="text"] {
+    flex: 1;
+    min-width: 100px;
+}
+.action-row-remove {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1.1em;
+    color: var(--danger-red);
+    opacity: 0.6;
+    padding: 2px 6px;
+    transition: opacity 0.2s;
+}
+.action-row-remove:hover {
+    opacity: 1;
+}
+.action-add-btn {
+    font-size: 0.88em;
+    padding: 6px 14px;
+    background: #f5e6cc;
+    border: 1px solid var(--aged-brown-medium);
+    border-radius: 3px;
+    cursor: pointer;
+    font-family: 'Lora', Georgia, serif;
+    color: var(--aged-brown-dark);
+    margin-top: 6px;
+    transition: background 0.15s;
+}
+.action-add-btn:hover {
+    background: #e0d4b5;
+}
+
+/* ── Rule Editor Sections ───────────────────────────────────────────────── */
+.rule-section {
+    margin-bottom: 20px;
+    padding: 15px;
+    background: #fff8e1;
+    border: 1px solid #8b5a2b;
+    border-radius: 5px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+.rule-section h3 {
+    margin: 0 0 12px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid rgba(139, 90, 43, 0.3);
+    font-size: 18px;
+    color: #2b1e0f;
+    text-align: left;
+    text-transform: none;
+    letter-spacing: 0;
+}
+.rule-section label {
+    display: block;
+    font-size: 15px;
+    margin-bottom: 6px;
+    color: #1a1208;
+    font-weight: bold;
+}
+.rule-section input[type="text"],
+.rule-section textarea {
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid #8b5a2b;
+    border-radius: 5px;
+    padding: 8px 10px;
+    font-size: 16px;
+    color: #1a1208;
+    font-family: 'Lora', Georgia, serif;
+    background: #f5e6cc;
+}
+.rule-section textarea {
+    min-height: 60px;
+    resize: vertical;
+}
+.rule-section select {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* Schedule config fields */
+.schedule-config {
+    display: none;
+    margin-top: 10px;
+    padding: 10px;
+    background: rgba(139, 90, 43, 0.06);
+    border: 1px solid #d4c5a9;
+    border-radius: 4px;
+}
+.schedule-config.visible {
+    display: block;
+}
+.schedule-config label {
+    font-weight: normal;
+    font-size: 14px;
+    margin-bottom: 4px;
+}
+.schedule-config select,
+.schedule-config input {
+    max-width: 200px;
+}
+
+/* Confirm toggle */
+.rule-toggle-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 0;
+}
+.rule-toggle-row label {
+    font-weight: normal;
+    margin: 0;
+    cursor: pointer;
+}
+
+/* Save/Cancel button bar */
+.rule-button-bar {
+    display: flex;
+    gap: 10px;
+    margin-top: 16px;
+    flex-wrap: wrap;
+}
+
+/* ── Tag Picker Widget (for add_tag / remove_tag actions) ───────────────── */
+.rule-tag-picker {
+    position: relative;
+    flex: 1;
+    min-width: 100px;
+    max-width: 220px;
+}
+.rule-tag-picker input {
+    width: 100%;
+    box-sizing: border-box;
+    font-size: 0.9em;
+    padding: 5px 8px;
+    border: 1px solid #8b5a2b;
+    border-radius: 4px;
+    font-family: 'Lora', Georgia, serif;
+    background: #f5e6cc;
+    color: #1a1208;
+}
+.rule-tag-picker input:focus {
+    outline: none;
+    border-color: var(--aged-brown-dark, #4a2c2a);
+    box-shadow: 0 0 0 2px rgba(139, 90, 43, 0.2);
+}
+.rule-tag-picker-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    max-height: 200px;
+    overflow-y: auto;
+    background: #fffaf0;
+    border: 1px solid #8b5a2b;
+    border-top: none;
+    border-radius: 0 0 4px 4px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+.rule-tag-picker-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    cursor: pointer;
+    font-size: 0.88em;
+    color: #1a1208;
+    transition: background 0.1s;
+}
+.rule-tag-picker-item:hover {
+    background: #f0e0c0;
+}
+.rule-tag-picker-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    border: 1px solid rgba(0, 0, 0, 0.15);
+}
+.rule-tag-picker-star {
+    color: #DAA520;
+    text-shadow: 0 0 1px #000;
+    font-size: 0.85em;
+    flex-shrink: 0;
+}
+.rule-tag-picker-empty {
+    padding: 8px 10px;
+    font-size: 0.85em;
+    color: var(--aged-brown-light, #a08060);
+    font-style: italic;
+}
+
+/* ── Responsive Breakpoints ─────────────────────────────────────────────── */
+@media (max-width: 768px) {
+    .condition-group {
+        margin-left: 8px;
+        padding-left: 10px;
+    }
+    .condition-leaf {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .condition-leaf select,
+    .condition-leaf input[type="text"] {
+        max-width: 100%;
+        min-width: 0;
+    }
+    .action-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .action-row select,
+    .action-row input[type="text"] {
+        max-width: 100%;
+        min-width: 0;
+    }
+    .rule-tag-picker {
+        max-width: 100%;
+    }
+    .confirmation-card {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .confirmation-actions {
+        justify-content: flex-end;
+    }
+}
+
+@media (max-width: 480px) {
+    .rules-toolbar {
+        gap: 6px;
+    }
+    .rule-section {
+        padding: 10px;
+    }
+    .rule-section h3 {
+        font-size: 16px;
+    }
+    .condition-group {
+        margin-left: 4px;
+        padding-left: 8px;
+    }
+    .condition-operator-toggle button {
+        padding: 4px 8px;
+        font-size: 0.8em;
+    }
+    .rule-button-bar {
+        flex-direction: column;
+    }
+    .rule-button-bar .cwoc-btn {
+        width: 100%;
+    }
+}

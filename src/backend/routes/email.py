@@ -14,11 +14,13 @@ import smtplib
 import os
 import re
 import sqlite3
+import threading
 from datetime import datetime, timedelta, timezone
 from email.header import decode_header
 from uuid import uuid4
 
 from src.backend.db import DB_PATH, serialize_json_field, compute_system_tags
+from src.backend.rules_engine import dispatch_trigger
 
 logger = logging.getLogger(__name__)
 
@@ -463,7 +465,7 @@ def _strip_html_tags(html: str) -> str:
 # ═══════════════════════════════════════════════════════════════════════════
 
 
-def _create_email_chit(cursor, parsed: dict, owner_id: str) -> str | None:
+def _create_email_chit(cursor, parsed: dict, owner_id: str, account_id: str = None) -> str | None:
     """Insert a new chit from a parsed email message.
 
     Performs deduplication by checking ``email_message_id`` before inserting.
@@ -472,6 +474,7 @@ def _create_email_chit(cursor, parsed: dict, owner_id: str) -> str | None:
         cursor: An active SQLite cursor (caller manages the transaction).
         parsed: Dict returned by ``_parse_email_message``.
         owner_id: The user/owner ID for the chit.
+        account_id: The email account ID this message belongs to.
 
     Returns:
         The new chit ID if inserted, or ``None`` if the message was a
@@ -526,6 +529,7 @@ def _create_email_chit(cursor, parsed: dict, owner_id: str) -> str | None:
             email_subject, email_body_text, email_body_html, email_date,
             email_folder, email_status, email_read,
             email_in_reply_to, email_references,
+            email_account_id,
             deleted, archived, pinned
         ) VALUES (
             ?, ?, ?, ?,
@@ -535,6 +539,7 @@ def _create_email_chit(cursor, parsed: dict, owner_id: str) -> str | None:
             ?, ?, ?, ?,
             ?, ?, ?,
             ?, ?,
+            ?,
             ?, ?, ?
         )""",
         (
@@ -558,6 +563,7 @@ def _create_email_chit(cursor, parsed: dict, owner_id: str) -> str | None:
             parsed.get("email_read", False),
             parsed.get("email_in_reply_to", ""),
             parsed.get("email_references", ""),
+            account_id,
             False,
             False,
             False,
@@ -1014,27 +1020,175 @@ from src.backend.db import DB_PATH, deserialize_json_field
 email_router = APIRouter()
 
 
-def _get_email_account(cursor, user_id: str) -> dict:
-    """Load and return the email_account config for the given user.
+def _get_email_account(cursor, user_id: str, account_id: str = None) -> dict:
+    """Load and return an email account config for the given user.
+
+    If account_id is provided, returns that specific account from email_accounts.
+    If account_id is None, returns the first account (for backward compatibility).
 
     Raises HTTPException(400) if no email account is configured.
     """
     cursor.execute(
-        "SELECT email_account FROM settings WHERE user_id = ?", (user_id,)
+        "SELECT email_account, email_accounts FROM settings WHERE user_id = ?", (user_id,)
     )
     row = cursor.fetchone()
-    if not row or not row[0]:
+    if not row:
         raise HTTPException(
             status_code=400,
-            detail="No email account configured. Go to Settings → Email Account to set up your email.",
+            detail="No email account configured. Go to Settings → Email to set up your email.",
         )
-    account = deserialize_json_field(row[0])
+
+    # Try multi-account first
+    accounts_json = row[1] if len(row) > 1 else None
+    if accounts_json:
+        accounts = deserialize_json_field(accounts_json)
+        if isinstance(accounts, list) and len(accounts) > 0:
+            if account_id:
+                for acct in accounts:
+                    if isinstance(acct, dict) and acct.get("id") == account_id:
+                        return acct
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Email account '{account_id}' not found.",
+                )
+            # Return first account as default
+            return accounts[0]
+
+    # Fall back to legacy single account
+    old_acct_json = row[0]
+    if not old_acct_json:
+        raise HTTPException(
+            status_code=400,
+            detail="No email account configured. Go to Settings → Email to set up your email.",
+        )
+    account = deserialize_json_field(old_acct_json)
     if not account or not isinstance(account, dict):
         raise HTTPException(
             status_code=400,
-            detail="No email account configured. Go to Settings → Email Account to set up your email.",
+            detail="No email account configured. Go to Settings → Email to set up your email.",
         )
     return account
+
+
+def _get_all_email_accounts(cursor, user_id: str) -> list:
+    """Load and return all email account configs for the given user.
+
+    Returns a list of account dicts. Falls back to legacy single account.
+    Returns empty list if no accounts configured.
+    """
+    cursor.execute(
+        "SELECT email_account, email_accounts FROM settings WHERE user_id = ?", (user_id,)
+    )
+    row = cursor.fetchone()
+    if not row:
+        return []
+
+    # Try multi-account first
+    accounts_json = row[1] if len(row) > 1 else None
+    if accounts_json:
+        accounts = deserialize_json_field(accounts_json)
+        if isinstance(accounts, list) and len(accounts) > 0:
+            return [a for a in accounts if isinstance(a, dict) and a.get("email")]
+
+    # Fall back to legacy single account
+    old_acct_json = row[0]
+    if old_acct_json:
+        account = deserialize_json_field(old_acct_json)
+        if isinstance(account, dict) and account.get("email"):
+            return [account]
+
+    return []
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Deletion sync — detect emails removed from IMAP and soft-delete locally
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+def _sync_deletions(imap, cursor, owner_id: str, account_id: str) -> int:
+    """Check which local email chits still exist on the IMAP server.
+
+    For each non-deleted inbox email chit belonging to *account_id*, search
+    IMAP by Message-ID.  If the message is no longer present in INBOX, the
+    chit is soft-deleted (``deleted = 1``, ``deleted_datetime`` set).
+
+    This handles the case where a user deletes an email in Gmail (or any
+    IMAP provider) and expects that deletion to propagate into CWOC.
+
+    Args:
+        imap: An authenticated ``imaplib.IMAP4_SSL`` with INBOX selected.
+        cursor: An active SQLite cursor (caller manages the transaction).
+        owner_id: The user/owner ID.
+        account_id: The email account ID to scope the check.
+
+    Returns:
+        The number of chits that were soft-deleted.
+    """
+    # Fetch all non-deleted inbox email chits for this account
+    if account_id:
+        cursor.execute(
+            """SELECT id, email_message_id FROM chits
+               WHERE owner_id = ?
+                 AND email_account_id = ?
+                 AND email_message_id IS NOT NULL
+                 AND email_message_id != ''
+                 AND email_folder = 'inbox'
+                 AND (deleted = 0 OR deleted IS NULL)""",
+            (owner_id, account_id),
+        )
+    else:
+        cursor.execute(
+            """SELECT id, email_message_id FROM chits
+               WHERE owner_id = ?
+                 AND email_message_id IS NOT NULL
+                 AND email_message_id != ''
+                 AND email_folder = 'inbox'
+                 AND (deleted = 0 OR deleted IS NULL)""",
+            (owner_id,),
+        )
+
+    local_emails = cursor.fetchall()  # [(chit_id, message_id), ...]
+    if not local_emails:
+        return 0
+
+    now = datetime.now(timezone.utc).isoformat()
+    deleted_count = 0
+
+    for chit_id, message_id in local_emails:
+        if not message_id:
+            continue
+        try:
+            # Search IMAP for this specific Message-ID
+            # The HEADER search criterion checks the Message-ID header
+            status, data = imap.search(
+                None, f'HEADER Message-ID "{message_id}"'
+            )
+            found = status == "OK" and data and data[0] and data[0].strip()
+
+            if not found:
+                # Message no longer in INBOX — soft-delete the chit
+                cursor.execute(
+                    """UPDATE chits
+                       SET deleted = 1,
+                           deleted_datetime = ?,
+                           modified_datetime = ?
+                       WHERE id = ?""",
+                    (now, now, chit_id),
+                )
+                deleted_count += 1
+                logger.info(
+                    "Deletion sync: soft-deleted chit %s (Message-ID: %s)",
+                    chit_id, message_id,
+                )
+        except Exception as e:
+            # Don't let a single lookup failure abort the whole sync
+            logger.warning(
+                "Deletion sync: failed to check Message-ID %s: %s",
+                message_id, e,
+            )
+            continue
+
+    return deleted_count
 
 
 # ───────────────────────────────────────────────────────────────────────────
@@ -1043,111 +1197,148 @@ def _get_email_account(cursor, user_id: str) -> dict:
 
 @email_router.post("/api/email/sync")
 def email_sync(request: Request):
-    """Fetch new messages from the configured IMAP server.
+    """Fetch new messages from all configured IMAP servers.
 
-    Returns ``{"new_count": int}`` on success.
+    Returns ``{"new_count": int, "accounts_synced": int, "errors": list}``.
     """
     user_id = request.state.user_id
     conn = None
-    imap = None
     try:
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
 
-        account = _get_email_account(cursor, user_id)
-
-        # Decrypt the stored password for IMAP auth
-        if account.get("password_encrypted"):
-            account["password"] = _decrypt_password(account["password_encrypted"])
-
-        # Connect to IMAP
-        try:
-            imap = _connect_imap(account)
-        except imaplib.IMAP4.error as e:
-            err_msg = str(e)
-            if "AUTHENTICATIONFAILED" in err_msg.upper() or "LOGIN" in err_msg.upper():
-                raise HTTPException(
-                    status_code=401,
-                    detail="IMAP authentication failed. Check your email and app password.",
-                )
+        accounts = _get_all_email_accounts(cursor, user_id)
+        if not accounts:
             raise HTTPException(
-                status_code=502,
-                detail=f"Cannot reach IMAP server {account.get('imap_host', '')}:{account.get('imap_port', '')}. Check your network and server settings.",
-            )
-        except (OSError, ConnectionError, TimeoutError) as e:
-            raise HTTPException(
-                status_code=502,
-                detail=f"Cannot reach IMAP server {account.get('imap_host', '')}:{account.get('imap_port', '')}. Check your network and server settings.",
-            )
-        except Exception as e:
-            if "timeout" in str(e).lower():
-                raise HTTPException(
-                    status_code=504,
-                    detail="IMAP sync timed out. Try again later.",
-                )
-            raise HTTPException(
-                status_code=502,
-                detail=f"Cannot reach IMAP server {account.get('imap_host', '')}:{account.get('imap_port', '')}. Check your network and server settings.",
+                status_code=400,
+                detail="No email accounts configured. Go to Settings → Email to set up your email.",
             )
 
-        # Determine sync window
-        since_date = _get_last_sync_date(cursor, user_id)
+        # Get shared sync settings from the first account (they share config)
+        shared_max_pull = int(accounts[0].get("max_pull", 50) or 50)
 
-        # Fetch new messages
-        try:
-            messages = _fetch_new_messages(imap, since_date)
-        except Exception as e:
-            if "timeout" in str(e).lower():
-                raise HTTPException(
-                    status_code=504,
-                    detail="IMAP sync timed out. Try again later.",
-                )
-            raise HTTPException(
-                status_code=502,
-                detail=f"Error fetching messages: {str(e)}",
-            )
+        total_new = 0
+        total_deleted = 0
+        accounts_synced = 0
+        sync_errors = []
+        all_email_summaries = []
+        all_email_chits = []
 
-        # Parse and store each message (respect max_pull limit)
-        max_pull = int(account.get("max_pull", 50) or 50)
-        new_count = 0
-        new_email_summaries = []  # Collect subject & sender for ntfy body
-        for raw_bytes, flags_bytes in messages:
-            if new_count >= max_pull:
-                break
+        for account in accounts:
+            account_id = account.get("id", "")
+            account_email = account.get("email", "unknown")
+            imap = None
+
+            # Decrypt the stored password for IMAP auth
+            if account.get("password_encrypted"):
+                account["password"] = _decrypt_password(account["password_encrypted"])
+
             try:
-                parsed = _parse_email_message(raw_bytes)
+                # Connect to IMAP
+                try:
+                    imap = _connect_imap(account)
+                except imaplib.IMAP4.error as e:
+                    err_msg = str(e)
+                    if "AUTHENTICATIONFAILED" in err_msg.upper() or "LOGIN" in err_msg.upper():
+                        sync_errors.append(f"{account_email}: IMAP authentication failed")
+                        continue
+                    sync_errors.append(f"{account_email}: Cannot reach IMAP server")
+                    continue
+                except (OSError, ConnectionError, TimeoutError) as e:
+                    sync_errors.append(f"{account_email}: Cannot reach IMAP server — {str(e)}")
+                    continue
+                except Exception as e:
+                    sync_errors.append(f"{account_email}: IMAP error — {str(e)}")
+                    continue
 
-                # Check IMAP SEEN flag to set email_read
-                if flags_bytes and b"\\Seen" in flags_bytes:
-                    parsed["email_read"] = True
-                else:
-                    parsed["email_read"] = False
+                # Determine sync window
+                since_date = _get_last_sync_date(cursor, user_id)
 
-                chit_id = _create_email_chit(cursor, parsed, user_id)
-                if chit_id:
-                    new_count += 1
-                    # Collect summary for notification
-                    subj = parsed.get("email_subject", "(No Subject)")
-                    sender = parsed.get("email_from", "Unknown")
-                    new_email_summaries.append(f"{subj} — {sender}")
-            except Exception as e:
-                logger.warning("Failed to parse/store email message: %s", e)
-                continue
+                # Fetch new messages
+                try:
+                    messages = _fetch_new_messages(imap, since_date)
+                except Exception as e:
+                    sync_errors.append(f"{account_email}: Error fetching messages — {str(e)}")
+                    continue
+
+                # Parse and store each message (respect max_pull limit per account)
+                new_count = 0
+                for raw_bytes, flags_bytes in messages:
+                    if new_count >= shared_max_pull:
+                        break
+                    try:
+                        parsed = _parse_email_message(raw_bytes)
+
+                        # Check IMAP SEEN flag to set email_read
+                        if flags_bytes and b"\\Seen" in flags_bytes:
+                            parsed["email_read"] = True
+                        else:
+                            parsed["email_read"] = False
+
+                        chit_id = _create_email_chit(cursor, parsed, user_id, account_id=account_id)
+                        if chit_id:
+                            new_count += 1
+                            subj = parsed.get("email_subject", "(No Subject)")
+                            sender = parsed.get("email_from", "Unknown")
+                            all_email_summaries.append(f"{subj} — {sender}")
+                            all_email_chits.append({"id": chit_id, **parsed, "owner_id": user_id})
+                    except Exception as e:
+                        logger.warning("Failed to parse/store email message: %s", e)
+                        continue
+
+                total_new += new_count
+
+                # ── Deletion sync: detect emails removed from IMAP ────────
+                try:
+                    acct_deleted = _sync_deletions(imap, cursor, user_id, account_id)
+                    total_deleted += acct_deleted
+                    if acct_deleted:
+                        logger.info(
+                            "Deletion sync: %d chit(s) soft-deleted for account %s",
+                            acct_deleted, account_email,
+                        )
+                except Exception as e:
+                    logger.warning(
+                        "Deletion sync failed for %s: %s", account_email, e
+                    )
+                    sync_errors.append(
+                        f"{account_email}: Deletion sync error — {str(e)}"
+                    )
+
+                accounts_synced += 1
+
+            finally:
+                if imap:
+                    try:
+                        imap.logout()
+                    except Exception:
+                        pass
 
         conn.commit()
 
+        # Fire-and-forget: dispatch rules engine triggers for new email chits
+        try:
+            for email_chit_data in all_email_chits:
+                logger.info("Firing rules engine trigger: email_received for chit %s, owner %s", email_chit_data.get("id", "?"), user_id)
+                threading.Thread(
+                    target=dispatch_trigger,
+                    args=("email_received", "chit", email_chit_data, user_id),
+                    daemon=True,
+                ).start()
+        except Exception:
+            pass
+
         # Send push notification if new emails were fetched
-        if new_count > 0:
+        if total_new > 0:
             try:
                 from src.backend.routes.ntfy import send_ntfy_notification
                 from src.backend.schedulers import _get_server_base_url
                 base = _get_server_base_url()
-                ntfy_title = f"📬 {new_count} new email{'s' if new_count != 1 else ''}"
-                # Build body with subject & sender for each new email (max 5 lines)
-                if new_email_summaries:
-                    body_lines = new_email_summaries[:5]
-                    if len(new_email_summaries) > 5:
-                        body_lines.append(f"… and {len(new_email_summaries) - 5} more")
+                ntfy_title = f"📬 {total_new} new email{'s' if total_new != 1 else ''}"
+                if all_email_summaries:
+                    body_lines = all_email_summaries[:5]
+                    if len(all_email_summaries) > 5:
+                        body_lines.append(f"… and {len(all_email_summaries) - 5} more")
                     ntfy_body = "\n".join(body_lines)
                 else:
                     ntfy_body = "You have new mail in CWOC."
@@ -1164,7 +1355,10 @@ def email_sync(request: Request):
             except Exception as e:
                 logger.warning(f"Ntfy notification failed for new email: {e}")
 
-        return {"new_count": new_count}
+        result = {"new_count": total_new, "deleted_count": total_deleted, "accounts_synced": accounts_synced}
+        if sync_errors:
+            result["errors"] = sync_errors
+        return result
 
     except HTTPException:
         raise
@@ -1172,11 +1366,6 @@ def email_sync(request: Request):
         logger.error("Email sync error: %s", e)
         raise HTTPException(status_code=500, detail=f"Email sync failed: {str(e)}")
     finally:
-        if imap:
-            try:
-                imap.logout()
-            except Exception:
-                pass
         if conn:
             conn.close()
 
@@ -1230,7 +1419,9 @@ def email_send(chit_id: str, request: Request):
         # Load email account credentials
         # Reset row_factory for settings query
         cursor2 = conn.cursor()
-        account = _get_email_account(cursor2, user_id)
+        # Use the chit's email_account_id if available, otherwise default
+        chit_account_id = chit.get("email_account_id")
+        account = _get_email_account(cursor2, user_id, account_id=chit_account_id)
 
         # Decrypt password
         if account.get("password_encrypted"):

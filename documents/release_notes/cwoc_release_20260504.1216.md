@@ -1,0 +1,1 @@
+Replaced the plain text input for add_tag and remove_tag actions in the rule editor with a tag picker dropdown that shows existing tags from user settings, with colored dots, favorite stars, and type-to-filter search.

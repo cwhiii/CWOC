@@ -116,6 +116,8 @@ from src.backend.migrations import (
     migrate_add_email_body_html,
     migrate_add_fts5,
     migrate_add_contact_vault,
+    migrate_create_rules_tables,
+    migrate_add_email_accounts,
 )
 
 # Initialize database and run all migrations (same order as before)
@@ -163,6 +165,8 @@ migrate_add_attachments()
 migrate_add_email_body_html()
 migrate_add_fts5()
 migrate_add_contact_vault()
+migrate_create_rules_tables()
+migrate_add_email_accounts()
 seed_version_info()
 
 # One-time cleanup: fix sent emails that still have CWOC_System/Email/Drafts tag
@@ -209,6 +213,7 @@ from src.backend.routes.ntfy import ntfy_router
 from src.backend.routes.ics_import import router as ics_import_router
 from src.backend.routes.email import email_router
 from src.backend.routes.attachments import attachments_router
+from src.backend.routes.rules import router as rules_router
 
 app.include_router(auth_router)
 app.include_router(users_router)
@@ -226,6 +231,7 @@ app.include_router(push_router)
 app.include_router(ics_import_router)
 app.include_router(email_router)
 app.include_router(attachments_router)
+app.include_router(rules_router)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -306,8 +312,9 @@ app.mount("/pwa", StaticFiles(directory="/app/src/pwa"), name="pwa")
 # Startup Events
 # ═══════════════════════════════════════════════════════════════════════════
 
-from src.backend.schedulers import start_weather_schedulers
+from src.backend.schedulers import start_weather_schedulers, start_rules_scheduler
 
 @app.on_event("startup")
 async def on_startup():
     await start_weather_schedulers()
+    await start_rules_scheduler()

@@ -32,13 +32,13 @@ Package marker. No public exports.
 | `app` | FastAPI application instance |
 | `NoCacheStaticMiddleware` | Middleware that adds no-cache headers to `/frontend/`, `/static/`, `/data/` responses |
 | `AuthMiddleware` | (imported from `middleware.py`) Session-based auth middleware — validates `cwoc_session` cookie, injects user identity into `request.state` |
-| `on_startup()` | Startup event — calls `start_weather_schedulers()` |
+| `on_startup()` | Startup event — calls `start_weather_schedulers()` and `start_rules_scheduler()` |
 | `serve_service_worker()` | `GET /sw.js` — Serve the service worker from `src/pwa/sw.js` with `Content-Type: application/javascript` and `Service-Worker-Allowed: /` header |
 | `serve_manifest()` | `GET /manifest.json` — Serve the web app manifest from `src/pwa/manifest.json` with `Content-Type: application/json` |
 | `serve_icon_192()` | `GET /static/cwoc-icon-192.png` — Serve 192×192 PWA icon from `src/pwa/` |
 | `serve_icon_512()` | `GET /static/cwoc-icon-512.png` — Serve 512×512 PWA icon from `src/pwa/` |
 
-Registers all route modules (including `auth_router`, `users_router`, `sharing_router`, `notifications_router`, `network_access_router`, `push_router`, `ntfy_router`, `email_router`, and `attachments_router`), runs all migrations (including `migrate_add_multi_user()`, `migrate_add_sharing()`, `migrate_add_kiosk_users()`, `migrate_add_network_access()`, `migrate_add_notifications()`, `migrate_habits_overhaul()`, `migrate_habits_phase2()`, `migrate_add_push_subscriptions()`, `migrate_add_vapid_keys()`, `migrate_add_map_settings()`, `migrate_add_contact_dates()`, `migrate_add_email_fields()`, `migrate_add_attachments()`, `migrate_add_email_body_html()`, `migrate_add_fts5()`, and `migrate_add_contact_vault()`) and `init_db()` at import time, mounts `StaticFiles` for frontend, static, data, and PWA directories.
+Registers all route modules (including `auth_router`, `users_router`, `sharing_router`, `notifications_router`, `network_access_router`, `push_router`, `ntfy_router`, `email_router`, `attachments_router`, and `rules_router`), runs all migrations (including `migrate_add_multi_user()`, `migrate_add_sharing()`, `migrate_add_kiosk_users()`, `migrate_add_network_access()`, `migrate_add_notifications()`, `migrate_habits_overhaul()`, `migrate_habits_phase2()`, `migrate_add_push_subscriptions()`, `migrate_add_vapid_keys()`, `migrate_add_map_settings()`, `migrate_add_contact_dates()`, `migrate_add_email_fields()`, `migrate_add_attachments()`, `migrate_add_email_body_html()`, `migrate_add_fts5()`, `migrate_add_contact_vault()`, and `migrate_create_rules_tables()`) and `init_db()` at import time, mounts `StaticFiles` for frontend, static, data, and PWA directories.
 
 ### 1.3 `src/backend/models.py` — Pydantic Models
 
@@ -58,6 +58,9 @@ Registers all route modules (including `auth_router`, `users_router`, `sharing_r
 | `ProfileUpdate` | Profile update request — display_name (optional), email (optional) |
 | `PasswordChange` | Password change request — current_password, new_password |
 | `Notification` | Notification record — `id`, `user_id`, `chit_id`, `chit_title`, `owner_display_name`, `notification_type` ("invited" or "assigned"), `status` ("pending", "accepted", "declined"), `created_datetime` |
+| `RuleCreate` | Create rule request — `name` (str), `description` (Optional), `enabled` (Optional bool, default True), `priority` (Optional int, default 0), `trigger_type` (str), `conditions` (Optional dict — condition tree JSON), `actions` (Optional list — array of action objects), `confirm_before_apply` (Optional bool, default True), `schedule_config` (Optional dict) |
+| `RuleUpdate` | Update rule request — all fields Optional: `name`, `description`, `enabled`, `priority`, `trigger_type`, `conditions`, `actions`, `confirm_before_apply`, `schedule_config` |
+| `RuleReorder` | Reorder rules request — `rule_ids` (List[str]) — ordered list of rule IDs |
 
 ### 1.4 `src/backend/db.py` — Database Helpers & Shared State
 
@@ -124,6 +127,8 @@ All migrations run at startup. Each checks if the column/table already exists be
 | `migrate_add_email_body_html()` | Add `email_body_html` (TEXT) column to chits table for HTML email body rendering |
 | `migrate_add_fts5()` | Create `chits_fts` FTS5 virtual table indexing title, note, email_body_text, email_subject; add INSERT/UPDATE/DELETE triggers for sync; rebuild index from existing data. Gracefully handles missing FTS5 support |
 | `migrate_add_contact_vault()` | Add `shared_to_vault` (BOOLEAN DEFAULT 0) column to contacts table; add `default_share_contacts` (TEXT DEFAULT '0') column to settings table. Enables the shared Contact Vault feature |
+| `migrate_create_rules_tables()` | Create `rules`, `rule_confirmations`, and `rule_execution_log` tables using `CREATE TABLE IF NOT EXISTS`. Rules table: `id` (TEXT PRIMARY KEY), `owner_id`, `name`, `description`, `enabled` (BOOLEAN DEFAULT 1), `priority` (INTEGER DEFAULT 0), `trigger_type`, `conditions` (TEXT — JSON condition tree), `actions` (TEXT — JSON array), `confirm_before_apply` (BOOLEAN DEFAULT 1), `schedule_config` (TEXT — JSON), `created_datetime`, `modified_datetime`, `last_run_datetime`, `run_count` (INTEGER DEFAULT 0), `last_run_result`. Rule confirmations table: `id`, `rule_id`, `rule_name`, `owner_id`, `action_description`, `action_data` (TEXT — JSON), `target_entity_type`, `target_entity_id`, `created_datetime`. Rule execution log table: `id`, `rule_id`, `owner_id`, `trigger_event`, `entities_evaluated`, `entities_matched`, `actions_executed`, `actions_failed`, `result_summary`, `executed_datetime`. Fully idempotent |
+| `migrate_add_email_accounts()` | Add `email_accounts` (TEXT) column to settings table for multi-account email; add `email_account_id` (TEXT) to chits; migrate existing `email_account` data into `email_accounts` array with generated IDs. Fully idempotent |
 
 ### 1.6 `src/backend/serializers.py` — vCard & CSV
 
@@ -167,6 +172,9 @@ All migrations run at startup. Each checks if the column/table already exists be
 | `_weather_daily_loop()` | Background loop — runs `weather_update()` every 24h for 8–16 day chits |
 | `_alert_push_loop()` | Background loop — runs every 60 seconds, checks for chits whose start/due time falls within the last 60-second window, sends push notifications to chit owners via `_send_chit_push()` and ntfy notifications via `_send_chit_ntfy()` |
 | `start_weather_schedulers()` | Start weather background loops (hourly + daily) and the alert push loop |
+| `_is_scheduled_rule_due(rule, now)` | Check whether a scheduled rule is due for execution based on its `schedule_config` (frequency, interval, time_of_day) and `last_run_datetime`. Supports daily and hourly frequencies with 90-second grace for scheduler jitter |
+| `_rules_scheduled_loop()` | Background loop — runs every 60 seconds, loads all enabled scheduled rules, checks if each is due, queries matching entities (chits or contacts), evaluates condition tree, executes or queues actions, inserts execution log entries, updates rule metadata. On first iteration runs after 5-second delay to catch overdue rules after restart |
+| `start_rules_scheduler()` | Register the background rules scheduler task as an asyncio task. Called from `main.py` on startup |
 
 ### 1.8 `src/backend/test_audit.py` — Audit Diff Property Tests
 
@@ -767,13 +775,14 @@ Provides IMAP sync, SMTP send, email parsing, password encryption, reply/forward
 
 | Function | Description |
 |----------|-------------|
-| `_create_email_chit(cursor, parsed, owner_id)` | Insert a new chit from a parsed email message; performs deduplication by `email_message_id`; auto-computes system tags; returns chit ID or `None` if duplicate |
+| `_create_email_chit(cursor, parsed, owner_id, account_id)` | Insert a new chit from a parsed email message; performs deduplication by `email_message_id`; auto-computes system tags; stores email_account_id; returns chit ID or `None` if duplicate |
 
 **Backfill estimation:**
 
 | Function | Description |
 |----------|-------------|
 | `_estimate_backfill(account)` | Connect to IMAP and estimate total mailbox size; returns `{message_count, estimated_mb}` (~50 KB per message estimate) |
+| `_sync_deletions(imap, cursor, owner_id, account_id)` | Check which local inbox email chits still exist on IMAP; soft-deletes chits whose Message-ID is no longer found; returns count of deleted chits |
 
 **SMTP send functions:**
 
@@ -795,7 +804,7 @@ Provides IMAP sync, SMTP send, email parsing, password encryption, reply/forward
 
 | Route | Handler | Description |
 |-------|---------|-------------|
-| `POST /api/email/sync` | `email_sync(request)` | Fetch new messages from the configured IMAP server; returns `{new_count: int}`; handles IMAP errors with descriptive messages (401, 502, 504) |
+| `POST /api/email/sync` | `email_sync(request)` | Fetch new messages from configured IMAP servers and soft-delete chits for emails removed from IMAP; returns `{new_count, deleted_count, accounts_synced}` |
 | `POST /api/email/send/{chit_id}` | `email_send(chit_id, request)` | Send a draft email chit via SMTP; on success updates `email_status` to "sent", `email_folder` to "sent", populates `email_message_id`; validates non-empty `email_to` (422 if empty); rejects non-draft chits (400) |
 | `PATCH /api/email/{chit_id}/read` | `email_toggle_read(chit_id, request)` | Toggle `email_read` on the specified email chit; returns `{email_read: bool}` |
 | `GET /api/email/thread/{chit_id}` | `email_thread(chit_id, request)` | Find all related emails in a conversation thread by Message-ID references and normalized subject matching; returns list sorted by `email_date` ascending |
@@ -806,7 +815,8 @@ Provides IMAP sync, SMTP send, email parsing, password encryption, reply/forward
 
 | Function | Description |
 |----------|-------------|
-| `_get_email_account(cursor, user_id)` | Load and return the `email_account` config for the given user; raises HTTPException(400) if no email account is configured |
+| `_get_email_account(cursor, user_id, account_id)` | Load and return an email account config for the given user; if account_id provided returns that specific account from email_accounts array; raises HTTPException(400) if not found |
+| `_get_all_email_accounts(cursor, user_id)` | Load and return all email account configs for the given user; falls back to legacy single account; returns empty list if none configured |
 
 ---
 
@@ -826,6 +836,78 @@ Provides upload, download, and delete endpoints for chit file attachments. Files
 | `POST /api/chits/{chit_id}/attachments` | `upload_attachment(chit_id, request, file)` | Upload a file attachment; validates size limit; stores file on disk and updates chit metadata |
 | `GET /api/chits/{chit_id}/attachments/{attachment_id}` | `download_attachment(chit_id, attachment_id, request)` | Download an attachment file by its ID |
 | `DELETE /api/chits/{chit_id}/attachments/{attachment_id}` | `delete_attachment(chit_id, attachment_id, request)` | Delete an attachment file and remove it from the chit's metadata |
+
+### 1.37 `src/backend/rules_engine.py` — Rules Engine: Condition Tree Evaluator, Action Executor & Trigger Dispatcher
+
+Pure-function evaluation engine that recursively walks AND/OR group nodes and leaf conditions, returning a boolean. Supports 14 operators, contact cross-references, and regex with a signal-based timeout guard. Also contains the action executor and trigger dispatcher (which have database dependencies).
+
+| Function | Description |
+|----------|-------------|
+| `validate_condition_tree(tree)` | Validate the structure of a condition tree. Returns `(True, None)` if valid, `(False, error_message)` if invalid. Checks node type (group/leaf), required keys, group operator (AND/OR), and recursively validates children |
+| `_regex_match_with_timeout(pattern, text, timeout_seconds=2)` | Compile and match a regex with a SIGALRM-based timeout guard. Returns False on timeout, invalid pattern, or no match. Prevents catastrophic backtracking |
+| `_get_field_value(entity, field)` | Extract a field value from an entity dict. Deserializes JSON-serialized list fields (tags, people, alerts, etc.) via `deserialize_json_field`. Returns None when field is absent |
+| `_is_empty(value)` | Return True when a value is considered empty (None, whitespace-only string, or empty list) |
+| `resolve_contact_cross_ref(field, operator, value, entity, contacts)` | Resolve a condition that cross-references user contacts. Supports `contains_contact_city`, `contains_contact_email`, `contains_contact_name` operators. Returns False when contacts is None/empty or no match found |
+| `evaluate_leaf(leaf, entity, contacts=None)` | Evaluate a single leaf condition against an entity. Supports 14 operators: equals, not_equals, contains, not_contains, starts_with, ends_with, is_empty, is_not_empty, greater_than, less_than, regex_match, tag_present, tag_not_present, person_on_chit, person_not_on_chit. Returns False for missing fields instead of raising errors |
+| `evaluate_condition_tree(tree, entity, contacts=None)` | Recursively evaluate a condition tree against an entity. Group nodes use AND (all) or OR (any) logic. Empty AND groups return True (vacuous truth), empty OR groups return False |
+| `execute_action(action, entity_type, entity_id, owner_id, rule_name, rule_id)` | Execute a single rule action against an entity. Supports chit actions (add_tag, remove_tag, set_status, set_priority, set_severity, set_color, set_location, add_person, archive, move_to_trash, add_to_project, add_alert, share_with_user, assign_to_user), email actions (mark_email_read, mark_email_unread, move_email_to_folder), send_notification, and add_matching_contacts_as_people. Recomputes system tags, inserts audit entry. Returns `{"success": bool, "message": str}` |
+| `dispatch_trigger(trigger_type, entity_type, entity, owner_id)` | Synchronous fire-and-forget trigger dispatcher (called via threading.Thread from route handlers). Loads enabled rules for owner with matching trigger_type, ordered by priority ASC. Evaluates condition tree, handles confirm_before_apply branching (queue to rule_confirmations or execute immediately). Inserts execution log entry, updates rule metadata (last_run_datetime, run_count, last_run_result). Pre-loads contacts if any rule uses cross-reference conditions. Includes comprehensive logging at each step |
+| `_build_action_description(action_type, params, entity)` | Build a human-readable description of a proposed action for the confirmation UI. Maps each action type to a descriptive string with entity title and parameter values |
+| `_send_rule_notification(owner_id, chit_id, chit_title, message)` | Send push and ntfy notifications for a rule action. Uses the same helpers as the alert scheduler — gracefully skips if push or ntfy modules are unavailable |
+
+**Internal helpers:**
+
+| Function | Description |
+|----------|-------------|
+| `_DictAsObj` | Lightweight adapter class that exposes dict keys as attributes for `compute_system_tags` compatibility |
+| `_get_username_for_user(owner_id)` | Return username for the given user from the users table, or just the user_id on failure |
+| `_build_rule_actor(rule_name, rule_id, owner_id)` | Build the audit actor string: `"Rule: {rule_name} ({rule_id}) on behalf of {username} ({user_id})"` |
+| `_read_chit(cursor, chit_id)` | Read a chit row and return as dict, or None if not found |
+| `_read_contact(cursor, contact_id)` | Read a contact row and return as dict, or None if not found |
+| `_recompute_and_save_system_tags(cursor, chit, chit_id)` | Recompute system tags for a chit dict and write them back to the DB |
+
+### 1.38 `src/backend/routes/rules.py` — Rules CRUD API Routes
+
+Provides endpoints for creating, reading, updating, deleting rules, toggling enabled state, reordering priorities, managing pending confirmations, and querying execution logs. All endpoints scoped by `owner_id` from authenticated user. Returns 404 for rules not owned by authenticated user (avoids leaking existence).
+
+| Route | Handler | Description |
+|-------|---------|-------------|
+| `GET /api/rules` | `list_rules(request)` | List all rules for the authenticated user, sorted by priority ASC |
+| `GET /api/rules/{rule_id}` | `get_rule(rule_id, request)` | Get a single rule by ID. Returns 404 if not owned by authenticated user |
+| `POST /api/rules` | `create_rule(rule, request)` | Create a new rule. UUID generated, owner_id set from authenticated user |
+| `PUT /api/rules/{rule_id}` | `update_rule(rule_id, rule, request)` | Update an existing rule. Only updates provided (non-None) fields. Returns 404 if not owned |
+| `DELETE /api/rules/{rule_id}` | `delete_rule(rule_id, request)` | Delete a rule and clean up pending confirmations. Returns 404 if not owned |
+| `PATCH /api/rules/{rule_id}/toggle` | `toggle_rule(rule_id, request)` | Toggle the enabled flag of a rule. Returns 404 if not owned |
+| `PUT /api/rules/reorder` | `reorder_rules(reorder, request)` | Accept an ordered list of rule IDs and update their priorities to match index order |
+| `GET /api/rules/confirmations` | `list_confirmations(request)` | List pending confirmations for the authenticated user, sorted by timestamp DESC |
+| `POST /api/rules/confirmations/{id}/accept` | `accept_confirmation(confirmation_id, request)` | Execute the queued action and delete the confirmation record. Returns 404 if not owned |
+| `POST /api/rules/confirmations/{id}/dismiss` | `dismiss_confirmation(confirmation_id, request)` | Discard the queued action and delete the confirmation record. Returns 404 if not owned |
+| `GET /api/rules/{rule_id}/log` | `get_rule_execution_log(rule_id, request)` | Execution log for a specific rule (paginated with limit/offset). Returns 404 if rule not owned |
+| `GET /api/rules/log` | `get_all_execution_logs(request)` | Execution log across all rules for the authenticated user, with optional filters (rule_id, since, until) and pagination (limit/offset) |
+
+**Internal helpers:**
+
+| Function | Description |
+|----------|-------------|
+| `_deserialize_rule(rule)` | Deserialize JSON-stored fields (conditions, actions, schedule_config) on a rule dict for API responses |
+| `_deserialize_confirmation(conf)` | Deserialize JSON-stored fields (action_data) on a confirmation dict |
+| `_row_to_dict(cursor, row)` | Convert a sqlite3 row tuple to a dict using cursor.description |
+
+### 1.39 `src/backend/test_rules_engine.py` — Rules Engine Property Tests
+
+Property-based tests for the rules engine. Uses Python stdlib only (unittest + random + sqlite3 + uuid) — no external libraries. Each property test runs 100+ iterations with randomly generated inputs.
+
+| Class / Function | Description |
+|------------------|-------------|
+| `TestProperty1ConditionTreeSerializationRoundTrip` | Condition tree serialization round-trip — generate random condition trees with arbitrary nesting, serialize via `serialize_json_field`, deserialize via `deserialize_json_field`, verify structural equivalence (100+ iterations). **Validates: Requirements 1.4, 12.1, 12.2, 12.3** |
+| `TestProperty2LeafConditionOperatorCorrectness` | Leaf condition operator correctness — generate random entities and leaf conditions for each supported operator, verify correct boolean result against operator semantics including JSON-serialized list field deserialization (100+ iterations). **Validates: Requirements 2.2, 2.5, 2.7** |
+| `TestProperty3BooleanGroupEvaluationCorrectness` | Boolean group evaluation correctness — generate random nested AND/OR trees with known leaf values, verify group evaluation matches expected boolean logic (AND = all, OR = any) at every nesting level (100+ iterations). **Validates: Requirements 2.1** |
+| `TestProperty4MissingFieldSafety` | Missing field safety — generate random field names not present on entity, verify evaluator returns False without raising exceptions (100+ iterations). **Validates: Requirements 2.8** |
+| `TestProperty10ConditionTreeValidation` | Condition tree validation — generate random valid and invalid condition trees, verify validation accepts valid trees and rejects malformed ones (missing keys, invalid operator, non-array children) (100+ iterations). **Validates: Requirements 12.4** |
+| `TestProperty5DispatchPriorityOrderingAndAllMatch` | Dispatch priority ordering and all-match semantics — generate random rule sets with different priorities, verify dispatch evaluates in ascending priority order and executes ALL matching rules (100+ iterations). **Validates: Requirements 3.7, 3.8** |
+| `TestProperty8ConfirmationModeBranching` | Confirmation mode branching — generate random rules with confirm_before_apply True/False, verify queuing vs immediate execution behavior (100+ iterations). **Validates: Requirements 5.1, 5.2, 5.7** |
+| `TestProperty7ActionFailureContinuation` | Action failure continuation — generate action sequences where some actions fail, verify executor continues executing remaining actions and logs failures (100+ iterations). **Validates: Requirements 4.8** |
+| `TestProperty11OwnerScopingIsolation` | Owner scoping isolation — generate random users and rules, verify querying with user A's owner_id never returns user B's rules (100+ iterations). **Validates: Requirements 1.3, 7.9** |
 
 ---
 
@@ -1010,7 +1092,7 @@ Depends on: `shared.js` (`_isMobileOverlay`, `_showSidebarBackdrop`, `_hideSideb
 |--------|-------------|
 | `_cwocSidebarContext` | Module-level state — stored Page_Context object |
 | `_notifInboxItems` | Cached notification list for the inbox |
-| `_cwocInjectSidebar()` | IIFE that builds and injects the complete sidebar HTML if `<body>` has `data-sidebar` attribute. Produces identical DOM structure, IDs, and classes as the original inline sidebar. Inserts as first child of `<body>` |
+| `_cwocInjectSidebar()` | IIFE that builds and injects the complete sidebar HTML if `<body>` has `data-sidebar` attribute. Produces identical DOM structure, IDs, and classes as the original inline sidebar. Inserts as first child of `<body>`. Includes 🤖 Rules sidebar button in half-width row next to Calculator button using `sidebar-compact-btn` CSS class, navigating to `/frontend/html/rules-manager.html` with title "Rules Engine (F10)" |
 | `_cwocInitSidebar(context)` | Initializes sidebar behavior with a Page_Context object containing page-specific callbacks. Wires all button onclick handlers with sensible defaults, populates period dropdown from `context.periodOptions`, restores sidebar state, initializes mobile backdrop, loads tag/people filters, fetches notifications, fetches version for footer |
 | `_wireFilterCheckboxes(context)` | Wires filter checkbox `onchange` events (status, priority, display, sharing) to the page's `onFilterChange` callback |
 | `toggleSidebar()` | Sidebar open/close toggle with `localStorage` persistence under `sidebarState` key. Handles mobile backdrop show/hide. Dispatches `resize` event after transition |
@@ -1264,6 +1346,7 @@ Depends on: `shared-sidebar.js` (`_cwocInitSidebar`, `toggleSidebar`, `restoreSi
 | `openHelpPage()` | Navigate to the help page |
 | `_toggleReference()` | Toggle the keyboard reference overlay on/off |
 | `_closeReference()` | Close the keyboard reference overlay |
+| `_rulesSetupHotkey()` | Register the global F10 keydown listener to navigate to the Rules Manager at `/frontend/html/rules-manager.html`. Follows the same pattern as F4 (Calculator). Called once at script load time |
 
 #### main-calendar.js
 
@@ -1415,6 +1498,17 @@ Email tab view — renders the Email dashboard tab with inbox-style list view. L
 | `_showToast(msg, type)` | Simple toast helper — delegates to shared `showToast` if available |
 | `_toggleEmailReadStatus(chit, card)` | Toggle read/unread status via `PATCH /api/email/{id}/read` and update card visual state |
 | `_emailBulkToggleRead()` | Bulk toggle read/unread for all selected emails via PATCH |
+| `_emailRepliedToCache` | Cached Set of message IDs that have been replied to (rebuilt each render) |
+| `_emailBuildRepliedCache()` | Build the replied-to cache by scanning all chits for `email_in_reply_to` |
+| `_emailHasReply(messageId)` | Check if a given message ID has been replied to |
+| `_emailQuickArchive(chit, card)` | Quick-archive a single email with undo countdown toast; hides card immediately, archives on expiry, restores on undo |
+| `_emailQuickDelete(chit, card)` | Quick-delete (soft delete) a single email with undo countdown toast; hides card immediately, deletes on expiry, restores on undo |
+| `_emailRestoreCard(card)` | Restore a hidden email card back to visible state (used by undo) |
+| `_emailUndoToast(message, onExpire, onUndo)` | Show an undo toast with countdown timer bar for email actions |
+| `_emailStripHtml(str)` | Strip HTML tags and decode entities from a string for clean plain-text display |
+| `_emailStripMarkdown(str)` | Strip markdown formatting (links, bold, italic, code, headings) returning plain text |
+| `_emailShiftSelect(currentCb)` | Shift+click range selection — checks/unchecks all checkboxes between last clicked and current |
+| `_emailLastCheckedIndex` | Tracks the last clicked checkbox index for shift+click range selection |
 
 #### main-modals.js
 
@@ -2363,6 +2457,60 @@ Maps page: interactive Leaflet map with two display modes — **Chits** (chit lo
 | `_mapsFormatDate(isoString)` | Formats an ISO datetime string for popup display |
 | `_mapsEsc(str)` | HTML escape for popup content |
 
+#### rules-manager.js
+
+Rules Manager page logic — fetches and displays rules, handles toggle/reorder/delete, and manages pending confirmations. Loaded by `rules-manager.html`.
+
+| Function | Description |
+|----------|-------------|
+| `_escHtml(str)` | Escape HTML special characters in a string |
+| `_formatTimestamp(iso)` | Format an ISO datetime string as `YYYY-MM-DD HH:MM` |
+| `_triggerLabel(type)` | Map trigger type to human-readable label (e.g., `chit_created` → `Chit Created`) |
+| `loadRules()` | Fetch rules from `GET /api/rules` and render the rules table |
+| `renderRulesTable()` | Render the rules table with columns: drag handle, enabled toggle, name (clickable link to editor), trigger type badge, priority, last run, run count, delete button. Attaches drag-and-drop for reorder |
+| `toggleRule(ruleId)` | Toggle a rule's enabled state via `PATCH /api/rules/{id}/toggle` |
+| `deleteRule(ruleId, ruleName)` | Delete a rule with `cwocConfirm()` confirmation via `DELETE /api/rules/{id}` |
+| `_initDragReorder()` | Initialize HTML5 drag-and-drop on the rules table for reorder |
+| `_saveReorder(ruleIds)` | Save new rule order via `PUT /api/rules/reorder` |
+| `loadConfirmations()` | Fetch pending confirmations from `GET /api/rules/confirmations` |
+| `renderConfirmations()` | Render the pending confirmations section with Accept/Dismiss buttons. Hidden when empty |
+| `toggleConfirmations()` | Toggle the confirmations section body collapsed/expanded |
+| `acceptConfirmation(confirmationId)` | Accept a confirmation via `POST /api/rules/confirmations/{id}/accept` |
+| `dismissConfirmation(confirmationId)` | Dismiss a confirmation via `POST /api/rules/confirmations/{id}/dismiss` |
+
+#### rule-editor.js
+
+Rule Editor page logic — handles creating and editing rules with condition tree builder, action configuration, trigger selection, and save/cancel via `CwocSaveSystem`. Loaded by `rule-editor.html`.
+
+| Symbol | Description |
+|--------|-------------|
+| `CHIT_FIELDS` | Array of field definitions for chit triggers (title, note, status, priority, severity, location, color, tags, people, archived, pinned, all_day, habit) |
+| `EMAIL_FIELDS` | Array of field definitions for email triggers (title, note, email_from, email_subject, email_body_text, email_folder, email_read, status, priority, tags, people, location) |
+| `CONTACT_FIELDS` | Array of field definitions for contact triggers (given_name, surname, organization, tags, emails, phones, addresses) |
+| `OPERATORS` | Array of 15 operator definitions (equals, not_equals, contains, not_contains, starts_with, ends_with, is_empty, is_not_empty, greater_than, less_than, regex_match, tag_present, tag_not_present, person_on_chit, person_not_on_chit) |
+| `NO_VALUE_OPERATORS` | Array of operators that don't need a value input (is_empty, is_not_empty) |
+| `CHIT_ACTION_TYPES` | Array of action type definitions with parameter configs (add_tag, remove_tag, set_status, set_priority, set_severity, set_color, set_location, add_person, archive, move_to_trash, send_notification, mark_email_read, mark_email_unread, move_email_to_folder, add_matching_contacts_as_people). add_tag and remove_tag use `type: 'tag'` for tag picker widget |
+| `_cachedTagList` | Cached flat list of user tags (excluding system tags) for the tag picker, sorted favorites-first then alphabetical |
+| `_loadTagList()` | Async function that fetches tags from `getCachedSettings()`, filters out system tags, sorts favorites-first, and caches in `_cachedTagList` |
+| `_getFieldsForTrigger()` | Return the appropriate field definitions array based on the selected trigger type |
+| `renderConditionTree()` | Render the condition tree into the `#condition-tree` container |
+| `_renderNode(node, isRoot)` | Render a single condition tree node (dispatches to group or leaf renderer) |
+| `_renderGroup(group, isRoot)` | Render a group node with AND/OR toggle, children, and add condition/group buttons |
+| `_renderLeaf(leaf)` | Render a leaf condition with field dropdown, operator dropdown, value input, and remove button |
+| `_removeNode(nodeId)` | Remove a node from the condition tree by ID |
+| `_serializeTree(node)` | Serialize the condition tree for API submission (strips internal `_id` fields) |
+| `_deserializeTree(node)` | Deserialize a condition tree from API data (adds internal `_id` fields) |
+| `_countLeaves(node)` | Count the number of leaf conditions in a tree |
+| `addActionRow(actionData)` | Add an action row to the actions list |
+| `removeAction(index)` | Remove an action row by index |
+| `renderActions()` | Render all action rows with type dropdown and dynamic parameter inputs |
+| `_onTriggerChange()` | Handle trigger type dropdown change — show/hide schedule config, re-render condition tree with new field options |
+| `_onScheduleFrequencyChange()` | Handle schedule frequency change — show/hide interval input for hourly frequency |
+| `_validate()` | Validate the rule form — require name, trigger type, at least one condition, at least one action with type selected |
+| `saveRule(andExit)` | Save the rule via `POST /api/rules` (new) or `PUT /api/rules/{id}` (existing). Updates URL for new rules |
+| `cancelOrExit()` | Cancel or exit via `CwocSaveSystem` |
+| `_loadRule(ruleId)` | Load an existing rule from `GET /api/rules/{id}` and populate all form fields |
+
 
 ## 3. Frontend CSS
 
@@ -2427,6 +2575,31 @@ Reusable editor patterns shared by the Chit Editor and Contact Editor. Self-cont
 | Mobile Actions Modal | Slide-up modal for mobile button access |
 | User Switcher (`.cwoc-user-switcher`) | User switcher button, dropdown, and password prompt modal styles |
 | Logout Button (`.cwoc-logout-btn`) | Logout button styling in the header |
+
+#### shared-rules.css
+Rules-specific styles used by `rules-manager.html` and `rule-editor.html`. Depends on CSS variables from `shared-page.css`.
+
+| Section | Description |
+|---------|-------------|
+| Pending Confirmations (`.rules-confirmations`) | Collapsible section with gold accent border, header with toggle arrow, confirmation cards with rule name, action description, timestamp, and Accept/Dismiss buttons |
+| Rules Toolbar (`.rules-toolbar`) | Flex toolbar for rules page action buttons |
+| Enabled Toggle (`.rule-enabled-toggle`) | Sliding toggle switch for rule enabled/disabled state with brown/parchment colors |
+| Trigger Badge (`.trigger-badge`) | Inline badge with color-coded backgrounds per trigger type: `chit_created` (green), `chit_updated` (yellow), `email_received` (blue), `contact_created` (purple), `contact_updated` (pink), `scheduled` (brown) |
+| Rule Name Link (`.rule-name-link`) | Underlined clickable rule name in the table |
+| Drag Handle (`.rule-drag-handle`) | Grab cursor drag handle for rule reorder |
+| Drag States (`.rule-dragging`, `.rule-drag-over`) | Visual feedback during drag-and-drop reorder |
+| Delete Button (`.rule-delete-btn`) | Danger-colored delete button in the rules table |
+| Condition Tree (`.condition-tree`, `.condition-group`, `.condition-leaf`) | Indented tree layout with left-border lines for nesting, AND/OR operator toggle buttons, add condition/group buttons, field/operator/value inputs, and remove buttons |
+| Condition Operator Toggle (`.condition-operator-toggle`) | Inline AND/OR toggle button pair with active state highlighting |
+| Action Rows (`.action-rows`, `.action-row`) | Flex layout for action configuration with type dropdown, dynamic parameter inputs, and remove button |
+| Action Add Button (`.action-add-btn`) | Parchment-styled button for adding new action rows |
+| Tag Picker Widget (`.rule-tag-picker`) | Wrapper with relative positioning for tag picker dropdown; input with parchment styling; `.rule-tag-picker-dropdown` absolute dropdown with max-height scroll; `.rule-tag-picker-item` clickable tag rows with color dot and optional favorite star; `.rule-tag-picker-empty` italic empty state message |
+| Rule Editor Sections (`.rule-section`) | Card-style sections for rule editor form areas (info, trigger, conditions, actions, settings) |
+| Schedule Config (`.schedule-config`) | Collapsible schedule configuration fields (frequency, interval, time of day) shown when "Scheduled" trigger is selected |
+| Rule Toggle Row (`.rule-toggle-row`) | Flex row for confirm-before-apply toggle |
+| Rule Button Bar (`.rule-button-bar`) | Save/Cancel button bar at bottom of rule editor |
+| Responsive (≤768px) | Tablet breakpoints — reduced condition group indentation, stacked leaf conditions and action rows, stacked confirmation cards |
+| Responsive (≤480px) | Mobile breakpoints — minimal indentation, compact operator toggles, full-width buttons |
 
 ### 3.2 Dashboard (`src/frontend/css/dashboard/`)
 
@@ -2884,7 +3057,7 @@ All secondary pages follow the same shared pattern. Example from `settings.html`
 <script src="/pwa/pwa-register.js"></script>
 ```
 
-Pages using this pattern: `settings.html`, `people.html`, `contact-editor.html`, `weather.html`, `trash.html`, `audit-log.html`, `help.html`, `profile.html`, `user-admin.html`, `maps.html`.
+Pages using this pattern: `settings.html`, `people.html`, `contact-editor.html`, `weather.html`, `trash.html`, `audit-log.html`, `help.html`, `profile.html`, `user-admin.html`, `maps.html`, `rules-manager.html`, `rule-editor.html`.
 
 New frontend pages added for multi-user system:
 - `login.html` — Standalone login page (no shared header/footer, no `shared-auth.js`). Parchment-themed centered form with username/password inputs.
@@ -2897,6 +3070,10 @@ New frontend pages added for chit sharing system:
 New frontend pages added for Maps View:
 - `maps.html` — Interactive Leaflet map page with two display modes: Chits (location-based chit markers) and People (contact address markers). Features mode toggle with localStorage persistence, chits filter panel (status, tags, priority, people, text search, date range), people filter panel (text search, favorites toggle, tag chips), mode-specific legends, separate cluster groups with distinct styling, contact popups with editor links, and responsive mobile layout with collapsible filter panels. Uses `shared-page.css` for parchment theme plus inline `<style>` for map-specific layout. Loads Leaflet.js, Leaflet.markercluster (CDN), shared scripts, `shared-page.js`, and `maps.js`. Served at `/maps` via `health.py`.
 
+New frontend pages added for Rules Engine:
+- `rules-manager.html` — Rules Manager page. Uses `shared-page.css` and `shared-rules.css` for styling, `shared-page.js` for header/footer injection. Displays rules table with enabled toggle, name, trigger type badge, priority, last run, run count, and delete button. Pending confirmations section at top (collapsible, hidden when empty) with Accept/Dismiss buttons. "New Rule" button navigates to `rule-editor.html`. Drag-and-drop reorder. Loads `rules-manager.js`. `data-page-title="Rules Manager"`, `data-page-icon="🤖"`.
+- `rule-editor.html` — Rule Editor page. Uses `shared-page.css` and `shared-rules.css` for styling, `shared-page.js` for header/footer injection. Sections: Rule Info (name, description), Trigger (dropdown), Conditions (visual tree builder), Actions (dynamic list), Settings (confirm toggle), Save/Cancel via `CwocSaveSystem`. Loads `rule-editor.js`. `data-page-title="Rule Editor"`, `data-page-icon="🤖"`.
+
 
 ---
 
@@ -2907,17 +3084,19 @@ New frontend pages added for Maps View:
 ```
 src/backend/main.py
   ├── src.backend.db          (init_db, seed_version_info)
-  ├── src.backend.migrations  (all migrate_* functions, including migrate_add_multi_user, migrate_add_sharing, migrate_add_push_subscriptions, migrate_add_vapid_keys, migrate_add_email_fields, migrate_add_attachments, migrate_add_email_body_html, migrate_add_fts5, migrate_add_contact_vault)
+  ├── src.backend.migrations  (all migrate_* functions, including migrate_add_multi_user, migrate_add_sharing, migrate_add_push_subscriptions, migrate_add_vapid_keys, migrate_add_email_fields, migrate_add_attachments, migrate_add_email_body_html, migrate_add_fts5, migrate_add_contact_vault, migrate_create_rules_tables)
   ├── src.backend.middleware   (AuthMiddleware)
   ├── src.backend.weather     (start_weather_schedulers)
-  └── src.backend.routes.*    (all 14 route modules, including auth_router, users_router, sharing_router, notifications_router, network_access_router, push_router, ntfy_router, email_router, and attachments_router)
+  ├── src.backend.schedulers  (start_rules_scheduler)
+  └── src.backend.routes.*    (all 15 route modules, including auth_router, users_router, sharing_router, notifications_router, network_access_router, push_router, ntfy_router, email_router, attachments_router, and rules_router)
 
 src/backend/routes/chits.py
   ├── src.backend.db           (DB_PATH, serialize/deserialize, compute_system_tags, _build_export_envelope)
   ├── src.backend.models       (Chit, ImportRequest)
   ├── src.backend.sharing      (resolve_effective_role, can_edit_chit, can_delete_chit, can_manage_sharing)
   ├── src.backend.routes.audit (insert_audit_entry, compute_audit_diff, get_actor_from_request)
-  └── src.backend.routes.notifications (_create_share_notifications)
+  ├── src.backend.routes.notifications (_create_share_notifications)
+  └── src.backend.rules_engine (dispatch_trigger — called after chit create/update/email_received)
 
 src/backend/routes/trash.py
   └── src.backend.db           (DB_PATH, deserialize_json_field)
@@ -2931,7 +3110,8 @@ src/backend/routes/contacts.py
   ├── src.backend.db           (DB_PATH, CONTACT_IMAGES_DIR, serialize/deserialize, compute_display_name)
   ├── src.backend.models       (Contact)
   ├── src.backend.serializers  (vcard_parse, vcard_print, csv_export, csv_import)
-  └── src.backend.routes.audit (insert_audit_entry, compute_audit_diff, get_actor_from_request)
+  ├── src.backend.routes.audit (insert_audit_entry, compute_audit_diff, get_actor_from_request)
+  └── src.backend.rules_engine (dispatch_trigger — called after contact create/update)
 
 src/backend/routes/audit.py
   └── src.backend.db           (DB_PATH, deserialize_json_field)
@@ -2966,6 +3146,18 @@ src/backend/routes/email.py
 src/backend/routes/attachments.py
   └── src.backend.db           (DB_PATH, serialize_json_field, deserialize_json_field)
 
+src/backend/rules_engine.py
+  ├── src.backend.db           (DB_PATH, serialize_json_field, deserialize_json_field, compute_system_tags)
+  ├── src.backend.routes.audit (insert_audit_entry, compute_audit_diff)
+  ├── src.backend.routes.push  (send_push_to_user — imported lazily in _send_rule_notification)
+  └── src.backend.routes.ntfy  (send_ntfy_notification — imported lazily in _send_rule_notification)
+
+src/backend/routes/rules.py
+  ├── src.backend.db           (DB_PATH, serialize_json_field, deserialize_json_field)
+  ├── src.backend.models       (RuleCreate, RuleUpdate, RuleReorder)
+  ├── src.backend.routes.audit (get_actor_from_request, insert_audit_entry, compute_audit_diff)
+  └── src.backend.rules_engine (execute_action)
+
 src/backend/sharing.py
   └── src.backend.db           (DB_PATH, deserialize_json_field)
 
@@ -2986,9 +3178,10 @@ src/backend/auth_utils.py
   └── (no internal CWOC imports — leaf module)
 
 src/backend/schedulers.py
-  ├── src.backend.db           (DB_PATH, _update_lock, serialize_json_field)
+  ├── src.backend.db           (DB_PATH, _update_lock, serialize_json_field, deserialize_json_field)
   ├── src.backend.routes.push  (send_push_to_user — imported lazily in _send_chit_push)
-  └── src.backend.routes.ntfy  (send_ntfy_notification — imported lazily in _send_chit_ntfy)
+  ├── src.backend.routes.ntfy  (send_ntfy_notification — imported lazily in _send_chit_ntfy)
+  └── src.backend.rules_engine (evaluate_condition_tree, execute_action, _build_action_description — imported lazily in _rules_scheduled_loop)
 
 src/backend/migrations.py
   ├── src.backend.db           (DB_PATH, serialize_json_field)
@@ -3012,7 +3205,7 @@ src/backend/models.py
   └── (no internal CWOC imports — leaf module)
 ```
 
-**Dependency summary:** `db.py`, `models.py`, and `auth_utils.py` are leaf modules with no internal imports. `routes/audit.py` is imported by `chits.py`, `contacts.py`, `settings.py`, `health.py`, `sharing.py`, `network_access.py`, and `ntfy.py` for audit logging. `routes/notifications.py` is imported by `chits.py` and `sharing.py` for notification creation. `routes/push.py` is imported lazily by `weather.py` for push notification sending. `routes/ntfy.py` is imported lazily by `weather.py` for ntfy notification sending. `routes/email.py` imports from `db.py` only (plus stdlib `imaplib`, `smtplib`, `email`; optional `cryptography.fernet`). `auth_utils.py` is imported by `routes/auth.py`, `routes/users.py`, and `migrations.py`. `middleware.py` is imported by `main.py`. All route modules import from `db.py`.
+**Dependency summary:** `db.py`, `models.py`, and `auth_utils.py` are leaf modules with no internal imports. `routes/audit.py` is imported by `chits.py`, `contacts.py`, `settings.py`, `health.py`, `sharing.py`, `network_access.py`, `ntfy.py`, and `rules.py` for audit logging. `routes/notifications.py` is imported by `chits.py` and `sharing.py` for notification creation. `routes/push.py` is imported lazily by `weather.py` and `rules_engine.py` for push notification sending. `routes/ntfy.py` is imported lazily by `weather.py` and `rules_engine.py` for ntfy notification sending. `routes/email.py` imports from `db.py` only (plus stdlib `imaplib`, `smtplib`, `email`; optional `cryptography.fernet`). `auth_utils.py` is imported by `routes/auth.py`, `routes/users.py`, and `migrations.py`. `middleware.py` is imported by `main.py`. `rules_engine.py` is imported by `routes/rules.py` (for `execute_action`), `routes/chits.py` and `routes/contacts.py` (for `dispatch_trigger`), and `schedulers.py` (for condition evaluation and action execution in scheduled rules). All route modules import from `db.py`.
 
 ### 5.2 Frontend Script Load Dependencies
 
@@ -3062,7 +3255,7 @@ shared-auth.js            ← MUST load first (getCurrentUser, isAdmin, waitForA
               │     main-views.js      (uses shared-tags, shared-sort, shared-indicators)
               │     main-alerts.js     (uses shared alarm system from shared.js)
               │     main-search.js
-              │     main-email.js      (email tab view — displayEmailView, _checkMail, _composeEmail, _updateEmailBadge)
+              │     main-email.js      (email tab view — displayEmailView, _checkMail, _composeEmail, _updateEmailBadge, _emailQuickArchive, _emailQuickDelete, _emailHasReply)
               │     main-modals.js
               │     main-init.js       (calls init functions from all above)
               │     main.js            (entry point — calls main-init)

@@ -7,6 +7,7 @@ managing recurrence exceptions, and import/export of chit data and userdata.
 import json
 import logging
 import sqlite3
+import threading
 from datetime import datetime
 from typing import Optional
 from uuid import uuid4
@@ -21,6 +22,7 @@ from src.backend.models import Chit, ImportRequest
 from src.backend.routes.audit import insert_audit_entry, compute_audit_diff, get_actor_from_request
 from src.backend.sharing import resolve_effective_role, can_edit_chit, can_delete_chit, can_manage_sharing
 from src.backend.routes.notifications import _create_share_notifications
+from src.backend.rules_engine import dispatch_trigger
 
 
 logger = logging.getLogger(__name__)
@@ -415,11 +417,22 @@ def create_chit(chit: Chit, request: Request):
             logger.error(f"Notification creation failed for new chit (best-effort): {str(e)}")
 
         conn.commit()
-        return {
+        chit_data = {
             **chit.dict(), "id": chit_id, "tags": chit_tags,
             "created_datetime": current_time, "modified_datetime": current_time,
             "owner_id": user_id, "owner_display_name": owner_display_name, "owner_username": owner_username,
         }
+        # Fire-and-forget: dispatch rules engine trigger for chit creation
+        try:
+            logger.info("Firing rules engine trigger: chit_created for chit %s, owner %s", chit_id, user_id)
+            threading.Thread(
+                target=dispatch_trigger,
+                args=("chit_created", "chit", chit_data, user_id),
+                daemon=True,
+            ).start()
+        except Exception:
+            pass  # Never block the API response for rules engine
+        return chit_data
     except Exception as e:
         logger.error(f"Error creating chit: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to create chit: {str(e)}")
@@ -802,7 +815,19 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
             except Exception as e:
                 logger.error(f"Notification creation failed for new chit via PUT (best-effort): {str(e)}")
         conn.commit()
-        return {**chit.dict(), "id": chit_id, "tags": chit_tags, "modified_datetime": current_time}
+        chit_data = {**chit.dict(), "id": chit_id, "tags": chit_tags, "modified_datetime": current_time}
+        # Fire-and-forget: dispatch rules engine trigger for chit update or creation
+        try:
+            trigger = "chit_updated" if existing else "chit_created"
+            logger.info("Firing rules engine trigger: %s for chit %s, owner %s", trigger, chit_id, user_id)
+            threading.Thread(
+                target=dispatch_trigger,
+                args=(trigger, "chit", chit_data, user_id),
+                daemon=True,
+            ).start()
+        except Exception:
+            pass  # Never block the API response for rules engine
+        return chit_data
     except Exception as e:
         logger.error(f"Error updating/creating chit: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to update/create chit: {str(e)}")

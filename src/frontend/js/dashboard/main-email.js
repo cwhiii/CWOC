@@ -12,6 +12,9 @@ var _emailSubFilter = 'inbox';
 /* Multi-select state */
 var _emailSelectedIds = [];
 
+/* Last checked checkbox index for shift+click range selection */
+var _emailLastCheckedIndex = null;
+
 /* Auto-check mail interval timer */
 var _emailAutoCheckTimer = null;
 
@@ -84,6 +87,8 @@ function displayEmailView(chitsToDisplay) {
     if (!container) return;
     container.innerHTML = '';
     _emailSelectedIds = [];
+    _emailLastCheckedIndex = null;
+    _emailRepliedToCache = null; // Rebuild replied cache on each render
 
     // Filter to email chits only
     var emailChits = chitsToDisplay.filter(function(c) {
@@ -145,11 +150,11 @@ function displayEmailView(chitsToDisplay) {
     bulkBar.className = 'email-bulk-bar';
     bulkBar.style.display = 'none';
     bulkBar.innerHTML =
+        '<label class="email-bulk-select-all-label"><input type="checkbox" id="emailBulkSelectAllCb" class="email-select-cb" onclick="_emailBulkSelectAll()"> <span id="emailBulkSelectAllLabel">Select All</span></label>' +
         '<span id="emailBulkCount">0 selected</span>' +
         '<button class="cwoc-btn" onclick="_emailBulkArchive()"><i class="fas fa-archive"></i> Archive</button>' +
         '<button class="cwoc-btn" onclick="_emailBulkTag()"><i class="fas fa-tag"></i> Tag</button>' +
         '<button class="cwoc-btn" onclick="_emailBulkToggleRead()"><i class="fas fa-envelope-open"></i> Mark Read/Unread</button>' +
-        '<button class="cwoc-btn" id="emailBulkSelectAllBtn" onclick="_emailBulkSelectAll()" style="margin-left:auto;">Select All</button>' +
         '<button class="cwoc-btn" onclick="_emailBulkClear()">Clear</button>';
     container.appendChild(bulkBar);
 
@@ -182,14 +187,24 @@ function _buildEmailCard(chit, viSettings) {
         applyChitColors(card, typeof chitColor === 'function' ? chitColor(chit) : '#fdf6e3');
     }
 
-    // Checkbox for multi-select
+    // Checkbox for multi-select (supports shift+click range selection)
     var cbWrap = document.createElement('div');
     cbWrap.className = 'email-cb-wrap';
     var cb = document.createElement('input');
     cb.type = 'checkbox';
     cb.className = 'email-select-cb';
     cb.dataset.chitId = chit.id;
-    cb.onclick = function(e) { e.stopPropagation(); _emailToggleSelect(chit.id, cb.checked); };
+    cb.onclick = function(e) {
+        e.stopPropagation();
+        if (e.shiftKey && _emailLastCheckedIndex !== null) {
+            _emailShiftSelect(cb);
+        } else {
+            _emailToggleSelect(chit.id, cb.checked);
+        }
+        // Track this checkbox as the last clicked
+        var allCbs = Array.from(document.querySelectorAll('.email-select-cb'));
+        _emailLastCheckedIndex = allCbs.indexOf(cb);
+    };
     cbWrap.appendChild(cb);
     card.appendChild(cbWrap);
 
@@ -199,15 +214,16 @@ function _buildEmailCard(chit, viSettings) {
 
     // Header row using _buildChitHeader (like search results)
     var subject = chit.title || chit.email_subject || '(No Subject)';
+    var cleanSubject = _emailStripMarkdown(subject);
     if (typeof _buildChitHeader === 'function') {
-        content.appendChild(_buildChitHeader(chit, _escHtml(subject), viSettings));
+        content.appendChild(_buildChitHeader(chit, _escHtml(cleanSubject), viSettings));
     } else {
         var titleEl = document.createElement('div');
-        titleEl.innerHTML = '<strong>' + _escHtml(subject) + '</strong>';
+        titleEl.innerHTML = '<strong>' + _escHtml(cleanSubject) + '</strong>';
         content.appendChild(titleEl);
     }
 
-    // Email meta row: sender, smart date, status badge
+    // Email meta row: sender, smart date, status badge, replied badge
     var meta = document.createElement('div');
     meta.className = 'email-card-meta';
 
@@ -217,34 +233,50 @@ function _buildEmailCard(chit, viSettings) {
     if (chit.email_status === 'draft') statusBadge = '<span class="email-draft-badge">Draft</span> ';
     if (chit.email_status === 'sent') statusBadge = '<span class="email-sent-badge">Sent</span> ';
 
-    meta.innerHTML = statusBadge +
+    // Replied badge — check if any chit references this message as in_reply_to
+    var repliedBadge = '';
+    if (chit.email_message_id && _emailHasReply(chit.email_message_id)) {
+        repliedBadge = '<span class="email-replied-badge"><i class="fas fa-reply"></i> Replied</span> ';
+    }
+
+    meta.innerHTML = statusBadge + repliedBadge +
         '<span class="email-meta-sender">From: ' + _escHtml(sender) + '</span>' +
         '<span class="email-meta-date">' + _escHtml(dateStr) + '</span>';
     content.appendChild(meta);
 
     // Tags are already rendered by _buildChitHeader — no duplicate tag row needed
 
-    // Body preview (first 2 lines)
+    // Body preview (first 2 lines, plain text only — strip any residual HTML/markdown)
     var bodyText = chit.email_body_text || '';
     if (bodyText) {
         var preview = document.createElement('div');
         preview.className = 'email-card-preview';
-        var lines = bodyText.split('\n').filter(function(l) { return l.trim(); });
+        var cleanText = _emailStripMarkdown(_emailStripHtml(bodyText));
+        var lines = cleanText.split('\n').filter(function(l) { return l.trim(); });
         preview.textContent = lines.slice(0, 2).join(' ').substring(0, 200);
         content.appendChild(preview);
     }
 
     card.appendChild(content);
 
-    // Shift+click to toggle read/unread; plain click does nothing (dblclick navigates)
-    card.addEventListener('click', function(e) {
-        if (e.target.classList.contains('email-select-cb')) return;
-        if (e.shiftKey) {
-            e.preventDefault();
-            e.stopPropagation();
-            _toggleEmailReadStatus(chit, card);
-        }
+    // Hover action buttons (archive, delete, mark unread) — right side
+    var actions = document.createElement('div');
+    actions.className = 'email-hover-actions';
+    actions.innerHTML =
+        '<button class="email-hover-btn" data-action="archive" title="Archive"><i class="fas fa-archive"></i></button>' +
+        '<button class="email-hover-btn" data-action="delete" title="Delete"><i class="fas fa-trash"></i></button>' +
+        '<button class="email-hover-btn" data-action="unread" title="Mark Unread"><i class="fas fa-envelope"></i></button>';
+    // Wire up action button clicks
+    actions.addEventListener('click', function(e) {
+        var btn = e.target.closest('.email-hover-btn');
+        if (!btn) return;
+        e.stopPropagation();
+        var action = btn.dataset.action;
+        if (action === 'archive') _emailQuickArchive(chit, card);
+        else if (action === 'delete') _emailQuickDelete(chit, card);
+        else if (action === 'unread') _toggleEmailReadStatus(chit, card);
     });
+    card.appendChild(actions);
 
     // Double-click handler: navigate to editor (consistent with all other views)
     card.addEventListener('dblclick', function(e) {
@@ -308,24 +340,31 @@ function _emailToggleSelect(chitId, checked) {
 function _emailUpdateBulkBar() {
     var bar = document.getElementById('emailBulkBar');
     var countEl = document.getElementById('emailBulkCount');
-    var selectAllBtn = document.getElementById('emailBulkSelectAllBtn');
+    var selectAllCb = document.getElementById('emailBulkSelectAllCb');
+    var selectAllLabel = document.getElementById('emailBulkSelectAllLabel');
     if (!bar) return;
     if (_emailSelectedIds.length > 0) {
         bar.style.display = '';
         if (countEl) countEl.textContent = _emailSelectedIds.length + ' selected';
-        // Update Select All button label
-        if (selectAllBtn) {
-            var allCbs = document.querySelectorAll('.email-select-cb');
-            selectAllBtn.textContent = (_emailSelectedIds.length === allCbs.length) ? 'Deselect All' : 'Select All';
+        // Update Select All checkbox and label
+        if (selectAllCb) {
+            var allCbs = document.querySelectorAll('.email-scroll-wrap .email-select-cb');
+            var allSelected = _emailSelectedIds.length === allCbs.length;
+            selectAllCb.checked = allSelected;
+        }
+        if (selectAllLabel) {
+            var allCbs2 = document.querySelectorAll('.email-scroll-wrap .email-select-cb');
+            selectAllLabel.textContent = (_emailSelectedIds.length === allCbs2.length) ? 'Deselect All' : 'Select All';
         }
     } else {
         bar.style.display = 'none';
+        if (selectAllCb) selectAllCb.checked = false;
     }
 }
 
 /** Select all / deselect all visible email cards (toggles) */
 function _emailBulkSelectAll() {
-    var allCbs = document.querySelectorAll('.email-select-cb');
+    var allCbs = document.querySelectorAll('.email-scroll-wrap .email-select-cb');
     var allChecked = _emailSelectedIds.length > 0 && _emailSelectedIds.length === allCbs.length;
 
     if (allChecked) {
@@ -346,7 +385,7 @@ function _emailBulkSelectAll() {
 /** Clear all selections */
 function _emailBulkClear() {
     _emailSelectedIds = [];
-    document.querySelectorAll('.email-select-cb').forEach(function(cb) { cb.checked = false; });
+    document.querySelectorAll('.email-scroll-wrap .email-select-cb').forEach(function(cb) { cb.checked = false; });
     _emailUpdateBulkBar();
 }
 
@@ -464,7 +503,7 @@ async function _emailBulkToggleRead() {
         _showToast(count + ' email(s) read status toggled', 'success');
     }
     _emailSelectedIds = [];
-    document.querySelectorAll('.email-select-cb').forEach(function(cb) { cb.checked = false; });
+    document.querySelectorAll('.email-scroll-wrap .email-select-cb').forEach(function(cb) { cb.checked = false; });
     _emailUpdateBulkBar();
 }
 
@@ -604,7 +643,11 @@ function _checkMail() {
         .then(function(result) {
             console.log('[Email Check Mail] Result:', JSON.stringify(result.data));
             if (result.ok && result.data.new_count !== undefined) {
-                _showToast(result.data.new_count + ' new email(s) fetched', 'success');
+                var parts = [];
+                if (result.data.new_count > 0) parts.push(result.data.new_count + ' new');
+                if (result.data.deleted_count > 0) parts.push(result.data.deleted_count + ' removed');
+                var msg = parts.length ? parts.join(', ') : 'No new emails';
+                _showToast(msg, 'success');
                 if (typeof fetchChits === 'function') fetchChits();
             } else if (result.status === 400 && result.data.detail && result.data.detail.indexOf('No email account') !== -1) {
                 console.warn('[Email Check Mail] No email account configured.');
@@ -663,6 +706,85 @@ function _escHtml(str) {
     return div.innerHTML;
 }
 
+/**
+ * Strip HTML tags and decode entities from a string.
+ * Used to clean email body text that may contain residual HTML.
+ */
+function _emailStripHtml(str) {
+    if (!str) return '';
+    // Remove style/script blocks
+    var text = str.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
+    text = text.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
+    // Replace <br> and </p> with newlines
+    text = text.replace(/<br\s*\/?>/gi, '\n');
+    text = text.replace(/<\/p>/gi, '\n');
+    // Strip all remaining tags
+    text = text.replace(/<[^>]+>/g, '');
+    // Decode common HTML entities
+    text = text.replace(/&amp;/g, '&');
+    text = text.replace(/&lt;/g, '<');
+    text = text.replace(/&gt;/g, '>');
+    text = text.replace(/&quot;/g, '"');
+    text = text.replace(/&#39;/g, "'");
+    text = text.replace(/&nbsp;/g, ' ');
+    // Strip raw URLs (http/https links that clutter the preview)
+    text = text.replace(/https?:\/\/[^\s)>\]]+/g, '');
+    // Collapse excessive whitespace
+    text = text.replace(/\n{3,}/g, '\n\n');
+    text = text.replace(/[ \t]+/g, ' ');
+    return text.trim();
+}
+
+/**
+ * Strip markdown formatting from a string, returning plain text.
+ * Extracts link text from [text](url), removes bold/italic markers, etc.
+ */
+function _emailStripMarkdown(str) {
+    if (!str) return '';
+    // Extract link text from [text](url) — keep only the text part
+    var text = str.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1');
+    // Remove image syntax ![alt](url)
+    text = text.replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1');
+    // Remove bold **text** or __text__
+    text = text.replace(/\*\*([^*]*)\*\*/g, '$1');
+    text = text.replace(/__([^_]*)__/g, '$1');
+    // Remove italic *text* or _text_
+    text = text.replace(/\*([^*]*)\*/g, '$1');
+    text = text.replace(/_([^_]*)_/g, '$1');
+    // Remove inline code `text`
+    text = text.replace(/`([^`]*)`/g, '$1');
+    // Remove heading markers
+    text = text.replace(/^#{1,6}\s+/gm, '');
+    // Strip any residual HTML tags too
+    text = text.replace(/<[^>]+>/g, '');
+    return text.trim();
+}
+
+/**
+ * Shift+click range selection for email checkboxes.
+ * Selects (checks) all checkboxes between the last clicked and the current one.
+ */
+function _emailShiftSelect(currentCb) {
+    var allCbs = Array.from(document.querySelectorAll('.email-select-cb'));
+    var currentIndex = allCbs.indexOf(currentCb);
+    if (_emailLastCheckedIndex === null || currentIndex === -1) return;
+
+    var start = Math.min(_emailLastCheckedIndex, currentIndex);
+    var end = Math.max(_emailLastCheckedIndex, currentIndex);
+    var newState = currentCb.checked;
+
+    for (var i = start; i <= end; i++) {
+        allCbs[i].checked = newState;
+        var chitId = allCbs[i].dataset.chitId;
+        if (newState && _emailSelectedIds.indexOf(chitId) === -1) {
+            _emailSelectedIds.push(chitId);
+        } else if (!newState) {
+            _emailSelectedIds = _emailSelectedIds.filter(function(id) { return id !== chitId; });
+        }
+    }
+    _emailUpdateBulkBar();
+}
+
 function _showToast(msg, type) {
     if (typeof cwocToast === 'function') {
         cwocToast(msg, type);
@@ -715,4 +837,236 @@ async function _toggleEmailReadStatus(chit, card) {
         console.error('[Email] Toggle read error:', err);
         _showToast('Failed to toggle read status', 'error');
     }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Replied-to detection
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** Cache of message IDs that have been replied to (built once per render) */
+var _emailRepliedToCache = null;
+
+/**
+ * Build a Set of message IDs that have been replied to.
+ * Only counts replies/forwards that the user actually sent or drafted —
+ * incoming emails with In-Reply-To headers are NOT counted.
+ */
+function _emailBuildRepliedCache() {
+    _emailRepliedToCache = new Set();
+    if (typeof chits === 'undefined' || !Array.isArray(chits)) return;
+    chits.forEach(function(c) {
+        if (c.email_in_reply_to &&
+            (c.email_status === 'sent' || c.email_status === 'draft')) {
+            _emailRepliedToCache.add(c.email_in_reply_to.trim());
+        }
+    });
+}
+
+/**
+ * Check if a given message ID has been replied to.
+ * @param {string} messageId - The email_message_id to check
+ * @returns {boolean}
+ */
+function _emailHasReply(messageId) {
+    if (!messageId) return false;
+    if (!_emailRepliedToCache) _emailBuildRepliedCache();
+    return _emailRepliedToCache.has(messageId.trim());
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Quick actions (single-email archive, delete)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Quick-archive a single email with undo countdown.
+ * Hides the card immediately, then archives after the countdown expires.
+ * If the user clicks Undo, the card reappears and nothing is changed.
+ */
+function _emailQuickArchive(chit, card) {
+    // Immediately hide the card
+    card.style.transition = 'opacity 0.3s, transform 0.3s';
+    card.style.opacity = '0';
+    card.style.transform = 'translateX(30px)';
+    setTimeout(function() { card.style.display = 'none'; }, 300);
+
+    var title = chit.title || chit.email_subject || '(No Subject)';
+
+    _emailUndoToast(
+        '📦 Archived: ' + title,
+        // onExpire — actually archive
+        async function() {
+            try {
+                var resp = await fetch('/api/chit/' + encodeURIComponent(chit.id));
+                if (!resp.ok) { _showToast('Failed to archive email', 'error'); _emailRestoreCard(card); return; }
+                var fullChit = await resp.json();
+                fullChit.archived = true;
+                ['tags', 'checklist', 'people', 'child_chits', 'alerts',
+                 'recurrence_exceptions', 'shares'].forEach(function(f) {
+                    if (typeof fullChit[f] === 'string') {
+                        try { fullChit[f] = JSON.parse(fullChit[f]); } catch(e) {}
+                    }
+                });
+                ['email_to', 'email_cc', 'email_bcc'].forEach(function(f) {
+                    if (Array.isArray(fullChit[f])) fullChit[f] = JSON.stringify(fullChit[f]);
+                });
+                var putResp = await fetch('/api/chits/' + encodeURIComponent(chit.id), {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(fullChit)
+                });
+                if (putResp.ok) {
+                    card.remove();
+                    if (typeof chits !== 'undefined' && Array.isArray(chits)) {
+                        var found = chits.find(function(c) { return c.id === chit.id; });
+                        if (found) found.archived = true;
+                    }
+                } else {
+                    _showToast('Failed to archive email', 'error');
+                    _emailRestoreCard(card);
+                }
+            } catch (e) {
+                console.error('[Email Quick Archive]', e);
+                _showToast('Failed to archive email', 'error');
+                _emailRestoreCard(card);
+            }
+        },
+        // onUndo — restore the card
+        function() {
+            _emailRestoreCard(card);
+            _showToast('Archive undone', 'success');
+        }
+    );
+}
+
+/**
+ * Quick-delete (soft delete) a single email with undo countdown.
+ * Hides the card immediately, then deletes after the countdown expires.
+ */
+function _emailQuickDelete(chit, card) {
+    // Immediately hide the card
+    card.style.transition = 'opacity 0.3s, transform 0.3s';
+    card.style.opacity = '0';
+    card.style.transform = 'translateX(30px)';
+    setTimeout(function() { card.style.display = 'none'; }, 300);
+
+    var title = chit.title || chit.email_subject || '(No Subject)';
+
+    _emailUndoToast(
+        '🗑️ Deleted: ' + title,
+        // onExpire — actually delete
+        async function() {
+            try {
+                var resp = await fetch('/api/chits/' + encodeURIComponent(chit.id), {
+                    method: 'DELETE'
+                });
+                if (resp.ok) {
+                    card.remove();
+                    if (typeof chits !== 'undefined' && Array.isArray(chits)) {
+                        var idx = chits.findIndex(function(c) { return c.id === chit.id; });
+                        if (idx !== -1) chits[idx].deleted = true;
+                    }
+                    if (typeof _updateEmailBadge === 'function') _updateEmailBadge();
+                } else {
+                    _showToast('Failed to delete email', 'error');
+                    _emailRestoreCard(card);
+                }
+            } catch (e) {
+                console.error('[Email Quick Delete]', e);
+                _showToast('Failed to delete email', 'error');
+                _emailRestoreCard(card);
+            }
+        },
+        // onUndo — restore the card
+        function() {
+            _emailRestoreCard(card);
+            _showToast('Delete undone', 'success');
+        }
+    );
+}
+
+/**
+ * Restore a hidden email card back to visible state (used by undo).
+ * Plays a brief flash animation so the restored card is obvious.
+ */
+function _emailRestoreCard(card) {
+    card.style.display = '';
+    card.style.transition = 'opacity 0.3s, transform 0.3s';
+    card.style.opacity = '1';
+    card.style.transform = 'none';
+    // Flash highlight so the user can see which card came back
+    card.classList.add('email-card-flash');
+    setTimeout(function() { card.classList.remove('email-card-flash'); }, 1500);
+}
+
+/**
+ * Show an undo toast with a countdown timer bar for email actions.
+ * Reuses the same visual style as _showDeleteUndoToast but with a custom message.
+ * @param {string} message - The message to display (e.g. "📦 Archived: Subject")
+ * @param {function} onExpire - Called when countdown expires (perform the action)
+ * @param {function} onUndo - Called when user clicks Undo
+ */
+function _emailUndoToast(message, onExpire, onUndo) {
+    var DURATION = 10000;
+
+    // Remove any existing email undo toast
+    var existing = document.getElementById('emailUndoToast');
+    if (existing) {
+        if (existing._undoDismissed === false && existing._onExpire) existing._onExpire();
+        existing.remove();
+    }
+
+    var toast = document.createElement('div');
+    toast.id = 'emailUndoToast';
+    toast.className = 'email-undo-toast';
+
+    var msgRow = document.createElement('div');
+    msgRow.className = 'email-undo-msg-row';
+    var msg = document.createElement('span');
+    msg.className = 'email-undo-msg';
+    msg.textContent = message;
+    var undoBtn = document.createElement('button');
+    undoBtn.className = 'email-undo-btn';
+    undoBtn.textContent = 'Undo';
+    msgRow.appendChild(msg);
+    msgRow.appendChild(undoBtn);
+    toast.appendChild(msgRow);
+
+    // Timer bar
+    var barOuter = document.createElement('div');
+    barOuter.className = 'email-undo-bar-outer';
+    var barInner = document.createElement('div');
+    barInner.className = 'email-undo-bar-inner';
+    barOuter.appendChild(barInner);
+    toast.appendChild(barOuter);
+
+    document.body.appendChild(toast);
+
+    var start = Date.now();
+    var dismissed = false;
+    toast._undoDismissed = false;
+    toast._onExpire = onExpire;
+
+    var interval = setInterval(function() {
+        var elapsed = Date.now() - start;
+        var pct = Math.max(0, 100 - (elapsed / DURATION) * 100);
+        barInner.style.width = pct + '%';
+        if (elapsed >= DURATION) {
+            clearInterval(interval);
+            if (!dismissed) {
+                dismissed = true;
+                toast._undoDismissed = true;
+                toast.remove();
+                if (onExpire) onExpire();
+            }
+        }
+    }, 50);
+
+    undoBtn.onclick = function() {
+        if (dismissed) return;
+        dismissed = true;
+        toast._undoDismissed = true;
+        clearInterval(interval);
+        toast.remove();
+        if (onUndo) onUndo();
+    };
 }

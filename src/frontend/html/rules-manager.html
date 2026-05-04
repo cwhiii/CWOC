@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <link rel="icon" type="image/x-icon" href="/static/cwod_logo-favicon.png" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Rules Manager — C.W.'s Omni Chits</title>
+    <!-- PWA -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#8b5a2b" />
+    <link rel="apple-touch-icon" href="/static/cwoc-icon-192.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <link rel="stylesheet" href="/frontend/css/shared/shared-page.css" />
+    <link rel="stylesheet" href="/frontend/css/shared/shared-calculator.css" />
+    <link rel="stylesheet" href="/frontend/css/shared/shared-rules.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" />
+    <style>
+        /* ══ RULES MANAGER PAGE-SPECIFIC STYLES ══ */
+        /* (All shared rules styles are in shared-rules.css) */
+    </style>
+</head>
+<body data-page-title="Rules Manager" data-page-icon="🤖">
+
+    <div class="settings-panel">
+
+        <!-- ═══ PENDING CONFIRMATIONS ═══ -->
+        <div class="rules-confirmations hidden" id="confirmations-section">
+            <div class="rules-confirmations-header" onclick="toggleConfirmations()">
+                <span>⚠️ Pending Confirmations (<span id="confirmations-count">0</span>)</span>
+                <span class="rules-confirmations-toggle" id="confirmations-toggle">▼</span>
+            </div>
+            <div class="rules-confirmations-body" id="confirmations-body"></div>
+        </div>
+
+        <!-- ═══ TOOLBAR ═══ -->
+        <div class="rules-toolbar">
+            <div class="toolbar-spacer"></div>
+            <button class="cwoc-btn" onclick="window.location.href='/frontend/html/rule-editor.html'">
+                ➕ New Rule
+            </button>
+        </div>
+
+        <!-- ═══ RULES TABLE ═══ -->
+        <div id="rules-table-wrap">
+            <div class="cwoc-empty">Loading rules…</div>
+        </div>
+
+    </div>
+
+    <!-- ── 1. Shared sub-scripts (utils first, coordinator last) ─────────── -->
+    <script src="/frontend/js/shared/shared-auth.js"></script>
+    <script src="/frontend/js/shared/shared-utils.js"></script>
+    <script src="/frontend/js/shared/shared-touch.js"></script>
+    <script src="/frontend/js/shared/shared-checklist.js"></script>
+    <script src="/frontend/js/shared/shared-sort.js"></script>
+    <script src="/frontend/js/shared/shared-indicators.js"></script>
+    <script src="/frontend/js/shared/shared-calendar.js"></script>
+    <script src="/frontend/js/shared/shared-tags.js"></script>
+    <script src="/frontend/js/shared/shared-recurrence.js"></script>
+    <script src="/frontend/js/shared/shared-geocoding.js"></script>
+    <script src="/frontend/js/shared/shared-qr.js"></script>
+    <script src="/frontend/js/shared/shared.js"></script>
+    <script src="/frontend/js/shared/shared-calculator.js"></script>
+
+    <!-- ── 2. Shared page components ─────────────────────────────────────── -->
+    <script src="/frontend/js/pages/shared-page.js"></script>
+
+    <!-- ── 3. Page-specific script ───────────────────────────────────────── -->
+    <script src="/frontend/js/pages/rules-manager.js"></script>
+
+    <!-- ── PWA ───────────────────────────────────────────────────────────── -->
+    <script src="/pwa/pwa-register.js"></script>
+</body>
+</html>

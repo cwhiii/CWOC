@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <link rel="icon" type="image/x-icon" href="/static/cwod_logo-favicon.png" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Rule Editor — C.W.'s Omni Chits</title>
+    <!-- PWA -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#8b5a2b" />
+    <link rel="apple-touch-icon" href="/static/cwoc-icon-192.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <link rel="stylesheet" href="/frontend/css/shared/shared-page.css" />
+    <link rel="stylesheet" href="/frontend/css/shared/shared-calculator.css" />
+    <link rel="stylesheet" href="/frontend/css/shared/shared-rules.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" />
+    <style>
+        /* ══ RULE EDITOR PAGE-SPECIFIC STYLES ══ */
+        /* (All shared rules styles are in shared-rules.css) */
+    </style>
+</head>
+<body data-page-title="Rule Editor" data-page-icon="🤖">
+
+    <div class="settings-panel">
+
+        <!-- ═══ RULE INFO ═══ -->
+        <div class="rule-section" id="section-info">
+            <h3>📝 Rule Info</h3>
+            <label for="rule-name">Name <span style="color:var(--danger-red);">*</span></label>
+            <input type="text" id="rule-name" placeholder="e.g. Auto-tag invoices" />
+            <label for="rule-description" style="margin-top:10px;">Description</label>
+            <textarea id="rule-description" placeholder="Optional description of what this rule does…"></textarea>
+        </div>
+
+        <!-- ═══ TRIGGER ═══ -->
+        <div class="rule-section" id="section-trigger">
+            <h3>⚡ Trigger</h3>
+            <label for="rule-trigger">When should this rule fire? <span style="color:var(--danger-red);">*</span></label>
+            <select id="rule-trigger">
+                <option value="">— Select trigger —</option>
+                <option value="chit_created">Chit Created</option>
+                <option value="chit_updated">Chit Updated</option>
+                <option value="email_received">Email Received</option>
+                <option value="contact_created">Contact Created</option>
+                <option value="contact_updated">Contact Updated</option>
+                <option value="scheduled">Scheduled</option>
+            </select>
+            <div class="schedule-config" id="schedule-config">
+                <label for="schedule-frequency">Frequency</label>
+                <select id="schedule-frequency">
+                    <option value="daily">Daily</option>
+                    <option value="hourly">Every N Hours</option>
+                </select>
+                <div id="schedule-interval-wrap" style="margin-top:8px;display:none;">
+                    <label for="schedule-interval">Every how many hours?</label>
+                    <input type="number" id="schedule-interval" min="1" max="168" value="1" style="width:80px;" />
+                </div>
+                <div style="margin-top:8px;">
+                    <label for="schedule-time">Time of Day</label>
+                    <input type="time" id="schedule-time" value="09:00" />
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══ CONDITIONS ═══ -->
+        <div class="rule-section" id="section-conditions">
+            <h3>🔍 Conditions <span style="color:var(--danger-red);">*</span></h3>
+            <p style="font-size:0.9em;color:var(--aged-brown-light);margin:0 0 10px;">
+                Define when this rule should match. All conditions in a group must be true (AND) or any one (OR).
+            </p>
+            <div class="condition-tree" id="condition-tree"></div>
+        </div>
+
+        <!-- ═══ ACTIONS ═══ -->
+        <div class="rule-section" id="section-actions">
+            <h3>🎯 Actions <span style="color:var(--danger-red);">*</span></h3>
+            <p style="font-size:0.9em;color:var(--aged-brown-light);margin:0 0 10px;">
+                What should happen when conditions match?
+            </p>
+            <div class="action-rows" id="action-rows"></div>
+            <button class="action-add-btn" onclick="addActionRow()">+ Add Action</button>
+        </div>
+
+        <!-- ═══ SETTINGS ═══ -->
+        <div class="rule-section" id="section-settings">
+            <h3>⚙️ Settings</h3>
+            <div class="rule-toggle-row">
+                <label class="rule-enabled-toggle">
+                    <input type="checkbox" id="rule-confirm" checked />
+                    <span class="rule-enabled-slider"></span>
+                </label>
+                <label for="rule-confirm" style="font-weight:normal;margin:0;cursor:pointer;">
+                    Confirm before applying actions (safety net)
+                </label>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- ── 1. Shared sub-scripts (utils first, coordinator last) ─────────── -->
+    <script src="/frontend/js/shared/shared-auth.js"></script>
+    <script src="/frontend/js/shared/shared-utils.js"></script>
+    <script src="/frontend/js/shared/shared-touch.js"></script>
+    <script src="/frontend/js/shared/shared-checklist.js"></script>
+    <script src="/frontend/js/shared/shared-sort.js"></script>
+    <script src="/frontend/js/shared/shared-indicators.js"></script>
+    <script src="/frontend/js/shared/shared-calendar.js"></script>
+    <script src="/frontend/js/shared/shared-tags.js"></script>
+    <script src="/frontend/js/shared/shared-recurrence.js"></script>
+    <script src="/frontend/js/shared/shared-geocoding.js"></script>
+    <script src="/frontend/js/shared/shared-qr.js"></script>
+    <script src="/frontend/js/shared/shared.js"></script>
+    <script src="/frontend/js/shared/shared-calculator.js"></script>
+
+    <!-- ── 2. Shared page components ─────────────────────────────────────── -->
+    <script src="/frontend/js/pages/shared-page.js"></script>
+
+    <!-- ── 3. Page-specific script ───────────────────────────────────────── -->
+    <script src="/frontend/js/pages/rule-editor.js"></script>
+
+    <!-- ── PWA ───────────────────────────────────────────────────────────── -->
+    <script src="/pwa/pwa-register.js"></script>
+</body>
+</html>

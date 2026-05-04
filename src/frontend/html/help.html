@@ -261,7 +261,16 @@
             <h4>Google Maps Preference</h4>
             <p>If "Prefer Google for Maps" is enabled in Settings → Chit Options, the Maps View displays a warning message instead of loading the map. Google Maps is not supported for this feature due to billing restrictions. Disable the preference in Settings to use the Maps View.</p>
             <h3 id="email">Email</h3>
-            <p>CWOC includes a built-in email client. Configure your email account in Settings → Email with IMAP/SMTP credentials. Emails are stored as chits with special email fields.</p>
+            <p>CWOC includes a built-in email client that supports multiple email accounts. Configure your accounts in Settings → Email → Accounts. Each account has its own IMAP/SMTP server settings, while syncing configuration (max pull, check interval) and signature are shared across all accounts. Emails are stored as chits with special email fields.</p>
+            <h4>Multiple Accounts</h4>
+            <ul>
+                <li><strong>Add Account</strong> — Click "Add Account" in Settings → Email to add a new email account. You can add any number of accounts, including third-party providers (Gmail, Outlook, Yahoo, custom IMAP servers, etc.)</li>
+                <li><strong>Per-Account Settings</strong> — Each account has its own email address, display name, username, password, and IMAP/SMTP server configuration</li>
+                <li><strong>Shared Settings</strong> — Max pull count, check interval, and email signature are shared across all accounts</li>
+                <li><strong>Test Connection</strong> — Each account card has its own "Test Connection" button to verify IMAP and SMTP connectivity independently</li>
+                <li><strong>Sync All</strong> — When syncing, all configured accounts are checked for new messages</li>
+            </ul>
+            <h4>Email Features</h4>
             <ul>
                 <li><strong>Email View</strong> — View inbox, sent, drafts, and trash folders. Shift+click an email card to toggle read/unread status</li>
                 <li><strong>Compose</strong> — Click Compose to create a new email draft. Fill in To, CC, BCC, and body fields. The body supports <strong>markdown</strong> with a live HTML preview below the text area. When sent, the email is delivered as properly rendered HTML</li>
@@ -272,6 +281,7 @@
                 <li><strong>HTML Rendering</strong> — Received emails with HTML content display in a sandboxed iframe. Use the HTML/Text toggle to switch between rendered and plain-text views</li>
                 <li><strong>Signature</strong> — Configure a markdown signature in Settings → Email → Signature. It is automatically appended to all outgoing emails, converted to HTML</li>
                 <li><strong>Auto-check</strong> — Configure automatic mail checking intervals in Settings → Email → Syncing (5, 15, 30, or 60 minutes)</li>
+                <li><strong>Deletion Sync</strong> — When you delete an email in Gmail (or any IMAP provider), the deletion propagates to CWOC on the next sync. The deleted email chit is soft-deleted and moved to Trash. This happens automatically during every mail check, whether manual or auto-check</li>
             </ul>
             <h4>Email Formatting Shortcuts</h4>
             <p>These keyboard shortcuts work in both the small email zone and the expanded editor. The expanded editor also has a toolbar with buttons for each action.</p>
