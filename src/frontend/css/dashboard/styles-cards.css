@@ -1156,3 +1156,195 @@ li.cwoc-dragging {
     border-color: #b22222;
     color: #b22222;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Email Tab — Inbox List View Styles
+   Email row cards, action bar, sub-filters, unread badge, status badges.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Email row: inbox-style list item (extends .chit-card) ────────────────── */
+.email-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+    cursor: pointer;
+    padding: 0.4em 0.7em;
+}
+
+/* ── Unread email distinction ─────────────────────────────────────────────── */
+.email-unread {
+    font-weight: bold;
+    background: var(--parchment-light, #fdf5e6);
+    border-left: 4px solid var(--aged-brown-medium, #8b4513);
+}
+
+/* ── Sender column ────────────────────────────────────────────────────────── */
+.email-row-sender {
+    flex: 0 0 180px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--aged-brown-dark, #4a2c2a);
+    font-size: 0.9em;
+}
+
+/* ── Subject column ───────────────────────────────────────────────────────── */
+.email-row-subject {
+    flex: 1 1 auto;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: #2b1e0f;
+}
+
+/* ── Date column ──────────────────────────────────────────────────────────── */
+.email-row-date {
+    flex: 0 0 80px;
+    text-align: right;
+    font-size: 0.8em;
+    color: #6b4e31;
+    white-space: nowrap;
+}
+
+/* ── Email action bar (Check Mail, Compose, sub-filters) ──────────────────── */
+.email-action-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 0.5em;
+    flex-wrap: wrap;
+}
+
+/* ── Sub-filter button group ──────────────────────────────────────────────── */
+.email-sub-filters {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: auto;
+}
+
+/* ── Individual sub-filter button (pill-shaped) ───────────────────────────── */
+.email-sub-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 3px 10px;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.8em;
+    font-weight: bold;
+    color: var(--aged-brown-dark, #4a2c2a);
+    background: rgba(139, 90, 43, 0.1);
+    border: 1px solid #c4a882;
+    border-radius: 12px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.email-sub-btn:hover {
+    background: rgba(139, 90, 43, 0.2);
+    border-color: #8b5a2b;
+}
+
+.email-sub-btn.active {
+    background: var(--btn-bg, #8b5a2b);
+    color: #fff8e1;
+    border-color: var(--btn-border, #5a3f2a);
+}
+
+/* ── Unread count badge on the Email tab ──────────────────────────────────── */
+.email-unread-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.3em;
+    height: 1.3em;
+    padding: 0 4px;
+    font-size: 0.7em;
+    font-weight: bold;
+    font-family: 'Lora', Georgia, serif;
+    color: #fff8e1;
+    background: #8b4513;
+    border-radius: 50%;
+    line-height: 1;
+    margin-left: 4px;
+    vertical-align: middle;
+}
+
+/* ── Draft / Sent status badges in email rows ─────────────────────────────── */
+.email-draft-badge,
+.email-sent-badge {
+    display: inline-block;
+    font-size: 0.75em;
+    font-weight: bold;
+    padding: 1px 6px;
+    border-radius: 8px;
+    margin-right: 4px;
+    white-space: nowrap;
+    vertical-align: middle;
+}
+
+.email-draft-badge {
+    background: rgba(139, 90, 43, 0.15);
+    color: #8b4513;
+    border: 1px solid #c4a882;
+}
+
+.email-sent-badge {
+    background: rgba(46, 125, 50, 0.12);
+    color: #2e7d32;
+    border: 1px solid #a5d6a7;
+}
+
+/* ── Email tab responsive — mobile (≤480px) ───────────────────────────────── */
+@media (max-width: 480px) {
+
+    /* Stack sender/subject vertically, full-width rows */
+    .email-row {
+        flex-wrap: wrap;
+        padding: 0.5em 0.5em;
+    }
+
+    .email-row-sender {
+        flex: 0 0 auto;
+        width: 100%;
+        font-size: 0.85em;
+        font-weight: bold;
+        margin-bottom: 2px;
+    }
+
+    .email-row-subject {
+        flex: 1 1 100%;
+        white-space: normal;
+        overflow: visible;
+        text-overflow: unset;
+        font-size: 0.9em;
+        word-break: break-word;
+    }
+
+    .email-row-date {
+        flex: 0 0 auto;
+        text-align: left;
+        font-size: 0.75em;
+        margin-top: 2px;
+    }
+
+    /* Action bar: wrap buttons */
+    .email-action-bar {
+        gap: 6px;
+    }
+
+    /* Sub-filters: wrap to own line */
+    .email-sub-filters {
+        margin-left: 0;
+        width: 100%;
+        flex-wrap: wrap;
+    }
+
+    .email-sub-btn {
+        min-height: 36px;
+        padding: 4px 12px;
+        font-size: 0.85em;
+    }
+}

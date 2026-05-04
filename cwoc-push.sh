@@ -66,6 +66,11 @@ done
 
 echo "--------------------------------------------------"
 
+# ── Ensure cryptography package is installed in server venv ───────────────
+echo "📦 Ensuring cryptography package..."
+ssh "$SERVER" "/app/venv/bin/pip install cryptography -q"
+echo "   ✅ cryptography"
+
 # ── Restart service ───────────────────────────────────────────────────────
 if [[ "$RESTART" == true ]]; then
     echo "🔄 Restarting cwoc.service..."

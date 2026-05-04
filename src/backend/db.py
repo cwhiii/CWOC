@@ -85,6 +85,8 @@ def compute_system_tags(chit) -> List[str]:
         system_tags.append("CWOC_System/Tasks")
     if not (chit.due_datetime or chit.start_datetime or chit.end_datetime):
         system_tags.append("CWOC_System/Notes")
+    if getattr(chit, 'email_message_id', None) or getattr(chit, 'email_status', None):
+        system_tags.append("CWOC_System/Email")
     # Habit auto-tags
     if getattr(chit, 'habit', False):
         system_tags.append("Habits")

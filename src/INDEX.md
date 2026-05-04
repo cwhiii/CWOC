@@ -38,7 +38,7 @@ Package marker. No public exports.
 | `serve_icon_192()` | `GET /static/cwoc-icon-192.png` — Serve 192×192 PWA icon from `src/pwa/` |
 | `serve_icon_512()` | `GET /static/cwoc-icon-512.png` — Serve 512×512 PWA icon from `src/pwa/` |
 
-Registers all route modules (including `auth_router`, `users_router`, `sharing_router`, `notifications_router`, `network_access_router`, `push_router`, and `ntfy_router`), runs all migrations (including `migrate_add_multi_user()`, `migrate_add_sharing()`, `migrate_add_kiosk_users()`, `migrate_add_network_access()`, `migrate_add_notifications()`, `migrate_habits_overhaul()`, `migrate_habits_phase2()`, `migrate_add_push_subscriptions()`, `migrate_add_vapid_keys()`, `migrate_add_map_settings()`, and `migrate_add_contact_dates()`) and `init_db()` at import time, mounts `StaticFiles` for frontend, static, data, and PWA directories.
+Registers all route modules (including `auth_router`, `users_router`, `sharing_router`, `notifications_router`, `network_access_router`, `push_router`, `ntfy_router`, and `email_router`), runs all migrations (including `migrate_add_multi_user()`, `migrate_add_sharing()`, `migrate_add_kiosk_users()`, `migrate_add_network_access()`, `migrate_add_notifications()`, `migrate_habits_overhaul()`, `migrate_habits_phase2()`, `migrate_add_push_subscriptions()`, `migrate_add_vapid_keys()`, `migrate_add_map_settings()`, `migrate_add_contact_dates()`, and `migrate_add_email_fields()`) and `init_db()` at import time, mounts `StaticFiles` for frontend, static, data, and PWA directories.
 
 ### 1.3 `src/backend/models.py` — Pydantic Models
 
@@ -47,8 +47,8 @@ Registers all route modules (including `auth_router`, `users_router`, `sharing_r
 | `ShareEntry` | Share entry with `user_id: str` and `role: str` (manager or viewer) |
 | `SharedTagEntry` | Tag-level share entry with `tag: str` and `shares: List[ShareEntry]` |
 | `Tag` | Tag with name, color, fontColor, favorite |
-| `Settings` | User settings — time format, tags, colors, indicators, calendar config, audit limits, habits success window, shared_tags, hide_declined, map settings (map_default_lat, map_default_lon, map_default_zoom, map_auto_zoom), etc. |
-| `Chit` | Core chit model — title, note, dates, status, checklist, alerts, recurrence, location, color, people, habit, habit_goal, habit_success, show_on_calendar, habit_reset_period, habit_last_action_date, habit_hide_overall, perpetual, shares, stealth, assigned_to, etc. |
+| `Settings` | User settings — time format, tags, colors, indicators, calendar config, audit limits, habits success window, shared_tags, hide_declined, map settings (map_default_lat, map_default_lon, map_default_zoom, map_auto_zoom), email_account (JSON string containing email config), etc. |
+| `Chit` | Core chit model — title, note, dates, status, checklist, alerts, recurrence, location, color, people, habit, habit_goal, habit_success, show_on_calendar, habit_reset_period, habit_last_action_date, habit_hide_overall, perpetual, shares, stealth, assigned_to, email fields (email_message_id, email_from, email_to, email_cc, email_bcc, email_subject, email_body_text, email_date, email_folder, email_status, email_read, email_in_reply_to, email_references), etc. |
 | `MultiValueEntry` | Label/value pair for contact multi-value fields (phone, email, etc.) |
 | `Contact` | Contact model — name fields, phones, emails, addresses, dates, social, security, notes, tags, color |
 | `ImportRequest` | Import envelope — mode ("add"/"replace") + data dict |
@@ -70,7 +70,7 @@ Registers all route modules (including `auth_router`, `users_router`, `sharing_r
 | `compute_display_name(contact)` | Build display name from contact name fields |
 | `serialize_json_field(data)` | Serialize a Python object to a JSON string (or None) |
 | `deserialize_json_field(data)` | Deserialize a JSON string to a Python object (or None) |
-| `compute_system_tags(chit)` | Auto-assign system tags (Calendar, Tasks, Notes, Habits, Habits/[title], etc.) based on chit properties; adds `Habits` and `Habits/[title]` tags when `habit=True` |
+| `compute_system_tags(chit)` | Auto-assign system tags (Calendar, Tasks, Notes, Habits, Habits/[title], CWOC_System/Email, etc.) based on chit properties; adds `Habits` and `Habits/[title]` tags when `habit=True`; adds `CWOC_System/Email` when `email_message_id` or `email_status` is set |
 | `get_or_create_instance_id()` | Get or create a persistent instance UUID |
 | `_build_export_envelope(data_type, data)` | Wrap data in an export envelope with metadata |
 | `get_version_info()` | Read version info from the `version_info` table |
@@ -119,6 +119,7 @@ All migrations run at startup. Each checks if the column/table already exists be
 | `migrate_add_vapid_keys()` | Ensure `instance_meta` table exists for storing VAPID key pair as key-value rows (`vapid_public_key`, `vapid_private_key`). Uses `CREATE TABLE IF NOT EXISTS` for idempotency |
 | `migrate_add_map_settings()` | Add `map_default_lat` (TEXT), `map_default_lon` (TEXT), `map_default_zoom` (TEXT), `map_auto_zoom` (TEXT DEFAULT '1') columns to settings table for map start view configuration |
 | `migrate_add_contact_dates()` | Add `dates` (TEXT) column to contacts table for multi-value date entries (Birthday, Anniversary, etc.) stored as JSON |
+| `migrate_add_email_fields()` | Add 13 email columns to chits table: `email_message_id` (TEXT), `email_from` (TEXT), `email_to` (TEXT), `email_cc` (TEXT), `email_bcc` (TEXT), `email_subject` (TEXT), `email_body_text` (TEXT), `email_date` (TEXT), `email_folder` (TEXT), `email_status` (TEXT), `email_read` (BOOLEAN), `email_in_reply_to` (TEXT), `email_references` (TEXT); add `email_account` (TEXT) column to settings table. Uses column-existence-check pattern (`PRAGMA table_info` → check → `ALTER TABLE`) |
 
 ### 1.6 `src/backend/serializers.py` — vCard & CSV
 
@@ -369,7 +370,7 @@ Package marker. No public exports.
 
 ### 1.19 `src/backend/routes/chits.py` — Chit CRUD & Import/Export
 
-All chit endpoints are scoped by `owner_id` — users can only access their own chits, plus chits shared with them via the sharing system. The `request.state.user_id` (set by `AuthMiddleware`) is used for ownership filtering, sharing permission checks, and assignment. Uses `resolve_effective_role`, `can_edit_chit`, `can_delete_chit`, and `can_manage_sharing` from `sharing.py` for access control.
+All chit endpoints are scoped by `owner_id` — users can only access their own chits, plus chits shared with them via the sharing system. The `request.state.user_id` (set by `AuthMiddleware`) is used for ownership filtering, sharing permission checks, and assignment. Uses `resolve_effective_role`, `can_edit_chit`, `can_delete_chit`, and `can_manage_sharing` from `sharing.py` for access control. Includes reserved tag namespace enforcement (`CWOC_System/` prefix) and email field serialization/deserialization.
 
 | Route | Handler | Description |
 |-------|---------|-------------|
@@ -392,11 +393,16 @@ All chit endpoints are scoped by `owner_id` — users can only access their own 
 
 | Function | Description |
 |----------|-------------|
+| `RESERVED_TAG_PREFIX` | Constant: `"cwoc_system/"` — reserved tag namespace prefix (case-insensitive) |
+| `_strip_reserved_tags(tags)` | Remove any user-submitted tags whose name starts with `CWOC_System/` (case-insensitive); preserves non-reserved tags in order; handles both dict and string tag formats |
+| `_validate_tag_name(name)` | Return `False` if the tag name uses the reserved `CWOC_System/` prefix (case-insensitive) |
 | `_enrich_assigned_to_display_names(cursor, chits)` | Batch-lookup display names for `assigned_to` user IDs and add as `assigned_to_display_name` on each chit dict |
+
+Email serialization: `get_all_chits`, `get_chit`, and `search_chits` deserialize `email_to`, `email_cc`, `email_bcc` via `deserialize_json_field` and convert `email_read` to `bool`. `create_chit` and `update_chit` serialize `email_to`, `email_cc`, `email_bcc` via `serialize_json_field` and include all 13 email columns in INSERT/UPDATE SQL. User-submitted tags are stripped of reserved `CWOC_System/` prefixes before `compute_system_tags` is called.
 
 ### 1.20 `src/backend/routes/trash.py` — Trash
 
-All trash endpoints are user-scoped: regular users see/act on only their own deleted chits (`owner_id` match). Admins see and can restore/purge any user's deleted chits.
+All trash endpoints are user-scoped: regular users see/act on only their own deleted chits (`owner_id` match). Admins see and can restore/purge any user's deleted chits. Restore logic resets `email_folder` to `"inbox"` for email chits (detected by `email_message_id` or `email_status`).
 
 | Route | Handler | Description |
 |-------|---------|-------------|
@@ -410,7 +416,7 @@ All trash endpoints are user-scoped: regular users see/act on only their own del
 
 ### 1.21 `src/backend/routes/settings.py` — Settings & Alerts
 
-Settings endpoints use `request.state.user_id` from `AuthMiddleware` to scope data to the authenticated user. Includes `shared_tags`, `hide_declined`, and map settings (`map_default_lat`, `map_default_lon`, `map_default_zoom`, `map_auto_zoom`) serialization in settings read/save paths.
+Settings endpoints use `request.state.user_id` from `AuthMiddleware` to scope data to the authenticated user. Includes `shared_tags`, `hide_declined`, map settings (`map_default_lat`, `map_default_lon`, `map_default_zoom`, `map_auto_zoom`), and `email_account` serialization in settings read/save paths. Tag creation validates against the reserved `CWOC_System/` prefix (returns 400 if violated).
 
 | Route | Handler | Description |
 |-------|---------|-------------|
@@ -716,6 +722,84 @@ Property-based tests for the ntfy push notification module. Uses Python stdlib o
 | `TestPBTHTTPRequestConstruction` | Property 3: Request URL, headers, body match inputs (120 iterations). **Validates: Requirements 3.1, 3.2, 3.4** |
 | `TestPBTTitleDefaulting` | Property 4: Empty/None titles default to "CWOC Reminder" (120 iterations). **Validates: Requirements 4.5** |
 | `TestPBTDisabledProviderSkip` | Property 5: Disabled/unconfigured provider always skips (120 iterations). **Validates: Requirements 11.5, 4.2** |
+
+### 1.35 `src/backend/routes/email.py` — Email Integration Routes & Helpers
+
+Provides IMAP sync, SMTP send, email parsing, password encryption, reply/forward helpers, and all email API endpoints. Uses Python stdlib `imaplib`, `smtplib`, `email`, and `email.utils` modules. Password encryption uses `cryptography.fernet.Fernet` when available, with a base64 fallback for dev environments.
+
+**Crypto helpers:**
+
+| Function | Description |
+|----------|-------------|
+| `_HAS_FERNET` | Boolean flag — True if `cryptography.fernet` is importable |
+| `_KEY_PATH_PRODUCTION` | Production key file path: `/app/data/email.key` |
+| `_KEY_PATH_DEV` | Dev fallback key file path: `data/email.key` |
+| `_get_key_path()` | Return the appropriate key file path for the current environment |
+| `_get_or_create_fernet_key()` | Load the Fernet key from disk, or generate and save a new one |
+| `_get_fernet()` | Return a `Fernet` instance, or `None` if cryptography is unavailable |
+| `_encrypt_password(plaintext)` | Encrypt a password string for storage (Fernet or base64 fallback) |
+| `_decrypt_password(ciphertext)` | Decrypt a stored password string (Fernet or base64 fallback) |
+
+**IMAP sync functions:**
+
+| Function | Description |
+|----------|-------------|
+| `_connect_imap(account)` | Connect and authenticate to the configured IMAP server; returns `imaplib.IMAP4_SSL` with INBOX selected |
+| `_get_last_sync_date(cursor, owner_id)` | Query the most recent `email_date` for this user's email chits; returns IMAP-compatible date string; defaults to 30 days ago |
+| `_fetch_new_messages(imap, since_date)` | Fetch messages from IMAP newer than `since_date`; returns list of `(raw_bytes, flags_bytes)` tuples |
+
+**Email parsing functions:**
+
+| Function | Description |
+|----------|-------------|
+| `_decode_header_value(value)` | Decode an RFC 2047 encoded header value into a plain string |
+| `_parse_email_message(raw_bytes)` | Parse a raw RFC 2822 email message into a dict of chit-ready fields (From, To, Cc, Subject, Date, Message-ID, In-Reply-To, References, body text) |
+| `_extract_text_from_message(msg)` | Walk MIME parts and extract the best plain-text body; prefers `text/plain`, falls back to stripping HTML tags from `text/html` |
+| `_strip_html_tags(html)` | Remove HTML tags and decode common entities, returning plain text |
+
+**Chit creation from parsed email:**
+
+| Function | Description |
+|----------|-------------|
+| `_create_email_chit(cursor, parsed, owner_id)` | Insert a new chit from a parsed email message; performs deduplication by `email_message_id`; auto-computes system tags; returns chit ID or `None` if duplicate |
+
+**Backfill estimation:**
+
+| Function | Description |
+|----------|-------------|
+| `_estimate_backfill(account)` | Connect to IMAP and estimate total mailbox size; returns `{message_count, estimated_mb}` (~50 KB per message estimate) |
+
+**SMTP send functions:**
+
+| Function | Description |
+|----------|-------------|
+| `_connect_smtp(account)` | Connect and authenticate to the configured SMTP server with STARTTLS |
+| `_build_rfc2822_message(chit, account)` | Construct a valid RFC 2822 `EmailMessage` from chit fields with all required headers (From, To, Cc, Bcc, Subject, Date, Message-ID, In-Reply-To, References) |
+| `_send_email(smtp, message, from_addr)` | Send an email message and return the Message-ID |
+
+**Reply and forward helpers:**
+
+| Function | Description |
+|----------|-------------|
+| `_add_subject_prefix(subject, prefix)` | Add `Re: ` or `Fwd: ` prefix to a subject without doubling (case-insensitive check) |
+| `_prepare_reply(original_chit, account)` | Create reply draft data — sets `email_to` to original sender, `email_in_reply_to` to original Message-ID, builds References chain, quotes original body below separator |
+| `_prepare_forward(original_chit)` | Create forward draft data — empty `email_to`, subject prefixed with `Fwd: `, original message headers and body quoted below separator |
+
+**Router endpoints:**
+
+| Route | Handler | Description |
+|-------|---------|-------------|
+| `POST /api/email/sync` | `email_sync(request)` | Fetch new messages from the configured IMAP server; returns `{new_count: int}`; handles IMAP errors with descriptive messages (401, 502, 504) |
+| `POST /api/email/send/{chit_id}` | `email_send(chit_id, request)` | Send a draft email chit via SMTP; on success updates `email_status` to "sent", `email_folder` to "sent", populates `email_message_id`; validates non-empty `email_to` (422 if empty); rejects non-draft chits (400) |
+| `PATCH /api/email/{chit_id}/read` | `email_mark_read(chit_id, request)` | Set `email_read` to true on the specified email chit |
+| `POST /api/email/test-connection` | `email_test_connection(request)` | Test IMAP and SMTP connectivity with provided or saved credentials; returns `{imap: {success, message}, smtp: {success, message}}` |
+| `POST /api/email/backfill-estimate` | `email_backfill_estimate(request)` | Query IMAP for total message count and estimated storage size; returns `{message_count, estimated_mb}` |
+
+**Internal helpers:**
+
+| Function | Description |
+|----------|-------------|
+| `_get_email_account(cursor, user_id)` | Load and return the `email_account` config for the given user; raises HTTPException(400) if no email account is configured |
 
 ---
 
@@ -1235,7 +1319,7 @@ Depends on: `shared-sidebar.js` (`_cwocInitSidebar`, `toggleSidebar`, `restoreSi
 | `_saSwFmt(ms)` | Format milliseconds as HH:MM:SS.cc stopwatch display string |
 | `_buildSaStopwatchCard(card, id, data)` | Build the UI for an independent stopwatch card (display, start/pause/lap/reset) |
 | `_renderSaLaps(container, laps)` | Render lap times list inside a stopwatch card |
-| `filterChits(tab)` | Switch to a tab, update sidebar visibility, and re-render chits |
+| `filterChits(tab)` | Switch to a tab, update sidebar visibility, and re-render chits; dispatches to `displayEmailView` for the Email tab |
 | `searchChits()` | Trigger a re-render of chits (called from sidebar search input) |
 | `highlightMatch(text, query)` | HTML-escape text and wrap query matches in `<mark>` tags |
 | `displayIndicatorsView()` | Render the Indicators tab — health trend charts with responsive SVG, grid-based latest cards |
@@ -1285,6 +1369,24 @@ Depends on: `shared-sidebar.js` (`_cwocInitSidebar`, `toggleSidebar`, `restoreSi
 | `_loadSavedSearch(text)` | Load a saved search into the sidebar search input and trigger search |
 | `_deleteSavedSearch(text)` | Delete a saved search from localStorage |
 | `_renderSavedSearches()` | Render saved search chips in the sidebar |
+
+#### main-email.js
+
+Email tab view — renders the Email dashboard tab with inbox-style list view. Loaded by `index.html` before `main.js`.
+
+| Symbol | Description |
+|--------|-------------|
+| `_emailSubFilter` | Email sub-filter state: `'inbox'` (default), `'bytag'`, `'drafts'`, `'trash'` |
+| `displayEmailView(chitsToDisplay)` | Display email chits in the Email tab list view; filters by sub-filter, sorts by `email_date` descending; renders action bar with Check Mail, Compose, and sub-filter buttons. Called from `filterChits()` dispatch in `main-views.js` |
+| `_buildEmailRow(chit)` | Build a single email row element using `chit-card` CSS class with email-specific additions; shows sender, subject, date, read/unread status, draft/sent badges; bold text + distinct background for unread emails |
+| `_setEmailSubFilter(filter)` | Set the email sub-filter (`'inbox'`, `'bytag'`, `'drafts'`, `'trash'`) and refresh the view |
+| `_checkMail()` | Trigger a manual email sync via `POST /api/email/sync`; shows toast with count, refreshes chit list |
+| `_composeEmail()` | Navigate to editor with `?new=email` param to create a draft email chit |
+| `_getUnreadCount()` | Return count of unread inbox emails for the badge |
+| `_updateEmailBadge()` | Update the unread count badge on the Email tab |
+| `_emailEmptyState(container)` | Show empty state for the email tab with Compose and Check Mail buttons |
+| `_escHtml(str)` | Simple HTML escape helper |
+| `_showToast(msg, type)` | Simple toast helper — delegates to shared `showToast` if available |
 
 #### main-modals.js
 
@@ -1646,6 +1748,21 @@ Health indicators zone: vitals, body metrics, activity, and cycle tracking.
 | `renderHealthIndicator(indicatorId)` | Render a single health indicator input field (number, checkbox, or blood pressure pair) |
 | `_loadHealthData(chit)` | Load health data from a chit into `_healthData` and render all indicators with correct units |
 | `_gatherHealthData()` | Collect all non-null health data values into an object for saving (or null if empty) |
+
+#### editor-email.js
+
+Email zone: populate, collect, reply, forward, send. Handles the Email zone in the chit editor: populating fields from chit data, collecting field values for save, toggling read-only state based on `email_status`, and creating reply/forward drafts via the API. Depends on: `shared-utils.js` (`cwocToast`, `generateUniqueId`), `shared-editor.js` (`cwocToggleZone`), `editor-save.js` (`setSaveButtonUnsaved`). Loaded before: `editor-save.js`, `editor-init.js`.
+
+| Symbol | Description |
+|--------|-------------|
+| `_emailCurrentChit` | Module-level state — stores the currently loaded chit for reply/forward operations |
+| `initEmailZone(chit)` | Populate email zone fields from chit data (From, To, Cc, Bcc, Body) and configure button visibility based on `email_status` (draft: show Send; received: show Reply/Forward; sent: hide all; no status: show Send). Wires change listeners for dirty tracking |
+| `getEmailData()` | Collect email field values for save; returns an object with email fields (To/Cc/Bcc as arrays, body text, subject from title, preserved metadata), or `null` if the email zone has no content |
+| `hasEmailData(chit)` | Check if a chit has email data (used by `applyZoneStates` for auto-expand); returns `true` if `email_message_id`, `email_status`, or `email_from` is set |
+| `_emailReply()` | Create a reply draft chit via `POST /api/chits` and navigate to the editor; sets `email_to` to original sender, `email_in_reply_to` to original Message-ID, subject prefixed with "Re: " (no doubling), body quoted below separator |
+| `_emailForward()` | Create a forward draft chit via `POST /api/chits` and navigate to the editor; empty `email_to`, subject prefixed with "Fwd: " (no doubling), body quoted below separator |
+| `_emailSend()` | Send the current draft email via `POST /api/email/send/{id}`; validates non-empty To field; shows success/error toast; updates local state and UI to reflect sent status |
+| `_setEmailZoneReadOnly(readOnly)` | Toggle field editability for the email zone (To, Cc, Bcc, Body) — sets `disabled` and `readOnly` properties |
 
 #### editor-save.js
 
@@ -2399,6 +2516,24 @@ Chit-specific styles. Base editor styles (header-row, zones, fields, buttons) co
 | Responsive (≤400px) | Compact chit-specific overrides |
 | Responsive (≤480px) | Mobile chit-specific overrides |
 
+#### editor-email.css
+Email zone styles for the chit editor. Uses the parchment theme variables from `shared-editor.css`. Load AFTER `shared-editor.css` and `editor.css`.
+
+| Section | Description |
+|---------|-------------|
+| Email Zone Container (`#emailSection`) | Border, border-radius, margin, background, overflow, collapse transition; `.collapsed` state with reduced opacity |
+| Email Zone Content (`.zone-content`) | Padding and background for the zone body |
+| Expand Button (`.expand-btn`) | Zone header expand/collapse button styling |
+| Email Field Rows (`.email-field`) | Flex layout for label + input pairs (From, To, Cc, Bcc); label styling with min-width, font-weight, Lora serif font |
+| Email Field Inputs | Text input styling with inset border, Lora font, focus ring with accent-teal |
+| From Display (`.email-from-display`) | Read-only From field with dotted border, italic text, parchment background |
+| Email Body (`#emailBody`) | Full-width textarea with min-height 180px, vertical resize, Lora font, placeholder styling |
+| Disabled / Read-Only States | Parchment background, dotted border, reduced opacity for disabled/readonly fields |
+| Recipient Tag Chips (`.email-recipient-chip`) | Inline-flex chip styling consistent with existing tag/people chip pattern; accent-teal background, remove button |
+| Email Action Buttons | `#emailSendBtn` (info-blue), `#emailReplyBtn` / `#emailForwardBtn` (aged-brown) with hover states |
+| Responsive — Tablet (≤768px) | Reduced gap and font sizes for email fields |
+| Responsive — Mobile (≤480px) | Stacked column layout for email fields, full-width inputs, 16px font to prevent iOS zoom |
+
 ### 3.4 Settings HTML — Network Access Block (`settings.html`)
 
 The `#network-access-block` div inside the `#admin-section` `.settings-grid` provides the Tailscale and Ntfy configuration UI.
@@ -2419,14 +2554,15 @@ The `#network-access-block` div inside the `#admin-section` `.settings-grid` pro
 
 Called in both fresh-install and upgrade paths of `main()`, after `configure_https` and before `start_and_verify`.
 
-`install_python_deps()` includes `pywebpush` in the `required_pkgs` list, installed via `/app/venv/bin/pip`.
+`install_python_deps()` includes `pywebpush` and `cryptography` in the `required_pkgs` list, installed via `/app/venv/bin/pip`.
 
 ### `cwoc-push.sh` — Push Service Startup Script
 
-Ensures push-related services stay running. Checks Tailscale and Ntfy service status on each invocation.
+Ensures push-related services stay running. Checks Tailscale and Ntfy service status on each invocation. Also installs `cryptography` package via pip on push.
 
 | Block | Description |
 |-------|-------------|
+| cryptography install | Runs `ssh "$SERVER" "/app/venv/bin/pip install cryptography -q"` to ensure the package is present after code push |
 | Tailscale check | If Tailscale is installed, ensure it stays running via `systemctl start tailscale` |
 | Ntfy check | If ntfy is installed (`command -v ntfy` or `/usr/bin/ntfy`), ensure it stays running via `systemctl start ntfy` |
 
@@ -2554,6 +2690,7 @@ All HTML pages include the following PWA `<head>` tags: `<link rel="manifest" hr
 <script src="/frontend/js/dashboard/main-views.js"></script>
 <script src="/frontend/js/dashboard/main-alerts.js"></script>
 <script src="/frontend/js/dashboard/main-search.js"></script>
+<script src="/frontend/js/dashboard/main-email.js"></script>
 <script src="/frontend/js/dashboard/main-modals.js"></script>
 <script src="/frontend/js/dashboard/main-init.js"></script>
 <script src="/frontend/js/dashboard/main.js"></script>
@@ -2571,6 +2708,7 @@ All HTML pages include the following PWA `<head>` tags: `<link rel="manifest" hr
 <!-- Editor stylesheets (shared-editor first, then chit-specific) -->
 <link rel="stylesheet" href="/frontend/css/shared/shared-editor.css" />
 <link rel="stylesheet" href="/frontend/css/editor/editor.css" />
+<link rel="stylesheet" href="/frontend/css/editor/editor-email.css" />
 ```
 
 **CDN scripts (in `<head>`):**
@@ -2603,7 +2741,7 @@ All HTML pages include the following PWA `<head>` tags: `<link rel="manifest" hr
 <script src="/frontend/js/pages/shared-page.js"></script>
 <script src="/frontend/js/pages/shared-editor.js"></script>
 
-<!-- 4. Editor sub-scripts (zone modules, then save, then sharing data-layer, then people, then init) -->
+<!-- 4. Editor sub-scripts (zone modules, then email, then save, then sharing data-layer, then people, then init) -->
 <script src="/frontend/js/editor/editor.js"></script>
 <script src="/frontend/js/editor/editor-dates.js"></script>
 <script src="/frontend/js/editor/editor-tags.js"></script>
@@ -2612,6 +2750,7 @@ All HTML pages include the following PWA `<head>` tags: `<link rel="manifest" hr
 <script src="/frontend/js/editor/editor-alerts.js"></script>
 <script src="/frontend/js/editor/editor-color.js"></script>
 <script src="/frontend/js/editor/editor-health.js"></script>
+<script src="/frontend/js/editor/editor-email.js"></script>
 <script src="/frontend/js/editor/editor-save.js"></script>
 <script src="/frontend/js/editor/editor-sharing.js"></script>
 <script src="/frontend/js/editor/editor-people.js"></script>
@@ -2690,10 +2829,10 @@ New frontend pages added for Maps View:
 ```
 src/backend/main.py
   ├── src.backend.db          (init_db, seed_version_info)
-  ├── src.backend.migrations  (all migrate_* functions, including migrate_add_multi_user, migrate_add_sharing, migrate_add_push_subscriptions, migrate_add_vapid_keys)
+  ├── src.backend.migrations  (all migrate_* functions, including migrate_add_multi_user, migrate_add_sharing, migrate_add_push_subscriptions, migrate_add_vapid_keys, migrate_add_email_fields)
   ├── src.backend.middleware   (AuthMiddleware)
   ├── src.backend.weather     (start_weather_schedulers)
-  └── src.backend.routes.*    (all 12 route modules, including auth_router, users_router, sharing_router, notifications_router, network_access_router, push_router, and ntfy_router)
+  └── src.backend.routes.*    (all 13 route modules, including auth_router, users_router, sharing_router, notifications_router, network_access_router, push_router, ntfy_router, and email_router)
 
 src/backend/routes/chits.py
   ├── src.backend.db           (DB_PATH, serialize/deserialize, compute_system_tags, _build_export_envelope)
@@ -2743,6 +2882,9 @@ src/backend/routes/ntfy.py
   ├── src.backend.db           (DB_PATH)
   └── src.backend.routes.audit (get_actor_from_request, insert_audit_entry)
 
+src/backend/routes/email.py
+  └── src.backend.db           (DB_PATH, serialize_json_field, deserialize_json_field, compute_system_tags)
+
 src/backend/sharing.py
   └── src.backend.db           (DB_PATH, deserialize_json_field)
 
@@ -2789,7 +2931,7 @@ src/backend/models.py
   └── (no internal CWOC imports — leaf module)
 ```
 
-**Dependency summary:** `db.py`, `models.py`, and `auth_utils.py` are leaf modules with no internal imports. `routes/audit.py` is imported by `chits.py`, `contacts.py`, `settings.py`, `health.py`, `sharing.py`, `network_access.py`, and `ntfy.py` for audit logging. `routes/notifications.py` is imported by `chits.py` and `sharing.py` for notification creation. `routes/push.py` is imported lazily by `weather.py` for push notification sending. `routes/ntfy.py` is imported lazily by `weather.py` for ntfy notification sending. `auth_utils.py` is imported by `routes/auth.py`, `routes/users.py`, and `migrations.py`. `middleware.py` is imported by `main.py`. All route modules import from `db.py`.
+**Dependency summary:** `db.py`, `models.py`, and `auth_utils.py` are leaf modules with no internal imports. `routes/audit.py` is imported by `chits.py`, `contacts.py`, `settings.py`, `health.py`, `sharing.py`, `network_access.py`, and `ntfy.py` for audit logging. `routes/notifications.py` is imported by `chits.py` and `sharing.py` for notification creation. `routes/push.py` is imported lazily by `weather.py` for push notification sending. `routes/ntfy.py` is imported lazily by `weather.py` for ntfy notification sending. `routes/email.py` imports from `db.py` only (plus stdlib `imaplib`, `smtplib`, `email`; optional `cryptography.fernet`). `auth_utils.py` is imported by `routes/auth.py`, `routes/users.py`, and `migrations.py`. `middleware.py` is imported by `main.py`. All route modules import from `db.py`.
 
 ### 5.2 Frontend Script Load Dependencies
 
@@ -2839,6 +2981,7 @@ shared-auth.js            ← MUST load first (getCurrentUser, isAdmin, waitForA
               │     main-views.js      (uses shared-tags, shared-sort, shared-indicators)
               │     main-alerts.js     (uses shared alarm system from shared.js)
               │     main-search.js
+              │     main-email.js      (email tab view — displayEmailView, _checkMail, _composeEmail, _updateEmailBadge)
               │     main-modals.js
               │     main-init.js       (calls init functions from all above)
               │     main.js            (entry point — calls main-init)
@@ -2855,6 +2998,7 @@ shared-auth.js            ← MUST load first (getCurrentUser, isAdmin, waitForA
                     editor-alerts.js      (alerts zone)
                     editor-color.js       (color zone)
                     editor-health.js      (health indicators zone)
+                    editor-email.js       (email zone — depends on shared-utils, shared-editor, editor-save)
                     editor-save.js        (save/exit logic)
                     editor-sharing.js     (sharing data-layer — uses shared-auth; provides _sharingUserList, getSharingData, hasSharingData for editor-people.js and editor-init.js)
                     editor-init.js        (entry point — calls init functions)

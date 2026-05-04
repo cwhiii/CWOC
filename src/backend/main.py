@@ -111,6 +111,7 @@ from src.backend.migrations import (
     migrate_add_running_timers,
     migrate_add_map_settings,
     migrate_add_contact_dates,
+    migrate_add_email_fields,
 )
 
 # Initialize database and run all migrations (same order as before)
@@ -153,6 +154,7 @@ migrate_add_vapid_keys()
 migrate_add_running_timers()
 migrate_add_map_settings()
 migrate_add_contact_dates()
+migrate_add_email_fields()
 seed_version_info()
 
 
@@ -174,6 +176,7 @@ from src.backend.routes.network_access import router as network_access_router
 from src.backend.routes.push import push_router
 from src.backend.routes.ntfy import ntfy_router
 from src.backend.routes.ics_import import router as ics_import_router
+from src.backend.routes.email import email_router
 
 app.include_router(auth_router)
 app.include_router(users_router)
@@ -189,6 +192,7 @@ app.include_router(ntfy_router)
 app.include_router(network_access_router)
 app.include_router(push_router)
 app.include_router(ics_import_router)
+app.include_router(email_router)
 
 
 # ═══════════════════════════════════════════════════════════════════════════

@@ -305,6 +305,16 @@ async function buildChitObject() {
     chit.assigned_to = sharingData.assigned_to;
   }
 
+  // Include email data from the email zone
+  if (typeof getEmailData === 'function') {
+    var emailData = getEmailData();
+    if (emailData) {
+      Object.keys(emailData).forEach(function (key) {
+        chit[key] = emailData[key];
+      });
+    }
+  }
+
   return chit;
 }
 

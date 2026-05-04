@@ -23,6 +23,7 @@
         <link rel="stylesheet" href="/frontend/css/shared/shared-editor.css" />
         <link rel="stylesheet" href="/frontend/css/shared/shared-calculator.css" />
         <link rel="stylesheet" href="/frontend/css/editor/editor.css" />
+        <link rel="stylesheet" href="/frontend/css/editor/editor-email.css" />
     </head>
     <body>
         <div class="header-row">
@@ -970,6 +971,27 @@
                         </div>
                     </div>
 
+                    <div id="emailSection" class="zone collapsed">
+                        <div class="zone-header" onclick="cwocToggleZone(event, 'emailSection', 'emailContent')">
+                            <span class="zone-toggle-icon">🔽</span>
+                            <span class="zone-title">✉️ Email</span>
+                            <button class="expand-btn" onclick="event.stopPropagation(); cwocExpandZone('emailSection', 'emailContent')" title="Expand email zone">⤢</button>
+                            <button class="zone-button" id="emailSendBtn" style="display:none;" onclick="event.stopPropagation(); _emailSend()">Send</button>
+                            <button class="zone-button" id="emailReplyBtn" style="display:none;" onclick="event.stopPropagation(); _emailReply()">Reply</button>
+                            <button class="zone-button" id="emailForwardBtn" style="display:none;" onclick="event.stopPropagation(); _emailForward()">Forward</button>
+                        </div>
+                        <div id="emailContent" class="zone-content" style="display:none;">
+                            <div class="email-field"><label>From:</label><span id="emailFrom" class="email-from-display"></span></div>
+                            <div class="email-field"><label>To:</label><input id="emailTo" type="text" placeholder="recipient@example.com"></div>
+                            <div class="email-field"><label>Cc:</label><input id="emailCc" type="text" placeholder="cc@example.com"></div>
+                            <div class="email-field"><label>Bcc:</label><input id="emailBcc" type="text" placeholder="bcc@example.com"></div>
+                            <div class="email-field email-body-field">
+                                <label>Body:</label>
+                                <textarea id="emailBody" rows="12" placeholder="Compose your message..."></textarea>
+                            </div>
+                        </div>
+                    </div>
+
                 </div>
             </div>
         </div>
@@ -1402,6 +1424,7 @@
         <script src="/frontend/js/editor/editor-alerts.js"></script>
         <script src="/frontend/js/editor/editor-color.js"></script>
         <script src="/frontend/js/editor/editor-health.js"></script>
+        <script src="/frontend/js/editor/editor-email.js"></script>
         <script src="/frontend/js/editor/editor-save.js"></script>
         <script src="/frontend/js/editor/editor-init.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>

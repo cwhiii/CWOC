@@ -144,6 +144,7 @@
                                 <div class="ref-item"><span class="ref-key">P</span> Projects</div>
                                 <div class="ref-item"><span class="ref-key">T</span> Tasks</div>
                                 <div class="ref-item"><span class="ref-key">N</span> Notes</div>
+                                <div class="ref-item"><span class="ref-key">E</span> Email</div>
                                 <div class="ref-item"><span class="ref-key">I</span> Indicators</div>
                                 <div class="ref-item"><span class="ref-key">G</span> Global Search</div>
                             </div>
@@ -325,6 +326,9 @@
                     <div class="tab" onclick="filterChits('Notes')" title="Notes">
                         <img src="/static/notes.png" /><span class="tab-label"> <u>N</u>otes</span>
                     </div>
+                    <div class="tab" onclick="filterChits('Email')" title="Email">
+                        <i class="fas fa-envelope" style="font-size:1.6em;line-height:1;color:#6b4e31;"></i><span class="tab-label"> <u>E</u>mail</span><span id="email-unread-badge" class="email-unread-badge" style="display:none;"></span>
+                    </div>
                     <div class="tab" onclick="filterChits('Indicators')" title="Health Indicators">
                         <i class="fas fa-heartbeat" style="font-size:1.6em;line-height:1;color:#6b4e31;"></i><span class="tab-label"> <u>I</u>ndicators</span>
                     </div>
@@ -369,6 +373,7 @@
         <script src="/frontend/js/dashboard/main-search.js"></script>
         <script src="/frontend/js/dashboard/main-modals.js"></script>
         <script src="/frontend/js/dashboard/main-init.js"></script>
+        <script src="/frontend/js/dashboard/main-email.js"></script>
         <script src="/frontend/js/dashboard/main.js"></script>
         <script>
         /* Populate profile menu button tooltip with username once auth is ready */

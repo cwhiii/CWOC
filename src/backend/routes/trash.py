@@ -90,7 +90,7 @@ def restore_chit(chit_id: str, request: Request):
 
         # Verify the chit exists and is deleted
         row = cursor.execute(
-            "SELECT id, owner_id FROM chits WHERE id = ? AND deleted = 1", (chit_id,)
+            "SELECT id, owner_id, email_message_id, email_status FROM chits WHERE id = ? AND deleted = 1", (chit_id,)
         ).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Chit not found in trash")
@@ -99,10 +99,18 @@ def restore_chit(chit_id: str, request: Request):
         if row["owner_id"] != user_id and not _is_admin(conn, user_id):
             raise HTTPException(status_code=403, detail="Not authorized")
 
-        cursor.execute(
-            "UPDATE chits SET deleted = 0, modified_datetime = ? WHERE id = ?",
-            (datetime.utcnow().isoformat(), chit_id),
-        )
+        current_time = datetime.utcnow().isoformat()
+        # If this is an email chit, restore email_folder back to inbox
+        if row["email_message_id"] or row["email_status"]:
+            cursor.execute(
+                "UPDATE chits SET deleted = 0, email_folder = 'inbox', modified_datetime = ? WHERE id = ?",
+                (current_time, chit_id),
+            )
+        else:
+            cursor.execute(
+                "UPDATE chits SET deleted = 0, modified_datetime = ? WHERE id = ?",
+                (current_time, chit_id),
+            )
         conn.commit()
         return {"message": "Chit restored"}
     except HTTPException:

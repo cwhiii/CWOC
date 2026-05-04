@@ -208,6 +208,24 @@ function addSearchedTag(event) {
   const tagName = input.value.trim();
   if (!tagName) return;
 
+  // Block reserved CWOC_System/ prefix
+  if (typeof isReservedTagPrefix === 'function' && isReservedTagPrefix(tagName)) {
+    input.style.borderColor = '#b22222';
+    var errEl = document.getElementById('tag-reserved-error');
+    if (!errEl) {
+      errEl = document.createElement('div');
+      errEl.id = 'tag-reserved-error';
+      errEl.style.cssText = 'color:#b22222;font-size:0.85em;margin-top:4px;';
+      input.parentNode.insertBefore(errEl, input.nextSibling);
+    }
+    errEl.textContent = RESERVED_TAG_ERROR;
+    setTimeout(function() {
+      input.style.borderColor = '';
+      if (errEl) errEl.textContent = '';
+    }, 3000);
+    return;
+  }
+
   // Add to current selection
   if (!window._currentTagSelection) window._currentTagSelection = [];
   if (!window._currentTagSelection.includes(tagName)) {

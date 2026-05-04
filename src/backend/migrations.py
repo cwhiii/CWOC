@@ -1303,3 +1303,64 @@ def migrate_add_map_settings():
     finally:
         if conn:
             conn.close()
+
+
+# ── Email Integration: migration ─────────────────────────────────────────
+
+def migrate_add_email_fields():
+    """Add email columns to chits table and email_account to settings table.
+
+    Adds 13 email columns to chits: email_message_id, email_from, email_to,
+    email_cc, email_bcc, email_subject, email_body_text, email_date,
+    email_folder, email_status, email_read, email_in_reply_to, email_references.
+
+    Adds email_account (TEXT) column to settings table.
+
+    Fully idempotent — checks column existence before adding.
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        # ── chits table ──────────────────────────────────────────────────
+        cursor.execute("PRAGMA table_info(chits)")
+        chit_cols = {row[1] for row in cursor.fetchall()}
+
+        email_chit_columns = [
+            ("email_message_id", "TEXT"),
+            ("email_from", "TEXT"),
+            ("email_to", "TEXT"),
+            ("email_cc", "TEXT"),
+            ("email_bcc", "TEXT"),
+            ("email_subject", "TEXT"),
+            ("email_body_text", "TEXT"),
+            ("email_date", "TEXT"),
+            ("email_folder", "TEXT"),
+            ("email_status", "TEXT"),
+            ("email_read", "BOOLEAN"),
+            ("email_in_reply_to", "TEXT"),
+            ("email_references", "TEXT"),
+        ]
+
+        for col_name, col_type in email_chit_columns:
+            if col_name not in chit_cols:
+                cursor.execute(f"ALTER TABLE chits ADD COLUMN {col_name} {col_type}")
+                logger.info(f"Added {col_name} column to chits table")
+
+        # ── settings table ───────────────────────────────────────────────
+        cursor.execute("PRAGMA table_info(settings)")
+        settings_cols = {row[1] for row in cursor.fetchall()}
+
+        if "email_account" not in settings_cols:
+            cursor.execute("ALTER TABLE settings ADD COLUMN email_account TEXT")
+            logger.info("Added email_account column to settings table")
+
+        conn.commit()
+        logger.info("Email fields migration complete")
+    except Exception as e:
+        logger.error(f"Error in migrate_add_email_fields: {str(e)}")
+        raise
+    finally:
+        if conn:
+            conn.close()

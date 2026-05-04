@@ -61,6 +61,7 @@ class Settings(BaseModel):
     map_default_lon: Optional[str] = None    # Default map center longitude, e.g. "-98.5795"
     map_default_zoom: Optional[str] = None   # Default map zoom level (1–18), e.g. "4"
     map_auto_zoom: Optional[str] = "1"       # "1" = auto-zoom to markers, "0" = use custom center/zoom
+    email_account: Optional[str] = None      # JSON string: {email, display_name, imap_host, imap_port, smtp_host, smtp_port, username, password_encrypted}
 
 class Chit(BaseModel):
     id: Optional[str] = None
@@ -108,6 +109,20 @@ class Chit(BaseModel):
     shares: Optional[List[Any]] = None         # JSON array: [{"user_id": "uuid", "role": "manager"|"viewer"}]
     stealth: Optional[bool] = False            # When true, hides chit from all non-owner users
     assigned_to: Optional[str] = None          # UUID of the assigned user
+    # Email fields (all optional — non-email chits have these as None)
+    email_message_id: Optional[str] = None      # RFC 2822 Message-ID
+    email_from: Optional[str] = None             # Sender address
+    email_to: Optional[str] = None               # JSON array of recipient addresses
+    email_cc: Optional[str] = None               # JSON array of CC addresses
+    email_bcc: Optional[str] = None              # JSON array of BCC addresses
+    email_subject: Optional[str] = None          # Subject line (also mapped to chit title)
+    email_body_text: Optional[str] = None        # Plain-text body content
+    email_date: Optional[str] = None             # ISO 8601 date from email Date header
+    email_folder: Optional[str] = None           # "inbox", "sent", "drafts", "trash"
+    email_status: Optional[str] = None           # "draft", "sent", "received"
+    email_read: Optional[bool] = None            # Read/unread state
+    email_in_reply_to: Optional[str] = None      # In-Reply-To Message-ID
+    email_references: Optional[str] = None       # References header (space-separated Message-IDs)
 
 class MultiValueEntry(BaseModel):
     label: Optional[str] = None    # "Work", "Home", "Mobile", custom

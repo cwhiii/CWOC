@@ -26,6 +26,35 @@ from src.backend.routes.notifications import _create_share_notifications
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+# --- Reserved tag namespace enforcement ---
+RESERVED_TAG_PREFIX = "cwoc_system/"
+
+
+def _strip_reserved_tags(tags):
+    """Remove any user-submitted tags that start with CWOC_System/ (case-insensitive).
+
+    Tags can be either strings or dicts with a "name" key — handles both formats.
+    """
+    if not tags or not isinstance(tags, list):
+        return tags
+    result = []
+    for t in tags:
+        if isinstance(t, dict):
+            name = t.get("name", "")
+            if not str(name).lower().startswith(RESERVED_TAG_PREFIX):
+                result.append(t)
+        elif isinstance(t, str):
+            if not t.lower().startswith(RESERVED_TAG_PREFIX):
+                result.append(t)
+        else:
+            result.append(t)
+    return result
+
+
+def _validate_tag_name(name):
+    """Return False if the tag name uses the reserved CWOC_System/ prefix (case-insensitive)."""
+    return not str(name).lower().startswith(RESERVED_TAG_PREFIX)
+
 
 def _enrich_assigned_to_display_names(cursor, chits):
     """Batch-lookup display names for assigned_to user IDs and add as assigned_to_display_name."""
@@ -84,6 +113,11 @@ def get_all_chits(request: Request):
             chit["shares"] = deserialize_json_field(chit.get("shares"))
             chit["stealth"] = bool(chit.get("stealth"))
             chit["assigned_to"] = chit.get("assigned_to")
+            # Email fields
+            chit["email_to"] = deserialize_json_field(chit.get("email_to"))
+            chit["email_cc"] = deserialize_json_field(chit.get("email_cc"))
+            chit["email_bcc"] = deserialize_json_field(chit.get("email_bcc"))
+            chit["email_read"] = bool(chit.get("email_read")) if chit.get("email_read") is not None else None
             chits.append(chit)
 
         # Enrich chits with assigned_to_display_name (batch lookup)
@@ -138,6 +172,11 @@ def search_chits(request: Request, q: Optional[str] = Query(None)):
             chit["shares"] = deserialize_json_field(chit.get("shares"))
             chit["stealth"] = bool(chit.get("stealth"))
             chit["assigned_to"] = chit.get("assigned_to")
+            # Email fields
+            chit["email_to"] = deserialize_json_field(chit.get("email_to"))
+            chit["email_cc"] = deserialize_json_field(chit.get("email_cc"))
+            chit["email_bcc"] = deserialize_json_field(chit.get("email_bcc"))
+            chit["email_read"] = bool(chit.get("email_read")) if chit.get("email_read") is not None else None
 
             matched_fields = []
 
@@ -222,6 +261,8 @@ def create_chit(chit: Chit, request: Request):
         owner_username = user_row[1] if user_row else request.state.username
 
         current_time = datetime.utcnow().isoformat()
+        # Strip any reserved CWOC_System/ tags from user-submitted tags before computing system tags
+        chit.tags = _strip_reserved_tags(chit.tags)
         chit_tags = compute_system_tags(chit)
         cursor.execute(
             """
@@ -234,8 +275,11 @@ def create_chit(chit: Chit, request: Request):
                 habit, habit_goal, habit_success, show_on_calendar,
                 habit_reset_period, habit_last_action_date, habit_hide_overall, perpetual,
                 owner_id, owner_display_name, owner_username,
-                shares, stealth, assigned_to
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                shares, stealth, assigned_to,
+                email_message_id, email_from, email_to, email_cc, email_bcc,
+                email_subject, email_body_text, email_date, email_folder,
+                email_status, email_read, email_in_reply_to, email_references
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 chit_id,
@@ -284,6 +328,19 @@ def create_chit(chit: Chit, request: Request):
                 serialize_json_field(chit.shares),
                 1 if chit.stealth else 0,
                 chit.assigned_to,
+                chit.email_message_id,
+                chit.email_from,
+                serialize_json_field(chit.email_to),
+                serialize_json_field(chit.email_cc),
+                serialize_json_field(chit.email_bcc),
+                chit.email_subject,
+                chit.email_body_text,
+                chit.email_date,
+                chit.email_folder,
+                chit.email_status,
+                1 if chit.email_read else 0 if chit.email_read is not None else None,
+                chit.email_in_reply_to,
+                chit.email_references,
             )
         )
         # Create notifications for shared users on new chit creation
@@ -361,6 +418,11 @@ def get_chit(chit_id: str, request: Request):
         chit["shares"] = deserialize_json_field(chit.get("shares"))
         chit["stealth"] = bool(chit.get("stealth"))
         chit["assigned_to"] = chit.get("assigned_to")
+        # Email fields
+        chit["email_to"] = deserialize_json_field(chit.get("email_to"))
+        chit["email_cc"] = deserialize_json_field(chit.get("email_cc"))
+        chit["email_bcc"] = deserialize_json_field(chit.get("email_bcc"))
+        chit["email_read"] = bool(chit.get("email_read")) if chit.get("email_read") is not None else None
         chit["effective_role"] = effective_role
 
         # Enrich with assigned_to_display_name
@@ -390,6 +452,8 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
         cursor.execute("SELECT * FROM chits WHERE id = ?", (chit_id,))
         existing = cursor.fetchone()
         current_time = datetime.utcnow().isoformat()
+        # Strip any reserved CWOC_System/ tags from user-submitted tags before computing system tags
+        chit.tags = _strip_reserved_tags(chit.tags)
         chit_tags = compute_system_tags(chit)
         if existing:
             existing_dict_check = dict(zip([col[0] for col in cursor.description], existing))
@@ -434,7 +498,10 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                     recurrence_rule = ?, recurrence_exceptions = ?, weather_data = ?, health_data = ?,
                     habit = ?, habit_goal = ?, habit_success = ?, show_on_calendar = ?,
                     habit_reset_period = ?, habit_last_action_date = ?, habit_hide_overall = ?, perpetual = ?,
-                    shares = ?, stealth = ?, assigned_to = ?
+                    shares = ?, stealth = ?, assigned_to = ?,
+                    email_message_id = ?, email_from = ?, email_to = ?, email_cc = ?, email_bcc = ?,
+                    email_subject = ?, email_body_text = ?, email_date = ?, email_folder = ?,
+                    email_status = ?, email_read = ?, email_in_reply_to = ?, email_references = ?
                 WHERE id = ?
                 """,
                 (
@@ -479,6 +546,19 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                     serialize_json_field(chit.shares),
                     1 if chit.stealth else 0,
                     chit.assigned_to,
+                    chit.email_message_id,
+                    chit.email_from,
+                    serialize_json_field(chit.email_to),
+                    serialize_json_field(chit.email_cc),
+                    serialize_json_field(chit.email_bcc),
+                    chit.email_subject,
+                    chit.email_body_text,
+                    chit.email_date,
+                    chit.email_folder,
+                    chit.email_status,
+                    1 if chit.email_read else 0 if chit.email_read is not None else None,
+                    chit.email_in_reply_to,
+                    chit.email_references,
                     chit_id,
                 )
             )
@@ -513,6 +593,19 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                     "shares": serialize_json_field(chit.shares),
                     "stealth": 1 if chit.stealth else 0,
                     "assigned_to": chit.assigned_to,
+                    "email_message_id": chit.email_message_id,
+                    "email_from": chit.email_from,
+                    "email_to": serialize_json_field(chit.email_to),
+                    "email_cc": serialize_json_field(chit.email_cc),
+                    "email_bcc": serialize_json_field(chit.email_bcc),
+                    "email_subject": chit.email_subject,
+                    "email_body_text": chit.email_body_text,
+                    "email_date": chit.email_date,
+                    "email_folder": chit.email_folder,
+                    "email_status": chit.email_status,
+                    "email_read": 1 if chit.email_read else 0 if chit.email_read is not None else None,
+                    "email_in_reply_to": chit.email_in_reply_to,
+                    "email_references": chit.email_references,
                 }
                 diff = compute_audit_diff(old_chit_dict, new_chit_dict, exclude_fields={"modified_datetime", "created_datetime"})
                 if diff:
@@ -556,8 +649,11 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                     habit, habit_goal, habit_success, show_on_calendar,
                     habit_reset_period, habit_last_action_date, habit_hide_overall, perpetual,
                     owner_id, owner_display_name, owner_username,
-                    shares, stealth, assigned_to
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    shares, stealth, assigned_to,
+                    email_message_id, email_from, email_to, email_cc, email_bcc,
+                    email_subject, email_body_text, email_date, email_folder,
+                    email_status, email_read, email_in_reply_to, email_references
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     chit_id,
@@ -606,6 +702,19 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                     serialize_json_field(chit.shares),
                     1 if chit.stealth else 0,
                     chit.assigned_to,
+                    chit.email_message_id,
+                    chit.email_from,
+                    serialize_json_field(chit.email_to),
+                    serialize_json_field(chit.email_cc),
+                    serialize_json_field(chit.email_bcc),
+                    chit.email_subject,
+                    chit.email_body_text,
+                    chit.email_date,
+                    chit.email_folder,
+                    chit.email_status,
+                    1 if chit.email_read else 0 if chit.email_read is not None else None,
+                    chit.email_in_reply_to,
+                    chit.email_references,
                 )
             )
             # Audit logging for chit creation
@@ -665,8 +774,18 @@ def delete_chit(chit_id: str, request: Request):
             raise HTTPException(status_code=404, detail="Chit not found")
         chit_title = chit_dict.get("title")
 
-        cursor.execute("UPDATE chits SET deleted = 1, modified_datetime = ? WHERE id = ?",
-                       (datetime.utcnow().isoformat(), chit_id))
+        current_time = datetime.utcnow().isoformat()
+        # If this is an email chit, also move it to the trash folder
+        if chit_dict.get("email_message_id") or chit_dict.get("email_status"):
+            cursor.execute(
+                "UPDATE chits SET deleted = 1, email_folder = 'trash', modified_datetime = ? WHERE id = ?",
+                (current_time, chit_id),
+            )
+        else:
+            cursor.execute(
+                "UPDATE chits SET deleted = 1, modified_datetime = ? WHERE id = ?",
+                (current_time, chit_id),
+            )
         # Audit logging for chit deletion
         try:
             actor = get_actor_from_request(request)

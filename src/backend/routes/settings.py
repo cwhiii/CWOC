@@ -53,6 +53,7 @@ def get_settings(user_id: str, request: Request):
         settings["default_notifications"] = deserialize_json_field(settings.get("default_notifications"))
         settings["shared_tags"] = deserialize_json_field(settings.get("shared_tags"))
         settings["kiosk_users"] = deserialize_json_field(settings.get("kiosk_users"))
+        settings["email_account"] = deserialize_json_field(settings.get("email_account"))
         settings["default_show_habits_on_calendar"] = settings.get("default_show_habits_on_calendar", "1")
         settings["map_default_lat"] = settings.get("map_default_lat")
         settings["map_default_lon"] = settings.get("map_default_lon")
@@ -72,6 +73,17 @@ def save_settings(settings: Settings, request: Request):
     authenticated_user_id = request.state.user_id
     if settings.user_id != authenticated_user_id:
         raise HTTPException(status_code=403, detail="Cannot modify another user's settings")
+
+    # Validate reserved tag namespace — reject any tag starting with CWOC_System/
+    RESERVED_TAG_PREFIX = "cwoc_system/"
+    if settings.tags:
+        for tag in settings.tags:
+            if tag.name.lower().startswith(RESERVED_TAG_PREFIX):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Tags starting with 'CWOC_System/' are reserved for system use and cannot be created manually."
+                )
+
     conn = None
     try:
         conn = sqlite3.connect(DB_PATH)
@@ -94,6 +106,13 @@ def save_settings(settings: Settings, request: Request):
         preserved_shared_tags = None
         if settings.shared_tags is None and old_settings_dict:
             preserved_shared_tags = old_settings_dict.get("shared_tags")
+
+        # Preserve email_account if not provided by the frontend (email_account
+        # is managed via the Settings → Email Account section and should not be
+        # overwritten by a general settings save that omits it)
+        preserved_email_account = None
+        if settings.email_account is None and old_settings_dict:
+            preserved_email_account = old_settings_dict.get("email_account")
 
         new_settings_dict = {
             "user_id": settings.user_id,
@@ -134,6 +153,7 @@ def save_settings(settings: Settings, request: Request):
             "map_default_lon": settings.map_default_lon,
             "map_default_zoom": settings.map_default_zoom,
             "map_auto_zoom": settings.map_auto_zoom or "1",
+            "email_account": preserved_email_account if settings.email_account is None else settings.email_account,
         }
 
         cursor.execute(
@@ -146,8 +166,9 @@ def save_settings(settings: Settings, request: Request):
                 username, audit_log_max_days, audit_log_max_mb, default_notifications, unit_system,
                 habits_success_window, overdue_border_color, blocked_border_color, shared_tags, kiosk_users,
                 hide_declined, default_show_habits_on_calendar,
-                map_default_lat, map_default_lon, map_default_zoom, map_auto_zoom
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                map_default_lat, map_default_lon, map_default_zoom, map_auto_zoom,
+                email_account
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 new_settings_dict["user_id"],
@@ -188,6 +209,7 @@ def save_settings(settings: Settings, request: Request):
                 new_settings_dict["map_default_lon"],
                 new_settings_dict["map_default_zoom"],
                 new_settings_dict["map_auto_zoom"],
+                new_settings_dict["email_account"],
             )
         )
 

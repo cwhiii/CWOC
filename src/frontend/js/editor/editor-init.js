@@ -210,6 +210,7 @@ function _collapseAllZonesForNewChit() {
     ['checklistSection', 'checklistContent'],
     ['alertsSection', 'alertsContent'],
     ['healthIndicatorsSection', 'healthIndicatorsContent'],
+    ['emailSection', 'emailContent'],
     ['colorSection', 'colorContent'],
     ['projectsSection', 'projectsContent'],
   ];
@@ -701,6 +702,25 @@ async function loadChitData(chitId) {
 
     applyZoneStates(chit);
 
+    // Initialize email zone with chit data
+    if (typeof initEmailZone === 'function') {
+      initEmailZone(chit);
+    }
+
+    // Auto-mark email as read when opening an email chit (Requirement 8.1)
+    if (typeof hasEmailData === 'function' && hasEmailData(chit) && chit.email_read === false) {
+      fetch('/api/email/' + encodeURIComponent(chit.id) + '/read', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' }
+      }).then(function (resp) {
+        if (resp.ok) {
+          chit.email_read = true;
+        }
+      }).catch(function (err) {
+        console.error('[loadChitData] Failed to mark email as read:', err);
+      });
+    }
+
     // Initialize sharing controls in the merged People zone
     if (typeof initPeopleSharingControls === 'function') {
       await initPeopleSharingControls(chit);
@@ -795,6 +815,7 @@ function applyZoneStates(chit) {
     ["checklistSection", "checklistContent", () => Array.isArray(chit.checklist) && chit.checklist.length > 0],
     ["alertsSection", "alertsContent", () => !!(chit.alarm || chit.notification || (Array.isArray(chit.alerts) && chit.alerts.length > 0))],
     ["healthIndicatorsSection", "healthIndicatorsContent", () => false],
+    ["emailSection", "emailContent", () => typeof hasEmailData === 'function' && hasEmailData(chit)],
     ["colorSection", "colorContent", () => !!(chit.color && chit.color !== "#C66B6B")],
     ["projectsSection", "projectsContent", () => !!(chit.is_project_master || (Array.isArray(chit.child_chits) && chit.child_chits.length > 0))],
   ];
@@ -1178,6 +1199,33 @@ document.addEventListener("DOMContentLoaded", function () {
         }
       }
     } catch (e) { /* ignore */ }
+
+    // Handle ?new=email — create a new email draft chit with email zone expanded
+    if (params.get('new') === 'email') {
+      // Set email draft defaults on the new chit
+      window._emailNewDraft = true;
+      if (typeof initEmailZone === 'function') {
+        initEmailZone({
+          email_status: 'draft',
+          email_folder: 'drafts',
+          email_from: '',
+          email_to: [],
+          email_cc: [],
+          email_bcc: [],
+          email_body_text: ''
+        });
+      }
+      // Expand the email zone
+      var emailSection = document.getElementById('emailSection');
+      var emailContent = document.getElementById('emailContent');
+      if (emailSection && emailContent) {
+        emailContent.style.display = '';
+        emailSection.classList.remove('collapsed');
+        var eIcon = emailSection.querySelector('.zone-toggle-icon');
+        if (eIcon) eIcon.textContent = '🔼';
+        emailSection.querySelectorAll('.zone-button:not(.zone-button-persist)').forEach(function (btn) { btn.style.display = ''; });
+      }
+    }
 
     // Auto-focus title field for new chits
     const titleInput = document.getElementById('title');

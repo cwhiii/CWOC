@@ -454,6 +454,8 @@ function fetchChits() {
       if (typeof _globalCheckNotifications === "function") _globalCheckNotifications();
       // Pre-fetch weather for chits with locations (populates cache for all views)
       _prefetchChitWeather(chits);
+      // Update email unread badge
+      if (typeof _updateEmailBadge === 'function') _updateEmailBadge();
       // Execute weather flash if navigating from weather page
       _executeWeatherFlash();
     })
@@ -600,6 +602,9 @@ function displayChits() {
     case "Indicators":
       displayIndicatorsView();
       return; // Indicators view manages its own rendering
+    case "Email":
+      displayEmailView(filteredChits);
+      break;
     case "Search":
       displaySearchView();
       return; // Search view manages its own rendering; skip post-render steps
@@ -634,6 +639,7 @@ function _updateTabCounts(filteredChits) {
     Projects: chits.filter(c => c.is_project_master && !c.deleted && !c.archived).length,
     Tasks: unique.filter(c => c.status || c.due_datetime).length,
     Notes: unique.filter(c => c.note && c.note.trim() !== '').length,
+    Email: unique.filter(c => c.email_message_id || c.email_status).length,
   };
   document.querySelectorAll('.tab').forEach(tab => {
     const onclick = tab.getAttribute('onclick') || '';
@@ -1045,7 +1051,7 @@ document.addEventListener("DOMContentLoaded", function () {
     var _tbSwiping = false;
     var SWIPE_MIN = 60;
 
-    var _tabOrder = ['Calendar', 'Checklists', 'Alarms', 'Projects', 'Tasks', 'Notes', 'Indicators', 'Search'];
+    var _tabOrder = ['Calendar', 'Checklists', 'Alarms', 'Projects', 'Tasks', 'Notes', 'Email', 'Indicators', 'Search'];
 
     headerEl.addEventListener('touchstart', function(e) {
       var t = e.touches[0];
@@ -1419,7 +1425,7 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     // ── Top-level hotkeys ──
-    const tabMap = { c: 'Calendar', h: 'Checklists', a: 'Alarms', p: 'Projects', t: 'Tasks', n: 'Notes', i: 'Indicators', g: 'Search' };
+    const tabMap = { c: 'Calendar', h: 'Checklists', a: 'Alarms', p: 'Projects', t: 'Tasks', n: 'Notes', e: 'Email', i: 'Indicators', g: 'Search' };
     if (tabMap[keyLower]) {
       e.preventDefault();
       filterChits(tabMap[keyLower]);

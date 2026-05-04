@@ -264,7 +264,7 @@ install_python_deps() {
     fi
 
     # Always ensure the known required packages are present
-    local required_pkgs="fastapi uvicorn pydantic python-dotenv python-multipart websockets pywebpush"
+    local required_pkgs="fastapi uvicorn pydantic python-dotenv python-multipart websockets pywebpush cryptography"
     "$APP_DIR/venv/bin/pip" install $required_pkgs \
         || log_error "Failed to install required Python packages." \
             "Check internet connectivity. Try manually: $APP_DIR/venv/bin/pip install $required_pkgs"

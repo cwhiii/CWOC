@@ -447,6 +447,180 @@ function _collectMapSettings() {
   };
 }
 
+// ── Email Account Settings ────────────────────────────────────────────────────
+
+/** Populate email account form fields from loaded settings */
+function _loadEmailAccountSettings(settings) {
+  var acct = settings.email_account;
+  if (!acct || typeof acct !== 'object') return;
+  var el;
+  el = document.getElementById('emailAccountEmail');
+  if (el) el.value = acct.email || '';
+  el = document.getElementById('emailAccountDisplayName');
+  if (el) el.value = acct.display_name || '';
+  el = document.getElementById('emailAccountImapHost');
+  if (el && acct.imap_host) el.value = acct.imap_host;
+  el = document.getElementById('emailAccountImapPort');
+  if (el && acct.imap_port != null) el.value = acct.imap_port;
+  el = document.getElementById('emailAccountSmtpHost');
+  if (el && acct.smtp_host) el.value = acct.smtp_host;
+  el = document.getElementById('emailAccountSmtpPort');
+  if (el && acct.smtp_port != null) el.value = acct.smtp_port;
+  el = document.getElementById('emailAccountUsername');
+  if (el) el.value = acct.username || '';
+  // Password is never sent back from the server — leave the field empty.
+  // The placeholder tells the user a password is saved.
+  el = document.getElementById('emailAccountPassword');
+  if (el && acct.password_encrypted) el.placeholder = '••••••••  (saved)';
+}
+
+/** Collect email account form fields into a JSON object for the save payload */
+function _collectEmailAccountSettings() {
+  var email = (document.getElementById('emailAccountEmail') || {}).value || '';
+  // If no email address entered, don't include email_account at all
+  if (!email.trim()) return null;
+  var pw = (document.getElementById('emailAccountPassword') || {}).value || '';
+  var obj = {
+    email: email.trim(),
+    display_name: ((document.getElementById('emailAccountDisplayName') || {}).value || '').trim(),
+    imap_host: ((document.getElementById('emailAccountImapHost') || {}).value || 'imap.gmail.com').trim(),
+    imap_port: parseInt((document.getElementById('emailAccountImapPort') || {}).value, 10) || 993,
+    smtp_host: ((document.getElementById('emailAccountSmtpHost') || {}).value || 'smtp.gmail.com').trim(),
+    smtp_port: parseInt((document.getElementById('emailAccountSmtpPort') || {}).value, 10) || 587,
+    username: ((document.getElementById('emailAccountUsername') || {}).value || '').trim(),
+  };
+  // Only include password if the user typed a new one (non-empty field)
+  if (pw) obj.password = pw;
+  return obj;
+}
+
+/** Toggle email password field visibility */
+function toggleEmailPasswordVisibility() {
+  var input = document.getElementById('emailAccountPassword');
+  var btn = document.getElementById('emailPasswordToggleBtn');
+  if (!input) return;
+  if (input.type === 'password') {
+    input.type = 'text';
+    if (btn) btn.textContent = '🙈';
+  } else {
+    input.type = 'password';
+    if (btn) btn.textContent = '👁️';
+  }
+}
+
+/** Test email connection — POST /api/email/test-connection */
+async function testEmailConnection() {
+  var resultSpan = document.getElementById('emailTestResult');
+  var btn = document.getElementById('emailTestConnectionBtn');
+  if (resultSpan) { resultSpan.textContent = '⏳ Testing...'; resultSpan.style.color = '#8b5a2b'; }
+  if (btn) btn.disabled = true;
+
+  var payload = {
+    email: ((document.getElementById('emailAccountEmail') || {}).value || '').trim(),
+    imap_host: ((document.getElementById('emailAccountImapHost') || {}).value || 'imap.gmail.com').trim(),
+    imap_port: parseInt((document.getElementById('emailAccountImapPort') || {}).value, 10) || 993,
+    smtp_host: ((document.getElementById('emailAccountSmtpHost') || {}).value || 'smtp.gmail.com').trim(),
+    smtp_port: parseInt((document.getElementById('emailAccountSmtpPort') || {}).value, 10) || 587,
+    username: ((document.getElementById('emailAccountUsername') || {}).value || '').trim(),
+    password: (document.getElementById('emailAccountPassword') || {}).value || '',
+  };
+
+  try {
+    var resp = await fetch('/api/email/test-connection', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    var data = await resp.json();
+    if (!resp.ok) {
+      var msg = data.detail || data.error || 'Connection failed';
+      if (resultSpan) { resultSpan.textContent = '❌ ' + msg; resultSpan.style.color = '#b22222'; }
+    } else if (data.imap && data.smtp) {
+      // Both IMAP and SMTP results returned
+      var imapOk = data.imap.success;
+      var smtpOk = data.smtp.success;
+      if (imapOk && smtpOk) {
+        if (resultSpan) { resultSpan.textContent = '✅ IMAP & SMTP connected'; resultSpan.style.color = '#1a7a4c'; }
+      } else {
+        var parts = [];
+        if (imapOk) parts.push('✅ IMAP OK');
+        else parts.push('❌ IMAP: ' + (data.imap.message || 'failed'));
+        if (smtpOk) parts.push('✅ SMTP OK');
+        else parts.push('❌ SMTP: ' + (data.smtp.message || 'failed'));
+        if (resultSpan) {
+          resultSpan.innerHTML = parts.join('<br>');
+          resultSpan.style.color = '#b22222';
+        }
+      }
+    } else {
+      if (resultSpan) { resultSpan.textContent = '❌ Unexpected response'; resultSpan.style.color = '#b22222'; }
+    }
+  } catch (e) {
+    console.error('Test connection error:', e);
+    if (resultSpan) { resultSpan.textContent = '❌ Network error'; resultSpan.style.color = '#b22222'; }
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+/** Backfill — first estimate, then confirm, then sync */
+async function emailBackfill() {
+  var resultSpan = document.getElementById('emailBackfillResult');
+  var btn = document.getElementById('emailBackfillBtn');
+  if (resultSpan) { resultSpan.textContent = '⏳ Estimating...'; resultSpan.style.color = '#8b5a2b'; }
+  if (btn) btn.disabled = true;
+
+  try {
+    // Step 1: Get estimate
+    var estResp = await fetch('/api/email/backfill-estimate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    var estData = await estResp.json();
+    if (!estResp.ok) {
+      var errMsg = estData.detail || estData.error || 'Estimation failed';
+      if (resultSpan) { resultSpan.textContent = '❌ ' + errMsg; resultSpan.style.color = '#b22222'; }
+      if (btn) btn.disabled = false;
+      return;
+    }
+
+    var count = estData.message_count || 0;
+    var sizeMb = estData.estimated_mb || 0;
+    if (resultSpan) resultSpan.textContent = '';
+    if (btn) btn.disabled = false;
+
+    // Step 2: Confirm with user
+    var confirmMsg = 'Backfill will fetch approximately ' + count + ' messages (~' + sizeMb.toFixed(1) + ' MB).\n\nThis may take a while. Continue?';
+    if (!confirm(confirmMsg)) {
+      if (resultSpan) { resultSpan.textContent = 'Cancelled'; resultSpan.style.color = '#8b5a2b'; }
+      return;
+    }
+
+    // Step 3: Trigger full sync
+    if (resultSpan) { resultSpan.textContent = '⏳ Syncing...'; resultSpan.style.color = '#8b5a2b'; }
+    if (btn) btn.disabled = true;
+
+    var syncResp = await fetch('/api/email/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ backfill: true }),
+    });
+    var syncData = await syncResp.json();
+    if (syncResp.ok) {
+      var newCount = syncData.new_count || 0;
+      if (resultSpan) { resultSpan.textContent = '✅ ' + newCount + ' emails imported'; resultSpan.style.color = '#1a7a4c'; }
+    } else {
+      var syncErr = syncData.detail || syncData.error || 'Sync failed';
+      if (resultSpan) { resultSpan.textContent = '❌ ' + syncErr; resultSpan.style.color = '#b22222'; }
+    }
+  } catch (e) {
+    console.error('Backfill error:', e);
+    if (resultSpan) { resultSpan.textContent = '❌ Network error'; resultSpan.style.color = '#b22222'; }
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
 /** Toggle visibility of Work Week config based on Work Hours period checkbox */
 function _toggleWorkConfig() {
   var workCb = document.querySelector('.period-cb[value="Work"]');
@@ -893,6 +1067,15 @@ function handleTagInput(event) {
     const input = document.getElementById("new-tag");
     const tagText = input.value.trim();
     if (tagText) {
+      // Block reserved CWOC_System/ prefix
+      if (isReservedTagPrefix(tagText)) {
+        const modal = document.getElementById("reserved-tag-modal");
+        if (modal) {
+          modal.style.display = "flex";
+          setTimeout(() => { modal.style.display = "none"; }, 2000);
+        }
+        return;
+      }
       const tagDiv = document.createElement("div");
       tagDiv.className = "tag";
       tagDiv.dataset.color = "#d4c4b0";
@@ -911,6 +1094,15 @@ function handleInfoClick(event) {
   const input = document.getElementById("new-tag");
   const tagText = input.value.trim();
   if (event.shiftKey && tagText) {
+    // Block reserved CWOC_System/ prefix
+    if (isReservedTagPrefix(tagText)) {
+      const modal = document.getElementById("reserved-tag-modal");
+      if (modal) {
+        modal.style.display = "flex";
+        setTimeout(() => { modal.style.display = "none"; }, 2000);
+      }
+      return;
+    }
     const tagDiv = document.createElement("div");
     tagDiv.className = "tag";
     tagDiv.dataset.color = "#d4c4b0";
@@ -926,6 +1118,15 @@ function addTag() {
   const input = document.getElementById("new-tag");
   const tagText = input.value.trim();
   if (tagText) {
+    // Block reserved CWOC_System/ prefix
+    if (isReservedTagPrefix(tagText)) {
+      const modal = document.getElementById("reserved-tag-modal");
+      if (modal) {
+        modal.style.display = "flex";
+        setTimeout(() => { modal.style.display = "none"; }, 2000);
+      }
+      return;
+    }
     const existingTags = Array.from(document.querySelectorAll("#tag-editor-hidden .tag")).map(
       (tag) =>
         tag.textContent
@@ -1133,6 +1334,16 @@ function saveTag() {
 
   if (!newName) {
     alert("Tag name cannot be empty.");
+    return;
+  }
+
+  // Block reserved CWOC_System/ prefix on rename
+  if (isReservedTagPrefix(newName)) {
+    const modal = document.getElementById("reserved-tag-modal");
+    if (modal) {
+      modal.style.display = "flex";
+      setTimeout(() => { modal.style.display = "none"; }, 2000);
+    }
     return;
   }
 
@@ -1781,6 +1992,9 @@ class SettingsManager {
 
     // Map settings
     _loadMapSettings(this.settings);
+
+    // Email account settings
+    _loadEmailAccountSettings(this.settings);
   }
 
   gatherSettings() {
@@ -1871,6 +2085,7 @@ class SettingsManager {
       blocked_border_color: _borderColorBlocked || '#DAA520',
       kiosk_users: _gatherKioskTags(),
       ..._collectMapSettings(),
+      email_account: (function() { var a = _collectEmailAccountSettings(); return a ? JSON.stringify(a) : null; })(),
     };
   }
 
