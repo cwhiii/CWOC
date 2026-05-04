@@ -78,7 +78,7 @@
                 <li><strong>Period</strong> — Switch calendar period (Itinerary, Day, Week, Work Hours, X Days, Month, Year)</li>
                 <li><strong>Filters</strong> — Collapsible filter groups for text, status, priority, tags, people, and show/hide options</li>
                 <li><strong>People &amp; Settings</strong> — Navigation to People and Settings pages</li>
-                <li><strong>Clock, Weather, Reference, Help</strong> — Four compact buttons at the bottom. Clock and Weather open modals (Shift+click Weather for the full page). Reference and Help open their respective overlays/pages</li>
+                <li><strong>Clock, Weather, Reference, Help</strong> — Four compact buttons at the bottom. Clock opens a modal. Weather navigates to the full page (Shift+click for quick modal). Reference and Help open their respective overlays/pages</li>
             </ul>
             <p>The Alerts and Projects views have a <strong>View Mode</strong> toggle in the sidebar. Projects switches between List and Kanban; Alerts switches between Chits (showing chits that have alerts) and Independent (a 3-column board for quick alarms, timers, and stopwatches not tied to any chit).</p>
             <h3 id="calendar">Calendar View</h3>
@@ -448,7 +448,7 @@
             <h4>Actions</h4>
             <ul>
                 <li><kbd>K</kbd> — Create chit (middle-click → new tab)</li>
-                <li><kbd>W</kbd> — Weather modal (default location forecast) · <kbd>Shift+W</kbd> — Weather page (full forecast)</li>
+                <li><kbd>W</kbd> — Weather page (full forecast) · <kbd>Shift+W</kbd> — Weather modal (default location forecast)</li>
                 <li><kbd>L</kbd> — Clock modal · <kbd>S</kbd> — Settings · <kbd>V</kbd> — Navigate menu</li>
                 <li><kbd>R</kbd> — Reference overlay · <kbd>Shift+R</kbd> — Help page</li>
                 <li><kbd>!</kbd> — Quick Alert menu (add Alarm, Timer, or Stopwatch). On the dashboard, creates an independent alert and shows Done/View buttons. In the editor, adds to the current chit and expands the alerts zone. On other pages, creates an independent alert</li>
@@ -514,6 +514,8 @@
                 <li><strong>Upload</strong> — Click "Add Files" or drag and drop files onto the upload area. Multiple files can be uploaded at once</li>
                 <li><strong>Download</strong> — Click the download icon next to any attachment to download it</li>
                 <li><strong>Delete</strong> — Click the trash icon to remove an attachment (with confirmation)</li>
+                <li><strong>Email Attachments</strong> — Files attached to incoming emails are automatically saved during sync. They appear in the Attachments zone and as downloadable chips at the bottom of the email body</li>
+                <li><strong>Indicator</strong> — Chits with attachments show a 📎 icon on dashboard cards, calendar events, and other views</li>
                 <li><strong>Size Limit</strong> — Configure the maximum file size in Settings → Email Account → Attachments (5, 10, 25, or 50 MB)</li>
             </ul>
             <h3 id="clocks">Clocks</h3>
@@ -526,7 +528,7 @@
             </ul>
             <p>Drag clocks between Active and Inactive zones in Settings to choose which appear. Use "Change Orientation" to switch between horizontal and vertical layout.</p>
             <h3 id="weather">Weather</h3>
-            <p>Press <kbd>W</kbd> on the dashboard to open the weather modal. It shows the current forecast for your default saved location, including weather icon, high/low temperatures, and precipitation. Temperatures display in °F or °C based on your unit system setting (Settings → Unit System). If no default location is configured, the modal will prompt you to set one in Settings. The modal includes a <strong>📊 Full Forecast</strong> button that opens the dedicated Weather page.</p>
+            <p>Press <kbd>W</kbd> on the dashboard to open the full Weather page. Press <kbd>Shift+W</kbd> for a quick weather modal showing the current forecast for your default saved location, including weather icon, high/low temperatures, and precipitation. Temperatures display in °F or °C based on your unit system setting (Settings → Unit System). If no default location is configured, the modal will prompt you to set one in Settings. The modal includes a <strong>📊 Full Forecast</strong> button that opens the dedicated Weather page.</p>
             <p>In the chit editor, weather loads automatically when a chit has both a location and a date. Stored forecast data displays immediately on load, then a live fetch updates it in the background. Placeholder messages appear when either location or date is missing.</p>
             <h4>Weather Data on Chits</h4>
             <p>Each chit with a location and date stores its own weather forecast. The stored data includes:</p>
@@ -546,13 +548,13 @@
                 <li><strong>Precipitation</strong> — Shown on Day, Week, Work Hours, and X Days views</li>
                 <li><strong>⏳ Stale indicator</strong> — Appears when the forecast data is more than 24 hours old</li>
             </ul>
-            <p>If a chit has a location but no stored weather data yet, it falls back to fetching weather in the background. The 🌤️ Weather button in the sidebar opens the weather modal (click) or navigates to the full Weather page (Shift+click).</p>
+            <p>If a chit has a location but no stored weather data yet, it falls back to fetching weather in the background. The 🌤️ Weather button in the sidebar opens the full Weather page (click) or the quick weather modal (Shift+click).</p>
             <h4>Weather Page</h4>
             <p>The Weather page shows a comprehensive forecast table for all your saved locations. Access it via:</p>
             <ul>
-                <li><kbd>Shift+W</kbd> from the dashboard</li>
+                <li><kbd>W</kbd> from the dashboard</li>
                 <li>The <strong>📊 Full Forecast</strong> button in the weather modal</li>
-                <li>Shift+click the <strong>🌤️ Weather</strong> button in the sidebar</li>
+                <li>Click the <strong>🌤️ Weather</strong> button in the sidebar</li>
             </ul>
             <p>The page displays one row per saved location, with up to 16 days of forecast data. Each day block shows the weather icon, high/low temperatures, and precipitation. Temperatures respect your unit system setting (°F or °C). Drag rows by the ☰ handle to reorder locations — your arrangement is saved automatically. Days where you have a chit at that location are highlighted with a darker background. Click any day block to jump to that day in the Calendar Day view — any chits at that location will flash briefly to draw your eye. If no saved locations are configured, a message directs you to add them in Settings. Press <kbd>ESC</kbd> to navigate back.</p>
             <h4>City Rows from Chits</h4>
@@ -572,7 +574,7 @@
                 <li><strong>Removing</strong> — Click ✕ to remove a row. At least one row always remains.</li>
                 <li><strong>Saving</strong> — Empty-address rows are cleaned up on save.</li>
             </ul>
-            <p>Saved locations are used by the editor's Location zone dropdown, the compact 📍 dropdown in the title area, the +Location button, and the dashboard weather modal (<kbd>W</kbd>).</p>
+            <p>Saved locations are used by the editor's Location zone dropdown, the compact 📍 dropdown in the title area, the +Location button, and the dashboard weather modal (<kbd>Shift+W</kbd>).</p>
             <h3 id="alert-indicators">Visual Indicators</h3>
             <p>Visual indicators are small icons displayed alongside chit titles in all views to signal key properties. Configure their visibility in Settings → Visual Indicators. Each indicator has three visibility modes:</p>
             <ul>
@@ -839,6 +841,7 @@ lxc.mount.entry: /dev/net/tun dev/net/tun none bind,create=file</pre>
     <script src="/frontend/js/shared/shared-recurrence.js"></script>
     <script src="/frontend/js/shared/shared-geocoding.js"></script>
     <script src="/frontend/js/shared/shared-qr.js"></script>
+    <script src="/frontend/js/shared/shared-hotkeys.js"></script>
     <script src="/frontend/js/shared/shared.js"></script>
     <script src="/frontend/js/shared/shared-calculator.js"></script>
     <script src="/frontend/js/pages/shared-page.js"></script>

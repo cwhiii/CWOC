@@ -11,18 +11,11 @@
  - Also, whichever email I'm pointing it should be much more visually obvious.
 
 
-I want a new feature. to have a shared contact vault. It's a check box in the people, editor. When checked, this contact is made available to all users on the server. All users should get a setting in the settings page for default to share or not share contacts to the vault
 
 
-
-
-- go through the base to find everywhere where there is an editor that accepts marked in. Have it also support the hot keys that we just set up for bold and attack and links. Also support: 
-- bold
-- italic
-- links (as we just did)
-- numbered lists (including mult-row=multi-items, and sub-lists) : cmd+shft+8
-- bullet list (including mult-row=multi-items, and sub-lists) : cmd+shft+8
-- Strikeout. = cmd+sft+x
+- go through the base to find everywhere where there is an editor that accepts marked in. Have it also support the hot keys that we just set up for bold and attack and links. 
+Also support: 
+:
 Also make a note in the read me and help that this tool supports markdown just about everywhere. 
 
 
@@ -46,6 +39,20 @@ right click everywhere shift lcick is supposerted.
 
 
 
+new messages arrving should trigger a (toast ?) notification 
+
+
+
+also, support oAuth2. 
+
+Newest emails are still not showing up at the top of the page. The nickname of the account is not showing up on the chats, or inside bar.   
+
+
+
+
+
+
+
 
 # Implementation Plan: Data Management Overhaul
 - update to handle new email fields
@@ -55,9 +62,6 @@ right click everywhere shift lcick is supposerted.
 - add an item to the todo: see where the new crypto-package could be used to futher secure passwords, and update the system to take advantage of it. 
 
 - Attachemtns: have an attachemnts zone. Be able to add or remove files forom a chit. (keep in mind that this will be a male client in the near future, so they should be able to work with the attachments coming and going through email. So if there's anything special with that, we want to support that out of the gate.)
-
-- on map & waether pages:  Add 3 more time periods to the drop-down. The next hour, and today, and next X days which uses the X days setting form th esettings. 
-- on teh map page, cange teh date filter to just "Day" instead of "this day", etc, for all then values in that ONE dropdown.    
 
 
 fix habit notifications:

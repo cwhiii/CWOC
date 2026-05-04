@@ -669,11 +669,18 @@ window.CwocSaveSystem = CwocSaveSystem;
       return;
     }
 
-    // V to open (not when typing, not on dashboard, not with modifier keys)
+    // V to open navigate panel (not when typing, not on dashboard, not with modifier keys)
     if (keyLower === 'v' && !inInput && !_isDashboard && !e.ctrlKey && !e.metaKey && !e.altKey) {
       if (!_isNavPanelOpen() && document.querySelector('.modal[style*="flex"]')) return;
       e.preventDefault();
       _openNavPanel();
+      return;
+    }
+
+    // Shared hotkeys: tab switching (C,H,A,P,T,N,E,I,G) + actions (K,S,W,L,R)
+    if (!inInput && !_isDashboard && typeof _cwocDispatchHotkey === 'function') {
+      if (_isNavPanelOpen() || document.querySelector('.modal[style*="flex"]')) return;
+      _cwocDispatchHotkey(e);
     }
   });
 })();

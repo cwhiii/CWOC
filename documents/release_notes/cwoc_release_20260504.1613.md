@@ -1,0 +1,1 @@
+Fixed email card hover layout shift. Date is now absolutely positioned to the far right and never moves. Hover action buttons are absolutely positioned to the left of the date (1em gap). Preview uses `visibility: hidden` instead of `display: none` on hover so it doesn't cause reflow. Content area has right padding to reserve space for the date.

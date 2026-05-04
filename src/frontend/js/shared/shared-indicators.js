@@ -137,6 +137,13 @@ function _getAllIndicators(chit, settings, context) {
     result += '🔁 ';
   }
 
+  // Attachment indicator — lowest priority, shown last (furthest right)
+  var _attRaw = chit.attachments;
+  if (typeof _attRaw === 'string') { try { _attRaw = JSON.parse(_attRaw); } catch(e) { _attRaw = null; } }
+  if (Array.isArray(_attRaw) && _attRaw.length > 0) {
+    result += '📎 ';
+  }
+
   return result;
 }
 

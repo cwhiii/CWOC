@@ -1,0 +1,1 @@
+Subject column widened to 300px. Hover actions now have a 1em gap to the left of the date, and the date stays pinned in place (fixed min-width, right-aligned) so it never shifts when action buttons appear.

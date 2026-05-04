@@ -196,8 +196,7 @@ function _closeClockModal() {
   if (_clockModalInterval) { clearInterval(_clockModalInterval); _clockModalInterval = null; }
 }
 
-// ── Weather Modal (W hotkey) ─────────────────────────────────────────────────
-// ── Weather Modal (W hotkey) ─────────────────────────────────────────────────
+// ── Weather Modal (Shift+W hotkey) ───────────────────────────────────────────
 
 const _weatherIcons = {
   0: '☀️', 1: '🌤️', 2: '⛅', 3: '☁️',

@@ -726,6 +726,9 @@ function initEmailZone(chit) {
   if (chit.id && chit.email_message_id) {
     _fetchEmailThread(chit.id);
   }
+
+  // Render email attachment icons at the bottom of the email body
+  _renderEmailAttachmentBar(chit);
 }
 
 /**
@@ -1198,6 +1201,11 @@ function _openEmailExpandModal() {
   // Wire live markdown preview for draft expand modal (only when no HTML content)
   if (status === 'draft' && !hasHtml) {
     _wireExpandBodyPreview();
+  }
+
+  // Render email attachment icons in the expand modal
+  if (_emailCurrentChit) {
+    _renderExpandEmailAttachmentBar(_emailCurrentChit);
   }
 }
 
@@ -1801,4 +1809,109 @@ function _renderEmailThread(thread, currentId) {
 
   section.appendChild(list);
   emailContent.appendChild(section);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Email Attachment Bar — shows attachment icons at bottom of email body
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Render email attachment icons at the bottom-right of the email body field.
+ * Shown in both the small zone and the expand modal.
+ * @param {Object} chit — the loaded chit object
+ */
+function _renderEmailAttachmentBar(chit) {
+  // Remove any existing bar first
+  var existing = document.getElementById('emailAttachmentBar');
+  if (existing) existing.remove();
+
+  var attachments = _getEmailAttachmentList(chit);
+  if (!attachments || attachments.length === 0) return;
+
+  var bar = _buildEmailAttachmentBar(attachments, chit.id);
+  bar.id = 'emailAttachmentBar';
+
+  // Insert after the email body field (textarea or iframe)
+  var bodyField = document.querySelector('.email-body-field');
+  if (bodyField) {
+    bodyField.appendChild(bar);
+  }
+}
+
+/**
+ * Render email attachment icons inside the expand modal body.
+ * @param {Object} chit — the loaded chit object
+ */
+function _renderExpandEmailAttachmentBar(chit) {
+  var attachments = _getEmailAttachmentList(chit);
+  if (!attachments || attachments.length === 0) return;
+
+  var bar = _buildEmailAttachmentBar(attachments, chit.id);
+  bar.id = 'emailExpandAttachmentBar';
+
+  // Insert at the bottom of the expand modal body wrap
+  var wrap = document.getElementById('emailExpandBodyWrap');
+  if (wrap) {
+    wrap.appendChild(bar);
+  }
+}
+
+/**
+ * Parse the attachments list from a chit.
+ * @param {Object} chit
+ * @returns {Array|null}
+ */
+function _getEmailAttachmentList(chit) {
+  if (!chit || !chit.attachments) return null;
+  var parsed = chit.attachments;
+  if (typeof parsed === 'string') {
+    try { parsed = JSON.parse(parsed); } catch (e) { return null; }
+  }
+  return Array.isArray(parsed) && parsed.length > 0 ? parsed : null;
+}
+
+/**
+ * Build the attachment bar DOM element.
+ * Icons flow right-to-left in the bottom-right corner.
+ * @param {Array} attachments — parsed attachment metadata array
+ * @param {string} chitId — the chit ID for download URLs
+ * @returns {HTMLElement}
+ */
+function _buildEmailAttachmentBar(attachments, chitId) {
+  var bar = document.createElement('div');
+  bar.className = 'email-attachment-bar';
+
+  attachments.forEach(function(att) {
+    var item = document.createElement('a');
+    item.className = 'email-attachment-chip';
+    item.href = '/api/chits/' + encodeURIComponent(chitId) + '/attachments/' + encodeURIComponent(att.id);
+    item.target = '_blank';
+    item.title = att.filename + ' (' + _formatAttSize(att.size) + ')';
+    item.setAttribute('download', att.filename);
+
+    var icon = document.createElement('span');
+    icon.className = 'email-attachment-chip-icon';
+    icon.textContent = typeof _getFileIcon === 'function' ? _getFileIcon(att.mime_type) : '📄';
+    item.appendChild(icon);
+
+    var name = document.createElement('span');
+    name.className = 'email-attachment-chip-name';
+    name.textContent = att.filename;
+    item.appendChild(name);
+
+    bar.appendChild(item);
+  });
+
+  return bar;
+}
+
+/**
+ * Format a byte size into a human-readable string.
+ * @param {number} bytes
+ * @returns {string}
+ */
+function _formatAttSize(bytes) {
+  if (!bytes || bytes < 1024) return (bytes || 0) + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 }

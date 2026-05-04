@@ -1,0 +1,1 @@
+Fixed email account nickname tags not appearing on existing emails. Sync now backfills the `CWOC_System/Email/Account/{nickname}` tag onto all email chits belonging to each account, and assigns orphan emails (synced before multi-account) to the first account. Sidebar account pills now wait for settings to load before rendering.

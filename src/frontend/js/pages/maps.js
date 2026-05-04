@@ -31,6 +31,9 @@ var _mapsChitsFilterText = '';
 // Period offset for prev/next navigation
 var _mapsPeriodOffset = 0;
 
+// Custom days count from settings (for "Next X Days" period)
+var _mapsCustomDaysCount = 7;
+
 // People filter state
 var _mapsPeopleFilterText = '';
 var _mapsPeopleFilterFavoritesOnly = false;
@@ -180,6 +183,20 @@ function _getPeriodDateRange(period) {
   var offset = _mapsPeriodOffset || 0;
 
   switch (period) {
+    case 'nexthour':
+      // Next 60 minutes from now — show chits for today only
+      start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+      return { start: start, end: end };
+    case 'today':
+      start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+      return { start: start, end: end };
+    case 'nextxdays':
+      var xDays = _mapsCustomDaysCount || 7;
+      start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + xDays - 1, 23, 59, 59);
+      return { start: start, end: end };
     case 'day':
       start = new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset);
       end = new Date(start.getFullYear(), start.getMonth(), start.getDate(), 23, 59, 59);
@@ -325,11 +342,14 @@ function _initMapsSidebarShared() {
     onClearFilters: function() { _clearChitsFilters(); },
     onMapsClick: function() { /* no-op, already on maps */ },
     periodOptions: [
+      { value: 'nexthour', label: 'Next Hour' },
+      { value: 'today', label: 'Today' },
       { value: 'day', label: 'Day', selected: false },
-      { value: 'week', label: 'This Week', selected: true },
-      { value: 'month', label: 'This Month' },
-      { value: 'quarter', label: 'This Quarter' },
-      { value: 'year', label: 'This Year' },
+      { value: 'week', label: 'Week', selected: true },
+      { value: 'nextxdays', label: 'Next ' + (window._mapsCustomDaysCount || 7) + ' Days' },
+      { value: 'month', label: 'Month' },
+      { value: 'quarter', label: 'Quarter' },
+      { value: 'year', label: 'Year' },
       { value: 'all', label: 'All Time' }
     ],
     loadTagFilters: function() { _loadChitsFilterData(); },
@@ -373,6 +393,34 @@ function _updateMapsDateDisplay() {
   if (period === 'all') {
     if (yearEl) yearEl.textContent = '';
     if (rangeEl) rangeEl.textContent = 'All Time';
+    return;
+  }
+
+  // Fixed periods with no prev/next navigation
+  if (period === 'nexthour') {
+    if (yearEl) yearEl.textContent = '';
+    if (rangeEl) rangeEl.textContent = 'Next Hour';
+    return;
+  }
+  if (period === 'today') {
+    var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    var now = new Date();
+    if (yearEl) yearEl.textContent = now.getFullYear();
+    if (rangeEl) rangeEl.textContent = months[now.getMonth()] + ' ' + now.getDate();
+    return;
+  }
+  if (period === 'nextxdays') {
+    var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    var xDays = _mapsCustomDaysCount || 7;
+    var now = new Date();
+    var start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    var end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + xDays - 1);
+    if (yearEl) yearEl.textContent = start.getFullYear();
+    if (rangeEl) {
+      var startStr = months[start.getMonth()] + ' ' + start.getDate();
+      var endStr = months[end.getMonth()] + ' ' + end.getDate();
+      rangeEl.textContent = startStr + ' — ' + endStr;
+    }
     return;
   }
 
@@ -861,6 +909,14 @@ async function _mapsInit() {
     var settings = await getCachedSettings();
     var co = (settings && settings.chit_options) || {};
 
+    // Load custom_days_count for "Next X Days" period
+    _mapsCustomDaysCount = parseInt(settings.custom_days_count) || 7;
+    // Update the "Next X Days" label in the period dropdown now that we know the real count
+    var periodSelect = document.getElementById('period-select');
+    if (periodSelect) {
+      var nextXOpt = periodSelect.querySelector('option[value="nextxdays"]');
+      if (nextXOpt) nextXOpt.textContent = 'Next ' + _mapsCustomDaysCount + ' Days';
+    }
     if (co.prefer_google_maps) {
       // Show Google Maps warning, hide map-related elements
       var warning = document.getElementById('maps-google-warning');

@@ -226,16 +226,7 @@ function _buildChitHeader(chit, titleHtml, settings, opts) {
     }
   }
 
-  // Attachment indicator — 📎 with count tooltip
-  var _attachRaw = chit.attachments;
-  if (typeof _attachRaw === 'string') { try { _attachRaw = JSON.parse(_attachRaw); } catch(e) { _attachRaw = null; } }
-  if (Array.isArray(_attachRaw) && _attachRaw.length > 0) {
-    var attachSpan = document.createElement('span');
-    attachSpan.className = 'chit-attachment-indicator';
-    attachSpan.textContent = '📎';
-    attachSpan.title = _attachRaw.length + ' attachment' + (_attachRaw.length !== 1 ? 's' : '');
-    left.appendChild(attachSpan);
-  }
+  // Attachment indicator — now handled by _getAllIndicators in shared-indicators.js
 
   const title = document.createElement('span');
   title.className = 'chit-header-title';

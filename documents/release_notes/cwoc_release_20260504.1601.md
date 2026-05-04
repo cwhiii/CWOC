@@ -1,0 +1,1 @@
+Redesigned email card layout. Sender name is now the primary element (bold, dark, 1em — old subject style). Subject sits below it in a slightly smaller, muted brown. Body preview moved to the right column in a grid layout (like habit note previews). Date/time is larger and bolder. Badges (Draft/Sent/Replied) sit above the grid. On mobile the grid collapses to single column.

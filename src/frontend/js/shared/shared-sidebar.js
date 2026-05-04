@@ -112,14 +112,14 @@ function _cwocInjectSidebar() {
   html += '  </div>';
   html += '</div>';
 
-  /* 3. Period (always visible) */
+  /* 3. Time Period (always visible) */
   html += '<div class="sidebar-section" id="section-period">';
-  html += '  <label class="sidebar-section-label">Period</label>';
+  html += '  <label class="sidebar-section-label">Time Period</label>';
   html += '  <select id="period-select">';
   html += '    <option value="Itinerary">Itinerary</option>';
   html += '    <option value="Day">Day</option>';
-  html += '    <option value="Week" selected>Week</option>';
   html += '    <option value="Work">Work Hours</option>';
+  html += '    <option value="Week" selected>Week</option>';
   html += '    <option value="SevenDay">X Days</option>';
   html += '    <option value="Month">Month</option>';
   html += '    <option value="Year">Year</option>';
@@ -316,7 +316,7 @@ function _cwocInjectSidebar() {
   html += '    <button class="action-button sidebar-compact-btn" id="sidebar-maps-btn" title="Maps View">';
   html += '      🗺️ Maps';
   html += '    </button>';
-  html += '    <button class="action-button sidebar-compact-btn" id="sidebar-weather-btn" title="Weather (click: modal, Shift+click: full page)">';
+  html += '    <button class="action-button sidebar-compact-btn" id="sidebar-weather-btn" title="Weather (click: full page, Shift+click: modal)">';
   html += '      🌤️ Weather';
   html += '    </button>';
   html += '  </div>';

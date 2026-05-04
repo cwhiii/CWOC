@@ -2,313 +2,316 @@
 
 ## Overview
 
-Bidirectional integration between CWOC and Home Assistant. The implementation proceeds bottom-up: database migration → Pydantic models → HA bridge module → routes → rules engine extensions → frontend UI → property-based tests → help documentation. Each task builds on the previous, with no orphaned code.
+Full bidirectional Home Assistant integration spanning two codebases: CWOC Backend (FastAPI/Python) and HA Custom Integration (Python package). Implementation proceeds in five phases: backend foundation, HA custom integration files, frontend UI, testing & documentation, and final wiring.
+
+**Language:** Python (backend + HA integration), vanilla JavaScript (frontend)
 
 ## Tasks
 
-- [ ] 1. Database migration and Pydantic models
-  - [ ] 1.1 Add `migrate_create_ha_config()` to `src/backend/migrations.py`
-    - Create `ha_config` table with `id INTEGER PRIMARY KEY CHECK (id = 1)`, `ha_base_url TEXT`, `ha_access_token TEXT`, `ha_webhook_secret TEXT`, `ha_poll_interval INTEGER DEFAULT 30`, `configured_by TEXT`, `modified_datetime TEXT`
-    - Use `CREATE TABLE IF NOT EXISTS` for idempotency, then `INSERT OR IGNORE INTO ha_config (id) VALUES (1)` to seed the single row
-    - _Requirements: 12.1, 12.2, 12.3_
+- [ ] 1. CWOC Backend Foundation
+  - [ ] 1.1 Create database migration for ha_config table
+    - Add `migrate_create_ha_config()` to `src/backend/migrations.py`
+    - CREATE TABLE IF NOT EXISTS ha_config with columns: id (INTEGER PRIMARY KEY CHECK id=1), ha_base_url (TEXT), ha_access_token (TEXT), ha_webhook_secret (TEXT), ha_poll_interval (INTEGER DEFAULT 30), configured_by (TEXT), modified_datetime (TEXT)
+    - INSERT OR IGNORE a single row with id=1 and auto-generated UUID for ha_webhook_secret
+    - Follow existing migration pattern: sqlite3 connect, try/except, finally close
+    - _Requirements: 13.1, 13.2, 13.3_
 
-  - [ ] 1.2 Register the migration in `src/backend/main.py`
-    - Import `migrate_create_ha_config` from migrations and call it in the startup migration sequence (after `migrate_add_email_accounts`)
-    - _Requirements: 12.2_
+  - [ ] 1.2 Add Pydantic models for HA integration
+    - Add `HAConfigUpdate` model to `src/backend/models.py`: ha_base_url (Optional[str]), ha_access_token (Optional[str]), ha_poll_interval (Optional[int] = 30)
+    - Add `HAWebhookPayload` model to `src/backend/models.py`: action (str), user_id (Optional[str]), chit_id (Optional[str]), chit_title (Optional[str]), title (Optional[str]), note (Optional[str]), tags (Optional[List[str]]), status (Optional[str]), priority (Optional[str]), due_datetime (Optional[str]), checklist (Optional[List[Dict[str, Any]]]), item_text (Optional[str]), fields (Optional[Dict[str, Any]]), payload (Optional[Dict[str, Any]])
+    - _Requirements: 11.1, 12.1, 12.2_
 
-  - [ ] 1.3 Add `HAConfigUpdate` and `HAWebhookPayload` Pydantic models to `src/backend/models.py`
-    - `HAConfigUpdate`: `ha_base_url`, `ha_access_token`, `ha_poll_interval` (all Optional)
-    - `HAWebhookPayload`: `action`, `user_id`, `chit_id`, `chit_title`, `title`, `note`, `tags`, `status`, `priority`, `due_datetime`, `checklist`, `item_text`, `fields`, `payload` (per design)
-    - _Requirements: 1.2, 4.4, 4.5, 4.6, 4.7_
+  - [ ] 1.3 Create HA Bridge module (ha_bridge.py)
+    - Create `src/backend/ha_bridge.py` with all HA communication logic using stdlib `urllib.request`
+    - Implement `get_ha_config()` — read ha_config row, decrypt token using existing `_decrypt_password` from routes/email.py
+    - Implement `is_ha_configured()` — quick check for URL + token presence
+    - Implement `call_ha_service(domain, service, entity_id, service_data, timeout=10)` — POST to `{ha_base_url}/api/services/{domain}/{service}` with Bearer token auth
+    - Implement `fire_ha_event(event_type, event_data, timeout=10)` — POST to `{ha_base_url}/api/events/{event_type}`
+    - Implement `get_ha_entity_state(entity_id)` — GET `/api/states/{entity_id}`
+    - Implement `get_ha_entities()` — GET `/api/states`, return simplified list
+    - Implement `get_ha_services()` — GET `/api/services`
+    - Implement `test_ha_connection(base_url, token)` — GET `/api/` to validate
+    - Implement `substitute_template_placeholders(data, context)` — replace `{chit_title}`, `{chit_status}`, `{rule_name}`, `{entity_id}` in string values
+    - Implement polling scheduler: `start_ha_polling_scheduler()`, `_ha_polling_loop()`, `update_monitored_entities()`
+    - In-memory `_monitored_entities` and `_last_known_states` dicts
+    - All HTTP errors return `{success: False, message: "..."}` without raising exceptions
+    - _Requirements: 7.1, 7.5, 7.6, 7.7, 7.8, 9.1, 9.2, 9.4, 9.5, 9.7, 10.1, 10.2, 10.3, 10.5, 10.6, 10.7, 14.1, 14.2, 14.5, 14.6, 15.1, 15.2_
 
-- [ ] 2. HA Bridge module (`src/backend/ha_bridge.py`)
-  - [ ] 2.1 Create `src/backend/ha_bridge.py` with config helpers
-    - `get_ha_config()`: read `ha_config` row, decrypt token using `_decrypt_password` from `routes/email.py`, return dict or None
-    - `is_ha_configured()`: quick check returning bool
-    - `test_ha_connection(base_url, token)`: GET `{base_url}/api/` with Bearer token, return `{success, message, ha_version}`
-    - Use `urllib.request` (stdlib) for HTTP calls, matching the existing weather scheduler pattern
-    - _Requirements: 1.2, 1.3, 1.5, 1.6_
+  - [ ] 1.4 Create Stats API endpoint
+    - Add `GET /api/ha/stats` to `src/backend/routes/ha.py`
+    - Query non-deleted chits for the authenticated user
+    - Return JSON: total_chits, todo_count, in_progress_count, blocked_count, complete_count, overdue_count, inbox_count, tag_counts (user-defined tags only, excluding CWOC_System/ prefixed tags)
+    - Require authentication via session cookie or Bearer token
+    - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6_
 
-  - [ ] 2.2 Add HA service call and entity/service fetch functions
-    - `call_ha_service(domain, service, entity_id, service_data, timeout=10)`: POST to `{ha_base_url}/api/services/{domain}/{service}`, return `{success, message, status_code}`
-    - `get_ha_entity_state(entity_id)`: GET single entity state
-    - `get_ha_entities()`: GET `/api/states`, return simplified list `[{entity_id, state, friendly_name}]`
-    - `get_ha_services()`: GET `/api/services`, return list of `{domain, services}`
-    - Handle connection errors, timeouts, non-2xx responses per design error table
-    - _Requirements: 2.1, 2.2, 2.3, 2.7, 8.1, 8.2_
+  - [ ] 1.5 Create HA routes module (routes/ha.py)
+    - Create `src/backend/routes/ha.py` with an APIRouter
+    - `POST /api/ha/config` — admin-only, save HA config (encrypt token before storage)
+    - `GET /api/ha/config` — admin-only, return config with masked token
+    - `POST /api/ha/config/test` — admin-only, test connection via `ha_bridge.test_ha_connection()`
+    - `POST /api/ha/config/regenerate-webhook` — admin-only, regenerate webhook secret UUID
+    - `GET /api/ha/entities` — authenticated, proxy to HA `/api/states` with 60s cache, return simplified entity list
+    - `GET /api/ha/services` — authenticated, proxy to HA `/api/services` with 60s cache
+    - `POST /api/ha/webhook` — token-authenticated (query param or Authorization header), process webhook actions: create_chit, add_checklist_item, update_chit, trigger_rule
+    - Webhook validates token against ha_config.ha_webhook_secret, resolves user_id (default to configured_by admin), returns appropriate HTTP errors (401, 400, 404, 500)
+    - _Requirements: 11.1, 11.2, 11.3, 11.4, 11.5, 11.6, 11.7, 11.8, 11.9, 12.1, 12.2, 12.3, 12.4, 12.5, 12.6, 12.7, 15.1, 15.2, 15.3, 15.4_
 
-  - [ ] 2.2a Add `fire_ha_event()` function to `src/backend/ha_bridge.py`
-    - `fire_ha_event(event_type, event_data, timeout=10)`: POST to `{ha_base_url}/api/events/{event_type}` with event_data as JSON body, Bearer token auth
-    - Return `{success, message, status_code}` matching the same pattern as `call_ha_service`
-    - Handle: HA not configured (skip with warning), non-2xx response, timeout (10s), connection refused, missing event_type
-    - _Requirements: 14.1, 14.2, 14.6, 14.7, 14.8_
+  - [ ] 1.6 Extend rules engine with HA actions and triggers
+    - Add `call_ha_service` action type to `execute_action()` in `src/backend/rules_engine.py` — delegate to `ha_bridge.call_ha_service()` with template substitution on service_data
+    - Add `fire_ha_event` action type to `execute_action()` — delegate to `ha_bridge.fire_ha_event()` with template substitution on event_data
+    - Add `ha_state_change` and `ha_webhook` to recognized trigger types in `dispatch_trigger()`
+    - Add `_build_action_description()` entries: `call_ha_service` → "Call HA service {domain}.{service} on {entity_id}", `fire_ha_event` → "Fire Home Assistant event '{event_type}' with {N} data fields"
+    - _Requirements: 7.1, 7.2, 7.5, 7.9, 9.1, 9.2, 9.5, 9.6, 10.1, 10.4, 18.1, 18.2, 18.3_
 
-  - [ ] 2.3 Add template placeholder substitution
-    - `substitute_template_placeholders(service_data, context)`: replace `{chit_title}`, `{chit_status}`, `{rule_name}`, `{entity_id}` in string values within the dict
-    - _Requirements: 2.5_
+  - [ ] 1.7 Register HA routes and polling scheduler in main.py
+    - Import `migrate_create_ha_config` in `src/backend/main.py` and call it in the migration sequence
+    - Import and include the HA router (`ha_router`)
+    - Import `start_ha_polling_scheduler` from `ha_bridge` and call it in `on_startup()`
+    - _Requirements: 14.1, 14.2_
 
-  - [ ] 2.4 Add HA polling scheduler
-    - In-memory `_monitored_entities` (dict of owner_id → set of entity_ids) and `_last_known_states` (dict of entity_id → state dict)
-    - `start_ha_polling_scheduler()`: async function called from `main.py` on_startup, loads monitored entities from DB, starts polling loop
-    - `_ha_polling_loop()`: background loop polling at configured interval, fires `ha_state_change` trigger via `dispatch_trigger` when state differs
-    - `update_monitored_entities()`: reload monitored entity set from DB (called when rules change)
-    - _Requirements: 3.1, 3.2, 3.3, 3.6, 3.7, 3.8, 9.1, 9.2, 9.3, 9.4, 9.5, 9.6_
-
-- [ ] 3. Checkpoint — Ensure all tests pass
+- [ ] 2. Checkpoint — Backend foundation complete
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 4. HA routes (`src/backend/routes/ha.py`)
-  - [ ] 4.1 Create `src/backend/routes/ha.py` with admin-only config endpoints
-    - `POST /api/ha/config`: save HA config (URL, token encrypted via `_encrypt_password`, poll interval, configured_by, webhook secret auto-generated if missing)
-    - `GET /api/ha/config`: return config with token masked (show only last 4 chars)
-    - `POST /api/ha/config/test`: test connection with provided or saved credentials
-    - `POST /api/ha/config/regenerate-token`: regenerate webhook secret UUID
-    - Admin-only access check (same pattern as user management routes)
-    - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.6, 5.1, 5.3_
+- [ ] 3. HA Custom Integration
+  - [ ] 3.1 Create integration scaffolding files
+    - Create `ha_integration/custom_components/cwoc/manifest.json` with domain "cwoc", config_flow true, version, documentation_url, no requirements (uses built-in aiohttp)
+    - Create `ha_integration/custom_components/cwoc/const.py` with DOMAIN, DEFAULT_SCAN_INTERVAL (30), service name constants
+    - Create `ha_integration/custom_components/cwoc/strings.json` with config flow step titles, field labels, error messages
+    - Create `ha_integration/custom_components/cwoc/translations/en.json` matching strings.json
+    - Create `ha_integration/custom_components/cwoc/icons.json` mapping services to MDI icons
+    - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5, 8.6_
 
-  - [ ] 4.2 Add proxy endpoints for entities and services
-    - `GET /api/ha/entities`: proxy to HA `/api/states`, return simplified entity list, 60s in-memory cache
-    - `GET /api/ha/services`: proxy to HA `/api/services`, return service list, 60s in-memory cache
-    - Return HTTP 400 if HA not configured, HTTP 502 if HA unreachable
-    - Any authenticated user can access (not admin-only)
-    - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5_
+  - [ ] 3.2 Implement config flow (config_flow.py)
+    - Create `ha_integration/custom_components/cwoc/config_flow.py`
+    - Implement `CwocConfigFlow` extending `ConfigFlow` with DOMAIN
+    - `async_step_user()` — present form with cwoc_url, username, password fields
+    - On submit: POST to `{cwoc_url}/api/auth/login` to validate credentials, store session token
+    - On success: create config entry with cwoc_url, username, password, session_token
+    - On failure: show "cannot_connect" or "invalid_auth" error, allow retry
+    - Implement options flow for reconfiguration (update URL/credentials)
+    - _Requirements: 2.1, 2.2, 2.3, 2.4, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7_
 
-  - [ ] 4.3 Add webhook endpoint
-    - `POST /api/ha/webhook`: validate token from query param or Authorization header against stored `ha_webhook_secret`
-    - Resolve user_id (from payload or default to `configured_by` admin)
-    - Dispatch by action: `create_chit`, `add_checklist_item`, `update_chit`, `trigger_rule`
-    - `create_chit`: insert new chit with provided fields, compute system tags
-    - `add_checklist_item`: find chit by `chit_id` or `chit_title`, append item
-    - `update_chit`: update specified fields on target chit
-    - `trigger_rule`: fire `ha_webhook` trigger via `dispatch_trigger` with full payload as entity dict
-    - Return appropriate HTTP status codes per design error table (401, 400, 404, 500)
-    - No session/auth middleware required — token-authenticated
-    - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 4.8, 4.9_
+  - [ ] 3.3 Implement DataUpdateCoordinator (coordinator.py)
+    - Create `ha_integration/custom_components/cwoc/coordinator.py`
+    - Implement `CwocDataUpdateCoordinator` extending `DataUpdateCoordinator`
+    - `_async_update_data()` — GET `{cwoc_url}/api/ha/stats` with session auth
+    - Handle connection errors (log warning, retry next interval)
+    - Handle 401 errors (raise `ConfigEntryAuthFailed`)
+    - Default update interval: 30 seconds (configurable)
+    - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5_
 
-  - [ ] 4.4 Register HA routes in `src/backend/main.py`
-    - Import `ha_router` from `routes/ha.py` and `app.include_router(ha_router)`
-    - Import and call `start_ha_polling_scheduler()` in `on_startup`
-    - _Requirements: 4.1, 9.2_
+  - [ ] 3.4 Implement sensor platform (sensor.py)
+    - Create `ha_integration/custom_components/cwoc/sensor.py`
+    - Implement `async_setup_entry()` to register sensor entities
+    - Create fixed sensors: cwoc_total_chits, cwoc_todo_count, cwoc_in_progress_count, cwoc_overdue_count, cwoc_inbox_count
+    - Create dynamic tag sensors: cwoc_tag_{name}_count for each tracked tag
+    - Each sensor reads `native_value` from coordinator data
+    - Set appropriate device_class, state_class, icon (mdi:note-multiple, mdi:checkbox-blank-outline, etc.)
+    - Tag sensors report 0 when count is zero (not unavailable)
+    - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5_
 
-- [ ] 5. Rules engine extensions
-  - [ ] 5.1 Add `call_ha_service` action to `execute_action()` in `src/backend/rules_engine.py`
-    - New `elif action_type == "call_ha_service"` branch
-    - Import and call `ha_bridge.call_ha_service()` with template substitution on service_data
-    - Build context dict from entity (chit_title, chit_status) and rule_name
-    - Return success/failure result for execution log
-    - _Requirements: 2.1, 2.2, 2.4, 2.5_
+  - [ ] 3.5 Implement service actions (services.py + services.yaml)
+    - Create `ha_integration/custom_components/cwoc/services.yaml` with full field descriptions for: cwoc.create_chit, cwoc.add_checklist_item, cwoc.update_chit, cwoc.set_chit_status, cwoc.add_tag, cwoc.remove_tag
+    - Create `ha_integration/custom_components/cwoc/services.py` with handler functions
+    - Each service makes REST API call to CWOC backend using stored credentials
+    - Raise `HomeAssistantError` on CWOC errors
+    - `create_chit` returns created chit ID in response data
+    - `set_chit_status`, `add_tag`, `remove_tag` support lookup by chit_id or chit_title
+    - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 6.6_
 
-  - [ ] 5.1a Add `fire_ha_event` action to `execute_action()` in `src/backend/rules_engine.py`
-    - New `elif action_type == "fire_ha_event"` branch
-    - Import and call `ha_bridge.fire_ha_event()` with template substitution on event_data (reuse `substitute_template_placeholders`)
-    - Build context dict from entity (chit_title, chit_status) and rule_name
-    - Return success/failure result for execution log
-    - _Requirements: 14.1, 14.2, 14.5, 14.6_
+  - [ ] 3.6 Implement integration setup (__init__.py)
+    - Create `ha_integration/custom_components/cwoc/__init__.py`
+    - Implement `async_setup_entry()` — create coordinator, forward to sensor platform, register services
+    - Implement `async_unload_entry()` — unload platforms
+    - Register all service handlers from services.py
+    - _Requirements: 3.4, 4.1, 6.1, 8.6_
 
-  - [ ] 5.2 Add `call_ha_service` description to `_build_action_description()` in `src/backend/rules_engine.py`
-    - Format: `"Call Home Assistant service {domain}.{service} on {entity_id}"`
-    - _Requirements: 2.6, 11.1_
-
-  - [ ] 5.2a Add `fire_ha_event` description to `_build_action_description()` in `src/backend/rules_engine.py`
-    - Format: `"Fire Home Assistant event '{event_type}' with {N} data fields"`
-    - _Requirements: 14.9_
-
-  - [ ] 5.3 Add `ha_state_change` and `ha_webhook` trigger type support
-    - These trigger types work with the existing `dispatch_trigger` function — no code changes needed in the dispatcher itself since it already loads rules by `trigger_type` dynamically
-    - Verify that condition tree evaluation works with HA entity dict fields (`ha_entity_id`, `old_state`, `new_state`, `attributes`)
-    - _Requirements: 3.1, 3.5, 10.1, 10.2, 10.3_
-
-  - [ ] 5.4 Call `update_monitored_entities()` when rules are created/updated/deleted
-    - In `src/backend/routes/rules.py`, after rule create/update/delete operations, call `ha_bridge.update_monitored_entities()` if the rule's trigger_type is `ha_state_change`
-    - _Requirements: 9.3, 9.4_
-
-- [ ] 6. Checkpoint — Ensure all tests pass
+- [ ] 4. Checkpoint — HA custom integration complete
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 7. Frontend — Settings page HA section
-  - [ ] 7.1 Add HA configuration section to `src/frontend/html/settings.html`
-    - New "Home Assistant" section (admin-only, hidden for non-admins)
-    - Fields: HA base URL input, access token input (masked by default with toggle), poll interval input
-    - Test Connection button with status display
-    - Webhook URL display (read-only) with copy button
-    - Regenerate Token button with warning text
-    - Mobile-friendly layout, 1940s parchment aesthetic matching existing sections
-    - _Requirements: 1.1, 1.3, 1.4, 4.10, 5.1, 5.2, 5.3, 5.5_
+- [ ] 5. CWOC Frontend — HA UI
+  - [ ] 5.1 Settings page HA section
+    - Add "Home Assistant" section to `src/frontend/html/settings.html` (admin-only visibility)
+    - Fields: HA base URL input, Long-Lived Access Token input (masked with reveal toggle), Poll Interval input
+    - Test Connection button with status indicator
+    - Webhook URL display with copy button (read-only)
+    - Regenerate Webhook Secret button with confirmation warning
+    - Add corresponding JS in `src/frontend/js/pages/settings.js`: load/save HA config, test connection handler, copy webhook URL, regenerate secret
+    - Add CSS for HA section in `src/frontend/css/shared/shared-page.css` (reuse existing settings patterns)
+    - Mobile-friendly layout from the start
+    - _Requirements: 12.1, 12.2, 12.3, 12.4, 12.5, 12.6, 12.7_
 
-  - [ ] 7.2 Add HA settings logic to `src/frontend/js/pages/settings.js`
-    - Load HA config on page init (admin only), populate fields
-    - Save HA config on save (include in existing save flow or separate save button)
-    - Test Connection button handler: POST to `/api/ha/config/test`, show result
-    - Copy webhook URL button handler
-    - Regenerate Token button handler with confirmation dialog
-    - Token mask/reveal toggle
-    - _Requirements: 1.1, 1.2, 1.3, 1.4, 5.1, 5.2, 5.3, 5.5_
+  - [ ] 5.2 Rules editor HA action UI (call_ha_service + fire_ha_event)
+    - In `src/frontend/js/pages/rule-editor.js`, add `call_ha_service` action type rendering
+    - Fields: domain input, service input, entity_id input, key-value editor for service_data
+    - Add "Fetch Entities" and "Fetch Services" buttons → query `/api/ha/entities` and `/api/ha/services`, populate searchable dropdowns
+    - Add `fire_ha_event` action type rendering: event_type input with autocomplete suggestions (cwoc_chit_created, cwoc_chit_updated, cwoc_email_received, cwoc_status_changed, cwoc_tag_added), key-value editor for event_data
+    - JSON preview panel below inputs for both action types
+    - Show "HA not configured" message when ha_config is empty, disable fetch buttons
+    - Mobile-friendly layout
+    - _Requirements: 16.1, 16.2, 16.3, 16.4, 16.5_
 
-- [ ] 8. Frontend — Rules editor HA action and trigger UI
-  - [ ] 8.1 Add HA action fields to the rules editor
-    - When `call_ha_service` is selected as action type, show: domain input, service input, entity_id input, service_data key-value editor
-    - "Fetch Entities" button → GET `/api/ha/entities` → populate searchable dropdown for entity_id
-    - "Fetch Services" button → GET `/api/ha/services` → populate searchable dropdown for domain.service
-    - JSON preview of the service call payload below the fields
-    - If HA not configured, show message directing user to admin settings, disable fetch buttons
-    - Add `call_ha_service` to the action type dropdown in the rules editor
-    - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5_
+  - [ ] 5.3 Rules editor HA trigger UI (ha_state_change + ha_webhook)
+    - In `src/frontend/js/pages/rule-editor.js`, add `ha_state_change` trigger type rendering
+    - Entity_id input with "Fetch Entities" autocomplete button
+    - Store entity_id in schedule_config.ha_entity_id
+    - Display hint about polling interval
+    - Add condition tree fields: ha_entity_id, old_state, new_state, attributes
+    - Add `ha_webhook` trigger type rendering: hint text explaining webhook-driven rules
+    - _Requirements: 17.1, 17.2, 17.3, 17.4, 17.5_
 
-  - [ ] 8.1a Add HA event firing fields to the rules editor
-    - When `fire_ha_event` is selected as action type, show: event_type input with autocomplete/dropdown suggesting common types (`cwoc_chit_created`, `cwoc_chit_updated`, `cwoc_email_received`, `cwoc_status_changed`, `cwoc_tag_added`), and a key-value editor for event_data
-    - JSON preview of the event payload (event_type + event_data) below the fields
-    - If HA not configured, show message directing user to admin settings
-    - Add `fire_ha_event` to the action type dropdown in the rules editor
-    - _Requirements: 15.1, 15.2, 15.3, 15.4_
-
-  - [ ] 8.2 Add HA trigger fields to the rules editor
-    - Add `ha_state_change` and `ha_webhook` to the trigger type dropdown
-    - When `ha_state_change` selected: show entity_id input with "Fetch Entities" autocomplete, store in `schedule_config.ha_entity_id`
-    - When `ha_state_change` selected: show hint text about polling interval
-    - When `ha_webhook` selected: show hint text about webhook `trigger_rule` action
-    - Add `ha_entity_id`, `old_state`, `new_state`, `attributes` to condition field dropdown when trigger is `ha_state_change`
-    - _Requirements: 7.1, 7.2, 7.3, 7.4, 10.4_
-
-  - [ ] 8.3 Add HA trigger badge styles to `src/frontend/css/shared/shared-rules.css`
-    - Add `.trigger-badge.ha_state_change` and `.trigger-badge.ha_webhook` color styles matching the existing badge pattern
-    - _Requirements: 7.1, 10.1_
-
-- [ ] 9. Checkpoint — Ensure all tests pass
+- [ ] 6. Checkpoint — Frontend complete
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 10. Property-based tests (`src/backend/test_ha_integration.py`)
-  - [ ] 10.1 Create test file with inlined production logic and generators
-    - Inline minimal HA bridge logic (config round-trip, template substitution, state change detection, entity simplification, action description, webhook validation/resolution/required fields, monitored entity computation, migration idempotency, payload passthrough, event fire request construction, event fire graceful skip, event fire action description, event fire template substitution)
-    - Inline `_encrypt_password` / `_decrypt_password` logic for config round-trip test
-    - Random generators for: URLs, tokens, domain/service strings, entity_ids, service_data dicts, webhook payloads, state dicts, event_type strings, event_data dicts
-    - Set `_ITERATIONS = 120`
-    - Follow existing pattern from `test_rules_engine.py` (unittest + random, no external deps)
-    - _Requirements: All_
+- [ ] 7. Testing & Documentation
+  - [ ] 7.1 Create property-based test file for HA integration
+    - Create `src/backend/test_ha_integration.py` using Python stdlib `unittest` + `random` (120 iterations per property)
+    - Follow existing pattern from `test_rules_engine.py`: inline minimal production logic, no imports of main.py/db.py
+    - Each test method tagged with comment: `# Feature: home-assistant-integration, Property N: {title}`
+    - _Requirements: 1.1, 7.1, 9.2, 10.3, 11.2, 13.1_
 
-  - [ ]* 10.2 Property 1: HA Config Save/Read Round-Trip
-    - **Property 1: HA Config Save/Read Round-Trip**
-    - For any valid HA base URL and access token, saving and reading back SHALL return the same URL and a token that decrypts to the original plaintext
-    - **Validates: Requirements 1.2, 1.6**
+  - [ ]* 7.2 Property test: Stats Computation Correctness (Property 1)
+    - Generate random chit sets with varying statuses, tags, due_datetimes, deleted flags, email_read/email_status
+    - Verify total_chits = non-deleted count, todo_count = non-deleted with status "ToDo", overdue_count = non-deleted past-due non-complete, inbox_count = non-deleted email_read=False email_status="received", tag_counts excludes CWOC_System/ tags
+    - **Property 1: Stats Computation Correctness**
+    - **Validates: Requirements 1.1, 1.4, 1.5, 1.6**
 
-  - [ ]* 10.3 Property 2: Graceful Skip When Unconfigured
-    - **Property 2: Graceful Skip When Unconfigured**
-    - For any call_ha_service params, if HA not configured, SHALL return `{success: False}` with warning, no exception
-    - **Validates: Requirements 1.5, 2.4**
+  - [ ]* 7.3 Property test: HA Config Save/Read Round-Trip (Property 2)
+    - Generate random URL strings and token strings, simulate save (encrypt) then read (decrypt)
+    - Verify base_url and decrypted token match originals, poll_interval round-trips
+    - **Property 2: HA Config Save/Read Round-Trip**
+    - **Validates: Requirements 12.2, 12.5, 13.1**
 
-  - [ ]* 10.4 Property 3: HA Service Call Request Construction
-    - **Property 3: HA Service Call Request Construction**
-    - For any domain, service, entity_id, service_data, SHALL construct correct POST URL and JSON body with Bearer token
-    - **Validates: Requirements 2.1, 2.2**
+  - [ ]* 7.4 Property test: Graceful Skip When HA Unconfigured (Property 3)
+    - Generate random action params, call bridge functions with no config
+    - Verify returns {success: False} with descriptive message, no exception raised
+    - **Property 3: Graceful Skip When HA Unconfigured**
+    - **Validates: Requirements 7.6, 9.4**
 
-  - [ ]* 10.5 Property 4: Template Placeholder Substitution
-    - **Property 4: Template Placeholder Substitution**
-    - For any service_data with placeholders and context dict, SHALL replace all placeholders leaving non-placeholder text unchanged
-    - **Validates: Requirements 2.5**
+  - [ ]* 7.5 Property test: HA Bridge Request URL Construction (Property 4)
+    - Generate random domain/service/event_type strings
+    - Verify call_ha_service constructs POST to `{base}/api/services/{domain}/{service}`
+    - Verify fire_ha_event constructs POST to `{base}/api/events/{event_type}`
+    - Verify Authorization header contains Bearer token
+    - **Property 4: HA Bridge Request URL Construction**
+    - **Validates: Requirements 7.1, 9.2**
 
-  - [ ]* 10.6 Property 5: HA Action Description Format
-    - **Property 5: HA Action Description Format**
-    - For any domain, service, entity_id, the action description SHALL contain all three values in the specified format
-    - **Validates: Requirements 2.6, 11.1**
+  - [ ]* 7.6 Property test: Template Placeholder Substitution (Property 5)
+    - Generate random dicts with placeholder strings and context values
+    - Verify all placeholders replaced, non-placeholder text unchanged, non-string values unchanged
+    - **Property 5: Template Placeholder Substitution**
+    - **Validates: Requirements 7.5, 9.5**
 
-  - [ ]* 10.7 Property 6: State Change Detection
-    - **Property 6: State Change Detection**
-    - For any entity_id and two state strings, if different SHALL produce entity dict with required fields; if same SHALL not fire trigger
-    - **Validates: Requirements 3.3**
+  - [ ]* 7.7 Property test: call_ha_service Description Format (Property 6)
+    - Generate random domain, service, entity_id strings
+    - Verify description contains all three values in human-readable format
+    - **Property 6: call_ha_service Confirmation Description Format**
+    - **Validates: Requirements 9.6**
 
-  - [ ]* 10.8 Property 7: Webhook Token Validation
-    - **Property 7: Webhook Token Validation**
-    - For any request, if token doesn't match stored secret SHALL reject; if matches SHALL proceed
-    - **Validates: Requirements 4.2, 4.8, 5.4**
+  - [ ]* 7.8 Property test: fire_ha_event Description Format (Property 7)
+    - Generate random event_type and event_data dict with N keys
+    - Verify description format: "Fire Home Assistant event '{event_type}' with {N} data fields"
+    - **Property 7: fire_ha_event Confirmation Description Format**
+    - **Validates: Requirements 7.9**
 
-  - [ ]* 10.9 Property 8: Webhook User Resolution
-    - **Property 8: Webhook User Resolution**
-    - For any payload, if user_id present use it; if absent/empty use configured_by admin
-    - **Validates: Requirements 4.3**
+  - [ ]* 7.9 Property test: State Change Detection (Property 8)
+    - Generate random entity_id, old_state, new_state pairs
+    - If old != new: verify entity dict contains ha_entity_id, old_state, new_state, attributes, last_changed
+    - If old == new: verify no trigger fires
+    - **Property 8: State Change Detection**
+    - **Validates: Requirements 10.3**
 
-  - [ ]* 10.10 Property 12: Webhook Required Field Validation
-    - **Property 12: Webhook Required Field Validation**
-    - For any payload missing required params for its action, SHALL return error with descriptive message
-    - **Validates: Requirements 4.9**
+  - [ ]* 7.10 Property test: Webhook Token Validation (Property 9)
+    - Generate random tokens and stored secrets
+    - If token != secret: verify rejection (401 equivalent)
+    - If token == secret: verify acceptance
+    - **Property 9: Webhook Token Validation**
+    - **Validates: Requirements 11.2, 11.8**
 
-  - [ ]* 10.11 Property 13: Entity List Simplification
-    - **Property 13: Entity List Simplification**
-    - For any HA states response, proxy SHALL return simplified objects with same count, each containing entity_id, state, friendly_name
-    - **Validates: Requirements 8.1**
+  - [ ]* 7.11 Property test: Webhook User Resolution (Property 10)
+    - Generate random payloads with/without user_id field
+    - If user_id present and non-empty: resolved user = user_id
+    - If user_id absent/empty: resolved user = configured_by admin
+    - **Property 10: Webhook User Resolution**
+    - **Validates: Requirements 11.3**
 
-  - [ ]* 10.12 Property 14: Monitored Entity Set Computation
-    - **Property 14: Monitored Entity Set Computation**
-    - For any set of rules, monitored set SHALL be union of ha_entity_id values from enabled ha_state_change rules
-    - **Validates: Requirements 9.3, 9.4**
+  - [ ]* 7.12 Property test: Webhook Trigger Rule Payload Passthrough (Property 14)
+    - Generate random webhook payloads with action "trigger_rule"
+    - Verify entity dict passed to trigger dispatcher contains all original payload fields
+    - **Property 14: Webhook Trigger Rule Payload Passthrough**
+    - **Validates: Requirements 11.7, 18.2**
 
-  - [ ]* 10.13 Property 15: Webhook Payload Passthrough
-    - **Property 15: Webhook Payload Passthrough**
-    - For any trigger_rule webhook payload, entity dict passed to dispatcher SHALL contain all original fields
-    - **Validates: Requirements 10.2**
+  - [ ]* 7.13 Property test: Webhook Required Field Validation (Property 15)
+    - Generate payloads missing required fields for each action type
+    - Verify HTTP 400 equivalent with descriptive error for: create_chit missing title, add_checklist_item missing chit_id/chit_title + item_text, update_chit missing chit_id
+    - **Property 15: Webhook Required Field Validation**
+    - **Validates: Requirements 11.9**
 
-  - [ ]* 10.14 Property 16: Migration Idempotency
-    - **Property 16: Migration Idempotency**
-    - For any number of consecutive migration calls, SHALL complete without error and table SHALL exist with correct schema
-    - **Validates: Requirements 12.2**
+  - [ ]* 7.14 Property test: Entity List Simplification (Property 16)
+    - Generate random HA states API responses (list of state objects)
+    - Verify simplified list has same count, each item has entity_id, state, friendly_name
+    - **Property 16: Entity List Simplification**
+    - **Validates: Requirements 15.1**
 
-  - [ ]* 10.15 Property 17: HA Event Fire Request Construction
-    - **Property 17: HA Event Fire Request Construction**
-    - For any valid event_type and optional event_data dict, SHALL construct correct POST URL `{ha_base_url}/api/events/{event_type}` and JSON body with Bearer token
-    - **Validates: Requirements 14.1, 14.2**
+  - [ ]* 7.15 Property test: Monitored Entity Set Computation (Property 17)
+    - Generate random rule sets with ha_state_change triggers, enabled/disabled states
+    - Verify monitored set = union of ha_entity_id from enabled ha_state_change rules
+    - Verify disabling removes entity only if no other enabled rule references it
+    - **Property 17: Monitored Entity Set Computation**
+    - **Validates: Requirements 10.5, 14.3, 14.4**
 
-  - [ ]* 10.16 Property 18: HA Event Fire Graceful Skip When Unconfigured
-    - **Property 18: HA Event Fire Graceful Skip When Unconfigured**
-    - For any fire_ha_event params, if HA not configured, SHALL return `{success: False}` with warning, no exception
-    - **Validates: Requirements 14.6**
+  - [ ]* 7.16 Property test: Migration Idempotency (Property 18)
+    - Call migrate_create_ha_config multiple times on same in-memory DB
+    - Verify no errors, table exists with correct schema, exactly one row after each call
+    - **Property 18: Migration Idempotency**
+    - **Validates: Requirements 13.1, 13.2, 13.3**
 
-  - [ ]* 10.17 Property 19: HA Event Fire Action Description Format
-    - **Property 19: HA Event Fire Action Description Format**
-    - For any event_type and event_data dict with N keys, the action description SHALL contain the event_type and count in the specified format
-    - **Validates: Requirements 14.9**
+  - [ ]* 7.17 Property test: Sensor Creation from Stats Data (Property 19)
+    - Generate random stats responses with varying tag_counts
+    - Verify sensor count = 5 + N (where N = number of tags), each native_value matches stats field
+    - **Property 19: Sensor Creation from Stats Data**
+    - **Validates: Requirements 5.1, 5.4, 5.5**
 
-  - [ ]* 10.18 Property 20: HA Event Fire Template Placeholder Substitution
-    - **Property 20: HA Event Fire Template Placeholder Substitution**
-    - For any event_data with placeholders and context dict, SHALL replace all placeholders leaving non-placeholder text unchanged (validates the fire_ha_event code path reuses substitution correctly)
-    - **Validates: Requirements 14.5**
+  - [ ]* 7.18 Property test: Chit Lookup by Title or ID (Property 20)
+    - Generate random chit sets with unique and duplicate titles
+    - Verify title lookup returns same chit as ID lookup for unique titles
+    - Verify title lookup returns most recently modified for duplicates
+    - **Property 20: Chit Lookup by Title or ID**
+    - **Validates: Requirements 6.6**
 
-- [ ] 11. Help page documentation
-  - [ ] 11.1 Add "Home Assistant Integration" section to `src/frontend/html/help.html`
-    - Setup instructions (admin configures URL and token in settings, webhook URL auto-generated)
-    - Common use cases: flash light on email receipt, create chit from HA automation, trigger scene on chit status change, fire HA event when chit created so HA automations can react
-    - Webhook payload format with field descriptions for each action (create_chit, add_checklist_item, update_chit, trigger_rule)
-    - How to pass `user_id` in webhook payloads to target specific users
-    - Event firing documentation: how to use `fire_ha_event` action in rules, common event types, how HA automations subscribe to CWOC events
-    - _Requirements: 13.1, 13.2, 13.3, 13.4, 14.3_
+  - [ ] 7.19 Add Help page documentation for HA integration
+    - Add "Home Assistant Integration" section to `src/frontend/html/help.html`
+    - Document full setup process: deploying HA custom integration, adding via HA Integrations panel, configuring CWOC connection in HA, configuring HA connection in CWOC settings
+    - Include common use case examples: chit counts on dashboards, creating chits from HA automations, triggering HA scenes from CWOC rules, firing HA events on CWOC state changes
+    - Document webhook payload format for each action (create_chit, add_checklist_item, update_chit, trigger_rule)
+    - Document fire_ha_event usage in CWOC rules and HA automation subscription
+    - _Requirements: 20.1, 20.2, 20.3, 20.4_
 
-- [ ] 12. Final wiring and cleanup
-  - [ ] 12.1 Update `src/INDEX.md` with all new files, functions, routes, and CSS sections
-    - Add `ha_bridge.py` module with all functions (including `fire_ha_event`)
-    - Add `routes/ha.py` with all endpoints
-    - Add rules engine extensions (new action types `call_ha_service` and `fire_ha_event`, new trigger types, new descriptions)
-    - Add new Pydantic models
-    - Add new migration function
-    - Add new CSS classes
-    - Add new frontend functions
-    - _Requirements: All_
+  - [ ] 7.20 Update configurator script with HA deployment option
+    - Add HA custom integration deployment option to `install/configurinator.sh`
+    - Prompt user for HA custom_components path
+    - Copy `ha_integration/custom_components/cwoc/` to specified path
+    - Offer update (overwrite) option for existing deployments
+    - Display reminder to restart Home Assistant after deployment
+    - _Requirements: 19.1, 19.2, 19.3, 19.4_
 
-  - [ ] 12.2 Update `src/VERSION` with current datetime
-    - Run `date "+%Y%m%d.%H%M"` and write the result to `src/VERSION`
-    - _Requirements: N/A (project convention)_
-
-  - [ ] 12.3 Create release notes file
-    - Create `documents/release_notes/cwoc_release_{version}.md` with brief summary of the Home Assistant integration feature
-    - _Requirements: N/A (project convention)_
-
-- [ ] 13. Final checkpoint — Ensure all tests pass
+- [ ] 8. Checkpoint — Testing and documentation complete
   - Ensure all tests pass, ask the user if questions arise.
+
+- [ ] 9. Final Wiring
+  - [ ] 9.1 Update INDEX.md, VERSION, and create release notes
+    - Update `src/INDEX.md` with all new files, functions, routes, and CSS sections added by this feature
+    - Run `date "+%Y%m%d.%H%M"` and update `src/VERSION` with the real datetime
+    - Create release notes file at `documents/release_notes/cwoc_release_{version}.md` with brief summary of the HA integration feature
+    - _Requirements: all_
 
 ## Notes
 
 - Tasks marked with `*` are optional and can be skipped for faster MVP
 - Each task references specific requirements for traceability
 - Checkpoints ensure incremental validation
-- Property tests validate universal correctness properties from the design document
-- NO software installation tasks — all code is built using existing dependencies
-- Property-based tests use Python stdlib `unittest` + `random` (120 iterations), matching the existing `test_rules_engine.py` pattern
-- Frontend is vanilla JS with no frameworks or build step
-- Database migration uses inline `CREATE TABLE IF NOT EXISTS` with existence checks
-- INDEX.md and VERSION are updated only once at the very end
+- Property tests validate universal correctness properties using Python stdlib unittest + random (120 iterations)
+- NO software installation required — all code is written directly, no pip/npm
+- HA custom integration is pure Python files copied to HA's custom_components directory
+- Frontend uses vanilla JS with the existing 1940s parchment aesthetic
+- All UI is mobile-friendly from the start

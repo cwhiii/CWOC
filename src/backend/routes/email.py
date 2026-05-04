@@ -10,6 +10,7 @@ import email.utils
 import email.policy
 import imaplib
 import logging
+import mimetypes
 import smtplib
 import os
 import re
@@ -354,6 +355,9 @@ def _parse_email_message(raw_bytes: bytes) -> dict:
     # Extract HTML body (for rich rendering)
     body_html = _extract_html_from_message(msg)
 
+    # Extract file attachments
+    extracted_attachments = _extract_attachments_from_message(msg)
+
     return {
         "email_from": from_addr,
         "email_to": email_to,
@@ -366,6 +370,7 @@ def _parse_email_message(raw_bytes: bytes) -> dict:
         "email_body_text": body_text,
         "email_body_html": body_html,
         "start_datetime": start_datetime,
+        "extracted_attachments": extracted_attachments,
     }
 
 
@@ -475,6 +480,116 @@ def _strip_html_tags(html: str) -> str:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Email attachment extraction
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+def _extract_attachments_from_message(msg) -> list:
+    """Walk MIME parts and extract file attachments.
+
+    Returns a list of dicts: ``[{filename, content_bytes, mime_type, size}]``.
+    Only extracts parts with ``Content-Disposition: attachment`` or inline
+    parts that are not text/html/plain (e.g. inline images).
+    """
+    attachments = []
+    if not msg.is_multipart():
+        return attachments
+
+    for part in msg.walk():
+        content_type = part.get_content_type()
+        disposition = str(part.get("Content-Disposition", ""))
+
+        # Skip multipart containers
+        if content_type.startswith("multipart/"):
+            continue
+
+        # Identify attachments: explicit attachment disposition, or non-text inline parts
+        is_attachment = "attachment" in disposition
+        is_inline_file = (
+            "inline" in disposition
+            and content_type not in ("text/plain", "text/html")
+        )
+
+        if not is_attachment and not is_inline_file:
+            continue
+
+        try:
+            payload = part.get_payload(decode=True)
+            if payload is None:
+                continue
+        except Exception:
+            continue
+
+        # Extract filename from Content-Disposition or Content-Type
+        filename = part.get_filename()
+        if filename:
+            filename = _decode_header_value(filename)
+        if not filename:
+            # Generate a name from the content type
+            ext = mimetypes.guess_extension(content_type) or ""
+            filename = f"attachment{ext}"
+
+        attachments.append({
+            "filename": filename,
+            "content_bytes": payload,
+            "mime_type": content_type,
+            "size": len(payload),
+        })
+
+    return attachments
+
+
+def _save_email_attachments(chit_id: str, extracted: list) -> list:
+    """Save extracted email attachment files to disk and return metadata list.
+
+    Uses the same storage layout as manual uploads:
+    ``/app/data/attachments/{chit_id}/{uuid}_{filename}``
+
+    Args:
+        chit_id: The chit ID to store attachments under.
+        extracted: List of dicts from ``_extract_attachments_from_message``.
+
+    Returns:
+        A list of attachment metadata dicts (same schema as manual uploads):
+        ``[{id, filename, size, mime_type, uploaded_at}]``
+    """
+    from src.backend.routes.attachments import _get_attachments_dir
+
+    if not extracted:
+        return []
+
+    attachments_dir = _get_attachments_dir()
+    chit_dir = os.path.join(attachments_dir, chit_id)
+    os.makedirs(chit_dir, exist_ok=True)
+
+    metadata = []
+    now = datetime.now(timezone.utc).isoformat()
+
+    for att in extracted:
+        attachment_id = str(uuid4())
+        safe_filename = os.path.basename(att["filename"] or "unnamed")
+        stored_name = f"{attachment_id}_{safe_filename}"
+        file_path = os.path.join(chit_dir, stored_name)
+
+        try:
+            with open(file_path, "wb") as f:
+                f.write(att["content_bytes"])
+        except Exception as e:
+            logger.warning("Failed to save email attachment %s: %s", safe_filename, e)
+            continue
+
+        metadata.append({
+            "id": attachment_id,
+            "filename": safe_filename,
+            "size": att["size"],
+            "mime_type": att["mime_type"],
+            "uploaded_at": now,
+        })
+
+    return metadata
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Chit creation from parsed email
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -540,6 +655,11 @@ def _create_email_chit(cursor, parsed: dict, owner_id: str, account_id: str = No
     email_to_json = serialize_json_field(parsed.get("email_to", []))
     email_cc_json = serialize_json_field(parsed.get("email_cc", []))
 
+    # Save email attachments to disk and get metadata
+    extracted_attachments = parsed.get("extracted_attachments", [])
+    attachment_metadata = _save_email_attachments(chit_id, extracted_attachments)
+    attachments_json = serialize_json_field(attachment_metadata) if attachment_metadata else None
+
     cursor.execute(
         """INSERT INTO chits (
             id, title, tags, start_datetime,
@@ -550,6 +670,7 @@ def _create_email_chit(cursor, parsed: dict, owner_id: str, account_id: str = No
             email_folder, email_status, email_read,
             email_in_reply_to, email_references,
             email_account_id,
+            attachments,
             deleted, archived, pinned
         ) VALUES (
             ?, ?, ?, ?,
@@ -559,6 +680,7 @@ def _create_email_chit(cursor, parsed: dict, owner_id: str, account_id: str = No
             ?, ?, ?, ?,
             ?, ?, ?,
             ?, ?,
+            ?,
             ?,
             ?, ?, ?
         )""",
@@ -584,6 +706,7 @@ def _create_email_chit(cursor, parsed: dict, owner_id: str, account_id: str = No
             parsed.get("email_in_reply_to", ""),
             parsed.get("email_references", ""),
             account_id,
+            attachments_json,
             False,
             False,
             False,
@@ -1348,6 +1471,66 @@ def email_sync(request: Request):
                         imap.logout()
                     except Exception:
                         pass
+
+        # Backfill: ensure all email chits for each account have the nickname tag
+        for account in accounts:
+            nickname = account.get("nickname")
+            acct_id = account.get("id")
+            if not nickname or not acct_id:
+                continue
+            target_tag = f"CWOC_System/Email/Account/{nickname}"
+            try:
+                cursor.execute(
+                    "SELECT id, tags FROM chits WHERE email_account_id = ? AND owner_id = ? AND (deleted = 0 OR deleted IS NULL)",
+                    (acct_id, user_id)
+                )
+                for row in cursor.fetchall():
+                    chit_id_row, tags_raw = row
+                    import json as _jb
+                    existing_tags = _jb.loads(tags_raw) if tags_raw else []
+                    if target_tag not in existing_tags:
+                        existing_tags.append(target_tag)
+                        cursor.execute(
+                            "UPDATE chits SET tags = ? WHERE id = ?",
+                            (_jb.dumps(existing_tags), chit_id_row)
+                        )
+            except Exception as e:
+                logger.warning(f"Backfill account tag failed for {nickname}: {e}")
+
+        # Backfill: assign orphan email chits (no email_account_id) to the first account
+        if len(accounts) > 0:
+            first_acct = accounts[0]
+            first_id = first_acct.get("id")
+            first_nickname = first_acct.get("nickname")
+            if first_id:
+                try:
+                    cursor.execute(
+                        "SELECT id, tags FROM chits WHERE (email_account_id IS NULL OR email_account_id = '') "
+                        "AND email_message_id IS NOT NULL AND owner_id = ? AND (deleted = 0 OR deleted IS NULL)",
+                        (user_id,)
+                    )
+                    orphan_rows = cursor.fetchall()
+                    for row in orphan_rows:
+                        chit_id_row, tags_raw = row
+                        import json as _jb2
+                        existing_tags = _jb2.loads(tags_raw) if tags_raw else []
+                        # Assign account ID
+                        update_sql = "UPDATE chits SET email_account_id = ?"
+                        params = [first_id]
+                        # Also add nickname tag if applicable
+                        if first_nickname:
+                            target_tag = f"CWOC_System/Email/Account/{first_nickname}"
+                            if target_tag not in existing_tags:
+                                existing_tags.append(target_tag)
+                                update_sql += ", tags = ?"
+                                params.append(_jb2.dumps(existing_tags))
+                        update_sql += " WHERE id = ?"
+                        params.append(chit_id_row)
+                        cursor.execute(update_sql, params)
+                    if orphan_rows:
+                        logger.info(f"Backfilled {len(orphan_rows)} orphan email chits to account {first_acct.get('email', '?')}")
+                except Exception as e:
+                    logger.warning(f"Backfill orphan emails failed: {e}")
 
         conn.commit()
 

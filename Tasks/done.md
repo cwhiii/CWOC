@@ -3,6 +3,9 @@
 is ther any way cto cache the locatons so they dont have to be fetched from scratch each time? Or to show the previoulsy-loaded values?
 
 
+- on map & waether pages:  Add 3 more time periods to the drop-down. The next hour, and today, and next X days which uses the X days setting form th esettings. 
+- on teh map page, cange teh date filter to just "Day" instead of "this day", etc, for all then values in that ONE dropdown.    
+
 
 
 Is there any way to cache/remember the locations on the map? It takes a very long time to load everything each time. I'd like to do like we do with the weather, and cache the info we need, and then, as soon as we start the page,, displaying the cached verison while we wait fo rhe currewnt stuff to get fetched? 

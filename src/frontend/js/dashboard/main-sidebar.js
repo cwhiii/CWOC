@@ -58,10 +58,10 @@ function _initDashboardSidebar() {
     onClockClick: function() { _openClockModal(); },
     onWeatherClick: function(e) {
       if (e && e.shiftKey) {
+        _openWeatherModal();
+      } else {
         storePreviousState();
         window.location.href = '/frontend/html/weather.html';
-      } else {
-        _openWeatherModal();
       }
     },
     onCalculatorClick: function() { cwocToggleCalculator(); },
@@ -70,8 +70,8 @@ function _initDashboardSidebar() {
     periodOptions: [
       { value: 'Itinerary', label: 'Itinerary' },
       { value: 'Day', label: 'Day' },
-      { value: 'Week', label: 'Week', selected: true },
       { value: 'Work', label: 'Work Hours' },
+      { value: 'Week', label: 'Week', selected: true },
       { value: 'SevenDay', label: 'X Days' },
       { value: 'Month', label: 'Month' },
       { value: 'Year', label: 'Year' }

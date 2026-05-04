@@ -45,8 +45,12 @@ function _updateEmailSidebarVisibility(tab) {
     if (tab === 'Email') {
         var radios = document.querySelectorAll('#email-folder-select input[name="emailFolder"]');
         radios.forEach(function(r) { r.checked = (r.value === _emailSubFilter); });
-        // Populate account filter buttons
-        _emailRenderAccountFilterButtons();
+        // Populate account filter buttons (ensure settings are loaded first)
+        if (window._cwocSettings) {
+            _emailRenderAccountFilterButtons();
+        } else if (typeof getCachedSettings === 'function') {
+            getCachedSettings().then(function() { _emailRenderAccountFilterButtons(); });
+        }
     }
 }
 
@@ -106,8 +110,8 @@ function _emailToggleAccountFilter(nickname) {
         _emailAccountFilter.splice(idx, 1);
     }
     _emailRenderAccountFilterButtons();
-    // Re-trigger the email view render
-    if (typeof filterChits === 'function') filterChits();
+    // Re-trigger the email view render with the current tab
+    if (typeof filterChits === 'function') filterChits('Email');
 }
 
 /**
@@ -274,7 +278,10 @@ function _buildEmailCard(chit, viSettings) {
     card.className = 'chit-card email-card' + (chit.email_read ? '' : ' email-unread');
     card.dataset.chitId = chit.id;
     if (typeof applyChitColors === 'function') {
-        applyChitColors(card, typeof chitColor === 'function' ? chitColor(chit) : '#fdf6e3');
+        var bg = typeof chitColor === 'function' ? chitColor(chit) : '#fdf6e3';
+        applyChitColors(card, bg);
+        // Store the computed text color for child elements that need contrast
+        card._contrastColor = typeof contrastColorForBg === 'function' ? contrastColorForBg(bg) : null;
     }
 
     // Checkbox for multi-select (supports shift+click range selection)
@@ -298,65 +305,71 @@ function _buildEmailCard(chit, viSettings) {
     cbWrap.appendChild(cb);
     card.appendChild(cbWrap);
 
-    // Content area
+    // Content area — single-row layout:
+    // [sender] [subject] [preview ............] [hover actions] [date]
     var content = document.createElement('div');
     content.className = 'email-card-content';
 
-    // Header row using _buildChitHeader (like search results)
+    // Parse sender
+    var senderRaw = chit.email_from || '';
+    var senderName = senderRaw;
+    var senderEmail = senderRaw;
+    var nameMatch = senderRaw.match(/^"?([^"<]+)"?\s*<([^>]+)>/);
+    if (nameMatch) {
+        senderName = nameMatch[1].trim();
+        senderEmail = nameMatch[2].trim();
+    } else if (senderRaw.indexOf('@') !== -1) {
+        senderName = senderRaw.split('@')[0];
+        senderEmail = senderRaw;
+    }
+
     var subject = chit.title || chit.email_subject || '(No Subject)';
     var cleanSubject = _emailStripMarkdown(subject);
-    if (typeof _buildChitHeader === 'function') {
-        content.appendChild(_buildChitHeader(chit, _escHtml(cleanSubject), viSettings));
-    } else {
-        var titleEl = document.createElement('div');
-        titleEl.innerHTML = '<strong>' + _escHtml(cleanSubject) + '</strong>';
-        content.appendChild(titleEl);
-    }
-
-    // Email meta row: sender, smart date, status badge, replied badge
-    var meta = document.createElement('div');
-    meta.className = 'email-card-meta';
-
-    var sender = chit.email_from || '';
     var dateStr = _emailFormatDateSmart(chit.email_date);
-    var statusBadge = '';
-    if (chit.email_status === 'draft') statusBadge = '<span class="email-draft-badge">Draft</span> ';
-    if (chit.email_status === 'sent') statusBadge = '<span class="email-sent-badge">Sent</span> ';
 
-    // Replied badge — check if any chit references this message as in_reply_to
-    var repliedBadge = '';
-    if (chit.email_message_id && _emailHasReply(chit.email_message_id)) {
-        repliedBadge = '<span class="email-replied-badge"><i class="fas fa-reply"></i> Replied</span> ';
+    // Status badges (inline, before sender) — draft/sent only
+    var badgesHtml = '';
+    if (chit.email_status === 'draft') badgesHtml += '<span class="email-draft-badge">Draft</span> ';
+    if (chit.email_status === 'sent') badgesHtml += '<span class="email-sent-badge">Sent</span> ';
+
+    // Reply indicator — fixed-width slot between sender and subject
+    var hasReply = chit.email_message_id && _emailHasReply(chit.email_message_id);
+    var replyEl = document.createElement('span');
+    replyEl.className = 'email-reply-slot';
+    if (hasReply) {
+        replyEl.innerHTML = '<i class="fas fa-reply"></i>';
+        replyEl.title = 'Replied';
     }
 
-    meta.innerHTML = statusBadge + repliedBadge +
-        '<span class="email-meta-sender">From: ' + _escHtml(sender) + '</span>' +
-        '<span class="email-meta-date">' + _escHtml(dateStr) + '</span>';
-    content.appendChild(meta);
+    // Sender name — prominent
+    var senderEl = document.createElement('span');
+    senderEl.className = 'email-card-sender';
+    senderEl.textContent = senderName;
+    senderEl.title = senderEmail;
 
-    // Tags are already rendered by _buildChitHeader — no duplicate tag row needed
+    // Subject — slightly smaller, truncated with tooltip
+    var subjectEl = document.createElement('span');
+    subjectEl.className = 'email-card-subject';
+    subjectEl.textContent = cleanSubject;
+    subjectEl.title = cleanSubject;
 
-    // Body preview (first 2 lines, plain text only — strip any residual HTML/markdown)
+    // Body preview — fills remaining space
     var bodyText = chit.email_body_text || '';
+    var previewEl = document.createElement('span');
+    previewEl.className = 'email-card-preview';
     if (bodyText) {
-        var preview = document.createElement('div');
-        preview.className = 'email-card-preview';
         var cleanText = _emailStripMarkdown(_emailStripHtml(bodyText));
         var lines = cleanText.split('\n').filter(function(l) { return l.trim(); });
-        preview.textContent = lines.slice(0, 2).join(' ').substring(0, 200);
-        content.appendChild(preview);
+        previewEl.textContent = lines.slice(0, 2).join(' ').substring(0, 250);
     }
 
-    card.appendChild(content);
-
-    // Hover action buttons (archive, delete, mark unread) — right side
+    // Hover action buttons — appear to the left of the date on hover
     var actions = document.createElement('div');
     actions.className = 'email-hover-actions';
     actions.innerHTML =
         '<button class="email-hover-btn" data-action="archive" title="Archive"><i class="fas fa-archive"></i></button>' +
         '<button class="email-hover-btn" data-action="delete" title="Delete"><i class="fas fa-trash"></i></button>' +
         '<button class="email-hover-btn" data-action="unread" title="Mark Unread"><i class="fas fa-envelope"></i></button>';
-    // Wire up action button clicks
     actions.addEventListener('click', function(e) {
         var btn = e.target.closest('.email-hover-btn');
         if (!btn) return;
@@ -366,7 +379,35 @@ function _buildEmailCard(chit, viSettings) {
         else if (action === 'delete') _emailQuickDelete(chit, card);
         else if (action === 'unread') _toggleEmailReadStatus(chit, card);
     });
-    card.appendChild(actions);
+
+    // Date — small, fixed right
+    var dateEl = document.createElement('span');
+    dateEl.className = 'email-meta-date';
+    dateEl.textContent = dateStr;
+
+    // Assemble: badges + sender + reply-slot + subject + preview + actions + date
+    if (badgesHtml) {
+        var badgeSpan = document.createElement('span');
+        badgeSpan.className = 'email-card-badges-inline';
+        badgeSpan.innerHTML = badgesHtml;
+        content.appendChild(badgeSpan);
+    }
+    content.appendChild(senderEl);
+    content.appendChild(replyEl);
+    content.appendChild(subjectEl);
+    content.appendChild(previewEl);
+    content.appendChild(actions);
+    content.appendChild(dateEl);
+
+    // Apply contrast-safe text colors when a custom chit color is set
+    if (card._contrastColor) {
+        senderEl.style.color = card._contrastColor;
+        subjectEl.style.color = card._contrastColor;
+        previewEl.style.color = card._contrastColor;
+        dateEl.style.color = card._contrastColor;
+    }
+
+    card.appendChild(content);
 
     // Double-click handler: navigate to editor (consistent with all other views)
     card.addEventListener('dblclick', function(e) {
@@ -736,8 +777,13 @@ function _checkMail() {
                 var parts = [];
                 if (result.data.new_count > 0) parts.push(result.data.new_count + ' new');
                 if (result.data.deleted_count > 0) parts.push(result.data.deleted_count + ' removed');
-                var msg = parts.length ? parts.join(', ') : 'No new emails';
-                _showToast(msg, 'success');
+                if (result.data.new_count > 0) {
+                    var noun = result.data.new_count === 1 ? 'email' : 'emails';
+                    cwocToast('📬 ' + result.data.new_count + ' new ' + noun, 'success', 5000);
+                } else {
+                    var msg = parts.length ? parts.join(', ') : 'No new emails';
+                    _showToast(msg, 'success');
+                }
                 if (typeof fetchChits === 'function') fetchChits();
             } else if (result.status === 400 && result.data.detail && result.data.detail.indexOf('No email account') !== -1) {
                 console.warn('[Email Check Mail] No email account configured.');
@@ -802,21 +848,37 @@ function _escHtml(str) {
  */
 function _emailStripHtml(str) {
     if (!str) return '';
-    // Remove style/script blocks
+    // Remove style/script blocks (including any that leaked into plain text)
     var text = str.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
     text = text.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
+    // Also strip CSS-like content that leaked into plain text (e.g. ".class { ... }")
+    text = text.replace(/\.[a-zA-Z_][\w-]*\s*\{[^}]*\}/g, '');
+    text = text.replace(/@media[^{]*\{[\s\S]*?\}\s*\}/g, '');
     // Replace <br> and </p> with newlines
     text = text.replace(/<br\s*\/?>/gi, '\n');
     text = text.replace(/<\/p>/gi, '\n');
     // Strip all remaining tags
     text = text.replace(/<[^>]+>/g, '');
-    // Decode common HTML entities
+    // Decode common named HTML entities
     text = text.replace(/&amp;/g, '&');
     text = text.replace(/&lt;/g, '<');
     text = text.replace(/&gt;/g, '>');
     text = text.replace(/&quot;/g, '"');
     text = text.replace(/&#39;/g, "'");
     text = text.replace(/&nbsp;/g, ' ');
+    // Decode ALL numeric HTML entities (&#NNN; and &#xHHH;)
+    text = text.replace(/&#x([0-9a-fA-F]+);/g, function(m, hex) {
+        var cp = parseInt(hex, 16);
+        // Replace zero-width and invisible characters with empty string
+        if (cp === 0x200C || cp === 0x200D || cp === 0x200B || cp === 0xFEFF || cp === 0x34F) return '';
+        return String.fromCodePoint(cp);
+    });
+    text = text.replace(/&#(\d+);/g, function(m, dec) {
+        var cp = parseInt(dec, 10);
+        // Replace zero-width and invisible characters with empty string
+        if (cp === 8204 || cp === 8205 || cp === 8203 || cp === 65279 || cp === 847) return '';
+        return String.fromCodePoint(cp);
+    });
     // Strip raw URLs (http/https links that clutter the preview)
     text = text.replace(/https?:\/\/[^\s)>\]]+/g, '');
     // Collapse excessive whitespace

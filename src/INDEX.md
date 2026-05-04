@@ -769,6 +769,8 @@ Provides IMAP sync, SMTP send, email parsing, password encryption, reply/forward
 | `_extract_text_from_message(msg)` | Walk MIME parts and extract the best plain-text body; prefers `text/plain`, falls back to stripping HTML tags from `text/html` |
 | `_extract_html_from_message(msg)` | Walk MIME parts and extract the HTML body if present; returns raw HTML string or empty string |
 | `_strip_html_tags(html)` | Remove HTML tags and decode common entities, returning plain text |
+| `_extract_attachments_from_message(msg)` | Walk MIME parts and extract file attachments; returns list of `{filename, content_bytes, mime_type, size}` dicts |
+| `_save_email_attachments(chit_id, extracted)` | Save extracted email attachment files to disk and return metadata list matching manual upload schema |
 | `_strip_email_prefixes(subject)` | Strip Re:/Fwd:/Fw: prefixes from a subject line for thread matching |
 
 **Chit creation from parsed email:**
@@ -1005,7 +1007,7 @@ Visual indicator helpers for chit cards and calendar events — alert type detec
 | `_ALERT_ICON_MAP` | Object mapping alert types to their emoji icons |
 | `_STATUS_ICONS` | Object mapping task status strings to Font Awesome HTML icon strings |
 | `_getAlertIndicators(chit, settings, context)` | Return alert indicator icon string based on visual_indicators settings and rendering context |
-| `_getAllIndicators(chit, settings, context)` | Return all visual indicator icons (alerts + people + health + recurrence) for a chit |
+| `_getAllIndicators(chit, settings, context)` | Return all visual indicator icons (alerts + people + health + recurrence + attachments) for a chit; attachment 📎 is last/lowest priority |
 | `_shouldShow(mode, context)` | Return true if a display mode ("always"/"never"/"space") permits showing in a given context |
 | `_chitAlertTypesPresent(chit)` | Return an object mapping each alert type to true/false for presence on a chit |
 
@@ -1119,6 +1121,18 @@ QR code display modal — single source of truth for all QR display across the a
 | Function | Description |
 |----------|-------------|
 | `showQRModal(opts)` | Show a QR code in a full-screen modal overlay; accepts title, data, ecl, info, onClose |
+
+#### shared-hotkeys.js
+
+Universal hotkey dispatch loaded by all pages. Contains the tab map and action key handlers. On the dashboard, tab keys call `filterChits()` directly; on secondary pages, they navigate to `/?tab=X` via `cwoc_jump_tab` localStorage. Change the key mappings here and they apply everywhere.
+
+| Function | Description |
+|----------|-------------|
+| `_cwocHotkeyTabMap` | Object mapping lowercase keys to tab names (c→Calendar, h→Checklists, etc.) |
+| `_cwocIsDashboard()` | Returns true if the current page is the main dashboard |
+| `_cwocSwitchTab(tabName)` | Switch to a tab — calls `filterChits()` on dashboard, navigates via `cwoc_jump_tab` on secondary pages |
+| `_cwocHandleActionHotkey(keyLower, e)` | Handle action keys (K, S, W, L, R); returns true if handled |
+| `_cwocDispatchHotkey(e)` | Main entry point — dispatches tab and action hotkeys; returns true if consumed |
 
 #### shared.js (coordinator)
 
@@ -1900,6 +1914,11 @@ Email zone: populate, collect, reply, forward, send. Handles the Email zone in t
 | `_openEmailExpandModal()` | Open fullscreen modal for email body with HTML/Text pill toggle, CC/BCC toggles, and action buttons |
 | `_switchExpandView(mode)` | Switch between HTML and Text views in the expand modal |
 | `_closeEmailExpandModal(save)` | Close the email expand modal; if save=true, sync fields back to the zone |
+| `_renderEmailAttachmentBar(chit)` | Render email attachment icon chips at the bottom-right of the email body field in the small zone |
+| `_renderExpandEmailAttachmentBar(chit)` | Render email attachment icon chips inside the expand modal body |
+| `_getEmailAttachmentList(chit)` | Parse the attachments list from a chit; returns array or null |
+| `_buildEmailAttachmentBar(attachments, chitId)` | Build the attachment bar DOM element with downloadable icon chips flowing right-to-left |
+| `_formatAttSize(bytes)` | Format a byte size into a human-readable string (B/KB/MB) |
 | `_toggleExpandCcBcc(field)` | Toggle Cc or Bcc field visibility in the expand modal |
 | `_escapeHtmlAttr(str)` | Escape text for safe insertion into HTML attributes |
 | `_emailLoadContacts()` | Fetch contacts for autocomplete (cached after first call) |
@@ -3225,6 +3244,7 @@ shared-auth.js            ← MUST load first (getCurrentUser, isAdmin, waitForA
         ├── shared-recurrence.js    (standalone — date math)
         ├── shared-geocoding.js     (uses fetch)
         └── shared-qr.js            (uses qrcode-generator CDN lib)
+        └── shared-hotkeys.js       (standalone — no dependencies)
               │
               └── shared.js          ← coordinator: depends on ALL above shared sub-scripts
                     │                   (uses shared-calendar, shared-tags, shared-recurrence,

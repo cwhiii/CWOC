@@ -1,0 +1,1 @@
+Added three new time period options (Next Hour, Today, Next X Days) to the map and weather page dropdowns. Renamed map page period labels from "This Week/Month/Quarter/Year" to shorter "Week/Month/Quarter/Year".

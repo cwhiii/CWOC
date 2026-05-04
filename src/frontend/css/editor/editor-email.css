@@ -735,3 +735,62 @@
     color: var(--parchment-light, #fff8e1);
     font-weight: 600;
 }
+
+/* ── Email Attachment Bar (bottom of email body) ───────────────────────── */
+.email-attachment-bar {
+    display: flex;
+    flex-wrap: wrap-reverse;
+    justify-content: flex-end;
+    align-items: flex-end;
+    gap: 6px;
+    margin-top: 8px;
+    padding: 6px 0 0;
+    border-top: 1px dashed rgba(139, 90, 43, 0.2);
+}
+
+.email-attachment-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    background: rgba(90, 60, 30, 0.15);
+    border: 1px solid rgba(139, 90, 43, 0.3);
+    border-radius: 14px;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.8em;
+    color: #3a2a1a;
+    text-decoration: none;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+    max-width: 180px;
+    overflow: hidden;
+}
+
+.email-attachment-chip:hover {
+    background: rgba(212, 175, 55, 0.18);
+    border-color: rgba(212, 175, 55, 0.5);
+    box-shadow: 0 0 4px rgba(212, 175, 55, 0.25);
+}
+
+.email-attachment-chip-icon {
+    flex-shrink: 0;
+    font-size: 1.1em;
+}
+
+.email-attachment-chip-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ── Responsive — mobile ───────────────────────────────────────────────── */
+@media (max-width: 480px) {
+    .email-attachment-bar {
+        gap: 4px;
+    }
+    .email-attachment-chip {
+        padding: 3px 8px;
+        font-size: 0.75em;
+        max-width: 140px;
+    }
+}

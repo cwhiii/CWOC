@@ -1,0 +1,1 @@
+Aligned weather page time period options to match the calendar/dashboard labels (Day, Work Hours, Week, X Days, Month, Year). Replaced "Itinerary" with "1 Hour" and kept "Forecast Max (16 day)" as the last option.

@@ -1430,30 +1430,9 @@ document.addEventListener("DOMContentLoaded", function () {
       return;
     }
 
-    // ── Top-level hotkeys ──
-    const tabMap = { c: 'Calendar', h: 'Checklists', a: 'Alarms', p: 'Projects', t: 'Tasks', n: 'Notes', e: 'Email', i: 'Indicators', g: 'Search' };
-    if (tabMap[keyLower]) {
-      e.preventDefault();
-      filterChits(tabMap[keyLower]);
-      return;
-    }
-
-    if (keyLower === 'k') {
-      e.preventDefault();
-      storePreviousState();
-      if (typeof currentTab !== 'undefined' && currentTab === 'Email') {
-        window.location.href = '/frontend/html/editor.html?new=email&expand=email';
-      } else {
-        window.location.href = '/frontend/html/editor.html';
-      }
-      return;
-    }
-
-    if (keyLower === 's' && !_hotkeyMode) {
-      e.preventDefault();
-      storePreviousState();
-      localStorage.setItem('cwoc_settings_return', '/');
-      window.location.href = '/frontend/html/settings.html';
+    // ── Top-level hotkeys (shared dispatch) ──
+    // Tab switching + action keys (K, S, W, L, R) are handled by shared-hotkeys.js
+    if (typeof _cwocDispatchHotkey === 'function' && _cwocDispatchHotkey(e)) {
       return;
     }
 
@@ -1490,27 +1469,10 @@ document.addEventListener("DOMContentLoaded", function () {
       return;
     }
 
-    if (keyLower === 'l' && !_hotkeyMode) {
-      e.preventDefault();
-      _openClockModal();
-      return;
-    }
-
     if (keyLower === 'v' && !_hotkeyMode) {
       e.preventDefault();
       _hotkeyMode = 'NAVIGATE';
       _showPanel('panel-navigate');
-      return;
-    }
-
-    if (keyLower === 'w' && !_hotkeyMode) {
-      e.preventDefault();
-      if (e.shiftKey) {
-        storePreviousState();
-        window.location.href = '/frontend/html/weather.html';
-      } else {
-        _openWeatherModal();
-      }
       return;
     }
   });

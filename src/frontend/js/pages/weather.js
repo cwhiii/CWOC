@@ -107,11 +107,14 @@ function _initWeatherSidebarShared() {
     onReferenceClick: function() { /* no-op */ },
     onHelpClick: function() { window.location.href = '/frontend/html/help.html'; },
     periodOptions: [
-      { value: 'all', label: 'Forecast Max (16 day)', selected: true },
-      { value: 'xdays', label: 'X Days' },
-      { value: 'day', label: 'Day' },
-      { value: 'week', label: 'This Week' },
-      { value: 'month', label: 'This Month' }
+      { value: '1hour', label: '1 Hour' },
+      { value: 'Day', label: 'Day' },
+      { value: 'Work', label: 'Work Hours' },
+      { value: 'Week', label: 'Week', selected: true },
+      { value: 'SevenDay', label: 'X Days' },
+      { value: 'Month', label: 'Month' },
+      { value: 'Year', label: 'Year' },
+      { value: 'all', label: 'Forecast Max (16 day)' }
     ]
   });
 
@@ -195,20 +198,31 @@ function _wxApplyDateFilter() {
   if (period !== 'all') {
     var now = new Date();
     var start, end;
-    if (period === 'xdays') {
-      var xDays = Math.min(_wxCustomDaysCount || 7, 16);
-      start = new Date(now.getFullYear(), now.getMonth(), now.getDate() + (_wxCurrentPeriodOffset * xDays));
-      end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + xDays - 1);
-    } else if (period === 'day') {
+    if (period === '1hour') {
+      // 1 Hour — show today's forecast (weather is daily, not hourly)
+      start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      end = new Date(start);
+    } else if (period === 'Day') {
       start = new Date(now.getFullYear(), now.getMonth(), now.getDate() + _wxCurrentPeriodOffset);
       end = new Date(start);
-    } else if (period === 'week') {
+    } else if (period === 'Work') {
+      // Work Hours — same as Day (weather is daily)
+      start = new Date(now.getFullYear(), now.getMonth(), now.getDate() + _wxCurrentPeriodOffset);
+      end = new Date(start);
+    } else if (period === 'Week') {
       var dayOfWeek = now.getDay();
       start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek + (_wxCurrentPeriodOffset * 7));
       end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 6);
-    } else if (period === 'month') {
+    } else if (period === 'SevenDay') {
+      var xDays = Math.min(_wxCustomDaysCount || 7, 16);
+      start = new Date(now.getFullYear(), now.getMonth(), now.getDate() + (_wxCurrentPeriodOffset * xDays));
+      end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + xDays - 1);
+    } else if (period === 'Month') {
       start = new Date(now.getFullYear(), now.getMonth() + _wxCurrentPeriodOffset, 1);
       end = new Date(start.getFullYear(), start.getMonth() + 1, 0);
+    } else if (period === 'Year') {
+      start = new Date(now.getFullYear() + _wxCurrentPeriodOffset, 0, 1);
+      end = new Date(now.getFullYear() + _wxCurrentPeriodOffset, 11, 31);
     }
     if (start && end) {
       startStr = start.getFullYear() + '-' + String(start.getMonth() + 1).padStart(2, '0') + '-' + String(start.getDate()).padStart(2, '0');
@@ -308,35 +322,46 @@ function _wxUpdateDateDisplay() {
     return;
   }
 
+  // Fixed periods — no prev/next navigation
+  if (period === '1hour') {
+    if (yearEl) yearEl.textContent = '';
+    if (rangeEl) rangeEl.textContent = '1 Hour';
+    return;
+  }
+
   // Calculate date range based on period and offset
   var now = new Date();
   var start, end;
   var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
-  if (period === 'xdays') {
-    // X Days: use the user's custom_days_count setting (capped at 16)
-    var xDays = Math.min(_wxCustomDaysCount || 7, 16);
-    start = new Date(now.getFullYear(), now.getMonth(), now.getDate() + (_wxCurrentPeriodOffset * xDays));
-    end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + xDays - 1);
-  } else if (period === 'day') {
+  if (period === 'Day' || period === 'Work') {
     var d = new Date(now);
     d.setDate(d.getDate() + _wxCurrentPeriodOffset);
     start = d; end = d;
-  } else if (period === 'week') {
+  } else if (period === 'Week') {
     var dayOfWeek = now.getDay();
     start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek + (_wxCurrentPeriodOffset * 7));
     end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 6);
-  } else if (period === 'month') {
+  } else if (period === 'SevenDay') {
+    var xDays = Math.min(_wxCustomDaysCount || 7, 16);
+    start = new Date(now.getFullYear(), now.getMonth(), now.getDate() + (_wxCurrentPeriodOffset * xDays));
+    end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + xDays - 1);
+  } else if (period === 'Month') {
     start = new Date(now.getFullYear(), now.getMonth() + _wxCurrentPeriodOffset, 1);
     end = new Date(start.getFullYear(), start.getMonth() + 1, 0);
+  } else if (period === 'Year') {
+    start = new Date(now.getFullYear() + _wxCurrentPeriodOffset, 0, 1);
+    end = new Date(now.getFullYear() + _wxCurrentPeriodOffset, 11, 31);
   }
 
   if (!start) return;
 
   if (yearEl) yearEl.textContent = start.getFullYear();
   if (rangeEl) {
-    if (period === 'day') {
+    if (period === 'Day' || period === 'Work') {
       rangeEl.textContent = months[start.getMonth()] + ' ' + start.getDate();
+    } else if (period === 'Year') {
+      rangeEl.textContent = start.getFullYear().toString();
     } else {
       var startStr = months[start.getMonth()] + ' ' + start.getDate();
       var endStr = months[end.getMonth()] + ' ' + end.getDate();

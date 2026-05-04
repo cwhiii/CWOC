@@ -1,0 +1,1 @@
+Fixed account filter pills crashing when clicked (filterChits called without tab parameter). Cleaned up email card display: removed "From:" prefix, shows sender display name only with full email on hover, strips CSS rules and invisible Unicode characters (&#847;, &#8204; zero-width joiners) from body previews.
