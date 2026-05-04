@@ -2177,6 +2177,10 @@ class SettingsManager {
     _loadEmailAccountSettings(this.settings);
     _updateSignatureInlinePreview();
 
+    // Default share contacts to vault
+    var defaultShareContactsCb = document.getElementById('default-share-contacts');
+    if (defaultShareContactsCb) defaultShareContactsCb.checked = (this.settings.default_share_contacts === '1');
+
     // Attachment size limit
     var attachSizeEl = document.getElementById('attachmentMaxSizeMb');
     if (attachSizeEl && this.settings.attachment_max_size_mb) {
@@ -2280,6 +2284,7 @@ class SettingsManager {
       email_account: (function() { var a = _collectEmailAccountSettings(); return a ? JSON.stringify(a) : null; })(),
       attachment_max_size_mb: ((document.getElementById('attachmentMaxSizeMb') || {}).value || '10'),
       attachment_max_storage_mb: ((document.getElementById('attachmentMaxStorageMb') || {}).value || '500'),
+      default_share_contacts: (document.getElementById('default-share-contacts') && document.getElementById('default-share-contacts').checked) ? '1' : '0',
     };
   }
 

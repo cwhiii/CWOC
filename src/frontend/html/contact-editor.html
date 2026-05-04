@@ -297,6 +297,19 @@
                 }
             }
 
+            /* ── Toggle switch color overrides (match pill toggle palette) ── */
+            input:checked + .slider {
+                background-color: #8b5a2b;
+                border-color: #8b5a2b;
+            }
+            input:focus + .slider {
+                box-shadow: 0 0 1px #8b5a2b;
+            }
+            .slider {
+                background-color: #f5e6cc;
+                border-color: #c4a484;
+            }
+
         </style>
     </head>
     <body>
@@ -350,7 +363,17 @@
                         </button>
                     </div>
                     <h2 id="displayNameHeader" style="margin:0;color:var(--aged-brown-dark);flex:1;font-size:1.3em;">New Contact</h2>
-                    <span style="font-size:0.65em;padding:2px 8px;border-radius:10px;background:rgba(70,130,180,0.18);color:#1a4a6e;border:1px solid rgba(70,130,180,0.4);font-weight:600;flex-shrink:0;align-self:center;"><i class="fas fa-address-book"></i> Contact</span>
+                    <div id="headerBadgeArea" style="display:flex;flex-direction:column;align-items:stretch;flex-shrink:0;align-self:center;gap:3px;margin-top:1.875em;">
+                        <span style="font-size:0.8em;padding:4px 8px;border-radius:4px;background:rgba(70,130,180,0.18);color:#1a4a6e;border:1px solid rgba(70,130,180,0.4);font-weight:600;text-align:center;"><i class="fas fa-address-book"></i> Contact</span>
+                        <div id="vault-pill" class="cwoc-pill-toggle" style="display:flex;border:1px solid #8b5a2b;border-radius:4px;overflow:hidden;cursor:pointer;font-size:0.8em;">
+                            <input type="hidden" id="vault-toggle" value="0" />
+                            <span data-val="0" style="padding:4px 8px;background:#8b5a2b;color:#fff8e1;font-weight:bold;flex:1;text-align:center;">🔒 Private</span>
+                            <span data-val="1" style="padding:4px 8px;background:#f5e6cc;color:#bbb;flex:1;text-align:center;">🏛️ Vault</span>
+                        </div>
+                        <div id="vaultOwnerInfo" style="display:none;font-size:0.6em;padding:1px 6px;background:rgba(70,130,180,0.1);border:1px solid rgba(70,130,180,0.3);border-radius:6px;color:#1a4a6e;white-space:nowrap;margin-top:3px;text-align:center;">
+                            <i class="fas fa-info-circle"></i> <span id="vaultOwnerText"></span>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- ═══ Column 1: Account (profile-only) + Name + Security ═══ -->
@@ -554,6 +577,7 @@
                             <div id="contactTagsChips" style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;"></div>
                         </div>
                     </div>
+
                 </div>
 
                 <!-- ═══ Column 3: Social & Web + Color ═══ -->

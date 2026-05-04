@@ -64,6 +64,7 @@ class Settings(BaseModel):
     email_account: Optional[str] = None      # JSON string: {email, display_name, imap_host, imap_port, smtp_host, smtp_port, username, password_encrypted}
     attachment_max_size_mb: Optional[str] = "10"  # Max attachment file size in MB
     attachment_max_storage_mb: Optional[str] = "500"  # Max total attachment storage per user in MB (0 = unlimited)
+    default_share_contacts: Optional[str] = "0"  # "1" = new contacts default to shared vault, "0" = private
 
 class Chit(BaseModel):
     id: Optional[str] = None
@@ -158,6 +159,7 @@ class Contact(BaseModel):
     image_url: Optional[str] = None
     notes: Optional[str] = None
     tags: Optional[List[str]] = None
+    shared_to_vault: Optional[bool] = False  # When true, contact is visible to all users
     created_datetime: Optional[str] = None
     modified_datetime: Optional[str] = None
 

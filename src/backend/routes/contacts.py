@@ -79,6 +79,7 @@ def _serialize_contact_for_db(contact) -> dict:
         "image_url": _get("image_url"),
         "notes": _get("notes"),
         "tags": serialize_json_field(_get("tags")),
+        "shared_to_vault": 1 if _get("shared_to_vault") else 0,
     }
 
 
@@ -102,6 +103,7 @@ def _row_to_contact(row: dict) -> dict:
     row.setdefault("notes", None)
     row.setdefault("dates", None)
     row["tags"] = deserialize_json_field(row.get("tags"))
+    row["shared_to_vault"] = bool(row.get("shared_to_vault"))
     return row
 
 
@@ -146,8 +148,9 @@ def create_contact(contact: Contact, request: Request):
                 nickname, display_name, phones, emails, addresses, call_signs,
                 x_handles, websites, dates, has_signal, signal_username, pgp_key, favorite,
                 color, organization, social_context, image_url, notes, tags,
+                shared_to_vault,
                 created_datetime, modified_datetime, owner_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 contact_id,
@@ -175,6 +178,7 @@ def create_contact(contact: Contact, request: Request):
                 db_fields["image_url"],
                 db_fields["notes"],
                 db_fields["tags"],
+                db_fields["shared_to_vault"],
                 current_time,
                 current_time,
                 user_id,
@@ -209,7 +213,7 @@ def get_contacts(request: Request, q: Optional[str] = Query(None)):
             cursor.execute(
                 """
                 SELECT * FROM contacts
-                WHERE owner_id = ?
+                WHERE (owner_id = ? OR shared_to_vault = 1)
                   AND (display_name LIKE ? COLLATE NOCASE
                    OR given_name LIKE ? COLLATE NOCASE
                    OR surname LIKE ? COLLATE NOCASE
@@ -234,7 +238,9 @@ def get_contacts(request: Request, q: Optional[str] = Query(None)):
             )
         else:
             cursor.execute(
-                "SELECT * FROM contacts WHERE owner_id = ? ORDER BY favorite DESC, display_name COLLATE NOCASE ASC",
+                """SELECT * FROM contacts
+                   WHERE owner_id = ? OR shared_to_vault = 1
+                   ORDER BY favorite DESC, display_name COLLATE NOCASE ASC""",
                 (user_id,),
             )
 
@@ -242,6 +248,8 @@ def get_contacts(request: Request, q: Optional[str] = Query(None)):
         contacts = []
         for row in cursor.fetchall():
             contact = dict(zip(columns, row))
+            contact_owner = contact.get("owner_id")
+            contact["is_vault_contact"] = bool(contact.get("shared_to_vault")) and contact_owner != user_id
             contacts.append(_row_to_contact(contact))
         return contacts
     except Exception as e:
@@ -315,8 +323,10 @@ def export_single_contact(contact_id: str, request: Request, format: str = Query
             raise HTTPException(status_code=404, detail=f"Contact {contact_id} not found")
         columns = [col[0] for col in cursor.description]
         contact_raw = dict(zip(columns, row))
-        # Verify ownership
-        if contact_raw.get("owner_id") and contact_raw["owner_id"] != user_id:
+        # Allow access if owner OR if contact is shared to vault
+        is_owner = not contact_raw.get("owner_id") or contact_raw["owner_id"] == user_id
+        is_vault = bool(contact_raw.get("shared_to_vault"))
+        if not is_owner and not is_vault:
             raise HTTPException(status_code=404, detail=f"Contact {contact_id} not found")
         contact = _row_to_contact(contact_raw)
 
@@ -351,9 +361,12 @@ def get_contact(contact_id: str, request: Request):
             raise HTTPException(status_code=404, detail=f"Contact {contact_id} not found")
         columns = [col[0] for col in cursor.description]
         contact = dict(zip(columns, row))
-        # Verify ownership
-        if contact.get("owner_id") and contact["owner_id"] != user_id:
+        # Allow access if owner OR if contact is shared to vault
+        is_owner = not contact.get("owner_id") or contact["owner_id"] == user_id
+        is_vault = bool(contact.get("shared_to_vault"))
+        if not is_owner and not is_vault:
             raise HTTPException(status_code=404, detail=f"Contact {contact_id} not found")
+        contact["is_vault_contact"] = is_vault and not is_owner
         return _row_to_contact(contact)
     except HTTPException:
         raise
@@ -409,7 +422,7 @@ def update_contact(contact_id: str, contact: Contact, request: Request):
                 call_signs = ?, x_handles = ?, websites = ?, dates = ?,
                 has_signal = ?, signal_username = ?, pgp_key = ?, favorite = ?,
                 color = ?, organization = ?, social_context = ?, image_url = ?,
-                notes = ?, tags = ?,
+                notes = ?, tags = ?, shared_to_vault = ?,
                 modified_datetime = ?
             WHERE id = ?
             """,
@@ -421,7 +434,7 @@ def update_contact(contact_id: str, contact: Contact, request: Request):
                 db_fields["websites"], db_fields["dates"], db_fields["has_signal"], db_fields["signal_username"],
                 db_fields["pgp_key"], db_fields["favorite"], db_fields["color"],
                 db_fields["organization"], db_fields["social_context"], db_fields["image_url"],
-                db_fields["notes"], db_fields["tags"], current_time, contact_id,
+                db_fields["notes"], db_fields["tags"], db_fields["shared_to_vault"], current_time, contact_id,
             ),
         )
         try:

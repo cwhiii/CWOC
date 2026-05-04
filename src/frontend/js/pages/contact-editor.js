@@ -68,6 +68,48 @@
         });
     }
 
+    // ── Default vault setting for new contacts ──────────────────────────
+    async function _applyDefaultVaultSetting() {
+        try {
+            var settings = typeof getCachedSettings === 'function' ? await getCachedSettings() : null;
+            if (settings && settings.default_share_contacts === '1') {
+                var hidden = document.getElementById('vault-toggle');
+                if (hidden) {
+                    hidden.value = '1';
+                    _updatePillToggle('vault-pill', '1');
+                }
+            }
+        } catch (e) {
+            console.error('Error loading default vault setting:', e);
+        }
+    }
+
+    // ── Pill toggle helper (same pattern as settings page) ──────────────
+    function _initPillToggle(pillId, hiddenInputId) {
+        var pill = document.getElementById(pillId);
+        if (!pill) return;
+        pill.addEventListener('click', function() {
+            var hidden = document.getElementById(hiddenInputId);
+            var spans = pill.querySelectorAll('span[data-val]');
+            if (!hidden || spans.length < 2) return;
+            var current = hidden.value;
+            var next = (spans[0].dataset.val === current) ? spans[1].dataset.val : spans[0].dataset.val;
+            hidden.value = next;
+            _updatePillToggle(pillId, next);
+            if (_saveSystem) _saveSystem.markUnsaved();
+        });
+    }
+
+    function _updatePillToggle(pillId, activeVal) {
+        var pill = document.getElementById(pillId);
+        if (!pill) return;
+        var activeStyle = 'padding:4px 8px;background:#8b5a2b;color:#fff8e1;font-weight:bold;';
+        var inactiveStyle = 'padding:4px 8px;background:#f5e6cc;color:#bbb;';
+        pill.querySelectorAll('span[data-val]').forEach(function(span) {
+            span.style.cssText = (span.dataset.val === activeVal) ? activeStyle : inactiveStyle;
+        });
+    }
+
     var params = new URLSearchParams(window.location.search);
     _contactId = params.get('id') || null;
     _isProfileMode = params.get('mode') === 'profile';
@@ -92,6 +134,7 @@
         _initImageUpload();
         _initSignalToggle();
         _initDisplayNameUpdater();
+        _initPillToggle('vault-pill', 'vault-toggle');
 
         if (_isProfileMode) {
             _initProfileMode();
@@ -106,6 +149,8 @@
             } else {
                 var gn = document.getElementById('givenName');
                 if (gn) setTimeout(function () { gn.focus(); }, 100);
+                // Apply default vault setting for new contacts
+                _applyDefaultVaultSetting();
             }
         }
     });
@@ -740,6 +785,7 @@
             image_url:       _currentImageUrl,
             notes:           document.getElementById('contactNotes').value.trim() || null,
             tags:            _contactTags.length > 0 ? _contactTags.slice() : null,
+            shared_to_vault: document.getElementById('vault-toggle').value === '1',
         };
     };
 
@@ -795,6 +841,38 @@
 
         // Image
         _setProfileImage(contact.image_url || null);
+
+        // Shared to vault (pill toggle in header)
+        var vaultHidden = document.getElementById('vault-toggle');
+        if (vaultHidden) {
+            vaultHidden.value = contact.shared_to_vault ? '1' : '0';
+            _updatePillToggle('vault-pill', vaultHidden.value);
+        }
+
+        // If this is a vault contact from another user, show read-only info
+        var vaultPill = document.getElementById('vault-pill');
+        var vaultOwnerInfo = document.getElementById('vaultOwnerInfo');
+        var vaultOwnerText = document.getElementById('vaultOwnerText');
+        if (contact.is_vault_contact) {
+            // Read-only: vault contact from another user
+            if (vaultPill) { vaultPill.style.pointerEvents = 'none'; vaultPill.style.opacity = '0.6'; }
+            if (vaultOwnerInfo) vaultOwnerInfo.style.display = '';
+            if (vaultOwnerText) vaultOwnerText.textContent = 'Shared by another user (read-only)';
+            // Disable all form inputs for vault contacts
+            document.querySelectorAll('#mainEditor input, #mainEditor textarea, #mainEditor select').forEach(function(el) {
+                el.disabled = true;
+                el.style.opacity = '0.7';
+            });
+            // Hide save/delete buttons
+            var saveBtn = document.getElementById('saveButton');
+            var saveStayBtn = document.getElementById('saveStayButton');
+            var saveExitBtn = document.getElementById('saveExitButton');
+            var deleteBtn = document.getElementById('deleteButton');
+            if (saveBtn) saveBtn.style.display = 'none';
+            if (saveStayBtn) saveStayBtn.style.display = 'none';
+            if (saveExitBtn) saveExitBtn.style.display = 'none';
+            if (deleteBtn) deleteBtn.style.display = 'none';
+        }
 
         // Update display name header
         _updateDisplayNameHeader();
@@ -1039,6 +1117,8 @@
         if (auditBtn) auditBtn.style.display = 'none';
         var tagsSection = document.getElementById('tagsSection');
         if (tagsSection) tagsSection.style.display = 'none';
+        var vaultPill = document.getElementById('vault-pill');
+        if (vaultPill) vaultPill.style.display = 'none';
 
         // Show profile-only zones
         var accountSection = document.getElementById('accountSection');

@@ -228,6 +228,9 @@ function _activateEmailZone() {
   // Auto-apply signature for new drafts
   _applySignatureIfEmpty();
 
+  // Wire live markdown preview for draft emails
+  _wireEmailBodyPreview();
+
   // Mark as unsaved
   if (typeof setSaveButtonUnsaved === 'function') setSaveButtonUnsaved();
 }
@@ -260,6 +263,10 @@ async function _deactivateEmailZone() {
   if (bodyEl) bodyEl.value = '';
   var fromEl = document.getElementById('emailFrom');
   if (fromEl) fromEl.textContent = '';
+
+  // Hide the markdown preview
+  var previewEl = document.getElementById('emailBodyPreview');
+  if (previewEl) previewEl.style.display = 'none';
 
   // Clear email metadata
   if (_emailCurrentChit) {
@@ -663,6 +670,8 @@ function initEmailZone(chit) {
     _showEmailSaveButtons(true);
     // Auto-apply signature for new drafts with empty body
     _applySignatureIfEmpty();
+    // Wire live markdown preview for draft emails
+    _wireEmailBodyPreview();
   } else if (status === 'received') {
     _setEmailZoneReadOnly(true);
     _showEmailSaveButtons(false);
@@ -679,6 +688,18 @@ function initEmailZone(chit) {
   if (ccEl) ccEl.addEventListener('input', function () { setSaveButtonUnsaved(); });
   if (bccEl) bccEl.addEventListener('input', function () { setSaveButtonUnsaved(); });
   if (bodyEl) bodyEl.addEventListener('input', function () { setSaveButtonUnsaved(); });
+
+  // Wire all formatting shortcuts on the small zone body textarea
+  if (bodyEl && !bodyEl._formatShortcutsWired) {
+    bodyEl._formatShortcutsWired = true;
+    bodyEl.addEventListener('keydown', function(e) {
+      var action = _getEmailFormatAction(e);
+      if (action) {
+        e.preventDefault();
+        _emailFormatBtn(action, 'emailBody');
+      }
+    });
+  }
 
   // Wire up autocomplete on To, Cc, Bcc fields
   _emailLoadContacts().then(function() {
@@ -986,6 +1007,10 @@ function _setEmailZoneReadOnly(readOnly) {
   if (ccEl) { ccEl.disabled = readOnly; ccEl.readOnly = readOnly; }
   if (bccEl) { bccEl.disabled = readOnly; bccEl.readOnly = readOnly; }
   if (bodyEl) { bodyEl.disabled = readOnly; bodyEl.readOnly = readOnly; }
+
+  // Hide markdown preview when read-only (received/sent emails use the HTML iframe)
+  var previewEl = document.getElementById('emailBodyPreview');
+  if (previewEl) previewEl.style.display = readOnly ? 'none' : '';
 }
 
 /**
@@ -1073,7 +1098,28 @@ function _openEmailExpandModal() {
           '<strong style="flex-shrink:0;min-width:50px;text-align:right;">Subject:</strong>' +
           '<input id="emailExpandSubject" type="text" value="' + _escapeHtmlAttr(subjectVal) + '" style="flex:1;padding:4px 8px;border:1px inset #c4a882;border-radius:4px;font-family:Lora,Georgia,serif;font-size:14px;"' + disabledAttr + '>' +
         '</div>' +
-        '<div id="emailExpandBodyWrap" style="flex:1;display:flex;flex-direction:column;height:calc(100vh - 2em - 240px);">' +
+        (isReadOnly ? '' :
+        '<div id="emailExpandToolbar" class="email-format-toolbar">' +
+          '<button type="button" title="Bold (Ctrl+B)" onclick="_emailFormatBtn(\'b\')"><strong>B</strong></button>' +
+          '<button type="button" title="Italic (Ctrl+I)" onclick="_emailFormatBtn(\'i\')"><em>I</em></button>' +
+          '<button type="button" title="Strikethrough (Ctrl+Shift+X)" onclick="_emailFormatBtn(\'s\')"><s>S</s></button>' +
+          '<button type="button" title="Link (Ctrl+K)" onclick="_emailFormatBtn(\'k\')">🔗</button>' +
+          '<span class="email-toolbar-sep"></span>' +
+          '<div class="email-toolbar-dropdown">' +
+            '<button type="button" title="Heading (Ctrl+Shift+1/2/3)">H ▾</button>' +
+            '<div class="email-toolbar-dropdown-menu">' +
+              '<button type="button" onclick="_emailFormatBtn(\'h1\')" style="font-size:1.2em;font-weight:bold;">H1</button>' +
+              '<button type="button" onclick="_emailFormatBtn(\'h2\')" style="font-size:1.05em;font-weight:bold;">H2</button>' +
+              '<button type="button" onclick="_emailFormatBtn(\'h3\')" style="font-size:0.95em;font-weight:bold;">H3</button>' +
+            '</div>' +
+          '</div>' +
+          '<button type="button" title="Bullet List (Ctrl+Shift+8)" onclick="_emailFormatBtn(\'ul\')">• List</button>' +
+          '<button type="button" title="Numbered List (Ctrl+Shift+7)" onclick="_emailFormatBtn(\'ol\')">1. List</button>' +
+          '<button type="button" title="Blockquote (Ctrl+Shift+.)" onclick="_emailFormatBtn(\'q\')">❝ Quote</button>' +
+          '<button type="button" title="Code (Ctrl+E)" onclick="_emailFormatBtn(\'code\')">⟨⟩</button>' +
+          '<button type="button" title="Horizontal Rule (Ctrl+Shift+-)" onclick="_emailFormatBtn(\'hr\')">―</button>' +
+        '</div>') +
+        '<div id="emailExpandBodyWrap" style="flex:1;display:flex;flex-direction:column;height:calc(100vh - 2em - 280px);">' +
           '<textarea id="emailExpandBody" style="flex:1;width:100%;box-sizing:border-box;font-family:Lora,Georgia,serif;font-size:14px;line-height:1.6;padding:10px;border:1px inset #c4a882;border-radius:4px;resize:none;' + (hasHtml ? 'display:none;' : '') + '"' +
             disabledAttr + '>' + _escapeHtmlAttr(bodyVal) + '</textarea>' +
         '</div>' +
@@ -1096,6 +1142,18 @@ function _openEmailExpandModal() {
   overlay._escHandler = _emailExpandEscHandler;
 
   document.body.appendChild(overlay);
+
+  // Wire all formatting shortcuts on the expand textarea
+  var expandTA = document.getElementById('emailExpandBody');
+  if (expandTA && !isReadOnly) {
+    expandTA.addEventListener('keydown', function(e) {
+      var action = _getEmailFormatAction(e);
+      if (action) {
+        e.preventDefault();
+        _emailFormatBtn(action);
+      }
+    });
+  }
 
   // If HTML content exists, render it in an iframe that allows links to open in new tabs
   if (hasHtml) {
@@ -1136,6 +1194,168 @@ function _openEmailExpandModal() {
       wrap.insertBefore(iframe, wrap.firstChild);
     }
   }
+
+  // Wire live markdown preview for draft expand modal (only when no HTML content)
+  if (status === 'draft' && !hasHtml) {
+    _wireExpandBodyPreview();
+  }
+}
+
+/**
+ * Map a keyboard event to a formatting action string, or null if no match.
+ * Hotkeys:
+ *   Ctrl+B → bold, Ctrl+I → italic, Ctrl+K → link,
+ *   Ctrl+Shift+X → strikethrough, Ctrl+Shift+7 → numbered list,
+ *   Ctrl+Shift+8 → bullet list, Ctrl+Shift+. → blockquote,
+ *   Ctrl+E → inline code, Ctrl+Shift+1 → H1, Ctrl+Shift+2 → H2,
+ *   Ctrl+Shift+3 → H3, Ctrl+Shift+- → horizontal rule
+ */
+function _getEmailFormatAction(e) {
+  if (!e.ctrlKey && !e.metaKey) return null;
+  var key = e.key.toLowerCase();
+  var code = e.code || '';
+  if (!e.shiftKey) {
+    if (key === 'b') return 'b';
+    if (key === 'i') return 'i';
+    if (key === 'k') return 'k';
+    if (key === 'e') return 'code';      // Ctrl+E → inline code
+    return null;
+  }
+  // Shift combos
+  if (key === 'x') return 's';                          // Ctrl+Shift+X → strikethrough
+  if (key === '7' || key === '&') return 'ol';           // Ctrl+Shift+7 → numbered list
+  if (key === '8' || key === '*') return 'ul';           // Ctrl+Shift+8 → bullet list
+  if (key === '.' || key === '>') return 'q';            // Ctrl+Shift+. → blockquote
+  if (key === '1' || key === '!') return 'h1';           // Ctrl+Shift+1 → H1
+  if (key === '2' || key === '@') return 'h2';           // Ctrl+Shift+2 → H2
+  if (key === '3' || key === '#') return 'h3';           // Ctrl+Shift+3 → H3
+  if (key === '-' || key === '_') return 'hr';           // Ctrl+Shift+- → horizontal rule
+  return null;
+}
+
+/**
+ * Apply a markdown formatting action to the selected text in a textarea.
+ * @param {string} action — 'b' (bold), 'i' (italic), 'k' (link), 's' (strikethrough),
+ *                           'h1'/'h2'/'h3' (headings), 'ul' (bullet list), 'ol' (numbered list),
+ *                           'q' (blockquote), 'code' (inline code), 'hr' (horizontal rule)
+ */
+function _emailFormatBtn(action, textareaId) {
+  var textarea = document.getElementById(textareaId || 'emailExpandBody');
+  if (!textarea) return;
+
+  var start = textarea.selectionStart;
+  var end = textarea.selectionEnd;
+  var text = textarea.value;
+  var selected = text.substring(start, end);
+  var replacement = '';
+  var cursorStart = start;
+  var cursorEnd = end;
+
+  switch (action) {
+    case 'b':
+      if (!selected) return; // No selection — do nothing
+      replacement = '**' + selected + '**';
+      cursorEnd = start + replacement.length;
+      break;
+    case 'i':
+      if (!selected) return; // No selection — do nothing
+      replacement = '*' + selected + '*';
+      cursorEnd = start + replacement.length;
+      break;
+    case 'k':
+      if (!selected) return; // No selection — do nothing
+      var isUrl = /^https?:\/\//i.test(selected.trim());
+      if (isUrl) {
+        replacement = '[link text](' + selected.trim() + ')';
+        cursorStart = start + 1; cursorEnd = start + 1 + 'link text'.length;
+      } else {
+        replacement = '[' + selected + '](url)';
+        var urlPos = start + 1 + selected.length + 2;
+        cursorStart = urlPos; cursorEnd = urlPos + 3;
+      }
+      break;
+    case 'h1':
+    case 'h2':
+    case 'h3':
+      // Headings apply to the current line even without selection
+      var hLevel = parseInt(action.charAt(1));
+      var hPrefix = '#'.repeat(hLevel) + ' ';
+      var lineStart = text.lastIndexOf('\n', start - 1) + 1;
+      var lineEnd = text.indexOf('\n', start);
+      if (lineEnd === -1) lineEnd = text.length;
+      var lineText = text.substring(lineStart, lineEnd);
+      if (!lineText.trim() && !selected) return; // Empty line, no selection — do nothing
+      var stripped = lineText.replace(/^#{1,3}\s+/, '');
+      replacement = hPrefix + stripped;
+      textarea.value = text.substring(0, lineStart) + replacement + text.substring(lineEnd);
+      textarea.selectionStart = lineStart; textarea.selectionEnd = lineStart + replacement.length;
+      textarea.focus();
+      textarea.dispatchEvent(new Event('input'));
+      return;
+    case 'ul':
+      if (selected) {
+        // Prefix each selected line with "- "
+        replacement = selected.split('\n').map(function(l) { return '- ' + l; }).join('\n');
+      } else {
+        // Prefix the current line with "- "
+        var lineStart = text.lastIndexOf('\n', start - 1) + 1;
+        var lineEnd = text.indexOf('\n', start);
+        if (lineEnd === -1) lineEnd = text.length;
+        var lineText = text.substring(lineStart, lineEnd);
+        replacement = '- ' + lineText;
+        textarea.value = text.substring(0, lineStart) + replacement + text.substring(lineEnd);
+        textarea.selectionStart = lineStart + replacement.length;
+        textarea.selectionEnd = lineStart + replacement.length;
+        textarea.focus();
+        textarea.dispatchEvent(new Event('input'));
+        return;
+      }
+      break;
+    case 'ol':
+      if (selected) {
+        replacement = selected.split('\n').map(function(l, i) { return (i + 1) + '. ' + l; }).join('\n');
+      } else {
+        // Prefix the current line with "1. "
+        var lineStart = text.lastIndexOf('\n', start - 1) + 1;
+        var lineEnd = text.indexOf('\n', start);
+        if (lineEnd === -1) lineEnd = text.length;
+        var lineText = text.substring(lineStart, lineEnd);
+        replacement = '1. ' + lineText;
+        textarea.value = text.substring(0, lineStart) + replacement + text.substring(lineEnd);
+        textarea.selectionStart = lineStart + replacement.length;
+        textarea.selectionEnd = lineStart + replacement.length;
+        textarea.focus();
+        textarea.dispatchEvent(new Event('input'));
+        return;
+      }
+      break;
+    case 'q':
+      if (!selected) return; // No selection — do nothing
+      replacement = selected.split('\n').map(function(l) { return '> ' + l; }).join('\n');
+      break;
+    case 's':
+      if (!selected) return; // No selection — do nothing
+      replacement = '~~' + selected + '~~';
+      cursorEnd = start + replacement.length;
+      break;
+    case 'code':
+      if (!selected) return; // No selection — do nothing
+      replacement = '`' + selected + '`';
+      cursorEnd = start + replacement.length;
+      break;
+    case 'hr':
+      replacement = '\n---\n';
+      cursorStart = start + replacement.length; cursorEnd = cursorStart;
+      break;
+    default:
+      return;
+  }
+
+  textarea.value = text.substring(0, start) + replacement + text.substring(end);
+  textarea.selectionStart = cursorStart;
+  textarea.selectionEnd = cursorEnd;
+  textarea.focus();
+  textarea.dispatchEvent(new Event('input'));
 }
 
 /**
@@ -1240,6 +1460,101 @@ function _toggleExpandCcBcc(field) {
 
 /** Alias for use in autocomplete dropdown rendering */
 var _escHtml = _escapeHtmlAttr;
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Markdown Live Preview — debounced rendering for draft email body
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** Debounce timer for the email body preview */
+var _emailBodyPreviewTimer = null;
+
+/**
+ * Wire live markdown preview on the email body textarea.
+ * The textarea remains the source of truth; the preview div shows rendered HTML.
+ * Only wired once per textarea (guarded by _previewWired flag).
+ */
+function _wireEmailBodyPreview() {
+  var bodyEl = document.getElementById('emailBody');
+  var preview = document.getElementById('emailBodyPreview');
+  if (!bodyEl || !preview || bodyEl._previewWired) return;
+  bodyEl._previewWired = true;
+
+  function updatePreview() {
+    var raw = bodyEl.value || '';
+    if (!raw.trim()) {
+      preview.style.display = 'none';
+      return;
+    }
+    if (typeof marked !== 'undefined' && marked.parse) {
+      preview.innerHTML = marked.parse(raw, { breaks: true });
+    } else {
+      preview.textContent = raw;
+    }
+    preview.style.display = '';
+  }
+
+  bodyEl.addEventListener('input', function() {
+    clearTimeout(_emailBodyPreviewTimer);
+    _emailBodyPreviewTimer = setTimeout(updatePreview, 500);
+  });
+
+  // Initial render if there's content
+  if (bodyEl.value.trim()) {
+    updatePreview();
+  }
+}
+
+/**
+ * Wire live markdown preview on the expand modal's email body textarea.
+ * Creates a preview div below the textarea and updates it on input.
+ */
+function _wireExpandBodyPreview() {
+  var expandTextarea = document.getElementById('emailExpandBody');
+  var wrap = document.getElementById('emailExpandBodyWrap');
+  if (!expandTextarea || !wrap) return;
+
+  // Make textarea take only top half, preview takes bottom half
+  expandTextarea.style.flex = '1';
+  expandTextarea.style.minHeight = '100px';
+
+  // Add a label above the preview
+  var label = document.createElement('div');
+  label.className = 'email-body-preview-label';
+  label.textContent = '📝 Preview';
+  label.style.cssText = 'flex-shrink:0;margin-top:6px;';
+  wrap.appendChild(label);
+
+  // Create preview div for the expand modal
+  var expandPreview = document.createElement('div');
+  expandPreview.id = 'emailExpandBodyPreview';
+  expandPreview.className = 'email-body-preview';
+  expandPreview.style.cssText = 'flex:1;min-height:80px;overflow-y:auto;margin-top:4px;max-height:none;';
+  wrap.appendChild(expandPreview);
+
+  var expandDebounce = null;
+
+  function updateExpandPreview() {
+    var raw = expandTextarea.value || '';
+    if (!raw.trim()) {
+      expandPreview.innerHTML = '<em style="opacity:0.4;">Preview appears here as you type…</em>';
+      return;
+    }
+    if (typeof marked !== 'undefined' && marked.parse) {
+      expandPreview.innerHTML = marked.parse(raw, { breaks: true });
+    } else {
+      expandPreview.textContent = raw;
+    }
+  }
+
+  expandTextarea.addEventListener('input', function() {
+    clearTimeout(expandDebounce);
+    expandDebounce = setTimeout(updateExpandPreview, 500);
+  });
+
+  // Initial render
+  updateExpandPreview();
+}
 
 
 // ═══════════════════════════════════════════════════════════════════════════

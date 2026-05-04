@@ -704,34 +704,43 @@ def _build_rfc2822_message(chit: dict, account: dict) -> email.message.EmailMess
     if references:
         msg["References"] = references
 
-    # Body — plain text, with optional signature
-    # The frontend inserts the rendered HTML signature into the body.
-    # Only append server-side if the body doesn't already contain a signature separator.
+    # Body — plain text + HTML alternative (markdown → HTML)
+    # The email body is written as markdown in the frontend. We always send
+    # a multipart/alternative with both plain text and rendered HTML.
     body = chit.get("email_body_text", "")
     signature = account.get("signature", "")
-    if signature and "\n--\n" not in body:
-        body = body + "\n\n--\n" + signature
-    msg.set_content(body)
 
-    # If there's a signature with markdown, also add an HTML alternative
-    if signature and "\n--\n" in body:
-        try:
-            html_sig = _markdown_to_html(signature)
-            import html as _html_mod
-            # Get the body text before the signature separator
-            body_parts = body.split("\n--\n", 1)
-            body_text = body_parts[0] if body_parts else body
-            escaped_body = _html_mod.escape(body_text)
-            html_body = (
-                '<div style="font-family:sans-serif;font-size:14px;line-height:1.5;">'
-                + escaped_body.replace('\n', '<br>')
-                + '<br><br>--<br>'
-                + html_sig
-                + '</div>'
-            )
-            msg.add_alternative(html_body, subtype='html')
-        except Exception as e:
-            logger.warning("Failed to add HTML signature alternative: %s", e)
+    # Build plain text version (with signature if not already present)
+    plain_body = body
+    if signature and "\n--\n" not in body:
+        plain_body = body + "\n\n--\n" + signature
+    msg.set_content(plain_body)
+
+    # Build HTML version — convert markdown body + signature to HTML
+    try:
+        # Split body from any existing signature separator
+        if "\n--\n" in plain_body:
+            body_parts = plain_body.split("\n--\n", 1)
+            body_text = body_parts[0]
+            sig_text = body_parts[1] if len(body_parts) > 1 else ""
+        else:
+            body_text = plain_body
+            sig_text = ""
+
+        html_body_content = _markdown_to_html(body_text) if body_text.strip() else ""
+        html_sig = ""
+        if sig_text.strip():
+            html_sig = "<br><br>--<br>" + _markdown_to_html(sig_text)
+
+        html_full = (
+            '<div style="font-family:sans-serif;font-size:14px;line-height:1.5;">'
+            + html_body_content
+            + html_sig
+            + '</div>'
+        )
+        msg.add_alternative(html_full, subtype='html')
+    except Exception as e:
+        logger.warning("Failed to add HTML alternative: %s", e)
 
     return msg
 
@@ -739,19 +748,91 @@ def _build_rfc2822_message(chit: dict, account: dict) -> email.message.EmailMess
 def _markdown_to_html(md_text: str) -> str:
     """Convert a markdown string to HTML using a minimal converter.
 
-    Handles: **bold**, *italic*, [text](url), single newlines as <br>.
+    Handles: **bold**, *italic*, [text](url), `inline code`, headers (# to ###),
+    unordered lists (- item), blockquotes (> text), and single newlines as <br>.
     No external dependencies — uses regex substitution.
     """
     import html as _html_mod
     text = _html_mod.escape(md_text)
+
+    # Process line-by-line for block-level elements
+    lines = text.split('\n')
+    result_lines = []
+    in_ul = False
+    in_ol = False
+
+    for line in lines:
+        stripped = line.strip()
+
+        # Headers: ### h3, ## h2, # h1
+        if stripped.startswith('### '):
+            if in_ul: result_lines.append('</ul>'); in_ul = False
+            if in_ol: result_lines.append('</ol>'); in_ol = False
+            result_lines.append('<h3>' + stripped[4:] + '</h3>')
+            continue
+        if stripped.startswith('## '):
+            if in_ul: result_lines.append('</ul>'); in_ul = False
+            if in_ol: result_lines.append('</ol>'); in_ol = False
+            result_lines.append('<h2>' + stripped[3:] + '</h2>')
+            continue
+        if stripped.startswith('# '):
+            if in_ul: result_lines.append('</ul>'); in_ul = False
+            if in_ol: result_lines.append('</ol>'); in_ol = False
+            result_lines.append('<h1>' + stripped[2:] + '</h1>')
+            continue
+
+        # Unordered list items: - item or * item
+        if re.match(r'^[-*]\s+', stripped):
+            if in_ol: result_lines.append('</ol>'); in_ol = False
+            if not in_ul:
+                result_lines.append('<ul>')
+                in_ul = True
+            result_lines.append('<li>' + stripped[2:].strip() + '</li>')
+            continue
+
+        # Ordered list items: 1. item, 2. item, etc.
+        ol_match = re.match(r'^(\d+)\.\s+', stripped)
+        if ol_match:
+            if in_ul: result_lines.append('</ul>'); in_ul = False
+            if not in_ol:
+                result_lines.append('<ol>')
+                in_ol = True
+            result_lines.append('<li>' + stripped[ol_match.end():] + '</li>')
+            continue
+
+        # Blockquote: > text
+        if stripped.startswith('&gt; '):
+            if in_ul: result_lines.append('</ul>'); in_ul = False
+            if in_ol: result_lines.append('</ol>'); in_ol = False
+            result_lines.append('<blockquote>' + stripped[5:] + '</blockquote>')
+            continue
+
+        # Close lists if we hit a non-list line
+        if in_ul: result_lines.append('</ul>'); in_ul = False
+        if in_ol: result_lines.append('</ol>'); in_ol = False
+
+        result_lines.append(line)
+
+    if in_ul: result_lines.append('</ul>')
+    if in_ol: result_lines.append('</ol>')
+
+    text = '\n'.join(result_lines)
+
+    # Inline formatting
+    # Strikethrough: ~~text~~ (must come before bold to avoid conflicts)
+    text = re.sub(r'~~(.+?)~~', r'<del>\1</del>', text)
     # Bold: **text**
     text = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', text)
     # Italic: *text*
     text = re.sub(r'\*(.+?)\*', r'<em>\1</em>', text)
+    # Inline code: `text`
+    text = re.sub(r'`(.+?)`', r'<code>\1</code>', text)
     # Links: [text](url)
     text = re.sub(r'\[(.+?)\]\((.+?)\)', r'<a href="\2">\1</a>', text)
-    # Single newlines → <br>
-    text = text.replace('\n', '<br>')
+    # Horizontal rule: --- or ***
+    text = re.sub(r'^(---|\*\*\*)$', '<hr>', text, flags=re.MULTILINE)
+    # Single newlines → <br> (but not after block elements)
+    text = re.sub(r'(?<!</h[123]>)(?<!</ul>)(?<!</li>)(?<!</blockquote>)(?<!</hr>)\n(?!<)', '<br>\n', text)
     return text
 
 

@@ -38,7 +38,7 @@ Package marker. No public exports.
 | `serve_icon_192()` | `GET /static/cwoc-icon-192.png` — Serve 192×192 PWA icon from `src/pwa/` |
 | `serve_icon_512()` | `GET /static/cwoc-icon-512.png` — Serve 512×512 PWA icon from `src/pwa/` |
 
-Registers all route modules (including `auth_router`, `users_router`, `sharing_router`, `notifications_router`, `network_access_router`, `push_router`, `ntfy_router`, `email_router`, and `attachments_router`), runs all migrations (including `migrate_add_multi_user()`, `migrate_add_sharing()`, `migrate_add_kiosk_users()`, `migrate_add_network_access()`, `migrate_add_notifications()`, `migrate_habits_overhaul()`, `migrate_habits_phase2()`, `migrate_add_push_subscriptions()`, `migrate_add_vapid_keys()`, `migrate_add_map_settings()`, `migrate_add_contact_dates()`, `migrate_add_email_fields()`, `migrate_add_attachments()`, `migrate_add_email_body_html()`, and `migrate_add_fts5()`) and `init_db()` at import time, mounts `StaticFiles` for frontend, static, data, and PWA directories.
+Registers all route modules (including `auth_router`, `users_router`, `sharing_router`, `notifications_router`, `network_access_router`, `push_router`, `ntfy_router`, `email_router`, and `attachments_router`), runs all migrations (including `migrate_add_multi_user()`, `migrate_add_sharing()`, `migrate_add_kiosk_users()`, `migrate_add_network_access()`, `migrate_add_notifications()`, `migrate_habits_overhaul()`, `migrate_habits_phase2()`, `migrate_add_push_subscriptions()`, `migrate_add_vapid_keys()`, `migrate_add_map_settings()`, `migrate_add_contact_dates()`, `migrate_add_email_fields()`, `migrate_add_attachments()`, `migrate_add_email_body_html()`, `migrate_add_fts5()`, and `migrate_add_contact_vault()`) and `init_db()` at import time, mounts `StaticFiles` for frontend, static, data, and PWA directories.
 
 ### 1.3 `src/backend/models.py` — Pydantic Models
 
@@ -47,10 +47,10 @@ Registers all route modules (including `auth_router`, `users_router`, `sharing_r
 | `ShareEntry` | Share entry with `user_id: str` and `role: str` (manager or viewer) |
 | `SharedTagEntry` | Tag-level share entry with `tag: str` and `shares: List[ShareEntry]` |
 | `Tag` | Tag with name, color, fontColor, favorite |
-| `Settings` | User settings — time format, tags, colors, indicators, calendar config, audit limits, habits success window, shared_tags, hide_declined, map settings (map_default_lat, map_default_lon, map_default_zoom, map_auto_zoom), email_account (JSON string containing email config), etc. |
+| `Settings` | User settings — time format, tags, colors, indicators, calendar config, audit limits, habits success window, shared_tags, hide_declined, map settings (map_default_lat, map_default_lon, map_default_zoom, map_auto_zoom), email_account (JSON string containing email config), default_share_contacts, etc. |
 | `Chit` | Core chit model — title, note, dates, status, checklist, alerts, recurrence, location, color, people, habit, habit_goal, habit_success, show_on_calendar, habit_reset_period, habit_last_action_date, habit_hide_overall, perpetual, shares, stealth, assigned_to, email fields (email_message_id, email_from, email_to, email_cc, email_bcc, email_subject, email_body_text, email_date, email_folder, email_status, email_read, email_in_reply_to, email_references), etc. |
 | `MultiValueEntry` | Label/value pair for contact multi-value fields (phone, email, etc.) |
-| `Contact` | Contact model — name fields, phones, emails, addresses, dates, social, security, notes, tags, color |
+| `Contact` | Contact model — name fields, phones, emails, addresses, dates, social, security, notes, tags, color, shared_to_vault |
 | `ImportRequest` | Import envelope — mode ("add"/"replace") + data dict |
 | `UserCreate` | Create user request — username, display_name, password, email (optional), is_admin (optional, default False) |
 | `UserResponse` | User response — id, username, display_name, email, is_admin, is_active, created_datetime |
@@ -123,6 +123,7 @@ All migrations run at startup. Each checks if the column/table already exists be
 | `migrate_add_attachments()` | Add `attachments` (TEXT) column to chits table for JSON array of attachment metadata; add `attachment_max_size_mb` (TEXT DEFAULT '10') column to settings table |
 | `migrate_add_email_body_html()` | Add `email_body_html` (TEXT) column to chits table for HTML email body rendering |
 | `migrate_add_fts5()` | Create `chits_fts` FTS5 virtual table indexing title, note, email_body_text, email_subject; add INSERT/UPDATE/DELETE triggers for sync; rebuild index from existing data. Gracefully handles missing FTS5 support |
+| `migrate_add_contact_vault()` | Add `shared_to_vault` (BOOLEAN DEFAULT 0) column to contacts table; add `default_share_contacts` (TEXT DEFAULT '0') column to settings table. Enables the shared Contact Vault feature |
 
 ### 1.6 `src/backend/serializers.py` — vCard & CSV
 
@@ -435,15 +436,15 @@ Settings endpoints use `request.state.user_id` from `AuthMiddleware` to scope da
 
 ### 1.22 `src/backend/routes/contacts.py` — Contacts
 
-All contact endpoints are scoped by `owner_id` — users can only access their own contacts.
+Contact endpoints are scoped by `owner_id`. Users can access their own contacts plus any contact with `shared_to_vault = 1` (Contact Vault). Vault contacts from other users are read-only.
 
 | Route | Handler | Description |
 |-------|---------|-------------|
-| `POST /api/contacts` | `create_contact(contact, request)` | Create a new contact (sets `owner_id` from authenticated user) |
-| `GET /api/contacts` | `get_contacts(q, request)` | List contacts owned by authenticated user (optional search) |
-| `GET /api/contacts/export` | `export_contacts(format, request)` | Export authenticated user's contacts as .vcf or .csv |
-| `GET /api/contacts/{contact_id}/export` | `export_single_contact(contact_id, format, request)` | Export a single contact (verifies ownership) |
-| `GET /api/contacts/{contact_id}` | `get_contact(contact_id, request)` | Get a single contact (verifies ownership) |
+| `POST /api/contacts` | `create_contact(contact, request)` | Create a new contact (sets `owner_id` from authenticated user, supports `shared_to_vault` flag) |
+| `GET /api/contacts` | `get_contacts(q, request)` | List contacts owned by authenticated user plus vault contacts from other users (optional search). Vault contacts include `is_vault_contact: true` |
+| `GET /api/contacts/export` | `export_contacts(format, request)` | Export authenticated user's own contacts as .vcf or .csv |
+| `GET /api/contacts/{contact_id}/export` | `export_single_contact(contact_id, format, request)` | Export a single contact (allows owner or vault access) |
+| `GET /api/contacts/{contact_id}` | `get_contact(contact_id, request)` | Get a single contact (allows owner or vault access) |
 | `PUT /api/contacts/{contact_id}` | `update_contact(contact_id, contact, request)` | Update a contact (verifies ownership) |
 | `DELETE /api/contacts/{contact_id}` | `delete_contact(contact_id, request)` | Delete a contact (verifies ownership) |
 | `POST /api/contacts/{contact_id}/image` | `upload_contact_image(contact_id, file)` | Upload a profile image |
@@ -455,8 +456,8 @@ All contact endpoints are scoped by `owner_id` — users can only access their o
 
 | Function | Description |
 |----------|-------------|
-| `_serialize_contact_for_db(contact)` | Convert a Contact model to a DB-ready dict |
-| `_row_to_contact(row)` | Convert a DB row dict to an API-ready contact dict |
+| `_serialize_contact_for_db(contact)` | Convert a Contact model to a DB-ready dict (includes `shared_to_vault`) |
+| `_row_to_contact(row)` | Convert a DB row dict to an API-ready contact dict (includes `shared_to_vault`) |
 | `_write_vcf_file(contact_id, contact)` | Write a .vcf file for a contact |
 
 ### 1.22b `src/backend/routes/ics_import.py` — ICS Calendar Import
@@ -1789,9 +1790,11 @@ Email zone: populate, collect, reply, forward, send. Handles the Email zone in t
 | `_emailReply()` | Create a reply draft chit via `POST /api/chits` and navigate to the editor; sets `email_to` to original sender, `email_in_reply_to` to original Message-ID, subject prefixed with "Re: " (no doubling), body quoted below separator |
 | `_emailForward()` | Create a forward draft chit via `POST /api/chits` and navigate to the editor; empty `email_to`, subject prefixed with "Fwd: " (no doubling), body quoted below separator |
 | `_emailSend()` | Send the current draft email via `POST /api/email/send/{id}`; validates non-empty To field; shows success/error toast; updates local state and UI to reflect sent status |
-| `_setEmailZoneReadOnly(readOnly)` | Toggle field editability for the email zone (To, Cc, Bcc, Body) — sets `disabled` and `readOnly` properties |
+| `_setEmailZoneReadOnly(readOnly)` | Toggle field editability for the email zone (To, Cc, Bcc, Body) — sets `disabled` and `readOnly` properties; hides markdown preview when read-only |
 | `_fetchEmailThread(chitId)` | Fetch the email thread for a chit via `GET /api/email/thread/{chit_id}` and render it below the body |
 | `_renderEmailThread(thread, currentId)` | Render the email thread section with sender, date, preview for each message; current email highlighted |
+| `_wireEmailBodyPreview()` | Wire live markdown preview on the email body textarea; debounced 500ms; uses `marked.parse()` for rendering |
+| `_wireExpandBodyPreview()` | Wire live markdown preview on the expand modal's email body textarea; creates preview div dynamically |
 | `_setupHtmlEmailView(htmlContent, bodyEl)` | Set up HTML email view with toggle button and sandboxed iframe using DOMPurify sanitization |
 | `_switchEmailView(mode)` | Switch between 'html' and 'text' views for email body rendering |
 | `_resizeEmailIframe(iframe)` | Auto-resize an iframe to fit its content height |
@@ -2904,7 +2907,7 @@ New frontend pages added for Maps View:
 ```
 src/backend/main.py
   ├── src.backend.db          (init_db, seed_version_info)
-  ├── src.backend.migrations  (all migrate_* functions, including migrate_add_multi_user, migrate_add_sharing, migrate_add_push_subscriptions, migrate_add_vapid_keys, migrate_add_email_fields, migrate_add_attachments, migrate_add_email_body_html, migrate_add_fts5)
+  ├── src.backend.migrations  (all migrate_* functions, including migrate_add_multi_user, migrate_add_sharing, migrate_add_push_subscriptions, migrate_add_vapid_keys, migrate_add_email_fields, migrate_add_attachments, migrate_add_email_body_html, migrate_add_fts5, migrate_add_contact_vault)
   ├── src.backend.middleware   (AuthMiddleware)
   ├── src.backend.weather     (start_weather_schedulers)
   └── src.backend.routes.*    (all 14 route modules, including auth_router, users_router, sharing_router, notifications_router, network_access_router, push_router, ntfy_router, email_router, and attachments_router)

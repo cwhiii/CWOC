@@ -170,9 +170,10 @@
         header.innerHTML = '<span style="width:28px;"></span><span style="width:32px;"></span><span class="contact-info"><span class="contact-name" style="font-weight:bold;font-size:0.8em;opacity:0.7;">Name</span><span class="contact-detail" style="font-weight:bold;opacity:0.7;">Phone · Email · Org</span></span><span style="width:40px;"></span>';
         listEl.appendChild(header);
 
-        // Split into favorites and non-favorites
-        const favorites = _filteredContacts.filter(c => c.favorite);
-        const others = _filteredContacts.filter(c => !c.favorite);
+        // Split into favorites, vault contacts, and non-favorites
+        const favorites = _filteredContacts.filter(c => c.favorite && !c.is_vault_contact);
+        const vaultContacts = _filteredContacts.filter(c => c.is_vault_contact);
+        const others = _filteredContacts.filter(c => !c.favorite && !c.is_vault_contact);
 
         // Also check for favorited users (stored in localStorage)
         const favUsers = filteredUsers.filter(u => localStorage.getItem('cwoc_user_fav_' + u.id) === '1');
@@ -181,6 +182,7 @@
         const sortFn = (a, b) => (a.display_name || '').localeCompare(b.display_name || '', undefined, { sensitivity: 'base' });
         favorites.sort(sortFn);
         others.sort(sortFn);
+        vaultContacts.sort(sortFn);
 
         // ── Ungrouped mode: flat alphabetical list ──────────────────────
         if (!_grouped) {
@@ -227,6 +229,13 @@
         // ── All Contacts section ────────────────────────────────────────
         if (others.length > 0) {
             _renderSection('all-contacts', 'All Contacts', others, q, function(c) {
+                return _createRow(c, q);
+            });
+        }
+
+        // ── Vault Contacts section ──────────────────────────────────────
+        if (vaultContacts.length > 0) {
+            _renderSection('vault-contacts', '🏛️ Contact Vault', vaultContacts, q, function(c) {
                 return _createRow(c, q);
             });
         }
@@ -370,6 +379,15 @@
         name.className = 'contact-name' + (contact.favorite ? ' favorite' : '');
         name.innerHTML = _highlightMatch(contact.display_name || contact.given_name || '(unnamed)', query);
         infoCol.appendChild(name);
+
+        // Vault icon — shown on any contact shared to the vault
+        if (contact.shared_to_vault || contact.is_vault_contact) {
+            const vaultIcon = document.createElement('span');
+            vaultIcon.className = 'vault-icon';
+            vaultIcon.textContent = '🏛️';
+            vaultIcon.title = contact.is_vault_contact ? 'Shared from another user\'s vault' : 'Shared to vault';
+            row.appendChild(vaultIcon);
+        }
 
         // Detail line: email, phone, org
         const details = [];

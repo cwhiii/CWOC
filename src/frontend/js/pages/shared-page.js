@@ -65,7 +65,10 @@ class CwocSaveSystem {
   cancelOrExit() {
     const url = this._getReturnUrl();
     if (this._hasUnsaved) {
-      // Show confirm modal (parchment-styled)
+      // Check if this is an email draft — offer Save as Draft option
+      const isEmailDraft = typeof _emailCurrentChit !== 'undefined' && _emailCurrentChit &&
+        (_emailCurrentChit.email_status === 'draft' || typeof _hasEmailContent === 'function' && _hasEmailContent());
+
       const existing = document.getElementById('cwoc-unsaved-modal');
       if (existing) existing.remove();
       const modal = document.createElement('div');
@@ -75,19 +78,43 @@ class CwocSaveSystem {
       modal.innerHTML = `
         <div class="modal-content">
           <h3>Unsaved Changes</h3>
-          <p>You have unsaved changes. Are you sure you want to leave?</p>
-          <div style="display:flex;gap:8px;justify-content:flex-end;">
-            <button class="standard-button" id="cwoc-stay-here">Stay Here</button>
-            <button class="standard-button" id="cwoc-confirm-exit">Exit Without Saving</button>
+          <p>You have unsaved changes. What would you like to do?</p>
+          <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;">
+            <button class="standard-button" id="cwoc-stay-here">Cancel</button>
+            ${isEmailDraft ? '<button class="standard-button" id="cwoc-save-draft">📝 Save as Draft</button>' : ''}
+            <button class="standard-button" id="cwoc-save-exit">💾 Save &amp; Exit</button>
+            <button class="standard-button" id="cwoc-confirm-exit" style="background:#a0522d;color:#fdf5e6;">🗑️ Discard</button>
           </div>
         </div>`;
       document.body.appendChild(modal);
-      document.getElementById('cwoc-confirm-exit').onclick = () => { window.location.href = url; };
+      document.getElementById('cwoc-confirm-exit').onclick = () => {
+        if (typeof _cancelServerTimersForChit === 'function') _cancelServerTimersForChit();
+        window.location.href = url;
+      };
       document.getElementById('cwoc-stay-here').onclick = () => { modal.remove(); };
+      const saveExitBtn = document.getElementById('cwoc-save-exit');
+      if (saveExitBtn) {
+        saveExitBtn.onclick = () => {
+          modal.remove();
+          if (typeof saveChit === 'function') saveChit();
+        };
+      }
+      const saveDraftBtn = document.getElementById('cwoc-save-draft');
+      if (saveDraftBtn) {
+        saveDraftBtn.onclick = () => {
+          modal.remove();
+          if (typeof saveChitAndStay === 'function') {
+            saveChitAndStay().then(function() {
+              window.location.href = url;
+            });
+          }
+        };
+      }
       // ESC closes the modal
       const onKey = (e) => { if (e.key === 'Escape') { modal.remove(); document.removeEventListener('keydown', onKey); } };
       document.addEventListener('keydown', onKey);
     } else {
+      if (typeof _cancelServerTimersForChit === 'function') _cancelServerTimersForChit();
       window.location.href = url;
     }
   }

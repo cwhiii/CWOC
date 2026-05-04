@@ -1463,9 +1463,7 @@ def migrate_add_fts5():
         if cursor.fetchone():
             logger.info("chits_fts table already exists, skipping FTS5 migration")
             conn.close()
-            return
-
-        # Create FTS5 virtual table
+            return        # Create FTS5 virtual table
         cursor.execute("""
             CREATE VIRTUAL TABLE IF NOT EXISTS chits_fts USING fts5(
                 title, note, email_body_text, email_subject,
@@ -1512,6 +1510,47 @@ def migrate_add_fts5():
         logger.error(f"Error in migrate_add_fts5: {str(e)}")
         # FTS5 may not be available in all SQLite builds — log but don't crash
         logger.warning("FTS5 migration failed — full-text search will fall back to LIKE queries")
+    finally:
+        if conn:
+            conn.close()
+
+
+# ── Shared Contact Vault: migration ──────────────────────────────────────
+
+def migrate_add_contact_vault():
+    """Add shared_to_vault column to contacts table and default_share_contacts to settings.
+
+    shared_to_vault (BOOLEAN DEFAULT 0): when true, the contact is visible to all users.
+    default_share_contacts (TEXT DEFAULT '0'): user preference for new contacts.
+
+    Fully idempotent — checks column existence before adding.
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        # ── contacts table ───────────────────────────────────────────────
+        cursor.execute("PRAGMA table_info(contacts)")
+        contact_cols = {row[1] for row in cursor.fetchall()}
+
+        if "shared_to_vault" not in contact_cols:
+            cursor.execute("ALTER TABLE contacts ADD COLUMN shared_to_vault BOOLEAN DEFAULT 0")
+            logger.info("Added shared_to_vault column to contacts table")
+
+        # ── settings table ───────────────────────────────────────────────
+        cursor.execute("PRAGMA table_info(settings)")
+        settings_cols = {row[1] for row in cursor.fetchall()}
+
+        if "default_share_contacts" not in settings_cols:
+            cursor.execute("ALTER TABLE settings ADD COLUMN default_share_contacts TEXT DEFAULT '0'")
+            logger.info("Added default_share_contacts column to settings table")
+
+        conn.commit()
+        logger.info("Contact vault migration complete")
+    except Exception as e:
+        logger.error(f"Error in migrate_add_contact_vault: {str(e)}")
+        raise
     finally:
         if conn:
             conn.close()

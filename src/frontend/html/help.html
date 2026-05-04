@@ -261,15 +261,33 @@
             <h4>Google Maps Preference</h4>
             <p>If "Prefer Google for Maps" is enabled in Settings → Chit Options, the Maps View displays a warning message instead of loading the map. Google Maps is not supported for this feature due to billing restrictions. Disable the preference in Settings to use the Maps View.</p>
             <h3 id="email">Email</h3>
-            <p>CWOC includes a built-in email client. Configure your email account in Settings → Email Account with IMAP/SMTP credentials. Emails are stored as chits with special email fields.</p>
+            <p>CWOC includes a built-in email client. Configure your email account in Settings → Email with IMAP/SMTP credentials. Emails are stored as chits with special email fields.</p>
             <ul>
-                <li><strong>Email View</strong> — View inbox, sent, drafts, and trash folders. Right-click (or long-press on mobile) an email card to toggle read/unread status</li>
-                <li><strong>Compose</strong> — Click Compose to create a new email draft. Fill in To, CC, BCC, and body fields. Save as Draft or Send directly</li>
-                <li><strong>Reply / Forward</strong> — Open a received email and use the Reply or Forward buttons to create a new draft with quoted content</li>
-                <li><strong>Threading</strong> — When viewing an email that's part of a conversation, a Thread section appears below the body showing all related messages sorted chronologically. Click any thread entry to navigate to that email</li>
+                <li><strong>Email View</strong> — View inbox, sent, drafts, and trash folders. Shift+click an email card to toggle read/unread status</li>
+                <li><strong>Compose</strong> — Click Compose to create a new email draft. Fill in To, CC, BCC, and body fields. The body supports <strong>markdown</strong> with a live HTML preview below the text area. When sent, the email is delivered as properly rendered HTML</li>
+                <li><strong>Expanded Editor</strong> — Click Expand to open the full-screen email editor with a formatting toolbar, subject field, and split view (markdown on top, preview on bottom). Opening an email from the Email view auto-expands</li>
+                <li><strong>Reply / Forward</strong> — Open a received email and use the Reply or Forward buttons to create a new draft with quoted content. The expand/collapse state is preserved across reply and forward</li>
+                <li><strong>Send &amp; Archive</strong> — Alongside the Send button, Send &amp; Archive sends the reply and archives the original email in one step</li>
+                <li><strong>Threading</strong> — When viewing an email that's part of a conversation, a Thread section appears below the body showing all related messages. Click any thread entry to navigate to that email</li>
                 <li><strong>HTML Rendering</strong> — Received emails with HTML content display in a sandboxed iframe. Use the HTML/Text toggle to switch between rendered and plain-text views</li>
-                <li><strong>Auto-check</strong> — Configure automatic mail checking intervals in Settings (5, 15, 30, or 60 minutes)</li>
+                <li><strong>Signature</strong> — Configure a markdown signature in Settings → Email → Signature. It is automatically appended to all outgoing emails, converted to HTML</li>
+                <li><strong>Auto-check</strong> — Configure automatic mail checking intervals in Settings → Email → Syncing (5, 15, 30, or 60 minutes)</li>
             </ul>
+            <h4>Email Formatting Shortcuts</h4>
+            <p>These keyboard shortcuts work in both the small email zone and the expanded editor. The expanded editor also has a toolbar with buttons for each action.</p>
+            <ul>
+                <li><kbd>Ctrl+B</kbd> — <strong>Bold</strong> (wraps selection with <code>**</code>)</li>
+                <li><kbd>Ctrl+I</kbd> — <em>Italic</em> (wraps selection with <code>*</code>)</li>
+                <li><kbd>Ctrl+K</kbd> — Link (wraps selection as <code>[text](url)</code>)</li>
+                <li><kbd>Ctrl+E</kbd> — Inline code (wraps selection with <code>`</code>)</li>
+                <li><kbd>Ctrl+Shift+X</kbd> — <s>Strikethrough</s> (wraps selection with <code>~~</code>)</li>
+                <li><kbd>Ctrl+Shift+8</kbd> — Bullet list (prefixes line with <code>-</code>)</li>
+                <li><kbd>Ctrl+Shift+7</kbd> — Numbered list (prefixes line with <code>1.</code>)</li>
+                <li><kbd>Ctrl+Shift+.</kbd> — Blockquote (prefixes selection with <code>&gt;</code>)</li>
+                <li><kbd>Ctrl+Shift+1</kbd> — Heading 1 · <kbd>Ctrl+Shift+2</kbd> — Heading 2 · <kbd>Ctrl+Shift+3</kbd> — Heading 3</li>
+                <li><kbd>Ctrl+Shift+-</kbd> — Horizontal rule (inserts <code>---</code>)</li>
+            </ul>
+            <p>Bold, italic, strikethrough, link, code, and blockquote require selected text. Lists prefix the current line. Headings apply to the current line. Horizontal rule always inserts.</p>
             <h3 id="global-search">Global Search</h3>
             <p>Press <kbd>G</kbd> or click the magnifying glass icon (last in the C CAPTN view bar) to open the Global Search view. Unlike the sidebar filter, Global Search queries ALL fields across ALL chits regardless of which view they belong to.</p>
             <ul>
@@ -468,6 +486,7 @@
                 <li><strong>Notes</strong> — Markdown notes field for free-form text about the contact</li>
                 <li><strong>Tags</strong> — Tags for contacts, auto-prefixed with "Contact/" (shared with the general tag system)</li>
                 <li><strong>Suffixes</strong> — Text suffixes (Jr., Sr., Esq., Ph.D., M.D.) listed before numeric suffixes (I–X)</li>
+                <li><strong>Contact Vault</strong> — Toggle "Share to Vault" to make a contact visible to all users on the server. Vault contacts from other users appear in a separate "🏛️ Contact Vault" section on the People page and are read-only. Set a default in Settings → General → Contact Vault</li>
             </ul>
             <h3 id="sharing">Sharing</h3>
             <p>Chits can be shared with other system users, giving them Viewer or Manager access. All sharing controls live in the People zone of the chit editor.</p>

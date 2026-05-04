@@ -105,6 +105,88 @@
     font-style: italic;
 }
 
+/* ── Email Body Live Preview ────────────────────────────────────────────── */
+.email-body-preview {
+    width: 100%;
+    min-height: 80px;
+    padding: 10px 12px;
+    border: 1px solid rgba(139, 90, 43, 0.2);
+    border-radius: 4px;
+    font-size: 14px;
+    font-family: 'Lora', Georgia, serif;
+    background: rgba(253, 246, 227, 0.5);
+    color: #1a1208;
+    line-height: 1.6;
+    margin-top: 6px;
+    overflow-y: auto;
+    max-height: 300px;
+    box-sizing: border-box;
+}
+
+.email-body-preview h1,
+.email-body-preview h2,
+.email-body-preview h3 {
+    margin: 0.5em 0 0.3em;
+    color: #3a2a1a;
+}
+
+.email-body-preview p {
+    margin: 0.4em 0;
+}
+
+.email-body-preview a {
+    color: #4a2c2a;
+    text-decoration: underline;
+}
+
+.email-body-preview strong {
+    font-weight: 700;
+}
+
+.email-body-preview ul,
+.email-body-preview ol {
+    padding-left: 1.5em;
+    margin: 0.4em 0;
+}
+
+.email-body-preview blockquote {
+    border-left: 3px solid rgba(139, 90, 43, 0.3);
+    margin: 0.5em 0;
+    padding: 0.3em 0.8em;
+    color: #5a4a3a;
+}
+
+.email-body-preview code {
+    background: rgba(139, 90, 43, 0.1);
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-size: 0.9em;
+}
+
+.email-body-preview pre {
+    background: rgba(139, 90, 43, 0.08);
+    padding: 8px 10px;
+    border-radius: 4px;
+    overflow-x: auto;
+}
+
+.email-body-preview-label {
+    font-size: 0.8em;
+    color: var(--aged-brown-light, #a0522d);
+    font-family: 'Lora', Georgia, serif;
+    font-style: italic;
+    margin-top: 6px;
+    margin-bottom: 2px;
+}
+
+/* ── Responsive — preview adjustments ──────────────────────────────────── */
+@media (max-width: 480px) {
+    .email-body-preview {
+        max-height: 200px;
+        font-size: 15px;
+    }
+}
+
 /* ── Disabled / Read-Only States ───────────────────────────────────────── */
 .email-field input[type="text"]:disabled,
 .email-field input[type="text"][readonly],
@@ -525,6 +607,106 @@
 }
 
 /* ── Email Expand Modal — HTML/Text Pill Toggle ────────────────────────── */
+
+/* ── Email Format Toolbar (expand modal only) ──────────────────────────── */
+.email-format-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 4px 6px;
+    margin-bottom: 6px;
+    background: var(--parchment-medium, #e8dcc8);
+    border: 1px solid var(--aged-brown-medium, #8b5a2b);
+    border-radius: 4px;
+    flex-wrap: wrap;
+}
+.email-format-toolbar button {
+    padding: 3px 8px;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.85em;
+    background: var(--button-bg, #d4c5a9);
+    color: var(--aged-brown-dark, #4a2c2a);
+    border: 1px solid var(--aged-brown-light, #a0522d);
+    border-radius: 3px;
+    cursor: pointer;
+    transition: background 0.15s;
+    line-height: 1.3;
+    min-width: 28px;
+    text-align: center;
+}
+.email-format-toolbar button:hover {
+    background: var(--button-hover, #c4b599);
+}
+.email-format-toolbar button:active {
+    background: var(--aged-brown-light, #a0522d);
+    color: var(--parchment-light, #fff8e1);
+}
+.email-toolbar-sep {
+    width: 1px;
+    height: 20px;
+    background: var(--aged-brown-light, #a0522d);
+    opacity: 0.3;
+    margin: 0 4px;
+}
+.email-toolbar-dropdown {
+    position: relative;
+    display: inline-block;
+}
+.email-toolbar-dropdown > button {
+    padding: 3px 8px;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.85em;
+    background: var(--button-bg, #d4c5a9);
+    color: var(--aged-brown-dark, #4a2c2a);
+    border: 1px solid var(--aged-brown-light, #a0522d);
+    border-radius: 3px;
+    cursor: pointer;
+    transition: background 0.15s;
+    line-height: 1.3;
+}
+.email-toolbar-dropdown > button:hover {
+    background: var(--button-hover, #c4b599);
+}
+.email-toolbar-dropdown-menu {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    background: var(--parchment-light, #fff8e1);
+    border: 1px solid var(--aged-brown-medium, #8b5a2b);
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 110;
+    min-width: 50px;
+    padding: 2px;
+}
+.email-toolbar-dropdown:hover .email-toolbar-dropdown-menu,
+.email-toolbar-dropdown:focus-within .email-toolbar-dropdown-menu {
+    display: flex;
+    flex-direction: column;
+}
+.email-toolbar-dropdown-menu button {
+    padding: 4px 12px;
+    border: none;
+    background: none;
+    color: var(--aged-brown-dark, #4a2c2a);
+    cursor: pointer;
+    text-align: left;
+    font-family: 'Lora', Georgia, serif;
+    white-space: nowrap;
+    border-radius: 3px;
+}
+.email-toolbar-dropdown-menu button:hover {
+    background: var(--parchment-medium, #e8dcc8);
+}
+@media (max-width: 480px) {
+    .email-format-toolbar button {
+        padding: 4px 6px;
+        font-size: 0.8em;
+        min-width: 24px;
+    }
+}
+
 #emailExpandPillToggle {
     align-self: flex-start;
     width: auto;
