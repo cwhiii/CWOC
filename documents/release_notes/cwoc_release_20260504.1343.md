@@ -1,0 +1,1 @@
+Restructured email accounts UI to use a "Manage Email Accounts" button that opens a modal. The modal shows a list of configured accounts as clickable items. Clicking an account opens its edit form within the same modal where you can modify or delete it. An "Add Account" button in the modal lets you add new accounts. ESC key properly navigates back through the modal layers.

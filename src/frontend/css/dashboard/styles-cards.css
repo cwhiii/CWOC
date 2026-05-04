@@ -1376,6 +1376,31 @@ li.cwoc-dragging {
     margin-bottom: 8px;
 }
 
+/* ── Email account filter pill buttons ────────────────────────────────────── */
+.email-account-pill {
+    display: inline-block;
+    font-size: 0.8em;
+    font-weight: 600;
+    padding: 4px 10px;
+    margin: 2px 4px 2px 0;
+    border-radius: 12px;
+    border: 1px solid rgba(139, 90, 43, 0.4);
+    background: #f5e6cc;
+    color: #6b4e31;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+    font-family: inherit;
+}
+.email-account-pill:hover {
+    background: #e8dcc8;
+    border-color: #8b5a2b;
+}
+.email-account-pill.active {
+    background: #8b5a2b;
+    color: #fff8e1;
+    border-color: #5c4033;
+}
+
 /* ── Scrollable wrapper for email cards ───────────────────────────────────── */
 .email-scroll-wrap {
     flex: 1;

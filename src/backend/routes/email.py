@@ -178,20 +178,34 @@ def _unwrap_json_list(val) -> list:
 def _connect_imap(account: dict) -> imaplib.IMAP4_SSL:
     """Connect and authenticate to the configured IMAP server.
 
+    Supports SSL/TLS (default, port 993) and STARTTLS (port 143).
+    The ``imap_security`` field controls the connection mode:
+      - "ssl" (default): Use IMAP4_SSL (implicit TLS)
+      - "starttls": Use IMAP4 then upgrade with STARTTLS
+      - "none": Use IMAP4 without encryption (not recommended)
+
     Args:
         account: dict with keys ``imap_host``, ``imap_port``, ``username``,
-                 and ``password_encrypted`` (or ``password``).
+                 ``imap_security``, and ``password_encrypted`` (or ``password``).
 
     Returns:
-        An authenticated ``imaplib.IMAP4_SSL`` connection with INBOX selected.
+        An authenticated IMAP connection with INBOX selected.
 
     Raises:
         imaplib.IMAP4.error: on authentication or connection failure.
     """
     host = account.get("imap_host", "imap.gmail.com")
     port = int(account.get("imap_port", 993))
+    security = account.get("imap_security", "ssl")
 
-    imap = imaplib.IMAP4_SSL(host, port)
+    if security == "starttls":
+        imap = imaplib.IMAP4(host, port)
+        imap.starttls()
+    elif security == "none":
+        imap = imaplib.IMAP4(host, port)
+    else:
+        # Default: SSL/TLS
+        imap = imaplib.IMAP4_SSL(host, port)
 
     # Decrypt the stored password (or use plaintext if provided directly)
     password = account.get("password")
@@ -465,7 +479,7 @@ def _strip_html_tags(html: str) -> str:
 # ═══════════════════════════════════════════════════════════════════════════
 
 
-def _create_email_chit(cursor, parsed: dict, owner_id: str, account_id: str = None) -> str | None:
+def _create_email_chit(cursor, parsed: dict, owner_id: str, account_id: str = None, account_nickname: str = None) -> str | None:
     """Insert a new chit from a parsed email message.
 
     Performs deduplication by checking ``email_message_id`` before inserting.
@@ -475,6 +489,7 @@ def _create_email_chit(cursor, parsed: dict, owner_id: str, account_id: str = No
         parsed: Dict returned by ``_parse_email_message``.
         owner_id: The user/owner ID for the chit.
         account_id: The email account ID this message belongs to.
+        account_nickname: The account's nickname for system tag assignment.
 
     Returns:
         The new chit ID if inserted, or ``None`` if the message was a
@@ -514,6 +529,11 @@ def _create_email_chit(cursor, parsed: dict, owner_id: str, account_id: str = No
     proxy.email_folder = "inbox"
 
     tags = compute_system_tags(proxy)
+
+    # Add account nickname as a system tag for filtering/rules
+    if account_nickname:
+        tags.append(f"CWOC_System/Email/Account/{account_nickname}")
+
     tags_json = serialize_json_field(tags)
 
     # Serialize list fields as JSON
@@ -613,14 +633,20 @@ def _estimate_backfill(account: dict) -> dict:
 
 
 def _connect_smtp(account: dict) -> smtplib.SMTP:
-    """Connect and authenticate to the configured SMTP server with STARTTLS.
+    """Connect and authenticate to the configured SMTP server.
+
+    Supports STARTTLS (default, port 587), SSL/TLS (port 465), and
+    unencrypted (not recommended). The ``smtp_security`` field controls mode:
+      - "starttls" (default): Connect plain then upgrade with STARTTLS
+      - "ssl": Use SMTP_SSL (implicit TLS, typically port 465)
+      - "none": No encryption (not recommended)
 
     Args:
         account: dict with keys ``smtp_host``, ``smtp_port``, ``username``,
-                 and ``password_encrypted`` (or ``password``).
+                 ``smtp_security``, and ``password_encrypted`` (or ``password``).
 
     Returns:
-        An authenticated ``smtplib.SMTP`` connection ready to send.
+        An authenticated SMTP connection ready to send.
 
     Raises:
         smtplib.SMTPAuthenticationError: on authentication failure.
@@ -628,11 +654,20 @@ def _connect_smtp(account: dict) -> smtplib.SMTP:
     """
     host = account.get("smtp_host", "smtp.gmail.com")
     port = int(account.get("smtp_port", 587))
+    security = account.get("smtp_security", "starttls")
 
-    smtp = smtplib.SMTP(host, port, timeout=15)
-    smtp.ehlo()
-    smtp.starttls()
-    smtp.ehlo()
+    if security == "ssl":
+        smtp = smtplib.SMTP_SSL(host, port, timeout=15)
+        smtp.ehlo()
+    elif security == "none":
+        smtp = smtplib.SMTP(host, port, timeout=15)
+        smtp.ehlo()
+    else:
+        # Default: STARTTLS
+        smtp = smtplib.SMTP(host, port, timeout=15)
+        smtp.ehlo()
+        smtp.starttls()
+        smtp.ehlo()
 
     # Decrypt the stored password (or use plaintext if provided directly)
     password = account.get("password")
@@ -1110,7 +1145,7 @@ def _sync_deletions(imap, cursor, owner_id: str, account_id: str) -> int:
 
     For each non-deleted inbox email chit belonging to *account_id*, search
     IMAP by Message-ID.  If the message is no longer present in INBOX, the
-    chit is soft-deleted (``deleted = 1``, ``deleted_datetime`` set).
+    chit is soft-deleted (``deleted = 1``, ``email_folder = 'trash'``).
 
     This handles the case where a user deletes an email in Gmail (or any
     IMAP provider) and expects that deletion to propagate into CWOC.
@@ -1170,10 +1205,10 @@ def _sync_deletions(imap, cursor, owner_id: str, account_id: str) -> int:
                 cursor.execute(
                     """UPDATE chits
                        SET deleted = 1,
-                           deleted_datetime = ?,
+                           email_folder = 'trash',
                            modified_datetime = ?
                        WHERE id = ?""",
-                    (now, now, chit_id),
+                    (now, chit_id),
                 )
                 deleted_count += 1
                 logger.info(
@@ -1275,7 +1310,7 @@ def email_sync(request: Request):
                         else:
                             parsed["email_read"] = False
 
-                        chit_id = _create_email_chit(cursor, parsed, user_id, account_id=account_id)
+                        chit_id = _create_email_chit(cursor, parsed, user_id, account_id=account_id, account_nickname=account.get("nickname"))
                         if chit_id:
                             new_count += 1
                             subj = parsed.get("email_subject", "(No Subject)")
@@ -1798,9 +1833,18 @@ async def email_test_connection(request: Request):
     try:
         host = account.get("imap_host", "imap.gmail.com")
         port = int(account.get("imap_port", 993))
-        imap_conn = imaplib.IMAP4_SSL(host, port)
+        imap_security = account.get("imap_security", "ssl")
         password = account.get("password", "")
         username = account.get("username", account.get("email", ""))
+
+        if imap_security == "starttls":
+            imap_conn = imaplib.IMAP4(host, port)
+            imap_conn.starttls()
+        elif imap_security == "none":
+            imap_conn = imaplib.IMAP4(host, port)
+        else:
+            imap_conn = imaplib.IMAP4_SSL(host, port)
+
         imap_conn.login(username, password)
         imap_conn.logout()
         imap_conn = None
@@ -1824,12 +1868,22 @@ async def email_test_connection(request: Request):
     try:
         host = account.get("smtp_host", "smtp.gmail.com")
         port = int(account.get("smtp_port", 587))
-        smtp_conn = smtplib.SMTP(host, port)
-        smtp_conn.ehlo()
-        smtp_conn.starttls()
-        smtp_conn.ehlo()
+        smtp_security = account.get("smtp_security", "starttls")
         password = account.get("password", "")
         username = account.get("username", account.get("email", ""))
+
+        if smtp_security == "ssl":
+            smtp_conn = smtplib.SMTP_SSL(host, port, timeout=15)
+            smtp_conn.ehlo()
+        elif smtp_security == "none":
+            smtp_conn = smtplib.SMTP(host, port, timeout=15)
+            smtp_conn.ehlo()
+        else:
+            smtp_conn = smtplib.SMTP(host, port, timeout=15)
+            smtp_conn.ehlo()
+            smtp_conn.starttls()
+            smtp_conn.ehlo()
+
         smtp_conn.login(username, password)
         smtp_conn.quit()
         smtp_conn = None

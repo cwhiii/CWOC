@@ -4,7 +4,7 @@
 
 This design adds bidirectional integration between CWOC and Home Assistant (HA). The integration has two directions:
 
-1. **CWOC → HA**: The rules engine gains a `call_ha_service` action type that POSTs to the HA REST API, letting rule conditions trigger smart home actions (flash lights, play TTS, trigger scenes).
+1. **CWOC → HA**: The rules engine gains a `call_ha_service` action type that POSTs to the HA REST API, letting rule conditions trigger smart home actions (flash lights, play TTS, trigger scenes). It also gains a `fire_ha_event` action type that POSTs to the HA event bus (`/api/events/{event_type}`), letting CWOC state changes (chit created, tag added, status changed, email received) fire events that HA automations can subscribe to.
 2. **HA → CWOC**: A new webhook endpoint (`/api/ha/webhook`) lets HA automations call back into CWOC to create chits, modify checklists, update chit fields, or fire rule chains.
 
 A single admin configures the HA connection once (base URL + long-lived access token) in a new Settings section. The token is stored encrypted using the existing Fernet/base64 encryption from the email module. A background polling scheduler monitors HA entity states and fires `ha_state_change` triggers. The rules editor gains HA-specific action and trigger UIs with entity/service fetch buttons that proxy through the backend (keeping the HA token off the browser).
@@ -23,7 +23,9 @@ A single admin configures the HA connection once (base URL + long-lived access t
 graph TB
     subgraph CWOC Backend
         RE[Rules Engine] -->|call_ha_service| HAB[HA Bridge Module]
+        RE -->|fire_ha_event| HAB
         HAB -->|POST /api/services/...| HA[Home Assistant API]
+        HAB -->|POST /api/events/...| HA
         
         PS[HA Polling Scheduler] -->|GET /api/states/...| HA
         PS -->|state changed| TD[Trigger Dispatcher]
@@ -42,6 +44,7 @@ graph TB
     
     subgraph Home Assistant
         HA -->|webhook POST| WH
+        HA -.->|HA automations subscribe to<br>cwoc_* events| HAB
     end
 ```
 
@@ -52,6 +55,15 @@ graph TB
 3. If a rule matches and has a `call_ha_service` action, `execute_action` delegates to `ha_bridge.call_ha_service()`
 4. `ha_bridge` reads `ha_config` from the DB, decrypts the token, POSTs to `{ha_base_url}/api/services/{domain}/{service}`
 5. Result (success/failure/timeout) is logged in the execution log
+
+### Data Flow: CWOC → HA Event Firing
+
+1. A chit event fires a trigger (e.g., `chit_created`, `chit_updated`, `email_received`)
+2. `dispatch_trigger` loads matching rules, evaluates condition trees
+3. If a rule matches and has a `fire_ha_event` action, `execute_action` delegates to `ha_bridge.fire_ha_event()`
+4. `ha_bridge` reads `ha_config` from the DB, decrypts the token, POSTs to `{ha_base_url}/api/events/{event_type}` with the event_data as JSON body
+5. HA automations subscribed to that event_type receive the event and can trigger their own actions
+6. Result (success/failure/timeout) is logged in the execution log
 
 ### Data Flow: HA → CWOC Webhook
 
@@ -86,6 +98,11 @@ def is_ha_configured() -> bool:
 def call_ha_service(domain: str, service: str, entity_id: Optional[str],
                     service_data: Optional[dict], timeout: int = 10) -> dict:
     """POST to HA /api/services/{domain}/{service}. Returns {success, message, status_code}."""
+
+# ── Event firing (CWOC → HA Event Bus) ──────────────────────────────
+def fire_ha_event(event_type: str, event_data: Optional[dict],
+                  timeout: int = 10) -> dict:
+    """POST to HA /api/events/{event_type}. Returns {success, message, status_code}."""
 
 # ── State polling ────────────────────────────────────────────────────
 def get_ha_entity_state(entity_id: str) -> Optional[dict]:
@@ -126,6 +143,7 @@ POST /api/ha/webhook         # Inbound webhook from HA automations
 
 **New action type in `execute_action()`:**
 - `call_ha_service` — delegates to `ha_bridge.call_ha_service()`, with template placeholder substitution on `service_data` values
+- `fire_ha_event` — delegates to `ha_bridge.fire_ha_event()`, with template placeholder substitution on `event_data` values
 
 **New trigger types in `dispatch_trigger()`:**
 - `ha_state_change` — fired by the polling scheduler when a monitored entity's state changes
@@ -133,6 +151,7 @@ POST /api/ha/webhook         # Inbound webhook from HA automations
 
 **New action description in `_build_action_description()`:**
 - `call_ha_service` → `"Call Home Assistant service {domain}.{service} on {entity_id}"`
+- `fire_ha_event` → `"Fire Home Assistant event '{event_type}' with {N} data fields"`
 
 ### HA Polling Scheduler (in `src/backend/ha_bridge.py`)
 
@@ -232,6 +251,23 @@ class HAWebhookPayload(BaseModel):
         "service_data": {
             "brightness_pct": 100,
             "message": "New chit: {chit_title}"
+        }
+    }
+}
+```
+
+### fire_ha_event Action Schema (stored in rule actions array)
+
+```json
+{
+    "type": "fire_ha_event",
+    "params": {
+        "event_type": "cwoc_chit_updated",
+        "event_data": {
+            "chit_title": "{chit_title}",
+            "chit_status": "{chit_status}",
+            "rule_name": "{rule_name}",
+            "chit_id": "{entity_id}"
         }
     }
 }
@@ -363,6 +399,30 @@ The full webhook payload is passed as the entity dict, allowing condition trees 
 
 **Validates: Requirements 12.2**
 
+### Property 17: HA Event Fire Request Construction
+
+*For any* valid event_type string and optional event_data dict, the HA bridge SHALL construct a POST request to the URL `{ha_base_url}/api/events/{event_type}` with the event_data as the JSON body, and an Authorization header with the decrypted Bearer token.
+
+**Validates: Requirements 14.1, 14.2**
+
+### Property 18: HA Event Fire Graceful Skip When Unconfigured
+
+*For any* `fire_ha_event` action parameters (event_type, event_data), if the HA config is not configured (missing URL, missing token, or no ha_config row), the HA bridge SHALL return a result with `success=False` and a descriptive warning message, without raising an exception.
+
+**Validates: Requirements 14.6**
+
+### Property 19: HA Event Fire Action Description Format
+
+*For any* event_type string and event_data dict with N keys, the action description for a `fire_ha_event` action SHALL be a string containing the event_type and the count of data fields in the format "Fire Home Assistant event '{event_type}' with {N} data fields".
+
+**Validates: Requirements 14.9**
+
+### Property 20: HA Event Fire Template Placeholder Substitution
+
+*For any* event_data dict containing string values with `{chit_title}`, `{chit_status}`, `{rule_name}`, and/or `{entity_id}` placeholders, and any context dict with corresponding values, the substitution function SHALL replace every placeholder occurrence with the context value, leaving non-placeholder text unchanged. (This reuses the same substitution function as `call_ha_service` — Property 4 — but is validated independently for the `fire_ha_event` code path.)
+
+**Validates: Requirements 14.5**
+
 ## Error Handling
 
 ### HA Bridge Errors
@@ -374,6 +434,10 @@ The full webhook payload is passed as the entity dict, allowing condition trees 
 | HA service call times out (>10s) | Abort request, return `{success: False, message: "HA request timed out"}` |
 | HA service call connection refused | Return `{success: False, message: "Cannot connect to HA at {url}"}` |
 | Invalid domain/service format | Return `{success: False, message: "Invalid domain or service"}` |
+| HA event fire returns non-2xx | Return `{success: False, message: "HA event fire returned {status}", status_code: N}`, log error |
+| HA event fire times out (>10s) | Abort request, return `{success: False, message: "HA event fire timed out"}` |
+| HA event fire connection refused | Return `{success: False, message: "Cannot connect to HA at {url}"}` |
+| Missing event_type for fire_ha_event | Return `{success: False, message: "Missing required event_type"}` |
 
 ### Webhook Endpoint Errors
 
@@ -433,6 +497,10 @@ Each property test is tagged with a comment referencing the design property:
 - Property 14: Monitored Entity Set Computation
 - Property 15: Webhook Payload Passthrough
 - Property 16: Migration Idempotency
+- Property 17: HA Event Fire Request Construction
+- Property 18: HA Event Fire Graceful Skip When Unconfigured
+- Property 19: HA Event Fire Action Description Format
+- Property 20: HA Event Fire Template Placeholder Substitution
 
 **Properties better suited for example-based tests** (due to DB/HTTP dependencies):
 - Properties 9, 10, 11 (webhook create/update/checklist — require DB setup)
@@ -464,8 +532,11 @@ Manual testing checklist:
 - Test Connection button feedback
 - Webhook URL copy button
 - Rules editor HA action fields appear when `call_ha_service` selected
+- Rules editor HA event fields appear when `fire_ha_event` selected
+- Event type suggestions appear in dropdown/autocomplete for `fire_ha_event`
+- JSON preview updates for both `call_ha_service` and `fire_ha_event` as fields change
 - Fetch Entities/Services buttons populate dropdowns
-- JSON preview updates as fields change
 - HA trigger entity_id autocomplete
 - Hint text displays for `ha_state_change` and `ha_webhook` triggers
+- HA not configured message displays correctly for `fire_ha_event` action
 - Mobile responsiveness of all new UI elements

@@ -322,6 +322,101 @@
                     font-size: 0.85em;
                     margin-top: 4px;
                 }
+                /* ── Email Accounts Modal List Items ── */
+                .email-modal-item {
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    padding: 10px 12px;
+                    border: 1px solid rgba(139, 90, 43, 0.3);
+                    border-radius: 6px;
+                    margin-bottom: 6px;
+                    background: #fff8e1;
+                    cursor: pointer;
+                    transition: background 0.15s, border-color 0.15s;
+                }
+                .email-modal-item:hover {
+                    background: #f5e6cc;
+                    border-color: #8b5a2b;
+                }
+                .email-modal-item .email-modal-item-icon {
+                    font-size: 1.2em;
+                    flex-shrink: 0;
+                }
+                .email-modal-item .email-modal-item-info {
+                    flex: 1;
+                    min-width: 0;
+                }
+                .email-modal-item .email-modal-item-email {
+                    font-weight: bold;
+                    color: #4a2c2a;
+                    font-size: 0.95em;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                }
+                .email-modal-item .email-modal-item-server {
+                    font-size: 0.8em;
+                    color: #6b4e31;
+                    opacity: 0.7;
+                }
+                .email-modal-item .email-modal-item-arrow {
+                    color: #8b5a2b;
+                    font-size: 1.1em;
+                    flex-shrink: 0;
+                }
+                /* ── Email Account Delete Confirmation Modal ── */
+                #deleteEmailAccountModal .modal-content {
+                    background-color: var(--parchment-light, #fdf5e6);
+                    margin: 15% auto;
+                    padding: 20px 30px;
+                    border: 2px solid var(--aged-brown-medium, #8b4513);
+                    border-radius: 8px;
+                    width: auto;
+                    max-width: 300px;
+                    height: auto;
+                    min-height: 150px;
+                    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+                    text-align: center;
+                    color: var(--text-color, #4a2c2a);
+                }
+                #deleteEmailAccountModal .modal-title {
+                    margin-top: 0;
+                    font-size: 1.5em;
+                    font-weight: 600;
+                    color: var(--aged-brown-dark, #4a2c2a);
+                }
+                #deleteEmailAccountModal .modal-message {
+                    margin: 10px 0 20px;
+                    font-size: 1em;
+                    color: var(--dark-grey, #6c757d);
+                }
+                #deleteEmailAccountModal .modal-button {
+                    font-size: 1em;
+                    font-weight: 600;
+                    padding: 10px 20px;
+                    margin: 1em 0;
+                    border: 2px outset var(--aged-brown-medium, #8b4513);
+                    border-radius: 5px;
+                    cursor: pointer;
+                    transition: background-color 0.3s ease;
+                    width: 100%;
+                    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+                }
+                #deleteEmailAccountModal .modal-button-danger {
+                    background-color: var(--danger-red, #b22222);
+                    color: var(--parchment-light, #fdf5e6);
+                }
+                #deleteEmailAccountModal .modal-button-danger:hover {
+                    background-color: #a01c1c;
+                }
+                #deleteEmailAccountModal .modal-button-cancel {
+                    background-color: var(--info-blue, #4682b4);
+                    color: var(--parchment-light, #fdf5e6);
+                }
+                #deleteEmailAccountModal .modal-button-cancel:hover {
+                    background-color: #3a70a0;
+                }
                 /* ── Tag Sharing UI ── */
                 .tag-sharing-item {
                     display: flex;
@@ -970,9 +1065,10 @@
                         <h3>✉️ Email</h3>
 
                         <label class="setting-subheader">📧 Accounts</label>
-                        <p class="setting-hint">Add one or more email accounts. Each account has its own IMAP/SMTP server settings.</p>
-                        <div id="emailAccountsList"></div>
-                        <button type="button" class="standard-button" style="width:100%;margin-top:8px;" onclick="addEmailAccount()">➕ Add Account</button>
+                        <div id="emailAccountsSummary" style="margin-bottom:8px;font-size:0.9em;color:#4a2c2a;"></div>
+                        <button type="button" class="standard-button" style="width:100%;" onclick="openEmailAccountsModal()">📧 Manage Email Accounts</button>
+                        <!-- Hidden container for account data (not displayed inline) -->
+                        <div id="emailAccountsList" style="display:none;"></div>
 
                         <label class="setting-subheader">🔄 Syncing</label>
                         <p class="setting-hint">Shared across all accounts.</p>
@@ -1430,6 +1526,47 @@
                     </div>
                     <div style="display:flex;justify-content:center;margin-top:8px;">
                         <button class="standard-button" onclick="closeReleaseNotesModal()">Dismiss</button>
+                    </div>
+                </div>
+            </div>
+            <!-- Email Accounts Management Modal -->
+            <div class="modal" id="email-accounts-modal" style="display:none;">
+                <div class="modal-content" style="max-width:95vw;width:550px;max-height:85vh;display:flex;flex-direction:column;text-align:left;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+                        <h3 style="margin:0;">📧 Email Accounts</h3>
+                        <button type="button" class="standard-button" onclick="closeEmailAccountsModal()" style="padding:4px 10px;">✕</button>
+                    </div>
+                    <!-- Account list view -->
+                    <div id="emailModalListView" style="flex:1;overflow-y:auto;">
+                        <div id="emailModalAccountList"></div>
+                        <button type="button" class="standard-button" style="width:100%;margin-top:10px;" onclick="_emailModalAddAccount()">➕ Add Account</button>
+                    </div>
+                    <!-- Account edit view (hidden by default) -->
+                    <div id="emailModalEditView" style="display:none;flex:1;overflow-y:auto;">
+                        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+                            <button type="button" class="standard-button" onclick="_emailModalBackToList()" style="padding:4px 10px;">← Back</button>
+                            <span id="emailModalEditTitle" style="font-weight:bold;color:#4a2c2a;"></span>
+                        </div>
+                        <div id="emailModalEditForm"></div>
+                        <div style="display:flex;gap:8px;margin-top:12px;">
+                            <button type="button" class="standard-button" onclick="_emailModalSaveAccount()" style="flex:1;">✅ Done</button>
+                            <button type="button" class="standard-button" onclick="_emailModalDeleteAccount()" style="background:#a0522d;color:#fdf5e6;">🗑️ Delete</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- Email Account Delete Confirmation Modal -->
+            <div id="deleteEmailAccountModal" class="modal" style="display:none;">
+                <div class="modal-content">
+                    <h2 class="modal-title">Delete Account?</h2>
+                    <p class="modal-message" id="deleteEmailAccountMessage">This action cannot be undone.</p>
+                    <div class="modal-buttons">
+                        <button id="confirmDeleteEmailAccountBtn" class="modal-button modal-button-danger">
+                            Nuke Account!
+                        </button>
+                        <button id="cancelDeleteEmailAccountBtn" class="modal-button modal-button-cancel">
+                            Keep Account
+                        </button>
                     </div>
                 </div>
             </div>

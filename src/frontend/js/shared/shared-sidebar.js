@@ -64,6 +64,7 @@ function _cwocInjectSidebar() {
   html += '  <button class="action-button sidebar-compact-btn" id="sidebar-check-mail-btn" style="margin-bottom:6px;">';
   html += '    <i class="fas fa-sync"></i> Check Mail';
   html += '  </button>';
+  html += '  <div id="email-account-filter-wrap" style="margin-bottom:8px;"></div>';
   html += '  <div class="filter-group">';
   html += '    <label class="filter-group-label" onclick="var b=this.nextElementSibling;b.style.display=b.style.display===\'none\'?\'\':\'none\';this.querySelector(\'.filter-arrow\').textContent=b.style.display===\'none\'?\'▶\':\'▼\';">';
   html += '      <span class="filter-arrow">▼</span> Folder';

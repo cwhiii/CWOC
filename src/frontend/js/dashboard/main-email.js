@@ -18,6 +18,9 @@ var _emailLastCheckedIndex = null;
 /* Auto-check mail interval timer */
 var _emailAutoCheckTimer = null;
 
+/* Account filter state: array of selected account nicknames (empty = show all) */
+var _emailAccountFilter = [];
+
 /**
  * Toggle the email sidebar section body visibility.
  */
@@ -42,7 +45,69 @@ function _updateEmailSidebarVisibility(tab) {
     if (tab === 'Email') {
         var radios = document.querySelectorAll('#email-folder-select input[name="emailFolder"]');
         radios.forEach(function(r) { r.checked = (r.value === _emailSubFilter); });
+        // Populate account filter buttons
+        _emailRenderAccountFilterButtons();
     }
+}
+
+/**
+ * Render account filter pill buttons in the sidebar.
+ * Multi-select: clicking toggles that account on/off. Empty selection = show all.
+ */
+function _emailRenderAccountFilterButtons() {
+    var wrap = document.getElementById('email-account-filter-wrap');
+    if (!wrap) return;
+
+    var accounts = (window._cwocSettings || {}).email_accounts;
+    if (!Array.isArray(accounts) || accounts.length === 0) {
+        // Fall back to legacy single account
+        var legacy = (window._cwocSettings || {}).email_account;
+        if (legacy && typeof legacy === 'object' && legacy.nickname) {
+            accounts = [legacy];
+        } else {
+            wrap.style.display = 'none';
+            return;
+        }
+    }
+
+    // Only show if at least one account has a nickname
+    var namedAccounts = accounts.filter(function(a) { return a && a.nickname; });
+    if (namedAccounts.length === 0) {
+        wrap.style.display = 'none';
+        return;
+    }
+
+    wrap.style.display = '';
+    wrap.innerHTML = '';
+
+    namedAccounts.forEach(function(acct) {
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'email-account-pill';
+        var isActive = _emailAccountFilter.indexOf(acct.nickname) !== -1;
+        if (isActive) btn.classList.add('active');
+        btn.textContent = acct.nickname;
+        btn.title = acct.email || acct.nickname;
+        btn.addEventListener('click', function() {
+            _emailToggleAccountFilter(acct.nickname);
+        });
+        wrap.appendChild(btn);
+    });
+}
+
+/**
+ * Toggle an account nickname in the filter. Re-renders the email view.
+ */
+function _emailToggleAccountFilter(nickname) {
+    var idx = _emailAccountFilter.indexOf(nickname);
+    if (idx === -1) {
+        _emailAccountFilter.push(nickname);
+    } else {
+        _emailAccountFilter.splice(idx, 1);
+    }
+    _emailRenderAccountFilterButtons();
+    // Re-trigger the email view render
+    if (typeof filterChits === 'function') filterChits();
 }
 
 /**
@@ -59,9 +124,15 @@ function _emailStartAutoCheck() {
     // Load interval from cached settings
     if (typeof getCachedSettings !== 'function') return;
     getCachedSettings().then(function(settings) {
-        var acct = settings.email_account;
-        if (!acct || typeof acct !== 'object') return;
-        var interval = acct.check_interval;
+        // Check email_accounts (multi-account) first, fall back to legacy
+        var interval = 'manual';
+        var accounts = settings.email_accounts;
+        if (Array.isArray(accounts) && accounts.length > 0) {
+            interval = accounts[0].check_interval || 'manual';
+        } else {
+            var acct = settings.email_account;
+            if (acct && typeof acct === 'object') interval = acct.check_interval || 'manual';
+        }
         if (!interval || interval === 'manual') return;
 
         var ms = parseInt(interval, 10) * 60 * 1000;
@@ -130,6 +201,25 @@ function displayEmailView(chitsToDisplay) {
         emailChits = emailChits.filter(function(c) { return _chitHasTag(c, 'Trash'); });
     } else if (_emailSubFilter === 'archived') {
         emailChits = emailChits.filter(function(c) { return !!c.archived; });
+    }
+
+    // Apply account filter (multi-select by nickname system tag)
+    if (_emailAccountFilter.length > 0) {
+        emailChits = emailChits.filter(function(c) {
+            var tags = c.tags;
+            if (typeof tags === 'string') {
+                try { tags = JSON.parse(tags); } catch(e) { tags = []; }
+            }
+            if (!tags || !Array.isArray(tags)) tags = [];
+            // Check if any selected account nickname matches a tag on this chit
+            return _emailAccountFilter.some(function(nickname) {
+                var target = 'CWOC_System/Email/Account/' + nickname;
+                return tags.some(function(t) {
+                    var name = (typeof t === 'string') ? t : (t && t.name ? t.name : '');
+                    return name === target;
+                });
+            });
+        });
     }
 
     // Sort by email_date descending (newest first)

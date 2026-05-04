@@ -37,6 +37,12 @@ Bidirectional integration between CWOC and Home Assistant. The implementation pr
     - Handle connection errors, timeouts, non-2xx responses per design error table
     - _Requirements: 2.1, 2.2, 2.3, 2.7, 8.1, 8.2_
 
+  - [ ] 2.2a Add `fire_ha_event()` function to `src/backend/ha_bridge.py`
+    - `fire_ha_event(event_type, event_data, timeout=10)`: POST to `{ha_base_url}/api/events/{event_type}` with event_data as JSON body, Bearer token auth
+    - Return `{success, message, status_code}` matching the same pattern as `call_ha_service`
+    - Handle: HA not configured (skip with warning), non-2xx response, timeout (10s), connection refused, missing event_type
+    - _Requirements: 14.1, 14.2, 14.6, 14.7, 14.8_
+
   - [ ] 2.3 Add template placeholder substitution
     - `substitute_template_placeholders(service_data, context)`: replace `{chit_title}`, `{chit_status}`, `{rule_name}`, `{entity_id}` in string values within the dict
     - _Requirements: 2.5_
@@ -92,9 +98,20 @@ Bidirectional integration between CWOC and Home Assistant. The implementation pr
     - Return success/failure result for execution log
     - _Requirements: 2.1, 2.2, 2.4, 2.5_
 
+  - [ ] 5.1a Add `fire_ha_event` action to `execute_action()` in `src/backend/rules_engine.py`
+    - New `elif action_type == "fire_ha_event"` branch
+    - Import and call `ha_bridge.fire_ha_event()` with template substitution on event_data (reuse `substitute_template_placeholders`)
+    - Build context dict from entity (chit_title, chit_status) and rule_name
+    - Return success/failure result for execution log
+    - _Requirements: 14.1, 14.2, 14.5, 14.6_
+
   - [ ] 5.2 Add `call_ha_service` description to `_build_action_description()` in `src/backend/rules_engine.py`
     - Format: `"Call Home Assistant service {domain}.{service} on {entity_id}"`
     - _Requirements: 2.6, 11.1_
+
+  - [ ] 5.2a Add `fire_ha_event` description to `_build_action_description()` in `src/backend/rules_engine.py`
+    - Format: `"Fire Home Assistant event '{event_type}' with {N} data fields"`
+    - _Requirements: 14.9_
 
   - [ ] 5.3 Add `ha_state_change` and `ha_webhook` trigger type support
     - These trigger types work with the existing `dispatch_trigger` function — no code changes needed in the dispatcher itself since it already loads rules by `trigger_type` dynamically
@@ -137,6 +154,13 @@ Bidirectional integration between CWOC and Home Assistant. The implementation pr
     - Add `call_ha_service` to the action type dropdown in the rules editor
     - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5_
 
+  - [ ] 8.1a Add HA event firing fields to the rules editor
+    - When `fire_ha_event` is selected as action type, show: event_type input with autocomplete/dropdown suggesting common types (`cwoc_chit_created`, `cwoc_chit_updated`, `cwoc_email_received`, `cwoc_status_changed`, `cwoc_tag_added`), and a key-value editor for event_data
+    - JSON preview of the event payload (event_type + event_data) below the fields
+    - If HA not configured, show message directing user to admin settings
+    - Add `fire_ha_event` to the action type dropdown in the rules editor
+    - _Requirements: 15.1, 15.2, 15.3, 15.4_
+
   - [ ] 8.2 Add HA trigger fields to the rules editor
     - Add `ha_state_change` and `ha_webhook` to the trigger type dropdown
     - When `ha_state_change` selected: show entity_id input with "Fetch Entities" autocomplete, store in `schedule_config.ha_entity_id`
@@ -154,9 +178,9 @@ Bidirectional integration between CWOC and Home Assistant. The implementation pr
 
 - [ ] 10. Property-based tests (`src/backend/test_ha_integration.py`)
   - [ ] 10.1 Create test file with inlined production logic and generators
-    - Inline minimal HA bridge logic (config round-trip, template substitution, state change detection, entity simplification, action description, webhook validation/resolution/required fields, monitored entity computation, migration idempotency, payload passthrough)
+    - Inline minimal HA bridge logic (config round-trip, template substitution, state change detection, entity simplification, action description, webhook validation/resolution/required fields, monitored entity computation, migration idempotency, payload passthrough, event fire request construction, event fire graceful skip, event fire action description, event fire template substitution)
     - Inline `_encrypt_password` / `_decrypt_password` logic for config round-trip test
-    - Random generators for: URLs, tokens, domain/service strings, entity_ids, service_data dicts, webhook payloads, state dicts
+    - Random generators for: URLs, tokens, domain/service strings, entity_ids, service_data dicts, webhook payloads, state dicts, event_type strings, event_data dicts
     - Set `_ITERATIONS = 120`
     - Follow existing pattern from `test_rules_engine.py` (unittest + random, no external deps)
     - _Requirements: All_
@@ -226,19 +250,40 @@ Bidirectional integration between CWOC and Home Assistant. The implementation pr
     - For any number of consecutive migration calls, SHALL complete without error and table SHALL exist with correct schema
     - **Validates: Requirements 12.2**
 
+  - [ ]* 10.15 Property 17: HA Event Fire Request Construction
+    - **Property 17: HA Event Fire Request Construction**
+    - For any valid event_type and optional event_data dict, SHALL construct correct POST URL `{ha_base_url}/api/events/{event_type}` and JSON body with Bearer token
+    - **Validates: Requirements 14.1, 14.2**
+
+  - [ ]* 10.16 Property 18: HA Event Fire Graceful Skip When Unconfigured
+    - **Property 18: HA Event Fire Graceful Skip When Unconfigured**
+    - For any fire_ha_event params, if HA not configured, SHALL return `{success: False}` with warning, no exception
+    - **Validates: Requirements 14.6**
+
+  - [ ]* 10.17 Property 19: HA Event Fire Action Description Format
+    - **Property 19: HA Event Fire Action Description Format**
+    - For any event_type and event_data dict with N keys, the action description SHALL contain the event_type and count in the specified format
+    - **Validates: Requirements 14.9**
+
+  - [ ]* 10.18 Property 20: HA Event Fire Template Placeholder Substitution
+    - **Property 20: HA Event Fire Template Placeholder Substitution**
+    - For any event_data with placeholders and context dict, SHALL replace all placeholders leaving non-placeholder text unchanged (validates the fire_ha_event code path reuses substitution correctly)
+    - **Validates: Requirements 14.5**
+
 - [ ] 11. Help page documentation
   - [ ] 11.1 Add "Home Assistant Integration" section to `src/frontend/html/help.html`
     - Setup instructions (admin configures URL and token in settings, webhook URL auto-generated)
-    - Common use cases: flash light on email receipt, create chit from HA automation, trigger scene on chit status change
+    - Common use cases: flash light on email receipt, create chit from HA automation, trigger scene on chit status change, fire HA event when chit created so HA automations can react
     - Webhook payload format with field descriptions for each action (create_chit, add_checklist_item, update_chit, trigger_rule)
     - How to pass `user_id` in webhook payloads to target specific users
-    - _Requirements: 13.1, 13.2, 13.3, 13.4_
+    - Event firing documentation: how to use `fire_ha_event` action in rules, common event types, how HA automations subscribe to CWOC events
+    - _Requirements: 13.1, 13.2, 13.3, 13.4, 14.3_
 
 - [ ] 12. Final wiring and cleanup
   - [ ] 12.1 Update `src/INDEX.md` with all new files, functions, routes, and CSS sections
-    - Add `ha_bridge.py` module with all functions
+    - Add `ha_bridge.py` module with all functions (including `fire_ha_event`)
     - Add `routes/ha.py` with all endpoints
-    - Add rules engine extensions (new action type, new trigger types, new description)
+    - Add rules engine extensions (new action types `call_ha_service` and `fire_ha_event`, new trigger types, new descriptions)
     - Add new Pydantic models
     - Add new migration function
     - Add new CSS classes

@@ -1,0 +1,1 @@
+Updated email account delete confirmation to use a styled modal matching the chit editor's delete dialog — same structure, classes, and styling (modal-title, modal-message, modal-button-danger "Nuke Account!", modal-button-cancel "Keep Account"). Message shows "Email [username] on [IMAP host]".
