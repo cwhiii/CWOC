@@ -1,0 +1,175 @@
+create_chit:
+  name: Create Chit
+  description: Create a new chit in CWOC
+  fields:
+    title:
+      name: Title
+      description: The title of the new chit
+      required: true
+      example: "Buy groceries"
+      selector:
+        text:
+    note:
+      name: Note
+      description: Optional note/description for the chit
+      example: "Get milk, eggs, bread"
+      selector:
+        text:
+          multiline: true
+    tags:
+      name: Tags
+      description: Comma-separated list of tags
+      example: "Groceries, Shopping"
+      selector:
+        text:
+    status:
+      name: Status
+      description: Initial status (ToDo, In Progress, Blocked, Complete)
+      default: "ToDo"
+      selector:
+        select:
+          options:
+            - "ToDo"
+            - "In Progress"
+            - "Blocked"
+            - "Complete"
+    priority:
+      name: Priority
+      description: Priority level
+      selector:
+        text:
+    due_datetime:
+      name: Due Date/Time
+      description: Due date and time in ISO format
+      example: "2026-01-15T10:00:00"
+      selector:
+        text:
+
+add_checklist_item:
+  name: Add Checklist Item
+  description: Add an item to a chit's checklist
+  fields:
+    chit_id:
+      name: Chit ID
+      description: The ID of the target chit (use this or chit_title)
+      selector:
+        text:
+    chit_title:
+      name: Chit Title
+      description: The title of the target chit (use this or chit_id)
+      selector:
+        text:
+    item_text:
+      name: Item Text
+      description: The text of the checklist item to add
+      required: true
+      example: "Pick up dry cleaning"
+      selector:
+        text:
+
+update_chit:
+  name: Update Chit
+  description: Update fields on an existing chit
+  fields:
+    chit_id:
+      name: Chit ID
+      description: The ID of the chit to update
+      required: true
+      selector:
+        text:
+    title:
+      name: Title
+      description: New title
+      selector:
+        text:
+    note:
+      name: Note
+      description: New note content
+      selector:
+        text:
+          multiline: true
+    status:
+      name: Status
+      description: New status
+      selector:
+        select:
+          options:
+            - "ToDo"
+            - "In Progress"
+            - "Blocked"
+            - "Complete"
+    priority:
+      name: Priority
+      description: New priority
+      selector:
+        text:
+
+set_chit_status:
+  name: Set Chit Status
+  description: Set the status of a chit
+  fields:
+    chit_id:
+      name: Chit ID
+      description: The ID of the target chit (use this or chit_title)
+      selector:
+        text:
+    chit_title:
+      name: Chit Title
+      description: The title of the target chit (use this or chit_id)
+      selector:
+        text:
+    status:
+      name: Status
+      description: The new status to set
+      required: true
+      selector:
+        select:
+          options:
+            - "ToDo"
+            - "In Progress"
+            - "Blocked"
+            - "Complete"
+
+add_tag:
+  name: Add Tag
+  description: Add a tag to a chit
+  fields:
+    chit_id:
+      name: Chit ID
+      description: The ID of the target chit (use this or chit_title)
+      selector:
+        text:
+    chit_title:
+      name: Chit Title
+      description: The title of the target chit (use this or chit_id)
+      selector:
+        text:
+    tag:
+      name: Tag
+      description: The tag to add
+      required: true
+      example: "Urgent"
+      selector:
+        text:
+
+remove_tag:
+  name: Remove Tag
+  description: Remove a tag from a chit
+  fields:
+    chit_id:
+      name: Chit ID
+      description: The ID of the target chit (use this or chit_title)
+      selector:
+        text:
+    chit_title:
+      name: Chit Title
+      description: The title of the target chit (use this or chit_id)
+      selector:
+        text:
+    tag:
+      name: Tag
+      description: The tag to remove
+      required: true
+      example: "Urgent"
+      selector:
+        text:

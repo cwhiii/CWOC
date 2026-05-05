@@ -213,6 +213,13 @@ deploy_from_zip() {
         log_ok "Deployed documents/"
     fi
 
+    # Deploy ha_integration/ (Home Assistant custom integration)
+    if [[ -d "$zip_root/ha_integration" ]]; then
+        rm -rf "$APP_DIR/ha_integration"
+        cp -r "$zip_root/ha_integration" "$APP_DIR/ha_integration"
+        log_ok "Deployed ha_integration/"
+    fi
+
     # Create data dir if it doesn't exist
     mkdir -p "$APP_DIR/data"
     chmod 700 "$APP_DIR/data"
@@ -472,6 +479,88 @@ NGINX_EOF
 }
 
 # ---------------------------------------------------------------------------
+# Phase: Deploy HA Custom Integration
+# ---------------------------------------------------------------------------
+
+deploy_ha_integration() {
+    echo ""
+    log_step "Home Assistant Custom Integration Deployment"
+    echo ""
+    echo "  CWOC includes a Home Assistant custom integration that provides"
+    echo "  sensors, services, and automations for your chits."
+    echo ""
+
+    # Check if the HA integration source exists in the release
+    local ha_source="$APP_DIR/ha_integration/custom_components/cwoc"
+    if [[ ! -d "$ha_source" ]]; then
+        log_warn "HA integration source not found at $ha_source — skipping."
+        return 0
+    fi
+
+    read -rp "  Deploy HA custom integration to Home Assistant? [y/N]: " deploy_ha
+    if [[ ! "$deploy_ha" =~ ^[Yy]$ ]]; then
+        log_ok "Skipping HA integration deployment."
+        return 0
+    fi
+
+    # Prompt for custom_components path
+    local default_path="/config/custom_components"
+    echo ""
+    echo "  Enter the path to your Home Assistant custom_components directory."
+    echo "  Common paths:"
+    echo "    - /config/custom_components        (HA OS / Docker)"
+    echo "    - /home/homeassistant/.homeassistant/custom_components  (venv install)"
+    echo "    - /usr/share/hassio/homeassistant/custom_components     (Supervised)"
+    echo ""
+    read -rp "  HA custom_components path [$default_path]: " ha_path
+    ha_path="${ha_path:-$default_path}"
+
+    # Validate the path exists (or offer to create it)
+    if [[ ! -d "$ha_path" ]]; then
+        read -rp "  Directory $ha_path does not exist. Create it? [Y/n]: " create_dir
+        if [[ "$create_dir" =~ ^[Nn]$ ]]; then
+            log_warn "Cannot deploy without a valid path. Skipping HA deployment."
+            return 0
+        fi
+        mkdir -p "$ha_path" || log_error "Failed to create directory: $ha_path"
+        log_ok "Created $ha_path"
+    fi
+
+    local dest_path="$ha_path/cwoc"
+
+    # Check for existing deployment
+    if [[ -d "$dest_path" ]]; then
+        echo ""
+        log_warn "Existing CWOC integration found at $dest_path"
+        read -rp "  Overwrite existing deployment? [y/N]: " overwrite
+        if [[ ! "$overwrite" =~ ^[Yy]$ ]]; then
+            log_ok "Keeping existing deployment. Skipping."
+            return 0
+        fi
+        rm -rf "$dest_path"
+        log_ok "Removed old deployment."
+    fi
+
+    # Copy the integration files
+    log_step "Copying CWOC integration to $dest_path..."
+    cp -r "$ha_source" "$dest_path" \
+        || log_error "Failed to copy HA integration to $dest_path" \
+            "Check permissions on the target directory."
+    log_ok "HA custom integration deployed to $dest_path"
+
+    # Reminder to restart HA
+    echo ""
+    echo "  ┌─────────────────────────────────────────────────────────────┐"
+    echo "  │  IMPORTANT: Restart Home Assistant to load the integration. │"
+    echo "  │                                                             │"
+    echo "  │  After restart, go to:                                      │"
+    echo "  │    Settings → Integrations → Add Integration → search CWOC  │"
+    echo "  └─────────────────────────────────────────────────────────────┘"
+    echo ""
+    log_ok "HA integration deployment complete."
+}
+
+# ---------------------------------------------------------------------------
 # Phase: Service startup and verification
 # ---------------------------------------------------------------------------
 
@@ -647,6 +736,7 @@ main() {
         configure_https
         install_tailscale
         install_ntfy
+        deploy_ha_integration
         start_and_verify
         echo "============================================="
         echo " Post-upgrade fixup complete."
@@ -683,6 +773,7 @@ main() {
         configure_https
         install_tailscale
         install_ntfy
+        deploy_ha_integration
         start_and_verify
     else
         log_step "No existing installation found — running full provisioning."
@@ -694,6 +785,7 @@ main() {
         configure_https
         install_tailscale
         install_ntfy
+        deploy_ha_integration
         start_and_verify
     fi
 

@@ -89,6 +89,13 @@ var CONTACT_FIELDS = [
     { value: 'addresses', label: 'Addresses' }
 ];
 
+var HA_STATE_CHANGE_FIELDS = [
+    { value: 'ha_entity_id', label: 'Entity ID' },
+    { value: 'old_state', label: 'Old State' },
+    { value: 'new_state', label: 'New State' },
+    { value: 'attributes', label: 'Attributes' }
+];
+
 var OPERATORS = [
     { value: 'equals', label: 'equals' },
     { value: 'not_equals', label: 'not equals' },
@@ -126,15 +133,667 @@ var CHIT_ACTION_TYPES = [
     { value: 'mark_email_read', label: 'Mark Email Read', params: [] },
     { value: 'mark_email_unread', label: 'Mark Email Unread', params: [] },
     { value: 'move_email_to_folder', label: 'Move Email to Folder', params: [{ key: 'folder', label: 'Folder', type: 'text' }] },
-    { value: 'add_matching_contacts_as_people', label: 'Add Matching Contacts as People', params: [{ key: 'match_field', label: 'Match Field', type: 'select', options: ['city', 'state', 'country'] }] }
+    { value: 'add_matching_contacts_as_people', label: 'Add Matching Contacts as People', params: [{ key: 'match_field', label: 'Match Field', type: 'select', options: ['city', 'state', 'country'] }] },
+    { value: 'call_ha_service', label: '🏠 Call HA Service', params: null },
+    { value: 'fire_ha_event', label: '🏠 Fire HA Event', params: null }
 ];
+
+// ── HA Action Helpers ──
+var _haConfigured = null; // null = unknown, true/false after check
+var _haEntitiesCache = null;
+var _haServicesCache = null;
+
+var HA_EVENT_TYPE_SUGGESTIONS = [
+    'cwoc_chit_created',
+    'cwoc_chit_updated',
+    'cwoc_email_received',
+    'cwoc_status_changed',
+    'cwoc_tag_added'
+];
+
+async function _checkHaConfigured() {
+    if (_haConfigured !== null) return _haConfigured;
+    try {
+        var resp = await fetch('/api/ha/config');
+        if (!resp.ok) { _haConfigured = false; return false; }
+        var data = await resp.json();
+        _haConfigured = !!(data.ha_base_url);
+    } catch (e) {
+        _haConfigured = false;
+    }
+    return _haConfigured;
+}
+
+async function _fetchHaEntities() {
+    try {
+        var resp = await fetch('/api/ha/entities');
+        if (resp.status === 400) { _haConfigured = false; return null; }
+        if (!resp.ok) return null;
+        var data = await resp.json();
+        _haEntitiesCache = data;
+        return data;
+    } catch (e) {
+        return null;
+    }
+}
+
+async function _fetchHaServices() {
+    try {
+        var resp = await fetch('/api/ha/services');
+        if (resp.status === 400) { _haConfigured = false; return null; }
+        if (!resp.ok) return null;
+        var data = await resp.json();
+        _haServicesCache = data;
+        return data;
+    } catch (e) {
+        return null;
+    }
+}
+
+function _renderHaKeyValueEditor(pairs, onChange) {
+    var wrapper = document.createElement('div');
+    wrapper.className = 'ha-kv-editor';
+
+    function rebuild() {
+        wrapper.innerHTML = '';
+        pairs.forEach(function(pair, i) {
+            var row = document.createElement('div');
+            row.className = 'ha-kv-row';
+
+            var keyInput = document.createElement('input');
+            keyInput.type = 'text';
+            keyInput.placeholder = 'Key';
+            keyInput.value = pair.key || '';
+            keyInput.className = 'ha-kv-key';
+            keyInput.oninput = function() {
+                pair.key = this.value;
+                onChange();
+            };
+
+            var valInput = document.createElement('input');
+            valInput.type = 'text';
+            valInput.placeholder = 'Value (supports {chit_title}, etc.)';
+            valInput.value = pair.value || '';
+            valInput.className = 'ha-kv-value';
+            valInput.oninput = function() {
+                pair.value = this.value;
+                onChange();
+            };
+
+            var removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.className = 'ha-kv-remove';
+            removeBtn.textContent = '×';
+            removeBtn.title = 'Remove';
+            removeBtn.onclick = function() {
+                pairs.splice(i, 1);
+                onChange();
+                rebuild();
+            };
+
+            row.appendChild(keyInput);
+            row.appendChild(valInput);
+            row.appendChild(removeBtn);
+            wrapper.appendChild(row);
+        });
+
+        var addBtn = document.createElement('button');
+        addBtn.type = 'button';
+        addBtn.className = 'ha-kv-add';
+        addBtn.textContent = '+ Add Field';
+        addBtn.onclick = function() {
+            pairs.push({ key: '', value: '' });
+            onChange();
+            rebuild();
+        };
+        wrapper.appendChild(addBtn);
+    }
+
+    rebuild();
+    return wrapper;
+}
+
+function _buildHaJsonPreview(action) {
+    var pre = document.createElement('pre');
+    pre.className = 'ha-json-preview';
+    _updateHaJsonPreview(pre, action);
+    return pre;
+}
+
+function _updateHaJsonPreview(pre, action) {
+    var payload = {};
+    if (action.type === 'call_ha_service') {
+        payload.domain = action.params.domain || '';
+        payload.service = action.params.service || '';
+        if (action.params.entity_id) payload.entity_id = action.params.entity_id;
+        if (action.params.service_data && action.params.service_data.length > 0) {
+            var sd = {};
+            action.params.service_data.forEach(function(p) {
+                if (p.key) sd[p.key] = p.value || '';
+            });
+            if (Object.keys(sd).length > 0) payload.service_data = sd;
+        }
+    } else if (action.type === 'fire_ha_event') {
+        payload.event_type = action.params.event_type || '';
+        if (action.params.event_data && action.params.event_data.length > 0) {
+            var ed = {};
+            action.params.event_data.forEach(function(p) {
+                if (p.key) ed[p.key] = p.value || '';
+            });
+            if (Object.keys(ed).length > 0) payload.event_data = ed;
+        }
+    }
+    pre.textContent = JSON.stringify(payload, null, 2);
+}
+
+function _renderHaServiceAction(action, container) {
+    // Ensure params structure
+    if (!action.params) action.params = {};
+    if (!action.params.domain) action.params.domain = '';
+    if (!action.params.service) action.params.service = '';
+    if (!action.params.entity_id) action.params.entity_id = '';
+    if (!action.params.service_data) action.params.service_data = [];
+
+    var panel = document.createElement('div');
+    panel.className = 'ha-action-panel';
+
+    // HA not configured warning
+    _checkHaConfigured().then(function(configured) {
+        if (!configured) {
+            var warn = panel.querySelector('.ha-not-configured');
+            if (warn) warn.style.display = '';
+        }
+    });
+
+    var warnDiv = document.createElement('div');
+    warnDiv.className = 'ha-not-configured';
+    warnDiv.style.display = 'none';
+    warnDiv.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> Home Assistant is not configured. <a href="/frontend/html/settings.html">Configure it in Settings → Home Assistant.</a>';
+    panel.appendChild(warnDiv);
+
+    // Domain input
+    var domainLabel = document.createElement('label');
+    domainLabel.textContent = 'Domain';
+    domainLabel.className = 'ha-field-label';
+    panel.appendChild(domainLabel);
+
+    var domainInput = document.createElement('input');
+    domainInput.type = 'text';
+    domainInput.placeholder = 'e.g. light, switch, notify';
+    domainInput.value = action.params.domain;
+    domainInput.className = 'ha-field-input';
+    domainInput.oninput = function() {
+        action.params.domain = this.value;
+        _markDirty();
+        _updateHaJsonPreview(jsonPreview, action);
+    };
+    panel.appendChild(domainInput);
+
+    // Service input + Fetch Services button
+    var serviceLabel = document.createElement('label');
+    serviceLabel.textContent = 'Service';
+    serviceLabel.className = 'ha-field-label';
+    panel.appendChild(serviceLabel);
+
+    var serviceRow = document.createElement('div');
+    serviceRow.className = 'ha-field-row';
+
+    var serviceInput = document.createElement('input');
+    serviceInput.type = 'text';
+    serviceInput.placeholder = 'e.g. turn_on, turn_off, send_message';
+    serviceInput.value = action.params.service;
+    serviceInput.className = 'ha-field-input';
+    serviceInput.oninput = function() {
+        action.params.service = this.value;
+        _markDirty();
+        _updateHaJsonPreview(jsonPreview, action);
+    };
+    serviceRow.appendChild(serviceInput);
+
+    var fetchSvcBtn = document.createElement('button');
+    fetchSvcBtn.type = 'button';
+    fetchSvcBtn.className = 'ha-fetch-btn';
+    fetchSvcBtn.textContent = 'Fetch Services';
+    fetchSvcBtn.onclick = async function() {
+        fetchSvcBtn.disabled = true;
+        fetchSvcBtn.textContent = 'Loading…';
+        var services = await _fetchHaServices();
+        fetchSvcBtn.disabled = false;
+        fetchSvcBtn.textContent = 'Fetch Services';
+        if (!services) {
+            cwocToast('Could not fetch HA services. Is HA configured?', 'error');
+            return;
+        }
+        _showHaServicePicker(services, domainInput, serviceInput, action, jsonPreview);
+    };
+    serviceRow.appendChild(fetchSvcBtn);
+    panel.appendChild(serviceRow);
+
+    // Entity ID input + Fetch Entities button
+    var entityLabel = document.createElement('label');
+    entityLabel.textContent = 'Entity ID';
+    entityLabel.className = 'ha-field-label';
+    panel.appendChild(entityLabel);
+
+    var entityRow = document.createElement('div');
+    entityRow.className = 'ha-field-row';
+
+    var entityInput = document.createElement('input');
+    entityInput.type = 'text';
+    entityInput.placeholder = 'e.g. light.living_room';
+    entityInput.value = action.params.entity_id;
+    entityInput.className = 'ha-field-input';
+    entityInput.oninput = function() {
+        action.params.entity_id = this.value;
+        _markDirty();
+        _updateHaJsonPreview(jsonPreview, action);
+    };
+    entityRow.appendChild(entityInput);
+
+    var fetchEntBtn = document.createElement('button');
+    fetchEntBtn.type = 'button';
+    fetchEntBtn.className = 'ha-fetch-btn';
+    fetchEntBtn.textContent = 'Fetch Entities';
+    fetchEntBtn.onclick = async function() {
+        fetchEntBtn.disabled = true;
+        fetchEntBtn.textContent = 'Loading…';
+        var entities = await _fetchHaEntities();
+        fetchEntBtn.disabled = false;
+        fetchEntBtn.textContent = 'Fetch Entities';
+        if (!entities) {
+            cwocToast('Could not fetch HA entities. Is HA configured?', 'error');
+            return;
+        }
+        _showHaEntityPicker(entities, entityInput, action, jsonPreview);
+    };
+    entityRow.appendChild(fetchEntBtn);
+    panel.appendChild(entityRow);
+
+    // Service Data key-value editor
+    var sdLabel = document.createElement('label');
+    sdLabel.textContent = 'Service Data';
+    sdLabel.className = 'ha-field-label';
+    panel.appendChild(sdLabel);
+
+    var kvEditor = _renderHaKeyValueEditor(action.params.service_data, function() {
+        _markDirty();
+        _updateHaJsonPreview(jsonPreview, action);
+    });
+    panel.appendChild(kvEditor);
+
+    // JSON Preview
+    var previewLabel = document.createElement('label');
+    previewLabel.textContent = 'JSON Preview';
+    previewLabel.className = 'ha-field-label ha-preview-label';
+    panel.appendChild(previewLabel);
+
+    var jsonPreview = _buildHaJsonPreview(action);
+    panel.appendChild(jsonPreview);
+
+    container.appendChild(panel);
+}
+
+function _renderHaEventAction(action, container) {
+    // Ensure params structure
+    if (!action.params) action.params = {};
+    if (!action.params.event_type) action.params.event_type = '';
+    if (!action.params.event_data) action.params.event_data = [];
+
+    var panel = document.createElement('div');
+    panel.className = 'ha-action-panel';
+
+    // HA not configured warning
+    _checkHaConfigured().then(function(configured) {
+        if (!configured) {
+            var warn = panel.querySelector('.ha-not-configured');
+            if (warn) warn.style.display = '';
+        }
+    });
+
+    var warnDiv = document.createElement('div');
+    warnDiv.className = 'ha-not-configured';
+    warnDiv.style.display = 'none';
+    warnDiv.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> Home Assistant is not configured. <a href="/frontend/html/settings.html">Configure it in Settings → Home Assistant.</a>';
+    panel.appendChild(warnDiv);
+
+    // Event Type input with datalist autocomplete
+    var etLabel = document.createElement('label');
+    etLabel.textContent = 'Event Type';
+    etLabel.className = 'ha-field-label';
+    panel.appendChild(etLabel);
+
+    var etInput = document.createElement('input');
+    etInput.type = 'text';
+    etInput.placeholder = 'e.g. cwoc_chit_created';
+    etInput.value = action.params.event_type;
+    etInput.className = 'ha-field-input';
+    etInput.setAttribute('list', 'ha-event-type-suggestions');
+    etInput.oninput = function() {
+        action.params.event_type = this.value;
+        _markDirty();
+        _updateHaJsonPreview(jsonPreview, action);
+    };
+    panel.appendChild(etInput);
+
+    // Datalist for event type suggestions
+    if (!document.getElementById('ha-event-type-suggestions')) {
+        var datalist = document.createElement('datalist');
+        datalist.id = 'ha-event-type-suggestions';
+        HA_EVENT_TYPE_SUGGESTIONS.forEach(function(s) {
+            var opt = document.createElement('option');
+            opt.value = s;
+            datalist.appendChild(opt);
+        });
+        document.body.appendChild(datalist);
+    }
+
+    // Event Data key-value editor
+    var edLabel = document.createElement('label');
+    edLabel.textContent = 'Event Data';
+    edLabel.className = 'ha-field-label';
+    panel.appendChild(edLabel);
+
+    var kvEditor = _renderHaKeyValueEditor(action.params.event_data, function() {
+        _markDirty();
+        _updateHaJsonPreview(jsonPreview, action);
+    });
+    panel.appendChild(kvEditor);
+
+    // JSON Preview
+    var previewLabel = document.createElement('label');
+    previewLabel.textContent = 'JSON Preview';
+    previewLabel.className = 'ha-field-label ha-preview-label';
+    panel.appendChild(previewLabel);
+
+    var jsonPreview = _buildHaJsonPreview(action);
+    panel.appendChild(jsonPreview);
+
+    container.appendChild(panel);
+}
+
+function _showHaEntityPicker(entities, targetInput, action, jsonPreview) {
+    // Remove any existing picker
+    var existing = document.querySelector('.ha-picker-overlay');
+    if (existing) existing.remove();
+
+    var overlay = document.createElement('div');
+    overlay.className = 'ha-picker-overlay';
+
+    var modal = document.createElement('div');
+    modal.className = 'ha-picker-modal';
+
+    var header = document.createElement('div');
+    header.className = 'ha-picker-header';
+    header.innerHTML = '<span>Select Entity</span>';
+
+    var closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.textContent = '×';
+    closeBtn.className = 'ha-picker-close';
+    closeBtn.onclick = function() { overlay.remove(); };
+    header.appendChild(closeBtn);
+    modal.appendChild(header);
+
+    var searchInput = document.createElement('input');
+    searchInput.type = 'text';
+    searchInput.placeholder = 'Search entities…';
+    searchInput.className = 'ha-picker-search';
+    modal.appendChild(searchInput);
+
+    var list = document.createElement('div');
+    list.className = 'ha-picker-list';
+
+    function renderList(filter) {
+        list.innerHTML = '';
+        var q = (filter || '').toLowerCase();
+        var filtered = entities.filter(function(e) {
+            var eid = (e.entity_id || '').toLowerCase();
+            var fname = (e.friendly_name || '').toLowerCase();
+            return !q || eid.indexOf(q) !== -1 || fname.indexOf(q) !== -1;
+        });
+        if (filtered.length === 0) {
+            list.innerHTML = '<div class="ha-picker-empty">No matching entities</div>';
+            return;
+        }
+        filtered.slice(0, 100).forEach(function(ent) {
+            var item = document.createElement('div');
+            item.className = 'ha-picker-item';
+            item.innerHTML = '<strong>' + _escHtml(ent.entity_id) + '</strong><span class="ha-picker-detail">' + _escHtml(ent.friendly_name || '') + ' — ' + _escHtml(ent.state || '') + '</span>';
+            item.onclick = function() {
+                targetInput.value = ent.entity_id;
+                action.params.entity_id = ent.entity_id;
+                _markDirty();
+                _updateHaJsonPreview(jsonPreview, action);
+                overlay.remove();
+            };
+            list.appendChild(item);
+        });
+    }
+
+    searchInput.oninput = function() { renderList(this.value); };
+    renderList('');
+
+    modal.appendChild(list);
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+    searchInput.focus();
+
+    overlay.onclick = function(e) {
+        if (e.target === overlay) overlay.remove();
+    };
+}
+
+function _showHaServicePicker(services, domainInput, serviceInput, action, jsonPreview) {
+    // Remove any existing picker
+    var existing = document.querySelector('.ha-picker-overlay');
+    if (existing) existing.remove();
+
+    var overlay = document.createElement('div');
+    overlay.className = 'ha-picker-overlay';
+
+    var modal = document.createElement('div');
+    modal.className = 'ha-picker-modal';
+
+    var header = document.createElement('div');
+    header.className = 'ha-picker-header';
+    header.innerHTML = '<span>Select Service</span>';
+
+    var closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.textContent = '×';
+    closeBtn.className = 'ha-picker-close';
+    closeBtn.onclick = function() { overlay.remove(); };
+    header.appendChild(closeBtn);
+    modal.appendChild(header);
+
+    var searchInput = document.createElement('input');
+    searchInput.type = 'text';
+    searchInput.placeholder = 'Search services…';
+    searchInput.className = 'ha-picker-search';
+    modal.appendChild(searchInput);
+
+    var list = document.createElement('div');
+    list.className = 'ha-picker-list';
+
+    // Flatten services into domain.service pairs
+    var flatServices = [];
+    (services || []).forEach(function(domainObj) {
+        var domain = domainObj.domain || '';
+        (domainObj.services || []).forEach(function(svc) {
+            flatServices.push({
+                domain: domain,
+                service: svc.service || svc,
+                description: svc.description || ''
+            });
+        });
+    });
+
+    function renderList(filter) {
+        list.innerHTML = '';
+        var q = (filter || '').toLowerCase();
+        var filtered = flatServices.filter(function(s) {
+            var full = (s.domain + '.' + s.service).toLowerCase();
+            var desc = (s.description || '').toLowerCase();
+            return !q || full.indexOf(q) !== -1 || desc.indexOf(q) !== -1;
+        });
+        if (filtered.length === 0) {
+            list.innerHTML = '<div class="ha-picker-empty">No matching services</div>';
+            return;
+        }
+        filtered.slice(0, 100).forEach(function(svc) {
+            var item = document.createElement('div');
+            item.className = 'ha-picker-item';
+            item.innerHTML = '<strong>' + _escHtml(svc.domain + '.' + svc.service) + '</strong>' +
+                (svc.description ? '<span class="ha-picker-detail">' + _escHtml(svc.description) + '</span>' : '');
+            item.onclick = function() {
+                domainInput.value = svc.domain;
+                serviceInput.value = svc.service;
+                action.params.domain = svc.domain;
+                action.params.service = svc.service;
+                _markDirty();
+                _updateHaJsonPreview(jsonPreview, action);
+                overlay.remove();
+            };
+            list.appendChild(item);
+        });
+    }
+
+    searchInput.oninput = function() { renderList(this.value); };
+    renderList('');
+
+    modal.appendChild(list);
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+    searchInput.focus();
+
+    overlay.onclick = function(e) {
+        if (e.target === overlay) overlay.remove();
+    };
+}
+
+// ── HA Trigger Entity Picker (for ha_state_change trigger) ──
+function _showHaTriggerEntityPicker(entities) {
+    // Remove any existing picker
+    var existing = document.querySelector('.ha-picker-overlay');
+    if (existing) existing.remove();
+
+    var overlay = document.createElement('div');
+    overlay.className = 'ha-picker-overlay';
+
+    var modal = document.createElement('div');
+    modal.className = 'ha-picker-modal';
+
+    var header = document.createElement('div');
+    header.className = 'ha-picker-header';
+    header.innerHTML = '<span>Select Entity to Monitor</span>';
+
+    var closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.textContent = '×';
+    closeBtn.className = 'ha-picker-close';
+    closeBtn.onclick = function() { overlay.remove(); };
+    header.appendChild(closeBtn);
+    modal.appendChild(header);
+
+    var searchInput = document.createElement('input');
+    searchInput.type = 'text';
+    searchInput.placeholder = 'Search entities…';
+    searchInput.className = 'ha-picker-search';
+    modal.appendChild(searchInput);
+
+    var list = document.createElement('div');
+    list.className = 'ha-picker-list';
+
+    function renderList(filter) {
+        list.innerHTML = '';
+        var q = (filter || '').toLowerCase();
+        var filtered = entities.filter(function(e) {
+            var eid = (e.entity_id || '').toLowerCase();
+            var fname = (e.friendly_name || '').toLowerCase();
+            return !q || eid.indexOf(q) !== -1 || fname.indexOf(q) !== -1;
+        });
+        if (filtered.length === 0) {
+            list.innerHTML = '<div class="ha-picker-empty">No matching entities</div>';
+            return;
+        }
+        filtered.slice(0, 100).forEach(function(ent) {
+            var item = document.createElement('div');
+            item.className = 'ha-picker-item';
+            item.innerHTML = '<strong>' + _escHtml(ent.entity_id) + '</strong><span class="ha-picker-detail">' + _escHtml(ent.friendly_name || '') + ' — ' + _escHtml(ent.state || '') + '</span>';
+            item.onclick = function() {
+                document.getElementById('ha-entity-id-input').value = ent.entity_id;
+                _markDirty();
+                overlay.remove();
+            };
+            list.appendChild(item);
+        });
+    }
+
+    searchInput.oninput = function() { renderList(this.value); };
+    renderList('');
+
+    modal.appendChild(list);
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+    searchInput.focus();
+
+    overlay.onclick = function(e) {
+        if (e.target === overlay) overlay.remove();
+    };
+}
+
+// ── Deserialize HA action from stored format to editor format ──
+function _deserializeHaAction(action) {
+    if (action.type === 'call_ha_service' && action.params) {
+        // Convert service_data object to key-value array for editor
+        var sdArr = [];
+        var sd = action.params.service_data;
+        if (sd && typeof sd === 'object' && !Array.isArray(sd)) {
+            Object.keys(sd).forEach(function(k) {
+                sdArr.push({ key: k, value: sd[k] || '' });
+            });
+        } else if (Array.isArray(sd)) {
+            sdArr = sd;
+        }
+        return {
+            type: action.type,
+            params: {
+                domain: action.params.domain || '',
+                service: action.params.service || '',
+                entity_id: action.params.entity_id || '',
+                service_data: sdArr
+            }
+        };
+    }
+    if (action.type === 'fire_ha_event' && action.params) {
+        // Convert event_data object to key-value array for editor
+        var edArr = [];
+        var ed = action.params.event_data;
+        if (ed && typeof ed === 'object' && !Array.isArray(ed)) {
+            Object.keys(ed).forEach(function(k) {
+                edArr.push({ key: k, value: ed[k] || '' });
+            });
+        } else if (Array.isArray(ed)) {
+            edArr = ed;
+        }
+        return {
+            type: action.type,
+            params: {
+                event_type: action.params.event_type || '',
+                event_data: edArr
+            }
+        };
+    }
+    return action;
+}
 
 // ── Get Fields for Current Trigger ──
 function _getFieldsForTrigger() {
     var trigger = document.getElementById('rule-trigger').value;
     if (trigger === 'email_received') return EMAIL_FIELDS;
     if (trigger === 'contact_created' || trigger === 'contact_updated') return CONTACT_FIELDS;
-    return CHIT_FIELDS; // default for chit_created, chit_updated, scheduled
+    if (trigger === 'ha_state_change') return HA_STATE_CHANGE_FIELDS;
+    return CHIT_FIELDS; // default for chit_created, chit_updated, scheduled, ha_webhook
 }
 
 // ── Condition Tree Builder ──
@@ -456,8 +1115,31 @@ function renderActions() {
         };
         row.appendChild(typeSelect);
 
+        // Remove button (created early so HA action types can use it)
+        var removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'action-row-remove';
+        removeBtn.textContent = '×';
+        removeBtn.title = 'Remove action';
+        removeBtn.onclick = function() { removeAction(idx); };
+
         // Parameter inputs (dynamic based on action type)
         var actionDef = CHIT_ACTION_TYPES.find(function(at) { return at.value === action.type; });
+
+        // HA action types get custom rendering
+        if (action.type === 'call_ha_service') {
+            row.appendChild(removeBtn);
+            container.appendChild(row);
+            _renderHaServiceAction(action, container);
+            return; // skip normal param rendering
+        }
+        if (action.type === 'fire_ha_event') {
+            row.appendChild(removeBtn);
+            container.appendChild(row);
+            _renderHaEventAction(action, container);
+            return; // skip normal param rendering
+        }
+
         if (actionDef && actionDef.params) {
             actionDef.params.forEach(function(param) {
                 if (param.type === 'select') {
@@ -589,13 +1271,7 @@ function renderActions() {
             });
         }
 
-        // Remove button
-        var removeBtn = document.createElement('button');
-        removeBtn.type = 'button';
-        removeBtn.className = 'action-row-remove';
-        removeBtn.textContent = '×';
-        removeBtn.title = 'Remove action';
-        removeBtn.onclick = function() { removeAction(idx); };
+        // Append remove button at end of row (for non-HA action types)
         row.appendChild(removeBtn);
 
         container.appendChild(row);
@@ -606,12 +1282,28 @@ function renderActions() {
 function _onTriggerChange() {
     var trigger = document.getElementById('rule-trigger').value;
     var scheduleConfig = document.getElementById('schedule-config');
+    var haStateChangeConfig = document.getElementById('ha-state-change-config');
+    var haWebhookConfig = document.getElementById('ha-webhook-config');
 
     // Show/hide schedule config
     if (trigger === 'scheduled') {
         scheduleConfig.classList.add('visible');
     } else {
         scheduleConfig.classList.remove('visible');
+    }
+
+    // Show/hide HA state change config
+    if (trigger === 'ha_state_change') {
+        haStateChangeConfig.classList.add('visible');
+    } else {
+        haStateChangeConfig.classList.remove('visible');
+    }
+
+    // Show/hide HA webhook config
+    if (trigger === 'ha_webhook') {
+        haWebhookConfig.classList.add('visible');
+    } else {
+        haWebhookConfig.classList.remove('visible');
     }
 
     // Re-render condition tree with new field options
@@ -671,7 +1363,38 @@ async function saveRule(andExit) {
         description: document.getElementById('rule-description').value.trim() || null,
         trigger_type: document.getElementById('rule-trigger').value,
         conditions: _serializeTree(_conditionTree),
-        actions: _actions.filter(function(a) { return a.type; }),
+        actions: _actions.filter(function(a) { return a.type; }).map(function(a) {
+            // Serialize HA action key-value arrays to objects for storage
+            if (a.type === 'call_ha_service') {
+                var sd = {};
+                (a.params.service_data || []).forEach(function(p) {
+                    if (p.key) sd[p.key] = p.value || '';
+                });
+                return {
+                    type: a.type,
+                    params: {
+                        domain: a.params.domain || '',
+                        service: a.params.service || '',
+                        entity_id: a.params.entity_id || '',
+                        service_data: sd
+                    }
+                };
+            }
+            if (a.type === 'fire_ha_event') {
+                var ed = {};
+                (a.params.event_data || []).forEach(function(p) {
+                    if (p.key) ed[p.key] = p.value || '';
+                });
+                return {
+                    type: a.type,
+                    params: {
+                        event_type: a.params.event_type || '',
+                        event_data: ed
+                    }
+                };
+            }
+            return a;
+        }),
         confirm_before_apply: document.getElementById('rule-confirm').checked
     };
 
@@ -681,6 +1404,13 @@ async function saveRule(andExit) {
             frequency: document.getElementById('schedule-frequency').value,
             interval: parseInt(document.getElementById('schedule-interval').value, 10) || 1,
             time_of_day: document.getElementById('schedule-time').value || '09:00'
+        };
+    }
+
+    // HA state change config
+    if (payload.trigger_type === 'ha_state_change') {
+        payload.schedule_config = {
+            ha_entity_id: document.getElementById('ha-entity-id-input').value.trim()
         };
     }
 
@@ -761,6 +1491,11 @@ async function _loadRule(ruleId) {
             document.getElementById('schedule-interval').value = sc.interval || 1;
             document.getElementById('schedule-time').value = sc.time_of_day || '09:00';
             _onScheduleFrequencyChange();
+
+            // HA state change entity_id
+            if (sc.ha_entity_id) {
+                document.getElementById('ha-entity-id-input').value = sc.ha_entity_id;
+            }
         }
 
         // Conditions
@@ -776,7 +1511,7 @@ async function _loadRule(ruleId) {
         if (typeof actions === 'string') {
             try { actions = JSON.parse(actions); } catch (e) { actions = []; }
         }
-        _actions = Array.isArray(actions) ? actions : [];
+        _actions = Array.isArray(actions) ? actions.map(_deserializeHaAction) : [];
         renderActions();
 
         // Mark as saved (no changes yet)
@@ -818,6 +1553,24 @@ document.addEventListener('DOMContentLoaded', function() {
     // Bind trigger change
     document.getElementById('rule-trigger').addEventListener('change', _onTriggerChange);
     document.getElementById('schedule-frequency').addEventListener('change', _onScheduleFrequencyChange);
+
+    // Bind HA trigger entity_id dirty tracking
+    document.getElementById('ha-entity-id-input').addEventListener('input', _markDirty);
+
+    // Bind HA trigger Fetch Entities button
+    document.getElementById('ha-trigger-fetch-entities').addEventListener('click', async function() {
+        var btn = this;
+        btn.disabled = true;
+        btn.textContent = 'Loading…';
+        var entities = await _fetchHaEntities();
+        btn.disabled = false;
+        btn.textContent = 'Fetch Entities';
+        if (!entities) {
+            cwocToast('Could not fetch HA entities. Is HA configured?', 'error');
+            return;
+        }
+        _showHaTriggerEntityPicker(entities);
+    });
 
     // Bind dirty tracking on text inputs
     document.getElementById('rule-name').addEventListener('input', _markDirty);

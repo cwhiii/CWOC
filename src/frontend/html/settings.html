@@ -1410,6 +1410,43 @@
 
                             </div><!-- /ntfy-config-body -->
                         </div>
+                        <div class="setting-group" id="ha-settings-group">
+                            <h3>🏠 Home Assistant</h3>
+
+                            <label class="setting-subheader">🔗 Connection</label>
+                            <div class="setting-inline">
+                                <label for="ha-base-url">HA Base URL</label>
+                                <input type="text" id="ha-base-url" placeholder="http://192.168.1.100:8123" style="flex:1;min-width:0;" />
+                            </div>
+                            <div class="setting-inline">
+                                <label for="ha-access-token">Access Token</label>
+                                <div style="flex:1;min-width:0;display:flex;gap:4px;">
+                                    <input type="password" id="ha-access-token" placeholder="Long-Lived Access Token" style="flex:1;min-width:0;" autocomplete="off" />
+                                    <button type="button" class="standard-button" style="flex-shrink:0;padding:4px 8px;font-size:0.85em;" onclick="_haToggleTokenVisibility()">👁️</button>
+                                </div>
+                            </div>
+                            <div class="setting-inline">
+                                <label for="ha-poll-interval">Poll Interval (sec)</label>
+                                <input type="number" id="ha-poll-interval" min="5" max="3600" value="30" style="width:80px;" />
+                            </div>
+
+                            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px;">
+                                <button type="button" class="standard-button" onclick="_haTestConnection()">🔌 Test Connection</button>
+                                <button type="button" class="standard-button" onclick="_haSaveConfig()">💾 Save HA Config</button>
+                                <span id="ha-connection-status" style="font-size:0.85em;"></span>
+                            </div>
+
+                            <label class="setting-subheader">🔗 Webhook</label>
+                            <p class="setting-hint">HA automations POST to this URL to create chits, update chits, or trigger rules.</p>
+                            <div class="setting-inline" style="flex-wrap:wrap;">
+                                <input type="text" id="ha-webhook-url" readonly style="flex:1;min-width:0;background:#f5e6cc;opacity:0.85;cursor:default;font-size:0.85em;" value="Loading..." />
+                                <button type="button" class="standard-button" style="flex-shrink:0;padding:4px 8px;font-size:0.85em;" onclick="_haCopyWebhookUrl()">📋 Copy</button>
+                            </div>
+                            <div style="margin-top:8px;">
+                                <button type="button" class="standard-button" onclick="_haRegenerateWebhookSecret()" style="font-size:0.85em;">🔄 Regenerate Webhook Secret</button>
+                                <p class="setting-hint" style="color:#a0522d;margin-top:4px;">⚠️ Regenerating breaks existing HA automations using the old URL.</p>
+                            </div>
+                        </div>
                         <div class="setting-group">
                             <h3>🔄 Version &amp; Updates</h3>
                             <div style="margin-bottom:12px;font-size:0.9em;">

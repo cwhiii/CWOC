@@ -61,6 +61,7 @@
                             <li><a href="#version-management">Version & Updates</a></li>
                             <li><a href="#network-access">Dependent Apps</a></li>
                             <li><a href="#ntfy-notifications">Ntfy Notifications</a></li>
+                            <li><a href="#home-assistant">Home Assistant</a></li>
                             <li><a href="#install-app">Install as App</a></li>
                         </ul>
                     </div>
@@ -817,6 +818,139 @@ lxc.mount.entry: /dev/net/tun dev/net/tun none bind,create=file</pre>
                 <li><strong>Works at home but not remotely</strong> — Make sure Tailscale is running on both the server and your phone. Check that subnet routing is approved in the Tailscale admin console (see above).</li>
                 <li><strong>Notifications delayed</strong> — Enable Instant Delivery in the Ntfy app for your subscription. Also check that Android isn't killing the Ntfy app — add it to your battery optimization exceptions (Settings → Apps → Ntfy → Battery → Unrestricted).</li>
             </ul>
+            <h3 id="home-assistant">Home Assistant Integration</h3>
+            <p>CWOC integrates bidirectionally with <strong>Home Assistant</strong> (HA). You can display chit counts on HA dashboards, create or update chits from HA automations, trigger HA scenes from CWOC rules, and fire HA events when chit state changes.</p>
+
+            <h4>Setup Overview</h4>
+            <p>There are two sides to configure: the HA custom integration (runs inside Home Assistant) and the CWOC HA connection (configured in CWOC Settings).</p>
+
+            <h4>1. Deploy the HA Custom Integration</h4>
+            <ol>
+                <li>Copy the <code>ha_integration/custom_components/cwoc/</code> folder from the CWOC repository to your Home Assistant's <code>config/custom_components/cwoc/</code> directory. The configurator script (<code>install/configurinator.sh</code>) can do this for you.</li>
+                <li>Restart Home Assistant so it discovers the new integration.</li>
+            </ol>
+
+            <h4>2. Add CWOC via HA Integrations Panel</h4>
+            <ol>
+                <li>In Home Assistant, go to <strong>Settings → Devices &amp; Services → Add Integration</strong>.</li>
+                <li>Search for <strong>"CWOC"</strong> and select it.</li>
+                <li>Enter your CWOC server URL (e.g., <code>http://192.168.1.111:3333</code>), username, and password.</li>
+                <li>The config flow validates your credentials against CWOC. On success, sensors and services are created automatically.</li>
+            </ol>
+
+            <h4>3. Configure HA Connection in CWOC Settings</h4>
+            <p>This step enables CWOC rules to call HA services and fire HA events. Admin-only.</p>
+            <ol>
+                <li>Go to <strong>CWOC Settings → Home Assistant</strong>.</li>
+                <li>Enter your HA base URL (e.g., <code>http://192.168.1.100:8123</code>).</li>
+                <li>Paste a <strong>Long-Lived Access Token</strong> from HA (create one in HA → Profile → Long-Lived Access Tokens).</li>
+                <li>Set the poll interval (default 30 seconds) for state change monitoring.</li>
+                <li>Click <strong>Test Connection</strong> to verify. Save when green.</li>
+            </ol>
+            <p>The <strong>Webhook URL</strong> displayed in this section is what HA automations use to call back into CWOC. Copy it for use in HA automation YAML.</p>
+
+            <h4>Common Use Cases</h4>
+
+            <p><strong>Chit counts on HA dashboards:</strong> Once the integration is added, sensors like <code>sensor.cwoc_total_chits</code>, <code>sensor.cwoc_todo_count</code>, <code>sensor.cwoc_overdue_count</code>, and <code>sensor.cwoc_inbox_count</code> appear automatically. Add them to any HA dashboard card. Per-tag sensors (e.g., <code>sensor.cwoc_tag_groceries_count</code>) are also available for tracked tags.</p>
+
+            <p><strong>Creating chits from HA automations:</strong> Use the <code>cwoc.create_chit</code> service in any HA automation. Example YAML:</p>
+<pre><code>service: cwoc.create_chit
+data:
+  title: "Front door opened while away"
+  tags:
+    - Security
+    - Alerts
+  status: ToDo
+  priority: High
+  note: "Motion detected at {{ now().strftime('%H:%M') }}"</code></pre>
+
+            <p><strong>Triggering HA scenes from CWOC rules:</strong> In the CWOC Rules Editor, create a rule with a <code>call_ha_service</code> action. For example, when a chit tagged "Bedtime" is marked Complete, call <code>scene.turn_on</code> to activate your "Goodnight" scene:</p>
+<pre><code>{
+  "type": "call_ha_service",
+  "params": {
+    "domain": "scene",
+    "service": "turn_on",
+    "entity_id": "scene.goodnight",
+    "service_data": {}
+  }
+}</code></pre>
+
+            <p><strong>Firing HA events on CWOC state changes:</strong> Use the <code>fire_ha_event</code> action in CWOC rules to push events onto the HA event bus. HA automations can then trigger on these events. Example rule action:</p>
+<pre><code>{
+  "type": "fire_ha_event",
+  "params": {
+    "event_type": "cwoc_chit_updated",
+    "event_data": {
+      "chit_title": "{chit_title}",
+      "chit_status": "{chit_status}",
+      "rule_name": "{rule_name}"
+    }
+  }
+}</code></pre>
+            <p>In HA, subscribe to this event in an automation trigger:</p>
+<pre><code>trigger:
+  - platform: event
+    event_type: cwoc_chit_updated
+    event_data:
+      chit_status: "Complete"
+action:
+  - service: notify.mobile_app
+    data:
+      message: "Chit completed: {{ trigger.event.data.chit_title }}"</code></pre>
+
+            <h4>Webhook Payloads (HA → CWOC)</h4>
+            <p>HA automations can POST to the CWOC webhook endpoint to create chits, update them, add checklist items, or trigger CWOC rules. The webhook URL format is:</p>
+            <p><code>http://&lt;cwoc-host&gt;:3333/api/ha/webhook?token=&lt;webhook-secret&gt;</code></p>
+            <p>All payloads are JSON with an <code>action</code> field. The optional <code>user_id</code> field targets a specific CWOC user (defaults to the admin who configured HA).</p>
+
+            <p><strong>create_chit</strong> — Create a new chit:</p>
+<pre><code>{
+  "action": "create_chit",
+  "title": "Garage door left open",
+  "note": "Detected at 11:30 PM",
+  "tags": ["Home", "Alerts"],
+  "status": "ToDo",
+  "priority": "High",
+  "due_datetime": "2026-01-16T08:00:00"
+}</code></pre>
+
+            <p><strong>add_checklist_item</strong> — Append an item to an existing chit's checklist:</p>
+<pre><code>{
+  "action": "add_checklist_item",
+  "chit_id": "abc123",
+  "item_text": "Buy milk"
+}</code></pre>
+            <p>You can also use <code>"chit_title": "Grocery List"</code> instead of <code>chit_id</code> to look up by title.</p>
+
+            <p><strong>update_chit</strong> — Update fields on an existing chit:</p>
+<pre><code>{
+  "action": "update_chit",
+  "chit_id": "abc123",
+  "fields": {
+    "status": "Complete",
+    "note": "Resolved automatically by HA"
+  }
+}</code></pre>
+
+            <p><strong>trigger_rule</strong> — Fire the <code>ha_webhook</code> trigger in the CWOC rules engine:</p>
+<pre><code>{
+  "action": "trigger_rule",
+  "payload": {
+    "ha_entity_id": "binary_sensor.front_door",
+    "state": "on",
+    "event": "door_opened"
+  }
+}</code></pre>
+            <p>Rules with the <code>ha_webhook</code> trigger type will evaluate their conditions against the payload fields.</p>
+
+            <h4>Using fire_ha_event in CWOC Rules</h4>
+            <p>The <code>fire_ha_event</code> action in the CWOC rules engine POSTs an event to the HA event bus. This lets any CWOC trigger (chit created, status changed, email received, etc.) push a notification to HA.</p>
+            <p>Template placeholders (<code>{chit_title}</code>, <code>{chit_status}</code>, <code>{rule_name}</code>, <code>{entity_id}</code>) are substituted from the triggering context before the event is fired.</p>
+            <p>In HA, automations subscribe to these events using the <code>event</code> platform trigger with the matching <code>event_type</code>. Suggested event types: <code>cwoc_chit_created</code>, <code>cwoc_chit_updated</code>, <code>cwoc_email_received</code>, <code>cwoc_status_changed</code>, <code>cwoc_tag_added</code>.</p>
+
+            <h4>HA State Change Trigger</h4>
+            <p>CWOC can poll HA entity states and fire rules when a state changes. In the Rules Editor, select <code>ha_state_change</code> as the trigger type and specify the entity_id to monitor (e.g., <code>binary_sensor.front_door</code>). CWOC polls at the configured interval and fires the trigger when the state differs from the last known value. The condition tree can evaluate <code>ha_entity_id</code>, <code>old_state</code>, <code>new_state</code>, and <code>attributes</code>.</p>
+
             <h3 id="install-app">Install as App</h3>
             <p>CWOC is a Progressive Web App (PWA) — you can install it on your phone, tablet, or desktop so it runs in its own window without browser chrome, just like a native app.</p>
             <h4>Trusting the Server Certificate</h4>

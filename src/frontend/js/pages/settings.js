@@ -5046,3 +5046,186 @@ async function loadNtfyConfig() {
   displayNtfyTopic();
   await displayNtfyServerUrl();
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ── Home Assistant Integration Settings ──────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Load HA config from the backend and populate the form fields.
+ * GET /api/ha/config (admin-only)
+ */
+async function _haLoadConfig() {
+  try {
+    var resp = await fetch('/api/ha/config');
+    if (!resp.ok) {
+      if (resp.status === 403) return; // not admin, silently skip
+      console.warn('[HA] Failed to load config:', resp.status);
+      return;
+    }
+    var data = await resp.json();
+    var urlInput = document.getElementById('ha-base-url');
+    var tokenInput = document.getElementById('ha-access-token');
+    var pollInput = document.getElementById('ha-poll-interval');
+    var webhookInput = document.getElementById('ha-webhook-url');
+
+    if (urlInput) urlInput.value = data.ha_base_url || '';
+    if (tokenInput) tokenInput.placeholder = data.ha_access_token ? '••••••••••••••••' : 'Long-Lived Access Token';
+    if (pollInput) pollInput.value = data.ha_poll_interval || 30;
+
+    // Build webhook URL
+    var secret = data.ha_webhook_secret || '';
+    if (secret && webhookInput) {
+      webhookInput.value = window.location.protocol + '//' + window.location.host + '/api/ha/webhook?token=' + secret;
+    } else if (webhookInput) {
+      webhookInput.value = 'Not configured yet';
+    }
+  } catch (e) {
+    console.error('[HA] Error loading config:', e);
+  }
+}
+
+/**
+ * Save HA config to the backend.
+ * POST /api/ha/config
+ */
+async function _haSaveConfig() {
+  var statusEl = document.getElementById('ha-connection-status');
+  if (statusEl) { statusEl.textContent = '⏳ Saving...'; statusEl.style.color = '#8b5a2b'; }
+
+  var payload = {
+    ha_base_url: (document.getElementById('ha-base-url') || {}).value || '',
+    ha_poll_interval: parseInt((document.getElementById('ha-poll-interval') || {}).value, 10) || 30
+  };
+
+  // Only include token if user typed a new one (not the placeholder)
+  var tokenInput = document.getElementById('ha-access-token');
+  if (tokenInput && tokenInput.value) {
+    payload.ha_access_token = tokenInput.value;
+  }
+
+  try {
+    var resp = await fetch('/api/ha/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!resp.ok) {
+      var err = await resp.json().catch(function() { return {}; });
+      if (statusEl) { statusEl.textContent = '❌ ' + (err.detail || 'Save failed'); statusEl.style.color = '#b22222'; }
+      return;
+    }
+    if (statusEl) { statusEl.textContent = '✅ Saved'; statusEl.style.color = '#1a7a4c'; }
+    // Clear the token input (it's now stored encrypted)
+    if (tokenInput) { tokenInput.value = ''; tokenInput.placeholder = '••••••••••••••••'; }
+    // Reload to get updated webhook URL
+    await _haLoadConfig();
+  } catch (e) {
+    if (statusEl) { statusEl.textContent = '❌ Network error'; statusEl.style.color = '#b22222'; }
+  }
+}
+
+/**
+ * Test HA connection using the currently entered URL and token.
+ * POST /api/ha/config/test
+ */
+async function _haTestConnection() {
+  var statusEl = document.getElementById('ha-connection-status');
+  if (statusEl) { statusEl.textContent = '⏳ Testing...'; statusEl.style.color = '#8b5a2b'; }
+
+  var payload = {
+    ha_base_url: (document.getElementById('ha-base-url') || {}).value || '',
+  };
+  var tokenInput = document.getElementById('ha-access-token');
+  if (tokenInput && tokenInput.value) {
+    payload.ha_access_token = tokenInput.value;
+  }
+
+  try {
+    var resp = await fetch('/api/ha/config/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    var data = await resp.json();
+    if (data.success) {
+      var msg = '✅ Connected';
+      if (data.ha_version) msg += ' (HA ' + data.ha_version + ')';
+      if (statusEl) { statusEl.textContent = msg; statusEl.style.color = '#1a7a4c'; }
+    } else {
+      if (statusEl) { statusEl.textContent = '❌ ' + (data.message || 'Connection failed'); statusEl.style.color = '#b22222'; }
+    }
+  } catch (e) {
+    if (statusEl) { statusEl.textContent = '❌ Network error'; statusEl.style.color = '#b22222'; }
+  }
+}
+
+/**
+ * Toggle visibility of the HA access token field.
+ */
+function _haToggleTokenVisibility() {
+  var input = document.getElementById('ha-access-token');
+  if (!input) return;
+  input.type = input.type === 'password' ? 'text' : 'password';
+}
+
+/**
+ * Copy the webhook URL to clipboard.
+ */
+function _haCopyWebhookUrl() {
+  var input = document.getElementById('ha-webhook-url');
+  if (!input || !input.value || input.value === 'Loading...' || input.value === 'Not configured yet') return;
+  navigator.clipboard.writeText(input.value).then(function() {
+    var statusEl = document.getElementById('ha-connection-status');
+    if (statusEl) { statusEl.textContent = '📋 Copied!'; statusEl.style.color = '#1a7a4c'; }
+    setTimeout(function() { if (statusEl && statusEl.textContent === '📋 Copied!') statusEl.textContent = ''; }, 2000);
+  }).catch(function() {
+    // Fallback: select the input text
+    input.select();
+    document.execCommand('copy');
+  });
+}
+
+/**
+ * Regenerate the webhook secret (with confirmation).
+ * POST /api/ha/config/regenerate-webhook
+ */
+async function _haRegenerateWebhookSecret() {
+  if (!confirm('Regenerate webhook secret?\n\nThis will break any existing HA automations using the current webhook URL. They will need to be updated with the new URL.')) {
+    return;
+  }
+
+  var statusEl = document.getElementById('ha-connection-status');
+  if (statusEl) { statusEl.textContent = '⏳ Regenerating...'; statusEl.style.color = '#8b5a2b'; }
+
+  try {
+    var resp = await fetch('/api/ha/config/regenerate-webhook', { method: 'POST' });
+    if (!resp.ok) {
+      var err = await resp.json().catch(function() { return {}; });
+      if (statusEl) { statusEl.textContent = '❌ ' + (err.detail || 'Failed'); statusEl.style.color = '#b22222'; }
+      return;
+    }
+    if (statusEl) { statusEl.textContent = '✅ Secret regenerated'; statusEl.style.color = '#1a7a4c'; }
+    // Reload to get updated webhook URL
+    await _haLoadConfig();
+  } catch (e) {
+    if (statusEl) { statusEl.textContent = '❌ Network error'; statusEl.style.color = '#b22222'; }
+  }
+}
+
+/**
+ * Initialize HA settings section on page load (admin only).
+ */
+(function() {
+  function _initHASettings() {
+    var user = (typeof getCurrentUser === 'function') ? getCurrentUser() : null;
+    if (user && user.is_admin) {
+      _haLoadConfig();
+    }
+  }
+  if (typeof waitForAuth === 'function') {
+    waitForAuth().then(_initHASettings);
+  } else {
+    _initHASettings();
+  }
+})();

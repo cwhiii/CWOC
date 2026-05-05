@@ -1,0 +1,10 @@
+{
+  "services": {
+    "create_chit": "mdi:note-plus",
+    "add_checklist_item": "mdi:checkbox-marked-outline",
+    "update_chit": "mdi:pencil",
+    "set_chit_status": "mdi:flag",
+    "add_tag": "mdi:tag-plus",
+    "remove_tag": "mdi:tag-minus"
+  }
+}

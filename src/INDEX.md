@@ -32,13 +32,13 @@ Package marker. No public exports.
 | `app` | FastAPI application instance |
 | `NoCacheStaticMiddleware` | Middleware that adds no-cache headers to `/frontend/`, `/static/`, `/data/` responses |
 | `AuthMiddleware` | (imported from `middleware.py`) Session-based auth middleware — validates `cwoc_session` cookie, injects user identity into `request.state` |
-| `on_startup()` | Startup event — calls `start_weather_schedulers()` and `start_rules_scheduler()` |
+| `on_startup()` | Startup event — calls `start_weather_schedulers()`, `start_rules_scheduler()`, and `start_ha_polling_scheduler()` |
 | `serve_service_worker()` | `GET /sw.js` — Serve the service worker from `src/pwa/sw.js` with `Content-Type: application/javascript` and `Service-Worker-Allowed: /` header |
 | `serve_manifest()` | `GET /manifest.json` — Serve the web app manifest from `src/pwa/manifest.json` with `Content-Type: application/json` |
 | `serve_icon_192()` | `GET /static/cwoc-icon-192.png` — Serve 192×192 PWA icon from `src/pwa/` |
 | `serve_icon_512()` | `GET /static/cwoc-icon-512.png` — Serve 512×512 PWA icon from `src/pwa/` |
 
-Registers all route modules (including `auth_router`, `users_router`, `sharing_router`, `notifications_router`, `network_access_router`, `push_router`, `ntfy_router`, `email_router`, `attachments_router`, and `rules_router`), runs all migrations (including `migrate_add_multi_user()`, `migrate_add_sharing()`, `migrate_add_kiosk_users()`, `migrate_add_network_access()`, `migrate_add_notifications()`, `migrate_habits_overhaul()`, `migrate_habits_phase2()`, `migrate_add_push_subscriptions()`, `migrate_add_vapid_keys()`, `migrate_add_map_settings()`, `migrate_add_contact_dates()`, `migrate_add_email_fields()`, `migrate_add_attachments()`, `migrate_add_email_body_html()`, `migrate_add_fts5()`, `migrate_add_contact_vault()`, and `migrate_create_rules_tables()`) and `init_db()` at import time, mounts `StaticFiles` for frontend, static, data, and PWA directories.
+Registers all route modules (including `auth_router`, `users_router`, `sharing_router`, `notifications_router`, `network_access_router`, `push_router`, `ntfy_router`, `email_router`, `attachments_router`, `rules_router`, and `ha_router`), runs all migrations (including `migrate_add_multi_user()`, `migrate_add_sharing()`, `migrate_add_kiosk_users()`, `migrate_add_network_access()`, `migrate_add_notifications()`, `migrate_habits_overhaul()`, `migrate_habits_phase2()`, `migrate_add_push_subscriptions()`, `migrate_add_vapid_keys()`, `migrate_add_map_settings()`, `migrate_add_contact_dates()`, `migrate_add_email_fields()`, `migrate_add_attachments()`, `migrate_add_email_body_html()`, `migrate_add_fts5()`, `migrate_add_contact_vault()`, `migrate_create_rules_tables()`, and `migrate_create_ha_config()`) and `init_db()` at import time, mounts `StaticFiles` for frontend, static, data, and PWA directories.
 
 ### 1.3 `src/backend/models.py` — Pydantic Models
 
@@ -61,6 +61,8 @@ Registers all route modules (including `auth_router`, `users_router`, `sharing_r
 | `RuleCreate` | Create rule request — `name` (str), `description` (Optional), `enabled` (Optional bool, default True), `priority` (Optional int, default 0), `trigger_type` (str), `conditions` (Optional dict — condition tree JSON), `actions` (Optional list — array of action objects), `confirm_before_apply` (Optional bool, default True), `schedule_config` (Optional dict) |
 | `RuleUpdate` | Update rule request — all fields Optional: `name`, `description`, `enabled`, `priority`, `trigger_type`, `conditions`, `actions`, `confirm_before_apply`, `schedule_config` |
 | `RuleReorder` | Reorder rules request — `rule_ids` (List[str]) — ordered list of rule IDs |
+| `HAConfigUpdate` | HA config update request — `ha_base_url` (Optional[str]), `ha_access_token` (Optional[str]), `ha_poll_interval` (Optional[int], default 30) |
+| `HAWebhookPayload` | HA webhook payload — `action` (str), `user_id` (Optional[str]), `chit_id` (Optional[str]), `chit_title` (Optional[str]), `title` (Optional[str]), `note` (Optional[str]), `tags` (Optional[List[str]]), `status` (Optional[str]), `priority` (Optional[str]), `due_datetime` (Optional[str]), `checklist` (Optional[List[Dict]]), `item_text` (Optional[str]), `fields` (Optional[Dict]), `payload` (Optional[Dict]) |
 
 ### 1.4 `src/backend/db.py` — Database Helpers & Shared State
 
@@ -129,6 +131,7 @@ All migrations run at startup. Each checks if the column/table already exists be
 | `migrate_add_contact_vault()` | Add `shared_to_vault` (BOOLEAN DEFAULT 0) column to contacts table; add `default_share_contacts` (TEXT DEFAULT '0') column to settings table. Enables the shared Contact Vault feature |
 | `migrate_create_rules_tables()` | Create `rules`, `rule_confirmations`, and `rule_execution_log` tables using `CREATE TABLE IF NOT EXISTS`. Rules table: `id` (TEXT PRIMARY KEY), `owner_id`, `name`, `description`, `enabled` (BOOLEAN DEFAULT 1), `priority` (INTEGER DEFAULT 0), `trigger_type`, `conditions` (TEXT — JSON condition tree), `actions` (TEXT — JSON array), `confirm_before_apply` (BOOLEAN DEFAULT 1), `schedule_config` (TEXT — JSON), `created_datetime`, `modified_datetime`, `last_run_datetime`, `run_count` (INTEGER DEFAULT 0), `last_run_result`. Rule confirmations table: `id`, `rule_id`, `rule_name`, `owner_id`, `action_description`, `action_data` (TEXT — JSON), `target_entity_type`, `target_entity_id`, `created_datetime`. Rule execution log table: `id`, `rule_id`, `owner_id`, `trigger_event`, `entities_evaluated`, `entities_matched`, `actions_executed`, `actions_failed`, `result_summary`, `executed_datetime`. Fully idempotent |
 | `migrate_add_email_accounts()` | Add `email_accounts` (TEXT) column to settings table for multi-account email; add `email_account_id` (TEXT) to chits; migrate existing `email_account` data into `email_accounts` array with generated IDs. Fully idempotent |
+| `migrate_create_ha_config()` | Create `ha_config` table with columns: `id` (INTEGER PRIMARY KEY CHECK id=1), `ha_base_url` (TEXT), `ha_access_token` (TEXT), `ha_webhook_secret` (TEXT), `ha_poll_interval` (INTEGER DEFAULT 30), `configured_by` (TEXT), `modified_datetime` (TEXT). INSERT OR IGNORE a single row with id=1 and auto-generated UUID for ha_webhook_secret. Fully idempotent |
 
 ### 1.6 `src/backend/serializers.py` — vCard & CSV
 
@@ -852,9 +855,9 @@ Pure-function evaluation engine that recursively walks AND/OR group nodes and le
 | `resolve_contact_cross_ref(field, operator, value, entity, contacts)` | Resolve a condition that cross-references user contacts. Supports `contains_contact_city`, `contains_contact_email`, `contains_contact_name` operators. Returns False when contacts is None/empty or no match found |
 | `evaluate_leaf(leaf, entity, contacts=None)` | Evaluate a single leaf condition against an entity. Supports 14 operators: equals, not_equals, contains, not_contains, starts_with, ends_with, is_empty, is_not_empty, greater_than, less_than, regex_match, tag_present, tag_not_present, person_on_chit, person_not_on_chit. Returns False for missing fields instead of raising errors |
 | `evaluate_condition_tree(tree, entity, contacts=None)` | Recursively evaluate a condition tree against an entity. Group nodes use AND (all) or OR (any) logic. Empty AND groups return True (vacuous truth), empty OR groups return False |
-| `execute_action(action, entity_type, entity_id, owner_id, rule_name, rule_id)` | Execute a single rule action against an entity. Supports chit actions (add_tag, remove_tag, set_status, set_priority, set_severity, set_color, set_location, add_person, archive, move_to_trash, add_to_project, add_alert, share_with_user, assign_to_user), email actions (mark_email_read, mark_email_unread, move_email_to_folder), send_notification, and add_matching_contacts_as_people. Recomputes system tags, inserts audit entry. Returns `{"success": bool, "message": str}` |
-| `dispatch_trigger(trigger_type, entity_type, entity, owner_id)` | Synchronous fire-and-forget trigger dispatcher (called via threading.Thread from route handlers). Loads enabled rules for owner with matching trigger_type, ordered by priority ASC. Evaluates condition tree, handles confirm_before_apply branching (queue to rule_confirmations or execute immediately). Inserts execution log entry, updates rule metadata (last_run_datetime, run_count, last_run_result). Pre-loads contacts if any rule uses cross-reference conditions. Includes comprehensive logging at each step |
-| `_build_action_description(action_type, params, entity)` | Build a human-readable description of a proposed action for the confirmation UI. Maps each action type to a descriptive string with entity title and parameter values |
+| `execute_action(action, entity_type, entity_id, owner_id, rule_name, rule_id)` | Execute a single rule action against an entity. Supports chit actions (add_tag, remove_tag, set_status, set_priority, set_severity, set_color, set_location, add_person, archive, move_to_trash, add_to_project, add_alert, share_with_user, assign_to_user), email actions (mark_email_read, mark_email_unread, move_email_to_folder), HA actions (call_ha_service, fire_ha_event), send_notification, and add_matching_contacts_as_people. Recomputes system tags, inserts audit entry. Returns `{"success": bool, "message": str}` |
+| `dispatch_trigger(trigger_type, entity_type, entity, owner_id)` | Synchronous fire-and-forget trigger dispatcher (called via threading.Thread from route handlers). Loads enabled rules for owner with matching trigger_type, ordered by priority ASC. Evaluates condition tree, handles confirm_before_apply branching (queue to rule_confirmations or execute immediately). Inserts execution log entry, updates rule metadata (last_run_datetime, run_count, last_run_result). Pre-loads contacts if any rule uses cross-reference conditions. Recognizes trigger types: chit_created, chit_updated, email_received, contact_created, contact_updated, scheduled, ha_state_change, ha_webhook. Includes comprehensive logging at each step |
+| `_build_action_description(action_type, params, entity)` | Build a human-readable description of a proposed action for the confirmation UI. Maps each action type to a descriptive string with entity title and parameter values. HA actions: `call_ha_service` → "Call HA service {domain}.{service} on {entity_id}", `fire_ha_event` → "Fire Home Assistant event '{event_type}' with {N} data fields" |
 | `_send_rule_notification(owner_id, chit_id, chit_title, message)` | Send push and ntfy notifications for a rule action. Uses the same helpers as the alert scheduler — gracefully skips if push or ntfy modules are unavailable |
 
 **Internal helpers:**
@@ -910,6 +913,147 @@ Property-based tests for the rules engine. Uses Python stdlib only (unittest + r
 | `TestProperty8ConfirmationModeBranching` | Confirmation mode branching — generate random rules with confirm_before_apply True/False, verify queuing vs immediate execution behavior (100+ iterations). **Validates: Requirements 5.1, 5.2, 5.7** |
 | `TestProperty7ActionFailureContinuation` | Action failure continuation — generate action sequences where some actions fail, verify executor continues executing remaining actions and logs failures (100+ iterations). **Validates: Requirements 4.8** |
 | `TestProperty11OwnerScopingIsolation` | Owner scoping isolation — generate random users and rules, verify querying with user A's owner_id never returns user B's rules (100+ iterations). **Validates: Requirements 1.3, 7.9** |
+
+### 1.40 `src/backend/ha_bridge.py` — Home Assistant Bridge Module
+
+HA communication module using Python stdlib `urllib.request`. Handles all outbound calls to Home Assistant REST API, entity state polling, and template placeholder substitution. All HTTP errors return `{success: False, message: "..."}` without raising exceptions.
+
+| Function | Description |
+|----------|-------------|
+| `get_ha_config()` | Read ha_config row from DB, decrypt token using `_decrypt_password` from routes/email.py. Returns config dict or None |
+| `is_ha_configured()` | Quick check for URL + token presence in ha_config table |
+| `call_ha_service(domain, service, entity_id, service_data, timeout=10)` | POST to `{ha_base_url}/api/services/{domain}/{service}` with Bearer token auth. Returns `{success, message}` |
+| `fire_ha_event(event_type, event_data, timeout=10)` | POST to `{ha_base_url}/api/events/{event_type}` with Bearer token auth. Returns `{success, message}` |
+| `get_ha_entity_state(entity_id)` | GET `/api/states/{entity_id}` from HA. Returns state dict or error |
+| `get_ha_entities()` | GET `/api/states` from HA, return simplified entity list (entity_id, state, friendly_name) |
+| `get_ha_services()` | GET `/api/services` from HA, return service domain/service list |
+| `test_ha_connection(base_url, token)` | GET `/api/` to validate HA connectivity and token. Returns `{success, message}` |
+| `substitute_template_placeholders(data, context)` | Replace `{chit_title}`, `{chit_status}`, `{rule_name}`, `{entity_id}` placeholders in string values within a dict |
+| `start_ha_polling_scheduler()` | Start the background polling loop as an asyncio task |
+| `_ha_polling_loop()` | Background loop — polls monitored entities at configured interval, detects state changes, dispatches `ha_state_change` triggers |
+| `update_monitored_entities()` | Rebuild the monitored entity set from enabled rules with `ha_state_change` triggers |
+
+**Internal state:**
+
+| Symbol | Description |
+|--------|-------------|
+| `_monitored_entities` | In-memory set of entity_ids to poll |
+| `_last_known_states` | In-memory dict mapping entity_id → last known state value |
+
+### 1.41 `src/backend/routes/ha.py` — Home Assistant API Routes
+
+Provides HA configuration management, entity/service proxy endpoints, and webhook receiver. Admin-only config endpoints; authenticated entity/service endpoints; token-authenticated webhook endpoint.
+
+| Route | Handler | Description |
+|-------|---------|-------------|
+| `GET /api/ha/stats` | `get_ha_stats(request)` | Return chit statistics for the authenticated user (total_chits, todo_count, in_progress_count, blocked_count, complete_count, overdue_count, inbox_count, tag_counts) |
+| `POST /api/ha/config` | `save_ha_config(body, request)` | Admin-only — save HA config (encrypt token before storage) |
+| `GET /api/ha/config` | `get_ha_config(request)` | Admin-only — return config with masked token |
+| `POST /api/ha/config/test` | `test_ha_config(body, request)` | Admin-only — test connection via `ha_bridge.test_ha_connection()` |
+| `POST /api/ha/config/regenerate-webhook` | `regenerate_webhook_secret(request)` | Admin-only — regenerate webhook secret UUID |
+| `GET /api/ha/entities` | `get_ha_entities(request)` | Authenticated — proxy to HA `/api/states` with 60s cache, return simplified entity list |
+| `GET /api/ha/services` | `get_ha_services(request)` | Authenticated — proxy to HA `/api/services` with 60s cache |
+| `POST /api/ha/webhook` | `receive_webhook(request)` | Token-authenticated — process webhook actions: create_chit, add_checklist_item, update_chit, trigger_rule |
+
+**Internal helpers:**
+
+| Function | Description |
+|----------|-------------|
+| `_get_authenticated_user_id(request)` | Extract user_id from request state |
+| `_require_admin(request)` | Verify requesting user is admin; raise 403 otherwise |
+| `_validate_webhook_token(request)` | Validate webhook token from query param or Authorization header against stored secret |
+| `_resolve_webhook_user(payload, configured_by)` | Resolve user_id from payload or fall back to configured_by admin |
+| `_find_chit_by_id_or_title(cursor, chit_id, chit_title, owner_id)` | Look up a chit by ID or title (most recently modified for duplicate titles) |
+
+### 1.42 `src/backend/test_ha_integration.py` — Home Assistant Integration Property Tests
+
+Property-based tests for the HA integration feature. Uses Python stdlib only (unittest + random + sqlite3 + uuid) — no external libraries. Each property test runs 120+ iterations with randomly generated inputs. Inlines minimal production logic to avoid importing backend modules. 17 properties across 39 test methods.
+
+| Class / Function | Description |
+|------------------|-------------|
+| `TestProperty1StatsComputationCorrectness` | Stats computation correctness — generate random chit sets, verify total_chits, todo_count, overdue_count, inbox_count, tag_counts (excludes CWOC_System/ tags) (120+ iterations). **Validates: Requirements 1.1, 1.4, 1.5, 1.6** |
+| `TestProperty2HAConfigSaveReadRoundTrip` | HA config save/read round-trip — generate random URLs and tokens, verify encrypt→decrypt round-trip preserves values (120+ iterations). **Validates: Requirements 12.2, 12.5, 13.1** |
+| `TestProperty3GracefulSkipWhenUnconfigured` | Graceful skip when HA unconfigured — call bridge functions with no config, verify returns `{success: False}` without exceptions (120+ iterations). **Validates: Requirements 7.6, 9.4** |
+| `TestProperty4HABridgeRequestURLConstruction` | HA bridge request URL construction — verify call_ha_service and fire_ha_event construct correct URLs with Bearer token (120+ iterations). **Validates: Requirements 7.1, 9.2** |
+| `TestProperty5TemplatePlaceholderSubstitution` | Template placeholder substitution — generate random dicts with placeholders, verify all replaced correctly (120+ iterations). **Validates: Requirements 7.5, 9.5** |
+| `TestProperty6CallHAServiceDescriptionFormat` | call_ha_service description format — verify description contains domain, service, entity_id (120+ iterations). **Validates: Requirements 9.6** |
+| `TestProperty7FireHAEventDescriptionFormat` | fire_ha_event description format — verify format "Fire Home Assistant event '{event_type}' with {N} data fields" (120+ iterations). **Validates: Requirements 7.9** |
+| `TestProperty8StateChangeDetection` | State change detection — verify trigger fires when old != new state, no trigger when same (120+ iterations). **Validates: Requirements 10.3** |
+| `TestProperty9WebhookTokenValidation` | Webhook token validation — verify rejection when token != secret, acceptance when equal (120+ iterations). **Validates: Requirements 11.2, 11.8** |
+| `TestProperty10WebhookUserResolution` | Webhook user resolution — verify user_id from payload when present, fallback to configured_by when absent (120+ iterations). **Validates: Requirements 11.3** |
+| `TestProperty14WebhookTriggerRulePayloadPassthrough` | Webhook trigger rule payload passthrough — verify entity dict contains all original payload fields (120+ iterations). **Validates: Requirements 11.7, 18.2** |
+| `TestProperty15WebhookRequiredFieldValidation` | Webhook required field validation — verify HTTP 400 for missing required fields per action type (120+ iterations). **Validates: Requirements 11.9** |
+| `TestProperty16EntityListSimplification` | Entity list simplification — verify simplified list has same count, each item has entity_id, state, friendly_name (120+ iterations). **Validates: Requirements 15.1** |
+| `TestProperty17MonitoredEntitySetComputation` | Monitored entity set computation — verify set = union of ha_entity_id from enabled ha_state_change rules (120+ iterations). **Validates: Requirements 10.5, 14.3, 14.4** |
+| `TestProperty18MigrationIdempotency` | Migration idempotency — call migrate_create_ha_config multiple times, verify no errors, correct schema, exactly one row (120+ iterations). **Validates: Requirements 13.1, 13.2, 13.3** |
+| `TestProperty19SensorCreationFromStatsData` | Sensor creation from stats data — verify sensor count = 5 + N tags, each native_value matches stats field (120+ iterations). **Validates: Requirements 5.1, 5.4, 5.5** |
+| `TestProperty20ChitLookupByTitleOrID` | Chit lookup by title or ID — verify title lookup returns same chit as ID lookup for unique titles, most recently modified for duplicates (120+ iterations). **Validates: Requirements 6.6** |
+
+### 1.43 `ha_integration/custom_components/cwoc/` — Home Assistant Custom Integration
+
+Complete HA custom integration package deployed to HA's `custom_components/` directory.
+
+#### `__init__.py` — Integration Setup
+
+| Function | Description |
+|----------|-------------|
+| `async_setup_entry(hass, entry)` | Create coordinator, forward to sensor platform, register services |
+| `async_unload_entry(hass, entry)` | Unload platforms |
+
+#### `config_flow.py` — Config Flow
+
+| Class | Description |
+|-------|-------------|
+| `CwocConfigFlow` | Config flow extending `ConfigFlow` — `async_step_user()` presents form with cwoc_url, username, password; validates via POST to `/api/auth/login` |
+| `CwocOptionsFlow` | Options flow for reconfiguration (update URL/credentials) |
+
+#### `coordinator.py` — DataUpdateCoordinator
+
+| Class | Description |
+|-------|-------------|
+| `CwocDataUpdateCoordinator` | Extends `DataUpdateCoordinator` — `_async_update_data()` fetches `/api/ha/stats`; handles connection errors and 401 (raises `ConfigEntryAuthFailed`) |
+
+#### `sensor.py` — Sensor Platform
+
+| Class / Function | Description |
+|------------------|-------------|
+| `async_setup_entry(hass, entry, async_add_entities)` | Register sensor entities from coordinator data |
+| `CwocSensor` | Fixed sensors: cwoc_total_chits, cwoc_todo_count, cwoc_in_progress_count, cwoc_overdue_count, cwoc_inbox_count |
+| `CwocTagSensor` | Dynamic tag sensors: cwoc_tag_{name}_count — reports 0 when count is zero |
+
+#### `services.py` — Service Handlers
+
+| Function | Description |
+|----------|-------------|
+| `create_chit(hass, call)` | Create a chit via CWOC API; returns created chit ID |
+| `add_checklist_item(hass, call)` | Add checklist item to a chit |
+| `update_chit(hass, call)` | Update chit fields |
+| `set_chit_status(hass, call)` | Set chit status (supports lookup by chit_id or chit_title) |
+| `add_tag(hass, call)` | Add tag to a chit (supports lookup by chit_id or chit_title) |
+| `remove_tag(hass, call)` | Remove tag from a chit (supports lookup by chit_id or chit_title) |
+
+#### `const.py` — Constants
+
+| Symbol | Description |
+|--------|-------------|
+| `DOMAIN` | Integration domain: "cwoc" |
+| `DEFAULT_SCAN_INTERVAL` | Default polling interval: 30 seconds |
+
+#### `manifest.json` — Integration Manifest
+
+Config flow enabled, no external requirements (uses built-in aiohttp).
+
+#### `services.yaml` — Service Definitions
+
+Full field descriptions for all six services.
+
+#### `strings.json` / `translations/en.json` — UI Strings
+
+Config flow step titles, field labels, error messages.
+
+#### `icons.json` — Service Icons
+
+MDI icon mappings for each service action.
 
 ---
 
@@ -2222,6 +2366,12 @@ Settings page logic: tags, colors, clocks, locations, indicators, import/export,
 | `enableNtfyService()` | POST to `/api/network-access/ntfy/enable`, re-enable ntfy notifications, swap button to Disable |
 | `_ntfyUpdateDisableButton(isEnabled)` | Update the disable/enable button label based on current ntfy enabled state |
 | `toggleNtfySection()` | Toggle visibility of the Ntfy config section body |
+| `loadHAConfig()` | Fetch `GET /api/ha/config`, populate HA base URL, masked token, poll interval, and webhook URL display |
+| `saveHAConfig()` | Collect HA config values, POST to `/api/ha/config`, show success/error feedback |
+| `testHAConnection()` | POST to `/api/ha/config/test` with current URL and token, show connection result |
+| `regenerateHAWebhook()` | POST to `/api/ha/config/regenerate-webhook` with confirmation, update displayed webhook URL |
+| `toggleHATokenVisibility()` | Toggle HA access token input between `type="password"` and `type="text"` |
+| `copyHAWebhookUrl()` | Copy the webhook URL to clipboard with visual feedback |
 
 #### people.js
 
@@ -2508,7 +2658,7 @@ Rule Editor page logic — handles creating and editing rules with condition tre
 | `CONTACT_FIELDS` | Array of field definitions for contact triggers (given_name, surname, organization, tags, emails, phones, addresses) |
 | `OPERATORS` | Array of 15 operator definitions (equals, not_equals, contains, not_contains, starts_with, ends_with, is_empty, is_not_empty, greater_than, less_than, regex_match, tag_present, tag_not_present, person_on_chit, person_not_on_chit) |
 | `NO_VALUE_OPERATORS` | Array of operators that don't need a value input (is_empty, is_not_empty) |
-| `CHIT_ACTION_TYPES` | Array of action type definitions with parameter configs (add_tag, remove_tag, set_status, set_priority, set_severity, set_color, set_location, add_person, archive, move_to_trash, send_notification, mark_email_read, mark_email_unread, move_email_to_folder, add_matching_contacts_as_people). add_tag and remove_tag use `type: 'tag'` for tag picker widget |
+| `CHIT_ACTION_TYPES` | Array of action type definitions with parameter configs (add_tag, remove_tag, set_status, set_priority, set_severity, set_color, set_location, add_person, archive, move_to_trash, send_notification, mark_email_read, mark_email_unread, move_email_to_folder, add_matching_contacts_as_people, call_ha_service, fire_ha_event). add_tag and remove_tag use `type: 'tag'` for tag picker widget. call_ha_service has domain, service, entity_id, service_data (KV editor). fire_ha_event has event_type with autocomplete suggestions, event_data (KV editor) |
 | `_cachedTagList` | Cached flat list of user tags (excluding system tags) for the tag picker, sorted favorites-first then alphabetical |
 | `_loadTagList()` | Async function that fetches tags from `getCachedSettings()`, filters out system tags, sorts favorites-first, and caches in `_cachedTagList` |
 | `_getFieldsForTrigger()` | Return the appropriate field definitions array based on the selected trigger type |
@@ -2529,6 +2679,16 @@ Rule Editor page logic — handles creating and editing rules with condition tre
 | `saveRule(andExit)` | Save the rule via `POST /api/rules` (new) or `PUT /api/rules/{id}` (existing). Updates URL for new rules |
 | `cancelOrExit()` | Cancel or exit via `CwocSaveSystem` |
 | `_loadRule(ruleId)` | Load an existing rule from `GET /api/rules/{id}` and populate all form fields |
+| `_renderHAServiceAction(actionRow, params)` | Render call_ha_service action fields: domain, service, entity_id inputs with "Fetch Entities"/"Fetch Services" buttons, KV editor for service_data, JSON preview panel |
+| `_renderHAEventAction(actionRow, params)` | Render fire_ha_event action fields: event_type input with autocomplete suggestions (cwoc_chit_created, cwoc_chit_updated, cwoc_email_received, cwoc_status_changed, cwoc_tag_added), KV editor for event_data, JSON preview panel |
+| `_renderHAStateChangeTrigger()` | Render ha_state_change trigger config: entity_id input with "Fetch Entities" autocomplete, polling interval hint |
+| `_renderHAWebhookTrigger()` | Render ha_webhook trigger config: hint text explaining webhook-driven rules |
+| `_fetchHAEntities()` | Fetch entities from `GET /api/ha/entities`, populate searchable entity picker modal |
+| `_fetchHAServices()` | Fetch services from `GET /api/ha/services`, populate searchable service picker modal |
+| `_renderKVEditor(container, data, onChange)` | Render a key-value editor for service_data/event_data with add/remove rows |
+| `_renderJSONPreview(container, data)` | Render a read-only JSON preview panel below action inputs |
+| `_showEntityPickerModal(entities, onSelect)` | Show searchable entity picker modal with filtering |
+| `_showServicePickerModal(services, onSelect)` | Show searchable service picker modal with domain grouping |
 
 
 ## 3. Frontend CSS
@@ -2556,7 +2716,7 @@ Shared styles for ALL secondary pages (settings, help, trash, people, contacts, 
 | Empty State (`.cwoc-empty`) | Centered empty-state message |
 | Toolbar (`.cwoc-toolbar`) | Flex toolbar for button rows |
 | Indicator / Checkbox Lists | Flex column lists for settings checkboxes |
-| Help Content (`.help-content`) | Help page typography and spacing — includes Ntfy Notifications section (setup flow, topic subscription, local vs Tailscale access, troubleshooting) and Maps View section (date range filter, marker popups, clustering, color-coded status markers, Google Maps preference warning) |
+| Help Content (`.help-content`) | Help page typography and spacing — includes Ntfy Notifications section (setup flow, topic subscription, local vs Tailscale access, troubleshooting), Maps View section (date range filter, marker popups, clustering, color-coded status markers, Google Maps preference warning), and Home Assistant Integration section (setup process, HA custom integration deployment, CWOC connection config, webhook payload format, use case examples) |
 | Author Footer (`.author-info`) | Page footer with copyright |
 | Modal (`.modal`) | Full-screen modal overlay and content box |
 | Loader Spinner (`.loader`) | CSS spinner animation |
@@ -2603,7 +2763,7 @@ Rules-specific styles used by `rules-manager.html` and `rule-editor.html`. Depen
 | Pending Confirmations (`.rules-confirmations`) | Collapsible section with gold accent border, header with toggle arrow, confirmation cards with rule name, action description, timestamp, and Accept/Dismiss buttons |
 | Rules Toolbar (`.rules-toolbar`) | Flex toolbar for rules page action buttons |
 | Enabled Toggle (`.rule-enabled-toggle`) | Sliding toggle switch for rule enabled/disabled state with brown/parchment colors |
-| Trigger Badge (`.trigger-badge`) | Inline badge with color-coded backgrounds per trigger type: `chit_created` (green), `chit_updated` (yellow), `email_received` (blue), `contact_created` (purple), `contact_updated` (pink), `scheduled` (brown) |
+| Trigger Badge (`.trigger-badge`) | Inline badge with color-coded backgrounds per trigger type: `chit_created` (green), `chit_updated` (yellow), `email_received` (blue), `contact_created` (purple), `contact_updated` (pink), `scheduled` (brown), `ha_state_change` (teal), `ha_webhook` (orange) |
 | Rule Name Link (`.rule-name-link`) | Underlined clickable rule name in the table |
 | Drag Handle (`.rule-drag-handle`) | Grab cursor drag handle for rule reorder |
 | Drag States (`.rule-dragging`, `.rule-drag-over`) | Visual feedback during drag-and-drop reorder |
@@ -2619,6 +2779,10 @@ Rules-specific styles used by `rules-manager.html` and `rule-editor.html`. Depen
 | Rule Button Bar (`.rule-button-bar`) | Save/Cancel button bar at bottom of rule editor |
 | Responsive (≤768px) | Tablet breakpoints — reduced condition group indentation, stacked leaf conditions and action rows, stacked confirmation cards |
 | Responsive (≤480px) | Mobile breakpoints — minimal indentation, compact operator toggles, full-width buttons |
+| HA Action Panel (`.ha-action-panel`) | Container for HA action configuration with domain/service/entity inputs and fetch buttons |
+| KV Editor (`.ha-kv-editor`) | Key-value pair editor for service_data and event_data with add/remove row buttons |
+| JSON Preview (`.ha-json-preview`) | Read-only JSON preview panel with monospace font and parchment background |
+| Entity/Service Picker Modal (`.ha-picker-modal`) | Searchable modal for selecting HA entities or services with filter input, scrollable list, and domain grouping |
 
 ### 3.2 Dashboard (`src/frontend/css/dashboard/`)
 
@@ -2819,6 +2983,7 @@ The `#network-access-block` div inside the `#admin-section` `.settings-grid` pro
 | Function | Description |
 |----------|-------------|
 | `install_tailscale()` | Install Tailscale if not already present; uses `command -v tailscale` to check, runs official install script (`curl -fsSL https://tailscale.com/install.sh \| bash`); non-fatal on failure (`log_warn` + `return 0`); does NOT attempt `tailscale up` or `tailscale login` |
+| `deploy_ha_integration()` | Deploy HA custom integration to a user-specified HA custom_components path. Copies `ha_integration/custom_components/cwoc/` to the target directory. Offers update (overwrite) option for existing deployments. Displays reminder to restart Home Assistant after deployment |
 
 Called in both fresh-install and upgrade paths of `main()`, after `configure_https` and before `start_and_verify`.
 
@@ -3091,7 +3256,7 @@ New frontend pages added for Maps View:
 
 New frontend pages added for Rules Engine:
 - `rules-manager.html` — Rules Manager page. Uses `shared-page.css` and `shared-rules.css` for styling, `shared-page.js` for header/footer injection. Displays rules table with enabled toggle, name, trigger type badge, priority, last run, run count, and delete button. Pending confirmations section at top (collapsible, hidden when empty) with Accept/Dismiss buttons. "New Rule" button navigates to `rule-editor.html`. Drag-and-drop reorder. Loads `rules-manager.js`. `data-page-title="Rules Manager"`, `data-page-icon="🤖"`.
-- `rule-editor.html` — Rule Editor page. Uses `shared-page.css` and `shared-rules.css` for styling, `shared-page.js` for header/footer injection. Sections: Rule Info (name, description), Trigger (dropdown), Conditions (visual tree builder), Actions (dynamic list), Settings (confirm toggle), Save/Cancel via `CwocSaveSystem`. Loads `rule-editor.js`. `data-page-title="Rule Editor"`, `data-page-icon="🤖"`.
+- `rule-editor.html` — Rule Editor page. Uses `shared-page.css` and `shared-rules.css` for styling, `shared-page.js` for header/footer injection. Sections: Rule Info (name, description), Trigger (dropdown with ha_state_change and ha_webhook options + config panels), Conditions (visual tree builder), Actions (dynamic list with call_ha_service and fire_ha_event types), Settings (confirm toggle), Save/Cancel via `CwocSaveSystem`. Loads `rule-editor.js`. `data-page-title="Rule Editor"`, `data-page-icon="🤖"`.
 
 
 ---

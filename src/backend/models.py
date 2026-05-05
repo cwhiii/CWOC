@@ -272,3 +272,27 @@ class RuleUpdate(BaseModel):
 
 class RuleReorder(BaseModel):
     rule_ids: List[str]  # Ordered list of rule IDs
+
+
+# ── Home Assistant Integration Models ────────────────────────────────────
+
+class HAConfigUpdate(BaseModel):
+    ha_base_url: Optional[str] = None
+    ha_access_token: Optional[str] = None  # plaintext from frontend, encrypted before storage
+    ha_poll_interval: Optional[int] = 30
+
+class HAWebhookPayload(BaseModel):
+    action: str                          # create_chit, add_checklist_item, update_chit, trigger_rule
+    user_id: Optional[str] = None        # target user; defaults to configured_by admin
+    chit_id: Optional[str] = None        # for update_chit, add_checklist_item
+    chit_title: Optional[str] = None     # for lookup by title
+    title: Optional[str] = None          # for create_chit
+    note: Optional[str] = None
+    tags: Optional[List[str]] = None
+    status: Optional[str] = None
+    priority: Optional[str] = None
+    due_datetime: Optional[str] = None
+    checklist: Optional[List[Dict[str, Any]]] = None
+    item_text: Optional[str] = None      # for add_checklist_item
+    fields: Optional[Dict[str, Any]] = None  # for update_chit (arbitrary field updates)
+    payload: Optional[Dict[str, Any]] = None # for trigger_rule (passed as entity dict)

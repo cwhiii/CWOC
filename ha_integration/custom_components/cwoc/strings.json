@@ -1,0 +1,22 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to CWOC",
+        "description": "Enter your C.W.'s Omni Chits server details.",
+        "data": {
+          "cwoc_url": "CWOC Server URL",
+          "username": "Username",
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Cannot connect to the CWOC server. Please check the URL and try again.",
+      "invalid_auth": "Invalid username or password."
+    },
+    "abort": {
+      "already_configured": "This CWOC instance is already configured."
+    }
+  }
+}

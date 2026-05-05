@@ -1729,3 +1729,45 @@ def migrate_add_availability():
     finally:
         if conn:
             conn.close()
+
+# ── Home Assistant Integration: migration ────────────────────────────────
+
+def migrate_create_ha_config():
+    """Create ha_config table for instance-wide Home Assistant connection settings.
+
+    Single-row table (enforced by CHECK id=1) storing the HA base URL,
+    encrypted access token, auto-generated webhook secret, poll interval,
+    and the admin user who configured it.
+
+    Inserts the default row with a generated UUID webhook secret on first run.
+
+    Fully idempotent — uses CREATE TABLE IF NOT EXISTS and INSERT OR IGNORE.
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS ha_config (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                ha_base_url TEXT,
+                ha_access_token TEXT,
+                ha_webhook_secret TEXT,
+                ha_poll_interval INTEGER DEFAULT 30,
+                configured_by TEXT,
+                modified_datetime TEXT
+            )
+        """)
+        # Ensure the single row exists with an auto-generated webhook secret
+        cursor.execute(
+            "INSERT OR IGNORE INTO ha_config (id, ha_webhook_secret) VALUES (1, ?)",
+            (str(uuid4()),)
+        )
+        conn.commit()
+        logger.info("ha_config table ready")
+    except Exception as e:
+        logger.error(f"Error in migrate_create_ha_config: {str(e)}")
+        raise
+    finally:
+        if conn:
+            conn.close()

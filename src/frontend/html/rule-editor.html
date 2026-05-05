@@ -45,6 +45,8 @@
                 <option value="contact_created">Contact Created</option>
                 <option value="contact_updated">Contact Updated</option>
                 <option value="scheduled">Scheduled</option>
+                <option value="ha_state_change">🏠 HA State Change</option>
+                <option value="ha_webhook">🏠 HA Webhook</option>
             </select>
             <div class="schedule-config" id="schedule-config">
                 <label for="schedule-frequency">Frequency</label>
@@ -60,6 +62,25 @@
                     <label for="schedule-time">Time of Day</label>
                     <input type="time" id="schedule-time" value="09:00" />
                 </div>
+            </div>
+            <div class="schedule-config" id="ha-state-change-config">
+                <label for="ha-entity-id-input">Entity ID</label>
+                <div class="ha-field-row">
+                    <input type="text" id="ha-entity-id-input" placeholder="e.g. binary_sensor.front_door" />
+                    <button type="button" id="ha-trigger-fetch-entities" class="ha-fetch-btn">Fetch Entities</button>
+                </div>
+                <p class="ha-trigger-hint">
+                    <i class="fa-solid fa-circle-info"></i>
+                    CWOC polls HA every N seconds for state changes on this entity.
+                    Configure the poll interval in Settings → Home Assistant.
+                </p>
+            </div>
+            <div class="schedule-config" id="ha-webhook-config">
+                <p class="ha-trigger-hint">
+                    <i class="fa-solid fa-circle-info"></i>
+                    This rule triggers when an HA automation sends a webhook with <code>action: trigger_rule</code>.
+                    Configure the webhook URL in Settings → Home Assistant.
+                </p>
             </div>
         </div>
 

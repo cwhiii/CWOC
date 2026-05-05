@@ -668,6 +668,43 @@ def execute_action(
                     (folder, current_time, entity_id),
                 )
 
+            # ── Home Assistant actions ────────────────────────────
+            elif action_type == "call_ha_service":
+                from src.backend import ha_bridge
+                domain = params.get("domain", "")
+                service = params.get("service", "")
+                ha_entity_id = params.get("entity_id", "")
+                service_data = params.get("service_data") or {}
+                # Build template context from the chit
+                template_context = {
+                    "chit_title": chit.get("title") or "",
+                    "chit_status": chit.get("status") or "",
+                    "rule_name": rule_name,
+                    "entity_id": entity_id,
+                }
+                # Apply template substitution on service_data
+                service_data = ha_bridge.substitute_template_placeholders(service_data, template_context)
+                result = ha_bridge.call_ha_service(domain, service, ha_entity_id, service_data)
+                conn.commit()
+                return result
+
+            elif action_type == "fire_ha_event":
+                from src.backend import ha_bridge
+                event_type = params.get("event_type", "")
+                event_data = params.get("event_data") or {}
+                # Build template context from the chit
+                template_context = {
+                    "chit_title": chit.get("title") or "",
+                    "chit_status": chit.get("status") or "",
+                    "rule_name": rule_name,
+                    "entity_id": entity_id,
+                }
+                # Apply template substitution on event_data
+                event_data = ha_bridge.substitute_template_placeholders(event_data, template_context)
+                result = ha_bridge.fire_ha_event(event_type, event_data)
+                conn.commit()
+                return result
+
             # ── Notification action ──────────────────────────────
             elif action_type == "send_notification":
                 message = params.get("message", "")
@@ -838,7 +875,8 @@ def dispatch_trigger(
 
     Args:
         trigger_type: One of chit_created, chit_updated, email_received,
-                      contact_created, contact_updated, scheduled.
+                      contact_created, contact_updated, scheduled,
+                      ha_state_change, ha_webhook.
         entity_type: ``"chit"`` or ``"contact"``.
         entity: The triggering entity as a flat dict.
         owner_id: UUID of the entity owner.
@@ -1061,5 +1099,7 @@ def _build_action_description(action_type: str, params: dict, entity: dict) -> s
         "move_email_to_folder": f"Move '{entity_title}' to folder '{params.get('folder', '')}'",
         "send_notification": f"Send notification: {params.get('message', '')}",
         "add_matching_contacts_as_people": f"Add matching contacts as people on '{entity_title}'",
+        "call_ha_service": f"Call HA service {params.get('domain', '')}.{params.get('service', '')} on {params.get('entity_id', '')}",
+        "fire_ha_event": f"Fire Home Assistant event '{params.get('event_type', '')}' with {len(params.get('event_data', {}) or {})} data fields",
     }
     return descriptions.get(action_type, f"Execute {action_type} on '{entity_title}'")
