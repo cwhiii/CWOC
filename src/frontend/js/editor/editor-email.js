@@ -11,6 +11,20 @@
  * Loaded before: editor-save.js, editor-init.js
  */
 
+/* ── Email Undo/Redo ──────────────────────────────────────────────────────── */
+
+function _emailUndo(e) {
+  if (e) { e.stopPropagation(); e.preventDefault(); }
+  var bodyEl = document.getElementById('emailBody');
+  if (bodyEl) { bodyEl.focus(); document.execCommand('undo'); }
+}
+
+function _emailRedo(e) {
+  if (e) { e.stopPropagation(); e.preventDefault(); }
+  var bodyEl = document.getElementById('emailBody');
+  if (bodyEl) { bodyEl.focus(); document.execCommand('redo'); }
+}
+
 /** Stores the currently loaded chit for reply/forward operations */
 var _emailCurrentChit = null;
 

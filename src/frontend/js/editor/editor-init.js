@@ -615,6 +615,18 @@ async function loadChitData(chitId) {
       }
     }
 
+    // Per-chit checklist autosave override
+    if (typeof _checklistAutosaveChitOverride !== 'undefined') {
+      if (chit.checklist_autosave === true || chit.checklist_autosave === 'true' || chit.checklist_autosave === '1') {
+        _checklistAutosaveChitOverride = true;
+      } else if (chit.checklist_autosave === false || chit.checklist_autosave === 'false' || chit.checklist_autosave === '0') {
+        _checklistAutosaveChitOverride = false;
+      } else {
+        _checklistAutosaveChitOverride = null; // use global
+      }
+      _updateChecklistAutosaveToggle();
+    }
+
     _alertsFromChit(chit);
     _loadHealthData(chit);
 
@@ -841,15 +853,15 @@ function applyZoneStates(chit) {
     ["datesSection", "datesContent", () => !!(chit.start_datetime || chit.end_datetime || chit.due_datetime || chit.recurrence)],
     ["taskSection", "taskContent", () => !!(chit.priority || chit.severity || chit.status)],
     ["locationSection", "locationContent", () => !!(chit.location && chit.location.trim())],
-    ["tagsSection", "tagsContent", () => Array.isArray(chit.tags) && chit.tags.length > 0],
-    ["peopleSection", "peopleContent", () => (Array.isArray(chit.people) ? chit.people.length > 0 : !!(chit.people && chit.people.trim())) || (typeof hasSharingData === 'function' && hasSharingData(chit))],
+    ["tagsSection", "tagsContent", () => false],
+    ["peopleSection", "peopleContent", () => false],
     ["notesSection", "notesContent", () => !!(chit.note && chit.note.trim())],
     ["checklistSection", "checklistContent", () => Array.isArray(chit.checklist) && chit.checklist.length > 0],
     ["alertsSection", "alertsContent", () => !!(chit.alarm || chit.notification || (Array.isArray(chit.alerts) && chit.alerts.length > 0))],
     ["healthIndicatorsSection", "healthIndicatorsContent", () => false],
     ["emailSection", "emailContent", () => typeof hasEmailData === 'function' && hasEmailData(chit)],
     ["attachmentsSection", "attachmentsContent", () => typeof hasAttachmentData === 'function' && hasAttachmentData(chit)],
-    ["colorSection", "colorContent", () => !!(chit.color && chit.color !== "#C66B6B")],
+    ["colorSection", "colorContent", () => false],
     ["projectsSection", "projectsContent", () => !!(chit.is_project_master || (Array.isArray(chit.child_chits) && chit.child_chits.length > 0))],
   ];
 
@@ -954,8 +966,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
     const masters = allChits.filter(c => c.is_project_master && c.id !== chitId);
 
-    // Track currently selected project ID
+    // Track currently selected project ID (exposed globally for status change checks)
     let _selectedProjectId = '';
+    window._cwocParentProjectId = '';
 
     // Build menu items
     if (masters.length === 0) {
@@ -985,6 +998,7 @@ document.addEventListener("DOMContentLoaded", function () {
       wrapper.style.display = '';
       if (parentProject) {
         _selectedProjectId = parentProject.id;
+        window._cwocParentProjectId = parentProject.id;
         label.textContent = parentProject.title || '(Untitled Project)';
         _highlightSelected();
         if (removeBtn) removeBtn.style.display = '';
@@ -1029,38 +1043,38 @@ document.addEventListener("DOMContentLoaded", function () {
       });
     }
 
-    // Handle selection — add current chit to chosen project
+    // Handle selection — defer adding current chit to chosen project until save
     async function _selectProject(targetId, targetTitle) {
       menu.classList.remove('open');
       if (!targetId || !chitId) {
         if (removeBtn) removeBtn.style.display = 'none';
         return;
       }
-      try {
-        const projRes = await fetch('/api/chit/' + encodeURIComponent(targetId));
-        if (!projRes.ok) throw new Error('Failed to load target project');
-        const proj = await projRes.json();
-        const children = Array.isArray(proj.child_chits) ? proj.child_chits : [];
-        if (!children.includes(chitId)) children.push(chitId);
-        proj.child_chits = children;
-        const saveRes = await fetch('/api/chits/' + encodeURIComponent(targetId), {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(proj),
-        });
-        if (!saveRes.ok) throw new Error('Failed to save project');
-        _selectedProjectId = targetId;
-        label.textContent = targetTitle;
-        _highlightSelected();
-        if (removeBtn) removeBtn.style.display = '';
-        cwocToast('Added to project: ' + targetTitle, 'success');
-      } catch (e) {
-        console.error('Error adding chit to project:', e);
-        cwocToast('Failed to add to project.', 'error');
+
+      // Store pending project addition — executed on save
+      window._pendingProjectAddition = { projectId: targetId, projectTitle: targetTitle, chitId: chitId };
+
+      _selectedProjectId = targetId;
+      window._cwocParentProjectId = targetId;
+      label.textContent = targetTitle;
+      _highlightSelected();
+      if (removeBtn) removeBtn.style.display = '';
+
+      // Auto-set status to ToDo if empty
+      var statusNote = '';
+      var _statusEl = document.getElementById('status');
+      if (_statusEl && !_statusEl.value) {
+        _statusEl.value = 'ToDo';
+        statusNote = ' (status set to ToDo)';
       }
+
+      // Mark editor as unsaved so the user must click Save
+      setSaveButtonUnsaved();
+      cwocToast('Will add to "' + targetTitle + '" on save' + statusNote, 'info');
     }
 
     // Handle remove — pull this chit out of its parent project
+    // Deferred: stores pending removal and executes on save (not auto-save)
     if (removeBtn) {
       removeBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
@@ -1068,32 +1082,20 @@ document.addEventListener("DOMContentLoaded", function () {
         const parentMaster = masters.find(c => c.id === _selectedProjectId);
         const parentTitle = parentMaster ? (parentMaster.title || '(Untitled)') : 'this project';
         if (typeof cwocConfirm === 'function') {
-          const ok = await cwocConfirm('Remove this chit from "' + parentTitle + '"?', {
+          const ok = await cwocConfirm('Remove this chit from "' + parentTitle + '"?\n\nThis will take effect when you save.', {
             title: 'Remove from Project', confirmLabel: '✕ Remove', danger: true
           });
           if (!ok) return;
         }
-        try {
-          const projRes = await fetch('/api/chit/' + encodeURIComponent(_selectedProjectId));
-          if (!projRes.ok) throw new Error('Failed to load project');
-          const proj = await projRes.json();
-          proj.child_chits = (Array.isArray(proj.child_chits) ? proj.child_chits : [])
-            .filter(id => id !== chitId);
-          const saveRes = await fetch('/api/chits/' + encodeURIComponent(_selectedProjectId), {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(proj),
-          });
-          if (!saveRes.ok) throw new Error('Failed to save project');
-          _selectedProjectId = '';
-          label.textContent = 'Add to Project…';
-          _highlightSelected();
-          removeBtn.style.display = 'none';
-          cwocToast('Removed from project.', 'info');
-        } catch (e) {
-          console.error('Error removing chit from project:', e);
-          cwocToast('Failed to remove from project.', 'error');
-        }
+        // Store pending removal — executed on save
+        window._pendingProjectRemoval = { projectId: _selectedProjectId, chitId: chitId };
+        _selectedProjectId = '';
+        window._cwocParentProjectId = '';
+        label.textContent = 'Add to Project…';
+        _highlightSelected();
+        removeBtn.style.display = 'none';
+        if (typeof setSaveButtonUnsaved === 'function') setSaveButtonUnsaved();
+        cwocToast('Removal pending — save to confirm.', 'info');
       });
     }
   }).catch(() => {});
@@ -1125,6 +1127,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
   // Load time format setting for alarm display
   _loadEditorTimeFormat();
+
+  // Load checklist autosave setting
+  _loadChecklistAutosaveSetting();
 
   // Request notification permission
   if (typeof Notification !== "undefined" && Notification.permission === "default") {
@@ -1230,6 +1235,15 @@ document.addEventListener("DOMContentLoaded", function () {
         if (_hCb && !_hCb.checked) {
           onHabitToggle(); // toggles to true, expands everything
         }
+      }
+    } catch (e) { /* ignore */ }
+
+    // Auto-populate status "ToDo" when creating from Projects tab (not auto-saved)
+    try {
+      var _srcTabForStatus = localStorage.getItem('cwoc_source_tab');
+      if (_srcTabForStatus === 'Projects' && window.isNewChit) {
+        var _statusSel = document.getElementById('status');
+        if (_statusSel) _statusSel.value = 'ToDo';
       }
     } catch (e) { /* ignore */ }
 
@@ -1358,6 +1372,12 @@ document.addEventListener("DOMContentLoaded", function () {
       // Calculator popover — close before any other ESC action
       if (typeof cwocIsCalculatorOpen === 'function' && cwocIsCalculatorOpen()) {
         cwocCloseCalculator();
+        return;
+      }
+
+      // Send-content modal
+      if (_sendContentModalOpen) {
+        // Handled by its own ESC listener (clear search → close)
         return;
       }
 

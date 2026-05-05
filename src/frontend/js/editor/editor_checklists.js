@@ -1,5 +1,4 @@
 const MAX_INDENT_LEVEL = 4;
-const CHECKLIST_UNDO_DURATION = 8000;
 
 class Checklist {
   constructor(container, initialItems = [], onChangeCallback = null) {
@@ -12,6 +11,9 @@ class Checklist {
     this.editingItem = null;
     this.onChangeCallback = onChangeCallback;
     this._pendingUndo = null;
+    this._undoStack = [];
+    this._redoStack = [];
+    this._maxUndoSize = 50;
 
     this.init();
     if (initialItems && Array.isArray(initialItems)) this.loadItems(initialItems);
@@ -25,6 +27,7 @@ class Checklist {
 
   _createCountDisplay() {
     var header = document.getElementById("checklistSection")?.querySelector(".zone-header");
+    var self = this;
     this.countDisplay = document.createElement("span");
     this.countDisplay.className = "checklist-count-display";
     this.countDisplay.style.cssText = "font-size:0.85em;opacity:0.8;margin-left:0.5em;font-weight:normal;";
@@ -40,15 +43,121 @@ class Checklist {
       this.clearCheckedItems();
     });
 
+    // Undo button
+    this._undoBtn = document.createElement("button");
+    this._undoBtn.className = "zone-button notes-undo-redo";
+    this._undoBtn.textContent = "↺";
+    this._undoBtn.title = "Undo (Cmd+Z)";
+    this._undoBtn.disabled = true;
+    this._undoBtn.addEventListener("click", function(e) { e.stopPropagation(); e.preventDefault(); self.undo(); });
+
+    // Redo button
+    this._redoBtn = document.createElement("button");
+    this._redoBtn.className = "zone-button notes-undo-redo";
+    this._redoBtn.textContent = "↻";
+    this._redoBtn.title = "Redo (Cmd+Shift+Z)";
+    this._redoBtn.disabled = true;
+    this._redoBtn.addEventListener("click", function(e) { e.stopPropagation(); e.preventDefault(); self.redo(); });
+
+    // Move Checklist → Note button (goes in more menu)
+    this._checklistToNoteBtn = document.createElement("button");
+    this._checklistToNoteBtn.className = "zone-button";
+    this._checklistToNoteBtn.textContent = "☑️→📝";
+    this._checklistToNoteBtn.title = "Move checklist items to note";
+    this._checklistToNoteBtn.addEventListener("click", function(e) {
+      e.stopPropagation(); e.preventDefault();
+      _copyChecklistToNote(self);
+    });
+
+    // Send Checklist to Another Chit button (goes in more menu)
+    this._sendChecklistBtn = document.createElement("button");
+    this._sendChecklistBtn.className = "zone-button";
+    this._sendChecklistBtn.title = "Send checklist to another chit";
+    this._sendChecklistBtn.innerHTML = '<i class="fas fa-paper-plane"></i>';
+    this._sendChecklistBtn.addEventListener("click", function(e) {
+      e.stopPropagation(); e.preventDefault();
+      if (typeof _openSendContentModal === 'function') _openSendContentModal(e, 'checklist');
+    });
+
+    // More menu button
+    this._moreBtn = document.createElement("button");
+    this._moreBtn.className = "zone-button";
+    this._moreBtn.title = "More actions";
+    this._moreBtn.innerHTML = '<i class="fas fa-ellipsis-v"></i>';
+    this._moreBtn.addEventListener("click", function(e) {
+      e.stopPropagation(); e.preventDefault();
+      var menu = self._moreMenu;
+      var isOpen = menu.style.display === 'flex';
+      menu.style.display = isOpen ? 'none' : 'flex';
+      if (!isOpen) {
+        setTimeout(function() {
+          document.addEventListener('click', function _close() {
+            menu.style.display = 'none';
+            document.removeEventListener('click', _close);
+          }, { once: true });
+        }, 0);
+      }
+    });
+
+    // More menu dropdown
+    this._moreMenu = document.createElement("div");
+    this._moreMenu.className = "notes-more-menu";
+    this._moreMenu.style.display = "none";
+
+    var menuClear = document.createElement("button");
+    menuClear.innerHTML = '<i class="fas fa-broom"></i> Clear checked items';
+    menuClear.addEventListener("click", function(e) {
+      e.stopPropagation(); e.preventDefault();
+      self._moreMenu.style.display = 'none';
+      self.clearCheckedItems();
+    });
+    this._menuClearBtn = menuClear;
+
+    var menuToNote = document.createElement("button");
+    menuToNote.innerHTML = '<i class="fas fa-arrow-right"></i> Move to note';
+    menuToNote.addEventListener("click", function(e) {
+      e.stopPropagation(); e.preventDefault();
+      self._moreMenu.style.display = 'none';
+      _copyChecklistToNote(self);
+    });
+
+    var menuSend = document.createElement("button");
+    menuSend.innerHTML = '<i class="fas fa-paper-plane"></i> Send to another chit';
+    menuSend.addEventListener("click", function(e) {
+      e.stopPropagation(); e.preventDefault();
+      self._moreMenu.style.display = 'none';
+      if (typeof _openSendContentModal === 'function') _openSendContentModal(e, 'checklist');
+    });
+
+    var menuAutosave = document.createElement("button");
+    menuAutosave.id = 'checklistAutosaveBtn';
+    menuAutosave.innerHTML = '<i class="fas fa-bolt"></i> Auto-save: On';
+    menuAutosave.addEventListener("click", function(e) {
+      e.stopPropagation(); e.preventDefault();
+      self._moreMenu.style.display = 'none';
+      if (typeof _toggleChecklistAutosaveChit === 'function') _toggleChecklistAutosaveChit(e);
+    });
+
+    this._moreMenu.appendChild(menuClear);
+    this._moreMenu.appendChild(menuToNote);
+    this._moreMenu.appendChild(menuSend);
+    this._moreMenu.appendChild(menuAutosave);
+    this._moreBtn.style.position = "relative";
+    this._moreBtn.appendChild(this._moreMenu);
+
     if (header) {
       var zoneTitle = header.querySelector('.zone-title');
       if (zoneTitle) zoneTitle.appendChild(this.countDisplay);
-      // Insert clear-checked button into zone-actions, before the toggle icon
+      // Insert buttons into zone-actions: undo, redo pushed right; more button
       var zoneActions = header.querySelector('.zone-actions');
       if (zoneActions) {
-        zoneActions.insertBefore(this.clearCheckedButton, zoneActions.firstChild);
+        zoneActions.insertBefore(this._moreBtn, zoneActions.firstChild);
+        zoneActions.insertBefore(this._redoBtn, zoneActions.firstChild);
+        zoneActions.insertBefore(this._undoBtn, zoneActions.firstChild);
       } else {
-        header.appendChild(this.clearCheckedButton);
+        header.appendChild(this._undoBtn);
+        header.appendChild(this._redoBtn);
+        header.appendChild(this._moreBtn);
       }
     }
   }
@@ -61,8 +170,14 @@ class Checklist {
       checked: !!item.checked,
       parent: item.parent || null,
     }));
+    // Reset undo/redo on fresh load — this isn't a user action
+    this._undoStack = [];
+    this._redoStack = [];
+    this._updateUndoRedoButtons();
     this.render();
-    this._notifyChange();
+    // Notify without pushing to undo stack
+    this._updateCount();
+    if (typeof this.onChangeCallback === "function") this.onChangeCallback(this.getChecklistData());
   }
 
   getChecklistData() {
@@ -74,8 +189,13 @@ class Checklist {
     this.input.type = "text";
     this.input.placeholder = "Add new item and press Enter";
     this.input.className = "checklist-input";
+    var self = this;
     this.input.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && this.input.value.trim() !== "") {
+      if ((e.metaKey || e.ctrlKey) && e.key === "z" && !e.shiftKey) {
+        e.preventDefault(); self.undo();
+      } else if ((e.metaKey || e.ctrlKey) && e.key === "z" && e.shiftKey) {
+        e.preventDefault(); self.redo();
+      } else if (e.key === "Enter" && this.input.value.trim() !== "") {
         this.addNewItem(this.input.value.trim());
         this.input.value = "";
       } else if (e.key === "Escape") {
@@ -185,9 +305,9 @@ class Checklist {
       var checked = this.items.filter(i => i.checked).length;
       this.countDisplay.textContent = total > 0 ? "(" + checked + " / " + total + ")" : "";
     }
-    if (this.clearCheckedButton) {
+    if (this._menuClearBtn) {
       var hasChecked = this.items.some(i => i.checked);
-      this.clearCheckedButton.style.display = hasChecked ? "" : "none";
+      this._menuClearBtn.style.display = hasChecked ? "" : "none";
     }
   }
 
@@ -201,54 +321,11 @@ class Checklist {
       confirmed = confirm("Delete " + checkedCount + " checked item" + (checkedCount > 1 ? "s" : "") + "?");
     }
     if (!confirmed) return;
+    this._pushUndoState();
     var removed = this.items.filter(i => i.checked);
     this.items = this.items.filter(i => !i.checked);
     this.render();
     this._notifyChange();
-    this._showUndoCountdown(removed, "Cleared " + removed.length + " item" + (removed.length > 1 ? "s" : ""));
-  }
-
-  /* ── Inline Undo Countdown ──────────────────────────────────────────────── */
-
-  _showUndoCountdown(removedItems, label) {
-    if (this._pendingUndo) {
-      clearInterval(this._pendingUndo.interval);
-      if (this._pendingUndo.el && this._pendingUndo.el.parentNode) this._pendingUndo.el.remove();
-      this._pendingUndo = null;
-    }
-    var self = this;
-    var bar = document.createElement("div");
-    bar.style.cssText = "display:flex;align-items:center;gap:0.6em;padding:6px 10px;margin:6px 0;background:#fff5e6;border:2px solid #8b5a2b;border-radius:6px;font-size:0.9em;";
-    var msg = document.createElement("span");
-    msg.style.cssText = "flex:1;color:#1a1208;";
-    msg.textContent = "🗑️ " + label;
-    bar.appendChild(msg);
-    var undoBtn = document.createElement("button");
-    undoBtn.textContent = "Undo";
-    undoBtn.className = "zone-button";
-    undoBtn.style.cssText = "padding:3px 10px;font-size:0.85em;cursor:pointer;flex-shrink:0;";
-    bar.appendChild(undoBtn);
-    var timerOuter = document.createElement("div");
-    timerOuter.style.cssText = "width:60px;height:6px;background:#f5e6cc;border:1px solid #8b4513;border-radius:3px;overflow:hidden;flex-shrink:0;";
-    var timerFill = document.createElement("div");
-    timerFill.style.cssText = "height:100%;width:100%;background:linear-gradient(90deg,#d4af37,#8b4513);border-radius:2px;";
-    timerOuter.appendChild(timerFill);
-    bar.appendChild(timerOuter);
-    this.input.insertAdjacentElement("afterend", bar);
-    var start = Date.now(), dismissed = false;
-    var interval = setInterval(function() {
-      var pct = Math.max(0, 100 - ((Date.now() - start) / CHECKLIST_UNDO_DURATION) * 100);
-      timerFill.style.width = pct + "%";
-      if (pct <= 0) { clearInterval(interval); if (!dismissed) { dismissed = true; bar.remove(); self._pendingUndo = null; } }
-    }, 50);
-    undoBtn.addEventListener("click", function(e) {
-      e.stopPropagation();
-      if (dismissed) return;
-      dismissed = true; clearInterval(interval); bar.remove(); self._pendingUndo = null;
-      self.items = self.items.concat(removedItems);
-      self.render(); self._notifyChange();
-    });
-    this._pendingUndo = { interval: interval, el: bar, items: removedItems };
   }
 
   /* ── Item Element ───────────────────────────────────────────────────────── */
@@ -264,6 +341,13 @@ class Checklist {
     var left = document.createElement("div");
     left.className = "left-container";
     left.style.paddingLeft = item.level * 20 + "px";
+
+    // 6-dot drag indicator
+    var dragHandle = document.createElement("span");
+    dragHandle.className = "checklist-drag-handle";
+    dragHandle.textContent = "⠿";
+    dragHandle.title = "Drag to reorder";
+    left.appendChild(dragHandle);
 
     var cb = document.createElement("input");
     cb.type = "checkbox";
@@ -329,6 +413,65 @@ class Checklist {
       el.addEventListener("dragover", (e) => this.onDragOver(e, item));
       el.addEventListener("dragleave", (e) => this.onDragLeave(e, item));
       el.addEventListener("drop", (e) => this.onDrop(e, item));
+
+      // Touch drag support for mobile
+      var self = this;
+      if (typeof enableTouchDrag === 'function') {
+        enableTouchDrag(el, {
+          onStart: function() {
+            self.draggedItem = item;
+            self.draggedSubtree = self.getSubtree(item);
+            el.classList.add('dragging');
+          },
+          onMove: function(data) {
+            self.clearDropIndicator();
+            var target = document.elementFromPoint(data.clientX, data.clientY);
+            if (!target) return;
+            var targetEl = target.closest('.checklist-item, .completed-checklist-item');
+            if (!targetEl || targetEl === el) return;
+            var targetId = targetEl.dataset.id;
+            var targetItem = self.items.find(function(i) { return i.id === targetId; });
+            if (!targetItem || self.draggedSubtree.some(function(s) { return s.id === targetId; })) return;
+            var rect = targetEl.getBoundingClientRect();
+            var off = data.clientY - rect.top;
+            var h = rect.height;
+            if (off < h / 3) { targetEl.classList.add('drag-over-above'); self.dragOverPosition = 'above'; }
+            else if (off > 2 * h / 3) { targetEl.classList.add('drag-over-below'); self.dragOverPosition = 'below'; }
+            else { targetEl.classList.add('drag-over-on'); self.dragOverPosition = 'on'; }
+            self.dragOverItem = targetItem;
+          },
+          onEnd: function(data) {
+            el.classList.remove('dragging');
+            if (!self.draggedItem || !self.dragOverItem) {
+              self.draggedItem = null; self.draggedSubtree = []; self.dragOverItem = null;
+              self.clearDropIndicator();
+              return;
+            }
+            // Reuse the same drop logic as onDrop
+            var targetItem = self.dragOverItem;
+            self.items = self.items.filter(function(i) { return !self.draggedSubtree.some(function(s) { return s.id === i.id; }); });
+            var ti = self.items.findIndex(function(i) { return i.id === targetItem.id; });
+            if (self.dragOverPosition === 'on') {
+              self.draggedItem.parent = targetItem.id; self.draggedItem.level = targetItem.level + 1;
+              self._updateSubLevels(self.draggedSubtree, self.draggedItem.level);
+              var ii = ti + 1; while (ii < self.items.length && self._isDesc(self.items[ii], targetItem)) ii++;
+              self.items.splice(ii, 0, ...self.draggedSubtree);
+            } else if (self.dragOverPosition === 'above') {
+              self.draggedItem.parent = targetItem.parent; self.draggedItem.level = targetItem.level;
+              self._updateSubLevels(self.draggedSubtree, self.draggedItem.level);
+              self.items.splice(ti, 0, ...self.draggedSubtree);
+            } else if (self.dragOverPosition === 'below') {
+              self.draggedItem.parent = targetItem.parent; self.draggedItem.level = targetItem.level;
+              self._updateSubLevels(self.draggedSubtree, self.draggedItem.level);
+              var ii = ti + 1; while (ii < self.items.length && self.items[ii].level > targetItem.level) ii++;
+              self.items.splice(ii, 0, ...self.draggedSubtree);
+            }
+            self.draggedItem = null; self.draggedSubtree = []; self.dragOverItem = null; self.dragOverPosition = null;
+            self.clearDropIndicator();
+            self.render(); self._notifyChange();
+          }
+        });
+      }
     }
     return el;
   }
@@ -454,6 +597,28 @@ class Checklist {
         addNewItemBelow();
       } else if (e.key === "Escape") {
         finishEditing(false);
+      } else if ((e.key === "[" || e.key === "]") && (e.metaKey || e.ctrlKey)) {
+        // Cmd+[ = unindent, Cmd+] = indent (prevent browser back/forward)
+        e.preventDefault();
+        var idx = self.items.indexOf(item);
+        if (e.key === "[") {
+          if (item.level > 0) {
+            item.level = Math.max(0, item.level - 1);
+            item.parent = null;
+            for (var i = idx - 1; i >= 0; i--) { if (self.items[i].level === item.level - 1) { item.parent = self.items[i].id; break; } }
+            finishEditing(true); self.render(); self._notifyChange();
+            setTimeout(function() { var el = self.container.querySelector('[data-id="' + item.id + '"] .checklist-text'); if (el) el.click(); }, 0);
+          }
+        } else {
+          var prevLevel = idx > 0 ? self.items[idx - 1].level : -1;
+          if (idx > 0 && item.level < MAX_INDENT_LEVEL && item.level <= prevLevel) {
+            item.level = Math.min(item.level + 1, MAX_INDENT_LEVEL);
+            item.parent = null;
+            for (var i = idx - 1; i >= 0; i--) { if (self.items[i].level === item.level - 1) { item.parent = self.items[i].id; break; } }
+            finishEditing(true); self.render(); self._notifyChange();
+            setTimeout(function() { var el = self.container.querySelector('[data-id="' + item.id + '"] .checklist-text'); if (el) el.click(); }, 0);
+          }
+        }
       } else if (e.key === "Tab") {
         e.preventDefault();
         var idx = self.items.indexOf(item);
@@ -466,7 +631,8 @@ class Checklist {
             setTimeout(function() { var el = self.container.querySelector('[data-id="' + item.id + '"] .checklist-text'); if (el) el.click(); }, 0);
           }
         } else {
-          if (idx > 0 && item.level < MAX_INDENT_LEVEL) {
+          var prevLevel = idx > 0 ? self.items[idx - 1].level : -1;
+          if (idx > 0 && item.level < MAX_INDENT_LEVEL && item.level <= prevLevel) {
             item.level = Math.min(item.level + 1, MAX_INDENT_LEVEL);
             item.parent = null;
             for (var i = idx - 1; i >= 0; i--) { if (self.items[i].level === item.level - 1) { item.parent = self.items[i].id; break; } }
@@ -501,16 +667,39 @@ class Checklist {
   getChildren(item) { return this.items.filter(i => i.parent === item.id); }
 
   deleteItem(item, element) {
-    var subtree = this.getSubtree(item);
-    var label = item.text ? (item.text.length > 30 ? item.text.slice(0, 30) + '…' : item.text) : "(Untitled)";
-    if (subtree.length > 1) label += " +" + (subtree.length - 1);
+    var self = this;
+    var children = this.getChildren(item);
     element.classList.add("deleting");
-    setTimeout(() => {
-      this.items = this.items.filter(i => !subtree.some(s => s.id === i.id));
-      this.render();
-      this._notifyChange();
-      this._showUndoCountdown(subtree, label);
+    setTimeout(function() {
+      self._pushUndoState();
+      if (children.length > 0) {
+        // Promote children: re-parent to deleted item's parent, reduce level by 1 for entire subtree
+        children.forEach(function(child) {
+          child.parent = item.parent || null;
+          child.level = Math.max(0, child.level - 1);
+          // Also promote all descendants of this child
+          var descendants = self._getDescendants(child);
+          descendants.forEach(function(d) {
+            d.level = Math.max(0, d.level - 1);
+          });
+        });
+      }
+      // Remove only the deleted item (not its children)
+      self.items = self.items.filter(function(i) { return i.id !== item.id; });
+      self.render();
+      self._notifyChange();
     }, 300);
+  }
+
+  /** Get all descendants of an item (children, grandchildren, etc.) */
+  _getDescendants(item) {
+    var result = [];
+    var children = this.getChildren(item);
+    children.forEach(function(child) {
+      result.push(child);
+      result = result.concat(this._getDescendants(child));
+    }, this);
+    return result;
   }
 
   getSubtree(item) {
@@ -569,7 +758,51 @@ class Checklist {
   _updateSubLevels(sub, rootLvl) { var d = rootLvl - sub[0].level; sub.forEach(i => { i.level += d; }); }
   _isDesc(item, ancestor) { var p = this.getParent(item); while (p) { if (p.id === ancestor.id) return true; p = this.getParent(p); } return false; }
 
+  _pushUndoState() {
+    var snapshot = JSON.stringify(this.items.map(function(i) { return { id: i.id, text: i.text, level: i.level, checked: i.checked, parent: i.parent }; }));
+    // Don't push if identical to last state
+    if (this._undoStack.length > 0 && this._undoStack[this._undoStack.length - 1] === snapshot) return;
+    this._undoStack.push(snapshot);
+    if (this._undoStack.length > this._maxUndoSize) this._undoStack.shift();
+    this._redoStack = [];
+    this._updateUndoRedoButtons();
+  }
+
+  undo() {
+    if (this._undoStack.length === 0) return;
+    // Save current state to redo
+    var current = JSON.stringify(this.items.map(function(i) { return { id: i.id, text: i.text, level: i.level, checked: i.checked, parent: i.parent }; }));
+    this._redoStack.push(current);
+    // Restore previous state
+    var prev = JSON.parse(this._undoStack.pop());
+    this.items = prev;
+    this.render();
+    this._updateCount();
+    if (typeof this.onChangeCallback === "function") this.onChangeCallback(this.getChecklistData());
+    this._updateUndoRedoButtons();
+  }
+
+  redo() {
+    if (this._redoStack.length === 0) return;
+    // Save current state to undo
+    var current = JSON.stringify(this.items.map(function(i) { return { id: i.id, text: i.text, level: i.level, checked: i.checked, parent: i.parent }; }));
+    this._undoStack.push(current);
+    // Restore next state
+    var next = JSON.parse(this._redoStack.pop());
+    this.items = next;
+    this.render();
+    this._updateCount();
+    if (typeof this.onChangeCallback === "function") this.onChangeCallback(this.getChecklistData());
+    this._updateUndoRedoButtons();
+  }
+
+  _updateUndoRedoButtons() {
+    if (this._undoBtn) this._undoBtn.disabled = this._undoStack.length === 0;
+    if (this._redoBtn) this._redoBtn.disabled = this._redoStack.length === 0;
+  }
+
   _notifyChange() {
+    this._pushUndoState();
     this._updateCount();
     if (typeof this.onChangeCallback === "function") this.onChangeCallback(this.getChecklistData());
     // Auto-complete: if all items are checked and auto-complete is enabled
@@ -578,6 +811,108 @@ class Checklist {
 }
 
 window.Checklist = Checklist;
+
+// ── Copy Note ↔ Checklist ────────────────────────────────────────────────────
+
+/**
+ * Wrapper called from the Notes zone header button.
+ * Delegates to _copyNoteToChecklist with the global checklist instance.
+ */
+function _noteToChecklistFromHeader(e) {
+  if (e) { e.stopPropagation(); e.preventDefault(); }
+  if (window.checklist) _copyNoteToChecklist(window.checklist);
+}
+
+/**
+ * Move note lines into checklist items. Each non-empty line becomes an item.
+ * Lines starting with "- " or "* " have the prefix stripped.
+ * Indented lines (2 or 4 spaces, or tab) get corresponding indent levels.
+ * Clears the note after moving.
+ */
+function _copyNoteToChecklist(checklist) {
+  var noteEl = document.getElementById('note');
+  if (!noteEl || !noteEl.value.trim()) return;
+  var lines = noteEl.value.split('\n');
+  var newItems = [];
+  lines.forEach(function(line) {
+    if (!line.trim()) return;
+    // Detect indent level
+    var indent = 0;
+    var stripped = line;
+    while (stripped.startsWith('    ') || stripped.startsWith('\t')) {
+      indent++;
+      stripped = stripped.startsWith('\t') ? stripped.slice(1) : stripped.slice(4);
+    }
+    if (stripped.startsWith('  ')) { indent++; stripped = stripped.slice(2); }
+    // Strip list markers
+    stripped = stripped.replace(/^[-*•]\s+/, '').replace(/^\d+[.)]\s+/, '').replace(/^\[[ x]\]\s*/i, '');
+    if (!stripped.trim()) return;
+    newItems.push({
+      id: checklist.generateId(),
+      text: stripped.trim(),
+      level: Math.min(indent, MAX_INDENT_LEVEL),
+      checked: false,
+      parent: null
+    });
+  });
+  if (newItems.length === 0) return;
+  // Assign parents based on levels
+  for (var i = 1; i < newItems.length; i++) {
+    if (newItems[i].level > 0) {
+      for (var j = i - 1; j >= 0; j--) {
+        if (newItems[j].level === newItems[i].level - 1) { newItems[i].parent = newItems[j].id; break; }
+      }
+    }
+  }
+  checklist.items = checklist.items.concat(newItems);
+  checklist.render();
+  checklist._notifyChange();
+  // Clear the note (move, not copy)
+  noteEl.value = '';
+  if (typeof autoGrowNote === 'function') autoGrowNote(noteEl);
+  if (typeof setSaveButtonUnsaved === 'function') setSaveButtonUnsaved();
+  var rendered = document.getElementById('notes-rendered-output');
+  if (rendered && rendered.style.display !== 'none') rendered.innerHTML = '';
+}
+
+/**
+ * Move checklist items into the note field. Each item becomes a line,
+ * indented with spaces to reflect its level. Checked items get [x] prefix.
+ * Clears the checklist after moving.
+ */
+function _copyChecklistToNote(checklist) {
+  var noteEl = document.getElementById('note');
+  if (!noteEl) return;
+  if (!checklist.items || checklist.items.length === 0) return;
+  var lines = checklist.items.map(function(item) {
+    var prefix = '  '.repeat(item.level);
+    var marker = item.checked ? '[x] ' : '- ';
+    return prefix + marker + item.text;
+  });
+  var text = lines.join('\n');
+  // Append to existing note with a blank line separator
+  if (noteEl.value.trim()) {
+    noteEl.value = noteEl.value.trimEnd() + '\n\n' + text;
+  } else {
+    noteEl.value = text;
+  }
+  // Clear the checklist (move, not copy)
+  checklist.items = [];
+  checklist.render();
+  checklist._notifyChange();
+  // Trigger auto-grow and mark unsaved
+  if (typeof autoGrowNote === 'function') autoGrowNote(noteEl);
+  if (typeof setSaveButtonUnsaved === 'function') setSaveButtonUnsaved();
+  // Refresh rendered view if currently showing
+  var rendered = document.getElementById('notes-rendered-output');
+  if (rendered && rendered.style.display !== 'none') {
+    if (typeof marked !== 'undefined') {
+      rendered.innerHTML = marked.parse(noteEl.value || '');
+    } else {
+      rendered.innerHTML = '<pre style="white-space:pre-wrap;">' + noteEl.value + '</pre>';
+    }
+  }
+}
 
 // ── Checklist Auto-Complete / Auto-Archive ───────────────────────────────────
 

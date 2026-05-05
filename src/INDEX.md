@@ -132,6 +132,7 @@ All migrations run at startup. Each checks if the column/table already exists be
 | `migrate_create_rules_tables()` | Create `rules`, `rule_confirmations`, and `rule_execution_log` tables using `CREATE TABLE IF NOT EXISTS`. Rules table: `id` (TEXT PRIMARY KEY), `owner_id`, `name`, `description`, `enabled` (BOOLEAN DEFAULT 1), `priority` (INTEGER DEFAULT 0), `trigger_type`, `conditions` (TEXT — JSON condition tree), `actions` (TEXT — JSON array), `confirm_before_apply` (BOOLEAN DEFAULT 1), `schedule_config` (TEXT — JSON), `created_datetime`, `modified_datetime`, `last_run_datetime`, `run_count` (INTEGER DEFAULT 0), `last_run_result`. Rule confirmations table: `id`, `rule_id`, `rule_name`, `owner_id`, `action_description`, `action_data` (TEXT — JSON), `target_entity_type`, `target_entity_id`, `created_datetime`. Rule execution log table: `id`, `rule_id`, `owner_id`, `trigger_event`, `entities_evaluated`, `entities_matched`, `actions_executed`, `actions_failed`, `result_summary`, `executed_datetime`. Fully idempotent |
 | `migrate_add_email_accounts()` | Add `email_accounts` (TEXT) column to settings table for multi-account email; add `email_account_id` (TEXT) to chits; migrate existing `email_account` data into `email_accounts` array with generated IDs. Fully idempotent |
 | `migrate_create_ha_config()` | Create `ha_config` table with columns: `id` (INTEGER PRIMARY KEY CHECK id=1), `ha_base_url` (TEXT), `ha_access_token` (TEXT), `ha_webhook_secret` (TEXT), `ha_poll_interval` (INTEGER DEFAULT 30), `configured_by` (TEXT), `modified_datetime` (TEXT). INSERT OR IGNORE a single row with id=1 and auto-generated UUID for ha_webhook_secret. Fully idempotent |
+| `migrate_add_view_order()` | Add `view_order` (TEXT) column to settings table for storing user's custom tab order as a JSON array. Fully idempotent |
 
 ### 1.6 `src/backend/serializers.py` — vCard & CSV
 
@@ -1709,6 +1710,7 @@ Email tab view — renders the Email dashboard tab with inbox-style list view. L
 | `_getBreakpointCategory()` | Return the current breakpoint category (mobile/tablet/desktop) |
 | `_onDebouncedResize()` | Debounced resize handler — re-renders only when viewport crosses a breakpoint |
 | `_checkTabOverflow()` | Detect tab bar overflow and progressively reduce padding or switch to icon-only |
+| `_applyViewOrder(viewOrder)` | Reorder the tab bar DOM elements based on the user's saved view_order setting |
 | `_applyArchiveFilter(chitList)` | Filter chits by pinned/archived/unmarked toggle states |
 | `_applyMultiSelectFilters(chitList)` | Apply status, label, priority, people, and sharing ("Shared with me" / "Shared by me") multi-select filters |
 | `_applySort(chitList)` | Sort chits by the current sort field and direction |
@@ -1935,6 +1937,27 @@ Notes zone: auto-grow, chit linking, markdown render, modal.
 | `openNotesModal(event)` | Open the fullscreen notes editing modal, pre-populated with current note text |
 | `closeNotesModal(save)` | Close the notes modal; if save is true, copy modal text back to main textarea |
 | `toggleModalNotesRender()` | Toggle between edit and rendered views inside the notes modal |
+
+#### editor-send-content.js
+
+Send notes/checklist content to another chit via a single-select chit picker modal.
+
+| Symbol | Description |
+|--------|-------------|
+| `_sendContentModal` | Reference to the send-content modal DOM element |
+| `_sendContentModalOpen` | Boolean flag indicating if the send-content modal is open |
+| `_sendContentType` | Current content type being sent: `'notes'` or `'checklist'` |
+| `_openSendContentModal(e, contentType)` | Open the single-select chit picker modal for sending notes or checklist content |
+| `_closeSendContentModal()` | Close the send-content modal |
+| `_sendContentRenderChits(chits)` | Render the chit list in the modal with radio-button single-select |
+| `_sendContentHighlight(text, term)` | Highlight search term matches in chit titles |
+| `_sendContentUpdateButtons()` | Enable/disable Copy and Move buttons based on selection state |
+| `_sendContentApplyFilters()` | Apply search text and status filter to the chit list |
+| `_sendContentMatchesSearch(chit, term)` | Check if a chit matches the search term (title, status, tags) |
+| `_executeSendContent(mode)` | Execute the copy or move operation to the selected target chit |
+| `_sendContentUndoState` | State object for the active undo bar (interval, element) |
+| `_showSendContentUndoBar(mode, targetChit, savedTarget, undoData)` | Show an undo countdown bar in the zone header after send |
+| `_undoSendContent(mode, targetChit, undoData)` | Undo a send operation by restoring both source and target chits |
 
 #### editor-alerts.js
 
@@ -2372,6 +2395,14 @@ Settings page logic: tags, colors, clocks, locations, indicators, import/export,
 | `regenerateHAWebhook()` | POST to `/api/ha/config/regenerate-webhook` with confirmation, update displayed webhook URL |
 | `toggleHATokenVisibility()` | Toggle HA access token input between `type="password"` and `type="text"` |
 | `copyHAWebhookUrl()` | Copy the webhook URL to clipboard with visual feedback |
+| `_openArrangeViewsModal()` | Open the Arrange Views modal, load current view order from settings |
+| `_closeArrangeViewsModal()` | Close the Arrange Views modal |
+| `_resetViewOrder()` | Reset view order to default (Calendar, Checklists, Tasks, Projects, Notes, Email, Indicators, Alarms) |
+| `_renderArrangeViewsGrid()` | Render draggable tab buttons in the arrange views modal grid |
+| `_setupArrangeViewsDrag()` | Set up HTML5 drag-and-drop for the arrange views grid |
+| `_setupArrangeViewsTouch(grid)` | Set up touch-based drag support for mobile devices |
+| `_getViewItemAtPoint(grid, x, y, exclude)` | Find the view-tab-item element at a given point (excluding the dragged item) |
+| `_collectViewOrder()` | Collect the current view order for saving; returns null if matches default |
 
 #### people.js
 
@@ -3181,6 +3212,7 @@ All HTML pages include the following PWA `<head>` tags: `<link rel="manifest" hr
 <script src="/frontend/js/editor/editor-tags.js"></script>
 <script src="/frontend/js/editor/editor-location.js"></script>
 <script src="/frontend/js/editor/editor-notes.js"></script>
+<script src="/frontend/js/editor/editor-send-content.js"></script>
 <script src="/frontend/js/editor/editor-alerts.js"></script>
 <script src="/frontend/js/editor/editor-color.js"></script>
 <script src="/frontend/js/editor/editor-health.js"></script>
@@ -3454,6 +3486,7 @@ shared-auth.js            ← MUST load first (getCurrentUser, isAdmin, waitForA
                     editor-people.js      (people zone + sharing controls — depends on editor-sharing.js globals)
                     editor-location.js    (location zone — uses shared-geocoding)
                     editor-notes.js       (notes zone)
+                    editor-send-content.js (send notes/checklist to another chit)
                     editor-alerts.js      (alerts zone)
                     editor-color.js       (color zone)
                     editor-health.js      (health indicators zone)

@@ -185,6 +185,8 @@ function _clearAllFilters() {
   var hpd = document.getElementById('hide-past-due'); if (hpd) hpd.checked = false;
   var hc = document.getElementById('hide-complete'); if (hc) hc.checked = false;
   var hd = document.getElementById('hide-declined'); if (hd) hd.checked = false;
+  var her = document.getElementById('hide-email-received'); if (her) her.checked = true;
+  var hes = document.getElementById('hide-email-sent'); if (hes) hes.checked = true;
   var hlO = document.getElementById('highlight-overdue'); if (hlO) hlO.checked = true;
   var hlB = document.getElementById('highlight-blocked'); if (hlB) hlB.checked = true;
   var search = document.getElementById('search'); if (search) search.value = '';
@@ -194,6 +196,8 @@ function _clearAllFilters() {
   // Clear sharing filters (Requirement 7.5)
   var swm = document.getElementById('filter-shared-with-me'); if (swm) swm.checked = false;
   var sbm = document.getElementById('filter-shared-by-me'); if (sbm) sbm.checked = false;
+  // Clear project filter
+  _clearProjectFilter(true);
   currentSortField = null;
   var sortSel = document.getElementById('sort-select'); if (sortSel) sortSel.value = '';
   _updateSortUI();
@@ -221,6 +225,54 @@ function _updateClearFiltersButton() {
     var hasDefault = _defaultFilters && _defaultFilters[tabKey];
     resetBtn.style.display = hasDefault ? '' : 'none';
   }
+}
+
+/* ── Project filter ───────────────────────────────────────────────────────── */
+
+/**
+ * Populate the project filter dropdown with current project masters.
+ * Called after chits are fetched (from main-init.js).
+ */
+function _populateProjectFilter() {
+  var sel = document.getElementById('project-filter-select');
+  if (!sel) return;
+  var currentVal = sel.value;
+  // Keep the first 3 meta options (—, Any, None), remove project options
+  while (sel.options.length > 3) sel.remove(3);
+  // Get project masters from the global chits array
+  var projects = (typeof chits !== 'undefined' ? chits : []).filter(function(c) {
+    return c.is_project_master && !c.deleted;
+  });
+  // Sort alphabetically by title
+  projects.sort(function(a, b) {
+    return (a.title || '').localeCompare(b.title || '');
+  });
+  projects.forEach(function(p) {
+    var opt = document.createElement('option');
+    opt.value = p.id;
+    opt.textContent = p.title || '(Untitled Project)';
+    sel.appendChild(opt);
+  });
+  // Restore previous selection if still valid
+  if (currentVal) sel.value = currentVal;
+}
+
+/** Called when the project filter dropdown changes. */
+function _onProjectFilterChange() {
+  onFilterChange();
+}
+
+/** Clear the project filter dropdown. */
+function _clearProjectFilter(silent) {
+  var sel = document.getElementById('project-filter-select');
+  if (sel) sel.value = '';
+  if (!silent) onFilterChange();
+}
+
+/** Get the currently selected project ID (or empty string for "all"). */
+function _getSelectedProjectId() {
+  var sel = document.getElementById('project-filter-select');
+  return sel ? sel.value : '';
 }
 
 /* ── Filter value getters ────────────────────────────────────────────────── */
@@ -354,7 +406,7 @@ function _renderPeopleChipFilter(containerId, contacts, users, selection) {
   container.appendChild(searchInput);
 
   var chipsDiv = document.createElement('div');
-  chipsDiv.style.cssText = 'display:flex;flex-wrap:wrap;gap:4px;max-height:200px;overflow-y:auto;';
+  chipsDiv.style.cssText = 'display:flex;flex-direction:column;gap:4px;';
   container.appendChild(chipsDiv);
 
   // Build a merged list: contacts + users (users marked with _isUser flag)
@@ -489,12 +541,9 @@ async function _loadLabelFilters() {
     var container = document.getElementById('label-multi');
     if (!container) return;
 
-    var tagObjects = [];
+    // Load settings for non-tag config values
     try {
       var settings = await getCachedSettings();
-      var tags = settings.tags ? (typeof settings.tags === 'string' ? JSON.parse(settings.tags) : settings.tags) : [];
-      tagObjects = tags.map(function(t) { return typeof t === 'string' ? { name: t, color: null, favorite: false } : t; }).filter(function(t) { return t.name; });
-      _cachedTagObjects = tagObjects;
       if (settings.chit_options) {
         _chitOptions = Object.assign({}, _chitOptions, settings.chit_options);
       }
@@ -512,17 +561,9 @@ async function _loadLabelFilters() {
       _applyEnabledPeriods();
     } catch (e) { /* ignore */ }
 
-    if (tagObjects.length === 0 && chits.length > 0) {
-      var seen = new Set();
-      chits.forEach(function(c) {
-        (c.tags || []).forEach(function(t) {
-          if (t && !seen.has(t)) { seen.add(t); tagObjects.push({ name: t, color: null, favorite: false }); }
-        });
-      });
-      tagObjects.sort(function(a, b) { return a.name.localeCompare(b.name); });
-    }
-
-    tagObjects = tagObjects.filter(function(t) { return !isSystemTag(t.name); });
+    // Use shared tag loader — settings is the single source of truth
+    var tagObjects = await loadAllTags();
+    _cachedTagObjects = tagObjects;
 
     var prevSelected = [];
     container.querySelectorAll('input:checked').forEach(function(cb) { prevSelected.push(cb.value); });

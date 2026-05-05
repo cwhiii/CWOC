@@ -368,7 +368,7 @@ import sqlite3
 from datetime import datetime
 from uuid import uuid4
 
-from src.backend.db import DB_PATH, serialize_json_field, compute_system_tags
+from src.backend.db import DB_PATH, serialize_json_field, compute_system_tags, ensure_tags_in_settings
 
 
 # ── Dict-to-object adapter for compute_system_tags ───────────────────
@@ -520,6 +520,9 @@ def execute_action(
                     "UPDATE chits SET tags = ?, modified_datetime = ? WHERE id = ?",
                     (serialize_json_field(tags), current_time, entity_id),
                 )
+                # Register the tag in settings so it appears in filters/editor
+                if tag:
+                    ensure_tags_in_settings(conn, owner_id, [tag])
 
             elif action_type == "remove_tag":
                 tag = params.get("tag", "")

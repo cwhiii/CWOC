@@ -1,0 +1,1 @@
+Added a "Hidden" zone to the Arrange Views modal. Tabs dragged into the Hidden zone are no longer displayed as buttons on the dashboard tab bar, but remain fully accessible via hotkeys, search, and other navigation. Drag tabs back to the visible row to restore them.

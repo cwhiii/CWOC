@@ -1,0 +1,1 @@
+Changed checklist delete behavior: deleting a parent item now promotes its children up one level (along with all descendants) instead of deleting the entire subtree. Undo restores the full previous state.

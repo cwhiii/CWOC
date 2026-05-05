@@ -1,0 +1,1 @@
+Fixed Projects view issues: creating a chit from the Projects tab now auto-populates status to "ToDo"; adding a chit to a project via the "Add to Project" dropdown now saves the chit first if it's new (preventing dangling references); clearing status on a child chit now warns that it will remove the chit from its project.

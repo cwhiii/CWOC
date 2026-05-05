@@ -1,0 +1,1 @@
+Added "Send to Chit" button in the Notes and Checklist zone headers in the editor. Opens a single-select chit picker modal, then offers Copy (duplicate content to target) or Move (transfer content, clearing source). Shows an undo bar with countdown timer after execution.

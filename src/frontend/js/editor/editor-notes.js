@@ -10,6 +10,41 @@
  * Loaded before: editor-init.js, editor.js
  */
 
+/* ── Notes Undo/Redo ──────────────────────────────────────────────────────── */
+
+function _notesUndo(e) {
+  if (e) { e.stopPropagation(); e.preventDefault(); }
+  var noteEl = document.getElementById('note');
+  if (noteEl) { noteEl.focus(); document.execCommand('undo'); }
+}
+
+function _notesRedo(e) {
+  if (e) { e.stopPropagation(); e.preventDefault(); }
+  var noteEl = document.getElementById('note');
+  if (noteEl) { noteEl.focus(); document.execCommand('redo'); }
+}
+
+/* ── Notes More Menu ──────────────────────────────────────────────────────── */
+
+function _toggleNotesMoreMenu(e) {
+  if (e) { e.stopPropagation(); e.preventDefault(); }
+  var menu = document.getElementById('notesMoreMenu');
+  if (!menu) return;
+  var isOpen = menu.style.display === 'flex';
+  menu.style.display = isOpen ? 'none' : 'flex';
+  if (!isOpen) {
+    // Close on next click anywhere
+    setTimeout(function() {
+      document.addEventListener('click', _closeNotesMoreMenu, { once: true });
+    }, 0);
+  }
+}
+
+function _closeNotesMoreMenu() {
+  var menu = document.getElementById('notesMoreMenu');
+  if (menu) menu.style.display = 'none';
+}
+
 function autoGrowNote(el) {
   el.style.height = "auto";
   const maxH = Math.floor(window.innerHeight * 0.6);
@@ -137,10 +172,16 @@ function _setNotesRenderToggleLabel(isRendered, source) {
   const btn = document.getElementById(btnId);
   if (!btn) return;
   if (isRendered) {
-    btn.innerHTML = '<i class="fas fa-edit"></i> Edit';
+    btn.innerHTML = '<i class="fas fa-edit"></i>';
+    btn.title = 'Switch to edit mode';
   } else {
-    btn.innerHTML = '<i class="fas fa-eye"></i> Render';
+    btn.innerHTML = '<i class="fas fa-eye"></i>';
+    btn.title = 'Toggle rendered markdown view';
   }
+  // Hide/show format toolbar based on render state
+  var toolbarId = source === "modal" ? "notesModalFormatToolbar" : "notesFormatToolbar";
+  var toolbar = document.getElementById(toolbarId);
+  if (toolbar) toolbar.style.display = isRendered ? 'none' : '';
 }
 
 function toggleNotesViewMode(event) {

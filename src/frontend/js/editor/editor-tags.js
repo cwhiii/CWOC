@@ -13,12 +13,7 @@
 
 async function _loadTags() {
   try {
-    const settings = await getCachedSettings();
-    const tags = settings.tags || [];
-    // Normalize: tags may be strings (legacy) or {name, color} objects
-    return tags.map((t) =>
-      typeof t === "string" ? { name: t, color: null } : t
-    ).filter((t) => t.name);
+    return await loadAllTags();
   } catch (error) {
     console.error("Error fetching tags:", error);
     return [];

@@ -47,6 +47,49 @@ function _onDebouncedResize() {
 }
 
 /* ── Tab overflow detection ──────────────────────────────────────────────── */
+
+/** Reorder the tab bar based on the user's saved view_order setting and hide excluded tabs. */
+function _applyViewOrder(viewOrder) {
+  if (!viewOrder) return;
+  var order = viewOrder;
+  if (typeof order === 'string') {
+    try { order = JSON.parse(order); } catch (e) { return; }
+  }
+  if (!Array.isArray(order)) return;
+
+  var tabsContainer = document.getElementById('cwoc-tabs');
+  if (!tabsContainer) return;
+
+  var allTabs = Array.from(tabsContainer.querySelectorAll('.tab'));
+  // Build a map from tab name to DOM element (using the onclick attribute)
+  var tabMap = {};
+  allTabs.forEach(function(tab) {
+    var onclick = tab.getAttribute('onclick') || '';
+    var match = onclick.match(/filterChits\('([^']+)'\)/);
+    if (match) tabMap[match[1]] = tab;
+  });
+
+  // Reorder: place tabs in the specified order
+  order.forEach(function(viewName) {
+    if (tabMap[viewName]) {
+      tabMap[viewName].style.display = '';
+      tabsContainer.appendChild(tabMap[viewName]);
+      delete tabMap[viewName];
+    }
+  });
+
+  // Hide tabs not in the order (but keep Search always visible at the end)
+  Object.keys(tabMap).forEach(function(key) {
+    if (key === 'Search') {
+      tabMap[key].style.display = '';
+      tabsContainer.appendChild(tabMap[key]);
+    } else {
+      tabMap[key].style.display = 'none';
+      tabsContainer.appendChild(tabMap[key]);
+    }
+  });
+}
+
 function _checkTabOverflow() {
   var tabs = document.getElementById('cwoc-tabs');
   if (!tabs) return;
@@ -155,6 +198,41 @@ function _applyMultiSelectFilters(chitList) {
     });
   }
 
+  // Project filter — only show children of the selected project (+ the project itself)
+  var selectedProjectId = typeof _getSelectedProjectId === 'function' ? _getSelectedProjectId() : '';
+  if (selectedProjectId) {
+    var allChits = typeof chits !== 'undefined' ? chits : [];
+
+    if (selectedProjectId === '__any__') {
+      // Show only chits that belong to ANY project (are in some project's child_chits)
+      var allChildIds = new Set();
+      allChits.forEach(function(c) {
+        if (c.is_project_master && Array.isArray(c.child_chits)) {
+          c.child_chits.forEach(function(id) { allChildIds.add(id); });
+        }
+      });
+      result = result.filter(function(c) { return allChildIds.has(c.id) || c.is_project_master; });
+    } else if (selectedProjectId === '__none__') {
+      // Show only chits that do NOT belong to any project
+      var allChildIds2 = new Set();
+      allChits.forEach(function(c) {
+        if (c.is_project_master && Array.isArray(c.child_chits)) {
+          c.child_chits.forEach(function(id) { allChildIds2.add(id); });
+        }
+      });
+      result = result.filter(function(c) { return !allChildIds2.has(c.id) && !c.is_project_master; });
+    } else {
+      // Specific project — show its children + the project master itself
+      var projectMaster = allChits.find(function(c) { return c.id === selectedProjectId; });
+      if (projectMaster) {
+        var childIds = Array.isArray(projectMaster.child_chits) ? projectMaster.child_chits : [];
+        var allowedIds = new Set(childIds);
+        allowedIds.add(selectedProjectId);
+        result = result.filter(function(c) { return allowedIds.has(c.id); });
+      }
+    }
+  }
+
   return result;
 }
 
@@ -240,6 +318,8 @@ function storePreviousState() {
     hidePastDue: document.getElementById('hide-past-due')?.checked ?? false,
     hideComplete: document.getElementById('hide-complete')?.checked ?? false,
     hideDeclined: document.getElementById('hide-declined')?.checked ?? false,
+    hideEmailReceived: document.getElementById('hide-email-received')?.checked ?? true,
+    hideEmailSent: document.getElementById('hide-email-sent')?.checked ?? true,
     highlightOverdue: document.getElementById('highlight-overdue')?.checked ?? true,
     highlightBlocked: document.getElementById('highlight-blocked')?.checked ?? true,
   };
@@ -329,6 +409,10 @@ function _restoreUIState() {
       if (hc) hc.checked = state.hideComplete ?? false;
       const hd = document.getElementById('hide-declined');
       if (hd) hd.checked = state.hideDeclined ?? false;
+      const her = document.getElementById('hide-email-received');
+      if (her) her.checked = state.hideEmailReceived ?? true;
+      const hes = document.getElementById('hide-email-sent');
+      if (hes) hes.checked = state.hideEmailSent ?? true;
       const hlO = document.getElementById('highlight-overdue');
       if (hlO && state.highlightOverdue !== undefined) hlO.checked = state.highlightOverdue;
       const hlB = document.getElementById('highlight-blocked');
@@ -349,7 +433,7 @@ function _restoreUIState() {
       if (state.labelFilters && state.labelFilters.length > 0) {
         expandFilterGroup('filter-label');
       }
-      if (state.showArchived || !state.showPinned || !state.showUnmarked || state.hidePastDue || state.hideComplete || state.hideDeclined || state.highlightOverdue === false || state.highlightBlocked === false) {
+      if (state.showArchived || !state.showPinned || !state.showUnmarked || state.hidePastDue || state.hideComplete || state.hideDeclined || state.hideEmailReceived === false || state.hideEmailSent === false || state.highlightOverdue === false || state.highlightBlocked === false) {
         expandFilterGroup('filter-archive');
       }
     }
@@ -452,6 +536,7 @@ function fetchChits() {
       });
 
       chits = ownedChits;
+      window._projectChildNotFound = null; // Reset missing-child cache on fresh fetch
       chits.forEach(function(chit) {
         if (chit.start_datetime)
           chit.start_datetime_obj = new Date(chit.start_datetime);
@@ -461,6 +546,7 @@ function fetchChits() {
       console.debug("Fetched chits:", chits.length, "(including", sharedChits.length, "shared)");
       if (!currentWeekStart) currentWeekStart = getWeekStart(new Date());
       updateDateRange();
+      _populateProjectFilter();
       displayChits();
       restoreSidebarState();
       // Re-check notifications immediately after chits refresh
@@ -507,23 +593,7 @@ function displayChits() {
   const searchText = document.getElementById("search")?.value?.toLowerCase() || "";
 
   let filteredChits = chits.filter((chit) => {
-    if (!searchText) return true;
-    // Always search title
-    if (chit.title && chit.title.toLowerCase().includes(searchText)) return true;
-    // Search note content (visible in Notes, Checklists, Projects)
-    if (chit.note && chit.note.toLowerCase().includes(searchText)) return true;
-    // Search tags
-    if (Array.isArray(chit.tags) && chit.tags.some(t => t.toLowerCase().includes(searchText))) return true;
-    // Search status (visible in Tasks)
-    if (chit.status && chit.status.toLowerCase().includes(searchText)) return true;
-    // Search people
-    if (Array.isArray(chit.people) && chit.people.some(p => p.toLowerCase().includes(searchText))) return true;
-    // Search location
-    if (chit.location && chit.location.toLowerCase().includes(searchText)) return true;
-    // Search priority & severity
-    if (chit.priority && chit.priority.toLowerCase().includes(searchText)) return true;
-    if (chit.severity && chit.severity.toLowerCase().includes(searchText)) return true;
-    return false;
+    return chitMatchesSearch(chit, searchText);
   });
 
   // Apply multi-select filters (status, label, priority)
@@ -558,6 +628,25 @@ function displayChits() {
   var _hideHabitsCb = document.getElementById('hide-habits');
   if (_hideHabitsCb && _hideHabitsCb.checked) {
     filteredChits = filteredChits.filter(function(c) { return !c.habit; });
+  }
+
+  // Apply hide-email filters (hide email chits from non-Email views)
+  if (currentTab !== 'Email') {
+    var _hideEmailRecvCb = document.getElementById('hide-email-received');
+    var _hideEmailSentCb = document.getElementById('hide-email-sent');
+    var hideRecv = _hideEmailRecvCb && _hideEmailRecvCb.checked;
+    var hideSent = _hideEmailSentCb && _hideEmailSentCb.checked;
+    if (hideRecv || hideSent) {
+      filteredChits = filteredChits.filter(function(c) {
+        if (!(c.email_message_id || c.email_status)) return true;
+        var folder = c.email_folder || '';
+        var isSent = (folder === 'sent' || c.email_status === 'sent' || c.email_status === 'draft');
+        var isReceived = !isSent;
+        if (hideRecv && isReceived) return false;
+        if (hideSent && isSent) return false;
+        return true;
+      });
+    }
   }
 
   // Apply sort
@@ -902,6 +991,8 @@ document.addEventListener("DOMContentLoaded", function () {
     if (df && typeof df === 'object' && !Array.isArray(df)) {
       _defaultFilters = df;
     }
+    // Apply custom view/tab order
+    _applyViewOrder(s.view_order);
     // Now fetch chits and render with correct settings
     _applyEnabledPeriods();
 
@@ -988,6 +1079,38 @@ document.addEventListener("DOMContentLoaded", function () {
   restoreSidebarState();
   _checkTabOverflow();
   _startGlobalAlertSystem();
+
+  // ── Delegated click handler for chit title links ──────────────────────
+  // Ensures storePreviousState() is called before navigating to the editor
+  // via any <a> link inside a chit card header (single-click on title).
+  // Cmd/Ctrl+click opens in a new tab.
+  (function() {
+    var chitList = document.getElementById('chit-list');
+    if (!chitList) return;
+    chitList.addEventListener('click', function(e) {
+      var link = e.target.closest('a[href*="/editor"]');
+      if (!link) return;
+      e.preventDefault();
+      if (e.metaKey || e.ctrlKey) {
+        window.open(link.getAttribute('href'), '_blank');
+      } else {
+        if (typeof storePreviousState === 'function') storePreviousState();
+        window.location.href = link.getAttribute('href');
+      }
+    });
+
+    // Cmd/Ctrl+dblclick on any chit card → open in new tab
+    chitList.addEventListener('dblclick', function(e) {
+      if (!e.metaKey && !e.ctrlKey) return;
+      var card = e.target.closest('[data-chit-id]');
+      if (!card) return;
+      var chitId = card.dataset.chitId;
+      if (!chitId) return;
+      e.preventDefault();
+      e.stopPropagation();
+      window.open('/editor?id=' + chitId, '_blank');
+    }, true); // capture phase to intercept before individual handlers
+  })();
 
   // ── Mobile swipe on calendar to navigate periods ──────────────────────
   (function() {

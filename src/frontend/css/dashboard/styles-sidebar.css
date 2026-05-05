@@ -240,13 +240,41 @@
     opacity: 1;
 }
 
+/* ── Project filter dropdown ──────────────────────────────────────────────── */
+.cwoc-project-filter-select {
+    width: 100%;
+    padding: 6px 8px;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.85em;
+    border: 1px solid #6b4e31;
+    border-radius: 3px;
+    background: #f5e6cc;
+    color: #1a1208;
+    cursor: pointer;
+    box-sizing: border-box;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%236b4e31'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    padding-right: 24px;
+}
+.cwoc-project-filter-select:focus {
+    outline: none;
+    border-color: #008080;
+    box-shadow: 0 0 0 2px rgba(0, 128, 128, 0.2);
+}
+.cwoc-project-filter-select option.project-filter-meta {
+    background: #e8d8c4;
+    font-style: italic;
+    color: #6b4e31;
+}
+
 .multi-select {
     display: flex;
     flex-direction: column;
     gap: 1px;
     font-size: 0.85em;
-    max-height: 120px;
-    overflow-y: auto;
 }
 
 .multi-select label {
@@ -287,30 +315,14 @@
     opacity: 1;
 }
 
-/* ── Tag filter scrollbar always visible ──────────────────────────────────── */
+/* ── Tag filter ────────────────────────────────────────────────────────────── */
 #label-multi {
-    overflow-y: scroll !important;
-    max-height: 200px;
+    overflow-y: visible;
 }
 #label-multi input[type="checkbox"] {
     flex: 0 0 auto;
     width: auto;
     padding: 0;
-}
-#label-multi::-webkit-scrollbar {
-    width: 8px;
-    -webkit-appearance: none;
-}
-#label-multi::-webkit-scrollbar-track {
-    background: rgba(139, 90, 43, 0.1);
-    border-radius: 4px;
-}
-#label-multi::-webkit-scrollbar-thumb {
-    background: rgba(139, 90, 43, 0.35);
-    border-radius: 4px;
-}
-#label-multi::-webkit-scrollbar-thumb:hover {
-    background: rgba(139, 90, 43, 0.55);
 }
 
 /* ── CwocSidebarFilter component ──────────────────────────────────────────── */
@@ -318,8 +330,6 @@
     display: flex;
     flex-direction: column;
     gap: 1px;
-    max-height: 320px;
-    overflow-y: auto;
 }
 
 .cwoc-sidebar-filter-dot {

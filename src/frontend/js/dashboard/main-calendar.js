@@ -200,7 +200,12 @@ function attachCalendarChitEvents(el, chit) {
     if (window._dragJustEnded) return;
     e.preventDefault();
     e.stopPropagation();
-    openChitForEdit(chit);
+    if (e.metaKey || e.ctrlKey) {
+      var id = chit._isVirtual && chit._parentId ? chit._parentId : chit.id;
+      window.open('/editor?id=' + id, '_blank');
+    } else {
+      openChitForEdit(chit);
+    }
   });
   el.addEventListener("click", function(e) {
     if (window._dragJustEnded) return;

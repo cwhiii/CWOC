@@ -153,6 +153,13 @@ function renderInlineChecklist(container, chit, onUpdate) {
     li.dataset.idx = idx;
     li.dataset.chitId = chit.id;
 
+    // 6-dot drag indicator
+    const dragHandle = document.createElement('span');
+    dragHandle.className = 'checklist-drag-handle';
+    dragHandle.textContent = '⠿';
+    dragHandle.title = 'Drag to reorder';
+    li.appendChild(dragHandle);
+
     const cb = document.createElement('input');
     cb.type = 'checkbox';
     cb.checked = false; // Only unchecked items are rendered

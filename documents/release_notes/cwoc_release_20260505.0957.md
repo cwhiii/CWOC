@@ -1,0 +1,1 @@
+Unified tag loading between the sidebar filters and the chit editor. Both now use a shared `loadAllTags()` function in shared-tags.js that loads from settings and merges in any tags found on chits, ensuring consistent tag lists everywhere.

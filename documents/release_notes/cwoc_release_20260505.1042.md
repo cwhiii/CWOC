@@ -1,0 +1,1 @@
+Removed max-height and internal scrolling from sidebar filter groups (Display, Tags, Status, Priority). Filter sections now expand fully and push content below them down, with the sidebar itself scrolling as one unit.

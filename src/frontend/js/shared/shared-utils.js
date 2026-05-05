@@ -82,8 +82,12 @@ function cwocConfirm(message, opts) {
     box.appendChild(h3);
 
     var p = document.createElement('p');
-    p.style.cssText = 'margin:0 0 18px;font-size:1em;line-height:1.4;';
-    p.textContent = message;
+    p.style.cssText = 'margin:0 0 18px;font-size:1em;line-height:1.4;white-space:pre-line;';
+    if (opts.html) {
+      p.innerHTML = message;
+    } else {
+      p.textContent = message;
+    }
     box.appendChild(p);
 
     var btnRow = document.createElement('div');
@@ -319,4 +323,51 @@ function getPastelColor(label) {
   const g = (((hash >> 8) & 0xff) % 128) + 127;
   const b = (((hash >> 16) & 0xff) % 128) + 127;
   return `rgb(${r}, ${g}, ${b})`;
+}
+
+// ── Shared Chit Text Search ──────────────────────────────────────────────────
+
+/**
+ * Test whether a chit matches a text search term.
+ * Searches: title, note, tags (non-system), status, people, location,
+ * priority, severity, and checklist item text.
+ * Handles HTML entity encoding in titles (e.g. &amp; → &).
+ *
+ * @param {Object} chit — the chit object from the API
+ * @param {string} searchText — lowercase search term
+ * @returns {boolean}
+ */
+function chitMatchesSearch(chit, searchText) {
+  if (!searchText) return true;
+
+  // If search starts with #, it's a tag-only search (strip the #)
+  if (searchText.startsWith('#')) {
+    var tagTerm = searchText.slice(1);
+    if (!tagTerm) return true;
+    return Array.isArray(chit.tags) && chit.tags.some(function(t) {
+      if (t.startsWith('CWOC_System/')) return false;
+      var tLower = t.toLowerCase();
+      return tLower === tagTerm || tLower.includes(tagTerm) || tLower.split('/').some(function(seg) { return seg === tagTerm || seg.includes(tagTerm); });
+    });
+  }
+
+  // Title (normalize HTML entities)
+  var title = (chit.title || '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').toLowerCase();
+  if (title.includes(searchText)) return true;
+  // Note content
+  if (chit.note && chit.note.toLowerCase().includes(searchText)) return true;
+  // Tags (exclude system tags)
+  if (Array.isArray(chit.tags) && chit.tags.some(function(t) { return !t.startsWith('CWOC_System/') && t.toLowerCase().includes(searchText); })) return true;
+  // Status
+  if (chit.status && chit.status.toLowerCase().includes(searchText)) return true;
+  // People
+  if (Array.isArray(chit.people) && chit.people.some(function(p) { return p.toLowerCase().includes(searchText); })) return true;
+  // Location
+  if (chit.location && chit.location.toLowerCase().includes(searchText)) return true;
+  // Priority & severity
+  if (chit.priority && chit.priority.toLowerCase().includes(searchText)) return true;
+  if (chit.severity && chit.severity.toLowerCase().includes(searchText)) return true;
+  // Checklist item text
+  if (Array.isArray(chit.checklist) && chit.checklist.some(function(item) { return item.text && item.text.toLowerCase().includes(searchText); })) return true;
+  return false;
 }

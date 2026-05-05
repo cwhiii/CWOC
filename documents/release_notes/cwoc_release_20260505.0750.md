@@ -1,0 +1,1 @@
+Moved Home Assistant into the Dependent Apps block as a collapsible subsection. Button shows a lightning bolt icon (green when connected, dim when unconfigured) with "Home Assistant" on hover. Removed collapse arrows from the Dependent Apps group.

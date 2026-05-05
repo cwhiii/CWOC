@@ -87,12 +87,13 @@ function renderChildChitsByStatus() {
   projectContainer.className = "project-container";
 
   const statuses = ["ToDo", "In Progress", "Blocked", "Complete"];
+  const statusMapLower = { "todo": "ToDo", "in progress": "In Progress", "blocked": "Blocked", "complete": "Complete" };
   const grouped = {};
   statuses.forEach((status) => (grouped[status] = []));
   Object.values(projectState.childChits).forEach((chit) => {
-    const status = chit.status || "ToDo";
-    if (!grouped[status]) grouped[status] = [];
-    grouped[status].push(chit);
+    var status = chit.status || "ToDo";
+    var normalized = statusMapLower[status.toLowerCase()] || "ToDo";
+    grouped[normalized].push(chit);
   });
 
   statuses.forEach((status) => {
@@ -100,9 +101,50 @@ function renderChildChitsByStatus() {
     section.className = "project-status-section";
     section.dataset.status = status;
 
-    const header = document.createElement("h3");
-    header.textContent = status;
+    var count = grouped[status].length;
+
+    // Collapsible header
+    const header = document.createElement("div");
+    header.className = "project-status-header";
+    header.style.cssText = "display:flex;align-items:center;gap:0.5em;cursor:pointer;user-select:none;padding:4px 0;";
+
+    var headerTitle = document.createElement("h3");
+    headerTitle.style.cssText = "margin:0;font-size:1em;";
+    headerTitle.textContent = status;
+    header.appendChild(headerTitle);
+
+    var countSpan = document.createElement("span");
+    countSpan.style.cssText = "font-size:0.8em;opacity:0.6;font-weight:normal;";
+    countSpan.textContent = "(" + count + ")";
+    header.appendChild(countSpan);
+
+    var spacer = document.createElement("span");
+    spacer.style.cssText = "flex:1;";
+    header.appendChild(spacer);
+
+    var toggleIcon = document.createElement("span");
+    toggleIcon.className = "project-status-toggle";
+    toggleIcon.textContent = "▼";
+    toggleIcon.style.cssText = "font-size:0.7em;margin-left:1em;";
+    header.appendChild(toggleIcon);
+
     section.appendChild(header);
+
+    const list = document.createElement("div");
+    list.className = "project-chit-list";
+
+    // Collapse "Complete" by default if it has items, expand others
+    var isCollapsed = (status === "Complete" && count > 0);
+    if (isCollapsed) {
+      list.style.display = "none";
+      toggleIcon.textContent = "▶";
+    }
+
+    header.addEventListener("click", function() {
+      var hidden = list.style.display === "none";
+      list.style.display = hidden ? "" : "none";
+      toggleIcon.textContent = hidden ? "▼" : "▶";
+    });
 
     // Drag and drop on entire section
     section.addEventListener("dragover", (e) => {
@@ -120,9 +162,6 @@ function renderChildChitsByStatus() {
         updateChitStatus(chitId, status);
       }
     });
-
-    const list = document.createElement("div");
-    list.className = "project-chit-list";
 
     grouped[status].forEach((chit) => {
       const chitCard = createChildChitCard(chit);
@@ -209,12 +248,13 @@ function createChildChitCard(chit) {
   contentWrapper.style.display = "flex";
   contentWrapper.style.alignItems = "center";
   contentWrapper.style.width = "100%";
+  contentWrapper.style.minWidth = "0";
 
   // Drag handle on far left
   const dragHandle = document.createElement("div");
   dragHandle.className = "project-drag-handle";
   dragHandle.title = "Drag to reorder";
-  dragHandle.innerHTML = "≡"; // simple drag icon, can be replaced with SVG or icon font
+  dragHandle.innerHTML = "≡";
   contentWrapper.appendChild(dragHandle);
 
   // Left container: status dropdown and title
@@ -223,22 +263,21 @@ function createChildChitCard(chit) {
   leftContainer.style.display = "flex";
   leftContainer.style.alignItems = "center";
   leftContainer.style.flexGrow = "1";
-  leftContainer.style.gap = "1em";
+  leftContainer.style.gap = "0.5em";
   leftContainer.style.minWidth = "0";
 
-  // Status dropdown
+  // Status dropdown (fixed width for consistency)
   const statusSelect = document.createElement("select");
-  statusSelect.className = "status-dropdown";
+  statusSelect.className = "status-dropdown project-dropdown-fixed";
   ["ToDo", "In Progress", "Blocked", "Complete"].forEach((status) => {
     const option = document.createElement("option");
     option.value = status;
     option.textContent = status;
-    if (chit.status === status) option.selected = true;
+    if (chit.status === status || (chit.status && chit.status.toLowerCase() === status.toLowerCase())) option.selected = true;
     statusSelect.appendChild(option);
   });
   statusSelect.addEventListener("change", () => {
     updateChitStatus(chit.id, statusSelect.value);
-    // Trigger save chit on change
     saveCurrentChit();
   });
   leftContainer.appendChild(statusSelect);
@@ -254,19 +293,18 @@ function createChildChitCard(chit) {
   titleDiv.style.textOverflow = "ellipsis";
   titleDiv.style.whiteSpace = "nowrap";
   titleDiv.addEventListener("input", () => {
-    // Trigger save chit on title change
     saveCurrentChit();
   });
   leftContainer.appendChild(titleDiv);
 
   contentWrapper.appendChild(leftContainer);
 
-  // Right container: date, open, move, delete
+  // Right container: date, open, remove, delete
   const rightContainer = document.createElement("div");
   rightContainer.className = "right-container";
   rightContainer.style.display = "flex";
   rightContainer.style.alignItems = "center";
-  rightContainer.style.gap = "1em";
+  rightContainer.style.gap = "0.4em";
   rightContainer.style.flexShrink = "0";
 
   // Due date input
@@ -279,7 +317,6 @@ function createChildChitCard(chit) {
   dueDateInput.title = "Due date";
   dueDateInput.addEventListener("change", () => {
     handleDueDateChange(chit.id, dueDateInput.value);
-    // Trigger save chit on date change
     saveCurrentChit();
   });
   rightContainer.appendChild(dueDateInput);
@@ -288,18 +325,17 @@ function createChildChitCard(chit) {
   const openBtn = document.createElement("button");
   openBtn.className = "status-icon-button open-chit-btn";
   openBtn.title = "Open chit in new tab";
-  openBtn.innerHTML =
-    '<i class="fas fa-external-link-alt" aria-hidden="true"></i>';
+  openBtn.innerHTML = '<i class="fas fa-external-link-alt" aria-hidden="true"></i>';
   openBtn.addEventListener("click", () => {
-    window.open(`/editor?id=${chit.id}`, "_blank");
+    window.open('/editor?id=' + chit.id, "_blank");
   });
   rightContainer.appendChild(openBtn);
 
-  // Add to project button (only if current chit is NOT a master)
-  if (!projectState.projectChit.is_project_master) {
+  // Move to another project button
+  if (projectState.projectMasters && projectState.projectMasters.length > 1) {
     const moveBtn = document.createElement("button");
     moveBtn.className = "status-icon-button move-project-btn";
-    moveBtn.title = "Add to project";
+    moveBtn.title = "Move to another project";
     moveBtn.innerHTML = '<i class="fas fa-folder-open" aria-hidden="true"></i>';
     moveBtn.style.position = "relative";
 
@@ -314,7 +350,6 @@ function createChildChitCard(chit) {
         option.addEventListener("click", () => {
           moveChildChitToProject(chit.id, proj.id);
           dropdown.style.display = "none";
-          // Trigger save chit on move
           saveCurrentChit();
         });
         dropdown.appendChild(option);
@@ -322,44 +357,64 @@ function createChildChitCard(chit) {
     });
 
     moveBtn.appendChild(dropdown);
-
     moveBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       const isVisible = dropdown.style.display === "block";
-      document.querySelectorAll(".move-project-dropdown").forEach((dd) => {
-        dd.style.display = "none";
-      });
+      document.querySelectorAll(".move-project-dropdown").forEach((dd) => { dd.style.display = "none"; });
       dropdown.style.display = isVisible ? "none" : "block";
     });
-
     rightContainer.appendChild(moveBtn);
   }
 
-  // Delete button (furthest right)
+  // Remove from project button (✕)
+  const removeBtn = document.createElement("button");
+  removeBtn.className = "status-icon-button project-remove-child-btn";
+  removeBtn.title = "Remove from project";
+  removeBtn.textContent = "✕";
+  removeBtn.addEventListener("click", async () => {
+    var confirmed = await cwocConfirm(
+      'Remove "' + (chit.title || 'Untitled') + '" from this project?\n\nThe chit will not be deleted — just unlinked.',
+      { title: 'Remove from Project', confirmLabel: '✕ Remove', danger: false }
+    );
+    if (!confirmed) return;
+    // Remove from parent's child_chits list
+    if (projectState.projectChit && Array.isArray(projectState.projectChit.child_chits)) {
+      projectState.projectChit.child_chits = projectState.projectChit.child_chits.filter(function(id) { return id !== chit.id; });
+    }
+    delete projectState.childChits[chit.id];
+    renderChildChitsByStatus();
+    saveCurrentChit();
+  });
+  rightContainer.appendChild(removeBtn);
+
+  // Delete button (permanently deletes the chit)
   const deleteBtn = document.createElement("button");
   deleteBtn.className = "project-delete-item";
-  deleteBtn.title = "Delete this chit";
+  deleteBtn.title = "Permanently delete this chit";
   deleteBtn.innerHTML = '<i class="fas fa-trash-alt" aria-hidden="true"></i>';
   deleteBtn.addEventListener("click", async () => {
-    if (!(await cwocConfirm('Delete "' + (chit.title || 'Untitled') + '"?', { title: 'Delete Child Chit', confirmLabel: '🗑️ Delete', danger: true }))) return;
+    var confirmed = await cwocConfirm(
+      'Permanently delete the <span style="color:#b22222;font-weight:900;text-decoration:underline;">child</span> chit "' + (chit.title || 'Untitled') + '"?\n\nThis cannot be undone.',
+      { title: 'Delete Child Chit', confirmLabel: '🗑️ Delete', danger: true, html: true }
+    );
+    if (!confirmed) return;
     try {
       var resp = await fetch('/api/chits/' + encodeURIComponent(chit.id), { method: 'DELETE' });
       if (!resp.ok) throw new Error('Delete failed');
-      // Remove from parent's child_chits list
       if (projectState.projectChit && Array.isArray(projectState.projectChit.child_chits)) {
         projectState.projectChit.child_chits = projectState.projectChit.child_chits.filter(function(id) { return id !== chit.id; });
       }
       delete projectState.childChits[chit.id];
-      renderKanbanBoard();
-      setSaveButtonUnsaved();
+      renderChildChitsByStatus();
+      saveCurrentChit();
     } catch (e) {
       console.error('Failed to delete child chit:', e);
+      cwocToast('Failed to delete chit.', 'error');
     }
   });
   rightContainer.appendChild(deleteBtn);
 
   contentWrapper.appendChild(rightContainer);
-
   card.appendChild(contentWrapper);
 
   return card;
@@ -498,123 +553,270 @@ async function openAddChitModal() {
     modal.innerHTML = `
       <div class="modal-content-new">
         <div class="modal-header-new">
-          <h2>Add Child Chit</h2>
+          <h2>Add Child Chits</h2>
           <div class="modal-buttons"></div>
         </div>
         <div class="modal-body-new">
-          <input type="text" id="chitSearchNew" class="chit-search-input-new" placeholder="Search chits...">
+          <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;">
+            <select id="chitFilterStatus" style="padding:4px 8px;border:1px solid #a0522d;border-radius:4px;font-family:Lora,Georgia,serif;font-size:0.85em;background:#fff8f0;">
+              <option value="">All Statuses</option>
+              <option value="ToDo">ToDo</option>
+              <option value="In Progress">In Progress</option>
+              <option value="Blocked">Blocked</option>
+              <option value="Complete">Complete</option>
+            </select>
+            <select id="chitFilterPriority" style="padding:4px 8px;border:1px solid #a0522d;border-radius:4px;font-family:Lora,Georgia,serif;font-size:0.85em;background:#fff8f0;">
+              <option value="">All Priorities</option>
+              <option value="Low">Low</option>
+              <option value="Medium">Medium</option>
+              <option value="High">High</option>
+              <option value="Critical">Critical</option>
+            </select>
+            <input type="text" id="chitSearchNew" class="chit-search-input-new" placeholder="Search chits..." autofocus style="flex:1;">
+          </div>
           <table class="chit-table-new">
             <thead>
               <tr>
+                <th style="width:30px;"></th>
                 <th>Title</th>
                 <th>Due</th>
-                <th>Start</th>
+                <th>Status</th>
               </tr>
             </thead>
             <tbody id="chitListNew"></tbody>
           </table>
         </div>
         <div class="modal-footer-new">
+          <span id="chitSelectionCount" style="font-size:0.85em;opacity:0.7;"></span>
           <button class="modal-button-new cancel" id="cancelChitBtnNew">Cancel</button>
-          <button class="modal-button-new" id="addChitBtnNew" disabled>Add Selected Chit</button>
+          <button class="modal-button-new" id="addChitBtnNew" disabled>Add Selected</button>
         </div>
       </div>
     `;
   }
 
   modal.style.display = "flex";
+  window._addChitModalOpen = true;
 
-  // Fetch all chits and filter out project masters and existing child chits
+  // Fetch all chits
   try {
     const response = await fetch("/api/chits");
     if (!response.ok) throw new Error("Failed to fetch chits");
     const allChits = await response.json();
-    const nonProjectChits = allChits
-      .filter(
-        (chit) =>
-          !chit.is_project_master &&
-          chit.id !== (projectState.projectChit?.id) &&
-          !(projectState.projectChit.child_chits || []).includes(chit.id),
-      )
-      .sort((a, b) => (a.title || "").localeCompare(b.title || ""));
+    const currentChildIds = new Set(projectState.projectChit.child_chits || []);
 
-    // Store current chit list on modal so delegated handlers can access it
-    modal._nonProjectChits = nonProjectChits;
-    modal._selectedChitId = null;
+    // All non-project-master chits (excluding self), sorted alphabetically
+    const availableChits = allChits
+      .filter(function(chit) {
+        return !chit.is_project_master && chit.id !== (projectState.projectChit?.id);
+      })
+      .sort(function(a, b) { return (a.title || "").localeCompare(b.title || ""); });
 
-    const chitList = document.getElementById("chitListNew");
+    console.debug('[AddChitModal] Total from API:', allChits.length, '| Available (non-master):', availableChits.length, '| Already children:', currentChildIds.size, '| Masters filtered:', allChits.filter(function(c){return c.is_project_master;}).map(function(c){return c.title;}));
 
-    const renderChits = (chits) => {
+    modal._availableChits = availableChits;
+    modal._currentChildIds = currentChildIds;
+    modal._selectedIds = new Set();
+
+    var chitList = document.getElementById("chitListNew");
+    var addBtn = document.getElementById("addChitBtnNew");
+    var countSpan = document.getElementById("chitSelectionCount");
+
+    function _updateAddBtn() {
+      var count = modal._selectedIds.size;
+      addBtn.disabled = count === 0;
+      countSpan.textContent = count > 0 ? count + " selected" : "";
+    }
+
+    function _highlightText(text, term) {
+      if (!text) return '';
+      var escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      if (!term) return escaped;
+      var safeTerm = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      return escaped.replace(new RegExp('(' + safeTerm + ')', 'gi'), '<mark>$1</mark>');
+    }
+
+    function renderChits(chitsToRender) {
+      var searchTerm = (document.getElementById("chitSearchNew")?.value || "").toLowerCase().trim();
+      var highlightTerm = searchTerm.startsWith('#') ? '' : searchTerm; // Don't highlight in title for tag-only searches
+      var tagHighlight = searchTerm.startsWith('#') ? searchTerm.slice(1) : searchTerm;
+
       chitList.innerHTML = "";
-      chits.forEach((chit) => {
-        const row = document.createElement("tr");
+      chitsToRender.forEach(function(chit) {
+        var isChild = modal._currentChildIds.has(chit.id);
+        var row = document.createElement("tr");
         row.dataset.chitId = chit.id;
-        row.innerHTML = `
-          <td>${chit.title || "(No Title)"}</td>
-          <td>${chit.due_datetime ? new Date(chit.due_datetime).toISOString().slice(0, 10) : ""}</td>
-          <td>${chit.start_datetime ? new Date(chit.start_datetime).toISOString().slice(0, 10) : ""}</td>
-        `;
+        if (isChild) {
+          row.style.cssText = "opacity:0.6;background:#e8dcc8;";
+          row.title = "Already in this project";
+        }
+
+        // Checkbox cell
+        var cbCell = document.createElement("td");
+        cbCell.style.textAlign = "center";
+        if (isChild) {
+          var icon = document.createElement("span");
+          icon.textContent = "✓";
+          icon.style.cssText = "color:#4a7c59;font-weight:bold;";
+          cbCell.appendChild(icon);
+        } else {
+          var cb = document.createElement("input");
+          cb.type = "checkbox";
+          cb.checked = modal._selectedIds.has(chit.id);
+          cb.dataset.chitId = chit.id;
+          cb.addEventListener("change", function() {
+            if (this.checked) { modal._selectedIds.add(chit.id); }
+            else { modal._selectedIds.delete(chit.id); }
+            _updateAddBtn();
+          });
+          cbCell.appendChild(cb);
+        }
+        row.appendChild(cbCell);
+
+        // Title + Tags cell
+        var titleCell = document.createElement("td");
+        var titleSpan = document.createElement("span");
+        titleSpan.innerHTML = highlightTerm ? _highlightText(chit.title || "(No Title)", highlightTerm) : (chit.title || "(No Title)").replace(/&/g, '&amp;').replace(/</g, '&lt;');
+        if (isChild) titleSpan.style.fontStyle = "italic";
+        titleCell.appendChild(titleSpan);
+
+        // Tags (non-system, shown as small badges)
+        var userTags = (chit.tags || []).filter(function(t) { return !t.startsWith('CWOC_System/'); });
+        if (userTags.length > 0) {
+          var tagsSpan = document.createElement("span");
+          tagsSpan.style.cssText = "margin-left:6px;font-size:0.8em;opacity:0.7;";
+          tagsSpan.innerHTML = userTags.map(function(t) {
+            var tagHtml = tagHighlight ? _highlightText(t, tagHighlight) : t.replace(/&/g, '&amp;');
+            return '<span style="background:#f0e6d0;padding:1px 5px;border-radius:3px;margin-right:3px;white-space:nowrap;">' + tagHtml + '</span>';
+          }).join('');
+          titleCell.appendChild(tagsSpan);
+        }
+        row.appendChild(titleCell);
+
+        // Due date cell
+        var dueCell = document.createElement("td");
+        dueCell.textContent = chit.due_datetime ? new Date(chit.due_datetime).toISOString().slice(0, 10) : "";
+        row.appendChild(dueCell);
+
+        // Status cell
+        var statusCell = document.createElement("td");
+        statusCell.innerHTML = highlightTerm ? _highlightText(chit.status || "", highlightTerm) : (chit.status || "");
+        row.appendChild(statusCell);
+
+        // Click row to toggle checkbox (unless already a child)
+        if (!isChild) {
+          row.style.cursor = "pointer";
+          row.addEventListener("click", function(e) {
+            if (e.target.tagName === "INPUT") return;
+            var checkbox = row.querySelector('input[type="checkbox"]');
+            if (checkbox) {
+              checkbox.checked = !checkbox.checked;
+              checkbox.dispatchEvent(new Event("change"));
+            }
+          });
+          // Double-click to add immediately
+          row.addEventListener("dblclick", function() {
+            addChildChit(chit);
+            modal._currentChildIds.add(chit.id);
+            modal._selectedIds.delete(chit.id);
+            renderChits(modal._filteredChits || modal._availableChits);
+            _updateAddBtn();
+          });
+        }
+
         chitList.appendChild(row);
-      });
-    };
-
-    renderChits(nonProjectChits);
-
-    // Only attach listeners once when the modal is first created
-    if (isNewModal) {
-      // Delegate click/dblclick on table rows via the tbody
-      chitList.addEventListener("click", (e) => {
-        const row = e.target.closest("tr");
-        if (!row || !row.dataset.chitId) return;
-        modal._selectedChitId = row.dataset.chitId;
-        chitList.querySelectorAll("tr").forEach((r) => r.classList.remove("selected"));
-        row.classList.add("selected");
-        document.getElementById("addChitBtnNew").disabled = false;
-      });
-
-      chitList.addEventListener("dblclick", (e) => {
-        const row = e.target.closest("tr");
-        if (!row || !row.dataset.chitId) return;
-        const chit = (modal._nonProjectChits || []).find((c) => c.id === row.dataset.chitId);
-        if (chit) {
-          addChildChit(chit);
-          modal.style.display = "none";
-        }
-      });
-
-      document.getElementById("chitSearchNew").addEventListener("input", (e) => {
-        const searchTerm = e.target.value.toLowerCase();
-        const filtered = (modal._nonProjectChits || []).filter((chit) =>
-          (chit.title || "").toLowerCase().includes(searchTerm),
-        );
-        renderChits(filtered);
-      });
-
-      document.getElementById("addChitBtnNew").addEventListener("click", () => {
-        if (modal._selectedChitId) {
-          const selectedChit = (modal._nonProjectChits || []).find(
-            (chit) => chit.id === modal._selectedChitId,
-          );
-          if (selectedChit) {
-            addChildChit(selectedChit);
-            modal.style.display = "none";
-          }
-        }
-      });
-
-      document.getElementById("cancelChitBtnNew").addEventListener("click", () => {
-        modal.style.display = "none";
       });
     }
 
-    // Reset search and selection state each time modal opens
+    modal._filteredChits = availableChits;
+    renderChits(availableChits);
+
+    // Update header with count
+    var headerH2 = modal.querySelector('.modal-header-new h2');
+    if (headerH2) headerH2.textContent = 'Add Child Chits (' + availableChits.length + ' available)';
+
+    // Shared filter function — applies text search + status + priority dropdowns
+    function _applyModalFilters() {
+      var searchTerm = (document.getElementById("chitSearchNew")?.value || "").toLowerCase().trim();
+      var statusFilter = (document.getElementById("chitFilterStatus")?.value || "").toLowerCase();
+      var priorityFilter = (document.getElementById("chitFilterPriority")?.value || "").toLowerCase();
+
+      modal._filteredChits = (modal._availableChits || []).filter(function(chit) {
+        // Status dropdown filter (case-insensitive)
+        if (statusFilter && (chit.status || "").toLowerCase() !== statusFilter) return false;
+        // Priority dropdown filter (case-insensitive)
+        if (priorityFilter && (chit.priority || "").toLowerCase() !== priorityFilter) return false;
+        // Text search
+        if (searchTerm && !chitMatchesSearch(chit, searchTerm)) return false;
+        return true;
+      });
+
+      renderChits(modal._filteredChits);
+      var headerH2 = modal.querySelector('.modal-header-new h2');
+      if (headerH2) headerH2.textContent = 'Add Child Chits (' + modal._filteredChits.length + ' shown)';
+    }
+
+    // Only attach listeners once when the modal is first created
+    if (isNewModal) {
+      document.getElementById("chitSearchNew").addEventListener("input", _applyModalFilters);
+      document.getElementById("chitFilterStatus").addEventListener("change", _applyModalFilters);
+      document.getElementById("chitFilterPriority").addEventListener("change", _applyModalFilters);
+
+      addBtn.addEventListener("click", function() {
+        if (modal._selectedIds.size === 0) return;
+        modal._selectedIds.forEach(function(id) {
+          var chit = (modal._availableChits || []).find(function(c) { return c.id === id; });
+          if (chit) addChildChit(chit);
+        });
+        modal._selectedIds.clear();
+        modal.style.display = "none";
+        window._addChitModalOpen = false;
+      });
+
+      document.getElementById("cancelChitBtnNew").addEventListener("click", function() {
+        modal.style.display = "none";
+        window._addChitModalOpen = false;
+      });
+
+      // Click overlay to close
+      modal.addEventListener("click", function(e) {
+        if (e.target === modal) {
+          modal.style.display = "none";
+          window._addChitModalOpen = false;
+        }
+      });
+
+      // ESC key closes modal (layered: clear search → close modal)
+      modal._escHandler = function(e) {
+        if (e.key === "Escape" && modal.style.display === "flex") {
+          e.preventDefault();
+          e.stopPropagation();
+          var searchInput = document.getElementById("chitSearchNew");
+          if (searchInput && searchInput.value.trim()) {
+            // First ESC: clear search text and reset list
+            searchInput.value = "";
+            searchInput.dispatchEvent(new Event("input"));
+            searchInput.focus();
+          } else {
+            // Second ESC: close modal
+            modal.style.display = "none";
+            window._addChitModalOpen = false;
+          }
+        }
+      };
+      document.addEventListener("keydown", modal._escHandler, true);
+    }
+
+    // Reset state each time modal opens
     document.getElementById("chitSearchNew").value = "";
-    document.getElementById("addChitBtnNew").disabled = true;
-    chitList.querySelectorAll("tr").forEach((r) => r.classList.remove("selected"));
+    modal._selectedIds.clear();
+    _updateAddBtn();
+    setTimeout(function() { document.getElementById("chitSearchNew").focus(); }, 50);
   } catch (error) {
     console.error("Error fetching chits for modal:", error);
     cwocToast("Failed to load chits. Please try again.", "error");
     modal.style.display = "none";
+    window._addChitModalOpen = false;
   }
 }
 
@@ -624,10 +826,16 @@ function addChildChit(chit) {
     return;
   }
 
+  // Normalize status to match expected values (case-insensitive)
+  var normalizedStatus = chit.status || "ToDo";
+  var statusMap = { "todo": "ToDo", "in progress": "In Progress", "blocked": "Blocked", "complete": "Complete" };
+  var lower = normalizedStatus.toLowerCase();
+  if (statusMap[lower]) normalizedStatus = statusMap[lower];
+
   // Add chit to childChits map
   projectState.childChits[chit.id] = {
     ...chit,
-    status: chit.status || "ToDo",
+    status: normalizedStatus,
     due_datetime: chit.due_datetime || null,
     tags: chit.tags || [],
     checklist: chit.checklist || [],
@@ -732,17 +940,32 @@ async function loadProjectData(projectChitId) {
     Array.isArray(projectState.projectChit.child_chits) &&
     projectState.projectChit.child_chits.length > 0
   ) {
+    const staleIds = [];
     const fetches = projectState.projectChit.child_chits.map(
       async (childId) => {
         const res = await fetch(`/api/chit/${childId}`);
         if (res.ok) {
           const chit = await res.json();
+          // Skip soft-deleted children — they shouldn't appear in the project
+          if (chit.deleted) {
+            console.debug(`Skipping deleted child chit ${childId}`);
+            staleIds.push(childId);
+            return;
+          }
           projectState.childChits[childId] = chit;
         } else {
-          console.warn(`Failed to load child chit ${childId}`);
+          console.warn(`Failed to load child chit ${childId} (${res.status})`);
+          staleIds.push(childId);
         }
       },
     );
     await Promise.all(fetches);
+
+    // Auto-prune stale/inaccessible child references
+    if (staleIds.length > 0) {
+      projectState.projectChit.child_chits = projectState.projectChit.child_chits.filter(
+        id => !staleIds.includes(id)
+      );
+    }
   }
 }

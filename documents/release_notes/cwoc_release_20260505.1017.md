@@ -1,0 +1,1 @@
+Added per-user "Arrange Views" setting that lets you drag-reorder the dashboard tab bar. Accessible via a button in Settings > Display Options. The modal shows tabs styled like the real dashboard buttons, supports drag-and-drop (desktop and mobile touch), and includes a reset-to-default option. The custom order is applied on dashboard load.

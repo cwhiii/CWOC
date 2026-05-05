@@ -534,7 +534,13 @@ function _viewLocationInContext(event) {
   if (!loc || !loc.value.trim()) return;
   var address = loc.value.trim();
   var url = '/frontend/html/maps.html?focus=chit&address=' + encodeURIComponent(address);
-  window.location.href = url;
+  if (window._cwocSave && window._cwocSave.hasChanges()) {
+    cwocConfirm("You have unsaved changes. Leave without saving?", { title: 'Unsaved Changes', confirmLabel: 'Leave', danger: true }).then(function(ok) {
+      if (ok) window.location.href = url;
+    });
+  } else {
+    window.location.href = url;
+  }
 }
 
 /**
@@ -543,7 +549,38 @@ function _viewLocationInContext(event) {
  */
 function _updateViewInContextBtn() {
   var loc = document.getElementById('location');
+  var hasLocation = loc && loc.value.trim();
+  var show = hasLocation ? '' : 'none';
   var btn = document.getElementById('viewInContextBtn');
-  if (!btn) return;
-  btn.style.display = (loc && loc.value.trim()) ? '' : 'none';
+  if (btn) btn.style.display = show;
+  var searchBtn = document.getElementById('locationSearchBtn');
+  if (searchBtn) searchBtn.style.display = show;
+  var mapBtn = document.getElementById('locationMapBtn');
+  if (mapBtn) mapBtn.style.display = show;
+  var dirBtn = document.getElementById('locationDirectionsBtn');
+  if (dirBtn) dirBtn.style.display = show;
+  // Toggle +Location / ✕ Clear button
+  var addClearBtn = document.getElementById('locationAddClearBtn');
+  if (addClearBtn) {
+    if (hasLocation) {
+      addClearBtn.innerHTML = '<i class="fas fa-times"></i><span class="hideWhenNarrow">Clear</span>';
+      addClearBtn.title = 'Clear location';
+    } else {
+      addClearBtn.innerHTML = '<i class="fas fa-plus"></i><span class="hideWhenNarrow">Location</span>';
+      addClearBtn.title = 'Populate from default saved location';
+    }
+  }
+}
+
+/**
+ * +Location / Clear toggle handler.
+ */
+function _locationAddClearToggle(event) {
+  if (event) { event.stopPropagation(); event.preventDefault(); }
+  var loc = document.getElementById('location');
+  if (loc && loc.value.trim()) {
+    onClearLocation(event);
+  } else {
+    onAddDefaultLocation(event);
+  }
 }

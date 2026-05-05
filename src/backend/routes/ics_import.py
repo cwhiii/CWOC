@@ -13,7 +13,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Request
 
-from src.backend.db import DB_PATH, serialize_json_field, compute_system_tags
+from src.backend.db import DB_PATH, serialize_json_field, compute_system_tags, ensure_tags_in_settings
 from src.backend.models import ICSImportRequest, ICSImportResponse, Chit
 from src.backend.ics_serializer import ics_parse
 
@@ -366,6 +366,18 @@ async def import_ics(body: ICSImportRequest, request: Request):
                 mapping_errors.append(f"Insert error for '{chit.get('title', '?')}': {str(e)}")
 
         conn.commit()
+
+        # Register any user-facing tags from imported chits in settings
+        try:
+            all_tags = []
+            for idx, chit in enumerate(mapped_chits):
+                if idx in duplicate_indices:
+                    continue
+                chit_tags = chit.get("tags") or []
+                all_tags.extend(chit_tags)
+            ensure_tags_in_settings(conn, user_id, all_tags)
+        except Exception as e:
+            logger.warning(f"ICS import: could not register tags in settings: {str(e)}")
 
         all_errors = parse_errors + mapping_errors
         return ICSImportResponse(

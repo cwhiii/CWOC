@@ -1771,3 +1771,68 @@ def migrate_create_ha_config():
     finally:
         if conn:
             conn.close()
+
+
+# ── Checklist Autosave: migration ────────────────────────────────────────
+
+def migrate_add_checklist_autosave():
+    """Add checklist_autosave column to settings and chits tables.
+
+    Settings: TEXT default '1' (enabled by default).
+    Chits: TEXT (per-chit override, NULL = use global setting).
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        # Settings table
+        cursor.execute("PRAGMA table_info(settings)")
+        settings_cols = [col[1] for col in cursor.fetchall()]
+        if "checklist_autosave" not in settings_cols:
+            cursor.execute("ALTER TABLE settings ADD COLUMN checklist_autosave TEXT DEFAULT '1'")
+            logger.info("Added checklist_autosave column to settings table")
+
+        # Chits table
+        cursor.execute("PRAGMA table_info(chits)")
+        chits_cols = [col[1] for col in cursor.fetchall()]
+        if "checklist_autosave" not in chits_cols:
+            cursor.execute("ALTER TABLE chits ADD COLUMN checklist_autosave TEXT")
+            logger.info("Added checklist_autosave column to chits table")
+
+        conn.commit()
+    except Exception as e:
+        logger.error(f"Error in migrate_add_checklist_autosave: {str(e)}")
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+
+# ── View Order: migration ────────────────────────────────────────────────
+
+def migrate_add_view_order():
+    """Add view_order column to settings table.
+
+    Stores a JSON array of tab names in the user's preferred order,
+    e.g. '["Calendar","Checklists","Tasks","Projects","Notes","Email","Indicators","Alarms"]'
+    NULL means use the default order.
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        cursor.execute("PRAGMA table_info(settings)")
+        settings_cols = [col[1] for col in cursor.fetchall()]
+        if "view_order" not in settings_cols:
+            cursor.execute("ALTER TABLE settings ADD COLUMN view_order TEXT")
+            logger.info("Added view_order column to settings table")
+
+        conn.commit()
+    except Exception as e:
+        logger.error(f"Error in migrate_add_view_order: {str(e)}")
+        raise
+    finally:
+        if conn:
+            conn.close()

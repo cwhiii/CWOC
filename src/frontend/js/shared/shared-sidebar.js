@@ -271,6 +271,21 @@ function _cwocInjectSidebar() {
   html += '    </div>';
   html += '  </div>';
 
+  /* Project */
+  html += '  <div class="filter-group" id="filter-project">';
+  html += '    <label class="filter-label" onclick="toggleFilterGroup(\'filter-project\')">';
+  html += '      <span class="section-toggle">▶</span> Project';
+  html += '    </label>';
+  html += '    <div class="filter-group-body" style="display:none;">';
+  html += '      <select id="project-filter-select" class="cwoc-project-filter-select" onchange="_onProjectFilterChange()">';
+  html += '        <option value="" class="project-filter-meta">—</option>';
+  html += '        <option value="__any__" class="project-filter-meta">Any (has a project)</option>';
+  html += '        <option value="__none__" class="project-filter-meta">None (no project)</option>';
+  html += '      </select>';
+  html += '      <button class="filter-clear-btn" onclick="_clearProjectFilter()">Clear</button>';
+  html += '    </div>';
+  html += '  </div>';
+
   /* Show (Archive/Pinned) */
   html += '  <div class="filter-group" id="filter-archive">';
   html += '    <label class="filter-label" onclick="toggleFilterGroup(\'filter-archive\')">';
@@ -286,17 +301,9 @@ function _cwocInjectSidebar() {
   html += '        <label><input type="checkbox" id="hide-complete" /> ✅ Hide Complete</label>';
   html += '        <label><input type="checkbox" id="hide-declined" /> 🚫 Hide Declined</label>';
   html += '        <label><input type="checkbox" id="hide-habits" /> 🎯 Hide Habits</label>';
-  html += '      </div>';
-  html += '    </div>';
-  html += '  </div>';
-
-  /* Sharing */
-  html += '  <div class="filter-group" id="filter-sharing">';
-  html += '    <label class="filter-label" onclick="toggleFilterGroup(\'filter-sharing\')">';
-  html += '      <span class="section-toggle">▶</span> Sharing';
-  html += '    </label>';
-  html += '    <div class="filter-group-body" style="display:none;">';
-  html += '      <div class="multi-select">';
+  html += '        <label><input type="checkbox" id="hide-email-received" checked /> 📨 Hide Email (Received)</label>';
+  html += '        <label><input type="checkbox" id="hide-email-sent" checked /> 📤 Hide Email (Sent)</label>';
+  html += '        <hr style="border:0;border-top:1px dashed #c4a882;margin:4px 0;" />';
   html += '        <label><input type="checkbox" id="filter-shared-with-me" /> 🔗 Shared with me</label>';
   html += '        <label><input type="checkbox" id="filter-shared-by-me" /> 📤 Shared by me</label>';
   html += '      </div>';
@@ -639,15 +646,8 @@ function _wireFilterCheckboxes(context) {
   }
 
   /* Display checkboxes (show-pinned, show-archived, etc.) */
-  var displayIds = ['show-pinned', 'show-archived', 'show-unmarked', 'hide-past-due', 'hide-complete', 'hide-declined', 'hide-habits'];
+  var displayIds = ['show-pinned', 'show-archived', 'show-unmarked', 'hide-past-due', 'hide-complete', 'hide-declined', 'hide-habits', 'hide-email-received', 'hide-email-sent', 'filter-shared-with-me', 'filter-shared-by-me'];
   displayIds.forEach(function(id) {
-    var el = document.getElementById(id);
-    if (el) el.onchange = function() { cb(); };
-  });
-
-  /* Sharing checkboxes */
-  var sharingIds = ['filter-shared-with-me', 'filter-shared-by-me'];
-  sharingIds.forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.onchange = function() { cb(); };
   });
@@ -694,23 +694,31 @@ function _updateClearAllButton() {
   var hideComplete = document.getElementById('hide-complete');
   var hideDeclined = document.getElementById('hide-declined');
   var hideHabits = document.getElementById('hide-habits');
+  var hideEmailReceived = document.getElementById('hide-email-received');
+  var hideEmailSent = document.getElementById('hide-email-sent');
   var hasDisplayFilter = (showPinned && !showPinned.checked)
     || (showArchived && showArchived.checked)
     || (showUnmarked && !showUnmarked.checked)
     || (hidePastDue && hidePastDue.checked)
     || (hideComplete && hideComplete.checked)
     || (hideDeclined && hideDeclined.checked)
-    || (hideHabits && hideHabits.checked);
+    || (hideHabits && hideHabits.checked)
+    || (hideEmailReceived && !hideEmailReceived.checked)
+    || (hideEmailSent && !hideEmailSent.checked);
 
-  /* Sharing filters */
+  /* Sharing filters (now part of Display group) */
   var hasSharingFilter = (document.getElementById('filter-shared-with-me') || {}).checked
     || (document.getElementById('filter-shared-by-me') || {}).checked;
 
   /* Sort */
   var hasSort = !!(typeof currentSortField !== 'undefined' && currentSortField);
 
+  /* Project filter */
+  var projectSel = document.getElementById('project-filter-select');
+  var hasProjectFilter = projectSel && projectSel.value;
+
   var hasAnyFilter = hasStatusFilter || hasPriorityFilter || searchText || hasTagFilter
-    || hasPeopleFilter || hasDisplayFilter || hasSharingFilter || hasSort;
+    || hasPeopleFilter || hasDisplayFilter || hasSharingFilter || hasSort || hasProjectFilter;
 
   btn.style.display = hasAnyFilter ? '' : 'none';
 }

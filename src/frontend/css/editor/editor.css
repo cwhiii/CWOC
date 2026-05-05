@@ -531,8 +531,8 @@ input.error {
     border: 2px solid var(--aged-brown-medium);
     border-radius: 8px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-    width: 90%;
-    max-width: 600px;
+    width: 95%;
+    max-width: 900px;
     max-height: 80vh;
     display: flex;
     flex-direction: column;
@@ -1011,8 +1011,6 @@ hr {
     border-radius: 4px;
     padding: 8px;
     background-color: var(--input-bg);
-    max-height: 200px;
-    overflow-y: scroll;
     width: 100%;
     margin-bottom: 0.5em;
     box-sizing: border-box;
@@ -1022,17 +1020,7 @@ hr {
     width: auto;
     padding: 0;
 }
-.tag-container::-webkit-scrollbar {
-    width: 6px;
-    -webkit-appearance: none;
-}
-.tag-container::-webkit-scrollbar-track {
-    background: rgba(139, 90, 43, 0.08);
-}
-.tag-container::-webkit-scrollbar-thumb {
-    background: rgba(139, 90, 43, 0.3);
-    border-radius: 3px;
-}
+
 
 .verticalBox {
     display: flex;
@@ -1049,9 +1037,6 @@ hr {
     flex: 1;
     min-width: 0;
     min-height: 4em;
-    max-height: 200px;
-    overflow-y: auto;
-    overflow-x: hidden;
     margin-bottom: 0.5em;
     border: 1px solid var(--border-color);
     border-radius: 4px;
@@ -1428,6 +1413,8 @@ hr {
     width: 100%;
     box-sizing: border-box;
     position: relative;
+    overflow: hidden;
+    min-width: 0;
 }
 
 .project-item:last-child {
@@ -1458,6 +1445,7 @@ hr {
     text-overflow: ellipsis;
     white-space: nowrap;
     cursor: text;
+    min-width: 0;
 }
 
 .project-item-text-input {
@@ -1571,6 +1559,31 @@ hr {
     flex-shrink: 0;
     background-color: white;
     cursor: pointer;
+}
+
+/* Fixed-width dropdowns in project zone for visual consistency */
+.project-dropdown-fixed,
+.project-item-status-dropdown {
+    width: 110px;
+    min-width: 110px;
+    max-width: 110px;
+}
+
+/* Remove-from-project button (✕) */
+.project-remove-child-btn {
+    background: none;
+    border: 1px solid #a0522d;
+    border-radius: 4px;
+    color: #8b4513;
+    font-size: 0.9em;
+    font-weight: bold;
+    padding: 2px 6px;
+    cursor: pointer;
+    line-height: 1;
+}
+.project-remove-child-btn:hover {
+    background: #f5e6cc;
+    color: #5a2d0c;
 }
 
 .project-item-status-dropdown.status-ToDo {
@@ -2169,6 +2182,29 @@ hr {
     font-family: inherit;
 }
 
+/* ── 6-dot drag handle for checklist items ─────────────────────────────── */
+.checklist-drag-handle {
+    flex: 0 0 auto;
+    cursor: grab;
+    color: var(--aged-brown-light, #a0522d);
+    font-size: 1.2em;
+    line-height: 1.4;
+    padding: 0 4px 0 0;
+    user-select: none;
+    opacity: 0.6;
+    transition: opacity 0.15s, color 0.15s;
+    touch-action: none;
+}
+
+.checklist-drag-handle:hover {
+    opacity: 1;
+    color: var(--aged-brown-dark, #4a2c2a);
+}
+
+.checklist-drag-handle:active {
+    cursor: grabbing;
+}
+
 .checklist-item.dragging,
 .completed-checklist-item.dragging,
 .ghost-checklist-item.dragging {
@@ -2380,8 +2416,7 @@ hr {
     width: 100%;
     box-sizing: border-box;
     position: relative;
-    overflow-y: auto;
-    max-height: 60vh;
+    overflow-x: hidden;
 }
 
 /* 🟫 Project status section (drop zone) */
@@ -2391,10 +2426,12 @@ hr {
     background: transparent; /* removed border and background */
     width: 100%; /* fill full width */
     box-sizing: border-box;
+    overflow: hidden;
 }
 
 /* 🟫 Project status section header */
-.project-status-section > h3 {
+.project-status-section > h3,
+.project-status-header {
     display: flex;
     align-items: center;
     width: 100%;
@@ -2406,25 +2443,31 @@ hr {
     font-weight: bold;
     font-size: 1.1em;
     user-select: none;
+    cursor: pointer;
+    box-sizing: border-box;
 }
 
 /* 🟫 Status header icons using emoji */
-.project-status-section[data-status="ToDo"] > h3::before {
+.project-status-section[data-status="ToDo"] > h3::before,
+.project-status-section[data-status="ToDo"] > .project-status-header::before {
     content: "📝";
     margin-right: 8px;
     font-size: 1.2em;
 }
-.project-status-section[data-status="In Progress"] > h3::before {
+.project-status-section[data-status="In Progress"] > h3::before,
+.project-status-section[data-status="In Progress"] > .project-status-header::before {
     content: "⏳";
     margin-right: 8px;
     font-size: 1.2em;
 }
-.project-status-section[data-status="Blocked"] > h3::before {
+.project-status-section[data-status="Blocked"] > h3::before,
+.project-status-section[data-status="Blocked"] > .project-status-header::before {
     content: "⛔";
     margin-right: 8px;
     font-size: 1.2em;
 }
-.project-status-section[data-status="Complete"] > h3::before {
+.project-status-section[data-status="Complete"] > h3::before,
+.project-status-section[data-status="Complete"] > .project-status-header::before {
     content: "✅";
     margin-right: 8px;
     font-size: 1.2em;
@@ -3157,6 +3200,12 @@ button.archive-btn.archived-active {
     .checklist-item {
         padding: 4px 2px;
         gap: 4px;
+    }
+    /* Drag handle: always visible on mobile for touch */
+    .checklist-drag-handle {
+        opacity: 0.8;
+        font-size: 1.3em;
+        padding: 0 6px 0 0;
     }
 
     /* Health indicators: stack */
@@ -4594,6 +4643,19 @@ input.location {
     background: rgba(139, 90, 43, 0.2);
     margin: 0 4px;
 }
+.notes-toolbar-spacer {
+    flex: 1;
+}
+.notes-format-toolbar button.notes-undo-redo,
+.zone-button.notes-undo-redo {
+    background: var(--accent-teal, #008080);
+    color: #fff;
+    border-color: rgba(0, 100, 100, 0.5);
+}
+.notes-format-toolbar button.notes-undo-redo:hover,
+.zone-button.notes-undo-redo:hover {
+    background: #006666;
+}
 .notes-toolbar-dropdown {
     position: relative;
     display: inline-block;
@@ -4643,6 +4705,74 @@ input.location {
         font-size: 0.8em;
         min-width: 32px;
     }
+}
+
+/* ── Notes More Menu ──────────────────────────────────────────────────── */
+#notesSection > .zone-header .zone-actions .zone-button {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* ── Location zone: left-aligned action buttons ───────────────────────── */
+#locationSection > .zone-header {
+    justify-content: flex-start;
+}
+#locationSection > .zone-header .zone-title {
+    flex-shrink: 0;
+    flex-grow: 0;
+}
+#locationSection > .zone-header .zone-actions.location-zone-actions {
+    flex: 1;
+    margin-left: 1em;
+}
+.location-actions-spacer {
+    flex: 1;
+}
+#locationSection > .zone-header .zone-toggle-icon {
+    margin-left: 1em;
+}
+
+.notes-more-menu {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    z-index: 100;
+    background: var(--parchment-light, #fdf5e6);
+    border: 2px solid var(--aged-brown-medium, #8b5a2b);
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    padding: 6px 0;
+    min-width: 200px;
+    flex-direction: column;
+}
+.notes-more-menu button {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 8px 14px;
+    border: none;
+    background: none;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.9em;
+    color: var(--text-color, #1a1208);
+    cursor: pointer;
+    text-align: left;
+    white-space: nowrap;
+    justify-content: flex-start;
+}
+.notes-more-menu button:hover {
+    background: rgba(139, 90, 43, 0.1);
+}
+.notes-more-menu button i,
+.notes-more-menu button .fa {
+    width: 18px;
+    text-align: center;
+    flex-shrink: 0;
 }
 
 

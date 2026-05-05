@@ -9,6 +9,31 @@
  */
 
 /**
+ * Load the complete tag list from settings. This is the single source of truth
+ * for building tag lists across the editor and sidebar. All code paths that add
+ * tags to chits must also register them in settings — there should never be
+ * tags on chits that aren't in this list.
+ * @returns {Promise<Array>} Array of { name, color, favorite, fontColor } objects
+ */
+async function loadAllTags() {
+  var tagObjects = [];
+  try {
+    var settings = await getCachedSettings();
+    var tags = settings.tags ? (typeof settings.tags === 'string' ? JSON.parse(settings.tags) : settings.tags) : [];
+    tagObjects = tags.map(function(t) {
+      return typeof t === 'string' ? { name: t, color: null, favorite: false } : t;
+    }).filter(function(t) { return t.name; });
+  } catch (e) {
+    console.error('loadAllTags: failed to load settings tags:', e);
+  }
+
+  // Filter out system tags
+  tagObjects = tagObjects.filter(function(t) { return !isSystemTag(t.name); });
+
+  return tagObjects;
+}
+
+/**
  * Build a nested tag tree from a flat array of tag objects.
  * @param {Array} flatTags - Array of { name, color, favorite } objects
  * @returns {Array} Tree nodes: { name, fullPath, color, favorite, children: [] }

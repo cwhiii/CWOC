@@ -1,0 +1,1 @@
+People filter now shows one person per line (no wrapping) and expands fully without internal scrolling. Removed the 9-item cap from CwocSidebarFilter so all tags/people show. Removed max-height from .cwoc-sidebar-filter-list. Merged Sharing filters into the Display group.

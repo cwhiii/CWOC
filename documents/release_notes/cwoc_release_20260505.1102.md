@@ -1,0 +1,1 @@
+Fixed send-to-chit feature: moved "📝→☑️" button to Notes zone header, fixed move operation error (re-serialize JSON fields before PUT), move no longer marks editor as unsaved (only destination is saved), undo properly restores source content silently, and "☑️→📝" now refreshes the rendered markdown view. Added white-space:nowrap to zone buttons.

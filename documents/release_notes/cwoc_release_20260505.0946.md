@@ -1,0 +1,1 @@
+Fixed chit import not registering imported tags in settings/sidebar filters. Backend now creates a settings row if one doesn't exist, and frontend now invalidates the settings cache after any import type.

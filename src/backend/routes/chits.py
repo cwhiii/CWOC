@@ -16,7 +16,7 @@ from fastapi import APIRouter, HTTPException, Query, Request, Response
 
 from src.backend.db import (
     DB_PATH, serialize_json_field, deserialize_json_field,
-    compute_system_tags, _build_export_envelope,
+    compute_system_tags, _build_export_envelope, ensure_tags_in_settings,
 )
 from src.backend.models import Chit, ImportRequest
 from src.backend.routes.audit import insert_audit_entry, compute_audit_diff, get_actor_from_request
@@ -136,6 +136,203 @@ def get_all_chits(request: Request):
             conn.close()
 
 
+def _search_filter_chits(chits_list, query_str):
+    """Filter a list of deserialized chit dicts using the boolean search expression parser.
+
+    This is the shared search logic used by both the global search endpoint and
+    the admin chit search. Supports #tags, &&, ||, !, parentheses, and implicit AND.
+
+    Args:
+        chits_list: list of chit dicts (already deserialized from DB)
+        query_str: the raw search query string
+
+    Returns:
+        list of matching chit dicts
+    """
+    if not query_str or not query_str.strip():
+        return chits_list
+
+    query_lower = query_str.strip().lower()
+
+    def _tokenize_search(q_str):
+        tokens = []
+        i = 0
+        while i < len(q_str):
+            if q_str[i] in ' \t':
+                i += 1
+            elif q_str[i] == '(':
+                tokens.append(('OP', '('))
+                i += 1
+            elif q_str[i] == ')':
+                tokens.append(('OP', ')'))
+                i += 1
+            elif q_str[i:i+2] == '&&':
+                tokens.append(('OP', '&&'))
+                i += 2
+            elif q_str[i:i+2] == '||':
+                tokens.append(('OP', '||'))
+                i += 2
+            elif q_str[i] == '!' and i + 1 < len(q_str) and q_str[i+1] in '#(':
+                tokens.append(('OP', '!'))
+                i += 1
+            elif q_str[i] == '!':
+                i += 1
+                while i < len(q_str) and q_str[i] in ' \t':
+                    i += 1
+                if i < len(q_str) and q_str[i] == '(':
+                    tokens.append(('OP', '!'))
+                elif i < len(q_str) and q_str[i] not in '()&|':
+                    j = i
+                    while j < len(q_str) and q_str[j] not in ' \t()&|':
+                        j += 1
+                    tokens.append(('OP', '!'))
+                    tokens.append(('TEXT', q_str[i:j]))
+                    i = j
+                else:
+                    tokens.append(('OP', '!'))
+            elif q_str[i] == '#':
+                j = i + 1
+                while j < len(q_str) and q_str[j] not in ' \t()&|!':
+                    j += 1
+                if j > i + 1:
+                    tokens.append(('TAG', q_str[i+1:j]))
+                i = j
+            else:
+                j = i
+                while j < len(q_str) and q_str[j] not in ' \t()&|!#':
+                    j += 1
+                if j > i:
+                    tokens.append(('TEXT', q_str[i:j]))
+                i = j
+        return tokens
+
+    def _parse_search_ast(tokens):
+        pos = [0]
+        def peek():
+            return tokens[pos[0]] if pos[0] < len(tokens) else None
+        def consume():
+            t = tokens[pos[0]] if pos[0] < len(tokens) else None
+            pos[0] += 1
+            return t
+        def parse_expr():
+            left = parse_and_expr()
+            while peek() and peek() == ('OP', '||'):
+                consume()
+                right = parse_and_expr()
+                left = ('or', left, right)
+            return left
+        def parse_and_expr():
+            left = parse_unary()
+            while True:
+                p = peek()
+                if p and p == ('OP', '&&'):
+                    consume()
+                    right = parse_unary()
+                    left = ('and', left, right)
+                elif p and p not in (('OP', '||'), ('OP', ')')):
+                    right = parse_unary()
+                    left = ('and', left, right)
+                else:
+                    break
+            return left
+        def parse_unary():
+            if peek() == ('OP', '!'):
+                consume()
+                operand = parse_unary()
+                return ('not', operand)
+            return parse_atom()
+        def parse_atom():
+            p = peek()
+            if p == ('OP', '('):
+                consume()
+                node = parse_expr()
+                if peek() == ('OP', ')'):
+                    consume()
+                return node
+            t = consume()
+            if t is None:
+                return ('text', '')
+            if t[0] == 'TAG':
+                return ('tag', t[1])
+            if t[0] == 'TEXT':
+                return ('text', t[1])
+            return ('text', '')
+        if not tokens:
+            return None
+        return parse_expr()
+
+    def _tag_matches_token(token, tag_list):
+        for t in tag_list:
+            if t == token or t.startswith(token + '/'):
+                return True
+            segments = t.split('/')
+            if token in segments:
+                return True
+        return False
+
+    def _text_matches(term, searchable_text):
+        return term in searchable_text
+
+    def _eval_search_ast(node, tag_list_lower, searchable_text):
+        if node is None:
+            return True
+        kind = node[0]
+        if kind == 'tag':
+            return _tag_matches_token(node[1], tag_list_lower)
+        elif kind == 'text':
+            return _text_matches(node[1], searchable_text)
+        elif kind == 'and':
+            return _eval_search_ast(node[1], tag_list_lower, searchable_text) and \
+                   _eval_search_ast(node[2], tag_list_lower, searchable_text)
+        elif kind == 'or':
+            return _eval_search_ast(node[1], tag_list_lower, searchable_text) or \
+                   _eval_search_ast(node[2], tag_list_lower, searchable_text)
+        elif kind == 'not':
+            return not _eval_search_ast(node[1], tag_list_lower, searchable_text)
+        return True
+
+    def _get_searchable_text(chit):
+        parts = []
+        for field_name in [
+            "title", "note", "status", "priority", "severity",
+            "location", "color", "id",
+            "start_datetime", "end_datetime", "due_datetime",
+            "created_datetime", "modified_datetime",
+            "email_from", "email_subject", "email_body_text",
+        ]:
+            v = chit.get(field_name)
+            if v:
+                parts.append(str(v).lower())
+        people = chit.get("people")
+        if people and isinstance(people, list):
+            parts.extend(str(p).lower() for p in people if p)
+        checklist = chit.get("checklist")
+        if checklist and isinstance(checklist, list):
+            for item in checklist:
+                if isinstance(item, dict) and item.get("text"):
+                    parts.append(str(item["text"]).lower())
+        tags = chit.get("tags")
+        if tags and isinstance(tags, list):
+            parts.extend(str(t).lower() for t in tags if t)
+        return ' '.join(parts)
+
+    # Parse and evaluate
+    search_tokens = _tokenize_search(query_lower)
+    search_ast = _parse_search_ast(search_tokens)
+    if search_ast is None:
+        return chits_list
+
+    results = []
+    for chit in chits_list:
+        tags = chit.get("tags")
+        tag_list_lower = [t.lower() for t in tags] if tags and isinstance(tags, list) else []
+        searchable_text = _get_searchable_text(chit)
+        if _eval_search_ast(search_ast, tag_list_lower, searchable_text):
+            results.append(chit)
+
+    return results
+
+
 @router.get("/api/chits/search")
 def search_chits(request: Request, q: Optional[str] = Query(None)):
     """Global search across all chit fields. Returns matching chits with matched field names.
@@ -148,45 +345,325 @@ def search_chits(request: Request, q: Optional[str] = Query(None)):
 
     query_str = q.strip()
     query_lower = query_str.lower()
+
+    # ── Unified boolean search expression parser ──────────────────────────────
+    # Supports full boolean logic on BOTH #tags and text terms:
+    #   #work && #urgent         → must have both tags
+    #   #work || #personal       → either tag
+    #   !#done                   → must NOT have tag
+    #   meeting || lunch         → text contains either word
+    #   el !hello                → contains "el" AND does NOT contain "hello"
+    #   !(hello)                 → does NOT contain "hello"
+    #   (#work || #personal) && !#done && meeting  → complex
+    #   Multiple terms without operators default to AND
+    #   #parent matches sub-tags (parent/child, etc.)
+
+    def _tokenize_search(q_str):
+        """Tokenize search query into operators, #tags, and text terms."""
+        tokens = []
+        i = 0
+        while i < len(q_str):
+            # Skip whitespace
+            if q_str[i] in ' \t':
+                i += 1
+            elif q_str[i] == '(':
+                tokens.append(('OP', '('))
+                i += 1
+            elif q_str[i] == ')':
+                tokens.append(('OP', ')'))
+                i += 1
+            elif q_str[i:i+2] == '&&':
+                tokens.append(('OP', '&&'))
+                i += 2
+            elif q_str[i:i+2] == '||':
+                tokens.append(('OP', '||'))
+                i += 2
+            elif q_str[i] == '!' and i + 1 < len(q_str) and q_str[i+1] in '#(':
+                # NOT operator before a tag or group
+                tokens.append(('OP', '!'))
+                i += 1
+            elif q_str[i] == '!':
+                # NOT operator before a text term — look ahead for the word
+                i += 1
+                # Skip whitespace after !
+                while i < len(q_str) and q_str[i] in ' \t':
+                    i += 1
+                if i < len(q_str) and q_str[i] == '(':
+                    # !(expr) — insert NOT then let ( be parsed next
+                    tokens.append(('OP', '!'))
+                elif i < len(q_str) and q_str[i] not in '()&|':
+                    # !word — read the word and wrap as NOT + TEXT
+                    j = i
+                    while j < len(q_str) and q_str[j] not in ' \t()&|':
+                        j += 1
+                    tokens.append(('OP', '!'))
+                    tokens.append(('TEXT', q_str[i:j]))
+                    i = j
+                else:
+                    tokens.append(('OP', '!'))
+            elif q_str[i] == '#':
+                # Tag token
+                j = i + 1
+                while j < len(q_str) and q_str[j] not in ' \t()&|!':
+                    j += 1
+                if j > i + 1:
+                    tokens.append(('TAG', q_str[i+1:j]))
+                i = j
+            else:
+                # Text term — read until operator or whitespace
+                j = i
+                while j < len(q_str) and q_str[j] not in ' \t()&|!#':
+                    j += 1
+                if j > i:
+                    tokens.append(('TEXT', q_str[i:j]))
+                i = j
+        return tokens
+
+    def _parse_search_ast(tokens):
+        """Parse tokenized search into an AST.
+        Grammar:
+            expr     → and_expr ( '||' and_expr )*
+            and_expr → unary ( ('&&' | implicit) unary )*
+            unary    → '!' unary | atom
+            atom     → '(' expr ')' | TAG | TEXT
+        Implicit AND: adjacent terms without operator.
+        """
+        pos = [0]
+
+        def peek():
+            return tokens[pos[0]] if pos[0] < len(tokens) else None
+
+        def consume():
+            t = tokens[pos[0]] if pos[0] < len(tokens) else None
+            pos[0] += 1
+            return t
+
+        def parse_expr():
+            left = parse_and_expr()
+            while peek() and peek() == ('OP', '||'):
+                consume()  # eat ||
+                right = parse_and_expr()
+                left = ('or', left, right)
+            return left
+
+        def parse_and_expr():
+            left = parse_unary()
+            while True:
+                p = peek()
+                if p and p == ('OP', '&&'):
+                    consume()  # eat &&
+                    right = parse_unary()
+                    left = ('and', left, right)
+                elif p and p not in (('OP', '||'), ('OP', ')')):
+                    # Implicit AND
+                    right = parse_unary()
+                    left = ('and', left, right)
+                else:
+                    break
+            return left
+
+        def parse_unary():
+            if peek() == ('OP', '!'):
+                consume()  # eat !
+                operand = parse_unary()
+                return ('not', operand)
+            return parse_atom()
+
+        def parse_atom():
+            p = peek()
+            if p == ('OP', '('):
+                consume()  # eat (
+                node = parse_expr()
+                if peek() == ('OP', ')'):
+                    consume()  # eat )
+                return node
+            t = consume()
+            if t is None:
+                return ('text', '')
+            if t[0] == 'TAG':
+                return ('tag', t[1])
+            if t[0] == 'TEXT':
+                return ('text', t[1])
+            # Shouldn't reach here, but fallback
+            return ('text', '')
+
+        if not tokens:
+            return None
+        result = parse_expr()
+        return result
+
+    def _tag_matches_token(token, tag_list):
+        """Check if any tag in the list matches the token (with hierarchy)."""
+        for t in tag_list:
+            if t == token or t.startswith(token + '/'):
+                return True
+            segments = t.split('/')
+            if token in segments:
+                return True
+        return False
+
+    def _text_matches(term, searchable_text):
+        """Check if a text term appears in the chit's searchable text."""
+        return term in searchable_text
+
+    def _eval_search_ast(node, tag_list_lower, searchable_text):
+        """Evaluate a search AST against a chit's tags and text content."""
+        if node is None:
+            return True
+        kind = node[0]
+        if kind == 'tag':
+            return _tag_matches_token(node[1], tag_list_lower)
+        elif kind == 'text':
+            return _text_matches(node[1], searchable_text)
+        elif kind == 'and':
+            return _eval_search_ast(node[1], tag_list_lower, searchable_text) and \
+                   _eval_search_ast(node[2], tag_list_lower, searchable_text)
+        elif kind == 'or':
+            return _eval_search_ast(node[1], tag_list_lower, searchable_text) or \
+                   _eval_search_ast(node[2], tag_list_lower, searchable_text)
+        elif kind == 'not':
+            return not _eval_search_ast(node[1], tag_list_lower, searchable_text)
+        return True
+
+    def _get_searchable_text(chit):
+        """Build a single lowercase string of all searchable text fields."""
+        parts = []
+        for field_name in [
+            "title", "note", "status", "priority", "severity",
+            "location", "color",
+            "start_datetime", "end_datetime", "due_datetime",
+            "created_datetime", "modified_datetime",
+            "email_from", "email_subject", "email_body_text",
+        ]:
+            v = chit.get(field_name)
+            if v:
+                parts.append(str(v).lower())
+        # People
+        people = chit.get("people")
+        if people and isinstance(people, list):
+            parts.extend(str(p).lower() for p in people if p)
+        # Checklist items
+        checklist = chit.get("checklist")
+        if checklist and isinstance(checklist, list):
+            for item in checklist:
+                if isinstance(item, dict) and item.get("text"):
+                    parts.append(str(item["text"]).lower())
+        # Alerts
+        alerts = chit.get("alerts")
+        if alerts and isinstance(alerts, list):
+            for alert in alerts:
+                if isinstance(alert, dict):
+                    for k in ["description", "label", "name", "type"]:
+                        v = alert.get(k)
+                        if v:
+                            parts.append(str(v).lower())
+        # Tags as text (so text search can find tag names too)
+        tags = chit.get("tags")
+        if tags and isinstance(tags, list):
+            parts.extend(str(t).lower() for t in tags if t)
+        return ' '.join(parts)
+
+    def _collect_matched_fields(chit, search_ast):
+        """Determine which fields matched for display purposes."""
+        matched = []
+        text_terms = _collect_positive_text_terms(search_ast)
+        tag_terms = _collect_positive_tag_terms(search_ast)
+
+        if tag_terms:
+            tags = chit.get("tags")
+            tag_list_lower = [t.lower() for t in tags] if tags and isinstance(tags, list) else []
+            for token in tag_terms:
+                if _tag_matches_token(token, tag_list_lower):
+                    if "tags" not in matched:
+                        matched.append("tags")
+                    break
+
+        if text_terms:
+            for field_name in [
+                "title", "note", "status", "priority", "severity",
+                "location", "color",
+                "start_datetime", "end_datetime", "due_datetime",
+                "created_datetime", "modified_datetime",
+                "email_from", "email_subject", "email_body_text",
+            ]:
+                value = chit.get(field_name)
+                if value:
+                    val_lower = str(value).lower()
+                    if any(t in val_lower for t in text_terms):
+                        matched.append(field_name)
+
+            people = chit.get("people")
+            if people and isinstance(people, list):
+                for person in people:
+                    if isinstance(person, str) and any(t in person.lower() for t in text_terms):
+                        matched.append("people")
+                        break
+
+            checklist = chit.get("checklist")
+            if checklist and isinstance(checklist, list):
+                for item in checklist:
+                    if isinstance(item, dict):
+                        item_text = item.get("text", "")
+                        if item_text and any(t in str(item_text).lower() for t in text_terms):
+                            matched.append("checklist")
+                            break
+
+            alerts = chit.get("alerts")
+            if alerts and isinstance(alerts, list):
+                for alert in alerts:
+                    if isinstance(alert, dict):
+                        for alert_key in ["description", "label", "name", "type"]:
+                            alert_val = alert.get(alert_key, "")
+                            if alert_val and any(t in str(alert_val).lower() for t in text_terms):
+                                matched.append("alerts")
+                                break
+                        if "alerts" in matched:
+                            break
+
+        return matched if matched else ["full_text"]
+
+    def _collect_positive_text_terms(node):
+        """Collect all non-negated text terms from the AST for highlighting."""
+        if node is None:
+            return []
+        kind = node[0]
+        if kind == 'text':
+            return [node[1]]
+        elif kind == 'and':
+            return _collect_positive_text_terms(node[1]) + _collect_positive_text_terms(node[2])
+        elif kind == 'or':
+            return _collect_positive_text_terms(node[1]) + _collect_positive_text_terms(node[2])
+        elif kind == 'not':
+            return []  # Don't include negated terms
+        return []
+
+    def _collect_positive_tag_terms(node):
+        """Collect all non-negated tag terms from the AST."""
+        if node is None:
+            return []
+        kind = node[0]
+        if kind == 'tag':
+            return [node[1]]
+        elif kind == 'and':
+            return _collect_positive_tag_terms(node[1]) + _collect_positive_tag_terms(node[2])
+        elif kind == 'or':
+            return _collect_positive_tag_terms(node[1]) + _collect_positive_tag_terms(node[2])
+        elif kind == 'not':
+            return []  # Don't include negated terms
+        return []
+
+    # Parse the query into a unified AST
+    search_tokens = _tokenize_search(query_lower)
+    search_ast = _parse_search_ast(search_tokens)
+    has_search_expr = search_ast is not None
+
     conn = None
     try:
         user_id = request.state.user_id
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
 
-        # Try FTS5 search first
-        fts_ids = None
-        try:
-            # Check if FTS5 table exists
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='chits_fts'")
-            if cursor.fetchone():
-                # Escape FTS5 special characters and build query
-                fts_query = query_str.replace('"', '""')
-                cursor.execute(
-                    """SELECT rowid, rank FROM chits_fts
-                       WHERE chits_fts MATCH ?
-                       ORDER BY rank""",
-                    (f'"{fts_query}"',),
-                )
-                fts_rows = cursor.fetchall()
-                if fts_rows:
-                    # Get the chit IDs from rowids
-                    rowid_rank = {row[0]: row[1] for row in fts_rows}
-                    placeholders = ",".join("?" for _ in rowid_rank)
-                    cursor.execute(
-                        f"SELECT rowid, id FROM chits WHERE rowid IN ({placeholders}) "
-                        f"AND (deleted = 0 OR deleted IS NULL) AND owner_id = ?",
-                        list(rowid_rank.keys()) + [user_id],
-                    )
-                    fts_ids = {}
-                    for row in cursor.fetchall():
-                        fts_ids[row[1]] = rowid_rank.get(row[0], 0)
-                    logger.debug(f"FTS5 search found {len(fts_ids)} results for '{query_str}'")
-        except Exception as fts_err:
-            logger.debug(f"FTS5 search unavailable, falling back to LIKE: {fts_err}")
-            fts_ids = None
-
-        # Fetch all non-deleted chits for this user (for field-level matching)
+        # Fetch all non-deleted chits for this user
         cursor.execute("SELECT * FROM chits WHERE (deleted = 0 OR deleted IS NULL) AND owner_id = ?", (user_id,))
         results = []
 
@@ -225,74 +702,20 @@ def search_chits(request: Request, q: Optional[str] = Query(None)):
 
             matched_fields = []
 
-            # If FTS5 found this chit, it's a match — determine which fields matched
-            is_fts_match = fts_ids is not None and chit["id"] in fts_ids
+            # Evaluate the unified boolean search expression
+            if has_search_expr:
+                tags = chit.get("tags")
+                tag_list_lower = [t.lower() for t in tags] if tags and isinstance(tags, list) else []
+                searchable_text = _get_searchable_text(chit)
 
-            # Simple string fields
-            for field_name in [
-                "title", "note", "status", "priority", "severity",
-                "location", "color",
-                "start_datetime", "end_datetime", "due_datetime",
-                "created_datetime", "modified_datetime",
-                "email_from", "email_subject", "email_body_text",
-            ]:
-                value = chit.get(field_name)
-                if value and query_lower in str(value).lower():
-                    matched_fields.append(field_name)
+                if not _eval_search_ast(search_ast, tag_list_lower, searchable_text):
+                    continue
 
-            # Tags — check each tag name individually
-            tags = chit.get("tags")
-            if tags and isinstance(tags, list):
-                for tag in tags:
-                    if isinstance(tag, str) and query_lower in tag.lower():
-                        matched_fields.append("tags")
-                        break
+                matched_fields = _collect_matched_fields(chit, search_ast)
 
-            # People — check each person individually
-            people = chit.get("people")
-            if people and isinstance(people, list):
-                for person in people:
-                    if isinstance(person, str) and query_lower in person.lower():
-                        matched_fields.append("people")
-                        break
-
-            # Checklist — check each item's text field
-            checklist = chit.get("checklist")
-            if checklist and isinstance(checklist, list):
-                for item in checklist:
-                    if isinstance(item, dict):
-                        item_text = item.get("text", "")
-                        if item_text and query_lower in str(item_text).lower():
-                            matched_fields.append("checklist")
-                            break
-
-            # Alerts — check each alert's description/label fields
-            alerts = chit.get("alerts")
-            if alerts and isinstance(alerts, list):
-                for alert in alerts:
-                    if isinstance(alert, dict):
-                        for alert_key in ["description", "label", "name", "type"]:
-                            alert_val = alert.get(alert_key, "")
-                            if alert_val and query_lower in str(alert_val).lower():
-                                matched_fields.append("alerts")
-                                break
-                        if "alerts" in matched_fields:
-                            break
-
-            # Include if matched by FTS5 or by field-level LIKE search
-            if matched_fields or is_fts_match:
-                if not matched_fields and is_fts_match:
-                    matched_fields = ["full_text"]
-                rank = fts_ids.get(chit["id"], 0) if fts_ids else 0
-                results.append({"chit": chit, "matched_fields": matched_fields, "_rank": rank})
-
-        # Sort by FTS5 rank (lower = more relevant) when available
-        if fts_ids is not None:
-            results.sort(key=lambda r: r.get("_rank", 0))
-
-        # Remove internal rank field before returning
-        for r in results:
-            r.pop("_rank", None)
+            # Include this chit in results
+            if matched_fields:
+                results.append({"chit": chit, "matched_fields": matched_fields})
 
         # Enrich with assigned_to_display_name
         _enrich_assigned_to_display_names(cursor, [r["chit"] for r in results])
@@ -992,6 +1415,50 @@ def delete_chit(chit_id: str, request: Request):
             conn.close()
 
 
+@router.patch("/api/chits/{chit_id}/checklist")
+def patch_chit_checklist(chit_id: str, body: dict, request: Request):
+    """Save only the checklist field of a chit (auto-save).
+    Body: { "checklist": [...] }
+    Does NOT update modified_datetime to avoid triggering sync conflicts.
+    """
+    conn = None
+    try:
+        user_id = request.state.user_id
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        # Verify ownership or manager-level share access
+        cursor.execute("SELECT owner_id, shares FROM chits WHERE id = ?", (chit_id,))
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Chit not found")
+        owner_id = row["owner_id"]
+        has_access = (owner_id == user_id)
+        if not has_access:
+            shares = deserialize_json_field(row["shares"]) or []
+            has_access = any(
+                s.get("user_id") == user_id and s.get("role") in ("manager", "editor")
+                for s in shares
+            )
+        if not has_access:
+            raise HTTPException(status_code=404, detail="Chit not found")
+        checklist_data = body.get("checklist", [])
+        cursor.execute(
+            "UPDATE chits SET checklist = ? WHERE id = ?",
+            (serialize_json_field(checklist_data), chit_id)
+        )
+        conn.commit()
+        return {"message": "Checklist saved"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error patching checklist: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
+
+
 @router.patch("/api/chits/{chit_id}/recurrence-exceptions")
 def patch_recurrence_exceptions(chit_id: str, body: dict, request: Request):
     """Add or update a recurrence exception on a parent chit.
@@ -1352,6 +1819,24 @@ def import_chits(req: ImportRequest, request: Request):
             imported += 1
 
         conn.commit()
+        
+        # Merge any new tags from imported chits into the user's settings tag list
+        try:
+            all_imported_tags = []
+            for chit in records:
+                chit_tags = chit.get("tags") or []
+                if isinstance(chit_tags, str):
+                    try:
+                        chit_tags = json.loads(chit_tags)
+                    except (json.JSONDecodeError, TypeError):
+                        chit_tags = []
+                for tag_name in chit_tags:
+                    if tag_name and isinstance(tag_name, str):
+                        all_imported_tags.append(tag_name)
+            ensure_tags_in_settings(conn, user_id, all_imported_tags)
+        except Exception as e:
+            logger.warning(f"Could not merge imported tags into settings: {str(e)}")
+
         return {"summary": {"imported": imported}}
     except HTTPException:
         raise
@@ -1910,6 +2395,49 @@ def import_all(req: ImportRequest, request: Request):
         summary["alerts_imported"] = alerts_count
 
         conn.commit()
+
+        # Merge any new tags from imported chits into the user's settings tag list
+        try:
+            cur.execute("SELECT tags FROM settings WHERE user_id = ?", (user_id,))
+            settings_row = cur.fetchone()
+            existing_tags = []
+            if settings_row and settings_row[0]:
+                existing_tags = deserialize_json_field(settings_row[0]) or []
+
+            existing_tag_names = set()
+            for t in existing_tags:
+                if isinstance(t, str):
+                    existing_tag_names.add(t)
+                elif isinstance(t, dict) and t.get("name"):
+                    existing_tag_names.add(t["name"])
+
+            new_tags_added = False
+            for chit in payload.get("chits", []):
+                chit_tags = chit.get("tags") or []
+                if isinstance(chit_tags, str):
+                    try:
+                        chit_tags = json.loads(chit_tags)
+                    except (json.JSONDecodeError, TypeError):
+                        chit_tags = []
+                for tag_name in chit_tags:
+                    if not tag_name or not isinstance(tag_name, str):
+                        continue
+                    if tag_name.startswith("CWOC_System/"):
+                        continue
+                    if tag_name not in existing_tag_names:
+                        existing_tag_names.add(tag_name)
+                        existing_tags.append({"name": tag_name, "color": None, "favorite": False})
+                        new_tags_added = True
+
+            if new_tags_added:
+                cur.execute(
+                    "UPDATE settings SET tags = ? WHERE user_id = ?",
+                    (serialize_json_field(existing_tags), user_id)
+                )
+                conn.commit()
+        except Exception as e:
+            logger.warning(f"Could not merge imported tags into settings: {str(e)}")
+
         return {"summary": summary}
     except HTTPException:
         raise

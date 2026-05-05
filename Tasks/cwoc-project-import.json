@@ -1,0 +1,196 @@
+{
+  "type": "chits",
+  "version": "20260505.0000",
+  "exported_at": "2026-05-05T00:00:00Z",
+  "instance_id": "import-from-todo",
+  "data": [
+    {
+      "title": "CWOC — Tasks & Roadmap",
+      "note": "Master project tracking all CWOC development tasks and roadmap items.\n\nCompleted items are in done.md. Deferred items in parking_lot.md. Declined in path_not_traveled.md.",
+      "tags": ["Projects/CWOC"],
+      "status": "todo",
+      "is_project_master": true,
+      "child_chits": []
+    },
+    {
+      "title": "Top Priorities",
+      "tags": ["Projects/CWOC"],
+      "status": "todo",
+      "checklist": [
+        { "text": "OAuth2 support", "checked": false },
+        { "text": "New message arrival toast notifications", "checked": false },
+        { "text": "Data Management Overhaul — update to handle new email fields, then execute", "checked": false }
+      ]
+    },
+    {
+      "title": "Known Bugs",
+      "tags": ["Projects/CWOC"],
+      "status": "todo",
+      "checklist": [
+        { "text": "Habits mode: completion value changes don't animate (just instant-swaps, hard to follow)", "checked": false },
+        { "text": "Newest emails not showing at the top of the page", "checked": false },
+        { "text": "Email account nickname not showing on cards or sidebar", "checked": false }
+      ]
+    },
+    {
+      "title": "Email",
+      "tags": ["Projects/CWOC"],
+      "status": "todo",
+      "checklist": [
+        { "text": "Make the currently-hovered email much more visually obvious", "checked": false },
+        { "text": "Explore attaching zones (or entire chit data) as files to outgoing emails", "checked": false },
+        { "text": "When hitting send and save on email zone, save/exit buttons don't update to reflect save", "checked": false }
+      ]
+    },
+    {
+      "title": "Editor & Markdown",
+      "tags": ["Projects/CWOC"],
+      "status": "todo",
+      "checklist": [
+        { "text": "Find all editors that accept markdown and add hotkey support (bold, italic, links, etc.)", "checked": false },
+        { "text": "Multi-line checklist items", "checked": false },
+        { "text": "Dependencies (chits that must be completed first)", "checked": false },
+        { "text": "Add a note in the README and Help that markdown is supported throughout the app", "checked": false },
+        { "text": "Ensure double * for bold and _ for italics exclusively", "checked": false },
+        { "text": "Obsidian-like markdown live preview", "checked": false }
+      ]
+    },
+    {
+      "title": "Exporting & Import",
+      "tags": ["Projects/CWOC"],
+      "status": "todo",
+      "checklist": [
+        { "text": "Update and implement .ics export", "checked": false },
+        { "text": "Export chit as markdown with frontmatter (per chit from editor + data export tool)", "checked": false },
+        { "text": "Export chit as .ics calendar file (per chit from editor + data export tool)", "checked": false },
+        { "text": "Per-user or all-users option for exports", "checked": false },
+        { "text": "Import calendar data from Google, Apple, Outlook via .ics (RFC 5545) — SUMMARY→title, DESCRIPTION→note, DTSTART/DTEND→dates, LOCATION→location, CATEGORIES→tags, PRIORITY mapping, RRULE mapping, VTODO support, duplicate detection", "checked": false }
+      ]
+    },
+    {
+      "title": "Calendar & Scheduling",
+      "tags": ["Projects/CWOC"],
+      "status": "todo",
+      "checklist": [
+        { "text": "Show alarms/notifications/timers on calendar view", "checked": false },
+        { "text": "Jitter for reminders (±X minutes, configurable globally and per-chit)", "checked": false },
+        { "text": "Alarm: chained variable-length intervals (5 min, then 4, then 4…)", "checked": false },
+        { "text": "Declined events view", "checked": false },
+        { "text": "Time zones support on chits with dates", "checked": false }
+      ]
+    },
+    {
+      "title": "People & Contacts",
+      "tags": ["Projects/CWOC"],
+      "status": "todo",
+      "checklist": [
+        { "text": "Birthday/anniversary dates on contacts should generate annual calendar entries", "checked": false },
+        { "text": "Checkbox per date (default on) to show on calendar", "checked": false },
+        { "text": "Display the person's chip on the all-day section for that date each year", "checked": false },
+        { "text": "Searches should find birthday/anniversary entries correctly across years", "checked": false }
+      ]
+    },
+    {
+      "title": "Notes",
+      "tags": ["Projects/CWOC"],
+      "status": "todo",
+      "checklist": [
+        { "text": "Notes links: auto-fill dropdown using name of other chit", "checked": false },
+        { "text": "Side-by-side notes view (2 chits for copy/paste/reference)", "checked": false },
+        { "text": "Auto import/export notes as Markdown to sync with Obsidian", "checked": false },
+        { "text": "Note-to-markdown export option, per chit or all", "checked": false }
+      ]
+    },
+    {
+      "title": "Notifications & Alerts",
+      "tags": ["Projects/CWOC"],
+      "status": "todo",
+      "checklist": [
+        { "text": "On a notification, add a 'bump' button with unit options (tomorrow, next week, next month) to push start/due time out", "checked": false },
+        { "text": "Proximity-based notifications (your location, someone else's)", "checked": false }
+      ]
+    },
+    {
+      "title": "Templates",
+      "tags": ["Projects/CWOC"],
+      "status": "todo",
+      "checklist": [
+        { "text": "Save a chit as a template, auto-populate new chits from it", "checked": false },
+        { "text": "New editor mode: Shift+click on new chit button, 'Make this a template' in editor, Shift+K hotkey", "checked": false }
+      ]
+    },
+    {
+      "title": "UI & Interaction",
+      "tags": ["Projects/CWOC"],
+      "status": "todo",
+      "checklist": [
+        { "text": "Use consistent system for modals (same styling, same in/out animation)", "checked": false },
+        { "text": "Right-click everywhere Shift+click is supported", "checked": false },
+        { "text": "Rolling circular chits view (next task in project, repeat when done)", "checked": false },
+        { "text": "Automatic context switching (hide chits by time schedule + tags) via rules", "checked": false },
+        { "text": "Rules engine: 'new from X' make green", "checked": false }
+      ]
+    },
+    {
+      "title": "Health Indicators (Enhancements)",
+      "tags": ["Projects/CWOC"],
+      "status": "todo",
+      "checklist": [
+        { "text": "Symptom tracker (multi-select) with custom symptom list in settings", "checked": false },
+        { "text": "Cycle tracking (show/hide based on gender setting)", "checked": false }
+      ]
+    },
+    {
+      "title": "Large / Complex",
+      "tags": ["Projects/CWOC"],
+      "status": "todo",
+      "checklist": [
+        { "text": "HST Time Format: When 'HST' is selected, ALL times display in HST throughout the tool", "checked": false },
+        { "text": "HST: Calendar hour columns, event times, tooltips, quick edit, editor — all use HST", "checked": false },
+        { "text": "HST: Displays as plain number (e.g. '42.5 sd') — no progress bar except Clock modal", "checked": false },
+        { "text": "HST: Views show 100 HST hours instead of normal hours", "checked": false },
+        { "text": "HST: Span options become 1, 2, 3, 4, 5, 10 HST hours", "checked": false },
+        { "text": "E2E encryption", "checked": false },
+        { "text": "Local desktop storage (cookies?) with server sync", "checked": false },
+        { "text": "Phone app with offline store + sync", "checked": false },
+        { "text": "Establish external access path (Home Assistant? Secured reverse proxy? Mobile platform?)", "checked": false },
+        { "text": "Security audit", "checked": false }
+      ]
+    },
+    {
+      "title": "Long-term / Dream",
+      "tags": ["Projects/CWOC"],
+      "status": "todo",
+      "checklist": [
+        { "text": "Email integration (prototype exists) — MVP in progress via spec", "checked": false },
+        { "text": "Home Assistant integration", "checked": false },
+        { "text": "Obsidian sync (auto-export notes as Markdown)", "checked": false },
+        { "text": "Object & Inventory Tracking zone", "checked": false },
+        { "text": "Reports system", "checked": false },
+        { "text": "Automations (if this, then that)", "checked": false },
+        { "text": "Appointments (from other people)", "checked": false },
+        { "text": "Notification based on start time + location + drive time", "checked": false },
+        { "text": "Biometric triggers (steps, heart rate, cycle state)", "checked": false },
+        { "text": "Auto backup & export to other machine", "checked": false }
+      ]
+    },
+    {
+      "title": "Decisions Needed",
+      "tags": ["Projects/CWOC"],
+      "status": "todo",
+      "checklist": [
+        { "text": "Event by quantity of TIME vs chronological (snooze slides the event until started)", "checked": false },
+        { "text": "Chit groups (like Google calendars) — just use tags? Maybe a checkbox to 'use as group'?", "checked": false },
+        { "text": "Attaching zone data as email attachments — entire chit or individual zones?", "checked": false }
+      ]
+    },
+    {
+      "title": "Manual Tasks",
+      "tags": ["Projects/CWOC"],
+      "status": "todo",
+      "checklist": [
+        { "text": "Screenshot and video walkthrough of the app", "checked": false }
+      ]
+    }
+  ]
+}

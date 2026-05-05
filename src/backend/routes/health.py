@@ -268,6 +268,11 @@ async def profile_page():
 async def user_admin_page():
     return FileResponse("/app/src/frontend/html/user-admin.html")
 
+# Admin Chit Tool route
+@router.get("/admin-chits")
+async def admin_chits_page():
+    return FileResponse("/app/src/frontend/html/admin-chits.html")
+
 # Editor route to serve editor.html and handle chit data
 @router.get("/editor")
 async def editor(id: str = None):

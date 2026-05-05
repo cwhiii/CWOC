@@ -116,6 +116,31 @@ function onDueCompleteToggle() {
 /** Sync the Due Complete checkbox when status dropdown changes */
 function onStatusChange() {
   const statusSel = document.getElementById('status');
+
+  // Prevent clearing status on a child chit (it would orphan it from the project)
+  if (statusSel && !statusSel.value && window._cwocParentProjectId) {
+    cwocConfirm(
+      'Removing the status will also remove this chit from its project.\n\nContinue?',
+      { title: 'Remove Status', confirmLabel: 'Remove & Unlink', danger: true }
+    ).then(function(ok) {
+      if (ok) {
+        // Clear the project membership
+        window._pendingProjectRemoval = { projectId: window._cwocParentProjectId, chitId: chitId };
+        window._cwocParentProjectId = '';
+        var label = document.getElementById('moveToProjectLabel');
+        if (label) label.textContent = 'Add to Project…';
+        var removeBtn = document.getElementById('removeFromProjectBtn');
+        if (removeBtn) removeBtn.style.display = 'none';
+        setSaveButtonUnsaved();
+        cwocToast('Status cleared — project removal pending on save.', 'info');
+      } else {
+        // Revert to ToDo
+        statusSel.value = 'ToDo';
+      }
+    });
+    return;
+  }
+
   const cb = document.getElementById('dueComplete');
   if (cb) cb.checked = (statusSel && statusSel.value === 'Complete');
   setSaveButtonUnsaved();

@@ -515,6 +515,17 @@
                 .setting-group.collapsed > h3::before {
                     content: '▶';
                 }
+                /* Dependent Apps uses per-item toggle buttons, no group-level collapse */
+                #network-access-block > h3 {
+                    cursor: default;
+                }
+                #network-access-block > h3::before {
+                    display: none;
+                }
+                /* Sub-headers inside Dependent Apps are button-driven, hide their arrows */
+                #network-access-block .setting-subheader::before {
+                    display: none;
+                }
                 .setting-group-body {
                     /* wrapper for all content below h3 */
                 }
@@ -730,6 +741,105 @@
                 .log-error { color: #b91c1c; }
                 .log-step { color: #1e5a99; }
                 .log-hint { color: #7b2d8b; }
+
+                /* ── Arrange Views Modal ── */
+                .arrange-views-grid {
+                    display: flex;
+                    flex-wrap: nowrap;
+                    gap: 8px;
+                    justify-content: center;
+                    padding: 12px;
+                    background: #fff8e1;
+                    border: 1px solid #8b5a2b;
+                    border-radius: 5px;
+                    min-height: 60px;
+                }
+                .arrange-views-grid .view-tab-item {
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 4px;
+                    padding: 8px 12px;
+                    background-color: #e8d5b7;
+                    border: 1px solid #5a3f2a;
+                    border-radius: 3px;
+                    font-family: 'Lora', Georgia, serif;
+                    font-weight: bold;
+                    font-size: 0.9em;
+                    cursor: move;
+                    user-select: none;
+                    white-space: nowrap;
+                    flex-shrink: 0;
+                    transition: opacity 0.15s, transform 0.1s;
+                }
+                .arrange-views-grid .view-tab-item:active {
+                    opacity: 0.7;
+                    transform: scale(0.95);
+                }
+                .arrange-views-grid .view-tab-item.dragging {
+                    opacity: 0.4;
+                }
+                .arrange-views-grid .view-tab-item img {
+                    height: 1.5em;
+                    flex-shrink: 0;
+                }
+                .arrange-views-grid .view-tab-item i {
+                    font-size: 1.3em;
+                    color: #6b4e31;
+                }
+                .arrange-views-hidden-label {
+                    margin-top: 12px;
+                    font-size: 0.85em;
+                    color: #6b4e31;
+                    font-weight: bold;
+                    text-align: left;
+                    padding-left: 4px;
+                }
+                .arrange-views-hidden {
+                    display: flex;
+                    flex-wrap: nowrap;
+                    gap: 8px;
+                    justify-content: center;
+                    padding: 12px;
+                    background: #f0e4d0;
+                    border: 1px dashed #8b5a2b;
+                    border-radius: 5px;
+                    min-height: 48px;
+                    opacity: 0.6;
+                }
+                .arrange-views-hidden:empty::after {
+                    content: "Drag tabs here to hide them";
+                    font-style: italic;
+                    color: #8b5a2b;
+                    opacity: 0.6;
+                    align-self: center;
+                }
+                .arrange-views-hidden .view-tab-item {
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 4px;
+                    padding: 8px 12px;
+                    background-color: #e8d5b7;
+                    border: 1px solid #5a3f2a;
+                    border-radius: 3px;
+                    font-family: 'Lora', Georgia, serif;
+                    font-weight: bold;
+                    font-size: 0.9em;
+                    cursor: move;
+                    user-select: none;
+                    white-space: nowrap;
+                    flex-shrink: 0;
+                    transition: opacity 0.15s, transform 0.1s;
+                }
+                .arrange-views-hidden .view-tab-item img {
+                    height: 1.5em;
+                    flex-shrink: 0;
+                }
+                .arrange-views-hidden .view-tab-item i {
+                    font-size: 1.3em;
+                    color: #6b4e31;
+                }
             </style>
         </head>
         <body data-page-title="Settings" data-page-icon="⚙️" data-hide-nav="settings">
@@ -944,6 +1054,7 @@
 
                         <label class="setting-subheader">Chit Options</label>
                         <div class="checkbox-list">
+                            <label><input type="checkbox" id="checklist-autosave-toggle" name="checklist_autosave" checked /> ⚡ Checklist Auto-Save</label>
                             <label><input type="checkbox" id="fade-past" name="fade_past_chits" checked /> 📜 Fade Past Chits</label>
                             <label><input type="checkbox" id="highlight-overdue" name="highlight_overdue_chits" checked onchange="_onHighlightToggle()" /> 🚨 Highlight Overdue</label>
                             <label><input type="checkbox" id="highlight-blocked" name="highlight_blocked_chits" checked onchange="_onHighlightToggle()" /> 🚧 Highlight Blocked</label>
@@ -952,6 +1063,10 @@
                             <label><input type="checkbox" id="prefer-google-maps" name="prefer_google_maps" /> 🗺️ Prefer Google for Maps</label>
                             <label><input type="checkbox" id="hide-declined-toggle" /> 🚫 Hide declined chits</label>
                         </div>
+
+                        <label class="setting-subheader">View Order</label>
+                        <button type="button" class="standard-button" style="width:100%;" onclick="_openArrangeViewsModal()">📋 Arrange Views</button>
+                        <p class="setting-hint">Drag to reorder the tab bar on the dashboard.</p>
                     </div>
                     <div class="setting-group">
                         <h3>🔁 Habits</h3>
@@ -1113,6 +1228,7 @@
                         <div class="setting-group">
                             <h3>Admin</h3>
                             <button onclick="window.location.href='/user-admin'" class="standard-button" style="width:100%;">👥 Manage Users</button>
+                            <button onclick="window.location.href='/admin-chits'" class="standard-button" style="width:100%;margin-top:8px;">🔧 Chit Manager</button>
 
                             <label class="setting-subheader" style="margin-top:14px;">Instance Name</label>
                             <input type="text" id="instance-name-input" placeholder="e.g. The Holeman Household" style="width:100%;box-sizing:border-box;font-family:'Lora',Georgia,serif;font-size:0.95em;border:1px solid #8b5a2b;border-radius:5px;padding:8px;background:#f5e6cc;margin-bottom:10px;" />
@@ -1409,43 +1525,74 @@
                                 </div>
 
                             </div><!-- /ntfy-config-body -->
-                        </div>
-                        <div class="setting-group" id="ha-settings-group">
-                            <h3>🏠 Home Assistant</h3>
 
-                            <label class="setting-subheader">🔗 Connection</label>
-                            <div class="setting-inline">
-                                <label for="ha-base-url">HA Base URL</label>
-                                <input type="text" id="ha-base-url" placeholder="http://192.168.1.100:8123" style="flex:1;min-width:0;" />
+                            <!-- ── Home Assistant ── -->
+
+                            <!-- HA header — button and help icon -->
+                            <div class="setting-subheader" id="ha-settings-group" style="display:flex;align-items:center;gap:8px;margin-top:16px;">
+                                <button type="button" id="ha-enable-btn" class="zone-button"
+                                        onclick="_haToggleSection()"
+                                        style="cursor:pointer;font-size:14px;padding:6px 14px;font-family:Lora,Georgia,serif;">
+                                    Home Assistant &nbsp;<span id="ha-header-icon">⚪</span>
+                                </button>
+                                <i class="fa-regular fa-circle-question"
+                                   onclick="document.getElementById('ha-help').style.display = document.getElementById('ha-help').style.display === 'none' ? '' : 'none';"
+                                   style="cursor:pointer;font-size:1em;opacity:0.6;"
+                                   title="Show setup instructions"></i>
                             </div>
-                            <div class="setting-inline">
-                                <label for="ha-access-token">Access Token</label>
-                                <div style="flex:1;min-width:0;display:flex;gap:4px;">
-                                    <input type="password" id="ha-access-token" placeholder="Long-Lived Access Token" style="flex:1;min-width:0;" autocomplete="off" />
-                                    <button type="button" class="standard-button" style="flex-shrink:0;padding:4px 8px;font-size:0.85em;" onclick="_haToggleTokenVisibility()">👁️</button>
+
+                            <!-- Help text (hidden by default) -->
+                            <div id="ha-help" style="display:none;font-size:0.88em;line-height:1.5;margin:4px 0 10px 0;padding:8px 10px;background:rgba(0,0,0,0.04);border-radius:4px;">
+                                <p style="margin:0 0 8px 0;">Connect CWOC to your Home Assistant instance to create chits from automations, sync sensor data, and trigger rules from HA events.</p>
+                                <strong>Setup:</strong>
+                                <ol style="margin:4px 0 0 18px;padding:0;">
+                                    <li>Enter your Home Assistant base URL (e.g. <code>http://192.168.1.100:8123</code>).</li>
+                                    <li>Generate a <em>Long-Lived Access Token</em> in HA → Profile → Security.</li>
+                                    <li>Paste the token and click <strong>💾 Save HA Config</strong>.</li>
+                                    <li>Click <strong>🔌 Test Connection</strong> to verify.</li>
+                                    <li>Use the Webhook URL in HA automations to POST events to CWOC.</li>
+                                </ol>
+                                <a href="/frontend/html/help.html#home-assistant" style="display:inline-block;margin-top:6px;">Full integration guide →</a>
+                            </div>
+
+                            <!-- Collapsible HA config body (hidden by default) -->
+                            <div id="ha-config-body" style="display:none;">
+
+                                <label class="setting-subheader">🔗 Connection</label>
+                                <div class="setting-inline">
+                                    <label for="ha-base-url">HA Base URL</label>
+                                    <input type="text" id="ha-base-url" placeholder="http://192.168.1.100:8123" style="flex:1;min-width:0;" />
                                 </div>
-                            </div>
-                            <div class="setting-inline">
-                                <label for="ha-poll-interval">Poll Interval (sec)</label>
-                                <input type="number" id="ha-poll-interval" min="5" max="3600" value="30" style="width:80px;" />
-                            </div>
+                                <div class="setting-inline">
+                                    <label for="ha-access-token">Access Token</label>
+                                    <div style="flex:1;min-width:0;display:flex;gap:4px;">
+                                        <input type="password" id="ha-access-token" placeholder="Long-Lived Access Token" style="flex:1;min-width:0;" autocomplete="off" />
+                                        <button type="button" class="standard-button" style="flex-shrink:0;padding:4px 8px;font-size:0.85em;" onclick="_haToggleTokenVisibility()">👁️</button>
+                                    </div>
+                                </div>
+                                <div class="setting-inline">
+                                    <label for="ha-poll-interval">Poll Interval (sec)</label>
+                                    <input type="number" id="ha-poll-interval" min="5" max="3600" value="30" style="width:80px;" />
+                                </div>
 
-                            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px;">
-                                <button type="button" class="standard-button" onclick="_haTestConnection()">🔌 Test Connection</button>
-                                <button type="button" class="standard-button" onclick="_haSaveConfig()">💾 Save HA Config</button>
-                                <span id="ha-connection-status" style="font-size:0.85em;"></span>
-                            </div>
+                                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px;">
+                                    <button type="button" class="standard-button" onclick="_haTestConnection()">🔌 Test Connection</button>
+                                    <button type="button" class="standard-button" onclick="_haSaveConfig()">💾 Save HA Config</button>
+                                    <span id="ha-connection-status" style="font-size:0.85em;"></span>
+                                </div>
 
-                            <label class="setting-subheader">🔗 Webhook</label>
-                            <p class="setting-hint">HA automations POST to this URL to create chits, update chits, or trigger rules.</p>
-                            <div class="setting-inline" style="flex-wrap:wrap;">
-                                <input type="text" id="ha-webhook-url" readonly style="flex:1;min-width:0;background:#f5e6cc;opacity:0.85;cursor:default;font-size:0.85em;" value="Loading..." />
-                                <button type="button" class="standard-button" style="flex-shrink:0;padding:4px 8px;font-size:0.85em;" onclick="_haCopyWebhookUrl()">📋 Copy</button>
-                            </div>
-                            <div style="margin-top:8px;">
-                                <button type="button" class="standard-button" onclick="_haRegenerateWebhookSecret()" style="font-size:0.85em;">🔄 Regenerate Webhook Secret</button>
-                                <p class="setting-hint" style="color:#a0522d;margin-top:4px;">⚠️ Regenerating breaks existing HA automations using the old URL.</p>
-                            </div>
+                                <label class="setting-subheader">🔗 Webhook</label>
+                                <p class="setting-hint">HA automations POST to this URL to create chits, update chits, or trigger rules.</p>
+                                <div class="setting-inline" style="flex-wrap:wrap;">
+                                    <input type="text" id="ha-webhook-url" readonly style="flex:1;min-width:0;background:#f5e6cc;opacity:0.85;cursor:default;font-size:0.85em;" value="Loading..." />
+                                    <button type="button" class="standard-button" style="flex-shrink:0;padding:4px 8px;font-size:0.85em;" onclick="_haCopyWebhookUrl()">📋 Copy</button>
+                                </div>
+                                <div style="margin-top:8px;">
+                                    <button type="button" class="standard-button" onclick="_haRegenerateWebhookSecret()" style="font-size:0.85em;">🔄 Regenerate Webhook Secret</button>
+                                    <p class="setting-hint" style="color:#a0522d;margin-top:4px;">⚠️ Regenerating breaks existing HA automations using the old URL.</p>
+                                </div>
+
+                            </div><!-- /ha-config-body -->
                         </div>
                         <div class="setting-group">
                             <h3>🔄 Version &amp; Updates</h3>
@@ -1630,6 +1777,21 @@
                     </div>
                 </div>
             </div>
+            <!-- Arrange Views Modal -->
+            <div class="modal" id="arrange-views-modal" style="display:none;">
+                <div class="modal-content" style="max-width:95vw;width:auto;text-align:center;">
+                    <h3 style="margin-bottom:12px;">📋 Arrange Views</h3>
+                    <p class="setting-hint" style="margin-bottom:12px;">Drag tabs to reorder them on the dashboard.</p>
+                    <div id="arrange-views-grid" class="arrange-views-grid"></div>
+                    <div class="arrange-views-hidden-label">Hidden</div>
+                    <div id="arrange-views-hidden" class="arrange-views-hidden"></div>
+                    <div style="display:flex;gap:8px;justify-content:center;margin-top:16px;">
+                        <button type="button" class="standard-button" style="flex:1;max-width:180px;" onclick="_cancelArrangeViews()">Cancel</button>
+                        <button type="button" class="standard-button" style="flex:1;max-width:180px;" onclick="_resetViewOrder()">↩️ Reset to Default</button>
+                        <button type="button" class="standard-button" style="flex:1;max-width:180px;background:#8b5a2b;color:#fdf5e6;" onclick="_closeArrangeViewsModal()">Done</button>
+                    </div>
+                </div>
+            </div>
             <!-- Footer is auto-injected by shared-page.js -->
             <script src="/frontend/js/shared/shared-auth.js"></script>
             <script src="/frontend/js/shared/shared-utils.js"></script>
@@ -1694,6 +1856,9 @@
                   var group = groups[i];
                   var h3 = group.querySelector(':scope > h3');
                   if (!h3) continue;
+
+                  /* Dependent Apps uses per-item toggle buttons — skip group-level collapse */
+                  if (group.id === 'network-access-block') continue;
 
                   /* Build a key from the h3 text content */
                   var key = h3.textContent.trim().replace(/[^\w\s]/g, '').trim().toLowerCase().replace(/\s+/g, '-');

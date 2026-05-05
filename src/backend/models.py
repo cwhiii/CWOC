@@ -66,6 +66,8 @@ class Settings(BaseModel):
     attachment_max_size_mb: Optional[str] = "10"  # Max attachment file size in MB
     attachment_max_storage_mb: Optional[str] = "500"  # Max total attachment storage per user in MB (0 = unlimited)
     default_share_contacts: Optional[str] = "0"  # "1" = new contacts default to shared vault, "0" = private
+    checklist_autosave: Optional[str] = "1"      # "1" = auto-save checklist changes, "0" = require manual save
+    view_order: Optional[str] = None             # JSON array of tab names in user's preferred order
 
 class Chit(BaseModel):
     id: Optional[str] = None
@@ -131,6 +133,7 @@ class Chit(BaseModel):
     email_account_id: Optional[str] = None       # ID of the email account this email belongs to
     attachments: Optional[str] = None            # JSON array of {id, filename, size, mime_type, uploaded_at}
     availability: Optional[str] = None           # "busy", "free", or null/"-" (unset)
+    checklist_autosave: Optional[bool] = None     # Per-chit override: None=use global, True/False=override
 
 class MultiValueEntry(BaseModel):
     label: Optional[str] = None    # "Work", "Home", "Mobile", custom

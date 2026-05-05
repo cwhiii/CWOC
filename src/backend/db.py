@@ -113,6 +113,50 @@ def compute_system_tags(chit) -> List[str]:
     return list(set(user_tags + system_tags))
 
 
+def ensure_tags_in_settings(conn, user_id: str, tag_names: List[str]):
+    """Register tags in the user's settings if they aren't already there.
+
+    Skips system tags (CWOC_System/ prefix). Creates a settings row if none exists.
+    Should be called by any code path that puts user-facing tags on chits.
+    """
+    # Filter to only non-system, non-empty tags
+    new_tags = [t for t in tag_names if t and not t.startswith("CWOC_System/")]
+    if not new_tags:
+        return
+
+    cursor = conn.cursor()
+    cursor.execute("SELECT tags FROM settings WHERE user_id = ?", (user_id,))
+    row = cursor.fetchone()
+
+    existing_tags = []
+    if row and row[0]:
+        existing_tags = deserialize_json_field(row[0]) or []
+
+    # Build set of known tag names
+    known_names = set()
+    for t in existing_tags:
+        if isinstance(t, str):
+            known_names.add(t)
+        elif isinstance(t, dict) and t.get("name"):
+            known_names.add(t["name"])
+
+    # Add any missing tags
+    added = False
+    for tag_name in new_tags:
+        if tag_name not in known_names:
+            known_names.add(tag_name)
+            existing_tags.append({"name": tag_name, "color": None, "favorite": False})
+            added = True
+
+    if added:
+        serialized = serialize_json_field(existing_tags)
+        if row:
+            cursor.execute("UPDATE settings SET tags = ? WHERE user_id = ?", (serialized, user_id))
+        else:
+            cursor.execute("INSERT INTO settings (user_id, tags) VALUES (?, ?)", (user_id, serialized))
+        conn.commit()
+
+
 # Database initialization
 def init_db():
     conn = None

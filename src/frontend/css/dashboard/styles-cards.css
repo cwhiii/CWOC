@@ -423,6 +423,20 @@ li.cwoc-dragging {
     margin-bottom: 0;
 }
 
+.global-search-hint {
+    font-size: 0.82em;
+    color: #6b4e31;
+    opacity: 0.75;
+    padding: 0 10px 10px;
+    line-height: 1.5;
+}
+.global-search-hint code {
+    background: rgba(139, 90, 43, 0.1);
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-size: 0.95em;
+}
+
 .global-search-results {
     padding: 0 8px;
     overflow-y: auto;

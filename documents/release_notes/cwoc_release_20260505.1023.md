@@ -1,0 +1,1 @@
+Arrange Views modal now displays tabs in a single non-wrapping horizontal line with overflow scroll. Swapped button order to Cancel / Reset to Default / Done, and added a Cancel button that reverts any unsaved drag changes.

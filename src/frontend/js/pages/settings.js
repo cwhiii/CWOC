@@ -1937,6 +1937,15 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
     // Layered ESC: close innermost modal first, never exit while a modal is open
 
+    // 0. Arrange Views modal
+    var arrangeViewsModal = document.getElementById("arrange-views-modal");
+    if (arrangeViewsModal && arrangeViewsModal.style.display === "flex") {
+      event.preventDefault();
+      event.stopPropagation();
+      _cancelArrangeViews();
+      return;
+    }
+
     // 1. Update/upgrade modal
     var updateModal = document.getElementById("update-modal");
     if (updateModal && updateModal.style.display === "flex") {
@@ -2170,6 +2179,10 @@ class SettingsManager {
     document.getElementById("show-tab-counts").checked = !!co.show_tab_counts;
     document.getElementById("prefer-google-maps").checked = !!co.prefer_google_maps;
 
+    // Checklist autosave (global setting, default true)
+    var clAutoEl = document.getElementById("checklist-autosave-toggle");
+    if (clAutoEl) clAutoEl.checked = this.settings.checklist_autosave !== '0';
+
     const genderToggle = document.getElementById("gender-toggle");
     if (genderToggle) genderToggle.value = this.settings.sex || "Man";
     _updatePillToggle('sex-pill', this.settings.sex || 'Man');
@@ -2400,6 +2413,20 @@ class SettingsManager {
     if (attachStorageEl && this.settings.attachment_max_storage_mb) {
       attachStorageEl.value = this.settings.attachment_max_storage_mb;
     }
+
+    // View order — initialize the modal state from saved settings
+    if (this.settings.view_order) {
+      var savedOrder = this.settings.view_order;
+      if (typeof savedOrder === 'string') {
+        try { savedOrder = JSON.parse(savedOrder); } catch (e) { savedOrder = null; }
+      }
+      if (Array.isArray(savedOrder) && savedOrder.length > 0) {
+        _currentViewOrder = savedOrder.slice();
+        _hiddenViews = _defaultViewOrder.filter(function(v) {
+          return savedOrder.indexOf(v) === -1;
+        });
+      }
+    }
   }
 
   gatherSettings() {
@@ -2477,6 +2504,7 @@ class SettingsManager {
         show_tab_counts: document.getElementById("show-tab-counts").checked,
         prefer_google_maps: document.getElementById("prefer-google-maps").checked,
       },
+      checklist_autosave: document.getElementById("checklist-autosave-toggle")?.checked ? '1' : '0',
       saved_locations: JSON.stringify(collectLocationsData()),
       audit_log_max_days: (() => { const cb = document.getElementById("audit-prune-enabled"); if (cb && !cb.checked) return null; const v = (document.getElementById("audit-max-days") || {}).value; return v === '' ? null : parseInt(v, 10); })(),
       audit_log_max_mb: (() => { const cb = document.getElementById("audit-prune-enabled"); if (cb && !cb.checked) return null; const v = (document.getElementById("audit-max-mb") || {}).value; return v === '' ? null : parseInt(v, 10); })(),
@@ -2495,6 +2523,7 @@ class SettingsManager {
       attachment_max_size_mb: ((document.getElementById('attachmentMaxSizeMb') || {}).value || '10'),
       attachment_max_storage_mb: ((document.getElementById('attachmentMaxStorageMb') || {}).value || '500'),
       default_share_contacts: (document.getElementById('default-share-contacts') && document.getElementById('default-share-contacts').checked) ? '1' : '0',
+      view_order: _collectViewOrder(),
     };
   }
 
@@ -2745,9 +2774,11 @@ async function _doImport(type, mode, fileData) {
     }
     alert(msg);
 
+    // Invalidate settings cache after any import (tags may have been merged)
+    _invalidateSettingsCache();
+
     // Reload settings after replace import
     if ((type === 'userdata' || type === 'all') && mode === 'replace') {
-      _invalidateSettingsCache();
       if (window.settingsManager) {
         window.settingsManager.initialize();
       }
@@ -5052,6 +5083,38 @@ async function loadNtfyConfig() {
 // ══════════════════════════════════════════════════════════════════════════════
 
 /**
+ * Toggle HA section — expand/collapse the HA config body.
+ */
+function _haToggleSection() {
+  var body = document.getElementById('ha-config-body');
+  if (!body) return;
+
+  var isVisible = body.style.display !== 'none';
+  body.style.display = isVisible ? 'none' : '';
+
+  if (!isVisible) {
+    // Expanding — reload config
+    _haLoadConfig();
+  }
+}
+
+/**
+ * Update the HA header icon based on connection state.
+ * @param {string} status - 'connected', 'error', 'not_configured'
+ */
+function _haUpdateHeaderIcon(status) {
+  var icon = document.getElementById('ha-header-icon');
+  if (!icon) return;
+
+  switch (status) {
+    case 'connected':      icon.textContent = '🟢'; break;
+    case 'error':          icon.textContent = '🔴'; break;
+    case 'not_configured': icon.textContent = '⚪'; break;
+    default:               icon.textContent = '⚪'; break;
+  }
+}
+
+/**
  * Load HA config from the backend and populate the form fields.
  * GET /api/ha/config (admin-only)
  */
@@ -5080,8 +5143,16 @@ async function _haLoadConfig() {
     } else if (webhookInput) {
       webhookInput.value = 'Not configured yet';
     }
+
+    // Update header icon based on config state
+    if (data.ha_base_url && data.ha_access_token) {
+      _haUpdateHeaderIcon('connected');
+    } else {
+      _haUpdateHeaderIcon('not_configured');
+    }
   } catch (e) {
     console.error('[HA] Error loading config:', e);
+    _haUpdateHeaderIcon('error');
   }
 }
 
@@ -5229,3 +5300,425 @@ async function _haRegenerateWebhookSecret() {
     _initHASettings();
   }
 })();
+
+// ── Arrange Views Modal ──────────────────────────────────────────────────────
+
+/** Default view order — matches the HTML tab order in index.html */
+var _defaultViewOrder = ['Calendar', 'Checklists', 'Tasks', 'Projects', 'Notes', 'Email', 'Indicators', 'Alarms'];
+
+/** Current view order state for the modal (visible tabs) */
+var _currentViewOrder = null;
+
+/** Current hidden views state for the modal */
+var _hiddenViews = [];
+
+/** View metadata for rendering tab buttons */
+var _viewMeta = {
+  Calendar:    { icon: 'img', src: '/static/calendar.png', label: '<u>C</u>alendar' },
+  Checklists:  { icon: 'img', src: '/static/checklists.png', label: '<u>C</u>hecklists' },
+  Tasks:       { icon: 'img', src: '/static/tasks.png', label: '<u>T</u>asks' },
+  Projects:    { icon: 'img', src: '/static/projects.png', label: '<u>P</u>rojects' },
+  Notes:       { icon: 'img', src: '/static/notes.png', label: '<u>N</u>otes' },
+  Email:       { icon: 'fa', cls: 'fas fa-envelope', label: '<u>E</u>mail' },
+  Indicators:  { icon: 'fa', cls: 'fas fa-heartbeat', label: '<u>I</u>ndicators' },
+  Alarms:      { icon: 'img', src: '/static/alerts.png', label: '<u>A</u>lerts' },
+};
+
+/** Open the Arrange Views modal */
+function _openArrangeViewsModal() {
+  var modal = document.getElementById('arrange-views-modal');
+  if (!modal) return;
+
+  // Load current order from settings manager or use default
+  if (window.settingsManager && window.settingsManager.settings && window.settingsManager.settings.view_order) {
+    var saved = window.settingsManager.settings.view_order;
+    if (typeof saved === 'string') {
+      try { saved = JSON.parse(saved); } catch (e) { saved = null; }
+    }
+    if (Array.isArray(saved) && saved.length > 0) {
+      _currentViewOrder = saved.slice();
+    } else {
+      _currentViewOrder = _defaultViewOrder.slice();
+    }
+  } else {
+    _currentViewOrder = _defaultViewOrder.slice();
+  }
+
+  // Determine hidden views — any from default that aren't in the visible order
+  _hiddenViews = _defaultViewOrder.filter(function(v) {
+    return _currentViewOrder.indexOf(v) === -1;
+  });
+
+  _renderArrangeViewsGrid();
+  modal.style.display = 'flex';
+}
+
+/** Close the Arrange Views modal */
+function _closeArrangeViewsModal() {
+  var modal = document.getElementById('arrange-views-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+/** Cancel arrange views — revert to the state before opening and close */
+function _cancelArrangeViews() {
+  // Restore the order from saved settings (discard any drag changes)
+  if (window.settingsManager && window.settingsManager.settings && window.settingsManager.settings.view_order) {
+    var saved = window.settingsManager.settings.view_order;
+    if (typeof saved === 'string') {
+      try { saved = JSON.parse(saved); } catch (e) { saved = null; }
+    }
+    if (Array.isArray(saved) && saved.length > 0) {
+      _currentViewOrder = saved.slice();
+    } else {
+      _currentViewOrder = _defaultViewOrder.slice();
+    }
+  } else {
+    _currentViewOrder = _defaultViewOrder.slice();
+  }
+  _hiddenViews = _defaultViewOrder.filter(function(v) {
+    return _currentViewOrder.indexOf(v) === -1;
+  });
+  _closeArrangeViewsModal();
+}
+
+/** Reset view order to default */
+function _resetViewOrder() {
+  _currentViewOrder = _defaultViewOrder.slice();
+  _hiddenViews = [];
+  _renderArrangeViewsGrid();
+  setSaveButtonUnsaved();
+}
+
+/** Render the draggable tab buttons in both zones */
+function _renderArrangeViewsGrid() {
+  var grid = document.getElementById('arrange-views-grid');
+  var hidden = document.getElementById('arrange-views-hidden');
+  if (!grid || !hidden) return;
+  grid.innerHTML = '';
+  hidden.innerHTML = '';
+
+  _currentViewOrder.forEach(function(viewName) {
+    grid.appendChild(_createViewTabItem(viewName));
+  });
+
+  _hiddenViews.forEach(function(viewName) {
+    hidden.appendChild(_createViewTabItem(viewName));
+  });
+
+  _setupArrangeViewsDrag();
+}
+
+/** Create a single view tab item element */
+function _createViewTabItem(viewName) {
+  var meta = _viewMeta[viewName];
+  if (!meta) return document.createElement('div');
+
+  var item = document.createElement('div');
+  item.className = 'view-tab-item';
+  item.draggable = true;
+  item.dataset.view = viewName;
+
+  if (meta.icon === 'img') {
+    var img = document.createElement('img');
+    img.src = meta.src;
+    img.alt = viewName;
+    item.appendChild(img);
+  } else if (meta.icon === 'fa') {
+    var icon = document.createElement('i');
+    icon.className = meta.cls;
+    item.appendChild(icon);
+  }
+
+  var label = document.createElement('span');
+  label.innerHTML = meta.label;
+  item.appendChild(label);
+
+  return item;
+}
+
+/** Set up drag-and-drop for the arrange views grid and hidden zone */
+function _setupArrangeViewsDrag() {
+  var grid = document.getElementById('arrange-views-grid');
+  var hiddenZone = document.getElementById('arrange-views-hidden');
+  if (!grid || !hiddenZone) return;
+
+  var draggedItem = null;
+
+  function attachItemListeners(item) {
+    item.addEventListener('dragstart', function(e) {
+      draggedItem = item;
+      item.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', item.dataset.view);
+    });
+
+    item.addEventListener('dragend', function() {
+      item.classList.remove('dragging');
+      draggedItem = null;
+      // Remove any drop indicators
+      grid.querySelectorAll('.view-tab-item').forEach(function(el) {
+        el.style.borderLeft = '';
+        el.style.borderRight = '';
+      });
+      hiddenZone.querySelectorAll('.view-tab-item').forEach(function(el) {
+        el.style.borderLeft = '';
+        el.style.borderRight = '';
+      });
+    });
+
+    item.addEventListener('dragover', function(e) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      if (!draggedItem || draggedItem === item) return;
+
+      // Visual indicator of drop position
+      var rect = item.getBoundingClientRect();
+      var midX = rect.left + rect.width / 2;
+      grid.querySelectorAll('.view-tab-item').forEach(function(el) {
+        el.style.borderLeft = '';
+        el.style.borderRight = '';
+      });
+      hiddenZone.querySelectorAll('.view-tab-item').forEach(function(el) {
+        el.style.borderLeft = '';
+        el.style.borderRight = '';
+      });
+      if (e.clientX < midX) {
+        item.style.borderLeft = '3px solid #8b5a2b';
+      } else {
+        item.style.borderRight = '3px solid #8b5a2b';
+      }
+    });
+
+    item.addEventListener('dragleave', function() {
+      item.style.borderLeft = '';
+      item.style.borderRight = '';
+    });
+
+    item.addEventListener('drop', function(e) {
+      e.preventDefault();
+      item.style.borderLeft = '';
+      item.style.borderRight = '';
+      if (!draggedItem || draggedItem === item) return;
+
+      var draggedView = draggedItem.dataset.view;
+      var targetView = item.dataset.view;
+      var rect = item.getBoundingClientRect();
+      var midX = rect.left + rect.width / 2;
+      var insertBefore = e.clientX < midX;
+
+      // Determine which zone the target is in
+      var targetInGrid = grid.contains(item);
+
+      // Remove dragged from both arrays
+      _currentViewOrder = _currentViewOrder.filter(function(v) { return v !== draggedView; });
+      _hiddenViews = _hiddenViews.filter(function(v) { return v !== draggedView; });
+
+      if (targetInGrid) {
+        var targetIdx = _currentViewOrder.indexOf(targetView);
+        if (!insertBefore) targetIdx++;
+        _currentViewOrder.splice(targetIdx, 0, draggedView);
+      } else {
+        var targetIdx = _hiddenViews.indexOf(targetView);
+        if (!insertBefore) targetIdx++;
+        _hiddenViews.splice(targetIdx, 0, draggedView);
+      }
+
+      _renderArrangeViewsGrid();
+      setSaveButtonUnsaved();
+    });
+  }
+
+  grid.querySelectorAll('.view-tab-item').forEach(attachItemListeners);
+  hiddenZone.querySelectorAll('.view-tab-item').forEach(attachItemListeners);
+
+  // Allow dropping on the grid zone itself (for empty or end-of-row drops)
+  grid.addEventListener('dragover', function(e) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; });
+  grid.addEventListener('drop', function(e) {
+    e.preventDefault();
+    if (!draggedItem) return;
+    // Only handle if dropped on the container itself, not on an item
+    if (e.target !== grid) return;
+    var draggedView = draggedItem.dataset.view;
+    _currentViewOrder = _currentViewOrder.filter(function(v) { return v !== draggedView; });
+    _hiddenViews = _hiddenViews.filter(function(v) { return v !== draggedView; });
+    _currentViewOrder.push(draggedView);
+    _renderArrangeViewsGrid();
+    setSaveButtonUnsaved();
+  });
+
+  // Allow dropping on the hidden zone itself
+  hiddenZone.addEventListener('dragover', function(e) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; });
+  hiddenZone.addEventListener('drop', function(e) {
+    e.preventDefault();
+    if (!draggedItem) return;
+    if (e.target !== hiddenZone) return;
+    var draggedView = draggedItem.dataset.view;
+    _currentViewOrder = _currentViewOrder.filter(function(v) { return v !== draggedView; });
+    _hiddenViews = _hiddenViews.filter(function(v) { return v !== draggedView; });
+    _hiddenViews.push(draggedView);
+    _renderArrangeViewsGrid();
+    setSaveButtonUnsaved();
+  });
+
+  // Touch support for mobile drag
+  _setupArrangeViewsTouch(grid, hiddenZone);
+}
+
+/** Touch-based drag support for mobile devices */
+function _setupArrangeViewsTouch(grid, hiddenZone) {
+  var touchItem = null;
+  var touchClone = null;
+  var startX = 0;
+  var startY = 0;
+  var allContainers = [grid, hiddenZone];
+
+  function attachTouchToItem(item) {
+    item.addEventListener('touchstart', function(e) {
+      if (e.touches.length !== 1) return;
+      var touch = e.touches[0];
+      startX = touch.clientX;
+      startY = touch.clientY;
+      touchItem = item;
+
+      setTimeout(function() {
+        if (!touchItem) return;
+        touchClone = item.cloneNode(true);
+        touchClone.style.position = 'fixed';
+        touchClone.style.zIndex = '99999';
+        touchClone.style.opacity = '0.8';
+        touchClone.style.pointerEvents = 'none';
+        touchClone.style.width = item.offsetWidth + 'px';
+        touchClone.style.left = (startX - item.offsetWidth / 2) + 'px';
+        touchClone.style.top = (startY - item.offsetHeight / 2) + 'px';
+        document.body.appendChild(touchClone);
+        item.classList.add('dragging');
+      }, 150);
+    }, { passive: true });
+
+    item.addEventListener('touchmove', function(e) {
+      if (!touchItem || !touchClone) return;
+      e.preventDefault();
+      var touch = e.touches[0];
+      touchClone.style.left = (touch.clientX - touchItem.offsetWidth / 2) + 'px';
+      touchClone.style.top = (touch.clientY - touchItem.offsetHeight / 2) + 'px';
+
+      // Highlight drop target
+      var target = _getViewItemAtPointAll(allContainers, touch.clientX, touch.clientY, touchItem);
+      grid.querySelectorAll('.view-tab-item').forEach(function(el) { el.style.borderLeft = ''; el.style.borderRight = ''; });
+      hiddenZone.querySelectorAll('.view-tab-item').forEach(function(el) { el.style.borderLeft = ''; el.style.borderRight = ''; });
+      if (target) {
+        var rect = target.getBoundingClientRect();
+        var midX = rect.left + rect.width / 2;
+        if (touch.clientX < midX) {
+          target.style.borderLeft = '3px solid #8b5a2b';
+        } else {
+          target.style.borderRight = '3px solid #8b5a2b';
+        }
+      }
+    }, { passive: false });
+
+    item.addEventListener('touchend', function(e) {
+      if (!touchItem) return;
+      item.classList.remove('dragging');
+
+      if (touchClone) {
+        var touch = e.changedTouches[0];
+        var target = _getViewItemAtPointAll(allContainers, touch.clientX, touch.clientY, touchItem);
+        var draggedView = touchItem.dataset.view;
+
+        if (target && target !== touchItem) {
+          var targetView = target.dataset.view;
+          var targetInGrid = grid.contains(target);
+          var rect = target.getBoundingClientRect();
+          var midX = rect.left + rect.width / 2;
+          var insertBefore = touch.clientX < midX;
+
+          _currentViewOrder = _currentViewOrder.filter(function(v) { return v !== draggedView; });
+          _hiddenViews = _hiddenViews.filter(function(v) { return v !== draggedView; });
+
+          if (targetInGrid) {
+            var targetIdx = _currentViewOrder.indexOf(targetView);
+            if (!insertBefore) targetIdx++;
+            _currentViewOrder.splice(targetIdx, 0, draggedView);
+          } else {
+            var targetIdx = _hiddenViews.indexOf(targetView);
+            if (!insertBefore) targetIdx++;
+            _hiddenViews.splice(targetIdx, 0, draggedView);
+          }
+
+          _renderArrangeViewsGrid();
+          setSaveButtonUnsaved();
+        } else {
+          // Check if dropped on a zone container directly
+          var gridRect = grid.getBoundingClientRect();
+          var hiddenRect = hiddenZone.getBoundingClientRect();
+          if (touch.clientX >= hiddenRect.left && touch.clientX <= hiddenRect.right &&
+              touch.clientY >= hiddenRect.top && touch.clientY <= hiddenRect.bottom) {
+            _currentViewOrder = _currentViewOrder.filter(function(v) { return v !== draggedView; });
+            _hiddenViews = _hiddenViews.filter(function(v) { return v !== draggedView; });
+            _hiddenViews.push(draggedView);
+            _renderArrangeViewsGrid();
+            setSaveButtonUnsaved();
+          } else if (touch.clientX >= gridRect.left && touch.clientX <= gridRect.right &&
+                     touch.clientY >= gridRect.top && touch.clientY <= gridRect.bottom) {
+            _currentViewOrder = _currentViewOrder.filter(function(v) { return v !== draggedView; });
+            _hiddenViews = _hiddenViews.filter(function(v) { return v !== draggedView; });
+            _currentViewOrder.push(draggedView);
+            _renderArrangeViewsGrid();
+            setSaveButtonUnsaved();
+          }
+        }
+
+        document.body.removeChild(touchClone);
+        touchClone = null;
+      }
+
+      grid.querySelectorAll('.view-tab-item').forEach(function(el) { el.style.borderLeft = ''; el.style.borderRight = ''; });
+      hiddenZone.querySelectorAll('.view-tab-item').forEach(function(el) { el.style.borderLeft = ''; el.style.borderRight = ''; });
+      touchItem = null;
+    });
+
+    item.addEventListener('touchcancel', function() {
+      if (touchClone) {
+        document.body.removeChild(touchClone);
+        touchClone = null;
+      }
+      if (touchItem) {
+        touchItem.classList.remove('dragging');
+        touchItem = null;
+      }
+      grid.querySelectorAll('.view-tab-item').forEach(function(el) { el.style.borderLeft = ''; el.style.borderRight = ''; });
+      hiddenZone.querySelectorAll('.view-tab-item').forEach(function(el) { el.style.borderLeft = ''; el.style.borderRight = ''; });
+    });
+  }
+
+  grid.querySelectorAll('.view-tab-item').forEach(attachTouchToItem);
+  hiddenZone.querySelectorAll('.view-tab-item').forEach(attachTouchToItem);
+}
+
+/** Find the view-tab-item element at a given point across multiple containers */
+function _getViewItemAtPointAll(containers, x, y, exclude) {
+  for (var c = 0; c < containers.length; c++) {
+    var items = containers[c].querySelectorAll('.view-tab-item');
+    for (var i = 0; i < items.length; i++) {
+      if (items[i] === exclude) continue;
+      var rect = items[i].getBoundingClientRect();
+      if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
+        return items[i];
+      }
+    }
+  }
+  return null;
+}
+
+/** Collect the current view order for saving — only includes visible tabs */
+function _collectViewOrder() {
+  if (!_currentViewOrder || _currentViewOrder.length === 0) {
+    // If all views are hidden somehow, return default to avoid empty tab bar
+    if (_hiddenViews && _hiddenViews.length > 0) return JSON.stringify([]);
+    return null;
+  }
+  // Check if it matches default (all visible, default order) — if so, return null
+  if (_hiddenViews.length === 0 && JSON.stringify(_currentViewOrder) === JSON.stringify(_defaultViewOrder)) return null;
+  return JSON.stringify(_currentViewOrder);
+}

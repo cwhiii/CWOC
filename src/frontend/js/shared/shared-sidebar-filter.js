@@ -49,7 +49,6 @@ function CwocSidebarFilter(config) {
     listDiv.innerHTML = '';
     var shown = 0;
     sorted.forEach(function(item) {
-      if (shown >= 9) return;
       if (query && !(item.name || '').toLowerCase().includes(query)) return;
 
       shown++;

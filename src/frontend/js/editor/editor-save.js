@@ -13,6 +13,73 @@
  */
 
 /**
+ * Execute any pending project removal (deferred from the "Remove from Project" button).
+ * Called after a successful save.
+ */
+async function _executePendingProjectRemoval() {
+  if (!window._pendingProjectRemoval) return;
+  var removal = window._pendingProjectRemoval;
+  window._pendingProjectRemoval = null;
+  try {
+    var projRes = await fetch('/api/chit/' + encodeURIComponent(removal.projectId));
+    if (!projRes.ok) return;
+    var proj = await projRes.json();
+    proj.child_chits = (Array.isArray(proj.child_chits) ? proj.child_chits : [])
+      .filter(function(id) { return id !== removal.chitId; });
+    delete proj.effective_role;
+    delete proj.assigned_to_display_name;
+    // Re-serialize fields returned as objects by GET
+    if (proj.weather_data && typeof proj.weather_data === 'object') proj.weather_data = JSON.stringify(proj.weather_data);
+    if (proj.health_data && typeof proj.health_data === 'object') proj.health_data = JSON.stringify(proj.health_data);
+    if (proj.email_to && typeof proj.email_to === 'object') proj.email_to = JSON.stringify(proj.email_to);
+    if (proj.email_cc && typeof proj.email_cc === 'object') proj.email_cc = JSON.stringify(proj.email_cc);
+    if (proj.email_bcc && typeof proj.email_bcc === 'object') proj.email_bcc = JSON.stringify(proj.email_bcc);
+    await fetch('/api/chits/' + encodeURIComponent(removal.projectId), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(proj),
+    });
+  } catch (e) {
+    console.error('[_executePendingProjectRemoval] Error:', e);
+  }
+}
+
+/**
+ * Execute any pending project addition (deferred from the "Add to Project" dropdown).
+ * Called after a successful save.
+ */
+async function _executePendingProjectAddition() {
+  if (!window._pendingProjectAddition) return;
+  var addition = window._pendingProjectAddition;
+  window._pendingProjectAddition = null;
+  try {
+    var projRes = await fetch('/api/chit/' + encodeURIComponent(addition.projectId));
+    if (!projRes.ok) throw new Error('Failed to load project');
+    var proj = await projRes.json();
+    var children = Array.isArray(proj.child_chits) ? proj.child_chits : [];
+    if (!children.includes(addition.chitId)) children.push(addition.chitId);
+    proj.child_chits = children;
+    delete proj.effective_role;
+    delete proj.assigned_to_display_name;
+    // Re-serialize fields returned as objects by GET
+    if (proj.weather_data && typeof proj.weather_data === 'object') proj.weather_data = JSON.stringify(proj.weather_data);
+    if (proj.health_data && typeof proj.health_data === 'object') proj.health_data = JSON.stringify(proj.health_data);
+    if (proj.email_to && typeof proj.email_to === 'object') proj.email_to = JSON.stringify(proj.email_to);
+    if (proj.email_cc && typeof proj.email_cc === 'object') proj.email_cc = JSON.stringify(proj.email_cc);
+    if (proj.email_bcc && typeof proj.email_bcc === 'object') proj.email_bcc = JSON.stringify(proj.email_bcc);
+    var saveRes = await fetch('/api/chits/' + encodeURIComponent(addition.projectId), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(proj),
+    });
+    if (!saveRes.ok) throw new Error('PUT failed: ' + saveRes.status);
+  } catch (e) {
+    console.error('[_executePendingProjectAddition] Error:', e);
+    cwocToast('Failed to add to project.', 'error');
+  }
+}
+
+/**
  * Get the URL to navigate to when exiting the editor.
  * Uses the 'from' query param if present (e.g. kiosk return), otherwise '/'.
  */
@@ -320,6 +387,13 @@ async function buildChitObject() {
     chit.attachments = getAttachmentsData();
   }
 
+  // Per-chit checklist autosave override
+  if (typeof _checklistAutosaveChitOverride !== 'undefined' && _checklistAutosaveChitOverride !== null) {
+    chit.checklist_autosave = _checklistAutosaveChitOverride;
+  } else {
+    chit.checklist_autosave = null;
+  }
+
   return chit;
 }
 
@@ -411,6 +485,9 @@ async function saveChitData() {
       await saveProjectChanges();
     }
 
+    await _executePendingProjectRemoval();
+    await _executePendingProjectAddition();
+
     window.currentChitId = updatedChit.id;
     markEditorSaved();
     if (typeof syncSend === 'function') syncSend('chits_changed', {});
@@ -497,6 +574,9 @@ async function saveChitAndStay() {
     if (updatedChit.is_project_master && typeof saveProjectChanges === "function") {
       await saveProjectChanges();
     }
+
+    await _executePendingProjectRemoval();
+    await _executePendingProjectAddition();
 
     setSaveButtonSaved();
   } catch (error) {

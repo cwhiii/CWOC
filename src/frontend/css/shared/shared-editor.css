@@ -284,6 +284,7 @@ button:disabled:not(.status-icon-button) {
     gap: 8px;
     align-items: center;
     flex-direction: row !important;
+    position: relative;
 }
 
 .zone-header .zone-button {
@@ -296,6 +297,7 @@ button:disabled:not(.status-icon-button) {
     background-color: var(--aged-brown-light);
     color: var(--parchment-light);
     border: 1px outset var(--aged-brown-medium);
+    white-space: nowrap;
 }
 
 .zone-button:hover {
@@ -340,6 +342,12 @@ button:disabled:not(.status-icon-button) {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 20px;
+}
+
+/* Grid children must not overflow their column */
+.main-zones-grid > * {
+    min-width: 0;
+    overflow: hidden;
 }
 
 /* ── Toggle Switch (reusable on/off toggle) ────────────────────────────── */

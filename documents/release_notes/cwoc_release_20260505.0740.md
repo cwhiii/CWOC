@@ -1,0 +1,1 @@
+Moved Home Assistant connection settings into the Dependent Apps block as a collapsible subsection (matching Tailscale/Ntfy pattern). Removed the collapse arrow from the Dependent Apps group header and its sub-headers since each item uses its own toggle button.

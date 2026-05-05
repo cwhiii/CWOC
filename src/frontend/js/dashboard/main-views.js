@@ -2063,6 +2063,39 @@ function displayProjectsView(chitsToDisplay) {
   const chitMap = {};
   chits.forEach((c) => { chitMap[c.id] = c; });
 
+  // Collect all child IDs that are missing from chitMap
+  var _listMissingIds = [];
+  projects.forEach(function(project) {
+    var childIds = Array.isArray(project.child_chits) ? project.child_chits : [];
+    childIds.forEach(function(cid) {
+      if (!chitMap[cid] && !(window._projectChildNotFound && window._projectChildNotFound.has(cid))) _listMissingIds.push(cid);
+    });
+  });
+
+  // If there are missing children, fetch them and re-render
+  if (_listMissingIds.length > 0) {
+    chitList.innerHTML = '<div style="text-align:center;padding:2em;opacity:0.5;">⏳ Loading project children…</div>';
+    Promise.all(_listMissingIds.map(function(cid) {
+      return fetch('/api/chit/' + encodeURIComponent(cid))
+        .then(function(r) { return r.ok ? r.json() : null; })
+        .catch(function() { return null; });
+    })).then(function(results) {
+      if (!window._projectChildNotFound) window._projectChildNotFound = new Set();
+      results.forEach(function(child, idx) {
+        if (child && !child.deleted) {
+          chitMap[child.id] = child;
+          chits.push(child); // Add to global array so future renders don't re-fetch
+        } else {
+          // Mark as unfetchable to prevent infinite re-fetch loops
+          window._projectChildNotFound.add(_listMissingIds[idx]);
+        }
+      });
+      // Re-call displayProjectsView now that children are loaded
+      displayProjectsView(chitsToDisplay);
+    });
+    return;
+  }
+
   const view = document.createElement("div");
   view.className = "projects-view";
 
@@ -2608,6 +2641,62 @@ function _displayProjectsKanban(chitsToDisplay) {
   const chitMap = {};
   chits.forEach(c => { chitMap[c.id] = c; });
 
+  // Collect all child IDs that are missing from chitMap
+  var missingIds = [];
+  projects.forEach(function(project) {
+    var childIds = Array.isArray(project.child_chits) ? project.child_chits : [];
+    childIds.forEach(function(cid) {
+      if (!chitMap[cid] && !(window._projectChildNotFound && window._projectChildNotFound.has(cid))) missingIds.push(cid);
+    });
+  });
+
+  // If there are missing children, fetch them and re-render
+  if (missingIds.length > 0) {
+    chitList.innerHTML = '<div style="text-align:center;padding:2em;opacity:0.5;">⏳ Loading project children…</div>';
+    Promise.all(missingIds.map(function(cid) {
+      return fetch('/api/chit/' + encodeURIComponent(cid))
+        .then(function(r) { return r.ok ? r.json() : null; })
+        .catch(function() { return null; });
+    })).then(function(results) {
+      if (!window._projectChildNotFound) window._projectChildNotFound = new Set();
+      var added = 0;
+      results.forEach(function(child, idx) {
+        if (child && !child.deleted) {
+          chitMap[child.id] = child;
+          chits.push(child);
+          added++;
+        } else {
+          window._projectChildNotFound.add(missingIds[idx]);
+        }
+      });
+      // Auto-prune stale child references from project masters
+      if (window._projectChildNotFound.size > 0) {
+        projects.forEach(function(project) {
+          var childIds = Array.isArray(project.child_chits) ? project.child_chits : [];
+          var cleaned = childIds.filter(function(cid) { return !window._projectChildNotFound.has(cid); });
+          if (cleaned.length < childIds.length) {
+            project.child_chits = cleaned;
+            // Persist the cleanup to backend
+            fetch('/api/chits/' + encodeURIComponent(project.id), {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(project),
+            }).catch(function(e) { console.warn('[Kanban] Failed to prune stale children from project:', e); });
+          }
+        });
+      }
+      _renderKanbanBoard(chitList, projects, chitMap, _viSettings);
+    });
+  } else {
+    _renderKanbanBoard(chitList, projects, chitMap, _viSettings);
+  }
+}
+
+/** Inner render function for the Kanban board (extracted to allow async pre-fetch). */
+function _renderKanbanBoard(chitList, projects, chitMap, _viSettings) {
+  chitList.innerHTML = "";
+  var _kanbanProjectDragActive = false;
+
   const statuses = ["ToDo", "In Progress", "Blocked", "Complete"];
 
   const wrapper = document.createElement("div");
@@ -2688,11 +2777,12 @@ function _displayProjectsKanban(chitsToDisplay) {
     // Group children by status
     const grouped = {};
     statuses.forEach(s => { grouped[s] = []; });
+    const _statusMapLower = { "todo": "ToDo", "in progress": "In Progress", "blocked": "Blocked", "complete": "Complete" };
     childIds.forEach(cid => {
       const child = chitMap[cid];
       if (!child || child.deleted) return;
-      const st = child.status || "ToDo";
-      if (!grouped[st]) grouped[st] = [];
+      const rawSt = child.status || "ToDo";
+      const st = _statusMapLower[rawSt.toLowerCase()] || "ToDo";
       grouped[st].push(child);
     });
 

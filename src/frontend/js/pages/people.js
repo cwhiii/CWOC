@@ -325,10 +325,15 @@
 
         row.appendChild(infoCol);
 
-        // Click row → navigate to user profile
+        // Click row → navigate to user profile (Cmd/Ctrl+click opens in new tab)
         row.style.cursor = 'pointer';
-        row.addEventListener('click', () => {
-            window.location.href = '/frontend/html/contact-editor.html?mode=profile&user_id=' + encodeURIComponent(user.id);
+        row.addEventListener('click', (e) => {
+            var url = '/frontend/html/contact-editor.html?mode=profile&user_id=' + encodeURIComponent(user.id);
+            if (e.metaKey || e.ctrlKey) {
+                window.open(url, '_blank');
+            } else {
+                window.location.href = url;
+            }
         });
 
         return row;
@@ -420,9 +425,14 @@
         });
         row.appendChild(shareBtn);
 
-        // Click row → navigate to Contact Editor
-        row.addEventListener('click', () => {
-            window.location.href = '/frontend/html/contact-editor.html?id=' + encodeURIComponent(contact.id);
+        // Click row → navigate to Contact Editor (Cmd/Ctrl+click opens in new tab)
+        row.addEventListener('click', (e) => {
+            var url = '/frontend/html/contact-editor.html?id=' + encodeURIComponent(contact.id);
+            if (e.metaKey || e.ctrlKey) {
+                window.open(url, '_blank');
+            } else {
+                window.location.href = url;
+            }
         });
 
         return row;

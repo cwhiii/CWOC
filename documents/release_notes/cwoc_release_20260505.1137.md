@@ -1,0 +1,1 @@
+Fixed "Add to Project" in editor: now defers the project master update until the user clicks Save (instead of saving immediately). Also auto-sets status to "ToDo" if empty when adding to a project, with a note in the toast. Fixed the underlying PUT failure by re-serializing JSON fields (weather_data, health_data, email_to/cc/bcc) before saving project masters.

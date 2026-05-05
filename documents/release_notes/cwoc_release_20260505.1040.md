@@ -1,0 +1,1 @@
+Split the "Hide Email" display filter into two separate filters: "Hide Email (Received)" and "Hide Email (Sent)", both defaulting to checked. Users can now independently show/hide received vs sent email chits in non-Email views.

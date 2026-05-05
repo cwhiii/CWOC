@@ -1,0 +1,575 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <link rel="icon" type="image/x-icon" href="/static/cwod_logo-favicon.png" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Chit Manager — C.W.'s Omni Chits</title>
+    <!-- PWA -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#8b5a2b" />
+    <link rel="apple-touch-icon" href="/static/cwoc-icon-192.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <link rel="stylesheet" href="/frontend/css/shared/shared-page.css" />
+    <link rel="stylesheet" href="/frontend/css/shared/shared-calculator.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" />
+    <style>
+        /* ══ ADMIN CHIT MANAGER PAGE-SPECIFIC STYLES ══ */
+
+        /* ── Toolbar ── */
+        .admin-toolbar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 14px;
+            flex-wrap: wrap;
+        }
+        .admin-toolbar input[type="text"] {
+            flex: 1;
+            min-width: 200px;
+            border: 1px solid #8b5a2b;
+            border-radius: 5px;
+            padding: 8px 10px;
+            font-size: 16px;
+            color: #1a1208;
+            font-family: 'Lora', Georgia, serif;
+            background: #f5e6cc;
+        }
+        .admin-toolbar select {
+            border: 1px solid #8b5a2b;
+            border-radius: 5px;
+            padding: 6px 10px;
+            font-family: 'Lora', Georgia, serif;
+            background: #f5e6cc;
+            color: #1a1208;
+        }
+        .admin-toolbar .toolbar-spacer { flex: 1; }
+
+        /* ── Status badges ── */
+        .status-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-size: 0.85em;
+            font-weight: bold;
+        }
+        .status-badge.no-owner {
+            background: #f8d7da;
+            color: #b22222;
+        }
+        .status-badge.deleted {
+            background: #f8d7da;
+            color: #b22222;
+        }
+
+        /* ── Action buttons ── */
+        .action-btn {
+            padding: 4px 10px;
+            font-size: 0.85em;
+            font-family: 'Lora', Georgia, serif;
+            border: 1px solid #8b5a2b;
+            border-radius: 4px;
+            cursor: pointer;
+            background: #f5e6cc;
+            color: #4a2c2a;
+            transition: background 0.2s;
+        }
+        .action-btn:hover {
+            background: #e8dcc8;
+        }
+
+        /* ── Inline messages ── */
+        .admin-message {
+            padding: 8px 12px;
+            border-radius: 5px;
+            font-size: 14px;
+            display: none;
+            margin-bottom: 12px;
+        }
+        .admin-message.success {
+            background: rgba(34, 139, 34, 0.15);
+            border: 1px solid #228b22;
+            color: #1a5c1a;
+            display: block;
+        }
+        .admin-message.error {
+            background: rgba(178, 34, 34, 0.15);
+            border: 1px solid #b22222;
+            color: #8b1a1a;
+            display: block;
+        }
+
+        /* ── Table ── */
+        .table-wrap {
+            max-height: 65vh;
+            overflow-y: auto;
+            border: 1px solid rgba(139, 90, 43, 0.3);
+            border-radius: 4px;
+        }
+        .cwoc-table tr.selected {
+            background: rgba(0, 128, 128, 0.12);
+        }
+        .cwoc-table tr.deleted-row {
+            opacity: 0.5;
+        }
+        .cwoc-table td.id-cell {
+            font-family: monospace;
+            font-size: 0.8em;
+            max-width: 110px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .cwoc-table td.title-cell {
+            max-width: 250px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .cwoc-table td.title-cell a {
+            color: #4a2c2a;
+            text-decoration: none;
+        }
+        .cwoc-table td.title-cell a:hover {
+            text-decoration: underline;
+        }
+
+        /* ── Bulk action bar ── */
+        .bulk-bar {
+            display: none;
+            position: sticky;
+            bottom: 0;
+            background: #fff8e1;
+            border-top: 2px solid #8b5a2b;
+            padding: 10px 14px;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+            border-radius: 0 0 4px 4px;
+        }
+        .bulk-bar.active {
+            display: flex;
+        }
+        .bulk-bar select {
+            border: 1px solid #8b5a2b;
+            border-radius: 5px;
+            padding: 6px 10px;
+            font-family: 'Lora', Georgia, serif;
+            background: #f5e6cc;
+            color: #1a1208;
+        }
+        .bulk-bar .selected-count {
+            font-weight: bold;
+            font-size: 0.9em;
+            color: #4a2c2a;
+        }
+
+        /* ── Results info ── */
+        .results-info {
+            font-size: 0.9em;
+            opacity: 0.7;
+            margin-bottom: 0.5em;
+        }
+
+        /* ── Mobile responsive ── */
+        @media (max-width: 768px) {
+            .cwoc-table thead { display: none; }
+            .cwoc-table tbody { display: block; }
+            .cwoc-table tr {
+                display: flex;
+                flex-wrap: wrap;
+                align-items: baseline;
+                gap: 4px 10px;
+                border: 1px solid #d4c5a9;
+                border-radius: 4px;
+                margin-bottom: 6px;
+                padding: 8px 10px;
+                background: rgba(253, 245, 230, 0.5);
+            }
+            .cwoc-table td {
+                display: inline;
+                padding: 0;
+                border: none;
+                font-size: 0.9em;
+                line-height: 1.6;
+            }
+            .cwoc-table td::before {
+                content: attr(data-label) ": ";
+                font-weight: bold;
+                font-size: 0.85em;
+                color: var(--aged-brown-dark);
+            }
+            .cwoc-table td:first-child::before {
+                content: "";
+            }
+            .admin-toolbar input[type="text"] {
+                min-width: 0;
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body data-page-title="Chit Manager" data-page-icon="🔧">
+
+    <div class="settings-panel">
+        <!-- Toolbar -->
+        <div class="admin-toolbar">
+            <input type="text" id="searchInput" placeholder="Search (same syntax as global search: text, #tags, &&, ||, !)..." />
+            <select id="ownerFilter">
+                <option value="">All Owners</option>
+                <option value="__none__">⚠️ No Owner</option>
+            </select>
+            <select id="statusFilter">
+                <option value="">All Statuses</option>
+                <option value="__none__">⚠️ No Status</option>
+                <option value="ToDo">ToDo</option>
+                <option value="In Progress">In Progress</option>
+                <option value="Blocked">Blocked</option>
+                <option value="Complete">Complete</option>
+            </select>
+            <label style="display:flex;align-items:center;gap:4px;font-size:0.9em;white-space:nowrap;">
+                <input type="checkbox" id="showDeleted" /> Show Deleted
+            </label>
+            <button class="cwoc-btn" onclick="doSearch()"><i class="fas fa-search"></i> Search</button>
+        </div>
+
+        <!-- Inline message area -->
+        <div id="admin-message" class="admin-message"></div>
+
+        <!-- Results info -->
+        <div class="results-info" id="resultsInfo"></div>
+
+        <!-- Table -->
+        <div class="table-wrap">
+            <table class="cwoc-table">
+                <thead>
+                    <tr>
+                        <th style="width:30px;"><input type="checkbox" id="selectAll" title="Select all" /></th>
+                        <th>ID</th>
+                        <th>Title</th>
+                        <th>Status</th>
+                        <th>Owner</th>
+                        <th>Assignee</th>
+                        <th><i class="fas fa-paperclip"></i></th>
+                        <th>Deleted</th>
+                        <th>Modified</th>
+                    </tr>
+                </thead>
+                <tbody id="resultsBody"></tbody>
+            </table>
+        </div>
+
+        <!-- Bulk action bar -->
+        <div class="bulk-bar" id="bulkBar">
+            <span class="selected-count" id="selectedCount">0 selected</span>
+            <select id="bulkAction">
+                <option value="">— Bulk Action —</option>
+                <option value="set_owner">Set Owner</option>
+                <option value="set_status">Set Status</option>
+                <option value="set_priority">Set Priority</option>
+                <option value="delete">Mark Deleted</option>
+                <option value="undelete">Undelete</option>
+            </select>
+            <select id="bulkOwner" style="display:none;">
+                <option value="">Select owner...</option>
+            </select>
+            <select id="bulkStatus" style="display:none;">
+                <option value="">Select status...</option>
+                <option value="ToDo">ToDo</option>
+                <option value="In Progress">In Progress</option>
+                <option value="Blocked">Blocked</option>
+                <option value="Complete">Complete</option>
+            </select>
+            <select id="bulkPriority" style="display:none;">
+                <option value="">Select priority...</option>
+                <option value="Low">Low</option>
+                <option value="Medium">Medium</option>
+                <option value="High">High</option>
+                <option value="Critical">Critical</option>
+            </select>
+            <button class="cwoc-btn" onclick="executeBulk()"><i class="fas fa-bolt"></i> Apply</button>
+        </div>
+    </div>
+
+    <!-- ── 1. Shared sub-scripts ── -->
+    <script src="/frontend/js/shared/shared-auth.js"></script>
+    <script src="/frontend/js/shared/shared-utils.js"></script>
+    <script src="/frontend/js/shared/shared-touch.js"></script>
+    <script src="/frontend/js/shared/shared-checklist.js"></script>
+    <script src="/frontend/js/shared/shared-sort.js"></script>
+    <script src="/frontend/js/shared/shared-indicators.js"></script>
+    <script src="/frontend/js/shared/shared-calendar.js"></script>
+    <script src="/frontend/js/shared/shared-tags.js"></script>
+    <script src="/frontend/js/shared/shared-recurrence.js"></script>
+    <script src="/frontend/js/shared/shared-geocoding.js"></script>
+    <script src="/frontend/js/shared/shared-qr.js"></script>
+    <script src="/frontend/js/shared/shared-hotkeys.js"></script>
+    <script src="/frontend/js/shared/shared.js"></script>
+    <script src="/frontend/js/shared/shared-calculator.js"></script>
+
+    <!-- ── 2. Shared page components ── -->
+    <script src="/frontend/js/pages/shared-page.js"></script>
+
+    <!-- ── 3. Page-specific script ── -->
+    <script>
+    var _allResults = [];
+    var _selectedIds = new Set();
+    var _users = [];
+
+    async function init() {
+        // Load users for owner dropdown
+        try {
+            var r = await fetch('/api/admin/users');
+            if (r.ok) {
+                _users = await r.json();
+                var ownerFilter = document.getElementById('ownerFilter');
+                var bulkOwner = document.getElementById('bulkOwner');
+                _users.forEach(function(u) {
+                    var opt = document.createElement('option');
+                    opt.value = u.id;
+                    opt.textContent = u.display_name + ' (' + u.username + ')';
+                    ownerFilter.appendChild(opt.cloneNode(true));
+                    bulkOwner.appendChild(opt);
+                });
+            }
+        } catch(e) { console.error('Failed to load users:', e); }
+
+        // Enter key triggers search
+        document.getElementById('searchInput').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') doSearch();
+        });
+
+        // Select all checkbox
+        document.getElementById('selectAll').addEventListener('change', function() {
+            var checked = this.checked;
+            _selectedIds.clear();
+            if (checked) _allResults.forEach(function(c) { _selectedIds.add(c.id); });
+            document.querySelectorAll('.row-cb').forEach(function(cb) { cb.checked = checked; });
+            updateBulkBar();
+        });
+
+        // Bulk action dropdown shows relevant sub-select
+        document.getElementById('bulkAction').addEventListener('change', function() {
+            document.getElementById('bulkOwner').style.display = this.value === 'set_owner' ? '' : 'none';
+            document.getElementById('bulkStatus').style.display = this.value === 'set_status' ? '' : 'none';
+            document.getElementById('bulkPriority').style.display = this.value === 'set_priority' ? '' : 'none';
+        });
+
+        // Auto-search on load
+        doSearch();
+    }
+
+    function showMessage(text, type) {
+        var el = document.getElementById('admin-message');
+        el.textContent = text;
+        el.className = 'admin-message ' + type;
+        setTimeout(function() { el.className = 'admin-message'; }, 5000);
+    }
+
+    async function doSearch() {
+        var q = document.getElementById('searchInput').value.trim();
+        var owner = document.getElementById('ownerFilter').value;
+        var statusFilter = document.getElementById('statusFilter').value;
+        var showDeleted = document.getElementById('showDeleted').checked;
+
+        var params = new URLSearchParams();
+        if (q) params.set('q', q);
+        if (owner === '__none__') params.set('no_owner', 'true');
+        else if (owner) params.set('owner_id', owner);
+        params.set('limit', '1000');
+
+        try {
+            var r = await fetch('/api/admin/chits?' + params.toString());
+            if (!r.ok) {
+                if (r.status === 403) { showMessage('Admin access required.', 'error'); return; }
+                throw new Error('HTTP ' + r.status);
+            }
+            _allResults = await r.json();
+
+            // Apply client-side filters
+            var display = _allResults;
+            if (!showDeleted) display = display.filter(function(c) { return !c.deleted; });
+            if (statusFilter === '__none__') display = display.filter(function(c) { return !c.status; });
+            else if (statusFilter) display = display.filter(function(c) { return c.status === statusFilter; });
+
+            var hiddenCount = _allResults.length - display.length;
+            document.getElementById('resultsInfo').textContent = display.length + ' results' +
+                (hiddenCount > 0 ? ' (' + hiddenCount + ' filtered out)' : '');
+
+            renderTable(display);
+        } catch(e) {
+            console.error('Search failed:', e);
+            showMessage('Search failed: ' + e.message, 'error');
+        }
+    }
+
+    function renderTable(results) {
+        var tbody = document.getElementById('resultsBody');
+        tbody.innerHTML = '';
+        _selectedIds.clear();
+        document.getElementById('selectAll').checked = false;
+        updateBulkBar();
+
+        results.forEach(function(chit) {
+            var tr = document.createElement('tr');
+            if (chit.deleted) tr.className = 'deleted-row';
+            tr.dataset.chitId = chit.id;
+
+            // Checkbox
+            var tdCb = document.createElement('td');
+            var cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.className = 'row-cb';
+            cb.addEventListener('change', function() {
+                if (this.checked) _selectedIds.add(chit.id);
+                else _selectedIds.delete(chit.id);
+                tr.classList.toggle('selected', this.checked);
+                updateBulkBar();
+            });
+            tdCb.appendChild(cb);
+            tr.appendChild(tdCb);
+
+            // ID
+            var tdId = document.createElement('td');
+            tdId.className = 'id-cell';
+            tdId.setAttribute('data-label', 'ID');
+            tdId.textContent = chit.id;
+            tdId.title = chit.id;
+            tr.appendChild(tdId);
+
+            // Title
+            var tdTitle = document.createElement('td');
+            tdTitle.className = 'title-cell';
+            tdTitle.setAttribute('data-label', 'Title');
+            var link = document.createElement('a');
+            link.href = '/editor?id=' + chit.id;
+            link.textContent = chit.title || '(Untitled)';
+            link.target = '_blank';
+            tdTitle.appendChild(link);
+            tr.appendChild(tdTitle);
+
+            // Status
+            var tdStatus = document.createElement('td');
+            tdStatus.setAttribute('data-label', 'Status');
+            tdStatus.textContent = chit.status || '—';
+            tr.appendChild(tdStatus);
+
+            // Owner
+            var tdOwner = document.createElement('td');
+            tdOwner.setAttribute('data-label', 'Owner');
+            if (!chit.owner_id) {
+                var badge = document.createElement('span');
+                badge.className = 'status-badge no-owner';
+                badge.textContent = '⚠️ NONE';
+                tdOwner.appendChild(badge);
+            } else {
+                var ownerUser = _users.find(function(u) { return u.id === chit.owner_id; });
+                tdOwner.textContent = ownerUser ? ownerUser.display_name : chit.owner_id.slice(0, 8) + '…';
+            }
+            tr.appendChild(tdOwner);
+
+            // Assignee
+            var tdAssignee = document.createElement('td');
+            tdAssignee.setAttribute('data-label', 'Assignee');
+            if (chit.assigned_to) {
+                var assigneeUser = _users.find(function(u) { return u.id === chit.assigned_to; });
+                tdAssignee.textContent = assigneeUser ? assigneeUser.display_name : chit.assigned_to.slice(0, 8) + '…';
+            }
+            tr.appendChild(tdAssignee);
+
+            // Attachments
+            var tdAttach = document.createElement('td');
+            tdAttach.setAttribute('data-label', 'Attach');
+            var attachments = chit.attachments;
+            if (typeof attachments === 'string') { try { attachments = JSON.parse(attachments); } catch(e) { attachments = null; } }
+            if (attachments && Array.isArray(attachments) && attachments.length > 0) {
+                tdAttach.innerHTML = '<i class="fas fa-paperclip" title="' + attachments.length + ' attachment(s)"></i>';
+            }
+            tr.appendChild(tdAttach);
+
+            // Deleted
+            var tdDel = document.createElement('td');
+            tdDel.setAttribute('data-label', 'Deleted');
+            if (chit.deleted) {
+                var delBadge = document.createElement('span');
+                delBadge.className = 'status-badge deleted';
+                delBadge.textContent = '🗑️ Yes';
+                tdDel.appendChild(delBadge);
+            }
+            tr.appendChild(tdDel);
+
+            // Modified
+            var tdMod = document.createElement('td');
+            tdMod.setAttribute('data-label', 'Modified');
+            tdMod.textContent = chit.modified_datetime ? chit.modified_datetime.slice(0, 10) : '—';
+            tr.appendChild(tdMod);
+
+            tbody.appendChild(tr);
+        });
+    }
+
+    function updateBulkBar() {
+        var bar = document.getElementById('bulkBar');
+        var count = _selectedIds.size;
+        document.getElementById('selectedCount').textContent = count + ' selected';
+        bar.classList.toggle('active', count > 0);
+    }
+
+    async function executeBulk() {
+        var action = document.getElementById('bulkAction').value;
+        if (!action) { showMessage('Select a bulk action first.', 'error'); return; }
+        if (_selectedIds.size === 0) { showMessage('No chits selected.', 'error'); return; }
+
+        var updates = {};
+        if (action === 'set_owner') {
+            var ownerId = document.getElementById('bulkOwner').value;
+            if (!ownerId) { showMessage('Select an owner.', 'error'); return; }
+            updates.owner_id = ownerId;
+        } else if (action === 'set_status') {
+            var status = document.getElementById('bulkStatus').value;
+            if (!status) { showMessage('Select a status.', 'error'); return; }
+            updates.status = status;
+        } else if (action === 'set_priority') {
+            var priority = document.getElementById('bulkPriority').value;
+            if (!priority) { showMessage('Select a priority.', 'error'); return; }
+            updates.priority = priority;
+        } else if (action === 'delete') {
+            updates.deleted = true;
+        } else if (action === 'undelete') {
+            updates.deleted = false;
+        }
+
+        var ids = Array.from(_selectedIds);
+        var actionLabel = action.replace('_', ' ');
+        if (!confirm('Apply "' + actionLabel + '" to ' + ids.length + ' chit(s)?')) return;
+
+        try {
+            var r = await fetch('/api/admin/chits/bulk-update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ chit_ids: ids, updates: updates })
+            });
+            if (!r.ok) {
+                var err = await r.text();
+                showMessage('Failed: ' + err, 'error');
+                return;
+            }
+            var result = await r.json();
+            showMessage('Updated ' + result.updated + ' chit(s).', 'success');
+            doSearch();
+        } catch(e) {
+            showMessage('Error: ' + e.message, 'error');
+        }
+    }
+
+    // Init on load
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+    </script>
+    <script src="/pwa/pwa-register.js"></script>
+</body>
+</html>

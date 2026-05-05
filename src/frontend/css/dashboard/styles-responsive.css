@@ -634,6 +634,12 @@
         padding: 4px 2px !important;
         min-height: 36px;
     }
+    /* Drag handle: always visible on mobile for touch */
+    .chit-card .checklist-drag-handle {
+        opacity: 0.7;
+        font-size: 1.2em;
+        padding: 0 6px 0 0;
+    }
 
     /* ── Notes view: force single column ──────────────────────────────────── */
     .notes-view {

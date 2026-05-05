@@ -406,52 +406,59 @@
                             class="zone-header"
                             onclick="toggleZone(event, 'locationSection', 'locationContent')"
                         >
-                            <h2 class="zone-title">📍 Location</h2>
-                            <div class="zone-actions">
+                            <h2 class="zone-title">🗺️ Location</h2>
+                            <div class="zone-actions location-zone-actions">
                                 <button
                                     type="button"
-                                    class="zone-button"
+                                    class="zone-button location-left-btn"
+                                    id="locationSearchBtn"
                                     onclick="searchLocationMap(event)"
+                                    style="display:none;"
                                 >
                                     <i class="fas fa-search"></i>
                                     <span class="hideWhenNarrow">Search</span>
                                 </button>
                                 <button
                                     type="button"
-                                    class="zone-button"
+                                    class="zone-button location-left-btn"
+                                    id="locationMapBtn"
                                     onclick="openLocationInNewTab(event)"
+                                    style="display:none;"
                                 >
                                     <i class="fas fa-external-link-alt"></i>
                                     <span class="hideWhenNarrow">Map</span>
                                 </button>
                                 <button
                                     type="button"
-                                    class="zone-button"
+                                    class="zone-button location-left-btn"
+                                    id="locationDirectionsBtn"
                                     onclick="openLocationDirections(event)"
+                                    style="display:none;"
                                 >
                                     <i class="fas fa-directions"></i>
-                                    <span class="hideWhenNarrow"
-                                        >Directions</span
-                                    >
+                                    <span class="hideWhenNarrow">Directions</span>
                                 </button>
                                 <button
                                     type="button"
-                                    class="zone-button"
-                                    onclick="onAddDefaultLocation(event)"
-                                    title="Populate from default saved location"
-                                >
-                                    <i class="fas fa-plus"></i>
-                                    <span class="hideWhenNarrow">Location</span>
-                                </button>
-                                <button
-                                    type="button"
-                                    class="zone-button"
+                                    class="zone-button location-left-btn"
                                     id="viewInContextBtn"
                                     onclick="_viewLocationInContext(event)"
                                     title="View in Context"
                                     style="display:none;"
                                 >
                                     <i class="fa-solid fa-circle-nodes"></i>
+                                    <span class="hideWhenNarrow">Context</span>
+                                </button>
+                                <span class="location-actions-spacer"></span>
+                                <button
+                                    type="button"
+                                    class="zone-button"
+                                    id="locationAddClearBtn"
+                                    onclick="_locationAddClearToggle(event)"
+                                    title="Populate from default saved location"
+                                >
+                                    <i class="fas fa-plus"></i>
+                                    <span class="hideWhenNarrow">Location</span>
                                 </button>
                             </div>
                             <span class="zone-toggle-icon">🔽</span>
@@ -461,12 +468,6 @@
                                 <select id="saved-locations-dropdown" title="Select a saved location">
                                     <option value="">— Saved Locations —</option>
                                 </select>
-                                <button
-                                    type="button"
-                                    class="zone-button clear-location-btn"
-                                    onclick="onClearLocation(event)"
-                                    title="Clear current location"
-                                >✕ Clear</button>
                             </div>
                             <div
                                 class="field full-width"
@@ -658,44 +659,37 @@
                             <div class="zone-actions">
                                 <button
                                     type="button"
-                                    onclick="openNotesModal(event)"
-                                    id="open-notes-modal-button"
-                                    class="zone-button"
-                                >
-                                    <i class="fas fa-expand"></i> Expand
-                                </button>
-                                <button
-                                    type="button"
                                     onclick="toggleNotesViewMode(event)"
                                     id="notes-render-toggle-btn"
                                     class="zone-button"
+                                    title="Toggle rendered markdown view"
                                 >
-                                    <i class="fas fa-eye"></i> Render
+                                    <i class="fas fa-eye"></i>
                                 </button>
                                 <button
                                     type="button"
-                                    onclick="shrinkNoteToFourLines(event)"
+                                    onclick="openNotesModal(event)"
+                                    id="open-notes-modal-button"
                                     class="zone-button"
-                                    title="Shrink to 4 lines"
+                                    title="Expand to full screen"
                                 >
-                                    <i class="fas fa-compress-alt"></i>
+                                    <i class="fas fa-expand"></i>
                                 </button>
                                 <button
                                     type="button"
-                                    onclick="copyNotesToClipboard(event, 'main')"
-                                    title="Copy to Clipboard"
+                                    onclick="_toggleNotesMoreMenu(event)"
                                     class="zone-button"
+                                    id="notes-more-btn"
+                                    title="More actions"
                                 >
-                                    <i class="fas fa-clipboard"></i>
+                                    <i class="fas fa-ellipsis-v"></i>
                                 </button>
-                                <button
-                                    type="button"
-                                    onclick="downloadNotes(event, 'main')"
-                                    title="Download"
-                                    class="zone-button"
-                                >
-                                    <i class="fas fa-download"></i>
-                                </button>
+                                <div id="notesMoreMenu" class="notes-more-menu" style="display:none;">
+                                    <button type="button" onclick="copyNotesToClipboard(event, 'main'); _closeNotesMoreMenu();"><i class="fas fa-clipboard"></i> Copy to clipboard</button>
+                                    <button type="button" onclick="downloadNotes(event, 'main'); _closeNotesMoreMenu();"><i class="fas fa-download"></i> Download as file</button>
+                                    <button type="button" onclick="_openSendContentModal(event, 'notes'); _closeNotesMoreMenu();"><i class="fas fa-paper-plane"></i> Send to another chit</button>
+                                    <button type="button" onclick="_noteToChecklistFromHeader(event); _closeNotesMoreMenu();"><i class="fas fa-arrow-right"></i> Move to checklist</button>
+                                </div>
                             </div>
                             <span class="zone-toggle-icon">🔼</span>
                         </div>
@@ -719,6 +713,9 @@
                                 <button type="button" title="Blockquote (Cmd+Shift+.)" onclick="_notesFormatBtn('q')">❝ Quote</button>
                                 <button type="button" title="Code (Cmd+E)" onclick="_notesFormatBtn('code')">⟨⟩</button>
                                 <button type="button" title="Horizontal Rule (Cmd+Shift+-)" onclick="_notesFormatBtn('hr')">―</button>
+                                <span class="notes-toolbar-spacer"></span>
+                                <button type="button" title="Undo (Cmd+Z)" onclick="_notesUndo(event)" class="notes-undo-redo">↺</button>
+                                <button type="button" title="Redo (Cmd+Shift+Z)" onclick="_notesRedo(event)" class="notes-undo-redo">↻</button>
                             </div>
                             <div class="field full-width">
                                 <textarea id="note" style="min-height:6em;resize:vertical;overflow-y:hidden;" oninput="autoGrowNote(this)" onkeydown="var a=_getNotesFormatAction&&_getNotesFormatAction(event);if(a){event.preventDefault();_notesFormatBtn(a);}"></textarea>
@@ -1012,6 +1009,8 @@
                         >
                             <h2 class="zone-title">✉️ Email</h2>
                             <div class="zone-actions" onclick="event.stopPropagation()">
+                                <button type="button" onclick="_emailUndo(event)" class="zone-button" title="Undo (Cmd+Z)">↩</button>
+                                <button type="button" onclick="_emailRedo(event)" class="zone-button" title="Redo (Cmd+Shift+Z)">↪</button>
                                 <button type="button" id="emailActivateBtn" class="zone-button zone-button-persist" onclick="_activateEmailZone()" title="Make this an email chit" style="font-size:0.8em;">✉️ Email</button>
                                 <button type="button" class="zone-button" id="emailSendBtn" style="display:none;" onclick="_emailSend()"><i class="fas fa-paper-plane"></i> Send</button>
                                 <button type="button" class="zone-button" id="emailReplyBtn" style="display:none;" onclick="_emailReply()"><i class="fas fa-reply"></i> Reply</button>
@@ -1081,11 +1080,36 @@
                     <h2 style="margin:0;">📝 Notes</h2>
                     <div style="display:flex;gap:0.5em;flex-wrap:wrap;">
                         <button type="button" onclick="toggleModalNotesRender()" id="modal-render-toggle-btn"><i class="fas fa-eye"></i> Render</button>
-                        <button type="button" onclick="copyNotesToClipboard(event, 'modal')" title="Copy"><i class="fas fa-clipboard"></i></button>
+                        <button type="button" onclick="copyNotesToClipboard(event, 'modal')" title="Copy to Clipboard"><i class="fas fa-clipboard"></i></button>
                         <button type="button" onclick="downloadNotes(event, 'modal')" title="Download"><i class="fas fa-download"></i></button>
+                        <button type="button" onclick="_openSendContentModal(event, 'notes')" title="Send notes to another chit"><i class="fas fa-paper-plane"></i></button>
+                        <button type="button" onclick="_noteToChecklistFromHeader(event)" title="Move note lines to checklist items">📝→☑️</button>
                         <button type="button" class="cancel" onclick="closeNotesModal(false)"><i class="fas fa-times"></i> Cancel</button>
                         <button type="button" onclick="closeNotesModal(true)"><i class="fas fa-check"></i> Done</button>
                     </div>
+                </div>
+                <div id="notesModalFormatToolbar" class="notes-format-toolbar" style="flex-shrink:0;margin:0 1em;">
+                    <button type="button" title="Bold (Cmd+B)" onclick="_notesFormatBtn('b')"><strong>B</strong></button>
+                    <button type="button" title="Italic (Cmd+I)" onclick="_notesFormatBtn('i')"><em>I</em></button>
+                    <button type="button" title="Strikethrough (Cmd+Shift+X)" onclick="_notesFormatBtn('s')"><s>S</s></button>
+                    <button type="button" title="Link (Cmd+K)" onclick="_notesFormatBtn('k')">🔗</button>
+                    <span class="notes-toolbar-sep"></span>
+                    <div class="notes-toolbar-dropdown">
+                        <button type="button" title="Heading">H ▾</button>
+                        <div class="notes-toolbar-dropdown-menu">
+                            <button type="button" onclick="_notesFormatBtn('h1')" style="font-size:1.2em;font-weight:bold;">H1</button>
+                            <button type="button" onclick="_notesFormatBtn('h2')" style="font-size:1.05em;font-weight:bold;">H2</button>
+                            <button type="button" onclick="_notesFormatBtn('h3')" style="font-size:0.95em;font-weight:bold;">H3</button>
+                        </div>
+                    </div>
+                    <button type="button" title="Bullet List (Cmd+Shift+8)" onclick="_notesFormatBtn('ul')">• List</button>
+                    <button type="button" title="Numbered List (Cmd+Shift+7)" onclick="_notesFormatBtn('ol')">1. List</button>
+                    <button type="button" title="Blockquote (Cmd+Shift+.)" onclick="_notesFormatBtn('q')">❝ Quote</button>
+                    <button type="button" title="Code (Cmd+E)" onclick="_notesFormatBtn('code')">⟨⟩</button>
+                    <button type="button" title="Horizontal Rule (Cmd+Shift+-)" onclick="_notesFormatBtn('hr')">―</button>
+                    <span class="notes-toolbar-spacer"></span>
+                    <button type="button" title="Undo (Cmd+Z)" onclick="_notesUndo(event)" class="notes-undo-redo">↺</button>
+                    <button type="button" title="Redo (Cmd+Shift+Z)" onclick="_notesRedo(event)" class="notes-undo-redo">↻</button>
                 </div>
                 <div class="modal-body" style="flex:1;overflow:auto;padding:0.5em 1em;">
                     <div class="field full-width" style="height:100%;">
@@ -1499,6 +1523,7 @@
         <script src="/frontend/js/editor/editor-people.js"></script>
         <script src="/frontend/js/editor/editor-location.js"></script>
         <script src="/frontend/js/editor/editor-notes.js"></script>
+        <script src="/frontend/js/editor/editor-send-content.js"></script>
         <script src="/frontend/js/editor/editor-alerts.js"></script>
         <script src="/frontend/js/editor/editor-color.js"></script>
         <script src="/frontend/js/editor/editor-health.js"></script>

@@ -327,6 +327,29 @@ button.delete:hover {
     width: 20px;
 }
 
+/* ── Inline checklist drag handle (dashboard) ──────────────────────────── */
+.chit-card .checklist-drag-handle {
+    flex: 0 0 auto;
+    cursor: grab;
+    color: var(--text-muted, #a0522d);
+    font-size: 1.1em;
+    line-height: 1.4;
+    padding: 0 4px 0 0;
+    user-select: none;
+    opacity: 0.5;
+    transition: opacity 0.15s, color 0.15s;
+    touch-action: none;
+}
+
+.chit-card .checklist-drag-handle:hover {
+    opacity: 1;
+    color: var(--text-primary, #4a2c2a);
+}
+
+.chit-card .checklist-drag-handle:active {
+    cursor: grabbing;
+}
+
 /* ── Chit list container ────────────────────────────────────────────────── */
 .chit-list {
     background-color: #fffaf0;

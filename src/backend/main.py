@@ -61,9 +61,49 @@ class NoCacheStaticMiddleware(BaseHTTPMiddleware):
 
 app.add_middleware(NoCacheStaticMiddleware)
 
+# ── Strip WWW-Authenticate header from ALL responses ──────────────────────
+# Starlette/FastAPI can inject WWW-Authenticate: Bearer on 401 responses,
+# which triggers the browser's built-in username/password popup. This
+# middleware runs outermost and strips that header from every response as a
+# safety net (the exception handler below also tries, but BaseHTTPMiddleware
+# can bypass exception handlers in some code paths).
+class StripWWWAuthenticateMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: StarletteRequest, call_next):
+        response = await call_next(request)
+        if response.status_code == 401:
+            # MutableHeaders supports del; use try/except for safety
+            try:
+                del response.headers["www-authenticate"]
+            except KeyError:
+                pass
+        return response
+
+app.add_middleware(StripWWWAuthenticateMiddleware)
+
 # ── Auth middleware — validates session cookie, injects user identity ─────
 from src.backend.middleware import AuthMiddleware
 app.add_middleware(AuthMiddleware)
+
+
+# ── Custom HTTPException handler to suppress WWW-Authenticate header ──────
+# FastAPI/Starlette automatically adds WWW-Authenticate: Bearer to 401 responses,
+# which triggers the browser's built-in authentication popup. This handler removes
+# that header to prevent the popup while still returning 401 for API clients.
+
+from fastapi import HTTPException
+from fastapi.responses import JSONResponse
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: StarletteRequest, exc: HTTPException):
+    """Handle HTTPException and suppress WWW-Authenticate header for 401 responses."""
+    response = JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail},
+    )
+    # Remove WWW-Authenticate header if present (prevents browser auth popup)
+    response.headers.pop("www-authenticate", None)
+    return response
+
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -120,6 +160,8 @@ from src.backend.migrations import (
     migrate_add_email_accounts,
     migrate_add_availability,
     migrate_create_ha_config,
+    migrate_add_checklist_autosave,
+    migrate_add_view_order,
 )
 
 # Initialize database and run all migrations (same order as before)
@@ -171,6 +213,8 @@ migrate_create_rules_tables()
 migrate_add_email_accounts()
 migrate_add_availability()
 migrate_create_ha_config()
+migrate_add_checklist_autosave()
+migrate_add_view_order()
 seed_version_info()
 
 # One-time cleanup: fix sent emails that still have CWOC_System/Email/Drafts tag
@@ -219,6 +263,7 @@ from src.backend.routes.email import email_router
 from src.backend.routes.attachments import attachments_router
 from src.backend.routes.rules import router as rules_router
 from src.backend.routes.ha import ha_router
+from src.backend.routes.admin import admin_router
 
 app.include_router(auth_router)
 app.include_router(users_router)
@@ -238,6 +283,7 @@ app.include_router(email_router)
 app.include_router(attachments_router)
 app.include_router(rules_router)
 app.include_router(ha_router)
+app.include_router(admin_router)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
