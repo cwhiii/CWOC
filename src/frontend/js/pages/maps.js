@@ -356,6 +356,9 @@ function _initMapsSidebarShared() {
     loadPeopleFilters: function() { /* handled by _loadChitsFilterData */ }
   });
 
+  // Inject "Go to" search field below the Create Chit button
+  _injectMapsGoToSearch();
+
   // Hide the author-info footer (sidebar has its own branding)
   var authorInfo = document.querySelector('.author-info');
   if (authorInfo) authorInfo.style.display = 'none';
@@ -376,6 +379,93 @@ function _initMapsSidebarShared() {
 
   // Show the current period's date range in the sidebar
   _updateMapsDateDisplay();
+}
+
+/* ── "Go to" Search Field ──────────────────────────────────────────────────── */
+
+/**
+ * _injectMapsGoToSearch() — Injects a "Go to" search field directly below the
+ * Create Chit button in the sidebar. Geocodes the entered address/city and
+ * zooms the map to that location.
+ */
+function _injectMapsGoToSearch() {
+  var createSection = document.getElementById('section-create');
+  if (!createSection) return;
+
+  var section = document.createElement('div');
+  section.className = 'sidebar-section';
+  section.id = 'section-maps-goto';
+  section.style.marginTop = '0';
+  section.style.marginBottom = '15px';
+
+  var wrapper = document.createElement('div');
+  wrapper.className = 'maps-goto-wrapper';
+
+  var inputRow = document.createElement('div');
+  inputRow.className = 'maps-goto-input-row';
+
+  var input = document.createElement('input');
+  input.type = 'text';
+  input.id = 'maps-goto-input';
+  input.className = 'maps-goto-input';
+  input.placeholder = 'Go to…';
+  input.setAttribute('autocomplete', 'off');
+
+  var btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'maps-goto-btn';
+  btn.title = 'Go to location';
+  btn.innerHTML = '<i class="fa-solid fa-magnifying-glass"></i>';
+
+  inputRow.appendChild(input);
+  inputRow.appendChild(btn);
+  wrapper.appendChild(inputRow);
+  section.appendChild(wrapper);
+
+  // Insert after the create section
+  createSection.insertAdjacentElement('afterend', section);
+
+  // Wire up search
+  btn.addEventListener('click', _mapsGoToSearch);
+  input.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      _mapsGoToSearch();
+    }
+  });
+}
+
+/**
+ * _mapsGoToSearch() — Geocodes the value in #maps-goto-input and flies the map
+ * to the resulting coordinates at zoom level 14.
+ */
+async function _mapsGoToSearch() {
+  var input = document.getElementById('maps-goto-input');
+  if (!input) return;
+  var query = input.value.trim();
+  if (!query) return;
+
+  var btn = input.nextElementSibling;
+  if (btn) btn.disabled = true;
+
+  try {
+    var result = await _geocodeAddress(query);
+    if (result && result.lat && result.lon) {
+      _mapsLeafletMap.flyTo([result.lat, result.lon], 14, { duration: 1.2 });
+      _mapsFocusMode = true;
+    }
+  } catch (err) {
+    // Show brief error feedback
+    input.classList.add('maps-goto-error');
+    input.placeholder = 'Not found…';
+    input.value = '';
+    setTimeout(function() {
+      input.classList.remove('maps-goto-error');
+      input.placeholder = 'Go to…';
+    }, 2000);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }
 
 /* ── Maps Date Display ─────────────────────────────────────────────────────── */
@@ -1004,6 +1094,22 @@ function _initLeafletMap() {
   if (!container) return;
 
   _mapsLeafletMap = L.map('maps-container', { zoomControl: false }).setView([20, 0], 2);
+
+  // Leaflet's keyboard handler stops propagation on keydown events when the map
+  // has focus, which prevents CWOC hotkeys from reaching document-level listeners.
+  // Capture-phase listener re-dispatches a clone to the document so shared hotkeys work.
+  var mapContainer = _mapsLeafletMap.getContainer();
+  mapContainer.addEventListener('keydown', function(e) {
+    // Let Leaflet handle its own keys (arrows, +, -, Escape) — don't interfere
+    // But also dispatch a copy to document so CWOC hotkeys still fire
+    var clone = new KeyboardEvent('keydown', {
+      key: e.key, code: e.code, keyCode: e.keyCode,
+      ctrlKey: e.ctrlKey, shiftKey: e.shiftKey, altKey: e.altKey, metaKey: e.metaKey,
+      bubbles: false, cancelable: true
+    });
+    clone._cwocFromMap = true;
+    document.dispatchEvent(clone);
+  }, true);
 
   // Add zoom control at bottom-right
   L.control.zoom({ position: 'bottomright' }).addTo(_mapsLeafletMap);

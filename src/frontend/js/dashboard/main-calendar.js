@@ -177,6 +177,12 @@ function updateDateRange() {
  * Open a chit in the editor. For recurring virtual instances, opens the parent.
  */
 function openChitForEdit(chit) {
+  // Birthday/anniversary entries open the contact editor instead
+  if (chit._isBirthday && chit._contact_id) {
+    storePreviousState();
+    window.location.href = '/frontend/html/contact-editor.html?id=' + chit._contact_id;
+    return;
+  }
   storePreviousState();
   var id = chit._isVirtual && chit._parentId ? chit._parentId : chit.id;
   window.location.href = '/editor?id=' + id;
@@ -605,6 +611,7 @@ function displayMonthView(chitsToDisplay) {
         applyChitColors(chitElement, chitColor(chit));
         chitElement.style.cursor = "pointer";
         if (chit.status === "Complete") chitElement.classList.add("completed-task");
+        if (chit._isBirthday) { chitElement.classList.add("birthday-event"); chitElement.draggable = false; }
         if (typeof _isDeclinedByCurrentUser === 'function' && _isDeclinedByCurrentUser(chit)) chitElement.classList.add("declined-chit");
         chitElement.title = calendarEventTooltip(chit, info);
         chitElement.innerHTML = calendarEventTitle(chit, info.isDueOnly, info, _viSettings, 'calendar-month');
@@ -804,6 +811,7 @@ function displayDayView(chitsToDisplay, opts) {
     allDayChits.forEach(({ chit, info }) => {
       const ev = document.createElement("div");
       ev.className = "all-day-event";
+      if (chit._isBirthday) ev.classList.add("birthday-event");
       ev.dataset.chitId = chit.id;
       applyChitColors(ev, chitColor(chit));
       if (chit.status === "Complete") ev.classList.add("completed-task");

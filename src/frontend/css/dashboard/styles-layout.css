@@ -386,8 +386,6 @@ button.delete:hover {
 /* ── Completed task ───────────────────────────────────────────────────────── */
 .completed-task {
     opacity: 0.5;
-    color: #666 !important;
-    background-color: #ddd !important;
 }
 
 /* ── Checklist all done — strike through the title ───────────────────────── */

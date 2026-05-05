@@ -423,11 +423,16 @@ function fetchChits() {
         return r.text().then(function(t) { console.error('[fetchChits] shared-chits error:', t); return []; });
       }
       return r.json();
-    }).catch(function(err) { console.error('[fetchChits] shared-chits fetch error:', err); return []; })
+    }).catch(function(err) { console.error('[fetchChits] shared-chits fetch error:', err); return []; }),
+    fetch("/api/contacts/birthdays").then(function(r) {
+      if (!r.ok) return [];
+      return r.json();
+    }).catch(function(err) { console.error('[fetchChits] birthdays fetch error:', err); return []; })
   ])
     .then(function(results) {
       var ownedChits = Array.isArray(results[0]) ? results[0] : [];
       var sharedChits = Array.isArray(results[1]) ? results[1] : [];
+      var birthdayChits = Array.isArray(results[2]) ? results[2] : [];
 
       // Mark shared chits with _shared flag and merge into the chits array
       var ownedIds = new Set();
@@ -438,6 +443,12 @@ function fetchChits() {
         if (ownedIds.has(sc.id)) return;
         sc._shared = true; // flag for shared chit identification
         ownedChits.push(sc);
+      });
+
+      // Merge birthday/anniversary entries (virtual all-day events)
+      birthdayChits.forEach(function(bc) {
+        bc._isBirthday = true;
+        ownedChits.push(bc);
       });
 
       chits = ownedChits;
@@ -1438,7 +1449,12 @@ document.addEventListener("DOMContentLoaded", function () {
 
     if (keyLower === 'm' && !_hotkeyMode) {
       e.preventDefault();
-      _openModePanel();
+      if (e.shiftKey) {
+        _openModePanel();
+      } else {
+        if (typeof storePreviousState === 'function') storePreviousState();
+        window.location.href = '/maps';
+      }
       return;
     }
 

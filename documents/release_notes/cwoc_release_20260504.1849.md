@@ -1,0 +1,1 @@
+Replace browser's native "Leave site?" dialog with a CWOC-styled modal when refreshing the chit editor or contact editor with unsaved changes. Keyboard refresh shortcuts (Cmd+R, Ctrl+R, F5) now show a parchment-themed modal with Cancel, Save & Refresh, and Discard & Refresh options. The native dialog remains as a fallback for browser-button refresh and tab close.

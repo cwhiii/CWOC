@@ -112,6 +112,24 @@ function calendarEventTitle(chit, isDueOnly, info, settings, context) {
       ownerBadge = '<span class="cwoc-owner-badge" style="font-size:0.75em;opacity:0.8;font-style:italic;margin-left:4px;">👤 ' + chit.owner_display_name + '</span>';
     }
   }
+
+  // Birthday/anniversary entries: render as a person chip with thumbnail
+  if (chit._isBirthday) {
+    // Format: [img] Name 🎂 Label (age)
+    var displayName = (chit.people && chit.people[0]) ? chit.people[0] : '';
+    var labelPart = chit._date_label || '';
+    var ageMatch = (chit.title || '').match(/\((\d+ yrs)\)/);
+    if (ageMatch) labelPart += ' (' + ageMatch[1] + ')';
+
+    var chipBg = chit.color || '#f5e6d3';
+    var chipHtml = '<span class="birthday-chip" style="background-color:' + chipBg + ';">';
+    if (chit._contact_image_url) {
+      chipHtml += '<img src="' + chit._contact_image_url + '" class="birthday-chip-img">';
+    }
+    chipHtml += displayName + ' 🎂 ' + labelPart + '</span>';
+    return chipHtml;
+  }
+
   return `<span style="font-weight:bold;font-size:1.1em;">${allIcons}${wxIcon}${pinnedIcon}${recurIcon}${dueIcon}${chit.title || '(Untitled)'}${ownerBadge}</span>`;
 }
 
@@ -739,9 +757,13 @@ function enableAllDayDrag(allDayEventsRow, days) {
     }
   });
 
-  // Make all-day events draggable
+  // Make all-day events draggable (except birthday entries)
   allDayEventsRow.querySelectorAll('.all-day-event').forEach(ev => {
-    ev.draggable = true;
+    if (ev.classList.contains('birthday-event')) {
+      ev.draggable = false;
+    } else {
+      ev.draggable = true;
+    }
   });
 }
 
@@ -801,6 +823,7 @@ function renderAllDayEventsInCells(dayData, allDayEventsRow, settings, context) 
 
     const ev = document.createElement('div');
     ev.className = 'all-day-event';
+    if (chit._isBirthday) ev.classList.add('birthday-event');
     ev.dataset.chitId = chit.id;
     ev.dataset.allDayRow = String(targetRow);
     ev.style.backgroundColor = chitColor(chit);

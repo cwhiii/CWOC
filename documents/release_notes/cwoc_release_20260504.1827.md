@@ -1,0 +1,3 @@
+# Release 20260504.1827
+
+Added Obsidian-like live preview to the Notes zone in the chit editor. The render button now cycles through three modes: Edit (plain textarea with format toolbar), Live Preview (side-by-side edit + rendered markdown), and Rendered (read-only markdown). A formatting toolbar with buttons and keyboard shortcuts (Ctrl+B bold, Ctrl+I italic, Ctrl+K link, Ctrl+E code, Ctrl+Shift+1/2/3 headings, Ctrl+Shift+7/8 lists, Ctrl+Shift+. blockquote, Ctrl+Shift+- horizontal rule) is shown in Edit and Live Preview modes. The mode toggle button persists in the zone header even when collapsed, cycling through modes like the existing Habit and Email toggle buttons.

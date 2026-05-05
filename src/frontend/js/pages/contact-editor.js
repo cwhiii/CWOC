@@ -130,6 +130,15 @@
 
         _initSaveSystem();
         _initHotkeys();
+
+        // Warn on refresh/close if there are unsaved changes
+        window.addEventListener('beforeunload', function(e) {
+            if (window._cwocSkipBeforeUnload) return;
+            if (_saveSystem && _saveSystem.hasChanges()) {
+                e.preventDefault();
+                e.returnValue = '';
+            }
+        });
         _initColorPicker();
         _initImageUpload();
         _initSignalToggle();
@@ -241,6 +250,12 @@
                 return '/frontend/html/people.html';
             },
             autoListenInputs: true
+        });
+
+        // Intercept Cmd+R / Ctrl+R / F5 to show CWOC modal instead of browser dialog
+        cwocInterceptRefresh({
+            hasChanges: function() { return _saveSystem && _saveSystem.hasChanges(); },
+            onSave: function() { return _saveContact(); },
         });
     }
 
@@ -560,7 +575,7 @@
     // Fields whose values should be clickable URLs when not focused
     var _urlFields = { websites: true };
 
-    window.addMultiValueEntry = function (fieldName, defaultLabel, defaultValue, inputType) {
+    window.addMultiValueEntry = function (fieldName, defaultLabel, defaultValue, inputType, extraOpts) {
         var containerId = _multiValueMap[fieldName];
         if (!containerId) return;
         var container = document.getElementById(containerId);
@@ -581,6 +596,15 @@
         valueInput.placeholder = _valuePlaceholders[fieldName] || 'Value';
         valueInput.value = defaultValue || '';
 
+        // Initialize Flatpickr for date fields (same format as chit editor: YYYY-Mon-DD)
+        if (fieldName === 'dates' && typeof flatpickr !== 'undefined') {
+            valueInput.type = 'text';
+            valueInput.placeholder = 'YYYY-Mon-DD';
+            setTimeout(function() {
+                flatpickr(valueInput, { dateFormat: 'Y-M-d', defaultDate: defaultValue || null });
+            }, 0);
+        }
+
         // Clickable link for URL fields
         var link = document.createElement('a');
         link.className = 'mv-link';
@@ -590,6 +614,23 @@
 
         if (_urlFields[fieldName]) {
             _setupUrlToggle(valueInput, link);
+        }
+
+        // "Show on Calendar" checkbox for date fields
+        var calCheckbox = null;
+        if (fieldName === 'dates') {
+            var calLabel = document.createElement('label');
+            calLabel.className = 'mv-cal-toggle';
+            calLabel.title = 'Show on calendar annually';
+            calCheckbox = document.createElement('input');
+            calCheckbox.type = 'checkbox';
+            calCheckbox.className = 'mv-show-on-calendar';
+            calCheckbox.checked = (extraOpts && extraOpts.show_on_calendar === false) ? false : true;
+            calCheckbox.addEventListener('change', function () { if (_saveSystem) _saveSystem.markUnsaved(); });
+            var calIcon = document.createElement('i');
+            calIcon.className = 'fas fa-calendar-day';
+            calLabel.appendChild(calCheckbox);
+            calLabel.appendChild(calIcon);
         }
 
         // Map button for address fields — uses Google or OSM based on setting
@@ -653,6 +694,7 @@
         row.appendChild(labelInput);
         row.appendChild(valueInput);
         row.appendChild(link);
+        if (calCheckbox) row.appendChild(calLabel);
         if (mapBtn) row.appendChild(mapBtn);
         if (contextBtn) row.appendChild(contextBtn);
         row.appendChild(removeBtn);
@@ -695,9 +737,28 @@
         for (var i = 0; i < rows.length; i++) {
             var label = rows[i].querySelector('.mv-label').value.trim();
             var value = rows[i].querySelector('.mv-value').value.trim();
-            if (value) entries.push({ label: label, value: value });
+            if (value) {
+                var entry = { label: label, value: value };
+                // Convert Flatpickr format (YYYY-Mon-DD) back to ISO (YYYY-MM-DD) for dates
+                if (fieldName === 'dates') {
+                    entry.value = _convertMonthToISO(value);
+                    var calCb = rows[i].querySelector('.mv-show-on-calendar');
+                    entry.show_on_calendar = calCb ? calCb.checked : true;
+                }
+                entries.push(entry);
+            }
         }
         return entries;
+    }
+
+    /** Convert YYYY-Mon-DD (e.g. 2026-May-04) to YYYY-MM-DD */
+    function _convertMonthToISO(dateStr) {
+        if (!dateStr) return dateStr;
+        var months = { Jan:'01', Feb:'02', Mar:'03', Apr:'04', May:'05', Jun:'06',
+                       Jul:'07', Aug:'08', Sep:'09', Oct:'10', Nov:'11', Dec:'12' };
+        return dateStr.replace(/(\d{4})-([A-Za-z]{3})-(\d{2})/, function(m, y, mon, d) {
+            return y + '-' + (months[mon] || mon) + '-' + d;
+        });
     }
 
     function _setMultiValueEntries(fieldName, entries) {
@@ -709,7 +770,8 @@
         if (!entries || !entries.length) return;
         var inputType = (fieldName === 'dates') ? 'date' : undefined;
         for (var i = 0; i < entries.length; i++) {
-            addMultiValueEntry(fieldName, entries[i].label || '', entries[i].value || '', inputType);
+            var extraOpts = (fieldName === 'dates') ? { show_on_calendar: entries[i].show_on_calendar } : undefined;
+            addMultiValueEntry(fieldName, entries[i].label || '', entries[i].value || '', inputType, extraOpts);
         }
     }
 
@@ -965,6 +1027,7 @@
                 await _removePendingImage();
             }
 
+            if (_saveSystem) _saveSystem.markSaved();
             _showBriefMessage('Saved');
             return saved;
         } catch (err) {
@@ -1307,6 +1370,7 @@
                 await _removePendingImage();
             }
 
+            if (_saveSystem) _saveSystem.markSaved();
             _showBriefMessage('Saved');
             return saved;
         } catch (err) {

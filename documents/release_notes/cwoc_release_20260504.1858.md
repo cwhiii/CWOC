@@ -1,0 +1,1 @@
+Added a "Go to" search field in the maps sidebar directly below the Create Chit button. Typing an address or city and pressing Enter (or the search icon) geocodes the location and flies the map to it.

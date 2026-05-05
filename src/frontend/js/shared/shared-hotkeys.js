@@ -123,6 +123,13 @@ function _cwocHandleActionHotkey(keyLower, e) {
     return true;
   }
 
+  // M — Map page (secondary pages only; dashboard uses M for Mode panel via main-init.js)
+  if (keyLower === 'm' && !isDash && !e.shiftKey) {
+    e.preventDefault();
+    window.location.href = '/maps';
+    return true;
+  }
+
   return false;
 }
 

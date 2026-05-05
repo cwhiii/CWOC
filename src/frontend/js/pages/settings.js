@@ -2143,12 +2143,21 @@ class SettingsManager {
     const auditMaxMbInput = document.getElementById("audit-max-mb");
     if (auditMaxMbInput) auditMaxMbInput.value = (this.settings.audit_log_max_mb != null && this.settings.audit_log_max_mb !== '') ? this.settings.audit_log_max_mb : '';
 
-    // Audit prune checkbox: unchecked if both limits are null
+    // Audit prune checkbox: enabled by default (new users get pruning on)
     const auditPruneCb = document.getElementById("audit-prune-enabled");
     if (auditPruneCb) {
-      const bothNull = (this.settings.audit_log_max_days == null || this.settings.audit_log_max_days === '') &&
-                        (this.settings.audit_log_max_mb == null || this.settings.audit_log_max_mb === '');
-      auditPruneCb.checked = !bothNull;
+      // Pruning is ON unless both limits were explicitly set to null by the user
+      // For new users (no settings row), default to enabled with model defaults (1096 days, 1 MB)
+      const explicitlyDisabled = this.settings.hasOwnProperty('audit_log_max_days') &&
+                                  this.settings.hasOwnProperty('audit_log_max_mb') &&
+                                  (this.settings.audit_log_max_days == null || this.settings.audit_log_max_days === '') &&
+                                  (this.settings.audit_log_max_mb == null || this.settings.audit_log_max_mb === '');
+      auditPruneCb.checked = !explicitlyDisabled;
+      // For new users, populate default values if inputs are empty
+      if (auditPruneCb.checked) {
+        if (auditMaxDaysInput && !auditMaxDaysInput.value) auditMaxDaysInput.value = '1096';
+        if (auditMaxMbInput && !auditMaxMbInput.value) auditMaxMbInput.value = '1';
+      }
       toggleAuditPruneInputs();
     }
 

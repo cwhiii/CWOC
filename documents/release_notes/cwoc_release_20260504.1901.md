@@ -1,0 +1,1 @@
+Refined the maps "Go to" search bar: removed the label (placeholder now reads "Go to…"), styled the button to match the Create Chit button color, and made the input+button row the same width as the Create button.

@@ -1,0 +1,1 @@
+Checklist↔Note append buttons now show an 8-second undo countdown bar (matching the checklist clear pattern). Both operations auto-expand the target zone when collapsed. Undo restores the previous state cleanly.

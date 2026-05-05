@@ -267,3 +267,25 @@ function toggleModalNotesRender() {
     _setNotesRenderToggleLabel(true, "modal");
   }
 }
+
+// ══════════════════════════════════════════════════════════════════════════
+// FORMAT TOOLBAR & KEYBOARD SHORTCUTS
+// Reuses _emailFormatBtn() and _getEmailFormatAction() from editor-email.js
+// ══════════════════════════════════════════════════════════════════════════
+
+/** Wrapper so toolbar buttons and hotkeys call the shared email format function on the notes textarea */
+function _notesFormatBtn(action) {
+  // If in rendered mode, switch back to edit first
+  var rendered = document.getElementById('notes-rendered-output');
+  if (rendered && rendered.style.display !== 'none') {
+    toggleNotesViewMode();
+  }
+  _emailFormatBtn(action, 'note');
+  autoGrowNote(document.getElementById('note'));
+}
+
+/** Alias so the onkeydown handler in the HTML can reference it */
+function _getNotesFormatAction(e) {
+  return _getEmailFormatAction(e);
+}
+

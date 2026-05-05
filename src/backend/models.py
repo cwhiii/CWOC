@@ -130,6 +130,7 @@ class Chit(BaseModel):
     email_body_html: Optional[str] = None        # HTML body content for rich rendering
     email_account_id: Optional[str] = None       # ID of the email account this email belongs to
     attachments: Optional[str] = None            # JSON array of {id, filename, size, mime_type, uploaded_at}
+    availability: Optional[str] = None           # "busy", "free", or null/"-" (unset)
 
 class MultiValueEntry(BaseModel):
     label: Optional[str] = None    # "Work", "Home", "Mobile", custom

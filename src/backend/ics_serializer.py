@@ -170,6 +170,8 @@ def _parse_component(lines: List[str], comp_type: str) -> dict:
             comp["due_tzid"] = dt.get("tzid")
         elif prop_name == "RRULE":
             comp["rrule"] = _parse_rrule(value)
+        elif prop_name == "TRANSP":
+            comp["transp"] = value.upper()  # OPAQUE or TRANSPARENT
 
     return comp
 
@@ -324,6 +326,10 @@ def ics_print(components: List[dict]) -> str:
             rrule_str = _format_rrule(comp["rrule"])
             if rrule_str:
                 lines.append(f"RRULE:{rrule_str}")
+
+        # TRANSP (availability: busy/free)
+        if comp.get("transp"):
+            lines.append(f"TRANSP:{comp['transp']}")
 
         lines.append(f"END:{comp_type}")
 

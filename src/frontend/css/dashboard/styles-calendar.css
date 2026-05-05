@@ -103,6 +103,40 @@
     background-color: #ffe4b5;
 }
 
+/* Birthday/anniversary calendar entries */
+.all-day-event.birthday-event {
+    background: transparent !important;
+    border: none;
+    border-left: none;
+    padding: 1px 2px;
+}
+
+.birthday-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px 2px 2px;
+    font-size: 0.78em;
+    font-family: 'Lora', Georgia, serif;
+    color: #4a2c2a;
+    border: 1px solid #c4a882;
+    border-radius: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.4;
+    user-select: none;
+    gap: 3px;
+    max-width: 100%;
+}
+
+.birthday-chip-img {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
 .month-event {
     border: 0.5px solid ivory;
     border-radius: 3px;

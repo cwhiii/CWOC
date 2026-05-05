@@ -366,8 +366,38 @@
             <h4>Independent Alerts Board</h4>
             <p>Switch to the <strong>Independent</strong> view mode in the Alarms tab sidebar to access a 3-column board for quick alarms, timers, and stopwatches that aren't connected to any chit. Click the <strong>+</strong> button in each column header to add a new item. Edit names, times, and durations inline — changes save automatically on blur. Delete items with the ❌ button. Timers and stopwatches have Start/Pause, Reset, and Lap controls just like in the chit editor. Timers and stopwatches start immediately when created — no save step needed.</p>
             <h4>Task Zone</h4>
-            <p>Status (ToDo, In Progress, Blocked, Complete), Priority (High, Medium, Low), and Severity (Critical, Major, Normal, Minor). The <strong>🎯 Habit</strong> button is always visible in the Task zone header (even when collapsed) — click it to toggle habit mode on/off. When a chit is shared with other users, an <strong>Assignee</strong> dropdown appears after Severity, listing only the users the chit is currently shared with. Removing a shared user from the People zone automatically updates the Assignee options.</p>
+            <p>Status (ToDo, In Progress, Blocked, Complete), Priority (High, Medium, Low), Severity (Critical, Major, Normal, Minor), and <strong>Availability</strong> (Busy, Free, or unset). The <strong>🎯 Habit</strong> button is always visible in the Task zone header (even when collapsed) — click it to toggle habit mode on/off. When a chit is shared with other users, an <strong>Assignee</strong> dropdown appears after Severity, listing only the users the chit is currently shared with. Removing a shared user from the People zone automatically updates the Assignee options.</p>
+            <p>The Availability field maps to the iCal TRANSP property for calendar exports: Busy = OPAQUE, Free = TRANSPARENT.</p>
             <p>In the Tasks view, status is shown with matching icons: ● ToDo, ⟳ In Progress, ⊘ Blocked, ✓ Complete.</p>
+            <h4>Checklist Zone</h4>
+            <p>The checklist zone header includes two utility buttons:</p>
+            <ul>
+                <li><strong>🏁 Auto-Complete</strong> — Click to cycle through: Off → Auto-Complete (marks chit "Complete" when last item is checked) → Auto-Complete + Archive (also archives the chit) → Off</li>
+                <li><strong>← Notes</strong> — Appends note lines as new checklist items. Recognizes markdown checklist syntax (<code>- [ ]</code> / <code>- [x]</code>), bullet points, and plain lines. Indentation is preserved.</li>
+            </ul>
+            <h4>Notes Zone</h4>
+            <p>The notes zone supports <strong>Obsidian-style live preview</strong> with three render modes, cycled by clicking the mode button in the zone header:</p>
+            <ul>
+                <li><strong>📝 Source</strong> — Plain textarea showing raw markdown syntax. Full editing with the format toolbar visible.</li>
+                <li><strong>✨ Live Preview</strong> — Obsidian-style hybrid: you see formatted/rendered text, but clicking into any block reveals its raw markdown for editing. Moving the cursor away re-renders that block. You're editing the source while mostly seeing the finished result.</li>
+                <li><strong>👁️ Reading</strong> — Fully rendered markdown, non-editable. Double-click to return to Source mode.</li>
+            </ul>
+            <p><strong>Format Toolbar:</strong> Visible in Source and Live Preview modes. Buttons for Bold, Italic, Strikethrough, Link, Headings (H1/H2/H3 dropdown), Bullet List, Numbered List, Blockquote, Inline Code, and Horizontal Rule.</p>
+            <p><strong>Keyboard Shortcuts:</strong></p>
+            <ul>
+                <li><kbd>Ctrl+B</kbd> — Bold</li>
+                <li><kbd>Ctrl+I</kbd> — Italic</li>
+                <li><kbd>Ctrl+K</kbd> — Link</li>
+                <li><kbd>Ctrl+E</kbd> — Inline Code</li>
+                <li><kbd>Ctrl+Shift+X</kbd> — Strikethrough</li>
+                <li><kbd>Ctrl+Shift+1/2/3</kbd> — Heading 1/2/3</li>
+                <li><kbd>Ctrl+Shift+7</kbd> — Numbered List</li>
+                <li><kbd>Ctrl+Shift+8</kbd> — Bullet List</li>
+                <li><kbd>Ctrl+Shift+.</kbd> — Blockquote</li>
+                <li><kbd>Ctrl+Shift+-</kbd> — Horizontal Rule</li>
+            </ul>
+            <p>The <strong>← Checklist</strong> button appends all checklist items to the notes as markdown checklist lines (<code>- [ ] item</code> / <code>- [x] item</code>). Both conversions are additive — they don't remove existing content from either zone.</p>
+            <p>Use <code>[[chit title]]</code> to link to other chits — an autocomplete dropdown appears as you type inside the brackets.</p>
             <h4>Location Zone</h4>
             <ul>
                 <li><strong>+Location</strong> — Populates the address from your default saved location</li>
@@ -497,6 +527,7 @@
                 <li><strong>Tags</strong> — Tags for contacts, auto-prefixed with "Contact/" (shared with the general tag system)</li>
                 <li><strong>Suffixes</strong> — Text suffixes (Jr., Sr., Esq., Ph.D., M.D.) listed before numeric suffixes (I–X)</li>
                 <li><strong>Contact Vault</strong> — Toggle "Share to Vault" to make a contact visible to all users on the server. Vault contacts from other users appear in a separate "🏛️ Contact Vault" section on the People page and are read-only. Set a default in Settings → General → Contact Vault</li>
+                <li><strong>Dates on Calendar</strong> — Each date entry (Birthday, Anniversary, etc.) has a calendar icon toggle. When enabled (default), the date generates an annual all-day event on the calendar showing the person's name and age. Double-click a birthday event to open the contact editor. These entries appear in search results and across all calendar views (Week, Day, Month, Itinerary, Year)</li>
             </ul>
             <h3 id="sharing">Sharing</h3>
             <p>Chits can be shared with other system users, giving them Viewer or Manager access. All sharing controls live in the People zone of the chit editor.</p>

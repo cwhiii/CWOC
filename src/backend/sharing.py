@@ -406,4 +406,6 @@ def _deserialize_chit_fields(chit):
     chit["shares"] = _normalize_share_rsvp(chit.get("shares"))
     chit["is_project_master"] = bool(chit.get("is_project_master"))
     chit["all_day"] = bool(chit.get("all_day"))
+    chit["pinned"] = bool(chit.get("pinned"))
+    chit["archived"] = bool(chit.get("archived"))
     chit["stealth"] = bool(chit.get("stealth"))

@@ -1,0 +1,1 @@
+Attachments are now fully staged: uploads are rolled back if you exit without saving, deletes don't take effect until you save. Fixed archived chits not being properly filtered in checklist view (API now returns pinned/archived as proper booleans). Swapped checklist↔note buttons to correct positions: "Append to Notes" on checklist zone, "Append to Checklist" on notes zone.

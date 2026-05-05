@@ -572,7 +572,75 @@ class Checklist {
   _notifyChange() {
     this._updateCount();
     if (typeof this.onChangeCallback === "function") this.onChangeCallback(this.getChecklistData());
+    // Auto-complete: if all items are checked and auto-complete is enabled
+    _checkAutoCompleteChecklist(this);
   }
 }
 
 window.Checklist = Checklist;
+
+// ── Checklist Auto-Complete / Auto-Archive ───────────────────────────────────
+
+var _checklistAutoComplete = false;
+var _checklistAutoArchive = false;
+
+/**
+ * Toggle the auto-complete setting for the checklist.
+ * When enabled, marking the last checklist item as checked will:
+ *   1. Set the chit status to "Complete"
+ *   2. Optionally archive the chit (if auto-archive is also enabled)
+ */
+function _toggleChecklistAutoComplete(e) {
+  if (e) { e.stopPropagation(); e.preventDefault(); }
+
+  // Cycle through: Off → Auto-Complete → Auto-Complete + Archive → Off
+  var btn = document.getElementById('checklistAutoCompleteBtn');
+  if (!_checklistAutoComplete) {
+    _checklistAutoComplete = true;
+    _checklistAutoArchive = false;
+    if (btn) { btn.textContent = '🏁 Auto-Complete ✓'; btn.title = 'Click again to also auto-archive'; }
+  } else if (!_checklistAutoArchive) {
+    _checklistAutoArchive = true;
+    if (btn) { btn.textContent = '🏁 Auto-Complete + Archive ✓'; btn.title = 'Click again to disable'; }
+  } else {
+    _checklistAutoComplete = false;
+    _checklistAutoArchive = false;
+    if (btn) { btn.textContent = '🏁 Auto-Complete'; btn.title = 'Auto-complete chit when all items checked'; }
+  }
+  if (typeof setSaveButtonUnsaved === 'function') setSaveButtonUnsaved();
+}
+
+/**
+ * Check if all checklist items are checked and auto-complete is enabled.
+ * If so, set status to Complete and optionally archive.
+ */
+function _checkAutoCompleteChecklist(checklist) {
+  if (!_checklistAutoComplete) return;
+  if (!checklist || !checklist.items || checklist.items.length === 0) return;
+
+  var allChecked = checklist.items.every(function(item) { return item.checked; });
+  if (!allChecked) return;
+
+  // Set status to Complete
+  var statusSelect = document.getElementById('status');
+  if (statusSelect && statusSelect.value !== 'Complete') {
+    statusSelect.value = 'Complete';
+    if (typeof onStatusChange === 'function') onStatusChange();
+  }
+
+  // Auto-archive if enabled
+  if (_checklistAutoArchive) {
+    var archivedInput = document.getElementById('archived');
+    if (archivedInput && archivedInput.value !== 'true') {
+      archivedInput.value = 'true';
+      var archiveBtn = document.getElementById('archivedButton');
+      if (archiveBtn) {
+        archiveBtn.textContent = '📦 Archived';
+        archiveBtn.classList.add('archived-active');
+        archiveBtn.title = 'Archived (click to unarchive)';
+      }
+    }
+  }
+
+  if (typeof setSaveButtonUnsaved === 'function') setSaveButtonUnsaved();
+}

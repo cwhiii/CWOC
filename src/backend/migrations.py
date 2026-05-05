@@ -1700,3 +1700,32 @@ def migrate_add_email_accounts():
     finally:
         if conn:
             conn.close()
+
+
+# ── Availability (Busy/Free) field: migration ────────────────────────────
+
+def migrate_add_availability():
+    """Add availability TEXT column to chits table.
+
+    Stores "busy", "free", or NULL (unset / "-").
+    Used for calendar availability display and iCal export.
+
+    Fully idempotent — checks column existence before adding.
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        cursor.execute("PRAGMA table_info(chits)")
+        columns = {row[1] for row in cursor.fetchall()}
+
+        if "availability" not in columns:
+            cursor.execute("ALTER TABLE chits ADD COLUMN availability TEXT")
+            conn.commit()
+            logger.info("Added availability column to chits table")
+    except Exception as e:
+        logger.error(f"Error in migrate_add_availability: {str(e)}")
+    finally:
+        if conn:
+            conn.close()

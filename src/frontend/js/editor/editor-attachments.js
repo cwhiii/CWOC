@@ -5,7 +5,12 @@
  * file upload via drag-drop or file picker, listing attached files with
  * download/delete actions, and upload progress indication.
  *
- * Depends on: shared-utils.js (cwocToast),
+ * Attachment operations are staged until the chit is saved:
+ *   - Uploads go to the server immediately (files need storage) but are tracked
+ *     as "pending" and rolled back if the user exits without saving.
+ *   - Deletes are local-only until save — the server file remains until commit.
+ *
+ * Depends on: shared-utils.js (cwocToast, cwocConfirm),
  *             editor-save.js (setSaveButtonUnsaved)
  * Loaded before: editor-save.js, editor-init.js
  */
@@ -13,12 +18,20 @@
 /** Current attachments list (parsed from chit.attachments JSON) */
 var _attachmentsData = [];
 
+/** IDs of attachments uploaded this session (rolled back on exit without save) */
+var _pendingUploads = [];
+
+/** IDs of attachments marked for deletion (committed on save) */
+var _pendingDeletes = [];
+
 /**
  * Initialize the attachments zone from chit data.
  * @param {Object} chit — the loaded chit object
  */
 function initAttachmentsZone(chit) {
   _attachmentsData = [];
+  _pendingUploads = [];
+  _pendingDeletes = [];
 
   if (chit.attachments) {
     var parsed = chit.attachments;
@@ -42,6 +55,57 @@ function initAttachmentsZone(chit) {
 function getAttachmentsData() {
   if (_attachmentsData.length === 0) return null;
   return JSON.stringify(_attachmentsData);
+}
+
+/**
+ * Commit pending attachment operations on chit save.
+ * - Deletes pending-delete files from the server
+ * - Clears pending tracking arrays
+ * Called by the save flow after successful chit PUT.
+ */
+async function commitAttachmentChanges() {
+  var chitId = window.currentChitId;
+  if (!chitId) return;
+
+  // Delete files that were marked for removal
+  for (var i = 0; i < _pendingDeletes.length; i++) {
+    try {
+      await fetch(
+        '/api/chits/' + encodeURIComponent(chitId) + '/attachments/' + encodeURIComponent(_pendingDeletes[i]),
+        { method: 'DELETE' }
+      );
+    } catch (err) {
+      console.error('[Attachments] Failed to commit delete for', _pendingDeletes[i], err);
+    }
+  }
+
+  // Clear pending state — uploads are now permanent, deletes are committed
+  _pendingUploads = [];
+  _pendingDeletes = [];
+}
+
+/**
+ * Roll back pending uploads on exit without save.
+ * Deletes any files that were uploaded this session but not saved.
+ * Called by cancelOrExit when the user discards changes.
+ */
+async function rollbackAttachmentChanges() {
+  var chitId = window.currentChitId;
+  if (!chitId || _pendingUploads.length === 0) return;
+
+  for (var i = 0; i < _pendingUploads.length; i++) {
+    try {
+      await fetch(
+        '/api/chits/' + encodeURIComponent(chitId) + '/attachments/' + encodeURIComponent(_pendingUploads[i]),
+        { method: 'DELETE' }
+      );
+    } catch (err) {
+      console.error('[Attachments] Failed to rollback upload for', _pendingUploads[i], err);
+    }
+  }
+
+  _pendingUploads = [];
+  _pendingDeletes = [];
 }
 
 /**
@@ -144,6 +208,7 @@ function _renderAttachmentsList() {
 function _wireAttachmentUpload() {
   var uploadArea = document.getElementById('attachmentUpload');
   var fileInput = document.getElementById('attachmentFileInput');
+  var zoneHeader = document.querySelector('#attachmentsSection > .zone-header');
   if (!uploadArea || !fileInput) return;
 
   // Prevent double-wiring
@@ -158,7 +223,7 @@ function _wireAttachmentUpload() {
     }
   });
 
-  // Drag-drop events
+  // Drag-drop events on upload area
   uploadArea.addEventListener('dragover', function(e) {
     e.preventDefault();
     e.stopPropagation();
@@ -179,10 +244,44 @@ function _wireAttachmentUpload() {
       _uploadFiles(e.dataTransfer.files);
     }
   });
+
+  // Also wire drag-drop on the zone header so dropping on the collapsed header works
+  if (zoneHeader) {
+    zoneHeader.addEventListener('dragover', function(e) {
+      if (!e.dataTransfer || !e.dataTransfer.types.includes('Files')) return;
+      e.preventDefault();
+      e.stopPropagation();
+      zoneHeader.style.outline = '2px dashed #008080';
+      zoneHeader.style.outlineOffset = '-2px';
+    });
+
+    zoneHeader.addEventListener('dragleave', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      zoneHeader.style.outline = '';
+      zoneHeader.style.outlineOffset = '';
+    });
+
+    zoneHeader.addEventListener('drop', function(e) {
+      if (!e.dataTransfer || !e.dataTransfer.files || e.dataTransfer.files.length === 0) return;
+      e.preventDefault();
+      e.stopPropagation();
+      zoneHeader.style.outline = '';
+      zoneHeader.style.outlineOffset = '';
+      // Auto-expand the zone if collapsed
+      var content = document.getElementById('attachmentsContent');
+      if (content && content.style.display === 'none') {
+        content.style.display = '';
+        var icon = zoneHeader.querySelector('.zone-toggle-icon');
+        if (icon) icon.textContent = '🔼';
+      }
+      _uploadFiles(e.dataTransfer.files);
+    });
+  }
 }
 
 /**
- * Upload one or more files to the current chit.
+ * Upload one or more files to the current chit (staged — rolled back on cancel).
  * @param {FileList} files — the files to upload
  */
 async function _uploadFiles(files) {
@@ -222,13 +321,15 @@ async function _uploadFiles(files) {
       }
 
       var result = await resp.json();
-      _attachmentsData.push({
+      var newAtt = {
         id: result.id,
         filename: result.filename,
         size: result.size,
         mime_type: result.mime_type,
         uploaded_at: new Date().toISOString(),
-      });
+      };
+      _attachmentsData.push(newAtt);
+      _pendingUploads.push(result.id);
 
     } catch (err) {
       console.error('[Attachments] Upload error:', err);
@@ -240,20 +341,21 @@ async function _uploadFiles(files) {
   _renderAttachmentsList();
   _updateAttachmentCount();
 
+  // Mark editor as having unsaved changes so save buttons appear
+  if (typeof setSaveButtonUnsaved === 'function') setSaveButtonUnsaved();
+
   if (typeof cwocToast === 'function' && files.length > 0) {
     cwocToast(files.length + ' file(s) uploaded', 'success');
   }
 }
 
 /**
- * Delete an attachment by ID.
+ * Mark an attachment for deletion (staged — committed on save).
+ * Does NOT delete from the server until the chit is saved.
  * @param {string} attachmentId
  * @param {string} filename
  */
 async function _deleteAttachment(attachmentId, filename) {
-  var chitId = window.currentChitId;
-  if (!chitId) return;
-
   // Confirm deletion
   var confirmed = false;
   if (typeof cwocConfirm === 'function') {
@@ -267,27 +369,37 @@ async function _deleteAttachment(attachmentId, filename) {
   }
   if (!confirmed) return;
 
-  try {
-    var resp = await fetch(
-      '/api/chits/' + encodeURIComponent(chitId) + '/attachments/' + encodeURIComponent(attachmentId),
-      { method: 'DELETE' }
-    );
-
-    if (!resp.ok) {
-      if (typeof cwocToast === 'function') cwocToast('Failed to delete attachment', 'error');
-      return;
+  // If this was a pending upload (uploaded this session), we can delete it immediately
+  // since it was never part of the saved state
+  var wasPendingUpload = _pendingUploads.indexOf(attachmentId) !== -1;
+  if (wasPendingUpload) {
+    // Remove from pending uploads and delete from server immediately
+    _pendingUploads = _pendingUploads.filter(function(id) { return id !== attachmentId; });
+    var chitId = window.currentChitId;
+    if (chitId) {
+      try {
+        await fetch(
+          '/api/chits/' + encodeURIComponent(chitId) + '/attachments/' + encodeURIComponent(attachmentId),
+          { method: 'DELETE' }
+        );
+      } catch (err) {
+        console.error('[Attachments] Failed to delete pending upload:', err);
+      }
     }
-
-    // Remove from local data
-    _attachmentsData = _attachmentsData.filter(function(a) { return a.id !== attachmentId; });
-    _renderAttachmentsList();
-    _updateAttachmentCount();
-
-    if (typeof cwocToast === 'function') cwocToast('Attachment deleted', 'success');
-  } catch (err) {
-    console.error('[Attachments] Delete error:', err);
-    if (typeof cwocToast === 'function') cwocToast('Failed to delete attachment', 'error');
+  } else {
+    // Mark for deletion on save — file stays on server until then
+    _pendingDeletes.push(attachmentId);
   }
+
+  // Remove from local display data
+  _attachmentsData = _attachmentsData.filter(function(a) { return a.id !== attachmentId; });
+  _renderAttachmentsList();
+  _updateAttachmentCount();
+
+  // Mark editor as having unsaved changes
+  if (typeof setSaveButtonUnsaved === 'function') setSaveButtonUnsaved();
+
+  if (typeof cwocToast === 'function') cwocToast('Attachment removed', 'success');
 }
 
 /** Show upload progress indicator */

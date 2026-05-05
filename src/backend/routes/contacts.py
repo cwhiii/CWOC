@@ -318,6 +318,128 @@ def export_contacts(request: Request, format: str = Query(...)):
             conn.close()
 
 
+# ── Birthday / Anniversary Calendar Entries ───────────────────────────────
+
+@router.get("/api/contacts/birthdays")
+def get_contact_birthdays(request: Request):
+    """Return virtual calendar entries for contact dates marked show_on_calendar.
+
+    Each date entry on a contact (birthday, anniversary, etc.) that has
+    show_on_calendar != false generates an annual all-day event for the
+    current year and adjacent years (prev, current, next) so the calendar
+    can display them regardless of which period is being viewed.
+    """
+    conn = None
+    try:
+        user_id = request.state.user_id
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute(
+            """SELECT id, given_name, surname, display_name, dates, color, image_url
+               FROM contacts
+               WHERE (owner_id = ? OR shared_to_vault = 1)""",
+            (user_id,),
+        )
+        columns = [col[0] for col in cursor.description]
+        rows = cursor.fetchall()
+
+        from datetime import date as date_type
+
+        today = date_type.today()
+        years = [today.year - 1, today.year, today.year + 1]
+
+        entries = []
+        for row in rows:
+            contact = dict(zip(columns, row))
+            dates_raw = deserialize_json_field(contact.get("dates"))
+            if not dates_raw or not isinstance(dates_raw, list):
+                continue
+
+            display_name = contact.get("display_name") or contact.get("given_name") or "Unknown"
+            contact_color = contact.get("color")
+            contact_id = contact["id"]
+            image_url = contact.get("image_url")
+
+            for date_entry in dates_raw:
+                if not isinstance(date_entry, dict):
+                    continue
+                # Skip if explicitly disabled
+                if date_entry.get("show_on_calendar") is False:
+                    continue
+
+                label = date_entry.get("label", "")
+                value = date_entry.get("value", "")
+                if not value:
+                    continue
+
+                # Parse the date value (YYYY-MM-DD format)
+                try:
+                    parts = value.split("-")
+                    orig_year = int(parts[0])
+                    month = int(parts[1])
+                    day = int(parts[2])
+                except (ValueError, IndexError):
+                    continue
+
+                # Generate an entry for each relevant year
+                for year in years:
+                    try:
+                        event_date = date_type(year, month, day)
+                    except ValueError:
+                        # Handle Feb 29 in non-leap years → use Feb 28
+                        if month == 2 and day == 29:
+                            event_date = date_type(year, 2, 28)
+                        else:
+                            continue
+
+                    # Calculate age/years if original year is known and reasonable
+                    age_str = ""
+                    if orig_year and orig_year > 1900 and orig_year < year:
+                        age = year - orig_year
+                        age_str = f" ({age} yrs)"
+
+                    # Build a virtual chit-like object
+                    event_id = f"birthday_{contact_id}_{label}_{event_date.isoformat()}"
+                    title = f"🎂 {display_name} — {label}{age_str}" if label else f"🎂 {display_name}{age_str}"
+
+                    entries.append({
+                        "id": event_id,
+                        "title": title,
+                        "start_datetime": event_date.isoformat() + "T00:00:00",
+                        "end_datetime": event_date.isoformat() + "T23:59:59",
+                        "all_day": True,
+                        "color": contact_color or "#f5e6d3",
+                        "tags": ["Calendar"],
+                        "status": None,
+                        "people": [display_name],
+                        "note": None,
+                        "pinned": False,
+                        "archived": False,
+                        "deleted": False,
+                        "checklist": None,
+                        "alerts": None,
+                        "recurrence_rule": None,
+                        "recurrence_exceptions": None,
+                        "is_project_master": False,
+                        "child_chits": None,
+                        "priority": None,
+                        "severity": None,
+                        "location": None,
+                        "_is_birthday": True,
+                        "_contact_id": contact_id,
+                        "_contact_image_url": image_url,
+                        "_date_label": label,
+                    })
+
+        return entries
+    except Exception as e:
+        logger.error(f"Error fetching contact birthdays: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch contact birthdays: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
 @router.get("/api/contacts/{contact_id}/export")
 def export_single_contact(contact_id: str, request: Request, format: str = Query(...)):
     """Export a single contact as a .vcf file download."""

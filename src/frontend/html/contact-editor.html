@@ -15,6 +15,7 @@
         <link rel="stylesheet" href="/frontend/css/shared/shared-calculator.css" />
         <link rel="stylesheet" href="/frontend/css/shared/shared-editor.css" />
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" />
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" />
         <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
         <style>
             /* ══ Contact Editor Page-Specific Styles ══ */
@@ -175,6 +176,18 @@
                 flex-shrink: 0;
             }
             .multi-value-row .remove-entry-btn:hover { background: #a01c1c; }
+            .mv-cal-toggle {
+                display: inline-flex;
+                align-items: center;
+                gap: 3px;
+                cursor: pointer;
+                flex-shrink: 0;
+                font-size: 0.85em;
+                color: var(--aged-brown-medium);
+                title: 'Show on calendar';
+            }
+            .mv-cal-toggle input:checked + i { color: var(--accent-teal, #2e8b57); }
+            .mv-cal-toggle input:not(:checked) + i { opacity: 0.4; }
             .add-entry-btn {
                 padding: 4px 12px;
                 font-size: 0.85em;
@@ -686,6 +699,7 @@
         <script src="/frontend/js/pages/shared-editor.js"></script>
         <div class="author-info">&copy; 2026 C.W.'s Omni Chits &middot; <a href="https://www.cwholemaniii.com/pages/home.shtml" target="_blank">www.cwholemaniii.com</a></div>
         <script src="/frontend/js/pages/contact-qr.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
         <script src="/frontend/js/pages/contact-editor.js"></script>
         <script src="/pwa/pwa-register.js"></script>
     </body>

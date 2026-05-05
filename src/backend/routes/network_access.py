@@ -29,6 +29,24 @@ def _utcnow_iso() -> str:
     return datetime.utcnow().isoformat() + "Z"
 
 
+def _encrypt_auth_key(plaintext: str) -> str:
+    """Encrypt an auth key using Fernet symmetric encryption."""
+    try:
+        from src.backend.routes.email import _encrypt_password
+        return _encrypt_password(plaintext)
+    except Exception:
+        return plaintext  # Fallback: store as-is if encryption unavailable
+
+
+def _decrypt_auth_key(ciphertext: str) -> str:
+    """Decrypt an auth key using Fernet symmetric encryption."""
+    try:
+        from src.backend.routes.email import _decrypt_password
+        return _decrypt_password(ciphertext)
+    except Exception:
+        return ciphertext  # Fallback: return as-is (may be plaintext from before encryption)
+
+
 def _require_admin(request: Request) -> str:
     """Check that the requesting user is an admin. Return user_id if so, raise 403 otherwise."""
     user_id = getattr(request.state, "user_id", None)
@@ -73,7 +91,11 @@ def _row_to_dict(row: sqlite3.Row) -> dict:
     }
     if row["config"]:
         try:
-            result["config"] = json.loads(row["config"])
+            config = json.loads(row["config"])
+            # Decrypt auth_key for frontend display
+            if isinstance(config, dict) and config.get("auth_key"):
+                config["auth_key"] = _decrypt_auth_key(config["auth_key"])
+            result["config"] = config
         except (json.JSONDecodeError, TypeError):
             result["config"] = {}
     return result
@@ -209,6 +231,9 @@ def tailscale_up(request: Request):
             try:
                 config_data = json.loads(row["config"])
                 auth_key = config_data.get("auth_key")
+                # Decrypt the auth key if it was encrypted
+                if auth_key:
+                    auth_key = _decrypt_auth_key(auth_key)
             except (json.JSONDecodeError, TypeError):
                 pass
 
@@ -414,6 +439,9 @@ def save_network_access(provider: str, body: dict, request: Request):
             try:
                 old_config = json.loads(existing["config"]) if existing["config"] else {}
                 old_auth_key = old_config.get("auth_key", "")
+                # Decrypt for comparison
+                if old_auth_key:
+                    old_auth_key = _decrypt_auth_key(old_auth_key)
             except (json.JSONDecodeError, TypeError):
                 old_auth_key = ""
         else:
@@ -423,6 +451,10 @@ def save_network_access(provider: str, body: dict, request: Request):
         enabled = body.get("enabled", False)
         config = body.get("config", {})
         new_auth_key = config.get("auth_key", "")
+
+        # Encrypt the auth key before storing
+        if new_auth_key:
+            config["auth_key"] = _encrypt_auth_key(new_auth_key)
         config_json = json.dumps(config)
 
         conn.execute(
@@ -463,11 +495,16 @@ def save_network_access(provider: str, body: dict, request: Request):
             except Exception as e:
                 logger.warning(f"Failed to disconnect Tailscale after key change: {e}")
 
+        # Return with decrypted auth_key for frontend display
+        response_config = dict(config)
+        if response_config.get("auth_key"):
+            response_config["auth_key"] = new_auth_key  # Use the original plaintext
+
         return {
             "id": row_id,
             "provider": provider,
             "enabled": bool(enabled),
-            "config": config,
+            "config": response_config,
             "created_datetime": created,
             "modified_datetime": now,
             "tailscale_disconnected": tailscale_disconnected,

@@ -89,6 +89,7 @@ class CwocSaveSystem {
       document.body.appendChild(modal);
       document.getElementById('cwoc-confirm-exit').onclick = () => {
         if (typeof _cancelServerTimersForChit === 'function') _cancelServerTimersForChit();
+        if (typeof rollbackAttachmentChanges === 'function') rollbackAttachmentChanges();
         window.location.href = url;
       };
       document.getElementById('cwoc-stay-here').onclick = () => { modal.remove(); };
@@ -122,6 +123,132 @@ class CwocSaveSystem {
 
 // Export globally
 window.CwocSaveSystem = CwocSaveSystem;
+
+
+/**
+ * Intercept browser refresh (Cmd+R, Ctrl+R, F5) when there are unsaved changes
+ * and show a CWOC-styled modal instead of the browser's native "Leave site?" dialog.
+ *
+ * Usage (call after save system is initialized):
+ *   cwocInterceptRefresh({
+ *     hasChanges: () => window._cwocSave && window._cwocSave.hasChanges(),
+ *     onSave: () => saveChitAndStay(),   // optional — save & refresh
+ *   });
+ *
+ * The native beforeunload handler remains as a fallback for browser-button refresh
+ * and tab close (which can't be intercepted via keydown).
+ */
+function cwocInterceptRefresh(opts) {
+  opts = opts || {};
+  var hasChanges = opts.hasChanges || function() { return false; };
+  var onSave = opts.onSave || null;
+
+  window.addEventListener('keydown', function(e) {
+    // Detect refresh shortcuts: Cmd+R (Mac), Ctrl+R, F5
+    var isRefresh = (e.key === 'F5') ||
+      ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'r');
+
+    if (!isRefresh) return;
+    if (!hasChanges()) return; // No unsaved changes — let refresh happen normally
+
+    // Prevent the browser refresh
+    e.preventDefault();
+    e.stopImmediatePropagation();
+
+    // Don't stack modals
+    var existing = document.getElementById('cwoc-refresh-modal');
+    if (existing) return;
+
+    // Build the CWOC-styled modal
+    var overlay = document.createElement('div');
+    overlay.id = 'cwoc-refresh-modal';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;';
+
+    var box = document.createElement('div');
+    box.style.cssText = 'background:#fffaf0;border:2px solid #8b5a2b;border-radius:8px;padding:20px 28px;max-width:420px;width:90%;font-family:Lora, Georgia, serif;color:#2b1e0f;box-shadow:0 4px 16px rgba(0,0,0,0.3);text-align:center;';
+
+    var h3 = document.createElement('h3');
+    h3.style.cssText = 'margin:0 0 12px;font-size:1.2em;color:#4a2c2a;';
+    h3.textContent = 'Unsaved Changes';
+    box.appendChild(h3);
+
+    var p = document.createElement('p');
+    p.style.cssText = 'margin:0 0 18px;font-size:1em;line-height:1.4;';
+    p.textContent = 'You have unsaved changes. Refreshing will discard them.';
+    box.appendChild(p);
+
+    var btnRow = document.createElement('div');
+    btnRow.style.cssText = 'display:flex;gap:8px;justify-content:center;flex-wrap:wrap;';
+
+    // Cancel button — stay on page
+    var cancelBtn = document.createElement('button');
+    cancelBtn.className = 'standard-button';
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.style.cssText = 'padding:8px 16px;font-family:inherit;cursor:pointer;';
+    cancelBtn.onclick = function() { overlay.remove(); };
+    btnRow.appendChild(cancelBtn);
+
+    // Save & Refresh button (only if onSave provided)
+    if (onSave) {
+      var saveBtn = document.createElement('button');
+      saveBtn.className = 'standard-button';
+      saveBtn.textContent = '💾 Save & Refresh';
+      saveBtn.style.cssText = 'padding:8px 16px;font-family:inherit;cursor:pointer;';
+      saveBtn.onclick = function() {
+        overlay.remove();
+        var result = onSave();
+        if (result && typeof result.then === 'function') {
+          result.then(function() { window.location.reload(); });
+        } else {
+          // Give a brief moment for sync save to complete
+          setTimeout(function() { window.location.reload(); }, 300);
+        }
+      };
+      btnRow.appendChild(saveBtn);
+    }
+
+    // Discard & Refresh button
+    var discardBtn = document.createElement('button');
+    discardBtn.className = 'standard-button';
+    discardBtn.textContent = '🗑️ Discard & Refresh';
+    discardBtn.style.cssText = 'padding:8px 16px;font-family:inherit;cursor:pointer;background:#a0522d;color:#fdf5e6;border-color:#6b3a1f;';
+    discardBtn.onclick = function() {
+      overlay.remove();
+      // Temporarily disable beforeunload so the browser doesn't double-prompt
+      window._cwocSkipBeforeUnload = true;
+      window.location.reload();
+    };
+    btnRow.appendChild(discardBtn);
+
+    box.appendChild(btnRow);
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+
+    // ESC closes the modal
+    function _onKey(ev) {
+      if (ev.key === 'Escape') {
+        ev.preventDefault();
+        ev.stopImmediatePropagation();
+        overlay.remove();
+        document.removeEventListener('keydown', _onKey, true);
+      }
+    }
+    document.addEventListener('keydown', _onKey, true);
+
+    // Click outside to cancel
+    overlay.addEventListener('click', function(ev) {
+      if (ev.target === overlay) {
+        overlay.remove();
+        document.removeEventListener('keydown', _onKey, true);
+      }
+    });
+
+    cancelBtn.focus();
+  }, true); // Use capture phase to intercept before other handlers
+}
+
+// Export globally
+window.cwocInterceptRefresh = cwocInterceptRefresh;
 
 
 /* ═══════════════════════════════════════════════════════════════════════════

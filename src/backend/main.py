@@ -118,6 +118,7 @@ from src.backend.migrations import (
     migrate_add_contact_vault,
     migrate_create_rules_tables,
     migrate_add_email_accounts,
+    migrate_add_availability,
 )
 
 # Initialize database and run all migrations (same order as before)
@@ -167,6 +168,7 @@ migrate_add_fts5()
 migrate_add_contact_vault()
 migrate_create_rules_tables()
 migrate_add_email_accounts()
+migrate_add_availability()
 seed_version_info()
 
 # One-time cleanup: fix sent emails that still have CWOC_System/Email/Drafts tag

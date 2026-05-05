@@ -99,6 +99,8 @@ def get_all_chits(request: Request):
             chit["child_chits"] = deserialize_json_field(chit.get("child_chits"))
             chit["is_project_master"] = bool(chit.get("is_project_master"))
             chit["all_day"] = bool(chit.get("all_day"))
+            chit["pinned"] = bool(chit.get("pinned"))
+            chit["archived"] = bool(chit.get("archived"))
             chit["alerts"] = deserialize_json_field(chit.get("alerts"))
             chit["recurrence_rule"] = deserialize_json_field(chit.get("recurrence_rule"))
             chit["recurrence_exceptions"] = deserialize_json_field(chit.get("recurrence_exceptions"))
@@ -197,6 +199,8 @@ def search_chits(request: Request, q: Optional[str] = Query(None)):
             chit["child_chits"] = deserialize_json_field(chit.get("child_chits"))
             chit["is_project_master"] = bool(chit.get("is_project_master"))
             chit["all_day"] = bool(chit.get("all_day"))
+            chit["pinned"] = bool(chit.get("pinned"))
+            chit["archived"] = bool(chit.get("archived"))
             chit["alerts"] = deserialize_json_field(chit.get("alerts"))
             chit["recurrence_rule"] = deserialize_json_field(chit.get("recurrence_rule"))
             chit["recurrence_exceptions"] = deserialize_json_field(chit.get("recurrence_exceptions"))
@@ -293,6 +297,94 @@ def search_chits(request: Request, q: Optional[str] = Query(None)):
         # Enrich with assigned_to_display_name
         _enrich_assigned_to_display_names(cursor, [r["chit"] for r in results])
 
+        # Also search contact birthday/anniversary entries
+        try:
+            cursor.execute(
+                """SELECT id, given_name, surname, display_name, dates, color, image_url
+                   FROM contacts
+                   WHERE (owner_id = ? OR shared_to_vault = 1)""",
+                (user_id,),
+            )
+            contact_cols = [col[0] for col in cursor.description]
+            from datetime import date as date_type
+            today = date_type.today()
+            years = [today.year - 1, today.year, today.year + 1]
+
+            for crow in cursor.fetchall():
+                contact = dict(zip(contact_cols, crow))
+                dates_raw = deserialize_json_field(contact.get("dates"))
+                if not dates_raw or not isinstance(dates_raw, list):
+                    continue
+                display_name = contact.get("display_name") or contact.get("given_name") or "Unknown"
+                contact_color = contact.get("color")
+                contact_id = contact["id"]
+                image_url = contact.get("image_url")
+
+                for date_entry in dates_raw:
+                    if not isinstance(date_entry, dict):
+                        continue
+                    if date_entry.get("show_on_calendar") is False:
+                        continue
+                    label = date_entry.get("label", "")
+                    value = date_entry.get("value", "")
+                    if not value:
+                        continue
+                    # Check if query matches display_name or label
+                    if query_lower not in display_name.lower() and query_lower not in label.lower():
+                        continue
+                    # Generate entries for relevant years
+                    try:
+                        parts = value.split("-")
+                        orig_year = int(parts[0])
+                        month = int(parts[1])
+                        day_num = int(parts[2])
+                    except (ValueError, IndexError):
+                        continue
+                    for year in years:
+                        try:
+                            event_date = date_type(year, month, day_num)
+                        except ValueError:
+                            if month == 2 and day_num == 29:
+                                event_date = date_type(year, 2, 28)
+                            else:
+                                continue
+                        age_str = ""
+                        if orig_year and orig_year > 1900 and orig_year < year:
+                            age_str = f" ({year - orig_year} yrs)"
+                        event_id = f"birthday_{contact_id}_{label}_{event_date.isoformat()}"
+                        title = f"🎂 {display_name} — {label}{age_str}" if label else f"🎂 {display_name}{age_str}"
+                        birthday_chit = {
+                            "id": event_id,
+                            "title": title,
+                            "start_datetime": event_date.isoformat() + "T00:00:00",
+                            "end_datetime": event_date.isoformat() + "T23:59:59",
+                            "all_day": True,
+                            "color": contact_color or "#f5e6d3",
+                            "tags": ["Calendar"],
+                            "status": None,
+                            "people": [display_name],
+                            "note": None,
+                            "pinned": False,
+                            "archived": False,
+                            "deleted": False,
+                            "checklist": None,
+                            "alerts": None,
+                            "recurrence_rule": None,
+                            "recurrence_exceptions": None,
+                            "is_project_master": False,
+                            "child_chits": None,
+                            "priority": None,
+                            "severity": None,
+                            "location": None,
+                            "_is_birthday": True,
+                            "_contact_id": contact_id,
+                            "_contact_image_url": image_url,
+                            "_date_label": label,
+                        }
+                        results.append({"chit": birthday_chit, "matched_fields": ["birthday"]})
+        except Exception as bday_err:
+            logger.debug(f"Birthday search failed (non-fatal): {bday_err}")
+
         return results
     except Exception as e:
         logger.error(f"Error searching chits: {str(e)}")
@@ -336,8 +428,8 @@ def create_chit(chit: Chit, request: Request):
                 email_message_id, email_from, email_to, email_cc, email_bcc,
                 email_subject, email_body_text, email_body_html, email_date, email_folder,
                 email_status, email_read, email_in_reply_to, email_references,
-                attachments
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                attachments, availability
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 chit_id,
@@ -401,6 +493,7 @@ def create_chit(chit: Chit, request: Request):
                 chit.email_in_reply_to,
                 chit.email_references,
                 serialize_json_field(chit.attachments) if chit.attachments else None,
+                chit.availability,
             )
         )
         # Create notifications for shared users on new chit creation
@@ -473,6 +566,8 @@ def get_chit(chit_id: str, request: Request):
         chit["child_chits"] = deserialize_json_field(chit.get("child_chits"))
         chit["is_project_master"] = bool(chit.get("is_project_master"))
         chit["all_day"] = bool(chit.get("all_day"))
+        chit["pinned"] = bool(chit.get("pinned"))
+        chit["archived"] = bool(chit.get("archived"))
         chit["alerts"] = deserialize_json_field(chit.get("alerts"))
         chit["recurrence_rule"] = deserialize_json_field(chit.get("recurrence_rule"))
         chit["recurrence_exceptions"] = deserialize_json_field(chit.get("recurrence_exceptions"))
@@ -573,7 +668,7 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                     email_message_id = ?, email_from = ?, email_to = ?, email_cc = ?, email_bcc = ?,
                     email_subject = ?, email_body_text = ?, email_body_html = ?, email_date = ?, email_folder = ?,
                     email_status = ?, email_read = ?, email_in_reply_to = ?, email_references = ?,
-                    attachments = ?
+                    attachments = ?, availability = ?
                 WHERE id = ?
                 """,
                 (
@@ -633,6 +728,7 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                     chit.email_in_reply_to,
                     chit.email_references,
                     serialize_json_field(chit.attachments) if chit.attachments else None,
+                    chit.availability,
                     chit_id,
                 )
             )
@@ -729,8 +825,8 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                     email_message_id, email_from, email_to, email_cc, email_bcc,
                     email_subject, email_body_text, email_body_html, email_date, email_folder,
                     email_status, email_read, email_in_reply_to, email_references,
-                    attachments
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    attachments, availability
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     chit_id,
@@ -794,6 +890,7 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                     chit.email_in_reply_to,
                     chit.email_references,
                     serialize_json_field(chit.attachments) if chit.attachments else None,
+                    chit.availability,
                 )
             )
             # Audit logging for chit creation
@@ -1115,6 +1212,12 @@ def export_userdata(request: Request):
             s["default_notifications"] = deserialize_json_field(s.get("default_notifications"))
             settings.append(s)
 
+        # Strip sensitive fields from settings before export
+        _SENSITIVE_SETTINGS_FIELDS = ("email_account", "email_accounts")
+        for s in settings:
+            for field in _SENSITIVE_SETTINGS_FIELDS:
+                s.pop(field, None)
+
         # --- Contacts ---
         cursor.execute("SELECT * FROM contacts WHERE owner_id = ?", (user_id,))
         contact_rows = cursor.fetchall()
@@ -1195,8 +1298,9 @@ def import_chits(req: ImportRequest, request: Request):
                     weather_data, health_data,
                     habit, habit_goal, habit_success, show_on_calendar,
                     owner_id, owner_display_name, owner_username,
-                    shares, stealth, assigned_to
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    shares, stealth, assigned_to,
+                    availability
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     new_id,
                     chit.get("title"),
@@ -1242,6 +1346,7 @@ def import_chits(req: ImportRequest, request: Request):
                     serialize_json_field(chit.get("shares")),
                     1 if chit.get("stealth") else 0,
                     chit.get("assigned_to"),
+                    chit.get("availability"),
                 ),
             )
             imported += 1
@@ -1585,6 +1690,12 @@ def export_all(request: Request):
                 s[f] = deserialize_json_field(s.get(f))
             settings.append(s)
 
+        # Strip sensitive fields from settings before export
+        _SENSITIVE_SETTINGS_FIELDS = ("email_account", "email_accounts")
+        for s in settings:
+            for field in _SENSITIVE_SETTINGS_FIELDS:
+                s.pop(field, None)
+
         # ── Contacts ──
         cursor.execute("SELECT * FROM contacts WHERE owner_id = ?", (user_id,))
         contacts = []
@@ -1680,8 +1791,8 @@ def import_all(req: ImportRequest, request: Request):
                     weather_data, health_data,
                     habit, habit_goal, habit_success, show_on_calendar,
                     owner_id, owner_display_name, owner_username,
-                    shares, stealth, assigned_to
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    shares, stealth, assigned_to, availability
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     new_id, chit.get("title"), chit.get("note"),
                     serialize_json_field(chit.get("tags")),
@@ -1715,6 +1826,7 @@ def import_all(req: ImportRequest, request: Request):
                     serialize_json_field(chit.get("shares")),
                     1 if chit.get("stealth") else 0,
                     chit.get("assigned_to"),
+                    chit.get("availability"),
                 ),
             )
             chit_count += 1

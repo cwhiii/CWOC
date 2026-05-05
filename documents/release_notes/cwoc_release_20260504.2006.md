@@ -1,0 +1,1 @@
+Added email body live preview with Obsidian-style token-level editing. The email body now supports the same three-mode cycling (Source → Live Preview → Reading) as the Notes zone, with its own format toolbar, cursor tracking, and independent state. Reuses the shared tokenizer/parser/builder from the notes engine.

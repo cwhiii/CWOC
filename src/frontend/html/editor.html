@@ -700,8 +700,28 @@
                             <span class="zone-toggle-icon">🔼</span>
                         </div>
                         <div id="notesContent" class="zone-body">
+                            <div id="notesFormatToolbar" class="notes-format-toolbar">
+                                <button type="button" title="Bold (Cmd+B)" onclick="_notesFormatBtn('b')"><strong>B</strong></button>
+                                <button type="button" title="Italic (Cmd+I)" onclick="_notesFormatBtn('i')"><em>I</em></button>
+                                <button type="button" title="Strikethrough (Cmd+Shift+X)" onclick="_notesFormatBtn('s')"><s>S</s></button>
+                                <button type="button" title="Link (Cmd+K)" onclick="_notesFormatBtn('k')">🔗</button>
+                                <span class="notes-toolbar-sep"></span>
+                                <div class="notes-toolbar-dropdown">
+                                    <button type="button" title="Heading">H ▾</button>
+                                    <div class="notes-toolbar-dropdown-menu">
+                                        <button type="button" onclick="_notesFormatBtn('h1')" style="font-size:1.2em;font-weight:bold;">H1</button>
+                                        <button type="button" onclick="_notesFormatBtn('h2')" style="font-size:1.05em;font-weight:bold;">H2</button>
+                                        <button type="button" onclick="_notesFormatBtn('h3')" style="font-size:0.95em;font-weight:bold;">H3</button>
+                                    </div>
+                                </div>
+                                <button type="button" title="Bullet List (Cmd+Shift+8)" onclick="_notesFormatBtn('ul')">• List</button>
+                                <button type="button" title="Numbered List (Cmd+Shift+7)" onclick="_notesFormatBtn('ol')">1. List</button>
+                                <button type="button" title="Blockquote (Cmd+Shift+.)" onclick="_notesFormatBtn('q')">❝ Quote</button>
+                                <button type="button" title="Code (Cmd+E)" onclick="_notesFormatBtn('code')">⟨⟩</button>
+                                <button type="button" title="Horizontal Rule (Cmd+Shift+-)" onclick="_notesFormatBtn('hr')">―</button>
+                            </div>
                             <div class="field full-width">
-                                <textarea id="note" style="min-height:6em;resize:vertical;overflow-y:hidden;" oninput="autoGrowNote(this)"></textarea>
+                                <textarea id="note" style="min-height:6em;resize:vertical;overflow-y:hidden;" oninput="autoGrowNote(this)" onkeydown="var a=_getNotesFormatAction&&_getNotesFormatAction(event);if(a){event.preventDefault();_notesFormatBtn(a);}"></textarea>
                                 <div
                                     id="notes-rendered-output"
                                     class="markdown-output"

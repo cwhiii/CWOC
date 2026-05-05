@@ -295,6 +295,13 @@ def reset_password(user_id: str, body: PasswordReset, request: Request):
             "UPDATE users SET password_hash = ?, modified_datetime = ? WHERE id = ?",
             (password_hash, now, user_id),
         )
+
+        # Invalidate all sessions for the target user so they must log in with the new password
+        conn.execute(
+            "DELETE FROM sessions WHERE user_id = ?",
+            (user_id,),
+        )
+
         conn.commit()
 
         return {"message": "Password reset"}

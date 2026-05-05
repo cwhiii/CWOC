@@ -1,0 +1,1 @@
+Attachment drag-drop now works on the zone header (auto-expands when collapsed). Uploading/deleting attachments marks the editor as unsaved instead of silently saving. Fixed auto-archive button styling to match manual archive. Swapped checklist↔note conversion buttons to correct zones: "Append to Notes" on checklist zone, "Append to Checklist" on notes zone.

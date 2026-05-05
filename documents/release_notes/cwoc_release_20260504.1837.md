@@ -1,0 +1,1 @@
+Fixed hotkeys on Maps page: instead of disabling Leaflet keyboard entirely, added a capture-phase listener that re-dispatches key events to the document so both CWOC hotkeys and Leaflet's arrow/zoom keyboard navigation work simultaneously.

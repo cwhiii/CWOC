@@ -36,6 +36,11 @@
 function showQuickEditModal(chit, onRefresh) {
   // Never open quick-edit if a drag operation just completed or is in progress
   if (window._dragJustEnded || window._touchDragActive) return;
+  // Birthday entries are read-only virtual events — open contact editor instead
+  if (chit._isBirthday && chit._contact_id) {
+    window.location.href = '/frontend/html/contact-editor.html?id=' + chit._contact_id;
+    return;
+  }
 
   document.querySelectorAll('.recurrence-modal-overlay').forEach(el => el.remove());
 

@@ -399,6 +399,27 @@ function _startInlineEdit(countSpan, chit) {
 // ── Habit Charts ─────────────────────────────────────────────────────────────
 
 /**
+ * Set up a canvas for high-DPI rendering.
+ * Scales the canvas backing store by devicePixelRatio so text and lines
+ * render crisply on Retina/HiDPI displays.
+ *
+ * @param {HTMLCanvasElement} canvas
+ * @param {number} w — desired CSS width
+ * @param {number} h — desired CSS height
+ * @returns {CanvasRenderingContext2D}
+ */
+function _setupHiDpiCanvas(canvas, w, h) {
+  var dpr = window.devicePixelRatio || 1;
+  canvas.width = w * dpr;
+  canvas.height = h * dpr;
+  canvas.style.width = w + 'px';
+  canvas.style.height = h + 'px';
+  var ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  return ctx;
+}
+
+/**
  * Render all habit charts into the charts container.
  *
  * @param {Object} chit — the chit object
@@ -438,9 +459,9 @@ function _renderHabitCharts(chit, periods) {
  * Draw the completion bar chart — habit_success per period with habit_goal line.
  */
 function _drawCompletionChart(canvas, periods, chit) {
-  var ctx = canvas.getContext('2d');
-  var w = canvas.width = canvas.parentElement.clientWidth || 300;
-  var h = canvas.height = 180;
+  var w = canvas.parentElement.clientWidth || 300;
+  var h = 180;
+  var ctx = _setupHiDpiCanvas(canvas, w, h);
   ctx.clearRect(0, 0, w, h);
 
   var padding = { top: 25, right: 15, bottom: 35, left: 35 };
@@ -541,9 +562,9 @@ function _drawCompletionChart(canvas, periods, chit) {
  * Draw the success rate trend line chart — rolling percentage over time.
  */
 function _drawSuccessRateChart(canvas, periods, chit) {
-  var ctx = canvas.getContext('2d');
-  var w = canvas.width = canvas.parentElement.clientWidth || 300;
-  var h = canvas.height = 180;
+  var w = canvas.parentElement.clientWidth || 300;
+  var h = 180;
+  var ctx = _setupHiDpiCanvas(canvas, w, h);
   ctx.clearRect(0, 0, w, h);
 
   var padding = { top: 25, right: 15, bottom: 35, left: 35 };
@@ -644,9 +665,9 @@ function _drawSuccessRateChart(canvas, periods, chit) {
  * Draw the streak timeline — visual blocks showing streaks and breaks.
  */
 function _drawStreakChart(canvas, periods, chit) {
-  var ctx = canvas.getContext('2d');
-  var w = canvas.width = canvas.parentElement.clientWidth || 300;
-  var h = canvas.height = 180;
+  var w = canvas.parentElement.clientWidth || 300;
+  var h = 180;
+  var ctx = _setupHiDpiCanvas(canvas, w, h);
   ctx.clearRect(0, 0, w, h);
 
   var padding = { top: 25, right: 15, bottom: 35, left: 15 };
