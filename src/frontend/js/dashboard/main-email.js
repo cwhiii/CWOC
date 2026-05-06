@@ -27,6 +27,33 @@ var _emailAccountErrors = {};
 /* Account success state: { nickname: true } — set on successful sync */
 var _emailAccountSuccess = {};
 
+/* Last sync attempt time per account: { nickname: ISO string } */
+var _emailAccountLastSync = {};
+
+// Load persisted sync status from localStorage
+(function() {
+    try {
+        var stored = localStorage.getItem('cwoc_email_account_status');
+        if (stored) {
+            var parsed = JSON.parse(stored);
+            _emailAccountErrors = parsed.errors || {};
+            _emailAccountSuccess = parsed.success || {};
+            _emailAccountLastSync = parsed.lastSync || {};
+        }
+    } catch(e) {}
+})();
+
+/** Persist account sync status to localStorage */
+function _emailPersistAccountStatus() {
+    try {
+        localStorage.setItem('cwoc_email_account_status', JSON.stringify({
+            errors: _emailAccountErrors,
+            success: _emailAccountSuccess,
+            lastSync: _emailAccountLastSync
+        }));
+    } catch(e) {}
+}
+
 /* Whether account filter has been initialized with all accounts */
 var _emailAccountFilterInitialized = false;
 
@@ -114,17 +141,28 @@ function _emailRenderAccountFilterButtons() {
 
         // Error state — red pill with warning icon
         var hasError = _emailAccountErrors[acct.nickname];
+        var hasSuccess = _emailAccountSuccess[acct.nickname];
+        var lastSync = _emailAccountLastSync[acct.nickname];
+        var lastSyncStr = '';
+        if (lastSync) {
+            try {
+                var d = new Date(lastSync);
+                lastSyncStr = 'Last check: ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' ' + d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+            } catch(e) {}
+        }
+
         if (hasError) {
             btn.classList.add('email-account-pill-error');
             btn.textContent = '⚠️ ' + acct.nickname;
-            btn.title = 'Error: ' + hasError + ' (click for details)';
+            btn.title = 'Error: ' + hasError + (lastSyncStr ? '\n' + lastSyncStr : '') + '\n(click for details)';
             btn.addEventListener('click', function(e) {
                 e.stopPropagation();
                 _showAccountErrorDetails(acct.nickname, hasError);
             });
         } else {
+            if (hasSuccess) btn.classList.add('email-account-pill-ok');
             btn.textContent = acct.nickname;
-            btn.title = acct.email || acct.nickname;
+            btn.title = (acct.email || acct.nickname) + (lastSyncStr ? '\n' + lastSyncStr : '');
             btn.addEventListener('click', function() {
                 _emailToggleAccountFilter(acct.nickname);
             });
@@ -959,33 +997,39 @@ function _checkMail() {
 
                 // Store errors on account pills instead of generic toasts
                 if (result.data.errors && result.data.errors.length) {
+                    var accounts = (window._cwocSettings || {}).email_accounts || [];
                     result.data.errors.forEach(function(e) {
-                        // Parse "nickname: error message" format
+                        // Parse "email_or_nickname: error message" format
                         var colonIdx = e.indexOf(':');
                         if (colonIdx > 0) {
                             var errAcct = e.substring(0, colonIdx).trim();
                             var errMsg = e.substring(colonIdx + 1).trim();
-                            // Match by email or nickname
-                            _emailAccountErrors[errAcct] = errMsg;
-                            // Also try to match nickname from the accounts list
-                            var details2 = result.data.details || [];
-                            details2.forEach(function(d) {
-                                if (e.indexOf(d.account) !== -1) {
-                                    _emailAccountErrors[d.account] = errMsg;
+                            // Find the matching account nickname
+                            var matchedNickname = errAcct; // default to what we got
+                            accounts.forEach(function(a) {
+                                if (a && (a.email === errAcct || a.nickname === errAcct)) {
+                                    matchedNickname = a.nickname || a.email;
                                 }
                             });
+                            _emailAccountErrors[matchedNickname] = errMsg;
+                            _emailAccountLastSync[matchedNickname] = new Date().toISOString();
                         }
                     });
+                    _emailPersistAccountStatus();
                     _emailRenderAccountFilterButtons();
                 }
 
                 // Clear errors for accounts that synced successfully
                 var successDetails = result.data.details || [];
+                var syncTime = new Date().toISOString();
                 successDetails.forEach(function(d) {
                     if (_emailAccountErrors[d.account]) {
                         delete _emailAccountErrors[d.account];
                     }
+                    _emailAccountSuccess[d.account] = true;
+                    _emailAccountLastSync[d.account] = syncTime;
                 });
+                _emailPersistAccountStatus();
                 _emailRenderAccountFilterButtons();
 
                 if (typeof fetchChits === 'function') fetchChits();
@@ -1380,16 +1424,20 @@ function _buildThreadedEmailCard(thread, viSettings) {
     ribbon.dataset.depth = depth;
     wrapper.appendChild(ribbon);
 
-    // Thread count badge — sits on the ribbon
-    var badge = document.createElement('span');
-    badge.className = 'email-thread-badge';
-    badge.textContent = thread.totalCount;
-    badge.title = thread.totalCount + ' messages in this thread — click to expand';
-    badge.addEventListener('click', function(e) {
-        e.stopPropagation();
-        _toggleThreadExpand(wrapper, thread, viSettings);
-    });
-    wrapper.appendChild(badge);
+    // Insert thread count badge inline — after sender, before subject
+    var content = mainCard.querySelector('.email-card-content');
+    var senderEl = content && content.querySelector('.email-card-sender');
+    if (senderEl) {
+        var badge = document.createElement('span');
+        badge.className = 'email-thread-badge';
+        badge.textContent = thread.totalCount;
+        badge.title = thread.totalCount + ' messages in this thread — click to expand';
+        badge.addEventListener('click', function(e) {
+            e.stopPropagation();
+            _toggleThreadExpand(wrapper, thread, viSettings);
+        });
+        senderEl.after(badge);
+    }
 
     wrapper.appendChild(mainCard);
 

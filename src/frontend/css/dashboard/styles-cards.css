@@ -1307,13 +1307,13 @@ li.cwoc-dragging {
 }
 
 .email-draft-badge {
-    background: rgba(139, 90, 43, 0.15);
+    background: #fdf5e6;
     color: #8b4513;
     border: 1px solid #c4a882;
 }
 
 .email-sent-badge {
-    background: rgba(46, 125, 50, 0.12);
+    background: #fdf5e6;
     color: #2e7d32;
     border: 1px solid #a5d6a7;
 }
@@ -1407,15 +1407,32 @@ li.cwoc-dragging {
 }
 
 .email-account-pill-error {
-    background: #8b1a1a;
-    color: #fdf5e6;
-    border-color: #5c1010;
+    background: #c0392b !important;
+    color: #fff !important;
+    border-color: #922b21 !important;
     animation: pillErrorPulse 2s ease-in-out infinite;
 }
 
 .email-account-pill-error:hover {
-    background: #a52a2a;
-    border-color: #8b1a1a;
+    background: #e74c3c !important;
+    border-color: #c0392b !important;
+}
+
+.email-account-pill-ok {
+    background: #27ae60 !important;
+    color: #fff !important;
+    border-color: #1e8449 !important;
+}
+
+.email-account-pill-ok:hover {
+    background: #2ecc71 !important;
+    border-color: #27ae60 !important;
+}
+
+.email-account-pill-ok.active {
+    background: #27ae60 !important;
+    color: #fff !important;
+    border-color: #1e8449 !important;
 }
 
 @keyframes pillErrorPulse {
@@ -1856,32 +1873,32 @@ li.cwoc-dragging {
     margin-bottom: 0;
 }
 
-/* Thread count badge */
+/* Thread count badge — inline between sender and subject */
 .email-thread-badge {
-    position: absolute;
-    top: 50%;
-    left: -2px;
-    transform: translateY(-50%);
-    min-width: 20px;
-    height: 20px;
-    line-height: 20px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    line-height: 18px;
     text-align: center;
     font-family: 'Lora', Georgia, serif;
-    font-size: 0.72em;
+    font-size: 0.7em;
     font-weight: 700;
-    color: #fff8e1;
-    background: #5c4033;
-    border: 1px solid #3a2a1a;
-    border-radius: 10px;
-    padding: 0 5px;
+    color: #5c4033;
+    background: rgba(212, 175, 55, 0.4);
+    border: 1px solid rgba(139, 90, 43, 0.3);
+    border-radius: 9px;
+    padding: 0 4px;
+    margin: 0 6px;
     cursor: pointer;
-    z-index: 5;
+    flex-shrink: 0;
     transition: background 0.15s, transform 0.15s;
 }
 
 .email-thread-badge:hover {
-    background: #8b5a2b;
-    transform: translateY(-50%) scale(1.15);
+    background: rgba(212, 175, 55, 0.65);
+    transform: scale(1.1);
 }
 
 /* When expanded, ribbon changes color */
@@ -1890,8 +1907,9 @@ li.cwoc-dragging {
 }
 
 .email-thread-group-expanded .email-thread-badge {
-    background: teal;
-    border-color: #006060;
+    background: rgba(0, 128, 128, 0.3);
+    border-color: rgba(0, 128, 128, 0.5);
+    color: #006060;
 }
 
 /* Expanded thread child cards */
