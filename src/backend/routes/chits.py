@@ -140,7 +140,7 @@ def _search_filter_chits(chits_list, query_str):
     """Filter a list of deserialized chit dicts using the boolean search expression parser.
 
     This is the shared search logic used by both the global search endpoint and
-    the admin chit search. Supports #tags, &&, ||, !, parentheses, and implicit AND.
+    the admin chit search. Supports #tags, &&, ||, !, parentheses, field:value, and implicit AND.
 
     Args:
         chits_list: list of chit dicts (already deserialized from DB)
@@ -153,6 +153,37 @@ def _search_filter_chits(chits_list, query_str):
         return chits_list
 
     query_lower = query_str.strip().lower()
+
+    # Field aliases (same as in search_chits)
+    _field_aliases = {
+        'title': ['title'],
+        'note': ['note'],
+        'notes': ['note'],
+        'location': ['location'],
+        'loc': ['location'],
+        'status': ['status'],
+        'priority': ['priority'],
+        'severity': ['severity'],
+        'color': ['color'],
+        'people': ['people'],
+        'person': ['people'],
+        'assigned': ['assigned_to'],
+        'assigned_to': ['assigned_to'],
+        'checklist': ['checklist'],
+        'subject': ['email_subject', 'title'],
+        'sender': ['email_from'],
+        'from': ['email_from'],
+        'to': ['email_to'],
+        'cc': ['email_cc'],
+        'bcc': ['email_bcc'],
+        'body': ['email_body_text', 'note'],
+        'child': ['_child_titles'],
+        'start': ['start_datetime'],
+        'end': ['end_datetime'],
+        'due': ['due_datetime'],
+        'created': ['created_datetime'],
+        'modified': ['modified_datetime'],
+    }
 
     def _tokenize_search(q_str):
         tokens = []
@@ -201,8 +232,36 @@ def _search_filter_chits(chits_list, query_str):
                 j = i
                 while j < len(q_str) and q_str[j] not in ' \t()&|!#':
                     j += 1
+                word = q_str[i:j]
+                # Check for field:value syntax
+                colon_pos = word.find(':')
+                if colon_pos > 0:
+                    field_name = word[:colon_pos]
+                    if field_name in _field_aliases:
+                        i += colon_pos + 1
+                        while i < len(q_str) and q_str[i] in ' \t':
+                            i += 1
+                        if i < len(q_str) and q_str[i] == '(':
+                            i += 1
+                            val_start = i
+                            depth = 1
+                            while i < len(q_str) and depth > 0:
+                                if q_str[i] == '(':
+                                    depth += 1
+                                elif q_str[i] == ')':
+                                    depth -= 1
+                                i += 1
+                            field_value = q_str[val_start:i - 1].strip()
+                        else:
+                            val_start = i
+                            while i < len(q_str) and q_str[i] not in ' \t()&|!#':
+                                i += 1
+                            field_value = q_str[val_start:i]
+                        if field_value:
+                            tokens.append(('FIELD', (field_name, field_value)))
+                        continue
                 if j > i:
-                    tokens.append(('TEXT', q_str[i:j]))
+                    tokens.append(('TEXT', word))
                 i = j
         return tokens
 
@@ -256,6 +315,8 @@ def _search_filter_chits(chits_list, query_str):
                 return ('tag', t[1])
             if t[0] == 'TEXT':
                 return ('text', t[1])
+            if t[0] == 'FIELD':
+                return ('field', t[1][0], t[1][1])
             return ('text', '')
         if not tokens:
             return None
@@ -273,7 +334,55 @@ def _search_filter_chits(chits_list, query_str):
     def _text_matches(term, searchable_text):
         return term in searchable_text
 
-    def _eval_search_ast(node, tag_list_lower, searchable_text):
+    def _get_field_text(chit, field_name):
+        """Get the lowercase text content of a specific field."""
+        value = chit.get(field_name)
+        if value is None:
+            return ''
+        if isinstance(value, list):
+            parts = []
+            for item in value:
+                if isinstance(item, dict):
+                    text = item.get('text', '')
+                    if text:
+                        parts.append(str(text).lower())
+                elif isinstance(item, str):
+                    parts.append(item.lower())
+            return ' '.join(parts)
+        return str(value).lower()
+
+    def _field_matches(field_alias, search_value, chit):
+        """Check if search_value appears in the specified field(s)."""
+        if not chit:
+            return False
+        target_fields = _field_aliases.get(field_alias, [field_alias])
+        for field_name in target_fields:
+            if field_name == '_child_titles':
+                # Special case: search child chit titles
+                child_ids = chit.get('child_chits')
+                if child_ids and isinstance(child_ids, list):
+                    try:
+                        child_conn = sqlite3.connect(DB_PATH)
+                        child_cursor = child_conn.cursor()
+                        placeholders = ','.join('?' * len(child_ids))
+                        child_cursor.execute(
+                            f"SELECT title FROM chits WHERE id IN ({placeholders}) AND (deleted = 0 OR deleted IS NULL)",
+                            child_ids
+                        )
+                        for (child_title,) in child_cursor.fetchall():
+                            if child_title and search_value in child_title.lower():
+                                child_conn.close()
+                                return True
+                        child_conn.close()
+                    except Exception:
+                        pass
+            else:
+                field_text = _get_field_text(chit, field_name)
+                if field_text and search_value in field_text:
+                    return True
+        return False
+
+    def _eval_search_ast(node, tag_list_lower, searchable_text, chit=None):
         if node is None:
             return True
         kind = node[0]
@@ -281,14 +390,16 @@ def _search_filter_chits(chits_list, query_str):
             return _tag_matches_token(node[1], tag_list_lower)
         elif kind == 'text':
             return _text_matches(node[1], searchable_text)
+        elif kind == 'field':
+            return _field_matches(node[1], node[2], chit)
         elif kind == 'and':
-            return _eval_search_ast(node[1], tag_list_lower, searchable_text) and \
-                   _eval_search_ast(node[2], tag_list_lower, searchable_text)
+            return _eval_search_ast(node[1], tag_list_lower, searchable_text, chit) and \
+                   _eval_search_ast(node[2], tag_list_lower, searchable_text, chit)
         elif kind == 'or':
-            return _eval_search_ast(node[1], tag_list_lower, searchable_text) or \
-                   _eval_search_ast(node[2], tag_list_lower, searchable_text)
+            return _eval_search_ast(node[1], tag_list_lower, searchable_text, chit) or \
+                   _eval_search_ast(node[2], tag_list_lower, searchable_text, chit)
         elif kind == 'not':
-            return not _eval_search_ast(node[1], tag_list_lower, searchable_text)
+            return not _eval_search_ast(node[1], tag_list_lower, searchable_text, chit)
         return True
 
     def _get_searchable_text(chit):
@@ -327,7 +438,7 @@ def _search_filter_chits(chits_list, query_str):
         tags = chit.get("tags")
         tag_list_lower = [t.lower() for t in tags] if tags and isinstance(tags, list) else []
         searchable_text = _get_searchable_text(chit)
-        if _eval_search_ast(search_ast, tag_list_lower, searchable_text):
+        if _eval_search_ast(search_ast, tag_list_lower, searchable_text, chit):
             results.append(chit)
 
     return results
@@ -358,8 +469,41 @@ def search_chits(request: Request, q: Optional[str] = Query(None)):
     #   Multiple terms without operators default to AND
     #   #parent matches sub-tags (parent/child, etc.)
 
+    # ── Field-scoped search support ─────────────────────────────────────────
+    # Recognized field prefixes for field:value syntax.
+    # Maps user-facing aliases to internal field names (or lists for multi-field aliases).
+    _FIELD_ALIASES = {
+        'title': ['title'],
+        'note': ['note'],
+        'notes': ['note'],
+        'location': ['location'],
+        'loc': ['location'],
+        'status': ['status'],
+        'priority': ['priority'],
+        'severity': ['severity'],
+        'color': ['color'],
+        'people': ['people'],
+        'person': ['people'],
+        'assigned': ['assigned_to'],
+        'assigned_to': ['assigned_to'],
+        'checklist': ['checklist'],
+        'subject': ['email_subject', 'title'],
+        'sender': ['email_from'],
+        'from': ['email_from'],
+        'to': ['email_to'],
+        'cc': ['email_cc'],
+        'bcc': ['email_bcc'],
+        'body': ['email_body_text', 'note'],
+        'child': ['_child_titles'],  # special: searches child chit titles
+        'start': ['start_datetime'],
+        'end': ['end_datetime'],
+        'due': ['due_datetime'],
+        'created': ['created_datetime'],
+        'modified': ['modified_datetime'],
+    }
+
     def _tokenize_search(q_str):
-        """Tokenize search query into operators, #tags, and text terms."""
+        """Tokenize search query into operators, #tags, field:value, and text terms."""
         tokens = []
         i = 0
         while i < len(q_str):
@@ -411,11 +555,47 @@ def search_chits(request: Request, q: Optional[str] = Query(None)):
                 i = j
             else:
                 # Text term — read until operator or whitespace
+                # But first check for field:value syntax
                 j = i
                 while j < len(q_str) and q_str[j] not in ' \t()&|!#':
                     j += 1
+                word = q_str[i:j]
+
+                # Check if this is a field:value or field:(multi word) token
+                colon_pos = word.find(':')
+                if colon_pos > 0:
+                    field_name = word[:colon_pos]
+                    if field_name in _FIELD_ALIASES:
+                        # It's a recognized field prefix
+                        i += colon_pos + 1  # advance past "field:"
+                        # Read the value — either (parenthesized multi-word) or single word
+                        while i < len(q_str) and q_str[i] in ' \t':
+                            i += 1
+                        if i < len(q_str) and q_str[i] == '(':
+                            # Parenthesized value: field:(multi word value)
+                            i += 1  # skip (
+                            val_start = i
+                            depth = 1
+                            while i < len(q_str) and depth > 0:
+                                if q_str[i] == '(':
+                                    depth += 1
+                                elif q_str[i] == ')':
+                                    depth -= 1
+                                i += 1
+                            field_value = q_str[val_start:i - 1].strip()
+                        else:
+                            # Single word value
+                            val_start = i
+                            while i < len(q_str) and q_str[i] not in ' \t()&|!#':
+                                i += 1
+                            field_value = q_str[val_start:i]
+                        if field_value:
+                            tokens.append(('FIELD', (field_name, field_value)))
+                        continue
+
+                # Regular text term
                 if j > i:
-                    tokens.append(('TEXT', q_str[i:j]))
+                    tokens.append(('TEXT', word))
                 i = j
         return tokens
 
@@ -484,6 +664,9 @@ def search_chits(request: Request, q: Optional[str] = Query(None)):
                 return ('tag', t[1])
             if t[0] == 'TEXT':
                 return ('text', t[1])
+            if t[0] == 'FIELD':
+                # t[1] is (field_name, field_value)
+                return ('field', t[1][0], t[1][1])
             # Shouldn't reach here, but fallback
             return ('text', '')
 
@@ -493,8 +676,11 @@ def search_chits(request: Request, q: Optional[str] = Query(None)):
         return result
 
     def _tag_matches_token(token, tag_list):
-        """Check if any tag in the list matches the token (with hierarchy)."""
+        """Check if any tag in the list matches the token (with hierarchy).
+        Excludes system tags (cwoc_system/) from matching."""
         for t in tag_list:
+            if t.startswith('cwoc_system/'):
+                continue
             if t == token or t.startswith(token + '/'):
                 return True
             segments = t.split('/')
@@ -506,7 +692,66 @@ def search_chits(request: Request, q: Optional[str] = Query(None)):
         """Check if a text term appears in the chit's searchable text."""
         return term in searchable_text
 
-    def _eval_search_ast(node, tag_list_lower, searchable_text):
+    def _field_matches(field_alias, search_value, chit):
+        """Check if search_value appears in the specified field(s) of the chit."""
+        if not chit:
+            return False
+        target_fields = _FIELD_ALIASES.get(field_alias, [field_alias])
+        for field_name in target_fields:
+            if field_name == '_child_titles':
+                # Special case: search child chit titles
+                if _child_title_matches(search_value, chit):
+                    return True
+            else:
+                field_text = _get_field_text(chit, field_name)
+                if field_text and search_value in field_text:
+                    return True
+        return False
+
+    def _get_field_text(chit, field_name):
+        """Get the lowercase text content of a specific field for matching."""
+        value = chit.get(field_name)
+        if value is None:
+            return ''
+        if isinstance(value, list):
+            # Handle list fields (people, email_to, email_cc, email_bcc, checklist)
+            parts = []
+            for item in value:
+                if isinstance(item, dict):
+                    # Checklist items
+                    text = item.get('text', '')
+                    if text:
+                        parts.append(str(text).lower())
+                elif isinstance(item, str):
+                    parts.append(item.lower())
+            return ' '.join(parts)
+        return str(value).lower()
+
+    def _child_title_matches(search_value, chit):
+        """Check if any child chit has a title matching the search value."""
+        child_ids = chit.get('child_chits')
+        if not child_ids or not isinstance(child_ids, list) or not child_ids:
+            return False
+        # Look up child chit titles from the already-fetched results
+        # We need to query the DB for child titles
+        try:
+            child_conn = sqlite3.connect(DB_PATH)
+            child_cursor = child_conn.cursor()
+            placeholders = ','.join('?' * len(child_ids))
+            child_cursor.execute(
+                f"SELECT title FROM chits WHERE id IN ({placeholders}) AND (deleted = 0 OR deleted IS NULL)",
+                child_ids
+            )
+            for (child_title,) in child_cursor.fetchall():
+                if child_title and search_value in child_title.lower():
+                    child_conn.close()
+                    return True
+            child_conn.close()
+        except Exception:
+            pass
+        return False
+
+    def _eval_search_ast(node, tag_list_lower, searchable_text, chit=None):
         """Evaluate a search AST against a chit's tags and text content."""
         if node is None:
             return True
@@ -515,14 +760,19 @@ def search_chits(request: Request, q: Optional[str] = Query(None)):
             return _tag_matches_token(node[1], tag_list_lower)
         elif kind == 'text':
             return _text_matches(node[1], searchable_text)
+        elif kind == 'field':
+            # node is ('field', field_alias, search_value)
+            field_alias = node[1]
+            search_value = node[2]
+            return _field_matches(field_alias, search_value, chit)
         elif kind == 'and':
-            return _eval_search_ast(node[1], tag_list_lower, searchable_text) and \
-                   _eval_search_ast(node[2], tag_list_lower, searchable_text)
+            return _eval_search_ast(node[1], tag_list_lower, searchable_text, chit) and \
+                   _eval_search_ast(node[2], tag_list_lower, searchable_text, chit)
         elif kind == 'or':
-            return _eval_search_ast(node[1], tag_list_lower, searchable_text) or \
-                   _eval_search_ast(node[2], tag_list_lower, searchable_text)
+            return _eval_search_ast(node[1], tag_list_lower, searchable_text, chit) or \
+                   _eval_search_ast(node[2], tag_list_lower, searchable_text, chit)
         elif kind == 'not':
-            return not _eval_search_ast(node[1], tag_list_lower, searchable_text)
+            return not _eval_search_ast(node[1], tag_list_lower, searchable_text, chit)
         return True
 
     def _get_searchable_text(chit):
@@ -557,10 +807,10 @@ def search_chits(request: Request, q: Optional[str] = Query(None)):
                         v = alert.get(k)
                         if v:
                             parts.append(str(v).lower())
-        # Tags as text (so text search can find tag names too)
+        # Tags as text (so text search can find tag names too — exclude system tags)
         tags = chit.get("tags")
         if tags and isinstance(tags, list):
-            parts.extend(str(t).lower() for t in tags if t)
+            parts.extend(str(t).lower() for t in tags if t and not str(t).startswith("CWOC_System/"))
         return ' '.join(parts)
 
     def _collect_matched_fields(chit, search_ast):
@@ -568,6 +818,7 @@ def search_chits(request: Request, q: Optional[str] = Query(None)):
         matched = []
         text_terms = _collect_positive_text_terms(search_ast)
         tag_terms = _collect_positive_tag_terms(search_ast)
+        field_terms = _collect_field_terms(search_ast)
 
         if tag_terms:
             tags = chit.get("tags")
@@ -577,6 +828,17 @@ def search_chits(request: Request, q: Optional[str] = Query(None)):
                     if "tags" not in matched:
                         matched.append("tags")
                     break
+
+        # Add matched fields from field-scoped searches
+        if field_terms:
+            for field_alias, search_value in field_terms:
+                target_fields = _FIELD_ALIASES.get(field_alias, [field_alias])
+                for field_name in target_fields:
+                    if field_name == '_child_titles':
+                        if 'child_chits' not in matched:
+                            matched.append('child_chits')
+                    elif field_name not in matched:
+                        matched.append(field_name)
 
         if text_terms:
             for field_name in [
@@ -629,6 +891,9 @@ def search_chits(request: Request, q: Optional[str] = Query(None)):
         kind = node[0]
         if kind == 'text':
             return [node[1]]
+        elif kind == 'field':
+            # Include the field value as a highlight term
+            return [node[2]]
         elif kind == 'and':
             return _collect_positive_text_terms(node[1]) + _collect_positive_text_terms(node[2])
         elif kind == 'or':
@@ -650,6 +915,21 @@ def search_chits(request: Request, q: Optional[str] = Query(None)):
             return _collect_positive_tag_terms(node[1]) + _collect_positive_tag_terms(node[2])
         elif kind == 'not':
             return []  # Don't include negated terms
+        return []
+
+    def _collect_field_terms(node):
+        """Collect all non-negated field search terms from the AST."""
+        if node is None:
+            return []
+        kind = node[0]
+        if kind == 'field':
+            return [(node[1], node[2])]  # (field_alias, value)
+        elif kind == 'and':
+            return _collect_field_terms(node[1]) + _collect_field_terms(node[2])
+        elif kind == 'or':
+            return _collect_field_terms(node[1]) + _collect_field_terms(node[2])
+        elif kind == 'not':
+            return []
         return []
 
     # Parse the query into a unified AST
@@ -708,7 +988,7 @@ def search_chits(request: Request, q: Optional[str] = Query(None)):
                 tag_list_lower = [t.lower() for t in tags] if tags and isinstance(tags, list) else []
                 searchable_text = _get_searchable_text(chit)
 
-                if not _eval_search_ast(search_ast, tag_list_lower, searchable_text):
+                if not _eval_search_ast(search_ast, tag_list_lower, searchable_text, chit):
                     continue
 
                 matched_fields = _collect_matched_fields(chit, search_ast)

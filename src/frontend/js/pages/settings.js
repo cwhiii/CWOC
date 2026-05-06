@@ -1426,27 +1426,15 @@ function handleTagInput(event) {
     const input = document.getElementById("new-tag");
     const tagText = input.value.trim();
     if (tagText) {
-      // Block reserved CWOC_System/ prefix
       if (isReservedTagPrefix(tagText)) {
         const modal = document.getElementById("reserved-tag-modal");
-        if (modal) {
-          modal.style.display = "flex";
-          setTimeout(() => { modal.style.display = "none"; }, 2000);
-        }
+        if (modal) { modal.style.display = "flex"; setTimeout(() => { modal.style.display = "none"; }, 2000); }
         return;
       }
-      // Open shared tag modal for creation with color picker
       input.value = "";
       cwocTagModal.open(null, {
         prefillName: tagText,
-        skipPersist: true,
-        onSave: function(tagData) {
-          // Add to hidden tag editor div
-          _addTagDivToEditor(tagData);
-          setSaveButtonUnsaved();
-          _renderSettingsTagTree();
-          _inheritParentTagSharing(tagData.name);
-        },
+        onSave: function() { _renderSettingsTagTree(); setSaveButtonUnsaved(); },
       });
     }
   } else if (event.key === "Enter") {
@@ -1458,26 +1446,15 @@ function handleInfoClick(event) {
   const input = document.getElementById("new-tag");
   const tagText = input.value.trim();
   if (event.shiftKey && tagText) {
-    // Block reserved CWOC_System/ prefix
     if (isReservedTagPrefix(tagText)) {
       const modal = document.getElementById("reserved-tag-modal");
-      if (modal) {
-        modal.style.display = "flex";
-        setTimeout(() => { modal.style.display = "none"; }, 2000);
-      }
+      if (modal) { modal.style.display = "flex"; setTimeout(() => { modal.style.display = "none"; }, 2000); }
       return;
     }
-    // Open shared tag modal for creation with color picker
     input.value = "";
     cwocTagModal.open(null, {
       prefillName: tagText,
-      skipPersist: true,
-      onSave: function(tagData) {
-        _addTagDivToEditor(tagData);
-        setSaveButtonUnsaved();
-        _renderSettingsTagTree();
-        _inheritParentTagSharing(tagData.name);
-      },
+      onSave: function() { _renderSettingsTagTree(); setSaveButtonUnsaved(); },
     });
   }
 }
@@ -1485,215 +1462,112 @@ function handleInfoClick(event) {
 function addTag() {
   const input = document.getElementById("new-tag");
   const tagText = input.value.trim();
-  if (tagText) {
-    // Block reserved CWOC_System/ prefix
-    if (isReservedTagPrefix(tagText)) {
-      const modal = document.getElementById("reserved-tag-modal");
-      if (modal) {
-        modal.style.display = "flex";
-        setTimeout(() => { modal.style.display = "none"; }, 2000);
-      }
-      return;
-    }
-    const existingTags = Array.from(document.querySelectorAll("#tag-editor-hidden .tag")).map(
-      (tag) =>
-        tag.textContent
-          .substring(0, tag.textContent.lastIndexOf("✕"))
-          .trim()
-          .toLowerCase(),
-    );
-    if (existingTags.includes(tagText.toLowerCase())) {
-      const modal = document.getElementById("duplicate-tag-modal");
-      modal.style.display = "flex";
-      setTimeout(() => {
-        modal.style.display = "none";
-        input.value = tagText;
-      }, 2000);
-      return;
-    }
-    // Open shared tag modal for full creation experience
-    input.value = "";
-    cwocTagModal.open(null, {
-      prefillName: tagText,
-      skipPersist: true,
-      onSave: function(tagData) {
-        _addTagDivToEditor(tagData);
-        setSaveButtonUnsaved();
-        _renderSettingsTagTree();
-        _inheritParentTagSharing(tagData.name);
-      },
-    });
+  if (!tagText) return;
+  if (isReservedTagPrefix(tagText)) {
+    const modal = document.getElementById("reserved-tag-modal");
+    if (modal) { modal.style.display = "flex"; setTimeout(() => { modal.style.display = "none"; }, 2000); }
+    return;
   }
-}
-
-/** Helper: add a tag div to the hidden tag editor (settings page internal state) */
-function _addTagDivToEditor(tagData) {
-  const tagEditor = document.getElementById("tag-editor-hidden");
-  if (!tagEditor) return;
-  const tagDiv = document.createElement("div");
-  tagDiv.className = "tag";
-  tagDiv.dataset.color = tagData.color || "#d4c4b0";
-  tagDiv.dataset.fontColor = tagData.fontColor || "#5c3317";
-  tagDiv.dataset.favorite = tagData.favorite ? 'true' : 'false';
-  tagDiv.style.backgroundColor = tagData.color || "#d4c4b0";
-  tagDiv.style.color = tagData.fontColor || "#5c3317";
-  tagDiv.innerHTML = `${tagData.name} <button onclick="openDeleteModal(event, this.parentElement)">✕</button>`;
-  tagDiv.onclick = function (e) {
-    if (e.target !== this && e.target.tagName === "BUTTON") return;
-    _openSettingsTagModal(this);
-  };
-  tagEditor.appendChild(tagDiv);
+  input.value = "";
+  cwocTagModal.open(null, {
+    prefillName: tagText,
+    onSave: function() { _renderSettingsTagTree(); setSaveButtonUnsaved(); },
+  });
 }
 
 let currentTag = null;
 
-// Default tag color palette — warm parchment-themed, high contrast
-// (Now defined in shared-tag-modal.js — kept here as reference for settings-specific swatch logic)
-
 function openTagModal(tag) {
-  _openSettingsTagModal(tag);
+  // Legacy: tag is a div element from the old hidden-div pattern.
+  // Extract name and open the shared modal.
+  var tagName = (tag && tag.childNodes && tag.childNodes[0]) ? tag.childNodes[0].textContent.trim() : '';
+  if (tagName) {
+    cwocTagModal.open(tagName, {
+      onSave: function() { _renderSettingsTagTree(); setSaveButtonUnsaved(); },
+      onDelete: function() { _renderSettingsTagTree(); setSaveButtonUnsaved(); },
+    });
+  }
 }
 
-/**
- * Open the shared tag modal for editing a tag in the settings page context.
- * The settings page uses hidden tag divs for batch save, so we bridge to the shared modal.
- */
-function _openSettingsTagModal(tagDiv) {
-  var tagName = (tagDiv.childNodes[0]?.textContent || '').trim();
-  var tagColor = tagDiv.dataset.color || '#d4c4b0';
-  var tagFontColor = tagDiv.dataset.fontColor || '#5c3317';
-  var tagFavorite = tagDiv.dataset.favorite === 'true';
-
-  // Gather all tags from the hidden editor for swatch colors
-  var tagDivs = document.querySelectorAll('#tag-editor-hidden .tag:not(.tag-input-container .tag)');
-  var allTags = Array.from(tagDivs).map(function(div) {
-    return {
-      name: (div.childNodes[0]?.textContent || '').trim(),
-      color: div.dataset.color || '#d4c4b0',
-      fontColor: div.dataset.fontColor || '#5c3317',
-      favorite: div.dataset.favorite === 'true',
-    };
-  }).filter(function(t) { return t.name; });
-
-  cwocTagModal.open(tagName, {
-    allTags: allTags,
-    skipPersist: true,
-    tagData: { color: tagColor, fontColor: tagFontColor, favorite: tagFavorite },
-    onSave: function(tagData, oldName) {
-      // Update the hidden tag div
-      tagDiv.dataset.color = tagData.color;
-      tagDiv.dataset.fontColor = tagData.fontColor;
-      tagDiv.dataset.favorite = tagData.favorite ? 'true' : 'false';
-      tagDiv.style.backgroundColor = tagData.color;
-      tagDiv.style.color = tagData.fontColor;
-
-      // Rebuild inner HTML
-      tagDiv.innerHTML = '';
-      var nameNode = document.createTextNode(tagData.name + ' ');
-      var deleteBtn = document.createElement('button');
-      deleteBtn.textContent = '✕';
-      deleteBtn.onclick = function(e) { e.stopPropagation(); openDeleteModal(e, tagDiv); };
-      tagDiv.appendChild(nameNode);
-      tagDiv.appendChild(deleteBtn);
-      tagDiv.onclick = function(e) {
-        if (e.target !== this && e.target.tagName === 'BUTTON') return;
-        _openSettingsTagModal(this);
-      };
-
-      setSaveButtonUnsaved();
-      _renderSettingsTagTree();
-    },
-    onDelete: function(deletedName) {
-      tagDiv.remove();
-      setSaveButtonUnsaved();
-      _renderSettingsTagTree();
-    },
-  });
-}
-
-/** Render the tag tree in the settings page using the shared renderTagTree */
-function _renderSettingsTagTree() {
+/** Render the tag tree in the settings page — reads from API via loadAllTags() */
+async function _renderSettingsTagTree() {
   const treeContainer = document.getElementById('settings-tag-tree');
   if (!treeContainer) return;
 
-  // Build tag objects from the hidden tag divs
-  const tagDivs = document.querySelectorAll('#tag-editor-hidden .tag:not(.tag-input-container .tag)');
-  const tags = Array.from(tagDivs).map(div => ({
-    name: (div.childNodes[0]?.textContent || '').trim(),
-    color: div.dataset.color || '#d4c4b0',
-    favorite: div.dataset.favorite === 'true',
-  })).filter(t => t.name);
+  // Invalidate cache so we get fresh data
+  _invalidateSettingsCache();
+  var tags = [];
+  try { tags = await loadAllTags(); } catch (e) { tags = []; }
+
+  // Also update the hidden tag editor for gatherSettings() compatibility
+  _syncHiddenTagEditor(tags);
 
   if (tags.length === 0) {
     treeContainer.innerHTML = '<div style="opacity:0.5;font-size:0.85em;padding:4px;">No tags. Use Add Tag above.</div>';
     return;
   }
 
-  // Use shared buildTagTree + renderTagTree
   const tree = buildTagTree(tags);
-  // Render with no selection (settings doesn't have selected tags), click opens edit modal
+  // Click on a tag opens the shared modal for editing
   renderTagTree(treeContainer, tree, [], (fullPath, isNowSelected) => {
-    // Find the hidden tag div for this tag and open its modal
-    const tagDiv = Array.from(tagDivs).find(div => (div.childNodes[0]?.textContent || '').trim() === fullPath);
-    if (tagDiv) openTagModal(tagDiv);
+    cwocTagModal.open(fullPath, {
+      onSave: function() { _renderSettingsTagTree(); setSaveButtonUnsaved(); },
+      onDelete: function() { _renderSettingsTagTree(); setSaveButtonUnsaved(); },
+    });
   });
 
-  // Add "+" child-create buttons and 🔗 sharing indicators next to each tag row
-  treeContainer.querySelectorAll('[style*="display:flex"]').forEach(row => {
-    const badge = row.querySelector('span[style*="border-radius"]');
-    if (!badge) return;
-    const tagPath = badge.textContent;
-    // Find the full path by looking at the tag tree
-    const fullPath = _findFullPathForBadge(tree, badge, row);
+  // Add "+" child-create buttons and 🔗 sharing indicators
+  treeContainer.querySelectorAll('[data-tag-row]').forEach(row => {
+    var fullPath = row.dataset.tagRow;
     if (!fullPath) return;
 
-    // Task 12.5: Add 🔗 sharing indicator with user list tooltip (Req 6.8)
+    // Sharing indicator
     if (_tagHasSharing(fullPath)) {
       var linkIcon = document.createElement('span');
       linkIcon.className = 'tag-sharing-link-icon';
       linkIcon.textContent = '🔗';
-      // Build tooltip listing shared users
       var sharedUsers = _getTagShares(fullPath);
-      var userNames = sharedUsers.map(function(s) {
-        return _getTagSharingUserName(s.user_id);
-      });
+      var userNames = sharedUsers.map(function(s) { return _getTagSharingUserName(s.user_id); });
       linkIcon.title = 'Shared with: ' + userNames.join(', ');
-      // Insert after the badge
-      badge.parentNode.insertBefore(linkIcon, badge.nextSibling);
+      row.appendChild(linkIcon);
     }
 
+    // "+" button to create child tag
     const addBtn = document.createElement('span');
     addBtn.textContent = '+';
-    addBtn.title = `Create child tag under "${fullPath}"`;
+    addBtn.title = 'Create child tag under "' + fullPath + '"';
     addBtn.style.cssText = 'font-size:0.75em;cursor:pointer;padding:0 4px;border-radius:3px;background:#8b5a2b;color:#fdf5e6;margin-left:4px;flex-shrink:0;line-height:1.4;';
     addBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       const input = document.getElementById('new-tag');
-      if (input) {
-        input.value = fullPath + '/';
-        input.focus();
-      }
+      if (input) { input.value = fullPath + '/'; input.focus(); }
     });
     row.appendChild(addBtn);
   });
 }
 
-/** Helper: find the full path for a badge element in the tag tree */
-function _findFullPathForBadge(tree, badge, row) {
-  // Walk the tree to find a node whose name matches the badge text
-  // Use depth from padding-left to disambiguate
-  const paddingMatch = row.style.paddingLeft?.match(/(\d+)px/);
-  const depth = paddingMatch ? parseInt(paddingMatch[1]) / 16 : 0;
-  let found = null;
-  function walk(nodes, d) {
-    for (const n of nodes) {
-      if (d === depth && n.name === badge.textContent) { found = n.fullPath; return; }
-      walk(n.children, d + 1);
-      if (found) return;
-    }
-  }
-  walk(tree, 0);
-  return found;
+/** Sync the hidden tag editor divs from API data (for gatherSettings compatibility) */
+function _syncHiddenTagEditor(tags) {
+  const tagEditor = document.getElementById("tag-editor-hidden");
+  if (!tagEditor) return;
+  // Clear existing
+  tagEditor.querySelectorAll('.tag:not(.tag-input-container .tag)').forEach(function(t) { t.remove(); });
+  // Rebuild from API data
+  (tags || []).forEach(function(tag) {
+    var tagDiv = document.createElement("div");
+    tagDiv.className = "tag";
+    tagDiv.dataset.color = tag.color || "#d4c4b0";
+    tagDiv.dataset.fontColor = tag.fontColor || "#5c3317";
+    tagDiv.dataset.favorite = tag.favorite ? 'true' : 'false';
+    tagDiv.style.backgroundColor = tag.color || "#d4c4b0";
+    tagDiv.style.color = tag.fontColor || "#5c3317";
+    tagDiv.innerHTML = tag.name + ' <button onclick="openDeleteModal(event, this.parentElement)">✕</button>';
+    tagDiv.onclick = function(e) {
+      if (e.target !== this && e.target.tagName === 'BUTTON') return;
+      openTagModal(this);
+    };
+    tagEditor.appendChild(tagDiv);
+  });
 }
 
 function closeTagModal() {
@@ -1884,10 +1758,8 @@ function _initPillToggle(pillId, hiddenInputId) {
 function _updatePillToggle(pillId, activeVal) {
   var pill = document.getElementById(pillId);
   if (!pill) return;
-  var activeStyle = 'padding:4px 8px;background:#8b5a2b;color:#fff8e1;font-weight:bold;';
-  var inactiveStyle = 'padding:4px 8px;background:#f5e6cc;color:#bbb;';
   pill.querySelectorAll('span[data-val]').forEach(function(span) {
-    span.style.cssText = (span.dataset.val === activeVal) ? activeStyle : inactiveStyle;
+    span.classList.toggle('active', span.dataset.val === activeVal);
   });
 }
 

@@ -1,0 +1,3 @@
+## v20260505.1940
+
+Unified markdown editing modes across Notes and Email zones. Both the Notes expand modal and Email expand modal now have a 2-value pill toggle to switch between "Edit/Render" mode (toggle between editing and seeing rendered markdown) and "Live Preview" mode (side-by-side input and real-time rendered output). The small Notes zone and small Email zone use Edit/Render toggle only. Also extracted the settings pill toggle (Man/Woman, Imperial/Metric) into a reusable `.cwoc-2val-toggle` CSS class in shared-editor.css, replacing inline styles across settings and contact-editor pages.

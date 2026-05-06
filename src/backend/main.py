@@ -111,7 +111,7 @@ async def http_exception_handler(request: StarletteRequest, exc: HTTPException):
 # (executed at import time, same order as the original monolith)
 # ═══════════════════════════════════════════════════════════════════════════
 
-from src.backend.db import init_db, seed_version_info
+from src.backend.db import init_db, seed_version_info, DB_PATH, get_db_connection
 from src.backend.migrations import (
     migrate_labels_to_tags,
     migrate_add_all_day,
@@ -222,7 +222,7 @@ seed_version_info()
 # One-time cleanup: fix sent emails that still have CWOC_System/Email/Drafts tag
 try:
     import json as _json_cleanup
-    _cleanup_conn = sqlite3.connect(DB_PATH)
+    _cleanup_conn = get_db_connection()
     _cleanup_cur = _cleanup_conn.cursor()
     _cleanup_cur.execute("SELECT id, tags FROM chits WHERE email_status = 'sent' AND tags LIKE '%Email/Drafts%'")
     _cleanup_rows = _cleanup_cur.fetchall()

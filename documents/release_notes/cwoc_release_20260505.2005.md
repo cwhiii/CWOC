@@ -1,0 +1,1 @@
+Added field-scoped search to Global Search. You can now use `field:value` or `field:(multi word)` syntax to restrict searches to specific fields (title, note, location, status, priority, people, checklist, child, sender, to, cc, bcc, body, subject, due, start, end, assigned, etc.). Combines with existing boolean operators and tag filters.

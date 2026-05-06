@@ -5,86 +5,23 @@
  *   - Search view (displaySearchView)
  *   - Search results rendering (_renderSearchResults)
  *   - Field value extraction (_getChitFieldValue)
- *   - Highlight helpers (_extractHighlightTerms, _highlightMultiTerms)
+ *   - Highlight helpers (delegates to cwocExtractSearchTerms/cwocHighlightTerms in shared-utils.js)
  *   - Saved searches (_saveSearch, _loadSavedSearch, _deleteSavedSearch, _renderSavedSearches)
  *
  * Depends on globals from main.js: _globalSearchResults, _globalSearchQuery
+ * Depends on shared-utils.js: cwocExtractSearchTerms, cwocHighlightTerms
  * Depends on main-views.js: _buildChitHeader, chitColor, _applyMultiSelectFilters,
  *   _applyArchiveFilter, applyChitColors, storePreviousState
  */
 
-// ── Highlight Helpers ────────────────────────────────────────────────────────
+// ── Highlight Helpers (thin wrappers around shared-utils.js) ─────────────────
 
-/**
- * Extract positive (non-negated) search terms from a query string for highlighting.
- * Strips operators (&&, ||, !, ()) and #tag prefixes, returns array of terms.
- */
 function _extractHighlightTerms(query) {
-  if (!query) return [];
-  var terms = [];
-  // Remove negated terms: !word or !#tag or !(group)
-  // Simple approach: walk tokens and skip anything after !
-  var i = 0;
-  var q = query.toLowerCase();
-  while (i < q.length) {
-    // Skip whitespace
-    if (q[i] === ' ' || q[i] === '\t') { i++; continue; }
-    // Skip operators
-    if (q[i] === '(' || q[i] === ')') { i++; continue; }
-    if (q.substring(i, i + 2) === '&&' || q.substring(i, i + 2) === '||') { i += 2; continue; }
-    // Negation: skip the negated term/group
-    if (q[i] === '!') {
-      i++;
-      // Skip whitespace after !
-      while (i < q.length && (q[i] === ' ' || q[i] === '\t')) i++;
-      if (i < q.length && q[i] === '(') {
-        // Skip entire parenthesized group
-        var depth = 1;
-        i++;
-        while (i < q.length && depth > 0) {
-          if (q[i] === '(') depth++;
-          else if (q[i] === ')') depth--;
-          i++;
-        }
-      } else if (i < q.length && q[i] === '#') {
-        // Skip #tag
-        i++;
-        while (i < q.length && ' \t()&|!#'.indexOf(q[i]) === -1) i++;
-      } else {
-        // Skip word
-        while (i < q.length && ' \t()&|!#'.indexOf(q[i]) === -1) i++;
-      }
-      continue;
-    }
-    // #tag — extract tag name as highlight term
-    if (q[i] === '#') {
-      i++;
-      var start = i;
-      while (i < q.length && ' \t()&|!#'.indexOf(q[i]) === -1) i++;
-      if (i > start) terms.push(q.substring(start, i));
-      continue;
-    }
-    // Regular text term
-    var start2 = i;
-    while (i < q.length && ' \t()&|!#'.indexOf(q[i]) === -1) i++;
-    if (i > start2) terms.push(q.substring(start2, i));
-  }
-  return terms.filter(function(t) { return t.length > 0; });
+  return cwocExtractSearchTerms(query);
 }
 
-/**
- * Highlight multiple terms in text. HTML-escapes first, then wraps matches in <mark>.
- */
 function _highlightMultiTerms(text, terms) {
-  if (!text) return '';
-  if (!terms || terms.length === 0) return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  var escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  // Build regex from all terms (escaped for regex safety)
-  var parts = terms.map(function(t) {
-    return t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  });
-  var regex = new RegExp('(' + parts.join('|') + ')', 'gi');
-  return escaped.replace(regex, '<mark>$1</mark>');
+  return cwocHighlightTerms(text, terms);
 }
 
 // ── Search View ──────────────────────────────────────────────────────────────
@@ -118,7 +55,7 @@ async function displaySearchView() {
   // Search tips hint
   var hintDiv = document.createElement('div');
   hintDiv.className = 'global-search-hint';
-  hintDiv.innerHTML = 'Operators: <strong>&&</strong> (AND, default) \u00b7 <strong>||</strong> (OR) \u00b7 <strong>!</strong> (NOT) \u00b7 <strong>()</strong> (group) \u00b7 <strong>#tag</strong> (filter by tag) \u00b7 e.g. <code>(meeting || lunch) && #work && !cancelled</code>';
+  hintDiv.innerHTML = 'Operators: <strong>&&</strong> (AND, default) \u00b7 <strong>||</strong> (OR) \u00b7 <strong>!</strong> (NOT) \u00b7 <strong>()</strong> (group) \u00b7 <strong>#tag</strong> (filter by tag) \u00b7 <strong>field:value</strong> or <strong>field:(multi word)</strong><br>Fields: <code>title</code>, <code>note</code>, <code>location</code>, <code>status</code>, <code>priority</code>, <code>people</code>, <code>checklist</code>, <code>subject</code>, <code>sender</code>, <code>from</code>, <code>to</code>, <code>cc</code>, <code>bcc</code>, <code>body</code>, <code>child</code>, <code>due</code>, <code>start</code>, <code>end</code>, <code>assigned</code><br>e.g. <code>title:(email stuff) && #work</code> \u00b7 <code>location:park || people:john</code> \u00b7 <code>child:deploy && !#done</code>';
   chitList.appendChild(hintDiv);
 
   // Results container
@@ -281,6 +218,9 @@ function _getChitFieldValue(chit, fieldName) {
       if (Array.isArray(cl)) return cl.map(function(item) { return typeof item === 'object' ? (item.text || '') : String(item); }).join(', ');
       return String(cl);
     case 'color': return chit.color || '';
+    case 'child_chits':
+      var children = chit.child_chits || [];
+      return Array.isArray(children) ? '(child chits)' : '';
     case 'start_datetime': return chit.start_datetime || '';
     case 'end_datetime': return chit.end_datetime || '';
     case 'due_datetime': return chit.due_datetime || '';
@@ -290,6 +230,19 @@ function _getChitFieldValue(chit, fieldName) {
       var alerts = chit.alerts || [];
       if (Array.isArray(alerts)) return alerts.map(function(a) { return typeof a === 'object' ? (a.description || a.label || JSON.stringify(a)) : String(a); }).join(', ');
       return String(alerts);
+    case 'email_from': return chit.email_from || '';
+    case 'email_subject': return chit.email_subject || '';
+    case 'email_body_text': return chit.email_body_text ? (chit.email_body_text.length > 200 ? chit.email_body_text.substring(0, 200) + '\u2026' : chit.email_body_text) : '';
+    case 'email_to':
+      var emailTo = chit.email_to || [];
+      return Array.isArray(emailTo) ? emailTo.join(', ') : String(emailTo || '');
+    case 'email_cc':
+      var emailCc = chit.email_cc || [];
+      return Array.isArray(emailCc) ? emailCc.join(', ') : String(emailCc || '');
+    case 'email_bcc':
+      var emailBcc = chit.email_bcc || [];
+      return Array.isArray(emailBcc) ? emailBcc.join(', ') : String(emailBcc || '');
+    case 'assigned_to': return chit.assigned_to || '';
     default: return chit[fieldName] != null ? String(chit[fieldName]) : '';
   }
 }

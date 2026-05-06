@@ -103,10 +103,8 @@
     function _updatePillToggle(pillId, activeVal) {
         var pill = document.getElementById(pillId);
         if (!pill) return;
-        var activeStyle = 'padding:4px 8px;background:#8b5a2b;color:#fff8e1;font-weight:bold;';
-        var inactiveStyle = 'padding:4px 8px;background:#f5e6cc;color:#bbb;';
         pill.querySelectorAll('span[data-val]').forEach(function(span) {
-            span.style.cssText = (span.dataset.val === activeVal) ? activeStyle : inactiveStyle;
+            span.classList.toggle('active', span.dataset.val === activeVal);
         });
     }
 

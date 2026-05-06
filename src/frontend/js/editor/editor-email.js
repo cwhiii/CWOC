@@ -242,8 +242,9 @@ function _activateEmailZone() {
   // Auto-apply signature for new drafts
   _applySignatureIfEmpty();
 
-  // Wire live markdown preview for draft emails
-  _wireEmailBodyPreview();
+  // Show the render toggle button for draft emails
+  var renderToggleBtn2 = document.getElementById('email-render-toggle-btn');
+  if (renderToggleBtn2) renderToggleBtn2.style.display = '';
 
   // Mark as unsaved
   if (typeof setSaveButtonUnsaved === 'function') setSaveButtonUnsaved();
@@ -278,9 +279,12 @@ async function _deactivateEmailZone() {
   var fromEl = document.getElementById('emailFrom');
   if (fromEl) fromEl.textContent = '';
 
-  // Hide the markdown preview
-  var previewEl = document.getElementById('emailBodyPreview');
-  if (previewEl) previewEl.style.display = 'none';
+  // Hide the rendered output and reset toggle
+  var renderedEl = document.getElementById('emailBodyRendered');
+  if (renderedEl) renderedEl.style.display = 'none';
+  var bodyElForDisplay = document.getElementById('emailBody');
+  if (bodyElForDisplay) bodyElForDisplay.style.display = '';
+  _setEmailRenderToggleLabel(false);
 
   // Clear email metadata
   if (_emailCurrentChit) {
@@ -348,6 +352,7 @@ function _updateEmailButtons(status) {
   var activateBtn = document.getElementById('emailActivateBtn');
   var quickBtn = document.getElementById('emailQuickActivateBtn');
   var sendBtn = document.getElementById('emailSendBtn');
+  var discardBtn = document.getElementById('emailDiscardBtn');
   var replyBtn = document.getElementById('emailReplyBtn');
   var forwardBtn = document.getElementById('emailForwardBtn');
   var expandBtn = document.getElementById('emailExpandBtn');
@@ -384,21 +389,25 @@ function _updateEmailButtons(status) {
 
   if (status === 'draft') {
     if (sendBtn) sendBtn.style.display = '';
+    if (discardBtn) discardBtn.style.display = '';
     if (replyBtn) replyBtn.style.display = 'none';
     if (forwardBtn) forwardBtn.style.display = 'none';
     if (expandBtn) expandBtn.style.display = '';
   } else if (status === 'received') {
     if (sendBtn) sendBtn.style.display = 'none';
+    if (discardBtn) discardBtn.style.display = 'none';
     if (replyBtn) replyBtn.style.display = '';
     if (forwardBtn) forwardBtn.style.display = '';
     if (expandBtn) expandBtn.style.display = '';
   } else if (status === 'sent') {
     if (sendBtn) sendBtn.style.display = 'none';
+    if (discardBtn) discardBtn.style.display = 'none';
     if (replyBtn) replyBtn.style.display = 'none';
     if (forwardBtn) forwardBtn.style.display = 'none';
     if (expandBtn) expandBtn.style.display = '';
   } else {
     if (sendBtn) sendBtn.style.display = 'none';
+    if (discardBtn) discardBtn.style.display = 'none';
     if (replyBtn) replyBtn.style.display = 'none';
     if (forwardBtn) forwardBtn.style.display = 'none';
     if (expandBtn) expandBtn.style.display = 'none';
@@ -684,8 +693,9 @@ function initEmailZone(chit) {
     _showEmailSaveButtons(true);
     // Auto-apply signature for new drafts with empty body
     _applySignatureIfEmpty();
-    // Wire live markdown preview for draft emails
-    _wireEmailBodyPreview();
+    // Show the render toggle button for draft emails
+    var renderToggleBtn = document.getElementById('email-render-toggle-btn');
+    if (renderToggleBtn) renderToggleBtn.style.display = '';
   } else if (status === 'received') {
     _setEmailZoneReadOnly(true);
     _showEmailSaveButtons(false);
@@ -835,6 +845,33 @@ async function _emailReply() {
   }
 
   var original = _emailCurrentChit;
+  var originalMsgId = original.email_message_id || '';
+
+  // Check if there's already an existing draft reply to this message
+  if (originalMsgId) {
+    try {
+      var checkResp = await fetch('/api/chits');
+      if (checkResp.ok) {
+        var allChits = await checkResp.json();
+        var existingDraft = allChits.find(function(c) {
+          return c.email_status === 'draft' &&
+                 c.email_in_reply_to &&
+                 c.email_in_reply_to.trim() === originalMsgId.trim() &&
+                 !c.deleted;
+        });
+        if (existingDraft) {
+          cwocToast('Opening existing reply draft.', 'info');
+          var expandParam = _emailExpandModalOpen ? '&expand=email' : '';
+          window.location.href = '/frontend/html/editor.html?id=' + encodeURIComponent(existingDraft.id) + expandParam;
+          return;
+        }
+      }
+    } catch (e) {
+      // If check fails, proceed to create new draft
+      console.warn('[_emailReply] Could not check for existing drafts:', e);
+    }
+  }
+
   var subject = original.title || original.email_subject || '';
 
   // Prefix with "Re: " but avoid doubling
@@ -854,10 +891,10 @@ async function _emailReply() {
     email_cc: JSON.stringify([]),
     email_bcc: JSON.stringify([]),
     email_body_text: quotedBody,
-    email_in_reply_to: original.email_message_id || null,
+    email_in_reply_to: originalMsgId || null,
     email_references: original.email_references
-      ? (original.email_references + ' ' + (original.email_message_id || ''))
-      : (original.email_message_id || null),
+      ? (original.email_references + ' ' + originalMsgId)
+      : (originalMsgId || null),
     email_status: 'draft',
     email_folder: 'drafts',
     email_from: null,
@@ -898,6 +935,35 @@ async function _emailForward() {
   }
 
   var original = _emailCurrentChit;
+  var originalMsgId = original.email_message_id || '';
+
+  // Check if there's already an existing forward draft for this message
+  if (originalMsgId) {
+    try {
+      var fwdSubject = original.title || original.email_subject || '';
+      if (!/^Fwd:\s/i.test(fwdSubject)) fwdSubject = 'Fwd: ' + fwdSubject;
+      var normFwd = fwdSubject.toLowerCase().trim();
+
+      var checkResp = await fetch('/api/chits');
+      if (checkResp.ok) {
+        var allChits = await checkResp.json();
+        var existingDraft = allChits.find(function(c) {
+          return c.email_status === 'draft' &&
+                 !c.deleted &&
+                 (c.title || '').toLowerCase().trim() === normFwd;
+        });
+        if (existingDraft) {
+          cwocToast('Opening existing forward draft.', 'info');
+          var expandParam = _emailExpandModalOpen ? '&expand=email' : '';
+          window.location.href = '/frontend/html/editor.html?id=' + encodeURIComponent(existingDraft.id) + expandParam;
+          return;
+        }
+      }
+    } catch (e) {
+      console.warn('[_emailForward] Could not check for existing drafts:', e);
+    }
+  }
+
   var subject = original.title || original.email_subject || '';
 
   // Prefix with "Fwd: " but avoid doubling
@@ -1003,9 +1069,54 @@ async function _emailSend() {
     if (sendBtn) sendBtn.style.display = 'none';
     _setEmailZoneReadOnly(true);
 
+    // Refresh the thread view so the sent message appears
+    _fetchEmailThread(chitId);
+
   } catch (err) {
     console.error('[_emailSend] Error sending email:', err);
     cwocToast('Failed to send email.', 'error');
+  }
+}
+
+/**
+ * Discard (soft-delete) the current draft email chit.
+ * Confirms with the user, then deletes and navigates back.
+ */
+async function _emailDiscardDraft() {
+  var chitId = window.currentChitId;
+  if (!chitId) {
+    cwocToast('No draft to discard.', 'error');
+    return;
+  }
+
+  // Confirm
+  var confirmed = await cwocConfirm('Discard this draft? It will be moved to Trash.');
+  if (!confirmed) return;
+
+  try {
+    var response = await fetch('/api/chits/' + encodeURIComponent(chitId), {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+    if (!response.ok) {
+      var errData;
+      try { errData = await response.json(); } catch(e) { errData = {}; }
+      cwocToast(errData.detail || 'Failed to discard draft.', 'error');
+      return;
+    }
+
+    cwocToast('Draft discarded.', 'success');
+
+    // Navigate back — use stored previous state or go to dashboard
+    if (typeof exitEditor === 'function') {
+      exitEditor();
+    } else {
+      window.location.href = '/';
+    }
+  } catch (err) {
+    console.error('[_emailDiscardDraft] Error:', err);
+    cwocToast('Failed to discard draft.', 'error');
   }
 }
 
@@ -1025,9 +1136,13 @@ function _setEmailZoneReadOnly(readOnly) {
   if (bccEl) { bccEl.disabled = readOnly; bccEl.readOnly = readOnly; }
   if (bodyEl) { bodyEl.disabled = readOnly; bodyEl.readOnly = readOnly; }
 
-  // Hide markdown preview when read-only (received/sent emails use the HTML iframe)
-  var previewEl = document.getElementById('emailBodyPreview');
-  if (previewEl) previewEl.style.display = readOnly ? 'none' : '';
+  // Hide rendered output and render toggle when read-only
+  var renderedEl2 = document.getElementById('emailBodyRendered');
+  if (renderedEl2) renderedEl2.style.display = 'none';
+  var renderBtn = document.getElementById('email-render-toggle-btn');
+  if (renderBtn) renderBtn.style.display = readOnly ? 'none' : '';
+  // Ensure textarea is visible when switching to editable
+  if (!readOnly && bodyEl) bodyEl.style.display = '';
 }
 
 /**
@@ -1060,7 +1175,8 @@ function _openEmailExpandModal() {
   if (status === 'draft') {
     actionBtns =
       '<button type="button" class="zone-button" onclick="event.stopPropagation(); _closeEmailExpandModal(true); _emailSend()"><i class="fas fa-paper-plane"></i> Send</button>' +
-      '<button type="button" class="zone-button" onclick="event.stopPropagation(); _closeEmailExpandModal(true); _emailSaveAndSendArchive()"><i class="fas fa-paper-plane"></i> Send &amp; Archive</button>';
+      '<button type="button" class="zone-button" onclick="event.stopPropagation(); _closeEmailExpandModal(true); _emailSaveAndSendArchive()"><i class="fas fa-paper-plane"></i> Send &amp; Archive</button>' +
+      '<button type="button" class="zone-button zone-button-danger" onclick="event.stopPropagation(); _closeEmailExpandModal(false); _emailDiscardDraft()"><i class="fas fa-trash"></i> Discard</button>';
   } else if (status === 'received') {
     actionBtns =
       '<button type="button" class="zone-button" onclick="event.stopPropagation(); _closeEmailExpandModal(true); _emailReply()"><i class="fas fa-reply"></i> Reply</button>' +
@@ -1089,6 +1205,12 @@ function _openEmailExpandModal() {
       '<div class="modal-header" style="display:flex;align-items:center;justify-content:space-between;padding:0.5em 1em;flex-shrink:0;">' +
         '<h2 style="margin:0;">✉️ Email</h2>' +
         '<div style="display:flex;gap:0.5em;flex-wrap:wrap;align-items:center;">' +
+          (isReadOnly ? '' :
+          '<button type="button" class="zone-button" id="emailExpandRenderBtn" style="display:none;" onclick="_toggleEmailExpandRender()" title="Toggle rendered view"><i class="fas fa-eye"></i> Render</button>' +
+          '<div class="cwoc-2val-toggle" id="emailExpandModeToggle" title="Switch between live preview and edit/render">' +
+            '<span data-val="livepreview" class="active" onclick="_switchEmailExpandMode(\'livepreview\')">Live</span>' +
+            '<span data-val="editrender" onclick="_switchEmailExpandMode(\'editrender\')">Render</span>' +
+          '</div>') +
           pillToggleHtml +
           actionBtns +
           '<button type="button" class="zone-button" onclick="_closeEmailExpandModal(true)"><i class="fas fa-check"></i> Done</button>' +
@@ -1139,6 +1261,7 @@ function _openEmailExpandModal() {
         '<div id="emailExpandBodyWrap" style="flex:1;display:flex;flex-direction:column;height:calc(100vh - 2em - 280px);">' +
           '<textarea id="emailExpandBody" style="flex:1;width:100%;box-sizing:border-box;font-family:Lora,Georgia,serif;font-size:14px;line-height:1.6;padding:10px;border:1px inset #c4a882;border-radius:4px;resize:none;' + (hasHtml ? 'display:none;' : '') + '"' +
             disabledAttr + '>' + _escapeHtmlAttr(bodyVal) + '</textarea>' +
+          '<div id="emailExpandRendered" class="email-body-preview" style="display:none;flex:1;min-height:200px;overflow-y:auto;max-height:none;cursor:pointer;" ondblclick="_toggleEmailExpandRender()" title="Double-click to edit"></div>' +
         '</div>' +
       '</div>' +
     '</div>';
@@ -1213,6 +1336,7 @@ function _openEmailExpandModal() {
   }
 
   // Wire live markdown preview for draft expand modal (only when no HTML content)
+  // Default mode is live preview, so wire it immediately
   if (status === 'draft' && !hasHtml) {
     _wireExpandBodyPreview();
   }
@@ -1485,6 +1609,158 @@ var _escHtml = _escapeHtmlAttr;
 
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Email Edit/Render Toggle — small zone (mirrors notes toggle pattern)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Toggle the email body between edit (textarea) and rendered (markdown) views.
+ * Used in the small email zone — same pattern as toggleNotesViewMode.
+ */
+function toggleEmailViewMode(event) {
+  if (event) event.stopPropagation();
+  var bodyEl = document.getElementById('emailBody');
+  var rendered = document.getElementById('emailBodyRendered');
+  if (!bodyEl || !rendered) return;
+
+  var isCurrentlyRendered = rendered.style.display !== 'none';
+  if (isCurrentlyRendered) {
+    // Switch to edit
+    var h = rendered.offsetHeight;
+    rendered.style.display = 'none';
+    bodyEl.style.display = '';
+    if (h > 0) bodyEl.style.height = h + 'px';
+    bodyEl.focus();
+    _setEmailRenderToggleLabel(false);
+  } else {
+    // Switch to rendered
+    var h2 = bodyEl.offsetHeight || bodyEl.scrollHeight;
+    var raw = bodyEl.value || '';
+    if (typeof marked !== 'undefined' && marked.parse) {
+      rendered.innerHTML = marked.parse(raw, { breaks: true });
+    } else {
+      rendered.innerHTML = '<pre style="white-space:pre-wrap;">' + raw + '</pre>';
+    }
+    rendered.style.minHeight = h2 + 'px';
+    rendered.style.display = 'block';
+    bodyEl.style.display = 'none';
+    _setEmailRenderToggleLabel(true);
+  }
+}
+
+/**
+ * Update the email render toggle button label/icon.
+ */
+function _setEmailRenderToggleLabel(isRendered) {
+  var btn = document.getElementById('email-render-toggle-btn');
+  if (!btn) return;
+  if (isRendered) {
+    btn.innerHTML = '<i class="fas fa-edit"></i><span class="hideWhenNarrow"> Edit</span>';
+    btn.title = 'Switch to edit mode';
+  } else {
+    btn.innerHTML = '<i class="fas fa-eye"></i><span class="hideWhenNarrow"> Render</span>';
+    btn.title = 'Toggle rendered markdown view';
+  }
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Email Expand Modal — Mode Toggle (Edit/Render vs Live Preview)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** Current email expand modal mode: 'editrender' or 'livepreview' */
+var _emailExpandMode = 'livepreview';
+
+/**
+ * Switch the email expand modal between Edit/Render and Live Preview modes.
+ * @param {string} mode — 'editrender' or 'livepreview'
+ */
+function _switchEmailExpandMode(mode) {
+  _emailExpandMode = mode;
+
+  var toggle = document.getElementById('emailExpandModeToggle');
+  if (toggle) {
+    toggle.querySelectorAll('span').forEach(function(s) {
+      s.classList.toggle('active', s.dataset.val === mode);
+    });
+  }
+
+  var textarea = document.getElementById('emailExpandBody');
+  var previewLabel = document.querySelector('#emailExpandBodyWrap .email-body-preview-label');
+  var preview = document.getElementById('emailExpandBodyPreview');
+  var rendered = document.getElementById('emailExpandRendered');
+  var renderBtn = document.getElementById('emailExpandRenderBtn');
+  var toolbar = document.getElementById('emailExpandToolbar');
+
+  if (mode === 'livepreview') {
+    // Show textarea + live preview below
+    if (textarea) textarea.style.display = '';
+    if (previewLabel) previewLabel.style.display = '';
+    if (preview) preview.style.display = '';
+    if (rendered) rendered.style.display = 'none';
+    if (renderBtn) renderBtn.style.display = 'none';
+    if (toolbar) toolbar.style.display = '';
+  } else {
+    // Edit/Render mode — show textarea OR rendered, with toggle button
+    if (previewLabel) previewLabel.style.display = 'none';
+    if (preview) preview.style.display = 'none';
+    if (renderBtn) renderBtn.style.display = '';
+    if (toolbar) toolbar.style.display = '';
+
+    // Default to edit mode
+    if (textarea) textarea.style.display = '';
+    if (rendered) rendered.style.display = 'none';
+    _setEmailExpandRenderLabel(false);
+  }
+}
+
+/**
+ * Toggle the email expand modal body between edit and rendered views.
+ * Only used in Edit/Render mode.
+ */
+function _toggleEmailExpandRender() {
+  var textarea = document.getElementById('emailExpandBody');
+  var rendered = document.getElementById('emailExpandRendered');
+  var toolbar = document.getElementById('emailExpandToolbar');
+  if (!textarea || !rendered) return;
+
+  var isRendered = rendered.style.display !== 'none';
+  if (isRendered) {
+    rendered.style.display = 'none';
+    textarea.style.display = '';
+    if (toolbar) toolbar.style.display = '';
+    textarea.focus();
+    _setEmailExpandRenderLabel(false);
+  } else {
+    var raw = textarea.value || '';
+    if (typeof marked !== 'undefined' && marked.parse) {
+      rendered.innerHTML = marked.parse(raw, { breaks: true });
+    } else {
+      rendered.innerHTML = '<pre style="white-space:pre-wrap;">' + raw + '</pre>';
+    }
+    rendered.style.display = 'block';
+    textarea.style.display = 'none';
+    if (toolbar) toolbar.style.display = 'none';
+    _setEmailExpandRenderLabel(true);
+  }
+}
+
+/**
+ * Update the email expand render toggle button label.
+ */
+function _setEmailExpandRenderLabel(isRendered) {
+  var btn = document.getElementById('emailExpandRenderBtn');
+  if (!btn) return;
+  if (isRendered) {
+    btn.innerHTML = '<i class="fas fa-edit"></i> Edit';
+    btn.title = 'Switch to edit mode';
+  } else {
+    btn.innerHTML = '<i class="fas fa-eye"></i> Render';
+    btn.title = 'Toggle rendered markdown view';
+  }
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Markdown Live Preview — debounced rendering for draft email body
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -1530,52 +1806,28 @@ function _wireEmailBodyPreview() {
 /**
  * Wire live markdown preview on the expand modal's email body textarea.
  * Creates a preview div below the textarea and updates it on input.
+ * Uses the shared cwocWireLivePreview/cwocUpdateLivePreview functions.
  */
 function _wireExpandBodyPreview() {
   var expandTextarea = document.getElementById('emailExpandBody');
   var wrap = document.getElementById('emailExpandBodyWrap');
   if (!expandTextarea || !wrap) return;
 
-  // Make textarea take only top half, preview takes bottom half
+  // Apply shared horizontal split layout (stacked: textarea on top, preview below)
+  wrap.classList.add('cwoc-lp-split', 'cwoc-lp-horizontal');
+
   expandTextarea.style.flex = '1';
   expandTextarea.style.minHeight = '100px';
-
-  // Add a label above the preview
-  var label = document.createElement('div');
-  label.className = 'email-body-preview-label';
-  label.textContent = '📝 Preview';
-  label.style.cssText = 'flex-shrink:0;margin-top:6px;';
-  wrap.appendChild(label);
 
   // Create preview div for the expand modal
   var expandPreview = document.createElement('div');
   expandPreview.id = 'emailExpandBodyPreview';
   expandPreview.className = 'email-body-preview';
-  expandPreview.style.cssText = 'flex:1;min-height:80px;overflow-y:auto;margin-top:4px;max-height:none;';
+  expandPreview.style.cssText = 'flex:1;min-height:80px;overflow-y:auto;max-height:none;';
   wrap.appendChild(expandPreview);
 
-  var expandDebounce = null;
-
-  function updateExpandPreview() {
-    var raw = expandTextarea.value || '';
-    if (!raw.trim()) {
-      expandPreview.innerHTML = '<em style="opacity:0.4;">Preview appears here as you type…</em>';
-      return;
-    }
-    if (typeof marked !== 'undefined' && marked.parse) {
-      expandPreview.innerHTML = marked.parse(raw, { breaks: true });
-    } else {
-      expandPreview.textContent = raw;
-    }
-  }
-
-  expandTextarea.addEventListener('input', function() {
-    clearTimeout(expandDebounce);
-    expandDebounce = setTimeout(updateExpandPreview, 500);
-  });
-
-  // Initial render
-  updateExpandPreview();
+  // Use the shared live preview wiring
+  cwocWireLivePreview('emailExpandBody', 'emailExpandBodyPreview');
 }
 
 
@@ -1755,7 +2007,55 @@ async function _fetchEmailThread(chitId) {
 }
 
 /**
+ * Build a single thread item element.
+ * @param {Object} entry — thread entry from the API
+ * @param {string} currentId — the current chit's ID
+ * @returns {HTMLElement}
+ */
+function _buildThreadItem(entry, currentId) {
+  var item = document.createElement('div');
+  item.className = 'email-thread-item' + (entry.id === currentId ? ' email-thread-current' : '');
+
+  var sender = document.createElement('div');
+  sender.className = 'email-thread-sender';
+  sender.textContent = entry.email_from || '(Unknown)';
+  item.appendChild(sender);
+
+  var dateStr = '';
+  if (entry.email_date) {
+    try {
+      var d = new Date(entry.email_date);
+      dateStr = d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) +
+                ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } catch (e) {
+      dateStr = entry.email_date;
+    }
+  }
+  var dateLine = document.createElement('div');
+  dateLine.className = 'email-thread-date';
+  dateLine.textContent = dateStr;
+  item.appendChild(dateLine);
+
+  var preview = document.createElement('div');
+  preview.className = 'email-thread-preview';
+  preview.textContent = entry.email_body_text_preview || '';
+  item.appendChild(preview);
+
+  // Click to navigate to that email (unless it's the current one)
+  if (entry.id !== currentId) {
+    item.style.cursor = 'pointer';
+    item.addEventListener('click', function() {
+      var expandParam = _emailExpandModalOpen ? '&expand=email' : '';
+      window.location.href = '/frontend/html/editor.html?id=' + encodeURIComponent(entry.id) + expandParam;
+    });
+  }
+
+  return item;
+}
+
+/**
  * Render the email thread section below the email body.
+ * If >3 messages, shows a collapsed "stacked parchment" preview that expands on click.
  * @param {Array} thread — array of thread entries from the API
  * @param {string} currentId — the current chit's ID (highlighted)
  */
@@ -1776,52 +2076,76 @@ function _renderEmailThread(thread, currentId) {
   header.innerHTML = '<span class="email-thread-icon">🧵</span> Thread (' + thread.length + ' messages)';
   section.appendChild(header);
 
-  var list = document.createElement('div');
-  list.className = 'email-thread-list';
+  var useStack = thread.length > 3;
 
-  thread.forEach(function(entry) {
-    var item = document.createElement('div');
-    item.className = 'email-thread-item' + (entry.id === currentId ? ' email-thread-current' : '');
+  if (useStack) {
+    // ── Collapsed stack view ──
+    var stack = document.createElement('div');
+    stack.className = 'email-thread-stack';
+    stack.title = 'Click to expand thread';
 
-    var sender = document.createElement('div');
-    sender.className = 'email-thread-sender';
-    sender.textContent = entry.email_from || '(Unknown)';
-    item.appendChild(sender);
+    // Show the 2 most recent non-current entries as stacked previews
+    var others = thread.filter(function(e) { return e.id !== currentId; });
+    var topTwo = others.slice(-2);
 
-    var dateStr = '';
-    if (entry.email_date) {
-      try {
-        var d = new Date(entry.email_date);
-        dateStr = d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) +
-                  ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      } catch (e) {
-        dateStr = entry.email_date;
-      }
-    }
-    var dateLine = document.createElement('div');
-    dateLine.className = 'email-thread-date';
-    dateLine.textContent = dateStr;
-    item.appendChild(dateLine);
+    // Build the visual stack layers (back to front)
+    topTwo.forEach(function(entry, idx) {
+      var layer = document.createElement('div');
+      layer.className = 'email-thread-stack-layer email-thread-stack-layer-' + (idx + 1);
+      var sName = entry.email_from || '(Unknown)';
+      var nameMatch = sName.match(/^"?([^"<]+)"?\s*</);
+      layer.textContent = nameMatch ? nameMatch[1].trim() : sName.split('@')[0];
+      stack.appendChild(layer);
+    });
 
-    var preview = document.createElement('div');
-    preview.className = 'email-thread-preview';
-    preview.textContent = entry.email_body_text_preview || '';
-    item.appendChild(preview);
+    // Front card — count + prompt
+    var front = document.createElement('div');
+    front.className = 'email-thread-stack-front';
+    front.innerHTML = '<span class="email-thread-stack-count">' + thread.length + '</span>' +
+                      '<span class="email-thread-stack-label">messages in thread</span>' +
+                      '<span class="email-thread-stack-expand"><i class="fas fa-chevron-down"></i> Expand</span>';
+    stack.appendChild(front);
 
-    // Click to navigate to that email (unless it's the current one)
-    if (entry.id !== currentId) {
-      item.style.cursor = 'pointer';
-      item.addEventListener('click', function() {
-        // Preserve expand state when navigating within a thread
-        var expandParam = _emailExpandModalOpen ? '&expand=email' : '';
-        window.location.href = '/frontend/html/editor.html?id=' + encodeURIComponent(entry.id) + expandParam;
-      });
-    }
+    // Click to expand
+    stack.addEventListener('click', function() {
+      stack.style.display = 'none';
+      list.style.display = '';
+    });
 
-    list.appendChild(item);
-  });
+    section.appendChild(stack);
 
-  section.appendChild(list);
+    // ── Expanded list (hidden initially) ──
+    var list = document.createElement('div');
+    list.className = 'email-thread-list email-thread-list-scrollable';
+    list.style.display = 'none';
+
+    // Collapse button at top of expanded list
+    var collapseBtn = document.createElement('button');
+    collapseBtn.className = 'email-thread-collapse-btn';
+    collapseBtn.innerHTML = '<i class="fas fa-chevron-up"></i> Collapse thread';
+    collapseBtn.addEventListener('click', function() {
+      list.style.display = 'none';
+      stack.style.display = '';
+    });
+    list.appendChild(collapseBtn);
+
+    thread.forEach(function(entry) {
+      list.appendChild(_buildThreadItem(entry, currentId));
+    });
+
+    section.appendChild(list);
+  } else {
+    // ── Simple list (3 or fewer) ──
+    var list = document.createElement('div');
+    list.className = 'email-thread-list';
+
+    thread.forEach(function(entry) {
+      list.appendChild(_buildThreadItem(entry, currentId));
+    });
+
+    section.appendChild(list);
+  }
+
   emailContent.appendChild(section);
 }
 

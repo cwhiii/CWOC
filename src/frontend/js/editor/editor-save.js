@@ -53,6 +53,28 @@ async function _executePendingProjectAddition() {
   var addition = window._pendingProjectAddition;
   window._pendingProjectAddition = null;
   try {
+    // Ensure the child chit has a status (required for project membership)
+    var childRes = await fetch('/api/chit/' + encodeURIComponent(addition.chitId));
+    if (childRes.ok) {
+      var childChit = await childRes.json();
+      if (!childChit.status) {
+        childChit.status = 'ToDo';
+        delete childChit.effective_role;
+        delete childChit.assigned_to_display_name;
+        if (childChit.weather_data && typeof childChit.weather_data === 'object') childChit.weather_data = JSON.stringify(childChit.weather_data);
+        if (childChit.health_data && typeof childChit.health_data === 'object') childChit.health_data = JSON.stringify(childChit.health_data);
+        if (childChit.email_to && typeof childChit.email_to === 'object') childChit.email_to = JSON.stringify(childChit.email_to);
+        if (childChit.email_cc && typeof childChit.email_cc === 'object') childChit.email_cc = JSON.stringify(childChit.email_cc);
+        if (childChit.email_bcc && typeof childChit.email_bcc === 'object') childChit.email_bcc = JSON.stringify(childChit.email_bcc);
+        await fetch('/api/chits/' + encodeURIComponent(addition.chitId), {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(childChit),
+        });
+      }
+    }
+
+    // Add child to the project's child_chits array
     var projRes = await fetch('/api/chit/' + encodeURIComponent(addition.projectId));
     if (!projRes.ok) throw new Error('Failed to load project');
     var proj = await projRes.json();
@@ -485,6 +507,15 @@ async function saveChitData() {
       await saveProjectChanges();
     }
 
+    // Update pending project addition/removal with the actual saved chit ID
+    // (backend generates its own UUID for new chits, so the client-side ID may differ)
+    if (window._pendingProjectAddition) {
+      window._pendingProjectAddition.chitId = updatedChit.id;
+    }
+    if (window._pendingProjectRemoval) {
+      window._pendingProjectRemoval.chitId = updatedChit.id;
+    }
+
     await _executePendingProjectRemoval();
     await _executePendingProjectAddition();
 
@@ -573,6 +604,14 @@ async function saveChitAndStay() {
 
     if (updatedChit.is_project_master && typeof saveProjectChanges === "function") {
       await saveProjectChanges();
+    }
+
+    // Update pending project addition/removal with the actual saved chit ID
+    if (window._pendingProjectAddition) {
+      window._pendingProjectAddition.chitId = updatedChit.id;
+    }
+    if (window._pendingProjectRemoval) {
+      window._pendingProjectRemoval.chitId = updatedChit.id;
     }
 
     await _executePendingProjectRemoval();

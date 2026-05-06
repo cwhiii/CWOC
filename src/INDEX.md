@@ -391,7 +391,7 @@ All chit endpoints are scoped by `owner_id` — users can only access their own 
 | Route | Handler | Description |
 |-------|---------|-------------|
 | `GET /api/chits` | `get_all_chits(request)` | Return all non-deleted chits owned by the authenticated user |
-| `GET /api/chits/search` | `search_chits(q, request)` | Global search across all chit fields, scoped to authenticated user |
+| `GET /api/chits/search` | `search_chits(q, request)` | Global search across all chit fields with boolean operators, #tags, and field-scoped search (field:value / field:(multi word)), scoped to authenticated user |
 | `POST /api/chits` | `create_chit(chit, request)` | Create a new chit with `owner_id`, `owner_display_name`, `owner_username` from authenticated user. Creates notifications for shared users via `_create_share_notifications()` |
 | `GET /api/chit/{chit_id}` | `get_chit(chit_id, request)` | Get a single chit by ID (verifies ownership or shared access via `resolve_effective_role`); includes `effective_role` and `assigned_to_display_name` in response |
 | `PUT /api/chits/{chit_id}` | `update_chit(chit_id, chit, request)` | Update a chit (verifies ownership or manager access via `can_edit_chit`; managers can persist shares/assigned_to via `can_manage_sharing` guard; stealth is always preserved for non-owners; viewers get 403). Creates notifications for newly shared users via `_create_share_notifications()` |
@@ -1102,6 +1102,9 @@ Core utility functions shared across all CWOC pages. Must load after `shared-aut
 | `_utcToLocalDate(isoString)` | Parse an ISO datetime string into a local Date object |
 | `_parseISOTime(isoString)` | Parse an ISO datetime string and return a formatted `HH:MM` time string |
 | `getPastelColor(label)` | Generate a deterministic pastel RGB color from a string label |
+| `cwocMatchesSearch(chit, searchText)` | Check if a chit matches a plain-text search term across title, note, tags (excluding system tags), status, people, location, priority, severity, checklist |
+| `cwocExtractSearchTerms(query)` | Extract positive (non-negated) search terms from a boolean query string for highlighting; strips operators (&&, \|\|, !, ()), #tag prefixes, and field: prefixes (extracts just the value portion from field:value syntax) |
+| `cwocHighlightTerms(text, terms)` | HTML-escape text and wrap matching terms in `<mark>` tags for search result highlighting |
 
 #### shared-touch.js
 
@@ -1844,8 +1847,7 @@ Tag tree rendering, search, selection, favorites, recents, and tag creation/edit
 | `createTag(event)` | Open the shared tag modal for creating a new tag |
 | `editTag(event, tagName)` | Open the shared tag modal for editing an existing tag |
 | `clearTagSearch(event)` | Clear the tag search input and reset the filter |
-| `_filterTagTree(query)` | Filter the tag tree by search text — hides non-matching items and empty groups |
-| `addSearchedTag(event)` | Add a tag by name from the search input; opens modal if tag is new, otherwise adds to selection |
+| `_filterTagTree(query)` | Filter the tag tree as-you-type — hides non-matching items and empty groups |
 | `navigateToSettings()` | Navigate to the settings page |
 
 #### editor-people.js
@@ -1947,8 +1949,12 @@ Notes zone: auto-grow, chit linking, markdown render, modal.
 | `copyNotesToClipboard(event, source)` | Copy notes text to clipboard from main textarea or modal |
 | `downloadNotes(event, source)` | Download notes as a `.md` file named after the chit title |
 | `openNotesModal(event)` | Open the fullscreen notes editing modal, pre-populated with current note text |
-| `closeNotesModal(save)` | Close the notes modal; if save is true, copy modal text back to main textarea |
-| `toggleModalNotesRender()` | Toggle between edit and rendered views inside the notes modal |
+| `closeNotesModal(save)` | Close the notes modal; if save is true, copy modal text back to main textarea (from whichever mode is active) |
+| `toggleModalNotesRender()` | Toggle between edit and rendered views inside the notes modal (Edit/Render mode) |
+| `_notesModalMode` | Current notes modal mode: `'editrender'` or `'livepreview'` |
+| `_switchNotesModalMode(mode)` | Switch the notes modal between Edit/Render and Live Preview modes; syncs content between panes |
+| `_wireNotesModalLivePreview()` | Wire the live preview input listener for real-time markdown rendering (only once) |
+| `_updateNotesModalLivePreview()` | Update the live preview output from the live preview input using `marked.parse()` |
 
 #### editor-send-content.js
 
@@ -1970,6 +1976,29 @@ Send notes/checklist content to another chit via a single-select chit picker mod
 | `_sendContentUndoState` | State object for the active undo bar (interval, element) |
 | `_showSendContentUndoBar(mode, targetChit, savedTarget, undoData)` | Show an undo countdown bar in the zone header after send |
 | `_undoSendContent(mode, targetChit, undoData)` | Undo a send operation by restoring both source and target chits |
+
+#### editor-send-item.js
+
+Send a single checklist item (+ children) to another chit via a quick popup or full search modal.
+
+| Symbol | Description |
+|--------|-------------|
+| `_sendItemPopup` | Reference to the per-item send popup DOM element |
+| `_sendItemPopupOpen` | Boolean flag indicating if the send-item popup is open |
+| `_sendItemTarget` | Current target: `{ item, checklist }` |
+| `_sendItemRecentChits` | Cached array of the 3 most recently edited chits |
+| `_openSendItemPopup(e, item, checklist)` | Open the quick send popup near a checklist item |
+| `_closeSendItemPopup()` | Close the send-item popup |
+| `_fetchRecentChitsForItem()` | Fetch all chits and populate the recent-3 list |
+| `_renderSendItemPopup(allChits)` | Render the popup content with recent chits and search button |
+| `_openSendItemSearchModal()` | Open the full search modal for single-item send |
+| `_closeSendItemSearchModal()` | Close the send-item search modal |
+| `_fetchChitsForItemSearch()` | Fetch and render chits in the search modal |
+| `_sendItemSearchRenderChits(chits)` | Render chit rows in the search modal table |
+| `_sendItemSearchUpdateButtons()` | Enable/disable Copy and Move buttons based on selection |
+| `_sendItemSearchApplyFilters()` | Apply search and status filters to the chit list |
+| `_executeSendItem(mode, targetChit)` | Execute copy or move of item subtree to target chit |
+| `_flashChecklistAddArrow()` | Flash a ↓ arrow at the checklist input when an item is added |
 
 #### editor-alerts.js
 
@@ -2077,10 +2106,15 @@ Email zone: populate, collect, reply, forward, send. Handles the Email zone in t
 | `_emailReply()` | Create a reply draft chit via `POST /api/chits` and navigate to the editor; sets `email_to` to original sender, `email_in_reply_to` to original Message-ID, subject prefixed with "Re: " (no doubling), body quoted below separator |
 | `_emailForward()` | Create a forward draft chit via `POST /api/chits` and navigate to the editor; empty `email_to`, subject prefixed with "Fwd: " (no doubling), body quoted below separator |
 | `_emailSend()` | Send the current draft email via `POST /api/email/send/{id}`; validates non-empty To field; shows success/error toast; updates local state and UI to reflect sent status |
-| `_setEmailZoneReadOnly(readOnly)` | Toggle field editability for the email zone (To, Cc, Bcc, Body) — sets `disabled` and `readOnly` properties; hides markdown preview when read-only |
+| `_setEmailZoneReadOnly(readOnly)` | Toggle field editability for the email zone (To, Cc, Bcc, Body) — sets `disabled` and `readOnly` properties; hides render toggle when read-only |
 | `_fetchEmailThread(chitId)` | Fetch the email thread for a chit via `GET /api/email/thread/{chit_id}` and render it below the body |
 | `_renderEmailThread(thread, currentId)` | Render the email thread section with sender, date, preview for each message; current email highlighted |
-| `_wireEmailBodyPreview()` | Wire live markdown preview on the email body textarea; debounced 500ms; uses `marked.parse()` for rendering |
+| `toggleEmailViewMode(event)` | Toggle email body between edit (textarea) and rendered (markdown) views in the small zone |
+| `_setEmailRenderToggleLabel(isRendered)` | Update the email render toggle button label/icon |
+| `_switchEmailExpandMode(mode)` | Switch email expand modal between 'editrender' and 'livepreview' modes |
+| `_toggleEmailExpandRender()` | Toggle email expand modal body between edit and rendered views (Edit/Render mode only) |
+| `_setEmailExpandRenderLabel(isRendered)` | Update the email expand render toggle button label |
+| `_wireEmailBodyPreview()` | (Legacy) Wire live markdown preview on the email body textarea; no longer called for small zone |
 | `_wireExpandBodyPreview()` | Wire live markdown preview on the expand modal's email body textarea; creates preview div dynamically |
 | `_setupHtmlEmailView(htmlContent, bodyEl)` | Set up HTML email view with toggle button and sandboxed iframe using DOMPurify sanitization |
 | `_switchEmailView(mode)` | Switch between 'html' and 'text' views for email body rendering |
@@ -2126,6 +2160,8 @@ Save system: build chit object, save, delete, pin, archive, QR.
 
 | Symbol | Description |
 |--------|-------------|
+| `_executePendingProjectRemoval()` | Execute deferred project removal (remove child from parent project's child_chits) after save |
+| `_executePendingProjectAddition()` | Execute deferred project addition (add child to project's child_chits, ensure child has status) after save |
 | `createISODateTimeString(dateStr, timeStr, isAllDay, isEnd)` | Convert date/time strings to an ISO datetime string, handling all-day and end-of-day logic |
 | `convertMonthFormat(dateStr)` | Convert `YYYY-Mon-DD` format to `YYYY-MM-DD` numeric format |
 | `setMediaSource(elementId, src)` | Set the `src` attribute of a media element, validating the URL first |
@@ -3225,6 +3261,7 @@ All HTML pages include the following PWA `<head>` tags: `<link rel="manifest" hr
 <script src="/frontend/js/editor/editor-location.js"></script>
 <script src="/frontend/js/editor/editor-notes.js"></script>
 <script src="/frontend/js/editor/editor-send-content.js"></script>
+<script src="/frontend/js/editor/editor-send-item.js"></script>
 <script src="/frontend/js/editor/editor-alerts.js"></script>
 <script src="/frontend/js/editor/editor-color.js"></script>
 <script src="/frontend/js/editor/editor-health.js"></script>
@@ -3500,6 +3537,7 @@ shared-auth.js            ← MUST load first (getCurrentUser, isAdmin, waitForA
                     editor-location.js    (location zone — uses shared-geocoding)
                     editor-notes.js       (notes zone)
                     editor-send-content.js (send notes/checklist to another chit)
+                    editor-send-item.js   (send single checklist item to another chit)
                     editor-alerts.js      (alerts zone)
                     editor-color.js       (color zone)
                     editor-health.js      (health indicators zone)

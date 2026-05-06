@@ -258,7 +258,10 @@ def _fetch_new_messages(imap, since_date: str) -> list:
     if status != "OK" or not data or not data[0]:
         return []
 
+    # Reverse UIDs so newest messages are fetched first
+    # (ensures max_pull limit doesn't cut off the latest messages)
     uids = data[0].split()
+    uids.reverse()
     messages = []
     for uid in uids:
         # Fetch both the full message and its flags
@@ -1415,15 +1418,18 @@ def email_sync(request: Request):
                 # Fetch new messages
                 try:
                     messages = _fetch_new_messages(imap, since_date)
+                    logger.info(f"[Sync] {account_email}: SINCE={since_date}, found {len(messages)} messages from IMAP")
                 except Exception as e:
                     sync_errors.append(f"{account_email}: Error fetching messages — {str(e)}")
                     continue
 
-                # Parse and store each message (respect max_pull limit per account)
+                # Parse and store all new messages in batches of max_pull
+                # Commits after each batch so progress is saved
                 new_count = 0
+                skipped_dupes = 0
+                batch_size = shared_max_pull
+                batch_num = 0
                 for raw_bytes, flags_bytes in messages:
-                    if new_count >= shared_max_pull:
-                        break
                     try:
                         parsed = _parse_email_message(raw_bytes)
 
@@ -1438,13 +1444,24 @@ def email_sync(request: Request):
                             new_count += 1
                             subj = parsed.get("email_subject", "(No Subject)")
                             sender = parsed.get("email_from", "Unknown")
+                            logger.info(f"[Sync] New email: {subj} from {sender}")
                             all_email_summaries.append(f"{subj} — {sender}")
                             all_email_chits.append({"id": chit_id, **parsed, "owner_id": user_id})
+                            # Commit in batches to save progress
+                            if new_count % batch_size == 0:
+                                conn.commit()
+                                batch_num += 1
+                                logger.info(f"[Sync] {account_email}: batch {batch_num} committed ({new_count} new so far)")
+                        else:
+                            skipped_dupes += 1
                     except Exception as e:
                         logger.warning("Failed to parse/store email message: %s", e)
                         continue
 
+                # Final commit for any remaining messages after the last batch
+                conn.commit()
                 total_new += new_count
+                logger.info(f"[Sync] {account_email}: {new_count} new, {skipped_dupes} duplicates skipped")
 
                 # ── Deletion sync: detect emails removed from IMAP ────────
                 try:

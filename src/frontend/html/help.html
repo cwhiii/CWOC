@@ -305,6 +305,39 @@
                 <li><strong>Search Input + Go</strong> — Type a query in the search input and press Enter or click Go. The search performs case-insensitive substring matching across every chit field (title, note, tags, status, priority, location, people, checklist items, dates, color, alerts, and more).</li>
                 <li><strong>Result Cards</strong> — Each matching chit is displayed as a card showing the chit title and every matched field with the matching text highlighted. Click a result card to open that chit in the editor.</li>
                 <li><strong>Sidebar Filters</strong> — Sidebar filters (Status, Priority, Tags, etc.) remain active during Global Search, narrowing results further.</li>
+                <li><strong>Boolean Operators</strong> — <code>&&</code> (AND, default), <code>||</code> (OR), <code>!</code> (NOT), <code>()</code> (grouping). Multiple terms without operators default to AND. Example: <code>(meeting || lunch) && #work && !cancelled</code></li>
+                <li><strong>Tag Search</strong> — Prefix with <code>#</code> to match tags: <code>#work</code>, <code>#personal/health</code>. Parent tags match sub-tags.</li>
+                <li><strong>Field-Scoped Search</strong> — Use <code>field:value</code> to search only within a specific field. For multi-word values, use parentheses: <code>field:(multi word value)</code>. This restricts matching to only the named field instead of searching all fields.</li>
+            </ul>
+            <h4>Available Field Prefixes</h4>
+            <ul>
+                <li><code>title:</code> — Chit title</li>
+                <li><code>note:</code> / <code>notes:</code> — Note/body content</li>
+                <li><code>location:</code> / <code>loc:</code> — Location field</li>
+                <li><code>status:</code> — Status (ToDo, In Progress, Blocked, Complete)</li>
+                <li><code>priority:</code> — Priority level</li>
+                <li><code>severity:</code> — Severity level</li>
+                <li><code>people:</code> / <code>person:</code> — People field</li>
+                <li><code>assigned:</code> / <code>assigned_to:</code> — Assigned user</li>
+                <li><code>checklist:</code> — Checklist item text</li>
+                <li><code>child:</code> — Child chit titles (for projects)</li>
+                <li><code>subject:</code> — Email subject / title</li>
+                <li><code>sender:</code> / <code>from:</code> — Email sender</li>
+                <li><code>to:</code> — Email recipients</li>
+                <li><code>cc:</code> — Email CC</li>
+                <li><code>bcc:</code> — Email BCC</li>
+                <li><code>body:</code> — Email body / note content</li>
+                <li><code>due:</code> / <code>start:</code> / <code>end:</code> — Date fields</li>
+                <li><code>color:</code> — Chit color</li>
+            </ul>
+            <h4>Field Search Examples</h4>
+            <ul>
+                <li><code>title:email</code> — Chits with "email" in the title only</li>
+                <li><code>title:(email stuff)</code> — Chits with "email stuff" in the title</li>
+                <li><code>location:park && people:john</code> — Location contains "park" AND people contains "john"</li>
+                <li><code>child:deploy && !#done</code> — Projects with a child chit titled "deploy", excluding #done tag</li>
+                <li><code>sender:boss || from:ceo</code> — Emails from "boss" or "ceo"</li>
+                <li><code>status:blocked && priority:high</code> — Blocked high-priority tasks</li>
             </ul>
             <h3 id="trash">Trash</h3>
             <p>When you delete a chit, it is soft-deleted and moved to the Trash. You can access the Trash page from the navigation header or from Settings → Data.</p>

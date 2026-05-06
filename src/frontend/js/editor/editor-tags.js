@@ -238,92 +238,46 @@ function clearTagSearch(event) {
   if (input) { input.value = ''; _filterTagTree(''); input.focus(); }
 }
 
-/** Filter the tag tree by search text — hides non-matching items */
+/** Filter the tag tree in realtime — hides non-matching rows and their parent groups */
 function _filterTagTree(query) {
   const container = document.getElementById('tagTreeContainer');
   if (!container) return;
-  const q = (query || '').toLowerCase();
-  // Find all label elements (each tag row is a label with a checkbox)
-  const labels = container.querySelectorAll('label');
-  labels.forEach(function (lbl) {
-    var text = (lbl.textContent || '').toLowerCase();
-    lbl.style.display = (!q || text.includes(q)) ? '' : 'none';
-  });
-  // Show/hide group headers (divs that contain the group name)
-  const groups = container.querySelectorAll('.tag-group-header, [data-tag-group]');
-  groups.forEach(function (g) {
-    // Show group if any child label is visible
-    var parent = g.closest('.tag-group') || g.parentElement;
-    if (parent) {
-      var visibleLabels = parent.querySelectorAll('label:not([style*="display: none"])');
-      if (g.classList.contains('tag-group-header') || g.hasAttribute('data-tag-group')) {
-        g.style.display = visibleLabels.length > 0 ? '' : 'none';
-      }
-    }
-  });
-}
+  const q = (query || '').trim().toLowerCase();
 
-/** Add a tag by name from the search input */
-function addSearchedTag(event) {
-  if (event) event.stopPropagation();
-  const input = document.getElementById('labels');
-  if (!input) return;
-  const tagName = input.value.trim();
-  if (!tagName) return;
+  // Each tag row has data-tag-row="fullPath". Child containers have data-tag-children.
+  const allRows = container.querySelectorAll('[data-tag-row]');
+  const childContainers = container.querySelectorAll('[data-tag-children]');
 
-  // Block reserved CWOC_System/ prefix
-  if (typeof isReservedTagPrefix === 'function' && isReservedTagPrefix(tagName)) {
-    input.style.borderColor = '#b22222';
-    var errEl = document.getElementById('tag-reserved-error');
-    if (!errEl) {
-      errEl = document.createElement('div');
-      errEl.id = 'tag-reserved-error';
-      errEl.style.cssText = 'color:#b22222;font-size:0.85em;margin-top:4px;';
-      input.parentNode.insertBefore(errEl, input.nextSibling);
-    }
-    errEl.textContent = RESERVED_TAG_ERROR;
-    setTimeout(function() {
-      input.style.borderColor = '';
-      if (errEl) errEl.textContent = '';
-    }, 3000);
+  if (!q) {
+    // No filter — show everything
+    allRows.forEach(function(row) { row.style.display = ''; });
+    childContainers.forEach(function(cc) { cc.style.display = ''; });
     return;
   }
 
-  // Check if tag already exists in settings
-  var settings = window._cwocSettings || {};
-  var existingTags = Array.isArray(settings.tags) ? settings.tags : [];
-  var tagExists = existingTags.some(function(t) {
-    var tName = (typeof t === 'string') ? t : (t.name || '');
-    return tName.toLowerCase() === tagName.toLowerCase();
-  });
+  // Hide all rows first, then show matches
+  allRows.forEach(function(row) { row.style.display = 'none'; });
+  childContainers.forEach(function(cc) { cc.style.display = 'none'; });
 
-  if (tagExists) {
-    // Tag exists — just add to selection
-    if (!window._currentTagSelection) window._currentTagSelection = [];
-    if (!window._currentTagSelection.includes(tagName)) {
-      window._currentTagSelection.push(tagName);
-      if (typeof trackRecentTag === 'function') trackRecentTag(tagName);
-    }
-    input.value = '';
-    _loadTags().then(tags => _renderTags(tags, window._currentTagSelection));
-    setSaveButtonUnsaved();
-  } else {
-    // New tag — open modal to configure it
-    input.value = '';
-    cwocTagModal.open(null, {
-      prefillName: tagName,
-      onSave: function(tagData) {
-        if (!window._currentTagSelection) window._currentTagSelection = [];
-        if (window._currentTagSelection.indexOf(tagData.name) === -1) {
-          window._currentTagSelection.push(tagData.name);
-          if (typeof trackRecentTag === 'function') trackRecentTag(tagData.name);
+  // Show rows whose full path matches the query
+  allRows.forEach(function(row) {
+    var path = (row.dataset.tagRow || '').toLowerCase();
+    if (path.includes(q)) {
+      row.style.display = '';
+      // Also show all ancestor containers so the row is visible
+      var parent = row.parentElement;
+      while (parent && parent !== container) {
+        if (parent.dataset && parent.dataset.tagChildren !== undefined) {
+          parent.style.display = '';
         }
-        _invalidateSettingsCache();
-        _loadTags().then(function(tags) { _renderTags(tags, window._currentTagSelection); });
-        setSaveButtonUnsaved();
-      },
-    });
-  }
+        // Show the parent group's header row too
+        if (parent.previousElementSibling && parent.previousElementSibling.dataset && parent.previousElementSibling.dataset.tagRow !== undefined) {
+          parent.previousElementSibling.style.display = '';
+        }
+        parent = parent.parentElement;
+      }
+    }
+  });
 }
 
 function navigateToSettings() {

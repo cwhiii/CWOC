@@ -860,19 +860,19 @@
 
                         <div class="setting-inline">
                             <label>Sex</label>
-                            <div id="sex-pill" class="cwoc-pill-toggle" style="display:flex;border:1px solid #8b5a2b;border-radius:4px;overflow:hidden;cursor:pointer;font-size:0.8em;">
+                            <div id="sex-pill" class="cwoc-2val-toggle">
                                 <input type="hidden" id="gender-toggle" value="Man" />
-                                <span data-val="Man" style="padding:4px 8px;background:#8b5a2b;color:#fff8e1;font-weight:bold;">♂ Man</span>
-                                <span data-val="Woman" style="padding:4px 8px;background:#f5e6cc;color:#bbb;">♀ Woman</span>
+                                <span data-val="Man" class="active">♂ Man</span>
+                                <span data-val="Woman">♀ Woman</span>
                             </div>
                         </div>
 
                         <div class="setting-inline">
                             <label>📏 Units</label>
-                            <div id="unit-pill" class="cwoc-pill-toggle" style="display:flex;border:1px solid #8b5a2b;border-radius:4px;overflow:hidden;cursor:pointer;font-size:0.8em;">
+                            <div id="unit-pill" class="cwoc-2val-toggle">
                                 <input type="hidden" id="unit-system-toggle" value="imperial" />
-                                <span data-val="imperial" style="padding:4px 8px;background:#8b5a2b;color:#fff8e1;font-weight:bold;">Imperial</span>
-                                <span data-val="metric" style="padding:4px 8px;background:#f5e6cc;color:#bbb;">Metric</span>
+                                <span data-val="imperial" class="active">Imperial</span>
+                                <span data-val="metric">Metric</span>
                             </div>
                         </div>
 
@@ -1149,7 +1149,7 @@
                             <input type="text" id="new-tag" placeholder="New tag name" onkeypress="handleTagInput(event)" style="flex:1;min-width:0;" />
                             <button onclick="addTag()" class="standard-button" title="Add tag (Shift+Enter or Shift+Click for tag modal)">➕ Add</button>
                         </div>
-                        <div id="settings-tag-tree" style="max-height:70vh;overflow-y:auto;border:1px solid #8b5a2b;border-radius:4px;padding:8px;background:#fffaf0;box-sizing:border-box;"></div>
+                        <div id="settings-tag-tree" class="tag-container" style="max-height:70vh;"></div>
                         <div id="tag-editor-hidden" style="display:none;"></div>
                     </div>
                     <div class="setting-group" id="pwa-cert-section">

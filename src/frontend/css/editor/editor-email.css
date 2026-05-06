@@ -199,6 +199,51 @@
     opacity: 0.85;
 }
 
+/* ── Email Mode Toggle (Live Preview vs Edit/Render) ───────────────────── */
+.email-mode-toggle-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+
+.email-mode-toggle-row .cwoc-2val-toggle {
+    font-size: 0.75em;
+}
+
+/* When in edit/render mode, hide the live preview */
+.email-body-field.mode-editrender .email-body-preview {
+    display: none !important;
+}
+
+/* When in edit/render mode, show the render toggle button */
+.email-render-toggle-btn {
+    display: none;
+}
+
+.email-body-field.mode-editrender .email-render-toggle-btn {
+    display: inline-flex;
+}
+
+/* Email rendered output (for edit/render mode) */
+.email-rendered-output {
+    width: 100%;
+    min-height: 180px;
+    padding: 10px 12px;
+    border: 1px solid rgba(139, 90, 43, 0.2);
+    border-radius: 4px;
+    font-size: 14px;
+    font-family: 'Lora', Georgia, serif;
+    background: rgba(253, 246, 227, 0.5);
+    color: #1a1208;
+    line-height: 1.6;
+    overflow-y: auto;
+    max-height: 400px;
+    box-sizing: border-box;
+    cursor: pointer;
+    display: none;
+}
+
 /* ── Recipient Tag Chips (To, Cc, Bcc) ─────────────────────────────────── */
 /* Consistent with existing .active-tag-item chip pattern in editor.css */
 .email-recipient-chip {
@@ -505,6 +550,12 @@
     gap: 6px;
 }
 
+.email-thread-list-scrollable {
+    max-height: 60vh;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
 .email-thread-item {
     padding: 8px 12px;
     border: 1px solid rgba(139, 90, 43, 0.2);
@@ -557,6 +608,113 @@
     white-space: nowrap;
 }
 
+/* ── Thread Stack (collapsed, >3 messages) ─────────────────────────────── */
+.email-thread-stack {
+    position: relative;
+    cursor: pointer;
+    padding: 0;
+    margin-bottom: 4px;
+    height: 90px;
+}
+
+.email-thread-stack-layer {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 36px;
+    border: 1px solid rgba(139, 90, 43, 0.2);
+    border-radius: 6px;
+    background: rgba(253, 246, 227, 0.7);
+    padding: 8px 12px;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.8em;
+    color: #8b7355;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.email-thread-stack-layer-1 {
+    top: 0;
+    transform: rotate(-0.5deg);
+    z-index: 1;
+}
+
+.email-thread-stack-layer-2 {
+    top: 6px;
+    transform: rotate(0.3deg);
+    z-index: 2;
+}
+
+.email-thread-stack-front {
+    position: absolute;
+    top: 14px;
+    left: 0;
+    right: 0;
+    z-index: 3;
+    padding: 12px 16px;
+    border: 1px solid rgba(139, 90, 43, 0.3);
+    border-radius: 6px;
+    background: rgba(253, 246, 227, 0.95);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    transition: box-shadow 0.15s, border-color 0.15s;
+}
+
+.email-thread-stack:hover .email-thread-stack-front {
+    border-color: rgba(139, 90, 43, 0.5);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.12);
+}
+
+.email-thread-stack-count {
+    font-family: 'Lora', Georgia, serif;
+    font-weight: 700;
+    font-size: 1.3em;
+    color: #5a4a3a;
+    min-width: 24px;
+    text-align: center;
+}
+
+.email-thread-stack-label {
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.88em;
+    color: #5a4a3a;
+    flex: 1;
+}
+
+.email-thread-stack-expand {
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.82em;
+    color: #8b5a2b;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* ── Thread Collapse Button ────────────────────────────────────────────── */
+.email-thread-collapse-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: none;
+    border: 1px solid rgba(139, 90, 43, 0.2);
+    border-radius: 4px;
+    padding: 4px 10px;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.8em;
+    color: #8b5a2b;
+    cursor: pointer;
+    margin-bottom: 8px;
+    transition: background 0.15s;
+}
+
+.email-thread-collapse-btn:hover {
+    background: rgba(139, 90, 43, 0.08);
+}
+
 /* ── Thread responsive — mobile ────────────────────────────────────────── */
 @media (max-width: 480px) {
     .email-thread-item {
@@ -564,6 +722,15 @@
     }
     .email-thread-sender {
         font-size: 0.85em;
+    }
+    .email-thread-stack {
+        height: 80px;
+    }
+    .email-thread-stack-front {
+        padding: 10px 12px;
+    }
+    .email-thread-list-scrollable {
+        max-height: 50vh;
     }
 }
 

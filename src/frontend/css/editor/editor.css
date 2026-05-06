@@ -733,6 +733,17 @@ input.error {
     flex: 2;
 }
 
+.chit-uuid-display {
+    font-family: monospace;
+    font-size: 0.75em;
+    color: #5a4a3a;
+    opacity: 0.8;
+    margin-left: 12px;
+    white-space: nowrap;
+    user-select: all;
+    cursor: text;
+}
+
 #compactWeatherSection {
     flex: 1;
     background-color: var(--parchment-dark) !important;
@@ -962,29 +973,8 @@ hr {
     gap: 4px;
 }
 
-.tags-search-row {
-    display: flex;
-    gap: 5px;
-    align-items: center;
-    margin-bottom: 0.5em;
-}
-
 .colorBox {
     margin: 1em;
-}
-
-.tags-search-row input {
-    flex-grow: 1;
-    background-color: var(--input-bg);
-    color: var(--text-color);
-    border: 1px inset var(--aged-brown-medium);
-}
-
-.tags-search-row button {
-    white-space: nowrap;
-    background-color: var(--button-bg);
-    color: var(--aged-brown-dark);
-    border: 1px outset var(--aged-brown-medium);
 }
 
 .tag-grid-row {
@@ -1036,63 +1026,7 @@ hr {
     background-color: var(--button-hover);
 }
 
-.tag-container {
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
-    padding: 8px;
-    background-color: var(--input-bg);
-    width: 100%;
-    margin-bottom: 0.5em;
-    box-sizing: border-box;
-}
-.tag-container input[type="checkbox"] {
-    flex: 0 0 auto;
-    width: auto;
-    padding: 0;
-}
-
-
-.verticalBox {
-    display: flex;
-    gap: 0.5em;
-    width: 100%;
-    align-items: flex-start;
-}
-.verticalBox > .tag-container {
-    flex: 1;
-    min-width: 0;
-}
-
-.tag-container-Active {
-    flex: 1;
-    min-width: 0;
-    min-height: 4em;
-    margin-bottom: 0.5em;
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
-    padding: 8px;
-    background-color: var(--input-bg);
-    box-sizing: border-box;
-}
-
-/* Active tag chips wrap instead of overflowing */
-#activeTagsListContainer {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-}
-
-.tag-container-Active h3 {
-    background-color: var(--zone-header-bg);
-    padding: 3px 0 3px 3px;
-    margin-top: 0;
-    margin-right: 0.3em;
-    border-radius: 4px;
-}
-
-.tag-tree-node {
-    display: flex;
-    align-items: center;
+/* Tag container overrides moved to shared-editor.css */
     padding: 3px 0;
     cursor: pointer;
     position: relative;
@@ -2305,6 +2239,12 @@ hr {
     visibility: visible;
 }
 
+.checklist-item:hover .checklist-send-icon,
+.completed-checklist-item:hover .checklist-send-icon,
+.ghost-checklist-item:hover .checklist-send-icon {
+    visibility: visible;
+}
+
 .checklist-item.highlight-row,
 .completed-checklist-item.highlight-row,
 .ghost-checklist-item.highlight-row {
@@ -3197,25 +3137,10 @@ button.archive-btn.archived-active {
         width: 100% !important;
     }
 
-    /* Tags: full width */
+    /* Tags: responsive (shared styles handle base, editor adds max-height) */
     .tag-container,
     .tag-container-Active {
-        width: 100%;
-        min-width: 0;
         max-height: 150px;
-    }
-    .active-tags-list {
-        min-width: 0;
-        width: 100%;
-    }
-    .tags-search-row {
-        flex-wrap: wrap;
-    }
-    .tags-search-row input {
-        flex: 1 1 100%;
-    }
-    #tagSearchInputClass {
-        width: 100% !important;
     }
 
     /* Location input: full width */
@@ -4641,6 +4566,9 @@ input.location {
 }
 
 
+/* ── Notes Modal Live Preview Mode ─────────────────────────────────────── */
+/* Replaced by shared .cwoc-live-preview-split in shared-editor.css */
+
 /* ── Notes Format Toolbar ──────────────────────────────────────────────── */
 .notes-format-toolbar {
     display: flex;
@@ -4888,3 +4816,155 @@ input.location {
     overflow-x: auto;
 }
 .notes-body-preview img { max-width: 100%; height: auto; }
+
+/* ── Send Item Popup (per-item quick send) ─────────────────────────────── */
+.send-item-popup {
+    position: fixed;
+    z-index: 1100;
+    background: var(--parchment-light, #fdf5e6);
+    border: 2px solid var(--aged-brown-medium, #8b5a2b);
+    border-radius: 8px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+    min-width: 220px;
+    max-width: 300px;
+    font-family: 'Lora', Georgia, serif;
+    overflow: hidden;
+}
+.send-item-header {
+    padding: 8px 12px 6px;
+    font-size: 0.85em;
+    font-weight: 600;
+    color: var(--aged-brown-dark, #4a2c2a);
+    border-bottom: 1px solid rgba(139, 90, 43, 0.2);
+}
+.send-item-loading {
+    padding: 12px;
+    text-align: center;
+    font-size: 0.85em;
+    color: var(--aged-brown-medium, #8b5a2b);
+}
+.send-item-recent {
+    padding: 4px 0;
+}
+.send-item-empty {
+    padding: 10px 12px;
+    font-size: 0.85em;
+    color: var(--aged-brown-medium, #8b5a2b);
+    opacity: 0.7;
+}
+.send-item-chit-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    cursor: default;
+    transition: background 0.15s;
+}
+.send-item-chit-row:hover {
+    background: rgba(139, 90, 43, 0.08);
+}
+.send-item-chit-title {
+    flex: 1;
+    font-size: 0.88em;
+    color: var(--text-color, #1a1208);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.send-item-actions {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+}
+.send-item-btn {
+    border: 1px solid var(--aged-brown-light, #a0522d);
+    background: var(--parchment-medium, #faebd7);
+    border-radius: 4px;
+    padding: 3px 7px;
+    font-size: 0.8em;
+    cursor: pointer;
+    transition: background 0.15s, transform 0.1s;
+}
+.send-item-btn:hover {
+    background: var(--button-hover, #c4a484);
+    transform: scale(1.05);
+}
+.send-item-btn:active {
+    transform: scale(0.95);
+}
+.send-item-footer {
+    border-top: 1px solid rgba(139, 90, 43, 0.2);
+    padding: 6px 12px;
+}
+.send-item-search-btn {
+    width: 100%;
+    border: 1px solid var(--aged-brown-light, #a0522d);
+    background: var(--parchment-medium, #faebd7);
+    border-radius: 4px;
+    padding: 6px 10px;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.85em;
+    color: var(--text-color, #1a1208);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    justify-content: center;
+    transition: background 0.15s;
+}
+.send-item-search-btn:hover {
+    background: var(--button-hover, #c4a484);
+}
+
+/* Send icon on checklist items (appears on hover, next to trash) */
+.checklist-send-icon {
+    cursor: pointer;
+    font-size: 0.85em;
+    opacity: 0.7;
+    padding: 2px 4px;
+    border-radius: 3px;
+    transition: opacity 0.15s, background 0.15s;
+    user-select: none;
+    flex-shrink: 0;
+}
+.checklist-send-icon:hover {
+    opacity: 1;
+    background: rgba(139, 90, 43, 0.1);
+}
+
+/* ── Checklist Add Flash Arrow ─────────────────────────────────────────── */
+.checklist-add-flash {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 1.2em;
+    color: var(--accent-teal, #008080);
+    opacity: 0;
+    transition: opacity 0.2s, transform 0.3s;
+    pointer-events: none;
+    font-weight: bold;
+}
+.checklist-add-flash-show {
+    opacity: 1;
+    transform: translateY(-50%) translateY(4px);
+}
+.checklist-add-flash-hide {
+    opacity: 0;
+    transform: translateY(-50%) translateY(12px);
+}
+
+@media (max-width: 600px) {
+    .send-item-popup {
+        min-width: 180px;
+        max-width: calc(100vw - 16px);
+    }
+}
+
+/* On touch devices, show send/trash icons always (no hover) */
+@media (pointer: coarse) {
+    .checklist-send-icon,
+    .trash-icon {
+        visibility: visible !important;
+    }
+}

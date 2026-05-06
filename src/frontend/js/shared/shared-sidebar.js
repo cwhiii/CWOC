@@ -77,6 +77,9 @@ function _cwocInjectSidebar() {
   html += '      </div>';
   html += '    </div>';
   html += '  </div>';
+  html += '  <div class="filter-group" style="margin-top:8px;">';
+  html += '    <label class="email-folder-opt" style="cursor:pointer;"><input type="checkbox" id="email-threaded-toggle" onchange="_toggleEmailThreadedView()" checked> <i class="fas fa-layer-group"></i> Group threads</label>';
+  html += '  </div>';
   html += '</div>';
 
   /* Date nav */

@@ -1,0 +1,1 @@
+Fixed "Add to Project" from a child chit's editor not working — the backend generates its own UUID for new chits, so the pending project addition was referencing the wrong ID. Now correctly updates the child chit ID after save before executing the project linkage. Also ensures child chits automatically get status "ToDo" when added to a project if they don't already have one.

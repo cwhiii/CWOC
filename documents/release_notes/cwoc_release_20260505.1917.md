@@ -1,0 +1,1 @@
+Upgraded the "Send to chit" modals (for notes, whole checklist, and single item) to use the full server-side search API with boolean operators (&&, ||, !, (), #tag) — matching the global search capability. Removed the limited client-side status dropdown filter and replaced it with the same search input + Go button pattern used by the dashboard search.

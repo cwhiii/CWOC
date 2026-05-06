@@ -45,6 +45,9 @@ function _updateEmailSidebarVisibility(tab) {
     if (tab === 'Email') {
         var radios = document.querySelectorAll('#email-folder-select input[name="emailFolder"]');
         radios.forEach(function(r) { r.checked = (r.value === _emailSubFilter); });
+        // Sync threaded toggle checkbox
+        var threadedCb = document.getElementById('email-threaded-toggle');
+        if (threadedCb) threadedCb.checked = _emailThreadedView;
         // Populate account filter buttons (ensure settings are loaded first)
         if (window._cwocSettings) {
             _emailRenderAccountFilterButtons();
@@ -165,10 +168,13 @@ function displayEmailView(chitsToDisplay) {
     _emailLastCheckedIndex = null;
     _emailRepliedToCache = null; // Rebuild replied cache on each render
 
-    // Filter to email chits only
-    var emailChits = chitsToDisplay.filter(function(c) {
+    // ALL email chits (unfiltered) — needed for cross-folder thread grouping
+    var allEmailChits = chitsToDisplay.filter(function(c) {
         return c.email_message_id || c.email_status;
     });
+
+    // Filter to email chits only (will be narrowed by sub-filter)
+    var emailChits = allEmailChits.slice();
 
     // Apply sub-filter
     function _chitHasTag(c, tagSuffix) {
@@ -259,10 +265,44 @@ function displayEmailView(chitsToDisplay) {
     var scrollWrap = document.createElement('div');
     scrollWrap.className = 'email-scroll-wrap';
 
-    // Render email cards
-    emailChits.forEach(function(chit) {
-        scrollWrap.appendChild(_buildEmailCard(chit, viSettings));
-    });
+    // Render email cards — threaded or flat
+    if (_emailThreadedView) {
+        // Build thread map from ALL emails (cross-folder), then filter to visible
+        var allThreads = _emailGroupByThread(allEmailChits);
+        var visibleIds = new Set(emailChits.map(function(c) { return c.id; }));
+
+        // Filter threads to only those with at least one visible message
+        var visibleThreads = [];
+        allThreads.forEach(function(thread) {
+            var visibleMessages = thread.messages.filter(function(m) { return visibleIds.has(m.id); });
+            if (visibleMessages.length > 0) {
+                visibleThreads.push({
+                    messages: thread.messages, // full thread for expansion
+                    latest: visibleMessages[0], // newest visible message as the top card
+                    visibleCount: visibleMessages.length,
+                    totalCount: thread.messages.length
+                });
+            }
+        });
+
+        console.log('[Email Threading] Grouped ' + allEmailChits.length + ' emails into ' + allThreads.length + ' threads, ' +
+            visibleThreads.filter(function(t) { return t.totalCount > 1; }).length + ' multi-message threads visible');
+
+        visibleThreads.forEach(function(thread) {
+            if (thread.totalCount <= 1) {
+                // Single message — render as normal card
+                scrollWrap.appendChild(_buildEmailCard(thread.latest, viSettings));
+            } else {
+                // Multi-message thread — render stacked parchment card
+                scrollWrap.appendChild(_buildThreadedEmailCard(thread, viSettings));
+            }
+        });
+    } else {
+        // Flat view
+        emailChits.forEach(function(chit) {
+            scrollWrap.appendChild(_buildEmailCard(chit, viSettings));
+        });
+    }
 
     container.appendChild(scrollWrap);
 }
@@ -998,6 +1038,126 @@ async function _toggleEmailReadStatus(chit, card) {
 /** Cache of message IDs that have been replied to (built once per render) */
 var _emailRepliedToCache = null;
 
+/** Whether to display emails grouped by thread (stacked parchment view) */
+var _emailThreadedView = true;
+
+/**
+ * Toggle between threaded (stacked) and flat email views.
+ * Called by the sidebar checkbox.
+ */
+function _toggleEmailThreadedView() {
+    var cb = document.getElementById('email-threaded-toggle');
+    _emailThreadedView = cb ? cb.checked : !_emailThreadedView;
+    if (typeof filterChits === 'function') filterChits('Email');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Thread grouping for dashboard display
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Strip Re:/Fwd:/Fw: prefixes from a subject for thread matching.
+ * @param {string} subject
+ * @returns {string} normalized subject
+ */
+function _emailNormalizeSubject(subject) {
+    if (!subject) return '';
+    return subject.replace(/^(re|fwd|fw)\s*:\s*/gi, '').trim().toLowerCase();
+}
+
+/**
+ * Group an array of email chits into threads.
+ * Uses Message-ID / In-Reply-To / References for linking, with normalized
+ * subject as a fallback for messages that lack proper headers.
+ *
+ * @param {Array} emailChits — sorted array of email chits (newest first)
+ * @returns {Array} array of thread objects: { messages: [...], latest: chit }
+ */
+function _emailGroupByThread(emailChits) {
+    // Map: message_id -> thread index
+    var idToThread = {};
+    // Map: normalized subject -> thread index (subject fallback, like backend)
+    var subjectToThread = {};
+    var threads = []; // Each entry: { messages: [] }
+
+    // Process oldest first so parent messages create threads before replies find them
+    var reversed = emailChits.slice().reverse();
+
+    reversed.forEach(function(chit) {
+        var msgId = (chit.email_message_id || '').trim();
+        var inReplyTo = (chit.email_in_reply_to || '').trim();
+        var refs = (chit.email_references || '').trim();
+        var rawSubject = (chit.title || chit.email_subject || '');
+        var normSubject = _emailNormalizeSubject(rawSubject);
+        var hasReplyPrefix = /^(re|fwd|fw)\s*:/i.test(rawSubject.trim());
+
+        var threadIdx = -1;
+
+        // Try to find existing thread by In-Reply-To
+        if (inReplyTo && idToThread[inReplyTo] !== undefined) {
+            threadIdx = idToThread[inReplyTo];
+        }
+
+        // Try References (space-separated list of message IDs)
+        if (threadIdx === -1 && refs) {
+            var refList = refs.split(/\s+/);
+            for (var i = 0; i < refList.length; i++) {
+                var r = refList[i].trim();
+                if (r && idToThread[r] !== undefined) {
+                    threadIdx = idToThread[r];
+                    break;
+                }
+            }
+        }
+
+        // Try own message_id (in case already registered by a child)
+        if (threadIdx === -1 && msgId && idToThread[msgId] !== undefined) {
+            threadIdx = idToThread[msgId];
+        }
+
+        // Subject fallback — match by normalized subject (same as backend thread endpoint)
+        if (threadIdx === -1 && normSubject && normSubject.length > 3 && subjectToThread[normSubject] !== undefined) {
+            threadIdx = subjectToThread[normSubject];
+        }
+
+        if (threadIdx === -1) {
+            // New thread
+            threadIdx = threads.length;
+            threads.push({ messages: [chit] });
+        } else {
+            threads[threadIdx].messages.push(chit);
+        }
+
+        // Register this message's ID in the lookup
+        if (msgId) idToThread[msgId] = threadIdx;
+        // Register subject for fallback (any message can start a subject group)
+        if (normSubject && normSubject.length > 3) {
+            if (subjectToThread[normSubject] === undefined) {
+                subjectToThread[normSubject] = threadIdx;
+            }
+        }
+    });
+
+    // For each thread, sort messages newest-first and pick latest
+    threads.forEach(function(t) {
+        t.messages.sort(function(a, b) {
+            var da = a.email_date || a.start_datetime || '';
+            var db = b.email_date || b.start_datetime || '';
+            return db.localeCompare(da);
+        });
+        t.latest = t.messages[0];
+    });
+
+    // Sort threads by their latest message date (newest thread first)
+    threads.sort(function(a, b) {
+        var da = a.latest.email_date || a.latest.start_datetime || '';
+        var db = b.latest.email_date || b.latest.start_datetime || '';
+        return db.localeCompare(da);
+    });
+
+    return threads;
+}
+
 /**
  * Build a Set of message IDs that have been replied to.
  * Only counts replies/forwards that the user actually sent or drafted —
@@ -1023,6 +1183,103 @@ function _emailHasReply(messageId) {
     if (!messageId) return false;
     if (!_emailRepliedToCache) _emailBuildRepliedCache();
     return _emailRepliedToCache.has(messageId.trim());
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Threaded email card (stacked parchment visual)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Build a stacked parchment card for a multi-message thread.
+ * Shows the latest message as the visible card with stacked layers behind it
+ * and a thread count badge. Clicking the badge expands inline to show all messages.
+ *
+ * @param {Object} thread — { messages: [...], latest: chit }
+ * @param {Object} viSettings — visual indicator settings
+ * @returns {HTMLElement}
+ */
+function _buildThreadedEmailCard(thread, viSettings) {
+    var wrapper = document.createElement('div');
+    wrapper.className = 'email-thread-group';
+
+    // Determine stack depth visual (cap at 3 layers)
+    var depth = Math.min(thread.totalCount - 1, 3);
+
+    // Build the main (latest visible) card
+    var mainCard = _buildEmailCard(thread.latest, viSettings);
+    mainCard.classList.add('email-thread-top-card');
+
+    // Thread ribbon — vertical bar on the left edge
+    var ribbon = document.createElement('div');
+    ribbon.className = 'email-thread-ribbon';
+    ribbon.dataset.depth = depth;
+    wrapper.appendChild(ribbon);
+
+    // Thread count badge — sits on the ribbon
+    var badge = document.createElement('span');
+    badge.className = 'email-thread-badge';
+    badge.textContent = thread.totalCount;
+    badge.title = thread.totalCount + ' messages in this thread — click to expand';
+    badge.addEventListener('click', function(e) {
+        e.stopPropagation();
+        _toggleThreadExpand(wrapper, thread, viSettings);
+    });
+    wrapper.appendChild(badge);
+
+    wrapper.appendChild(mainCard);
+
+    // Expanded thread container (hidden initially)
+    var expandedList = document.createElement('div');
+    expandedList.className = 'email-thread-expanded';
+    expandedList.style.display = 'none';
+    wrapper.appendChild(expandedList);
+
+    return wrapper;
+}
+
+/**
+ * Toggle inline expansion of a threaded email group.
+ * @param {HTMLElement} wrapper — the .email-thread-group element
+ * @param {Object} thread — { messages: [...], latest: chit, totalCount, visibleCount }
+ * @param {Object} viSettings
+ */
+function _toggleThreadExpand(wrapper, thread, viSettings) {
+    var expanded = wrapper.querySelector('.email-thread-expanded');
+    if (!expanded) return;
+
+    var isOpen = expanded.style.display !== 'none';
+    if (isOpen) {
+        // Collapse
+        expanded.style.display = 'none';
+        wrapper.classList.remove('email-thread-group-expanded');
+    } else {
+        // Expand — populate if empty
+        if (expanded.children.length === 0) {
+            // Show all messages in the thread (full cross-folder view)
+            thread.messages.forEach(function(chit) {
+                if (chit.id === thread.latest.id) return; // skip the top card
+                var card = _buildEmailCard(chit, viSettings);
+                card.classList.add('email-thread-child-card');
+                // Add folder indicator for messages from other folders
+                var folder = chit.email_folder || '';
+                if (folder && folder !== _emailSubFilter) {
+                    // Don't add folder tag if the status badge already shows the same info
+                    var status = chit.email_status || '';
+                    var redundant = (folder === 'sent' && status === 'sent') ||
+                                    (folder === 'drafts' && status === 'draft');
+                    if (!redundant) {
+                        var folderTag = document.createElement('span');
+                        folderTag.className = 'email-thread-folder-tag';
+                        folderTag.textContent = folder;
+                        card.querySelector('.email-card-content').prepend(folderTag);
+                    }
+                }
+                expanded.appendChild(card);
+            });
+        }
+        expanded.style.display = '';
+        wrapper.classList.add('email-thread-group-expanded');
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

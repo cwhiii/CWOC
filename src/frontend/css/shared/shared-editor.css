@@ -304,6 +304,15 @@ button:disabled:not(.status-icon-button) {
     background-color: #924525;
 }
 
+.zone-button-danger {
+    background-color: #8b2020;
+    border-color: #5c1010;
+}
+
+.zone-button-danger:hover {
+    background-color: #a52a2a;
+}
+
 .zone-body {
     padding: 10px;
     background-color: var(--zone-body-bg);
@@ -423,6 +432,153 @@ input:checked + .slider:before {
 .toggle-label {
     color: var(--aged-brown-dark);
     white-space: nowrap;
+}
+
+/* ── 2-Value Pill Toggle (reusable binary choice) ──────────────────────── */
+/* Usage: <div class="cwoc-2val-toggle"><span data-val="a" class="active">A</span><span data-val="b">B</span></div> */
+.cwoc-2val-toggle {
+    display: inline-flex;
+    border: 1px solid var(--aged-brown-medium, #8b5a2b);
+    border-radius: 4px;
+    overflow: hidden;
+    cursor: pointer;
+    font-size: 0.8em;
+    font-family: 'Lora', Georgia, serif;
+    flex-shrink: 0;
+    user-select: none;
+}
+
+.cwoc-2val-toggle span {
+    padding: 4px 10px;
+    white-space: nowrap;
+    transition: background 0.15s, color 0.15s;
+    background: #f5e6cc;
+    color: #999;
+}
+
+.cwoc-2val-toggle span.active {
+    background: var(--aged-brown-medium, #8b5a2b);
+    color: var(--parchment-light, #fff8e1);
+    font-weight: bold;
+}
+
+.cwoc-2val-toggle span:first-child {
+    border-right: 1px solid var(--aged-brown-medium, #8b5a2b);
+}
+
+/* ── Live Preview Split Layout ─────────────────────────────────────────── */
+/* Shared container for textarea + rendered preview in live preview mode.
+   Use .cwoc-lp-vertical for side-by-side (notes) or
+       .cwoc-lp-horizontal for stacked (email).                            */
+
+.cwoc-lp-split {
+    display: flex;
+    gap: 1em;
+}
+
+.cwoc-lp-split.cwoc-lp-vertical {
+    flex-direction: row;
+}
+
+.cwoc-lp-split.cwoc-lp-horizontal {
+    flex-direction: column;
+}
+
+.cwoc-lp-split > * {
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+}
+
+/* On mobile, vertical always collapses to stacked */
+@media (max-width: 768px) {
+    .cwoc-lp-split.cwoc-lp-vertical {
+        flex-direction: column;
+    }
+}
+
+/* ── Tag Zone (shared between chit editor and settings) ────────────────── */
+.tags-search-row {
+    display: flex;
+    gap: 5px;
+    align-items: center;
+    margin-bottom: 0.5em;
+}
+.tags-search-row input {
+    flex: 1;
+    min-width: 0;
+    padding: 6px 10px;
+    border: 1px solid var(--aged-brown-medium, #8b5a2b);
+    border-radius: 4px;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 14px;
+    background-color: var(--input-bg, #fdf5e6);
+    color: var(--text-color, #4a2c2a);
+    box-sizing: border-box;
+}
+.tags-search-row button {
+    white-space: nowrap;
+    background-color: var(--button-bg, #d2b48c);
+    color: var(--aged-brown-dark, #4a2c2a);
+    border: 1px outset var(--aged-brown-medium, #8b5a2b);
+    border-radius: 4px;
+    padding: 4px 10px;
+    cursor: pointer;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.85em;
+}
+.tag-container {
+    border: 1px solid var(--border-color, #8b5a2b);
+    border-radius: 4px;
+    padding: 8px;
+    background: var(--input-bg, #fffaf0);
+    width: 100%;
+    max-height: 70vh;
+    overflow-y: auto;
+    margin-bottom: 0.5em;
+    box-sizing: border-box;
+}
+.tag-container input[type="checkbox"] {
+    flex: 0 0 auto;
+    width: auto;
+    padding: 0;
+}
+.verticalBox {
+    display: flex;
+    gap: 0.5em;
+    width: 100%;
+    align-items: flex-start;
+}
+.verticalBox > .tag-container {
+    flex: 1;
+    min-width: 0;
+}
+.tag-container-Active {
+    flex: 1;
+    min-width: 0;
+    min-height: 4em;
+    margin-bottom: 0.5em;
+    border: 1px solid var(--border-color, #8b5a2b);
+    border-radius: 4px;
+    padding: 8px;
+    background: var(--input-bg, #fdf5e6);
+    box-sizing: border-box;
+}
+#activeTagsListContainer {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+.tag-container-Active h3 {
+    background-color: var(--zone-header-bg, #d2b48c);
+    padding: 3px 0 3px 3px;
+    margin-top: 0;
+    margin-right: 0.3em;
+    border-radius: 4px;
+}
+.tag-tree-node {
+    display: flex;
+    align-items: center;
 }
 
 /* ── Responsive Breakpoints ────────────────────────────────────────────── */
@@ -628,6 +784,22 @@ input:checked + .slider:before {
     /* Toggle switch: keep inline */
     .switch-wrapper {
         flex-direction: row;
+    }
+
+    /* Tags: stack vertically on mobile */
+    .verticalBox {
+        flex-direction: column;
+    }
+    .tag-container,
+    .tag-container-Active {
+        width: 100%;
+        min-width: 0;
+    }
+    .tags-search-row {
+        flex-wrap: wrap;
+    }
+    .tags-search-row input {
+        flex: 1 1 100%;
     }
 }
 

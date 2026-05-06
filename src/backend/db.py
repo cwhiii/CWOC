@@ -21,6 +21,15 @@ logger = logging.getLogger(__name__)
 # Database path
 DB_PATH = "/app/data/app.db"
 
+
+def get_db_connection(db_path=None):
+    """Create a SQLite connection with WAL mode and busy timeout for concurrency."""
+    conn = sqlite3.connect(db_path or DB_PATH)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=5000")
+    return conn
+
+
 # Lock to prevent concurrent update runs
 _update_lock = asyncio.Lock()
 
@@ -163,6 +172,10 @@ def init_db():
     try:
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
+        # Enable WAL mode for better concurrency (allows reads during writes)
+        cursor.execute("PRAGMA journal_mode=WAL")
+        # Set busy timeout to 5 seconds (wait instead of failing immediately)
+        cursor.execute("PRAGMA busy_timeout=5000")
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS chits (
             id TEXT PRIMARY KEY,

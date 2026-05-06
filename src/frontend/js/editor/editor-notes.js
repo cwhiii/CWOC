@@ -265,10 +265,14 @@ function openNotesModal(event) {
   const textarea = document.getElementById("note");
   const modalInput = document.getElementById("notes-markdown-input-modal");
   const modalOutput = document.getElementById("notes-rendered-output-modal");
+  const lpInput = document.getElementById("notes-livepreview-input-modal");
   if (textarea && modalInput) modalInput.innerText = textarea.value || "";
+  if (textarea && lpInput) lpInput.value = textarea.value || "";
   if (modalOutput) modalOutput.style.display = "none";
   if (modalInput) modalInput.style.display = "";
   _setNotesRenderToggleLabel(false, "modal");
+  // Reset to edit/render mode on open
+  _switchNotesModalMode('editrender');
   modal.style.display = "flex";
   if (modalInput) setTimeout(() => modalInput.focus(), 50);
 }
@@ -277,10 +281,18 @@ function closeNotesModal(save) {
   const modal = document.getElementById("notesModal");
   if (modal) modal.style.display = "none";
   if (save) {
-    const modalInput = document.getElementById("notes-markdown-input-modal");
+    // Get content from whichever mode is active
+    var text = '';
+    if (_notesModalMode === 'livepreview') {
+      var lpInput = document.getElementById('notes-livepreview-input-modal');
+      text = lpInput ? lpInput.value : '';
+    } else {
+      var modalInput = document.getElementById("notes-markdown-input-modal");
+      text = modalInput ? modalInput.innerText : '';
+    }
     const mainNote = document.getElementById("note");
-    if (modalInput && mainNote) {
-      mainNote.value = modalInput.innerText;
+    if (mainNote) {
+      mainNote.value = text;
       autoGrowNote(mainNote);
       setSaveButtonUnsaved();
     }
@@ -310,6 +322,85 @@ function toggleModalNotesRender() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════
+// NOTES MODAL MODE SWITCHING — Edit/Render vs Live Preview
+// ══════════════════════════════════════════════════════════════════════════
+
+/** Current notes modal mode: 'editrender' or 'livepreview' */
+var _notesModalMode = 'editrender';
+
+/**
+ * Switch the notes modal between Edit/Render and Live Preview modes.
+ * @param {string} mode — 'editrender' or 'livepreview'
+ */
+function _switchNotesModalMode(mode) {
+  _notesModalMode = mode;
+
+  var toggle = document.getElementById('notesModalModeToggle');
+  if (toggle) {
+    toggle.querySelectorAll('span').forEach(function(s) {
+      s.classList.toggle('active', s.dataset.val === mode);
+    });
+  }
+
+  var editRenderWrap = document.getElementById('notesModalEditRenderWrap');
+  var livePreviewWrap = document.getElementById('notesModalLivePreviewWrap');
+  var renderBtn = document.getElementById('modal-render-toggle-btn');
+  var toolbar = document.getElementById('notesModalFormatToolbar');
+
+  if (mode === 'livepreview') {
+    // Switch to live preview mode
+    if (editRenderWrap) editRenderWrap.style.display = 'none';
+    if (livePreviewWrap) livePreviewWrap.style.display = 'flex';
+    if (renderBtn) renderBtn.style.display = 'none';
+    if (toolbar) toolbar.style.display = '';
+
+    // Sync content from edit/render input to live preview textarea
+    var editInput = document.getElementById('notes-markdown-input-modal');
+    var lpInput = document.getElementById('notes-livepreview-input-modal');
+    if (editInput && lpInput) {
+      lpInput.value = editInput.innerText;
+    }
+
+    // Wire shared live preview (textarea → preview div)
+    cwocWireLivePreview('notes-livepreview-input-modal', 'notes-livepreview-output-modal');
+    cwocUpdateLivePreview('notes-livepreview-input-modal', 'notes-livepreview-output-modal');
+
+    if (lpInput) setTimeout(function() { lpInput.focus(); }, 50);
+  } else {
+    // Switch to edit/render mode
+    if (editRenderWrap) editRenderWrap.style.display = '';
+    if (livePreviewWrap) livePreviewWrap.style.display = 'none';
+    if (renderBtn) renderBtn.style.display = '';
+
+    // Sync content from live preview textarea back to edit/render input
+    var lpInput2 = document.getElementById('notes-livepreview-input-modal');
+    var editInput2 = document.getElementById('notes-markdown-input-modal');
+    if (lpInput2 && editInput2) {
+      editInput2.innerText = lpInput2.value;
+    }
+
+    // Reset to edit mode (not rendered)
+    var modalOutput = document.getElementById('notes-rendered-output-modal');
+    if (modalOutput) modalOutput.style.display = 'none';
+    if (editInput2) editInput2.style.display = '';
+    _setNotesRenderToggleLabel(false, 'modal');
+    if (toolbar) toolbar.style.display = '';
+
+    if (editInput2) setTimeout(function() { editInput2.focus(); }, 50);
+  }
+}
+
+/** Wire the live preview input listener (only once) */
+function _wireNotesModalLivePreview() {
+  cwocWireLivePreview('notes-livepreview-input-modal', 'notes-livepreview-output-modal');
+}
+
+/** Update the live preview output from the live preview input */
+function _updateNotesModalLivePreview() {
+  cwocUpdateLivePreview('notes-livepreview-input-modal', 'notes-livepreview-output-modal');
+}
+
+// ══════════════════════════════════════════════════════════════════════════
 // FORMAT TOOLBAR & KEYBOARD SHORTCUTS
 // Reuses _emailFormatBtn() and _getEmailFormatAction() from editor-email.js
 // ══════════════════════════════════════════════════════════════════════════
@@ -329,4 +420,3 @@ function _notesFormatBtn(action) {
 function _getNotesFormatAction(e) {
   return _getEmailFormatAction(e);
 }
-

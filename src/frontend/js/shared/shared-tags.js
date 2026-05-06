@@ -133,6 +133,7 @@ function renderTagTree(container, tree, selectedTags, onToggle, opts) {
     nodes.forEach(node => {
       const row = document.createElement('div');
       row.style.cssText = `display:flex;align-items:center;justify-content:flex-start;gap:4px;padding:1px 0;padding-left:${depth * 16}px;cursor:pointer;`;
+      row.dataset.tagRow = node.fullPath;
 
       // Create child container first so toggle can reference it
       let childContainer = null;
@@ -289,6 +290,86 @@ async function createTagInline(name, opts) {
     return true;
   } catch (e) {
     console.error('createTagInline failed:', e);
+    return false;
+  }
+}
+
+/**
+ * Update an existing tag in settings (rename, recolor, favorite).
+ * Also renames sub-tags if the name changed.
+ * @param {string} oldName — current tag name
+ * @param {object} tagData — { name, color, fontColor, favorite }
+ * @returns {Promise<boolean>} true if updated successfully
+ */
+async function updateTagInline(oldName, tagData) {
+  if (!oldName || !tagData || !tagData.name) return false;
+  try {
+    _invalidateSettingsCache();
+    var settings = await getCachedSettings();
+    var tags = Array.isArray(settings.tags) ? settings.tags : [];
+    var found = false;
+    for (var i = 0; i < tags.length; i++) {
+      var tName = (typeof tags[i] === 'string') ? tags[i] : (tags[i].name || '');
+      if (tName.toLowerCase() === oldName.toLowerCase()) {
+        tags[i] = { name: tagData.name, color: tagData.color, fontColor: tagData.fontColor, favorite: !!tagData.favorite };
+        found = true;
+        // Rename sub-tags if name changed
+        if (oldName !== tagData.name) {
+          var prefix = oldName + '/';
+          for (var j = 0; j < tags.length; j++) {
+            var subName = (typeof tags[j] === 'string') ? tags[j] : (tags[j].name || '');
+            if (subName.startsWith(prefix)) {
+              var newSubName = tagData.name + '/' + subName.substring(prefix.length);
+              if (typeof tags[j] === 'string') { tags[j] = newSubName; }
+              else { tags[j].name = newSubName; }
+            }
+          }
+        }
+        break;
+      }
+    }
+    if (!found) return false;
+    settings.tags = tags;
+    var resp = await fetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(settings),
+    });
+    if (!resp.ok) return false;
+    _invalidateSettingsCache();
+    return true;
+  } catch (e) {
+    console.error('updateTagInline failed:', e);
+    return false;
+  }
+}
+
+/**
+ * Delete a tag (and all its sub-tags) from settings.
+ * @param {string} tagName — tag name to delete
+ * @returns {Promise<boolean>} true if deleted successfully
+ */
+async function deleteTagInline(tagName) {
+  if (!tagName) return false;
+  try {
+    _invalidateSettingsCache();
+    var settings = await getCachedSettings();
+    var tags = Array.isArray(settings.tags) ? settings.tags : [];
+    var prefix = tagName + '/';
+    settings.tags = tags.filter(function(t) {
+      var tName = (typeof t === 'string') ? t : (t.name || '');
+      return tName !== tagName && !tName.startsWith(prefix);
+    });
+    var resp = await fetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(settings),
+    });
+    if (!resp.ok) return false;
+    _invalidateSettingsCache();
+    return true;
+  } catch (e) {
+    console.error('deleteTagInline failed:', e);
     return false;
   }
 }

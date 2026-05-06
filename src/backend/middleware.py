@@ -97,6 +97,7 @@ def _cleanup_expired_sessions() -> None:
         now = _utcnow_iso()
         cutoff = (datetime.utcnow() - timedelta(seconds=_INACTIVITY_SECONDS)).isoformat() + "Z"
         conn = sqlite3.connect(DB_PATH)
+        conn.execute("PRAGMA busy_timeout=5000")
         conn.execute(
             "DELETE FROM sessions WHERE expires_datetime < ? OR last_active_datetime < ?",
             (now, cutoff),
@@ -141,6 +142,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
             conn = None
             try:
                 conn = sqlite3.connect(DB_PATH)
+                conn.execute("PRAGMA busy_timeout=5000")
                 conn.row_factory = sqlite3.Row
                 row = conn.execute(
                     "SELECT s.token, s.user_id, s.expires_datetime, s.last_active_datetime, "

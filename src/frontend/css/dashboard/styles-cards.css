@@ -1641,6 +1641,14 @@ li.cwoc-dragging {
     box-shadow: 0 2px 8px rgba(74, 44, 42, 0.2);
     border-color: #c4a040;
     z-index: 1;
+    color: #1a1208 !important;
+}
+
+.email-card:hover .email-card-sender,
+.email-card:hover .email-card-subject,
+.email-card:hover .email-card-preview,
+.email-card:hover .email-meta-date {
+    color: #1a1208 !important;
 }
 
 .email-card:not(.email-unread):hover {
@@ -1666,9 +1674,8 @@ li.cwoc-dragging {
     display: flex;
 }
 
-/* On hover, make preview text near-black for readability */
+/* On hover, ensure preview text is fully visible */
 .email-card:hover .email-card-preview {
-    color: #1a1208;
     opacity: 0.9;
 }
 
@@ -1790,6 +1797,135 @@ li.cwoc-dragging {
 
 .email-card-flash {
     animation: emailCardFlash 1.5s ease-out;
+}
+
+/* ── Threaded email — stacked parchment visual ────────────────────────────── */
+.email-thread-group {
+    position: relative;
+    margin-bottom: 8px;
+}
+
+/* Thread ribbon — colored vertical bar on the left edge */
+.email-thread-ribbon {
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 5px;
+    border-radius: 6px 0 0 6px;
+    background: #8b5a2b;
+    z-index: 3;
+}
+
+/* Depth variations — more messages = thicker/darker ribbon */
+.email-thread-ribbon[data-depth="1"] {
+    background: #b8860b;
+}
+
+.email-thread-ribbon[data-depth="2"] {
+    background: #8b5a2b;
+    width: 6px;
+}
+
+.email-thread-ribbon[data-depth="3"] {
+    background: #5c4033;
+    width: 7px;
+}
+
+/* The top card in a thread group */
+.email-thread-top-card {
+    position: relative;
+    z-index: 2;
+    margin-bottom: 0;
+}
+
+/* Thread count badge */
+.email-thread-badge {
+    position: absolute;
+    top: 50%;
+    left: -2px;
+    transform: translateY(-50%);
+    min-width: 20px;
+    height: 20px;
+    line-height: 20px;
+    text-align: center;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.72em;
+    font-weight: 700;
+    color: #fff8e1;
+    background: #5c4033;
+    border: 1px solid #3a2a1a;
+    border-radius: 10px;
+    padding: 0 5px;
+    cursor: pointer;
+    z-index: 5;
+    transition: background 0.15s, transform 0.15s;
+}
+
+.email-thread-badge:hover {
+    background: #8b5a2b;
+    transform: translateY(-50%) scale(1.15);
+}
+
+/* When expanded, ribbon changes color */
+.email-thread-group-expanded .email-thread-ribbon {
+    background: teal;
+}
+
+.email-thread-group-expanded .email-thread-badge {
+    background: teal;
+    border-color: #006060;
+}
+
+/* Expanded thread child cards */
+.email-thread-expanded {
+    border-left: 3px solid rgba(139, 90, 43, 0.25);
+    margin-left: 16px;
+    padding-left: 8px;
+    margin-top: 4px;
+}
+
+.email-thread-child-card {
+    opacity: 0.92;
+    margin-bottom: 4px;
+}
+
+.email-thread-child-card:last-child {
+    margin-bottom: 0;
+}
+
+/* Folder tag on cross-folder thread messages */
+.email-thread-folder-tag {
+    display: inline-block;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.65em;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #8b5a2b;
+    background: rgba(139, 90, 43, 0.1);
+    border: 1px solid rgba(139, 90, 43, 0.2);
+    border-radius: 3px;
+    padding: 1px 5px;
+    margin-right: 6px;
+    vertical-align: middle;
+}
+
+/* ── Threaded email responsive — mobile ───────────────────────────────────── */
+@media (max-width: 480px) {
+    .email-thread-expanded {
+        margin-left: 8px;
+        padding-left: 6px;
+    }
+    .email-thread-badge {
+        font-size: 0.65em;
+        min-width: 16px;
+        height: 16px;
+        line-height: 16px;
+    }
+    .email-thread-ribbon {
+        width: 4px;
+    }
 }
 
 /* ── Email context menu (right-click / long-press) ────────────────────────── */

@@ -6,6 +6,9 @@
  * project child-chit picker), then offers Copy, Move, or Cancel.
  * After execution, shows an undo bar in the zone header.
  *
+ * Search uses the server-side /api/chits/search endpoint which supports
+ * full boolean operators: && (AND), || (OR), ! (NOT), () (group), #tag.
+ *
  * Depends on: shared-utils.js (cwocToast, generateUniqueId),
  *             editor.js (_onChecklistChange),
  *             editor_checklists.js (Checklist class)
@@ -45,47 +48,39 @@ async function _openSendContentModal(e, contentType) {
     _sendContentModal.className = 'modal-overlay-new';
     document.body.appendChild(_sendContentModal);
 
-    _sendContentModal.innerHTML = `
-      <div class="modal-content-new">
-        <div class="modal-header-new">
-          <h2 id="sendContentModalTitle">Select Target Chit</h2>
-          <div class="modal-buttons"></div>
-        </div>
-        <div class="modal-body-new">
-          <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;">
-            <select id="sendContentFilterStatus" style="padding:4px 8px;border:1px solid #a0522d;border-radius:4px;font-family:Lora,Georgia,serif;font-size:0.85em;background:#fff8f0;">
-              <option value="">All Statuses</option>
-              <option value="ToDo">ToDo</option>
-              <option value="In Progress">In Progress</option>
-              <option value="Blocked">Blocked</option>
-              <option value="Complete">Complete</option>
-            </select>
-            <input type="text" id="sendContentSearch" class="chit-search-input-new" placeholder="Search chits..." autofocus style="flex:1;">
-          </div>
-          <table class="chit-table-new">
-            <thead>
-              <tr>
-                <th style="width:30px;"></th>
-                <th>Title</th>
-                <th>Due</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody id="sendContentChitList"></tbody>
-          </table>
-        </div>
-        <div class="modal-footer-new">
-          <span id="sendContentSelectedName" style="font-size:0.85em;opacity:0.7;flex:1;"></span>
-          <button class="modal-button-new cancel" id="sendContentCancelBtn">Cancel</button>
-          <button class="modal-button-new" id="sendContentCopyBtn" disabled>📋 Copy</button>
-          <button class="modal-button-new" id="sendContentMoveBtn" disabled>📤 Move</button>
-        </div>
-      </div>
-    `;
+    _sendContentModal.innerHTML = '<div class="modal-content-new">'
+      + '<div class="modal-header-new">'
+      + '<h2 id="sendContentModalTitle">Select Target Chit</h2>'
+      + '<div class="modal-buttons"></div>'
+      + '</div>'
+      + '<div class="modal-body-new">'
+      + '<div style="display:flex;gap:6px;align-items:center;margin-bottom:4px;">'
+      + '<input type="text" id="sendContentSearch" class="chit-search-input-new" placeholder="Search chits..." autofocus style="flex:1;">'
+      + '<button type="button" id="sendContentGoBtn" class="modal-button-new" style="padding:6px 14px;flex-shrink:0;">Go</button>'
+      + '</div>'
+      + '<div style="font-size:0.75em;opacity:0.7;margin-bottom:8px;line-height:1.4;">'
+      + 'Operators: <strong>&&</strong> (AND) &middot; <strong>||</strong> (OR) &middot; <strong>!</strong> (NOT) &middot; <strong>()</strong> (group) &middot; <strong>#tag</strong> &middot; e.g. <code>#work && !done</code>'
+      + '</div>'
+      + '<table class="chit-table-new">'
+      + '<thead><tr><th style="width:30px;"></th><th>Title</th><th>Due</th><th>Status</th></tr></thead>'
+      + '<tbody id="sendContentChitList"></tbody>'
+      + '</table>'
+      + '</div>'
+      + '<div class="modal-footer-new">'
+      + '<span id="sendContentSelectedName" style="font-size:0.85em;opacity:0.7;flex:1;"></span>'
+      + '<button class="modal-button-new cancel" id="sendContentCancelBtn">Cancel</button>'
+      + '<button class="modal-button-new" id="sendContentCopyBtn" disabled>&#x1F4CB; Copy</button>'
+      + '<button class="modal-button-new" id="sendContentMoveBtn" disabled>&#x1F4E4; Move</button>'
+      + '</div>'
+      + '</div>';
 
     // Event listeners (attached once)
-    document.getElementById('sendContentSearch').addEventListener('input', _sendContentApplyFilters);
-    document.getElementById('sendContentFilterStatus').addEventListener('change', _sendContentApplyFilters);
+    document.getElementById('sendContentSearch').addEventListener('keydown', function(ev) {
+      if (ev.key === 'Enter') { ev.preventDefault(); _sendContentDoSearch(); }
+    });
+    document.getElementById('sendContentGoBtn').addEventListener('click', function() {
+      _sendContentDoSearch();
+    });
 
     document.getElementById('sendContentCancelBtn').addEventListener('click', function() {
       _closeSendContentModal();
@@ -112,7 +107,7 @@ async function _openSendContentModal(e, contentType) {
         var searchInput = document.getElementById('sendContentSearch');
         if (searchInput && searchInput.value.trim()) {
           searchInput.value = '';
-          searchInput.dispatchEvent(new Event('input'));
+          _sendContentRenderChits(_sendContentModal._availableChits || []);
           searchInput.focus();
         } else {
           _closeSendContentModal();
@@ -182,7 +177,8 @@ function _sendContentRenderChits(chits) {
   var list = document.getElementById('sendContentChitList');
   if (!list) return;
   list.innerHTML = '';
-  var searchTerm = (document.getElementById('sendContentSearch')?.value || '').toLowerCase().trim();
+  var searchTerm = (document.getElementById('sendContentSearch')?.value || '').trim();
+  var highlightTerms = _sendContentExtractTerms(searchTerm);
 
   chits.forEach(function(chit) {
     var row = document.createElement('tr');
@@ -207,8 +203,8 @@ function _sendContentRenderChits(chits) {
     // Title cell
     var titleCell = document.createElement('td');
     var titleText = chit.title || '(No Title)';
-    if (searchTerm) {
-      titleCell.innerHTML = _sendContentHighlight(titleText, searchTerm);
+    if (highlightTerms.length > 0) {
+      titleCell.innerHTML = _sendContentHighlightMulti(titleText, highlightTerms);
     } else {
       titleCell.textContent = titleText;
     }
@@ -236,12 +232,16 @@ function _sendContentRenderChits(chits) {
   });
 }
 
-function _sendContentHighlight(text, term) {
-  if (!text) return '';
-  var escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  if (!term) return escaped;
-  var safeTerm = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return escaped.replace(new RegExp('(' + safeTerm + ')', 'gi'), '<mark>$1</mark>');
+/* ── Highlight helpers ────────────────────────────────────────────────────── */
+
+// Use shared cwocExtractSearchTerms and cwocHighlightTerms from shared-utils.js
+// Aliases for backward compatibility within this file
+function _sendContentExtractTerms(query) {
+  return cwocExtractSearchTerms(query);
+}
+
+function _sendContentHighlightMulti(text, terms) {
+  return cwocHighlightTerms(text, terms);
 }
 
 function _sendContentUpdateButtons() {
@@ -254,45 +254,50 @@ function _sendContentUpdateButtons() {
   if (moveBtn) moveBtn.disabled = !hasSelection;
   if (nameSpan) {
     nameSpan.textContent = hasSelection
-      ? '→ ' + (_sendContentModal._selectedChit.title || '(No Title)')
+      ? '\u2192 ' + (_sendContentModal._selectedChit.title || '(No Title)')
       : '';
   }
 }
 
-/* ── Filter logic ─────────────────────────────────────────────────────────── */
+/* ── Search logic (uses server-side /api/chits/search) ─────────────────────── */
 
-function _sendContentApplyFilters() {
-  var searchTerm = (document.getElementById('sendContentSearch')?.value || '').toLowerCase().trim();
-  var statusFilter = (document.getElementById('sendContentFilterStatus')?.value || '').toLowerCase();
+async function _sendContentDoSearch() {
+  var searchTerm = (document.getElementById('sendContentSearch')?.value || '').trim();
 
-  var filtered = (_sendContentModal._availableChits || []).filter(function(chit) {
-    if (statusFilter && (chit.status || '').toLowerCase() !== statusFilter) return false;
-    if (searchTerm && !_sendContentMatchesSearch(chit, searchTerm)) return false;
-    return true;
-  });
-
-  _sendContentRenderChits(filtered);
-
-  var titleEl = document.getElementById('sendContentModalTitle');
-  if (titleEl) {
-    var label = _sendContentType === 'notes' ? 'Send Notes To' : 'Send Checklist To';
-    titleEl.textContent = label + ' (' + filtered.length + ' shown)';
+  if (!searchTerm) {
+    // Empty search: show all available chits (sorted alphabetically)
+    _sendContentRenderChits(_sendContentModal._availableChits || []);
+    var titleEl = document.getElementById('sendContentModalTitle');
+    if (titleEl) {
+      var label = _sendContentType === 'notes' ? 'Send Notes To' : 'Send Checklist To';
+      titleEl.textContent = label + ' (' + (_sendContentModal._availableChits || []).length + ' available)';
+    }
+    return;
   }
-}
 
-function _sendContentMatchesSearch(chit, term) {
-  if ((chit.title || '').toLowerCase().includes(term)) return true;
-  if ((chit.status || '').toLowerCase().includes(term)) return true;
-  if (term.startsWith('#')) {
-    var tagTerm = term.slice(1);
-    return (chit.tags || []).some(function(t) {
-      return t.toLowerCase().includes(tagTerm) && !t.startsWith('CWOC_System/');
-    });
+  try {
+    var resp = await fetch('/api/chits/search?q=' + encodeURIComponent(searchTerm));
+    if (!resp.ok) throw new Error('Search failed');
+    var data = await resp.json();
+    var results = Array.isArray(data) ? data : [];
+
+    // Extract chit objects, exclude current chit
+    var filtered = results
+      .map(function(r) { return r.chit || r; })
+      .filter(function(c) { return c.id !== window.currentChitId && !c.deleted; });
+
+    _sendContentRenderChits(filtered);
+
+    var titleEl = document.getElementById('sendContentModalTitle');
+    if (titleEl) {
+      var label = _sendContentType === 'notes' ? 'Send Notes To' : 'Send Checklist To';
+      titleEl.textContent = label + ' (' + filtered.length + ' found)';
+    }
+  } catch (err) {
+    console.error('Send-content search error:', err);
+    var list = document.getElementById('sendContentChitList');
+    if (list) list.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:1em;color:#b22222;">Search failed</td></tr>';
   }
-  if ((chit.tags || []).some(function(t) {
-    return !t.startsWith('CWOC_System/') && t.toLowerCase().includes(term);
-  })) return true;
-  return false;
 }
 
 /* ── Execute copy or move ─────────────────────────────────────────────────── */
@@ -326,11 +331,10 @@ async function _executeSendContent(mode) {
         ? targetNote + '\n\n' + sourceContent
         : sourceContent;
 
-      // If move, clear source (don't mark editor unsaved — only destination is saved)
+      // If move, clear source
       if (mode === 'move') {
         noteEl.value = '';
         autoGrowNote(noteEl);
-        // Refresh rendered view if showing
         var rendered = document.getElementById('notes-rendered-output');
         if (rendered && rendered.style.display !== 'none') {
           rendered.innerHTML = '';
@@ -365,7 +369,7 @@ async function _executeSendContent(mode) {
       });
       fullTarget.checklist = targetChecklist.concat(newItems);
 
-      // If move, clear source checklist (silently — don't trigger autosave or mark unsaved)
+      // If move, clear source checklist
       if (mode === 'move') {
         window.checklist.items = [];
         window.checklist.render();
@@ -373,10 +377,8 @@ async function _executeSendContent(mode) {
     }
 
     // Save target chit
-    // Remove read-only computed fields before saving
     delete fullTarget.effective_role;
     delete fullTarget.assigned_to_display_name;
-    // Re-serialize fields that GET returns as objects but PUT expects as JSON strings
     if (fullTarget.weather_data && typeof fullTarget.weather_data === 'object') {
       fullTarget.weather_data = JSON.stringify(fullTarget.weather_data);
     }
@@ -419,7 +421,6 @@ async function _executeSendContent(mode) {
 var _sendContentUndoState = null;
 
 function _showSendContentUndoBar(mode, targetChit, savedTarget, undoData) {
-  // Remove any existing undo bar
   var existing = document.getElementById('sendContentUndoBar');
   if (existing) {
     if (_sendContentUndoState && _sendContentUndoState.interval) {
@@ -441,7 +442,7 @@ function _showSendContentUndoBar(mode, targetChit, savedTarget, undoData) {
 
   var msg = document.createElement('span');
   msg.style.cssText = 'flex:1;color:#1a1208;';
-  msg.textContent = '📤 ' + actionLabel + ' ' + contentLabel + ' → "' + (targetChit.title || 'Untitled') + '"';
+  msg.textContent = '\uD83D\uDCE4 ' + actionLabel + ' ' + contentLabel + ' \u2192 "' + (targetChit.title || 'Untitled') + '"';
   bar.appendChild(msg);
 
   var undoBtn = document.createElement('button');
@@ -457,7 +458,6 @@ function _showSendContentUndoBar(mode, targetChit, savedTarget, undoData) {
   timerOuter.appendChild(timerFill);
   bar.appendChild(timerOuter);
 
-  // Insert after zone header
   zoneHeader.insertAdjacentElement('afterend', bar);
 
   var UNDO_DURATION = 8000;
@@ -488,7 +488,6 @@ function _showSendContentUndoBar(mode, targetChit, savedTarget, undoData) {
 
 async function _undoSendContent(mode, targetChit, undoData) {
   try {
-    // Restore target chit to original state
     var resp = await fetch('/api/chit/' + encodeURIComponent(targetChit.id));
     if (!resp.ok) throw new Error('Failed to fetch target for undo');
     var currentTarget = await resp.json();
@@ -496,13 +495,11 @@ async function _undoSendContent(mode, targetChit, undoData) {
     if (_sendContentType === 'notes') {
       currentTarget.note = undoData.targetOriginalNote;
 
-      // If it was a move, restore source notes (silently)
       if (mode === 'move') {
         var noteEl = document.getElementById('note');
         if (noteEl) {
           noteEl.value = undoData.sourceOriginalNote;
           autoGrowNote(noteEl);
-          // Refresh rendered view if showing
           var rendered = document.getElementById('notes-rendered-output');
           if (rendered && rendered.style.display !== 'none') {
             if (typeof marked !== 'undefined') {
@@ -516,7 +513,6 @@ async function _undoSendContent(mode, targetChit, undoData) {
     } else if (_sendContentType === 'checklist') {
       currentTarget.checklist = undoData.targetOriginalChecklist;
 
-      // If it was a move, restore source checklist (silently)
       if (mode === 'move') {
         if (window.checklist) {
           window.checklist.items = undoData.sourceOriginalChecklist.map(function(item) {
@@ -536,7 +532,6 @@ async function _undoSendContent(mode, targetChit, undoData) {
     // Save restored target
     delete currentTarget.effective_role;
     delete currentTarget.assigned_to_display_name;
-    // Re-serialize fields that GET returns as objects but PUT expects as JSON strings
     if (currentTarget.weather_data && typeof currentTarget.weather_data === 'object') {
       currentTarget.weather_data = JSON.stringify(currentTarget.weather_data);
     }

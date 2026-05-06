@@ -371,3 +371,178 @@ function chitMatchesSearch(chit, searchText) {
   if (Array.isArray(chit.checklist) && chit.checklist.some(function(item) { return item.text && item.text.toLowerCase().includes(searchText); })) return true;
   return false;
 }
+
+// ── Global Search Helpers (shared across dashboard and editor) ────────────────
+
+/**
+ * Extract positive (non-negated) search terms from a query string for highlighting.
+ * Strips operators (&&, ||, !, ()) and #tag prefixes, returns array of lowercase terms.
+ * Used by the global search, send-content modals, and send-item modals.
+ */
+function cwocExtractSearchTerms(query) {
+  if (!query) return [];
+  var terms = [];
+  var i = 0;
+  var q = query.toLowerCase();
+  // Known field prefixes for field:value syntax
+  var _fieldNames = ['title','note','notes','location','loc','status','priority','severity',
+    'color','people','person','assigned','assigned_to','checklist','subject','sender',
+    'from','to','cc','bcc','body','child','start','end','due','created','modified'];
+  while (i < q.length) {
+    if (q[i] === ' ' || q[i] === '\t') { i++; continue; }
+    if (q[i] === '(' || q[i] === ')') { i++; continue; }
+    if (q.substring(i, i + 2) === '&&' || q.substring(i, i + 2) === '||') { i += 2; continue; }
+    if (q[i] === '!') {
+      i++;
+      while (i < q.length && (q[i] === ' ' || q[i] === '\t')) i++;
+      if (i < q.length && q[i] === '(') {
+        var depth = 1; i++;
+        while (i < q.length && depth > 0) { if (q[i] === '(') depth++; else if (q[i] === ')') depth--; i++; }
+      } else if (i < q.length && q[i] === '#') {
+        i++;
+        while (i < q.length && ' \t()&|!#'.indexOf(q[i]) === -1) i++;
+      } else {
+        while (i < q.length && ' \t()&|!#'.indexOf(q[i]) === -1) i++;
+      }
+      continue;
+    }
+    if (q[i] === '#') {
+      i++;
+      var start = i;
+      while (i < q.length && ' \t()&|!#'.indexOf(q[i]) === -1) i++;
+      if (i > start) terms.push(q.substring(start, i));
+      continue;
+    }
+    // Read a word (may be field:value)
+    var start2 = i;
+    while (i < q.length && ' \t()&|!#'.indexOf(q[i]) === -1) i++;
+    var word = q.substring(start2, i);
+    // Check for field:value syntax
+    var colonPos = word.indexOf(':');
+    if (colonPos > 0) {
+      var fieldPart = word.substring(0, colonPos);
+      if (_fieldNames.indexOf(fieldPart) !== -1) {
+        var valuePart = word.substring(colonPos + 1);
+        if (!valuePart && i < q.length && q[i] === '(') {
+          // field:(multi word value) — extract the parenthesized content
+          i++; // skip (
+          var valStart = i;
+          var d = 1;
+          while (i < q.length && d > 0) { if (q[i] === '(') d++; else if (q[i] === ')') d--; i++; }
+          var multiVal = q.substring(valStart, i - 1).trim();
+          // Split multi-word value into individual terms for highlighting
+          var parts = multiVal.split(/\s+/);
+          for (var p = 0; p < parts.length; p++) {
+            if (parts[p].length > 0) terms.push(parts[p]);
+          }
+        } else if (valuePart.length > 0) {
+          terms.push(valuePart);
+        }
+        continue;
+      }
+    }
+    if (word.length > 0) terms.push(word);
+  }
+  return terms.filter(function(t) { return t.length > 0; });
+}
+
+/**
+ * Highlight multiple terms in text. HTML-escapes first, then wraps matches in <mark>.
+ * @param {string} text - raw text to highlight
+ * @param {string[]} terms - array of lowercase terms to highlight
+ * @returns {string} HTML with matches wrapped in <mark>
+ */
+function cwocHighlightTerms(text, terms) {
+  if (!text) return '';
+  var escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  if (!terms || terms.length === 0) return escaped;
+  var parts = terms.map(function(t) {
+    return t.replace(/[.*+?^${}()|[\]\\]/g, '\\' + '$&');
+  });
+  var regex = new RegExp('(' + parts.join('|') + ')', 'gi');
+  return escaped.replace(regex, '<mark>$1</mark>');
+}
+
+// ── Shared Live Preview ──────────────────────────────────────────────────────
+// One function used by both the Notes modal and Email expand modal for
+// real-time markdown rendering from a textarea into a preview div.
+
+/** Active debounce timers keyed by textarea ID */
+var _livePreviewTimers = {};
+
+/**
+ * Wire live markdown preview on a textarea → preview div pair.
+ * Debounced at 300ms. Only wires once per textarea (guarded by _lpWired flag).
+ *
+ * @param {string} textareaId — ID of the source textarea
+ * @param {string} previewId  — ID of the target preview div
+ */
+function cwocWireLivePreview(textareaId, previewId) {
+  var ta = document.getElementById(textareaId);
+  var pv = document.getElementById(previewId);
+  if (!ta || !pv) return;
+  if (ta._lpWired) return;
+  ta._lpWired = true;
+
+  ta.addEventListener('input', function() {
+    clearTimeout(_livePreviewTimers[textareaId]);
+    _livePreviewTimers[textareaId] = setTimeout(function() {
+      cwocUpdateLivePreview(textareaId, previewId);
+    }, 300);
+  });
+
+  // Initial render
+  cwocUpdateLivePreview(textareaId, previewId);
+}
+
+/**
+ * Render the current textarea value as markdown into the preview div.
+ *
+ * @param {string} textareaId — ID of the source textarea
+ * @param {string} previewId  — ID of the target preview div
+ */
+function cwocUpdateLivePreview(textareaId, previewId) {
+  var ta = document.getElementById(textareaId);
+  var pv = document.getElementById(previewId);
+  if (!ta || !pv) return;
+
+  var raw = ta.value || '';
+  if (!raw.trim()) {
+    pv.innerHTML = '<em style="opacity:0.4;">Preview appears here as you type\u2026</em>';
+    return;
+  }
+  if (typeof marked !== 'undefined' && marked.parse) {
+    pv.innerHTML = marked.parse(raw, { breaks: true });
+  } else {
+    pv.innerHTML = '<pre style="white-space:pre-wrap;">' + raw.replace(/&/g,'&amp;').replace(/</g,'&lt;') + '</pre>';
+  }
+}
+
+
+// ── Shared 2-Value Toggle ────────────────────────────────────────────────────
+// Clicking ANYWHERE on a .cwoc-2val-toggle switches to the other value.
+// Only applies to toggles whose spans have onclick handlers (mode toggles).
+// Settings-style toggles use _initPillToggle() which handles clicks separately.
+
+document.addEventListener('click', function(e) {
+  var toggle = e.target.closest('.cwoc-2val-toggle');
+  if (!toggle) return;
+  var spans = toggle.querySelectorAll('span[data-val]');
+  if (spans.length !== 2) return;
+
+  // Only handle toggles whose spans have onclick (mode toggles, not settings pills)
+  if (!spans[0].onclick && !spans[1].onclick) return;
+
+  // If user clicked directly on the inactive span, its onclick already fired — skip
+  var clickedSpan = e.target.closest('span[data-val]');
+  if (clickedSpan && !clickedSpan.classList.contains('active')) return;
+
+  // Otherwise (clicked active span, or the container gap) — switch to the other one
+  var activeSpan = toggle.querySelector('span.active');
+  var targetSpan = (activeSpan === spans[0]) ? spans[1] : spans[0];
+
+  // Call the onclick directly to avoid re-triggering this handler
+  if (targetSpan.onclick) {
+    targetSpan.onclick(e);
+  }
+});

@@ -24,7 +24,6 @@ var cwocTagModal = (function() {
   var _onSave = null;           // Callback: function(tagData, oldName)
   var _onDelete = null;         // Callback: function(tagName)
   var _onClose = null;          // Callback: function()
-  var _skipPersist = false;     // If true, don't save to API (caller handles persistence)
   var _injected = false;
 
   // Tag sharing state
@@ -190,7 +189,6 @@ var cwocTagModal = (function() {
     _onSave = opts.onSave || null;
     _onDelete = opts.onDelete || null;
     _onClose = opts.onClose || null;
-    _skipPersist = !!opts.skipPersist;
 
     var title = document.getElementById('cwoc-tag-modal-title');
     var nameInput = document.getElementById('cwoc-tag-modal-name');
@@ -315,15 +313,11 @@ var cwocTagModal = (function() {
       favorite: favStar ? (favStar.textContent === '★') : false,
     };
 
-    // Persist to settings (unless caller handles persistence)
-    if (!_skipPersist) {
-      await _persistTag(tagData, _currentTagName);
-    }
+    // Persist to settings
+    await _persistTag(tagData, _currentTagName);
 
-    // Save sharing config (unless caller handles persistence)
-    if (!_skipPersist) {
-      await _saveSharingConfig(tagData.name, _currentTagName);
-    }
+    // Save sharing config
+    await _saveSharingConfig(tagData.name, _currentTagName);
 
     // Callback
     if (_onSave) _onSave(tagData, _currentTagName);
@@ -349,11 +343,9 @@ var cwocTagModal = (function() {
     }
     if (!confirmed) return;
 
-    // Remove from settings (unless caller handles persistence)
-    if (!_skipPersist) {
-      await _deleteTagFromSettings(_currentTagName);
-      await _deleteSharingConfig(_currentTagName);
-    }
+    // Remove from settings
+    await _deleteTagFromSettings(_currentTagName);
+    await _deleteSharingConfig(_currentTagName);
 
     if (_onDelete) _onDelete(_currentTagName);
     close();
@@ -480,94 +472,24 @@ var cwocTagModal = (function() {
 
 
   // ── Persistence ────────────────────────────────────────────────────────────
+  // Uses the shared functions from shared-tags.js: createTagInline, updateTagInline, deleteTagInline
 
   /**
-   * Save or update a tag in settings.
-   * @param {Object} tagData — { name, color, fontColor, favorite }
-   * @param {string|null} oldName — previous name if renaming, null if new
+   * Save or update a tag in settings via shared-tags.js functions.
    */
   async function _persistTag(tagData, oldName) {
-    try {
-      _invalidateSettingsCache();
-      var settings = await getCachedSettings();
-      var tags = Array.isArray(settings.tags) ? settings.tags : [];
-
-      if (oldName) {
-        // Update existing
-        var found = false;
-        for (var i = 0; i < tags.length; i++) {
-          var tName = (typeof tags[i] === 'string') ? tags[i] : (tags[i].name || '');
-          if (tName.toLowerCase() === oldName.toLowerCase()) {
-            tags[i] = { name: tagData.name, color: tagData.color, fontColor: tagData.fontColor, favorite: tagData.favorite };
-            found = true;
-
-            // If renamed, also rename sub-tags
-            if (oldName !== tagData.name) {
-              var prefix = oldName + '/';
-              for (var j = 0; j < tags.length; j++) {
-                var subName = (typeof tags[j] === 'string') ? tags[j] : (tags[j].name || '');
-                if (subName.startsWith(prefix)) {
-                  var newSubName = tagData.name + '/' + subName.substring(prefix.length);
-                  if (typeof tags[j] === 'string') {
-                    tags[j] = newSubName;
-                  } else {
-                    tags[j].name = newSubName;
-                  }
-                }
-              }
-            }
-            break;
-          }
-        }
-        if (!found) {
-          tags.push({ name: tagData.name, color: tagData.color, fontColor: tagData.fontColor, favorite: tagData.favorite });
-        }
-      } else {
-        // New tag
-        tags.push({ name: tagData.name, color: tagData.color, fontColor: tagData.fontColor, favorite: tagData.favorite });
-      }
-
-      settings.tags = tags;
-      var resp = await fetch('/api/settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(settings),
-      });
-      if (!resp.ok) {
-        console.error('cwocTagModal: failed to save tag', resp.status);
-      }
-      _invalidateSettingsCache();
-    } catch (e) {
-      console.error('cwocTagModal: _persistTag error:', e);
+    if (oldName) {
+      await updateTagInline(oldName, tagData);
+    } else {
+      await createTagInline(tagData.name, { color: tagData.color, fontColor: tagData.fontColor, favorite: tagData.favorite });
     }
   }
 
   /**
-   * Delete a tag from settings (and all its sub-tags).
+   * Delete a tag from settings via shared-tags.js deleteTagInline.
    */
   async function _deleteTagFromSettings(tagName) {
-    try {
-      _invalidateSettingsCache();
-      var settings = await getCachedSettings();
-      var tags = Array.isArray(settings.tags) ? settings.tags : [];
-      var prefix = tagName + '/';
-      tags = tags.filter(function(t) {
-        var tName = (typeof t === 'string') ? t : (t.name || '');
-        return tName !== tagName && !tName.startsWith(prefix);
-      });
-      settings.tags = tags;
-      var resp = await fetch('/api/settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(settings),
-      });
-      if (!resp.ok) {
-        console.error('cwocTagModal: failed to delete tag', resp.status);
-      }
-      _invalidateSettingsCache();
-    } catch (e) {
-      console.error('cwocTagModal: _deleteTagFromSettings error:', e);
-    }
+    await deleteTagInline(tagName);
   }
 
   // ── Sharing ────────────────────────────────────────────────────────────────

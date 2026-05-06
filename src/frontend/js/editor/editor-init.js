@@ -389,6 +389,13 @@ async function loadChitData(chitId) {
       titleInput.value = chit.title || "";
     }
 
+    // Show chit UUID next to title
+    var uuidEl = document.getElementById('chitUuidDisplay');
+    if (uuidEl && chit.id) {
+      uuidEl.textContent = chit.id;
+      uuidEl.title = 'Chit ID: ' + chit.id;
+    }
+
     // Owner chip in title zone (Requirement 5.1–5.6)
     _renderOwnerChip(chit);
 
@@ -1393,6 +1400,14 @@ document.addEventListener("DOMContentLoaded", function () {
       if (_sendContentModalOpen) {
         // Handled by its own ESC listener (clear search → close)
         return;
+      }
+
+      // Send-item popup or search modal
+      if (typeof _sendItemPopupOpen !== 'undefined' && _sendItemPopupOpen) {
+        return; // Handled by its own ESC listener
+      }
+      if (typeof _sendItemSearchModalOpen !== 'undefined' && _sendItemSearchModalOpen) {
+        return; // Handled by its own ESC listener
       }
 
       const quickAlertOverlay = document.getElementById('cwoc-quick-alert-overlay');

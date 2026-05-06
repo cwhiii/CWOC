@@ -187,6 +187,7 @@ class Checklist {
       } else if (e.key === "Enter" && this.input.value.trim() !== "") {
         this.addNewItem(this.input.value.trim());
         this.input.value = "";
+        if (typeof _flashChecklistAddArrow === 'function') _flashChecklistAddArrow();
       } else if (e.key === "Escape") {
         if (typeof cancelOrExit === "function") cancelOrExit();
       }
@@ -386,6 +387,19 @@ class Checklist {
       }
     });
 
+    // Send-to-chit icon (appears on hover)
+    var sendIcon = document.createElement("span");
+    sendIcon.className = "checklist-send-icon";
+    sendIcon.textContent = "📤";
+    sendIcon.title = "Send to another chit";
+    sendIcon.style.visibility = "hidden";
+    var self = this;
+    sendIcon.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (typeof _openSendItemPopup === 'function') _openSendItemPopup(e, item, self);
+    });
+    el.appendChild(sendIcon);
+
     var trash = document.createElement("span");
     trash.className = "trash-icon";
     trash.textContent = "🗑️";
@@ -394,8 +408,8 @@ class Checklist {
     trash.addEventListener("click", (e) => { e.stopPropagation(); this.deleteItem(item, el); });
     el.appendChild(trash);
 
-    el.addEventListener("mouseenter", () => { trash.style.visibility = "visible"; });
-    el.addEventListener("mouseleave", () => { trash.style.visibility = "hidden"; });
+    el.addEventListener("mouseenter", () => { trash.style.visibility = "visible"; sendIcon.style.visibility = "visible"; });
+    el.addEventListener("mouseleave", () => { trash.style.visibility = "hidden"; sendIcon.style.visibility = "hidden"; });
 
     if (!isGhost) {
       el.addEventListener("dragstart", (e) => this.onDragStart(e, item));
@@ -814,7 +828,8 @@ function _noteToChecklistFromHeader(e) {
 
 /**
  * Move note lines into checklist items. Each non-empty line becomes an item.
- * Lines starting with "- " or "* " have the prefix stripped.
+ * Lines starting with "- [ ] " or "- [x] " are recognized as markdown checklists
+ * (preserving checked state). Lines starting with "- " or "* " have the prefix stripped.
  * Indented lines (2 or 4 spaces, or tab) get corresponding indent levels.
  * Clears the note after moving.
  */
@@ -833,14 +848,28 @@ function _copyNoteToChecklist(checklist) {
       stripped = stripped.startsWith('\t') ? stripped.slice(1) : stripped.slice(4);
     }
     if (stripped.startsWith('  ')) { indent++; stripped = stripped.slice(2); }
-    // Strip list markers
-    stripped = stripped.replace(/^[-*•]\s+/, '').replace(/^\d+[.)]\s+/, '').replace(/^\[[ x]\]\s*/i, '');
+    // Detect markdown checklist format: - [x] or - [ ] or * [x] or * [ ]
+    var isChecked = false;
+    var mdChecklistMatch = stripped.match(/^[-*]\s+\[([ xX])\]\s*/);
+    if (mdChecklistMatch) {
+      isChecked = mdChecklistMatch[1].toLowerCase() === 'x';
+      stripped = stripped.replace(/^[-*]\s+\[[ xX]\]\s*/, '');
+    } else {
+      // Strip list markers and standalone checkbox markers
+      stripped = stripped.replace(/^[-*•]\s+/, '').replace(/^\d+[.)]\s+/, '');
+      // Check for standalone [x] or [ ] at start (legacy format)
+      var legacyCheck = stripped.match(/^\[([ xX])\]\s*/);
+      if (legacyCheck) {
+        isChecked = legacyCheck[1].toLowerCase() === 'x';
+        stripped = stripped.replace(/^\[[ xX]\]\s*/, '');
+      }
+    }
     if (!stripped.trim()) return;
     newItems.push({
       id: checklist.generateId(),
       text: stripped.trim(),
       level: Math.min(indent, MAX_INDENT_LEVEL),
-      checked: false,
+      checked: isChecked,
       parent: null
     });
   });
@@ -865,8 +894,9 @@ function _copyNoteToChecklist(checklist) {
 }
 
 /**
- * Move checklist items into the note field. Each item becomes a line,
- * indented with spaces to reflect its level. Checked items get [x] prefix.
+ * Move checklist items into the note field as proper markdown checklists.
+ * Each item becomes a markdown task list item: `- [ ] text` or `- [x] text`.
+ * Sub-levels are indented with 2 spaces per level.
  * Clears the checklist after moving.
  */
 function _copyChecklistToNote(checklist) {
@@ -874,9 +904,9 @@ function _copyChecklistToNote(checklist) {
   if (!noteEl) return;
   if (!checklist.items || checklist.items.length === 0) return;
   var lines = checklist.items.map(function(item) {
-    var prefix = '  '.repeat(item.level);
-    var marker = item.checked ? '[x] ' : '- ';
-    return prefix + marker + item.text;
+    var indent = '  '.repeat(item.level);
+    var checkbox = item.checked ? '- [x] ' : '- [ ] ';
+    return indent + checkbox + item.text;
   });
   var text = lines.join('\n');
   // Append to existing note with a blank line separator

@@ -1,0 +1,1 @@
+Checklist ↔ Note conversion now uses proper markdown task list format (`- [ ] item` / `- [x] item`) with 2-space indentation for sub-levels. Note-to-checklist also preserves checked state from markdown checkboxes.
