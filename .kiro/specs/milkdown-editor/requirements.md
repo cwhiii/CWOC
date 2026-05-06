@@ -4,7 +4,7 @@
 
 This document defines the requirements for integrating Milkdown — a plugin-driven WYSIWYG markdown editor built on ProseMirror and Remark — into CWOC as the primary rich markdown editing experience. Milkdown replaces the current textarea + marked.js render-toggle approach in the chit editor's Notes zone and the fullscreen Notes modal, providing inline WYSIWYG editing where users see formatted output as they type while the underlying data remains standard markdown. The existing custom "Obsidian-style Token-Level Live Preview" spec is superseded by this integration.
 
-Milkdown is self-hosted on the CWOC server — the configurator downloads ESM bundles during install/update to `/static/vendor/milkdown/`, and an import map in the HTML maps module specifiers to these local files. This eliminates runtime internet dependency and is compatible with CWOC's no-build-step architecture. The editor is themed to match CWOC's 1940s parchment aesthetic and integrates with the existing save system, chit link autocomplete, and mobile touch interactions.
+Milkdown is self-hosted on the CWOC server — the configurator downloads ESM bundles during install/update to `/lostatic/vendor/milkdown/`, and an import map in the HTML maps module specifiers to these local files. This eliminates runtime internet dependency and is compatible with CWOC's no-build-step architecture. The editor is themed to match CWOC's 1940s parchment aesthetic and integrates with the existing save system, chit link autocomplete, and mobile touch interactions.
 
 ## Glossary
 

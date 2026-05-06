@@ -482,34 +482,53 @@ function _renderStealthToggle() {
   var container = document.getElementById('peopleContent');
   if (!container) return;
 
-  // Remove existing stealth toggle if present
+  // Remove existing stealth toggle row if present (legacy)
   var existing = document.getElementById('cwoc-stealth-toggle-row');
   if (existing) existing.remove();
 
-  // Only show for owners and managers (not viewers)
-  if (_effectiveRole === 'viewer') return;
+  // Ensure hidden checkbox exists for data reading
+  var cb = document.getElementById('sharingStealthToggle');
+  if (!cb) {
+    cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.id = 'sharingStealthToggle';
+    cb.style.display = 'none';
+    container.appendChild(cb);
+  }
 
-  var row = document.createElement('div');
-  row.id = 'cwoc-stealth-toggle-row';
-  row.className = 'cwoc-stealth-toggle-row';
-  row.style.cssText = 'padding:8px 4px 4px 4px;border-top:1px solid #d4c5a9;margin-top:8px;';
+  _updateStealthHeaderBtn();
+}
 
-  var label = document.createElement('label');
-  label.style.cssText = 'display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.85em;color:#6b4e31;';
+function _toggleStealthFromHeader(event) {
+  if (event) { event.stopPropagation(); event.preventDefault(); }
+  var cb = document.getElementById('sharingStealthToggle');
+  if (!cb) return;
+  cb.checked = !cb.checked;
+  setSaveButtonUnsaved();
+  _applyStealthGreyout();
+  _updateStealthHeaderBtn();
+}
 
-  var checkbox = document.createElement('input');
-  checkbox.type = 'checkbox';
-  checkbox.id = 'sharingStealthToggle';
-  checkbox.addEventListener('change', function () {
-    setSaveButtonUnsaved();
-    _applyStealthGreyout();
-  });
-
-  label.appendChild(checkbox);
-  label.appendChild(document.createTextNode('🥷 Stealth — hide from all other users'));
-
-  row.appendChild(label);
-  container.appendChild(row);
+function _updateStealthHeaderBtn() {
+  var btn = document.getElementById('stealthHeaderBtn');
+  if (!btn) return;
+  var cb = document.getElementById('sharingStealthToggle');
+  var isActive = cb && cb.checked;
+  if (isActive) {
+    btn.style.background = '#6b4e31';
+    btn.style.color = '#fff';
+    btn.title = 'Stealth ON — hidden from other users (click to disable)';
+  } else {
+    btn.style.background = '';
+    btn.style.color = '';
+    btn.title = 'Stealth — hide from all other users';
+  }
+  // Hide for viewers
+  if (_effectiveRole === 'viewer') {
+    btn.style.display = 'none';
+  } else {
+    btn.style.display = '';
+  }
 }
 
 // ── Assigned-to dropdown sync (Requirement 2.5) ─────────────────────────
@@ -732,6 +751,7 @@ function initPeopleSharingControls(chit) {
     stealthCb.checked = !!chit.stealth;
   }
   _applyStealthGreyout();
+  _updateStealthHeaderBtn();
 
   // For viewers: hide pill toggles and stealth toggle (read-only mode)
   // This is handled by _renderPeopleTree checking _effectiveRole
@@ -827,6 +847,30 @@ function _toggleAllPeopleGroups(event, expand) {
     _peopleGroupsExpanded[k] = expand;
   });
   _renderPeopleTree();
+}
+
+var _peopleGroupsAllExpanded = true;
+
+function _togglePeopleExpandCollapse(event) {
+  if (event) { event.stopPropagation(); event.preventDefault(); }
+  _peopleGroupsAllExpanded = !_peopleGroupsAllExpanded;
+  _toggleAllPeopleGroups(null, _peopleGroupsAllExpanded);
+  _updatePeopleExpandCollapseBtn();
+}
+
+function _updatePeopleExpandCollapseBtn() {
+  // Update both the zone header and modal buttons
+  var btns = [document.getElementById('people-expand-collapse-btn'), document.getElementById('people-expand-collapse-btn-modal')];
+  btns.forEach(function(btn) {
+    if (!btn) return;
+    if (_peopleGroupsAllExpanded) {
+      btn.innerHTML = '<i class="fas fa-compress-alt"></i><span class="hideWhenNarrow"> Collapse</span>';
+      btn.title = 'Collapse all groups';
+    } else {
+      btn.innerHTML = '<i class="fas fa-expand-alt"></i><span class="hideWhenNarrow"> Expand</span>';
+      btn.title = 'Expand all groups';
+    }
+  });
 }
 
 // ── Contact chip management (existing, unchanged) ────────────────────────────

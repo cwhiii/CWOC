@@ -1198,6 +1198,17 @@ Tag tree utilities, filtering, inline tag creation, system tag detection, and ch
 | `isSystemTag(tagName)` | Return true if a tag name is a system tag (flat or `CWOC_System/` prefix) |
 | `resolveChitLinks(html, allChits)` | Replace `[[title]]` patterns in HTML with links to matching chits |
 
+#### shared-tag-modal.js
+
+Shared tag creation/editing modal with full functionality (create, rename, recolor, font color, swatches, favorite, delete, sharing). Self-contained injectable component usable from both the settings page and the chit editor.
+
+| Symbol | Description |
+|--------|-------------|
+| `cwocTagModal.inject()` | Inject the modal HTML into the page (auto-called on DOMContentLoaded) |
+| `cwocTagModal.open(tagName, opts)` | Open the modal for editing (tagName) or creating (null). Options: `onSave`, `onDelete`, `onClose`, `allTags`, `tagData`, `prefillName`, `skipPersist` |
+| `cwocTagModal.close()` | Close the modal |
+| `cwocTagModal.isOpen()` | Returns true if the modal is currently displayed |
+
 #### shared-recurrence.js
 
 Recurrence expansion, formatting, series info computation, and date advancement by frequency.
@@ -1823,18 +1834,19 @@ Habits zone logic: period history display, inline editing of past counts, and ca
 
 #### editor-tags.js
 
-Tag tree rendering, search, selection, favorites, recents, and inline tag creation in the editor.
+Tag tree rendering, search, selection, favorites, recents, and tag creation/editing in the editor via the shared tag modal.
 
 | Symbol | Description |
 |--------|-------------|
 | `_loadTags()` | Load and normalize tags from user settings; returns array of `{name, color}` |
 | `_renderTags(tags, selectedTags)` | Render the full tag zone — tree, favorites row, recents row, active tags panel, and count badge |
 | `toggleAllTags(event, expand)` | Expand or collapse all tag tree nodes |
-| `createTag(event)` | Navigate to the settings page for tag creation |
+| `createTag(event)` | Open the shared tag modal for creating a new tag |
+| `editTag(event, tagName)` | Open the shared tag modal for editing an existing tag |
 | `clearTagSearch(event)` | Clear the tag search input and reset the filter |
 | `_filterTagTree(query)` | Filter the tag tree by search text — hides non-matching items and empty groups |
-| `addSearchedTag(event)` | Add a tag by name from the search input, persist to settings if new, and re-render |
-| `navigateToSettings()` | Navigate to the settings page (with unsaved-changes check) |
+| `addSearchedTag(event)` | Add a tag by name from the search input; opens modal if tag is new, otherwise adds to selection |
+| `navigateToSettings()` | Navigate to the settings page |
 
 #### editor-people.js
 
@@ -3438,6 +3450,7 @@ shared-auth.js            ← MUST load first (getCurrentUser, isAdmin, waitForA
         ├── shared-indicators.js    (standalone — alert type detection)
         ├── shared-calendar.js      (uses getCachedSettings from shared-utils)
         ├── shared-tags.js          (uses getCachedSettings, fetch)
+        ├── shared-tag-modal.js     (uses shared-tags, shared-utils; injectable tag edit modal)
         ├── shared-recurrence.js    (standalone — date math)
         ├── shared-geocoding.js     (uses fetch)
         └── shared-qr.js            (uses qrcode-generator CDN lib)

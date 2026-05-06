@@ -59,31 +59,14 @@ class Checklist {
     this._redoBtn.disabled = true;
     this._redoBtn.addEventListener("click", function(e) { e.stopPropagation(); e.preventDefault(); self.redo(); });
 
-    // Move Checklist → Note button (goes in more menu)
-    this._checklistToNoteBtn = document.createElement("button");
-    this._checklistToNoteBtn.className = "zone-button";
-    this._checklistToNoteBtn.textContent = "☑️→📝";
-    this._checklistToNoteBtn.title = "Move checklist items to note";
-    this._checklistToNoteBtn.addEventListener("click", function(e) {
-      e.stopPropagation(); e.preventDefault();
-      _copyChecklistToNote(self);
-    });
+    // More menu wrapper (left side, with label — matches notes Data pattern)
+    this._moreWrapper = document.createElement("div");
+    this._moreWrapper.style.cssText = "position:relative;display:inline-block;";
 
-    // Send Checklist to Another Chit button (goes in more menu)
-    this._sendChecklistBtn = document.createElement("button");
-    this._sendChecklistBtn.className = "zone-button";
-    this._sendChecklistBtn.title = "Send checklist to another chit";
-    this._sendChecklistBtn.innerHTML = '<i class="fas fa-paper-plane"></i>';
-    this._sendChecklistBtn.addEventListener("click", function(e) {
-      e.stopPropagation(); e.preventDefault();
-      if (typeof _openSendContentModal === 'function') _openSendContentModal(e, 'checklist');
-    });
-
-    // More menu button
     this._moreBtn = document.createElement("button");
     this._moreBtn.className = "zone-button";
-    this._moreBtn.title = "More actions";
-    this._moreBtn.innerHTML = '<i class="fas fa-ellipsis-v"></i>';
+    this._moreBtn.title = "Data actions";
+    this._moreBtn.innerHTML = '<i class="fas fa-ellipsis-v"></i><span class="hideWhenNarrow">Data</span>';
     this._moreBtn.addEventListener("click", function(e) {
       e.stopPropagation(); e.preventDefault();
       var menu = self._moreMenu;
@@ -101,7 +84,7 @@ class Checklist {
 
     // More menu dropdown
     this._moreMenu = document.createElement("div");
-    this._moreMenu.className = "notes-more-menu";
+    this._moreMenu.className = "zone-more-menu";
     this._moreMenu.style.display = "none";
 
     var menuClear = document.createElement("button");
@@ -142,22 +125,28 @@ class Checklist {
     this._moreMenu.appendChild(menuToNote);
     this._moreMenu.appendChild(menuSend);
     this._moreMenu.appendChild(menuAutosave);
-    this._moreBtn.style.position = "relative";
-    this._moreBtn.appendChild(this._moreMenu);
+    this._moreWrapper.appendChild(this._moreBtn);
+    this._moreWrapper.appendChild(this._moreMenu);
+
+    // Spacer to push undo/redo to the right
+    this._spacer = document.createElement("span");
+    this._spacer.className = "location-actions-spacer";
 
     if (header) {
       var zoneTitle = header.querySelector('.zone-title');
       if (zoneTitle) zoneTitle.appendChild(this.countDisplay);
-      // Insert buttons into zone-actions: undo, redo pushed right; more button
       var zoneActions = header.querySelector('.zone-actions');
       if (zoneActions) {
-        zoneActions.insertBefore(this._moreBtn, zoneActions.firstChild);
+        // Left: Data menu | Spacer | Right: Undo, Redo
         zoneActions.insertBefore(this._redoBtn, zoneActions.firstChild);
         zoneActions.insertBefore(this._undoBtn, zoneActions.firstChild);
+        zoneActions.insertBefore(this._spacer, zoneActions.firstChild);
+        zoneActions.insertBefore(this._moreWrapper, zoneActions.firstChild);
       } else {
+        header.appendChild(this._moreWrapper);
+        header.appendChild(this._spacer);
         header.appendChild(this._undoBtn);
         header.appendChild(this._redoBtn);
-        header.appendChild(this._moreBtn);
       }
     }
   }

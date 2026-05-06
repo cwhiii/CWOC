@@ -1375,6 +1375,20 @@ document.addEventListener("DOMContentLoaded", function () {
         return;
       }
 
+      // Zone more menus (notes Data, checklist More) — close before other ESC actions
+      var _openMoreMenu = document.querySelector('.zone-more-menu[style*="display: flex"], .zone-more-menu[style*="display:flex"]');
+      if (_openMoreMenu) {
+        _openMoreMenu.style.display = 'none';
+        return;
+      }
+      if (typeof _closeNotesMoreMenu === 'function') {
+        var _notesMenu = document.getElementById('notesMoreMenu');
+        if (_notesMenu && _notesMenu.style.display === 'flex') {
+          _closeNotesMoreMenu();
+          return;
+        }
+      }
+
       // Send-content modal
       if (_sendContentModalOpen) {
         // Handled by its own ESC listener (clear search → close)
@@ -1386,6 +1400,12 @@ document.addEventListener("DOMContentLoaded", function () {
 
       const qrModal = document.getElementById('cwoc-qr-overlay');
       if (qrModal) { qrModal.remove(); return; }
+
+      // Shared tag modal
+      if (typeof cwocTagModal !== 'undefined' && cwocTagModal.isOpen()) {
+        cwocTagModal.close();
+        return;
+      }
 
       const deleteModal = document.getElementById('deleteChitModal');
       if (deleteModal && deleteModal.style.display === 'block') {

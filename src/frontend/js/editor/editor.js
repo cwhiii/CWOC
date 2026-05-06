@@ -145,15 +145,21 @@ async function _doChecklistAutosave() {
 function _flashChecklistSaved() {
   var indicator = document.getElementById('checklist-autosave-indicator');
   if (!indicator) {
-    // Create a small indicator in the checklist zone header
     var header = document.getElementById('checklistSection')?.querySelector('.zone-header');
     if (!header) return;
+    var zoneActions = header.querySelector('.zone-actions');
+    if (!zoneActions) return;
     indicator = document.createElement('span');
     indicator.id = 'checklist-autosave-indicator';
-    indicator.style.cssText = 'font-size:0.75em;color:#008080;opacity:0;transition:opacity 0.3s;margin-left:0.5em;';
+    indicator.style.cssText = 'font-size:0.75em;color:#008080;opacity:0;transition:opacity 0.3s;margin-right:1em;';
     indicator.textContent = '✓ saved';
-    var title = header.querySelector('.zone-title');
-    if (title) title.appendChild(indicator);
+    // Insert before the undo button (first .notes-undo-redo in zone-actions)
+    var undoBtn = zoneActions.querySelector('.notes-undo-redo');
+    if (undoBtn) {
+      zoneActions.insertBefore(indicator, undoBtn);
+    } else {
+      zoneActions.appendChild(indicator);
+    }
   }
   indicator.style.opacity = '1';
   setTimeout(function() { indicator.style.opacity = '0'; }, 2000);

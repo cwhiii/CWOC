@@ -91,18 +91,38 @@
 
 .healthBox {
     display: flex;
-    flex-direction: row;
-    flex-wrap: wrap;
-    width: 100%;
-    height: 100%;
-    gap: 10px;
+    flex-direction: column;
+    gap: 4px;
 }
 
 .healthInput {
-    display: inline-flex;
-    gap: 0.3em;
-    margin-bottom: 0.3em;
-    width: calc(33.333% - 7px);
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+    padding: 4px 0;
+}
+
+.health-section-label {
+    font-size: 0.75em;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--aged-brown-medium, #8b5a2b);
+    border-bottom: 1px solid rgba(139, 90, 43, 0.2);
+    padding: 6px 0 2px;
+    margin-top: 4px;
+}
+
+.health-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 2px 20px;
+}
+
+@media (max-width: 600px) {
+    .health-grid {
+        grid-template-columns: 1fr;
+    }
 }
 
 .healthButton {
@@ -498,8 +518,18 @@ input.error {
     cursor: pointer;
 }
 
+.modal-overlay .modal-header button.zone-button {
+    background-color: var(--aged-brown-light);
+    color: var(--parchment-light);
+    font-size: 12px;
+}
+
 .modal-overlay .modal-header button:hover {
     background: var(--button-hover);
+}
+
+.modal-overlay .modal-header button.zone-button:hover {
+    background-color: #924525;
 }
 
 .modal-overlay .modal-header button.cancel {
@@ -3209,8 +3239,8 @@ button.archive-btn.archived-active {
     }
 
     /* Health indicators: stack */
-    .healthBox {
-        flex-direction: column;
+    .health-grid {
+        grid-template-columns: 1fr;
     }
     .healthInput {
         width: 100%;
@@ -4707,14 +4737,51 @@ input.location {
     }
 }
 
-/* ── Notes More Menu ──────────────────────────────────────────────────── */
-#notesSection > .zone-header .zone-actions .zone-button {
-    width: 32px;
-    height: 32px;
-    padding: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+/* ── Notes zone: left-aligned action buttons (matches location) ────────── */
+#notesSection > .zone-header,
+#checklistSection > .zone-header,
+#peopleSection > .zone-header,
+#tagsSection > .zone-header,
+#datesSection > .zone-header,
+#taskSection > .zone-header,
+#emailSection > .zone-header {
+    justify-content: flex-start;
+}
+#notesSection > .zone-header .zone-title,
+#checklistSection > .zone-header .zone-title,
+#peopleSection > .zone-header .zone-title,
+#tagsSection > .zone-header .zone-title,
+#datesSection > .zone-header .zone-title,
+#taskSection > .zone-header .zone-title,
+#emailSection > .zone-header .zone-title {
+    flex-shrink: 0;
+    flex-grow: 0;
+}
+#notesSection > .zone-header .zone-actions.notes-zone-actions,
+#checklistSection > .zone-header .zone-actions,
+#peopleSection > .zone-header .zone-actions,
+#tagsSection > .zone-header .zone-actions,
+#datesSection > .zone-header .zone-actions,
+#taskSection > .zone-header .zone-actions,
+#emailSection > .zone-header .zone-actions {
+    flex: 1;
+    margin-left: 1em;
+}
+#notesSection > .zone-header .zone-toggle-icon,
+#checklistSection > .zone-header .zone-toggle-icon,
+#peopleSection > .zone-header .zone-toggle-icon,
+#tagsSection > .zone-header .zone-toggle-icon,
+#datesSection > .zone-header .zone-toggle-icon,
+#taskSection > .zone-header .zone-toggle-icon,
+#emailSection > .zone-header .zone-toggle-icon {
+    margin-left: 1em;
+}
+
+/* ── Tag & People zone height cap ─────────────────────────────────────── */
+#tagsContent,
+#peopleContent {
+    max-height: 100vh;
+    overflow-y: auto;
 }
 
 /* ── Location zone: left-aligned action buttons ───────────────────────── */
@@ -4736,7 +4803,8 @@ input.location {
     margin-left: 1em;
 }
 
-.notes-more-menu {
+/* ── Zone More Menu (used by checklist) ────────────────────────────────── */
+.zone-more-menu {
     position: absolute;
     top: 100%;
     right: 0;
@@ -4749,7 +4817,7 @@ input.location {
     min-width: 200px;
     flex-direction: column;
 }
-.notes-more-menu button {
+.zone-more-menu button {
     display: flex;
     align-items: center;
     gap: 8px;
@@ -4765,16 +4833,15 @@ input.location {
     white-space: nowrap;
     justify-content: flex-start;
 }
-.notes-more-menu button:hover {
+.zone-more-menu button:hover {
     background: rgba(139, 90, 43, 0.1);
 }
-.notes-more-menu button i,
-.notes-more-menu button .fa {
+.zone-more-menu button i,
+.zone-more-menu button .fa {
     width: 18px;
     text-align: center;
     flex-shrink: 0;
 }
-
 
 /* ── Notes Body Live Preview (below textarea, same as email) ───────────── */
 .notes-body-preview {

@@ -35,11 +35,11 @@ function renderHealthIndicator(indicatorId) {
   if (!field) return;
 
   element.innerHTML = '';
-  element.style.cssText = 'display:flex;align-items:center;gap:6px;padding:5px 0;';
+  element.style.cssText = 'display:flex;align-items:center;gap:6px;padding:4px 0;min-width:0;';
 
   var label = document.createElement('label');
   label.textContent = field.label;
-  label.style.cssText = 'flex:1;font-size:0.9em;font-weight:bold;color:#1a1208;margin:0;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+  label.style.cssText = 'width:140px;flex-shrink:0;font-size:0.85em;font-weight:bold;color:#1a1208;margin:0;white-space:nowrap;text-align:left;';
   element.appendChild(label);
 
   if (field.isCheckbox) {
@@ -54,26 +54,31 @@ function renderHealthIndicator(indicatorId) {
     spacer.style.cssText = 'width:40px;flex-shrink:0;';
     element.appendChild(spacer);
   } else if (field.isBP) {
+    var bpWrap = document.createElement('div');
+    bpWrap.style.cssText = 'display:flex;align-items:center;gap:2px;width:70px;flex-shrink:0;';
+
     var sysInput = document.createElement('input');
     sysInput.type = 'number';
     sysInput.placeholder = 'sys';
-    sysInput.style.cssText = 'width:50px;padding:4px 2px;border:1px solid #8b5a2b;border-radius:4px;font-family:inherit;font-size:0.9em;text-align:center;box-sizing:border-box;flex-shrink:0;';
+    sysInput.style.cssText = 'flex:1;min-width:0;padding:4px 2px;border:1px solid #8b5a2b;border-radius:4px;font-family:inherit;font-size:0.9em;text-align:center;box-sizing:border-box;';
     sysInput.value = (window._healthData.bp_systolic != null) ? window._healthData.bp_systolic : '';
     sysInput.addEventListener('input', function() { window._healthData.bp_systolic = sysInput.value ? parseInt(sysInput.value) : null; setSaveButtonUnsaved(); });
-    element.appendChild(sysInput);
+    bpWrap.appendChild(sysInput);
 
     var slash = document.createElement('span');
     slash.textContent = '/';
     slash.style.cssText = 'font-size:0.9em;flex-shrink:0;';
-    element.appendChild(slash);
+    bpWrap.appendChild(slash);
 
     var diaInput = document.createElement('input');
     diaInput.type = 'number';
     diaInput.placeholder = 'dia';
-    diaInput.style.cssText = 'width:50px;padding:4px 2px;border:1px solid #8b5a2b;border-radius:4px;font-family:inherit;font-size:0.9em;text-align:center;box-sizing:border-box;flex-shrink:0;';
+    diaInput.style.cssText = 'flex:1;min-width:0;padding:4px 2px;border:1px solid #8b5a2b;border-radius:4px;font-family:inherit;font-size:0.9em;text-align:center;box-sizing:border-box;';
     diaInput.value = (window._healthData.bp_diastolic != null) ? window._healthData.bp_diastolic : '';
     diaInput.addEventListener('input', function() { window._healthData.bp_diastolic = diaInput.value ? parseInt(diaInput.value) : null; setSaveButtonUnsaved(); });
-    element.appendChild(diaInput);
+    bpWrap.appendChild(diaInput);
+
+    element.appendChild(bpWrap);
   } else {
     var input = document.createElement('input');
     input.type = 'number';

@@ -172,10 +172,10 @@ function _setNotesRenderToggleLabel(isRendered, source) {
   const btn = document.getElementById(btnId);
   if (!btn) return;
   if (isRendered) {
-    btn.innerHTML = '<i class="fas fa-edit"></i>';
+    btn.innerHTML = '<i class="fas fa-edit"></i><span class="hideWhenNarrow">Edit</span>';
     btn.title = 'Switch to edit mode';
   } else {
-    btn.innerHTML = '<i class="fas fa-eye"></i>';
+    btn.innerHTML = '<i class="fas fa-eye"></i><span class="hideWhenNarrow">Render</span>';
     btn.title = 'Toggle rendered markdown view';
   }
   // Hide/show format toolbar based on render state

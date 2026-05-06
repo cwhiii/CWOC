@@ -68,6 +68,7 @@ class Settings(BaseModel):
     default_share_contacts: Optional[str] = "0"  # "1" = new contacts default to shared vault, "0" = private
     checklist_autosave: Optional[str] = "1"      # "1" = auto-save checklist changes, "0" = require manual save
     view_order: Optional[str] = None             # JSON array of tab names in user's preferred order
+    recent_tags: Optional[List[str]] = None      # Recently used tag paths (persisted across sessions)
 
 class Chit(BaseModel):
     id: Optional[str] = None

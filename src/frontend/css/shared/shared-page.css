@@ -365,6 +365,85 @@ input[type="color"] {
     width: 20px; height: 20px; animation: spin 1s linear infinite; margin: 10px auto;
 }
 @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+@keyframes fadeOut { 0% { opacity: 1; } 80% { opacity: 1; } 100% { opacity: 0; } }
+
+/* ── Tag Sharing UI (shared tag modal) ───────────────────────────────────── */
+.tag-sharing-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    background: #fff8e1;
+    border: 1px solid rgba(139, 90, 43, 0.3);
+    border-radius: 4px;
+    margin-bottom: 4px;
+    font-size: 0.9em;
+}
+.tag-sharing-item .tag-share-name {
+    flex: 1;
+    color: #1a1208;
+    font-weight: 600;
+}
+.tag-sharing-item .tag-share-role {
+    font-size: 0.85em;
+    padding: 1px 6px;
+    border-radius: 3px;
+    flex-shrink: 0;
+}
+.tag-share-role-viewer {
+    background: rgba(70, 130, 180, 0.15);
+    color: #2e5a7e;
+}
+.tag-share-role-manager {
+    background: rgba(139, 90, 43, 0.15);
+    color: #6b4226;
+}
+.tag-sharing-item .tag-share-remove {
+    background: #a0522d;
+    color: #fdf5e6;
+    border: 1px solid #5c4033;
+    border-radius: 4px;
+    padding: 1px 6px;
+    cursor: pointer;
+    font-size: 11px;
+    font-family: inherit;
+    flex-shrink: 0;
+}
+.tag-sharing-item .tag-share-remove:hover {
+    background: #8b4513;
+}
+.tag-share-perm-toggle {
+    font-size: 0.8em;
+    padding: 1px 6px;
+    border-radius: 3px;
+    border: 1px solid rgba(139, 90, 43, 0.4);
+    background: #fdf5e6;
+    color: #4a2c2a;
+    cursor: pointer;
+    font-family: inherit;
+    flex-shrink: 0;
+    transition: background 0.15s;
+}
+.tag-share-perm-toggle:hover {
+    background: #e8dcc8;
+}
+.tag-share-perm-toggle[data-perm="manage"] {
+    background: rgba(139, 90, 43, 0.2);
+    border-color: #8b5a2b;
+    font-weight: 600;
+}
+.tag-sharing-empty {
+    opacity: 0.5;
+    font-size: 0.85em;
+    padding: 4px;
+    font-style: italic;
+}
+.tag-sharing-link-icon {
+    font-size: 0.75em;
+    margin-left: 3px;
+    opacity: 0.7;
+    cursor: default;
+}
 
 /* ── Navigate Panel (V hotkey — used on special pages) ───────────────────── */
 #cwoc-nav-overlay {

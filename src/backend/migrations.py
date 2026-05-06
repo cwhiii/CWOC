@@ -1836,3 +1836,30 @@ def migrate_add_view_order():
     finally:
         if conn:
             conn.close()
+
+
+# ── Recent Tags: migration ───────────────────────────────────────────────
+
+def migrate_add_recent_tags():
+    """Add recent_tags column to settings table.
+
+    Stores a JSON array of recently used tag paths, persisted across sessions/devices.
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        cursor.execute("PRAGMA table_info(settings)")
+        settings_cols = [col[1] for col in cursor.fetchall()]
+        if "recent_tags" not in settings_cols:
+            cursor.execute("ALTER TABLE settings ADD COLUMN recent_tags TEXT")
+            logger.info("Added recent_tags column to settings table")
+
+        conn.commit()
+    except Exception as e:
+        logger.error(f"Error in migrate_add_recent_tags: {str(e)}")
+        raise
+    finally:
+        if conn:
+            conn.close()

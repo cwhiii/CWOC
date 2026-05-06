@@ -207,18 +207,46 @@ function renderTagTree(container, tree, selectedTags, onToggle, opts) {
   renderLevel(tree, container, 0);
 }
 
-// Session-level recent tags tracking
+// Persistent recent tags — stored in user settings, synced across devices
 let _recentTags = [];
+let _recentTagsLoaded = false;
+
+async function _loadRecentTags() {
+  if (_recentTagsLoaded) return;
+  try {
+    var settings = await getCachedSettings();
+    _recentTags = Array.isArray(settings.recent_tags) ? settings.recent_tags.slice(0, 5) : [];
+    _recentTagsLoaded = true;
+  } catch (e) { /* keep empty */ }
+}
 
 function trackRecentTag(tagPath) {
   _recentTags = _recentTags.filter(t => t !== tagPath);
   _recentTags.unshift(tagPath);
-  if (_recentTags.length > 3) _recentTags = _recentTags.slice(0, 3);
+  if (_recentTags.length > 5) _recentTags = _recentTags.slice(0, 5);
+  // Persist to server (fire-and-forget)
+  _saveRecentTags();
 }
 
 function getRecentTags() {
-  return _recentTags.slice(0, 3);
+  return _recentTags.slice(0, 5);
 }
+
+var _recentTagsSaveTimer = null;
+function _saveRecentTags() {
+  // Debounce saves to avoid hammering the server
+  if (_recentTagsSaveTimer) clearTimeout(_recentTagsSaveTimer);
+  _recentTagsSaveTimer = setTimeout(function() {
+    fetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ recent_tags: _recentTags }),
+    }).catch(function() {});
+  }, 1000);
+}
+
+// Load recents on first use
+_loadRecentTags();
 
 /**
  * Create a tag inline — adds it to the settings tag list if it doesn't already exist.

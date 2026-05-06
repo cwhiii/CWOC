@@ -1435,14 +1435,19 @@ function handleTagInput(event) {
         }
         return;
       }
-      const tagDiv = document.createElement("div");
-      tagDiv.className = "tag";
-      tagDiv.dataset.color = "#d4c4b0";
-      tagDiv.style.backgroundColor = "#d4c4b0";
-      tagDiv.innerHTML = `${tagText} <button onclick="openDeleteModal(event, this.parentElement)">✕</button>`;
-      openTagModal(tagDiv);
+      // Open shared tag modal for creation with color picker
       input.value = "";
-      setSaveButtonUnsaved();
+      cwocTagModal.open(null, {
+        prefillName: tagText,
+        skipPersist: true,
+        onSave: function(tagData) {
+          // Add to hidden tag editor div
+          _addTagDivToEditor(tagData);
+          setSaveButtonUnsaved();
+          _renderSettingsTagTree();
+          _inheritParentTagSharing(tagData.name);
+        },
+      });
     }
   } else if (event.key === "Enter") {
     addTag();
@@ -1462,14 +1467,18 @@ function handleInfoClick(event) {
       }
       return;
     }
-    const tagDiv = document.createElement("div");
-    tagDiv.className = "tag";
-    tagDiv.dataset.color = "#d4c4b0";
-    tagDiv.style.backgroundColor = "#d4c4b0";
-    tagDiv.innerHTML = `${tagText} <button onclick="openDeleteModal(event, this.parentElement)">✕</button>`;
-    openTagModal(tagDiv);
+    // Open shared tag modal for creation with color picker
     input.value = "";
-    setSaveButtonUnsaved();
+    cwocTagModal.open(null, {
+      prefillName: tagText,
+      skipPersist: true,
+      onSave: function(tagData) {
+        _addTagDivToEditor(tagData);
+        setSaveButtonUnsaved();
+        _renderSettingsTagTree();
+        _inheritParentTagSharing(tagData.name);
+      },
+    });
   }
 }
 
@@ -1502,300 +1511,104 @@ function addTag() {
       }, 2000);
       return;
     }
-    const tagDiv = document.createElement("div");
-    tagDiv.className = "tag";
-    tagDiv.dataset.color = "#d4c4b0";
-    tagDiv.style.backgroundColor = "#d4c4b0";
-    tagDiv.innerHTML = `${tagText} <button onclick="openDeleteModal(event, this.parentElement)">✕</button>`;
-    tagDiv.onclick = function (e) {
-      if (e.target !== this && e.target.tagName === "BUTTON") return;
-      openTagModal(this);
-    };
-    const tagEditor = document.getElementById("tag-editor-hidden");
-    tagEditor.appendChild(tagDiv);
+    // Open shared tag modal for full creation experience
     input.value = "";
-    setSaveButtonUnsaved();
-    _renderSettingsTagTree();
-
-    // Inherit parent tag sharing if the new tag is a sub-tag (Req 6.2)
-    _inheritParentTagSharing(tagText);
+    cwocTagModal.open(null, {
+      prefillName: tagText,
+      skipPersist: true,
+      onSave: function(tagData) {
+        _addTagDivToEditor(tagData);
+        setSaveButtonUnsaved();
+        _renderSettingsTagTree();
+        _inheritParentTagSharing(tagData.name);
+      },
+    });
   }
+}
+
+/** Helper: add a tag div to the hidden tag editor (settings page internal state) */
+function _addTagDivToEditor(tagData) {
+  const tagEditor = document.getElementById("tag-editor-hidden");
+  if (!tagEditor) return;
+  const tagDiv = document.createElement("div");
+  tagDiv.className = "tag";
+  tagDiv.dataset.color = tagData.color || "#d4c4b0";
+  tagDiv.dataset.fontColor = tagData.fontColor || "#5c3317";
+  tagDiv.dataset.favorite = tagData.favorite ? 'true' : 'false';
+  tagDiv.style.backgroundColor = tagData.color || "#d4c4b0";
+  tagDiv.style.color = tagData.fontColor || "#5c3317";
+  tagDiv.innerHTML = `${tagData.name} <button onclick="openDeleteModal(event, this.parentElement)">✕</button>`;
+  tagDiv.onclick = function (e) {
+    if (e.target !== this && e.target.tagName === "BUTTON") return;
+    _openSettingsTagModal(this);
+  };
+  tagEditor.appendChild(tagDiv);
 }
 
 let currentTag = null;
 
 // Default tag color palette — warm parchment-themed, high contrast
-var _tagColorPalette = [
-  { bg: '#8b5a2b', fg: '#fff8e1' },  // Dark brown / cream
-  { bg: '#a0522d', fg: '#fff8e1' },  // Sienna / cream
-  { bg: '#4a2c2a', fg: '#fdf5e6' },  // Deep brown / parchment
-  { bg: '#6b4e31', fg: '#fff8e1' },  // Medium brown / cream
-  { bg: '#b22222', fg: '#fff8e1' },  // Firebrick / cream
-  { bg: '#8b0000', fg: '#fdf5e6' },  // Dark red / parchment
-  { bg: '#2e4057', fg: '#fdf5e6' },  // Navy / parchment
-  { bg: '#1b4332', fg: '#e8dcc8' },  // Forest green / tan
-  { bg: '#5c4033', fg: '#faebd7' },  // Coffee / antique white
-  { bg: '#d4af37', fg: '#2b1e0f' },  // Gold / dark brown
-  { bg: '#c4a484', fg: '#2b1e0f' },  // Tan / dark brown
-  { bg: '#e8dcc8', fg: '#4a2c2a' },  // Light parchment / dark brown
-  { bg: '#d2b48c', fg: '#2b1e0f' },  // Burlywood / dark brown
-  { bg: '#f5e6cc', fg: '#4a2c2a' },  // Cream / dark brown
-  { bg: '#fff8e1', fg: '#4a2c2a' },  // Light cream / dark brown
-];
+// (Now defined in shared-tag-modal.js — kept here as reference for settings-specific swatch logic)
 
 function openTagModal(tag) {
-  currentTag = tag;
-  const modal = document.getElementById("tag-modal");
-  const tagNameInput = document.getElementById("tag-name");
-  const colorInput = document.getElementById("tag-color");
-  const fontColorInput = document.getElementById("tag-font-color");
-  const preview = document.getElementById("tag-preview");
-
-  // Show the tag's actual name (text content minus the ✕ button)
-  const rawText = tag.childNodes[0]?.textContent?.trim() || tag.dataset.color || "";
-  tagNameInput.value = rawText;
-  tagNameInput.disabled = false;
-
-  colorInput.value = tag.dataset.color || "#d4c4b0";
-  fontColorInput.value = tag.dataset.fontColor || "#5c3317";
-
-  // Live preview updater
-  function _updateTagPreview() {
-    if (preview) {
-      preview.style.backgroundColor = colorInput.value;
-      preview.style.color = fontColorInput.value;
-      preview.textContent = tagNameInput.value || 'Preview';
-    }
-  }
-
-  // Build background color swatches: palette + all existing tag colors
-  var bgSwatches = document.getElementById('tag-color-swatches');
-  if (bgSwatches) {
-    bgSwatches.innerHTML = '';
-    var seenBg = new Set();
-    // Palette colors
-    _tagColorPalette.forEach(function (c) {
-      if (seenBg.has(c.bg)) return;
-      seenBg.add(c.bg);
-      var s = document.createElement('span');
-      s.style.cssText = 'width:24px;height:24px;border-radius:50%;cursor:pointer;border:2px solid transparent;display:inline-block;';
-      s.style.backgroundColor = c.bg;
-      s.title = c.bg;
-      if (c.bg === colorInput.value) s.style.borderColor = '#4a2c2a';
-      s.addEventListener('click', function () {
-        colorInput.value = c.bg;
-        fontColorInput.value = c.fg;
-        _updateTagPreview();
-        _highlightSwatches();
-        setSaveButtonUnsaved();
-      });
-      bgSwatches.appendChild(s);
-    });
-    // Existing tag colors
-    document.querySelectorAll('#tag-editor-hidden .tag').forEach(function (t) {
-      var c = t.dataset.color;
-      if (c && !seenBg.has(c)) {
-        seenBg.add(c);
-        var s = document.createElement('span');
-        s.style.cssText = 'width:24px;height:24px;border-radius:50%;cursor:pointer;border:2px solid transparent;display:inline-block;';
-        s.style.backgroundColor = c;
-        s.title = c;
-        if (c === colorInput.value) s.style.borderColor = '#4a2c2a';
-        s.addEventListener('click', function () {
-          colorInput.value = c;
-          _updateTagPreview();
-          _highlightSwatches();
-          setSaveButtonUnsaved();
-        });
-        bgSwatches.appendChild(s);
-      }
-    });
-  }
-
-  // Build font color swatches
-  var fgSwatches = document.getElementById('tag-font-color-swatches');
-  if (fgSwatches) {
-    fgSwatches.innerHTML = '';
-    var fgColors = ['#2b1e0f', '#4a2c2a', '#fff8e1', '#fdf5e6', '#faebd7', '#e8dcc8', '#000000', '#ffffff'];
-    fgColors.forEach(function (c) {
-      var s = document.createElement('span');
-      s.style.cssText = 'width:24px;height:24px;border-radius:50%;cursor:pointer;border:2px solid ' + (c === '#ffffff' || c === '#fff8e1' || c === '#fdf5e6' || c === '#faebd7' || c === '#e8dcc8' ? '#8b5a2b' : 'transparent') + ';display:inline-block;';
-      s.style.backgroundColor = c;
-      s.title = c;
-      if (c === fontColorInput.value) s.style.borderColor = '#4a2c2a';
-      s.addEventListener('click', function () {
-        fontColorInput.value = c;
-        _updateTagPreview();
-        _highlightFgSwatches();
-        setSaveButtonUnsaved();
-      });
-      fgSwatches.appendChild(s);
-    });
-  }
-
-  function _highlightSwatches() {
-    if (bgSwatches) bgSwatches.querySelectorAll('span').forEach(function (s) {
-      s.style.borderColor = s.title === colorInput.value ? '#4a2c2a' : 'transparent';
-    });
-  }
-  function _highlightFgSwatches() {
-    if (fgSwatches) fgSwatches.querySelectorAll('span').forEach(function (s) {
-      s.style.borderColor = s.title === fontColorInput.value ? '#4a2c2a' : (
-        ['#ffffff','#fff8e1','#fdf5e6','#faebd7','#e8dcc8'].includes(s.title) ? '#8b5a2b' : 'transparent'
-      );
-    });
-  }
-
-  // Live preview on color picker change
-  colorInput.onchange = function () { _updateTagPreview(); _highlightSwatches(); setSaveButtonUnsaved(); };
-  colorInput.oninput = function () { _updateTagPreview(); };
-  fontColorInput.onchange = function () { _updateTagPreview(); _highlightFgSwatches(); setSaveButtonUnsaved(); };
-  fontColorInput.oninput = function () { _updateTagPreview(); };
-  tagNameInput.oninput = function () { _updateTagPreview(); };
-
-  const favStar = document.getElementById('tag-favorite-star');
-  if (favStar) {
-    const isFav = tag.dataset.favorite === 'true';
-    favStar.textContent = isFav ? '★' : '☆';
-    favStar.style.color = isFav ? '#DAA520' : '#999';
-    favStar.title = isFav ? 'Unfavorite this Tag' : 'Favorite this Tag';
-  }
-
-  _updateTagPreview();
-  modal.style.display = "flex";
-
-  // Initialize tag sharing section
-  _initTagSharingSection(rawText);
-
-  // Enforce tag permission (Req 6.6, 6.7): check if current user has view-only access
-  _enforceTagPermission(rawText);
+  _openSettingsTagModal(tag);
 }
 
-function saveTag() {
-  const tagEditor = document.getElementById("tag-editor-hidden");
-  if (!tagEditor) return;
+/**
+ * Open the shared tag modal for editing a tag in the settings page context.
+ * The settings page uses hidden tag divs for batch save, so we bridge to the shared modal.
+ */
+function _openSettingsTagModal(tagDiv) {
+  var tagName = (tagDiv.childNodes[0]?.textContent || '').trim();
+  var tagColor = tagDiv.dataset.color || '#d4c4b0';
+  var tagFontColor = tagDiv.dataset.fontColor || '#5c3317';
+  var tagFavorite = tagDiv.dataset.favorite === 'true';
 
-  if (!currentTag) {
-    currentTag = document.createElement("div");
-    currentTag.className = "tag";
-    currentTag.onclick = function (e) {
-      if (e.target !== this && e.target.tagName === "BUTTON") return;
-      openTagModal(this);
+  // Gather all tags from the hidden editor for swatch colors
+  var tagDivs = document.querySelectorAll('#tag-editor-hidden .tag:not(.tag-input-container .tag)');
+  var allTags = Array.from(tagDivs).map(function(div) {
+    return {
+      name: (div.childNodes[0]?.textContent || '').trim(),
+      color: div.dataset.color || '#d4c4b0',
+      fontColor: div.dataset.fontColor || '#5c3317',
+      favorite: div.dataset.favorite === 'true',
     };
-  }
+  }).filter(function(t) { return t.name; });
 
-  const tagNameInput = document.getElementById("tag-name");
-  const colorInput = document.getElementById("tag-color");
-  const fontColorInput = document.getElementById("tag-font-color");
-  const newName = tagNameInput.value.trim();
-  const newColor = colorInput.value;
-  const newFontColor = fontColorInput ? fontColorInput.value : '#2b1e0f';
+  cwocTagModal.open(tagName, {
+    allTags: allTags,
+    skipPersist: true,
+    tagData: { color: tagColor, fontColor: tagFontColor, favorite: tagFavorite },
+    onSave: function(tagData, oldName) {
+      // Update the hidden tag div
+      tagDiv.dataset.color = tagData.color;
+      tagDiv.dataset.fontColor = tagData.fontColor;
+      tagDiv.dataset.favorite = tagData.favorite ? 'true' : 'false';
+      tagDiv.style.backgroundColor = tagData.color;
+      tagDiv.style.color = tagData.fontColor;
 
-  if (!newName) {
-    alert("Tag name cannot be empty.");
-    return;
-  }
+      // Rebuild inner HTML
+      tagDiv.innerHTML = '';
+      var nameNode = document.createTextNode(tagData.name + ' ');
+      var deleteBtn = document.createElement('button');
+      deleteBtn.textContent = '✕';
+      deleteBtn.onclick = function(e) { e.stopPropagation(); openDeleteModal(e, tagDiv); };
+      tagDiv.appendChild(nameNode);
+      tagDiv.appendChild(deleteBtn);
+      tagDiv.onclick = function(e) {
+        if (e.target !== this && e.target.tagName === 'BUTTON') return;
+        _openSettingsTagModal(this);
+      };
 
-  // Block reserved CWOC_System/ prefix on rename
-  if (isReservedTagPrefix(newName)) {
-    const modal = document.getElementById("reserved-tag-modal");
-    if (modal) {
-      modal.style.display = "flex";
-      setTimeout(() => { modal.style.display = "none"; }, 2000);
-    }
-    return;
-  }
-
-  // Check for duplicate names (excluding the tag being edited)
-  const existingNames = Array.from(
-    document.querySelectorAll(".tag:not(.tag-input-container .tag)")
-  )
-    .filter((t) => t !== currentTag)
-    .map((t) => {
-      const txt = t.childNodes[0]?.textContent?.trim() || "";
-      return txt.toLowerCase();
-    });
-
-  if (existingNames.includes(newName.toLowerCase())) {
-    const dupModal = document.getElementById("duplicate-tag-modal");
-    if (dupModal) {
-      dupModal.style.display = "flex";
-      setTimeout(() => { dupModal.style.display = "none"; }, 2000);
-    }
-    return;
-  }
-
-  currentTag.dataset.color = newColor;
-  currentTag.dataset.fontColor = newFontColor;
-  currentTag.style.backgroundColor = newColor;
-  currentTag.style.color = newFontColor;
-  const favStar = document.getElementById('tag-favorite-star');
-  currentTag.dataset.favorite = favStar && favStar.textContent === '★' ? 'true' : 'false';
-
-  // Check if tag was renamed — update sharing config if so
-  const oldName = (currentTag.childNodes[0]?.textContent || '').trim();
-  if (oldName && oldName !== newName && _tagSharingConfig) {
-    for (var si = 0; si < _tagSharingConfig.length; si++) {
-      if (_tagSharingConfig[si].tag === oldName) {
-        _tagSharingConfig[si].tag = newName;
-        break;
-      }
-    }
-  }
-
-  // Always save the current tag's sharing config when closing the modal
-  // (handles new shares, role changes, and renames)
-  _saveTagSharingConfig(newName);
-
-  // Rebuild inner HTML safely
-  currentTag.innerHTML = "";
-  const nameNode = document.createTextNode(newName + " ");
-  const deleteBtn = document.createElement("button");
-  deleteBtn.textContent = "✕";
-  deleteBtn.onclick = (e) => {
-    e.stopPropagation();
-    openDeleteModal(e, currentTag);
-  };
-  currentTag.appendChild(nameNode);
-  currentTag.appendChild(deleteBtn);
-
-  // Ensure click handler is set
-  currentTag.onclick = function (e) {
-    if (e.target !== this && e.target.tagName === "BUTTON") return;
-    openTagModal(this);
-  };
-
-  if (!tagEditor.contains(currentTag)) {
-    tagEditor.appendChild(currentTag);
-  }
-
-  closeTagModal();
-  setSaveButtonUnsaved();
-  _renderSettingsTagTree();
-}
-
-function deleteTag() {
-  if (currentTag) {
-    // Remove sharing config for this tag and all its sub-tags (Req 6.3)
-    var deletedName = (currentTag.childNodes[0]?.textContent || '').trim();
-    if (deletedName && _tagSharingConfig) {
-      var hadSharing = false;
-      var prefix = deletedName + '/';
-      _tagSharingConfig = _tagSharingConfig.filter(function(entry) {
-        if (entry.tag === deletedName || entry.tag.startsWith(prefix)) {
-          hadSharing = true;
-          return false;
-        }
-        return true;
-      });
-      if (hadSharing) _saveTagSharingConfig(null);
-    }
-
-    currentTag.remove();
-    closeTagModal();
-    setSaveButtonUnsaved();
-    _renderSettingsTagTree();
-  }
+      setSaveButtonUnsaved();
+      _renderSettingsTagTree();
+    },
+    onDelete: function(deletedName) {
+      tagDiv.remove();
+      setSaveButtonUnsaved();
+      _renderSettingsTagTree();
+    },
+  });
 }
 
 /** Render the tag tree in the settings page using the shared renderTagTree */
@@ -1884,19 +1697,21 @@ function _findFullPathForBadge(tree, badge, row) {
 }
 
 function closeTagModal() {
-  document.getElementById("tag-modal").style.display = "none";
-  itemToDelete = null;
+  // Legacy — now handled by cwocTagModal.close()
+  if (typeof cwocTagModal !== 'undefined' && cwocTagModal.isOpen()) {
+    cwocTagModal.close();
+  }
+  var oldModal = document.getElementById("tag-modal");
+  if (oldModal) oldModal.style.display = "none";
 }
 
 function toggleTagFavorite() {
-  const star = document.getElementById('tag-favorite-star');
-  if (!star) return;
-  const isFav = star.textContent === '★';
-  star.textContent = isFav ? '☆' : '★';
-  star.style.color = isFav ? '#999' : '#DAA520';
-  star.title = isFav ? 'Favorite this Tag' : 'Unfavorite this Tag';
-  setSaveButtonUnsaved();
+  // Legacy — now handled by shared tag modal internally
 }
+
+// Legacy stubs for old HTML onclick attributes
+function saveTag() { if (typeof cwocTagModal !== 'undefined' && cwocTagModal.isOpen()) cwocTagModal.close(); }
+function deleteTag() { if (typeof cwocTagModal !== 'undefined' && cwocTagModal.isOpen()) cwocTagModal.close(); }
 
 function openDeleteModal(event, item) {
   event.stopPropagation();
@@ -1989,8 +1804,13 @@ document.addEventListener("keydown", (event) => {
     var qrOverlay = document.getElementById("cwoc-qr-overlay");
     if (qrOverlay) { qrOverlay.remove(); return; }
 
-    // 3. Tag modal
-    if (document.getElementById("tag-modal").style.display === "flex") {
+    // 3. Tag modal (shared)
+    if (cwocTagModal.isOpen()) {
+      cwocTagModal.close();
+      return;
+    }
+    // Legacy tag modal fallback
+    if (document.getElementById("tag-modal") && document.getElementById("tag-modal").style.display === "flex") {
       closeTagModal();
       return;
     }
@@ -2024,8 +1844,8 @@ document.addEventListener("keydown", (event) => {
     // 8. Exit page (with save check)
     cancelSettings();
   } else if (event.key === "Enter") {
-    if (document.getElementById("tag-modal").style.display === "flex") {
-      saveTag();
+    if (cwocTagModal.isOpen()) {
+      // Enter in the shared tag modal — no-op (handled by modal's own save button)
     } else if (
       document.getElementById("delete-modal").style.display === "flex"
     ) {

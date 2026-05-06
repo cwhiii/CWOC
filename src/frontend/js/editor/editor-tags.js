@@ -120,12 +120,19 @@ function _renderTags(tags, selectedTags = []) {
     const tag = tags.find(t => t.name === tagName) || { name: tagName, color: null };
     const chip = document.createElement("span");
     const chipFg = tag.fontColor || '#2b1e0f';
-    chip.style.cssText = `display:inline-flex;align-items:center;gap:4px;background:${tag.color || getPastelColor(tag.name)};color:${chipFg};padding:2px 8px;border-radius:4px;font-size:0.9em;margin:2px;`;
+    chip.style.cssText = `display:inline-flex;align-items:center;gap:4px;background:${tag.color || getPastelColor(tag.name)};color:${chipFg};padding:2px 8px;border-radius:4px;font-size:0.9em;margin:2px;cursor:pointer;`;
     chip.textContent = tag.name;
+    chip.title = 'Click to edit tag';
+
+    chip.addEventListener("click", (e) => {
+      if (e.target.tagName === 'BUTTON') return;
+      editTag(e, tagName);
+    });
 
     const removeBtn = document.createElement("button");
     removeBtn.textContent = "✕";
     removeBtn.style.cssText = "background:none;border:none;cursor:pointer;font-size:0.8em;padding:0 0 0 4px;line-height:1;";
+    removeBtn.title = 'Remove from chit';
     removeBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       const idx = selectedTags.indexOf(tagName);
@@ -157,10 +164,71 @@ function toggleAllTags(event, expand) {
   });
 }
 
-/** Create a new tag — navigate to settings tag editor */
+var _tagsAllExpanded = true;
+
+function _toggleTagsExpandCollapse(event) {
+  if (event) { event.stopPropagation(); event.preventDefault(); }
+  _tagsAllExpanded = !_tagsAllExpanded;
+  toggleAllTags(null, _tagsAllExpanded);
+  _updateTagsExpandCollapseBtn();
+}
+
+function _updateTagsExpandCollapseBtn() {
+  var btn = document.getElementById('tags-expand-collapse-btn');
+  if (!btn) return;
+  if (_tagsAllExpanded) {
+    btn.innerHTML = '<i class="fas fa-compress-alt"></i><span class="hideWhenNarrow">Collapse</span>';
+    btn.title = 'Collapse all tag groups';
+  } else {
+    btn.innerHTML = '<i class="fas fa-expand-alt"></i><span class="hideWhenNarrow">Expand</span>';
+    btn.title = 'Expand all tag groups';
+  }
+}
+
+/** Create a new tag — open the shared tag modal */
 function createTag(event) {
   if (event) event.stopPropagation();
-  navigateToSettings();
+  cwocTagModal.open(null, {
+    onSave: function(tagData) {
+      // Add the new tag to the current selection
+      if (!window._currentTagSelection) window._currentTagSelection = [];
+      if (window._currentTagSelection.indexOf(tagData.name) === -1) {
+        window._currentTagSelection.push(tagData.name);
+        if (typeof trackRecentTag === 'function') trackRecentTag(tagData.name);
+      }
+      // Refresh the tag tree
+      _invalidateSettingsCache();
+      _loadTags().then(function(tags) { _renderTags(tags, window._currentTagSelection); });
+      setSaveButtonUnsaved();
+    },
+  });
+}
+
+/** Edit an existing tag — open the shared tag modal for editing */
+function editTag(event, tagName) {
+  if (event) event.stopPropagation();
+  cwocTagModal.open(tagName, {
+    onSave: function(tagData, oldName) {
+      // If renamed, update the selection
+      if (oldName && oldName !== tagData.name && window._currentTagSelection) {
+        var idx = window._currentTagSelection.indexOf(oldName);
+        if (idx !== -1) window._currentTagSelection[idx] = tagData.name;
+      }
+      _invalidateSettingsCache();
+      _loadTags().then(function(tags) { _renderTags(tags, window._currentTagSelection); });
+      setSaveButtonUnsaved();
+    },
+    onDelete: function(tagName) {
+      // Remove from selection if present
+      if (window._currentTagSelection) {
+        var idx = window._currentTagSelection.indexOf(tagName);
+        if (idx !== -1) window._currentTagSelection.splice(idx, 1);
+      }
+      _invalidateSettingsCache();
+      _loadTags().then(function(tags) { _renderTags(tags, window._currentTagSelection); });
+      setSaveButtonUnsaved();
+    },
+  });
 }
 
 /** Clear the tag search input */
@@ -221,31 +289,44 @@ function addSearchedTag(event) {
     return;
   }
 
-  // Add to current selection
-  if (!window._currentTagSelection) window._currentTagSelection = [];
-  if (!window._currentTagSelection.includes(tagName)) {
-    window._currentTagSelection.push(tagName);
-    if (typeof trackRecentTag === 'function') trackRecentTag(tagName);
-  }
-  input.value = '';
+  // Check if tag already exists in settings
+  var settings = window._cwocSettings || {};
+  var existingTags = Array.isArray(settings.tags) ? settings.tags : [];
+  var tagExists = existingTags.some(function(t) {
+    var tName = (typeof t === 'string') ? t : (t.name || '');
+    return tName.toLowerCase() === tagName.toLowerCase();
+  });
 
-  // Persist the tag to settings if it's new
-  if (typeof createTagInline === 'function') {
-    createTagInline(tagName);
+  if (tagExists) {
+    // Tag exists — just add to selection
+    if (!window._currentTagSelection) window._currentTagSelection = [];
+    if (!window._currentTagSelection.includes(tagName)) {
+      window._currentTagSelection.push(tagName);
+      if (typeof trackRecentTag === 'function') trackRecentTag(tagName);
+    }
+    input.value = '';
+    _loadTags().then(tags => _renderTags(tags, window._currentTagSelection));
+    setSaveButtonUnsaved();
+  } else {
+    // New tag — open modal to configure it
+    input.value = '';
+    cwocTagModal.open(null, {
+      prefillName: tagName,
+      onSave: function(tagData) {
+        if (!window._currentTagSelection) window._currentTagSelection = [];
+        if (window._currentTagSelection.indexOf(tagData.name) === -1) {
+          window._currentTagSelection.push(tagData.name);
+          if (typeof trackRecentTag === 'function') trackRecentTag(tagData.name);
+        }
+        _invalidateSettingsCache();
+        _loadTags().then(function(tags) { _renderTags(tags, window._currentTagSelection); });
+        setSaveButtonUnsaved();
+      },
+    });
   }
-
-  // Re-render tags
-  _loadTags().then(tags => _renderTags(tags, window._currentTagSelection));
-  setSaveButtonUnsaved();
 }
 
 function navigateToSettings() {
   localStorage.setItem('cwoc_settings_return', window.location.href);
-  if (window._cwocSave && window._cwocSave.hasChanges()) {
-    cwocConfirm("You have unsaved changes. Leave without saving?", { title: 'Unsaved Changes', confirmLabel: 'Leave', danger: true }).then(function(ok) {
-      if (ok) window.location.href = "/frontend/html/settings.html";
-    });
-  } else {
-    window.location.href = "/frontend/html/settings.html";
-  }
+  window.location.href = "/frontend/html/settings.html";
 }

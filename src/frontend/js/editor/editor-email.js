@@ -1059,12 +1059,12 @@ function _openEmailExpandModal() {
   var actionBtns = '';
   if (status === 'draft') {
     actionBtns =
-      '<button type="button" onclick="event.stopPropagation(); _closeEmailExpandModal(true); _emailSend()"><i class="fas fa-paper-plane"></i> Send</button>' +
-      '<button type="button" onclick="event.stopPropagation(); _closeEmailExpandModal(true); _emailSaveAndSendArchive()"><i class="fas fa-paper-plane"></i> Send &amp; Archive</button>';
+      '<button type="button" class="zone-button" onclick="event.stopPropagation(); _closeEmailExpandModal(true); _emailSend()"><i class="fas fa-paper-plane"></i> Send</button>' +
+      '<button type="button" class="zone-button" onclick="event.stopPropagation(); _closeEmailExpandModal(true); _emailSaveAndSendArchive()"><i class="fas fa-paper-plane"></i> Send &amp; Archive</button>';
   } else if (status === 'received') {
     actionBtns =
-      '<button type="button" onclick="event.stopPropagation(); _closeEmailExpandModal(true); _emailReply()"><i class="fas fa-reply"></i> Reply</button>' +
-      '<button type="button" onclick="event.stopPropagation(); _closeEmailExpandModal(true); _emailForward()"><i class="fas fa-share"></i> Forward</button>';
+      '<button type="button" class="zone-button" onclick="event.stopPropagation(); _closeEmailExpandModal(true); _emailReply()"><i class="fas fa-reply"></i> Reply</button>' +
+      '<button type="button" class="zone-button" onclick="event.stopPropagation(); _closeEmailExpandModal(true); _emailForward()"><i class="fas fa-share"></i> Forward</button>';
   }
 
   var disabledAttr = isReadOnly ? ' readonly disabled' : '';
@@ -1091,7 +1091,7 @@ function _openEmailExpandModal() {
         '<div style="display:flex;gap:0.5em;flex-wrap:wrap;align-items:center;">' +
           pillToggleHtml +
           actionBtns +
-          '<button type="button" class="cancel" onclick="_closeEmailExpandModal(false)"><i class="fas fa-times"></i> Close</button>' +
+          '<button type="button" class="zone-button" onclick="_closeEmailExpandModal(true)"><i class="fas fa-check"></i> Done</button>' +
         '</div>' +
       '</div>' +
       '<div class="modal-body" style="flex:1;overflow:auto;padding:0.5em 1em;">' +

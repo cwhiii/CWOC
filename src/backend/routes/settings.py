@@ -82,6 +82,7 @@ def get_settings(user_id: str, request: Request):
         settings["default_share_contacts"] = settings.get("default_share_contacts", "0")
         settings["checklist_autosave"] = settings.get("checklist_autosave", "1")
         settings["view_order"] = deserialize_json_field(settings.get("view_order"))
+        settings["recent_tags"] = deserialize_json_field(settings.get("recent_tags"))
         return settings
     except Exception as e:
         logger.error(f"Error fetching settings: {str(e)}")
@@ -241,6 +242,7 @@ def save_settings(settings: Settings, request: Request):
             "default_share_contacts": settings.default_share_contacts or "0",
             "checklist_autosave": settings.checklist_autosave or "1",
             "view_order": settings.view_order,
+            "recent_tags": serialize_json_field(settings.recent_tags),
         }
 
         cursor.execute(
@@ -256,8 +258,8 @@ def save_settings(settings: Settings, request: Request):
                 map_default_lat, map_default_lon, map_default_zoom, map_auto_zoom,
                 email_account, email_accounts,
                 attachment_max_size_mb, attachment_max_storage_mb,
-                default_share_contacts, checklist_autosave, view_order
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                default_share_contacts, checklist_autosave, view_order, recent_tags
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 new_settings_dict["user_id"],
@@ -305,6 +307,7 @@ def save_settings(settings: Settings, request: Request):
                 new_settings_dict["default_share_contacts"],
                 new_settings_dict["checklist_autosave"],
                 new_settings_dict["view_order"],
+                new_settings_dict.get("recent_tags"),
             )
         )
 

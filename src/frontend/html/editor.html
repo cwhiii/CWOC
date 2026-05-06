@@ -134,9 +134,13 @@
                             class="zone-header"
                             onclick="toggleZone(event, 'datesSection', 'datesContent')"
                         >
-                            <h2 class="zone-title">📅 Dates & Times</h2>
+                            <h2 class="zone-title">🗓️ Dates & Times</h2>
                             <div class="zone-actions" onclick="event.stopPropagation()">
-                                <button type="button" id="allDayToggleBtn" class="zone-button" onclick="_toggleAllDayBtn()" title="Toggle all-day" style="font-size:0.8em;display:none;">🗓️ All Day</button>
+                                <span class="location-actions-spacer"></span>
+                                <button type="button" id="allDayToggleBtn" class="zone-button" onclick="_toggleAllDayBtn()" title="Toggle all-day" style="display:none;">
+                                    <i class="far fa-clock"></i>
+                                    <span class="hideWhenNarrow">All Day</span>
+                                </button>
                                 <input type="checkbox" id="allDay" style="display:none;" />
                                 <input type="checkbox" id="habitEnabled" style="display:none;" />
                             </div>
@@ -259,7 +263,11 @@
                         >
                             <h2 class="zone-title">📋 Task</h2>
                             <div class="zone-actions" onclick="event.stopPropagation()">
-                                <button type="button" id="habitToggleBtn" class="zone-button zone-button-persist" onclick="onHabitToggle()" title="Toggle habit tracking" style="font-size:0.8em;">🎯 Habit</button>
+                                <span class="location-actions-spacer"></span>
+                                <button type="button" id="habitToggleBtn" class="zone-button zone-button-persist" onclick="onHabitToggle()" title="Toggle habit tracking">
+                                    <i class="far fa-circle-check"></i>
+                                    <span class="hideWhenNarrow">Habit</span>
+                                </button>
                             </div>
                             <span class="zone-toggle-icon">🔽</span>
                         </div>
@@ -503,34 +511,29 @@
                             onclick="toggleZone(event, 'tagsSection', 'tagsContent')"
                         >
                             <h2 class="zone-title">
-                                🏷️ Tags (<span id="activeTagsCount">0</span>
-                                active)
+                                🏷️ Tags (<span id="activeTagsCount">0</span>)
                             </h2>
-                            <div class="zone-actions">
+                            <div class="zone-actions tags-zone-actions">
                                 <button
                                     type="button"
-                                    onclick="toggleAllTags(event, true)"
-                                    id="expand-all-tags-button"
+                                    onclick="_toggleTagsExpandCollapse(event)"
+                                    id="tags-expand-collapse-btn"
                                     class="zone-button"
+                                    title="Expand all tag groups"
                                 >
-                                    <i class="fas fa-expand-alt"></i> Expand All
+                                    <i class="fas fa-expand-alt"></i>
+                                    <span class="hideWhenNarrow">Expand</span>
                                 </button>
-                                <button
-                                    type="button"
-                                    onclick="toggleAllTags(event, false)"
-                                    id="collapse-all-tags-button"
-                                    class="zone-button"
-                                >
-                                    <i class="fas fa-compress-alt"></i> Collapse
-                                    All
-                                </button>
+                                <span class="location-actions-spacer"></span>
                                 <button
                                     type="button"
                                     onclick="createTag(event)"
                                     id="create-new-tag-button"
                                     class="zone-button"
+                                    title="Create new tag"
                                 >
-                                    <i class="fas fa-plus"></i> Create New
+                                    <i class="fas fa-plus"></i>
+                                    <span class="hideWhenNarrow">New Tag</span>
                                 </button>
                             </div>
                             <span class="zone-toggle-icon">🔽</span>
@@ -656,7 +659,36 @@
                             onclick="toggleZone(event, 'notesSection', 'notesContent')"
                         >
                             <h2 class="zone-title">📝 Notes</h2>
-                            <div class="zone-actions">
+                            <div class="zone-actions notes-zone-actions">
+                                <button
+                                    type="button"
+                                    onclick="openNotesModal(event)"
+                                    id="open-notes-modal-button"
+                                    class="zone-button notes-left-btn"
+                                    title="Expand to full screen"
+                                >
+                                    <i class="fas fa-expand"></i>
+                                    <span class="hideWhenNarrow">Expand</span>
+                                </button>
+                                <div style="position:relative;display:inline-block;">
+                                    <button
+                                        type="button"
+                                        onclick="_toggleNotesMoreMenu(event)"
+                                        class="zone-button notes-left-btn"
+                                        id="notes-more-btn"
+                                        title="Data actions"
+                                    >
+                                        <i class="fas fa-ellipsis-v"></i>
+                                        <span class="hideWhenNarrow">Data</span>
+                                    </button>
+                                    <div id="notesMoreMenu" class="zone-more-menu" style="display:none;">
+                                        <button type="button" onclick="copyNotesToClipboard(event, 'main'); _closeNotesMoreMenu();"><i class="fas fa-clipboard"></i> Copy to clipboard</button>
+                                        <button type="button" onclick="downloadNotes(event, 'main'); _closeNotesMoreMenu();"><i class="fas fa-download"></i> Download as file</button>
+                                        <button type="button" onclick="_openSendContentModal(event, 'notes'); _closeNotesMoreMenu();"><i class="fas fa-paper-plane"></i> Send to another chit</button>
+                                        <button type="button" onclick="_noteToChecklistFromHeader(event); _closeNotesMoreMenu();"><i class="fas fa-arrow-right"></i> Move to checklist</button>
+                                    </div>
+                                </div>
+                                <span class="location-actions-spacer"></span>
                                 <button
                                     type="button"
                                     onclick="toggleNotesViewMode(event)"
@@ -665,31 +697,8 @@
                                     title="Toggle rendered markdown view"
                                 >
                                     <i class="fas fa-eye"></i>
+                                    <span class="hideWhenNarrow">Render</span>
                                 </button>
-                                <button
-                                    type="button"
-                                    onclick="openNotesModal(event)"
-                                    id="open-notes-modal-button"
-                                    class="zone-button"
-                                    title="Expand to full screen"
-                                >
-                                    <i class="fas fa-expand"></i>
-                                </button>
-                                <button
-                                    type="button"
-                                    onclick="_toggleNotesMoreMenu(event)"
-                                    class="zone-button"
-                                    id="notes-more-btn"
-                                    title="More actions"
-                                >
-                                    <i class="fas fa-ellipsis-v"></i>
-                                </button>
-                                <div id="notesMoreMenu" class="notes-more-menu" style="display:none;">
-                                    <button type="button" onclick="copyNotesToClipboard(event, 'main'); _closeNotesMoreMenu();"><i class="fas fa-clipboard"></i> Copy to clipboard</button>
-                                    <button type="button" onclick="downloadNotes(event, 'main'); _closeNotesMoreMenu();"><i class="fas fa-download"></i> Download as file</button>
-                                    <button type="button" onclick="_openSendContentModal(event, 'notes'); _closeNotesMoreMenu();"><i class="fas fa-paper-plane"></i> Send to another chit</button>
-                                    <button type="button" onclick="_noteToChecklistFromHeader(event); _closeNotesMoreMenu();"><i class="fas fa-arrow-right"></i> Move to checklist</button>
-                                </div>
                             </div>
                             <span class="zone-toggle-icon">🔼</span>
                         </div>
@@ -775,7 +784,7 @@
                                     class="zone-button"
                                     onclick="openNotificationModal(event)"
                                 >
-                                    <i class="fas fa-plus"></i> Add Notification
+                                    <i class="fas fa-bell"></i> Notification
                                 </button>
                                 <button
                                     type="button"
@@ -783,7 +792,7 @@
                                     class="zone-button"
                                     onclick="openAlarmModal(event)"
                                 >
-                                    <i class="fas fa-plus"></i> Add Alarm
+                                    <i class="fas fa-clock"></i> Alarm
                                 </button>
                                 <button
                                     type="button"
@@ -791,7 +800,7 @@
                                     class="zone-button"
                                     onclick="openTimerModal(event)"
                                 >
-                                    <i class="fas fa-plus"></i> Add Timer
+                                    <i class="fas fa-hourglass-half"></i> Timer
                                 </button>
                                 <button
                                     type="button"
@@ -799,7 +808,7 @@
                                     class="zone-button"
                                     onclick="addStopwatch()"
                                 >
-                                    <i class="fas fa-plus"></i> Add Stopwatch
+                                    <i class="fas fa-stopwatch"></i> Stopwatch
                                 </button>
                             </div>
                             <span class="zone-toggle-icon">🔽</span>
@@ -837,29 +846,38 @@
                             class="zone-header"
                             onclick="toggleZone(event, 'peopleSection', 'peopleContent')"
                         >
-                            <h2 class="zone-title">👥 People (<span id="activePeopleCount">0</span> active)</h2>
-                            <div class="zone-actions">
+                            <h2 class="zone-title">👥 People (<span id="activePeopleCount">0</span>)</h2>
+                            <div class="zone-actions people-zone-actions">
                                 <button
                                     type="button"
                                     onclick="openPeopleExpandModal(event)"
                                     id="open-people-modal-button"
                                     class="zone-button"
+                                    title="Expand to full screen"
                                 >
-                                    <i class="fas fa-expand"></i> Expand
+                                    <i class="fas fa-expand"></i>
+                                    <span class="hideWhenNarrow">Expand</span>
                                 </button>
                                 <button
                                     type="button"
-                                    onclick="_toggleAllPeopleGroups(event, true)"
+                                    onclick="_togglePeopleExpandCollapse(event)"
+                                    id="people-expand-collapse-btn"
                                     class="zone-button"
+                                    title="Expand all groups"
                                 >
-                                    <i class="fas fa-expand-alt"></i> Expand All
+                                    <i class="fas fa-expand-alt"></i>
+                                    <span class="hideWhenNarrow">Expand</span>
                                 </button>
+                                <span class="location-actions-spacer"></span>
                                 <button
                                     type="button"
-                                    onclick="_toggleAllPeopleGroups(event, false)"
+                                    id="stealthHeaderBtn"
                                     class="zone-button"
+                                    onclick="_toggleStealthFromHeader(event)"
+                                    title="Stealth — hide from all other users"
                                 >
-                                    <i class="fas fa-compress-alt"></i> Collapse All
+                                    <i class="fas fa-user-secret"></i>
+                                    <span class="hideWhenNarrow">Stealth</span>
                                 </button>
                             </div>
                             <span class="zone-toggle-icon">🔽</span>
@@ -981,23 +999,35 @@
                         </div>
                         <div
                             id="healthIndicatorsContent"
-                            class="zone-body healthBox"
-                            style="display:grid;grid-template-columns:1fr 1fr;gap:0 12px;"
+                            class="zone-body"
+                            style="display:flex;flex-direction:column;gap:2px;padding:10px 14px;"
                         >
-                            <!-- Vitals -->
-                            <div class="healthInput" id="heartRateEntry"></div>
-                            <div class="healthInput" id="bpEntry"></div>
-                            <div class="healthInput" id="spo2Entry"></div>
-                            <div class="healthInput" id="temperatureEntry"></div>
-                            <!-- Body -->
-                            <div class="healthInput" id="weightEntry"></div>
-                            <div class="healthInput" id="heightEntry"></div>
-                            <div class="healthInput" id="glucoseEntry"></div>
+                            <!-- Vital Signs -->
+                            <div class="health-section-label">Vital Signs</div>
+                            <div class="health-grid">
+                                <div class="healthInput" id="heartRateEntry"></div>
+                                <div class="healthInput" id="bpEntry"></div>
+                                <div class="healthInput" id="spo2Entry"></div>
+                                <div class="healthInput" id="temperatureEntry"></div>
+                            </div>
+                            <!-- Body Measurements -->
+                            <div class="health-section-label">Body</div>
+                            <div class="health-grid">
+                                <div class="healthInput" id="weightEntry"></div>
+                                <div class="healthInput" id="heightEntry"></div>
+                                <div class="healthInput" id="glucoseEntry"></div>
+                            </div>
                             <!-- Activity -->
-                            <div class="healthInput" id="distanceEntry"></div>
-                            <!-- Cycle (female only) -->
+                            <div class="health-section-label">Activity</div>
+                            <div class="health-grid">
+                                <div class="healthInput" id="distanceEntry"></div>
+                            </div>
+                            <!-- Reproductive (conditional) -->
                             <div id="reproductionSection" style="display:none;">
-                                <div class="healthInput" id="cycleEntry"></div>
+                                <div class="health-section-label">Reproductive</div>
+                                <div class="health-grid">
+                                    <div class="healthInput" id="cycleEntry"></div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1009,13 +1039,14 @@
                         >
                             <h2 class="zone-title">✉️ Email</h2>
                             <div class="zone-actions" onclick="event.stopPropagation()">
-                                <button type="button" onclick="_emailUndo(event)" class="zone-button" title="Undo (Cmd+Z)">↩</button>
-                                <button type="button" onclick="_emailRedo(event)" class="zone-button" title="Redo (Cmd+Shift+Z)">↪</button>
-                                <button type="button" id="emailActivateBtn" class="zone-button zone-button-persist" onclick="_activateEmailZone()" title="Make this an email chit" style="font-size:0.8em;">✉️ Email</button>
-                                <button type="button" class="zone-button" id="emailSendBtn" style="display:none;" onclick="_emailSend()"><i class="fas fa-paper-plane"></i> Send</button>
-                                <button type="button" class="zone-button" id="emailReplyBtn" style="display:none;" onclick="_emailReply()"><i class="fas fa-reply"></i> Reply</button>
-                                <button type="button" class="zone-button" id="emailForwardBtn" style="display:none;" onclick="_emailForward()"><i class="fas fa-share"></i> Forward</button>
-                                <button type="button" class="zone-button" id="emailExpandBtn" style="display:none;" onclick="_openEmailExpandModal()" title="Expand"><i class="fas fa-expand"></i> Expand</button>
+                                <button type="button" class="zone-button" id="emailExpandBtn" style="display:none;" onclick="_openEmailExpandModal()" title="Expand"><i class="fas fa-expand"></i><span class="hideWhenNarrow"> Expand</span></button>
+                                <button type="button" class="zone-button" id="emailSendBtn" style="display:none;" onclick="_emailSend()" title="Send email"><i class="fas fa-paper-plane"></i><span class="hideWhenNarrow"> Send</span></button>
+                                <button type="button" class="zone-button" id="emailReplyBtn" style="display:none;" onclick="_emailReply()" title="Reply"><i class="fas fa-reply"></i><span class="hideWhenNarrow"> Reply</span></button>
+                                <button type="button" class="zone-button" id="emailForwardBtn" style="display:none;" onclick="_emailForward()" title="Forward"><i class="fas fa-share"></i><span class="hideWhenNarrow"> Forward</span></button>
+                                <span class="location-actions-spacer"></span>
+                                <button type="button" onclick="_emailUndo(event)" class="zone-button notes-undo-redo" title="Undo (Cmd+Z)">↺</button>
+                                <button type="button" onclick="_emailRedo(event)" class="zone-button notes-undo-redo" title="Redo (Cmd+Shift+Z)">↻</button>
+                                <button type="button" id="emailActivateBtn" class="zone-button zone-button-persist" onclick="_activateEmailZone()" title="Make this an email chit"><i class="far fa-envelope"></i><span class="hideWhenNarrow"> Email</span></button>
                             </div>
                             <span class="zone-toggle-icon">🔽</span>
                         </div>
@@ -1078,14 +1109,13 @@
             <div class="modal-contentFull" style="width:calc(100vw - 2em);max-width:calc(100vw - 2em);height:calc(100vh - 2em);display:flex;flex-direction:column;">
                 <div class="modal-header" style="display:flex;align-items:center;justify-content:space-between;padding:0.5em 1em;flex-shrink:0;">
                     <h2 style="margin:0;">📝 Notes</h2>
-                    <div style="display:flex;gap:0.5em;flex-wrap:wrap;">
-                        <button type="button" onclick="toggleModalNotesRender()" id="modal-render-toggle-btn"><i class="fas fa-eye"></i> Render</button>
-                        <button type="button" onclick="copyNotesToClipboard(event, 'modal')" title="Copy to Clipboard"><i class="fas fa-clipboard"></i></button>
-                        <button type="button" onclick="downloadNotes(event, 'modal')" title="Download"><i class="fas fa-download"></i></button>
-                        <button type="button" onclick="_openSendContentModal(event, 'notes')" title="Send notes to another chit"><i class="fas fa-paper-plane"></i></button>
-                        <button type="button" onclick="_noteToChecklistFromHeader(event)" title="Move note lines to checklist items">📝→☑️</button>
-                        <button type="button" class="cancel" onclick="closeNotesModal(false)"><i class="fas fa-times"></i> Cancel</button>
-                        <button type="button" onclick="closeNotesModal(true)"><i class="fas fa-check"></i> Done</button>
+                    <div style="display:flex;gap:0.5em;flex-wrap:wrap;align-items:center;">
+                        <button type="button" class="zone-button" onclick="toggleModalNotesRender()" id="modal-render-toggle-btn" title="Toggle rendered view"><i class="fas fa-eye"></i> Render</button>
+                        <button type="button" class="zone-button" onclick="copyNotesToClipboard(event, 'modal')" title="Copy to Clipboard"><i class="fas fa-clipboard"></i> Copy</button>
+                        <button type="button" class="zone-button" onclick="downloadNotes(event, 'modal')" title="Download"><i class="fas fa-download"></i> Download</button>
+                        <button type="button" class="zone-button" onclick="_openSendContentModal(event, 'notes')" title="Send notes to another chit"><i class="fas fa-paper-plane"></i> Send</button>
+                        <button type="button" class="zone-button" onclick="_noteToChecklistFromHeader(event)" title="Move note lines to checklist items"><i class="fas fa-arrow-right"></i> To List</button>
+                        <button type="button" class="zone-button" onclick="closeNotesModal(true)"><i class="fas fa-check"></i> Done</button>
                     </div>
                 </div>
                 <div id="notesModalFormatToolbar" class="notes-format-toolbar" style="flex-shrink:0;margin:0 1em;">
@@ -1133,16 +1163,19 @@
         </div>
 
         <!-- People Expand Modal (Requirement 8.2) -->
-        <div id="peopleExpandModal" class="cwoc-people-expand-overlay" style="display: none">
-            <div class="cwoc-people-expand-content">
-                <div class="cwoc-people-expand-header">
-                    <h2>👥 People</h2>
-                    <div style="display:flex;gap:8px;align-items:center;">
-                        <button type="button" class="cwoc-people-expand-done-btn" onclick="closePeopleExpandModal()" title="Done (Enter)">✅ Done</button>
-                        <button type="button" class="cwoc-people-expand-shrink-btn" onclick="closePeopleExpandModal()" title="Shrink">⤡</button>
+        <div id="peopleExpandModal" class="modal-overlay" style="display: none">
+            <div class="modal-contentFull" style="width:calc(100vw - 2em);max-width:calc(100vw - 2em);height:calc(100vh - 2em);display:flex;flex-direction:column;">
+                <div class="modal-header" style="display:flex;align-items:center;justify-content:space-between;padding:0.5em 1em;flex-shrink:0;">
+                    <h2 style="margin:0;">👥 People</h2>
+                    <div style="display:flex;gap:0.5em;flex-wrap:wrap;align-items:center;">
+                        <button type="button" class="zone-button" onclick="_togglePeopleExpandCollapse(event)" id="people-expand-collapse-btn-modal" title="Expand all groups"><i class="fas fa-expand-alt"></i> Expand</button>
+                        <button type="button" class="zone-button" onclick="_toggleStealthFromHeader(event)" id="stealthHeaderBtnModal" title="Stealth — hide from all other users"><i class="fas fa-user-secret"></i> Stealth</button>
+                        <button type="button" class="zone-button" onclick="closePeopleExpandModal()" title="Done (Enter)"><i class="fas fa-check"></i> Done</button>
                     </div>
                 </div>
-                <div class="cwoc-people-expand-body" id="peopleExpandList"></div>
+                <div class="modal-body" style="flex:1;overflow:auto;padding:0.5em 1em;">
+                    <div id="peopleExpandList"></div>
+                </div>
             </div>
         </div>
 
@@ -1507,6 +1540,7 @@
         <script src="/frontend/js/shared/shared-indicators.js"></script>
         <script src="/frontend/js/shared/shared-calendar.js"></script>
         <script src="/frontend/js/shared/shared-tags.js"></script>
+        <script src="/frontend/js/shared/shared-tag-modal.js"></script>
         <script src="/frontend/js/shared/shared-recurrence.js"></script>
         <script src="/frontend/js/shared/shared-geocoding.js"></script>
         <script src="/frontend/js/shared/shared-qr.js"></script>

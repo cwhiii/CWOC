@@ -162,6 +162,7 @@ from src.backend.migrations import (
     migrate_create_ha_config,
     migrate_add_checklist_autosave,
     migrate_add_view_order,
+    migrate_add_recent_tags,
 )
 
 # Initialize database and run all migrations (same order as before)
@@ -215,6 +216,7 @@ migrate_add_availability()
 migrate_create_ha_config()
 migrate_add_checklist_autosave()
 migrate_add_view_order()
+migrate_add_recent_tags()
 seed_version_info()
 
 # One-time cleanup: fix sent emails that still have CWOC_System/Email/Drafts tag
