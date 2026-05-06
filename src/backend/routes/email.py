@@ -1384,6 +1384,7 @@ def email_sync(request: Request):
         sync_errors = []
         all_email_summaries = []
         all_email_chits = []
+        sync_details = []
 
         for account in accounts:
             account_id = account.get("id", "")
@@ -1461,7 +1462,15 @@ def email_sync(request: Request):
                 # Final commit for any remaining messages after the last batch
                 conn.commit()
                 total_new += new_count
-                logger.info(f"[Sync] {account_email}: {new_count} new, {skipped_dupes} duplicates skipped")
+                nickname = account.get("nickname", account_email)
+                sync_details.append({
+                    "account": nickname,
+                    "imap_found": len(messages),
+                    "new": new_count,
+                    "skipped_dupes": skipped_dupes,
+                    "since": since_date
+                })
+                logger.info(f"[Sync] {nickname}: {new_count} new, {skipped_dupes} duplicates skipped (SINCE {since_date}, {len(messages)} from IMAP)")
 
                 # ── Deletion sync: detect emails removed from IMAP ────────
                 try:
@@ -1593,6 +1602,10 @@ def email_sync(request: Request):
         result = {"new_count": total_new, "deleted_count": total_deleted, "accounts_synced": accounts_synced}
         if sync_errors:
             result["errors"] = sync_errors
+        if all_email_summaries:
+            result["imported"] = all_email_summaries[:20]
+        if sync_details:
+            result["details"] = sync_details
         return result
 
     except HTTPException:

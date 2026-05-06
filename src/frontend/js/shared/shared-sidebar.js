@@ -61,8 +61,8 @@ function _cwocInjectSidebar() {
 
   /* Email controls — only visible on Email tab */
   html += '<div class="sidebar-section" id="section-email-controls" style="display:none;">';
-  html += '  <button class="action-button sidebar-compact-btn" id="sidebar-check-mail-btn" style="margin-bottom:6px;">';
-  html += '    <i class="fas fa-sync"></i> Check Mail';
+  html += '  <button class="action-button" id="sidebar-check-mail-btn" style="margin-bottom:6px;">';
+  html += '    <i class="fas fa-sync" style="margin-right:6px;"></i> Check Mail';
   html += '  </button>';
   html += '  <div id="email-account-filter-wrap" style="margin-bottom:8px;"></div>';
   html += '  <div class="filter-group">';

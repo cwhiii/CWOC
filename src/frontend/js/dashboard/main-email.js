@@ -21,6 +21,15 @@ var _emailAutoCheckTimer = null;
 /* Account filter state: array of selected account nicknames (empty = show all) */
 var _emailAccountFilter = [];
 
+/* Account error state: { nickname: errorMessage } — set by sync, cleared on success */
+var _emailAccountErrors = {};
+
+/* Account success state: { nickname: true } — set on successful sync */
+var _emailAccountSuccess = {};
+
+/* Whether account filter has been initialized with all accounts */
+var _emailAccountFilterInitialized = false;
+
 /**
  * Toggle the email sidebar section body visibility.
  */
@@ -59,7 +68,8 @@ function _updateEmailSidebarVisibility(tab) {
 
 /**
  * Render account filter pill buttons in the sidebar.
- * Multi-select: clicking toggles that account on/off. Empty selection = show all.
+ * All accounts start selected (dark). Clicking deselects that one account.
+ * When all are selected, show all emails. When some are deselected, only show selected.
  */
 function _emailRenderAccountFilterButtons() {
     var wrap = document.getElementById('email-account-filter-wrap');
@@ -84,6 +94,14 @@ function _emailRenderAccountFilterButtons() {
         return;
     }
 
+    // Initialize filter to all accounts selected if not yet set
+    if (_emailAccountFilter.length === 0 && !_emailAccountFilterInitialized) {
+        _emailAccountFilterInitialized = true;
+        namedAccounts.forEach(function(a) {
+            _emailAccountFilter.push(a.nickname);
+        });
+    }
+
     wrap.style.display = '';
     wrap.innerHTML = '';
 
@@ -93,11 +111,24 @@ function _emailRenderAccountFilterButtons() {
         btn.className = 'email-account-pill';
         var isActive = _emailAccountFilter.indexOf(acct.nickname) !== -1;
         if (isActive) btn.classList.add('active');
-        btn.textContent = acct.nickname;
-        btn.title = acct.email || acct.nickname;
-        btn.addEventListener('click', function() {
-            _emailToggleAccountFilter(acct.nickname);
-        });
+
+        // Error state — red pill with warning icon
+        var hasError = _emailAccountErrors[acct.nickname];
+        if (hasError) {
+            btn.classList.add('email-account-pill-error');
+            btn.textContent = '⚠️ ' + acct.nickname;
+            btn.title = 'Error: ' + hasError + ' (click for details)';
+            btn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                _showAccountErrorDetails(acct.nickname, hasError);
+            });
+        } else {
+            btn.textContent = acct.nickname;
+            btn.title = acct.email || acct.nickname;
+            btn.addEventListener('click', function() {
+                _emailToggleAccountFilter(acct.nickname);
+            });
+        }
         wrap.appendChild(btn);
     });
 }
@@ -115,6 +146,93 @@ function _emailToggleAccountFilter(nickname) {
     _emailRenderAccountFilterButtons();
     // Re-trigger the email view render with the current tab
     if (typeof filterChits === 'function') filterChits('Email');
+}
+
+/**
+ * Show a persistent toast with full error details for a failed account.
+ * Includes a "Copy Error" button.
+ */
+function _showAccountErrorDetails(nickname, errorMsg) {
+    var fullMsg = nickname + ': ' + errorMsg;
+
+    // Remove existing toast
+    var existing = document.getElementById('cwoc-toast');
+    if (existing) existing.remove();
+
+    var toast = document.createElement('div');
+    toast.id = 'cwoc-toast';
+    toast.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);'
+        + 'background:#8b1a1a;color:#fdf5e6;border:2px solid #5c1010;'
+        + 'border-radius:8px;padding:12px 20px;font-family:Lora,Georgia,serif;font-size:0.95em;'
+        + 'box-shadow:0 4px 16px rgba(0,0,0,0.4);z-index:10000;'
+        + 'max-width:90%;text-align:left;opacity:0;transition:opacity 0.3s ease;display:flex;flex-direction:column;gap:8px;';
+
+    var msgEl = document.createElement('div');
+    msgEl.textContent = '⚠️ ' + fullMsg;
+    toast.appendChild(msgEl);
+
+    var btnRow = document.createElement('div');
+    btnRow.style.cssText = 'display:flex;gap:8px;justify-content:flex-end;';
+
+    var copyBtn = document.createElement('button');
+    copyBtn.textContent = '📋 Copy Error';
+    copyBtn.style.cssText = 'background:#5c1010;color:#fdf5e6;border:1px solid #3a0a0a;border-radius:4px;padding:4px 10px;cursor:pointer;font-family:inherit;font-size:0.85em;';
+    copyBtn.onclick = function(e) {
+        e.stopPropagation();
+        navigator.clipboard.writeText(fullMsg).then(function() {
+            copyBtn.textContent = '✓ Copied';
+            setTimeout(function() { copyBtn.textContent = '📋 Copy Error'; }, 2000);
+        });
+    };
+    btnRow.appendChild(copyBtn);
+
+    var closeBtn = document.createElement('button');
+    closeBtn.textContent = '✕ Dismiss';
+    closeBtn.style.cssText = 'background:#5c1010;color:#fdf5e6;border:1px solid #3a0a0a;border-radius:4px;padding:4px 10px;cursor:pointer;font-family:inherit;font-size:0.85em;';
+    closeBtn.onclick = function(e) {
+        e.stopPropagation();
+        toast.style.opacity = '0';
+        setTimeout(function() { if (toast.parentNode) toast.remove(); }, 300);
+    };
+    btnRow.appendChild(closeBtn);
+
+    toast.appendChild(btnRow);
+    document.body.appendChild(toast);
+    requestAnimationFrame(function() { toast.style.opacity = '1'; });
+}
+
+/**
+ * Show or hide spinning indicators on all account pills.
+ * @param {boolean} spinning — true to show spinners, false to remove them
+ */
+function _emailSetPillSpinners(spinning) {
+    var pills = document.querySelectorAll('.email-account-pill');
+    pills.forEach(function(pill) {
+        var existing = pill.querySelector('.email-pill-spinner');
+        if (spinning) {
+            if (!existing) {
+                var spinner = document.createElement('i');
+                spinner.className = 'fas fa-circle-notch fa-spin email-pill-spinner';
+                spinner.style.marginLeft = '5px';
+                spinner.style.fontSize = '0.8em';
+                pill.appendChild(spinner);
+            }
+        } else {
+            if (existing) existing.remove();
+        }
+    });
+    // Also spin the Check Mail button icon
+    var checkBtn = document.getElementById('sidebar-check-mail-btn');
+    if (checkBtn) {
+        var icon = checkBtn.querySelector('.fas');
+        if (icon) {
+            if (spinning) {
+                icon.classList.add('fa-spin');
+            } else {
+                icon.classList.remove('fa-spin');
+            }
+        }
+    }
 }
 
 /**
@@ -214,7 +332,10 @@ function displayEmailView(chitsToDisplay) {
     }
 
     // Apply account filter (multi-select by nickname system tag)
-    if (_emailAccountFilter.length > 0) {
+    // Only filter if some accounts are deselected (not all active)
+    var allAccounts = ((window._cwocSettings || {}).email_accounts || []).filter(function(a) { return a && a.nickname; });
+    var allSelected = _emailAccountFilter.length >= allAccounts.length;
+    if (_emailAccountFilter.length > 0 && !allSelected) {
         emailChits = emailChits.filter(function(c) {
             var tags = c.tags;
             if (typeof tags === 'string') {
@@ -806,24 +927,67 @@ function _setEmailSubFilter(filter) {
 function _checkMail() {
     console.log('[Email Check Mail] Starting sync...');
     _showToast('Checking mail...', 'info');
+    _emailSetPillSpinners(true);
     fetch('/api/email/sync', { method: 'POST' })
         .then(function(r) {
             console.log('[Email Check Mail] Response status:', r.status);
             return r.json().then(function(data) { return { ok: r.ok, status: r.status, data: data }; });
         })
         .then(function(result) {
+            _emailSetPillSpinners(false);
             console.log('[Email Check Mail] Result:', JSON.stringify(result.data));
             if (result.ok && result.data.new_count !== undefined) {
-                var parts = [];
-                if (result.data.new_count > 0) parts.push(result.data.new_count + ' new');
-                if (result.data.deleted_count > 0) parts.push(result.data.deleted_count + ' removed');
+                // Build detailed message with per-account info
+                var details = result.data.details || [];
+                var detailParts = details.map(function(d) {
+                    return d.account + ': ' + d.new + ' new' + (d.skipped_dupes ? ', ' + d.skipped_dupes + ' skipped' : '') + ' (checked ' + d.imap_found + ' since ' + d.since + ')';
+                });
+                if (detailParts.length) {
+                    console.log('[Email Check Mail] ' + detailParts.join(' | '));
+                }
+
                 if (result.data.new_count > 0) {
                     var noun = result.data.new_count === 1 ? 'email' : 'emails';
-                    cwocToast('📬 ' + result.data.new_count + ' new ' + noun, 'success', 5000);
+                    var acctNames = details.filter(function(d) { return d.new > 0; }).map(function(d) { return d.account + ' (' + d.new + ')'; });
+                    var toastMsg = '📬 ' + result.data.new_count + ' new ' + noun;
+                    if (acctNames.length) toastMsg += ' — ' + acctNames.join(', ');
+                    cwocToast(toastMsg, 'success', 5000);
                 } else {
-                    var msg = parts.length ? parts.join(', ') : 'No new emails';
-                    _showToast(msg, 'success');
+                    var acctSummary = details.map(function(d) { return d.account + ': checked ' + d.imap_found; }).join(', ');
+                    _showToast('No new emails' + (acctSummary ? ' (' + acctSummary + ')' : ''), 'success');
                 }
+
+                // Store errors on account pills instead of generic toasts
+                if (result.data.errors && result.data.errors.length) {
+                    result.data.errors.forEach(function(e) {
+                        // Parse "nickname: error message" format
+                        var colonIdx = e.indexOf(':');
+                        if (colonIdx > 0) {
+                            var errAcct = e.substring(0, colonIdx).trim();
+                            var errMsg = e.substring(colonIdx + 1).trim();
+                            // Match by email or nickname
+                            _emailAccountErrors[errAcct] = errMsg;
+                            // Also try to match nickname from the accounts list
+                            var details2 = result.data.details || [];
+                            details2.forEach(function(d) {
+                                if (e.indexOf(d.account) !== -1) {
+                                    _emailAccountErrors[d.account] = errMsg;
+                                }
+                            });
+                        }
+                    });
+                    _emailRenderAccountFilterButtons();
+                }
+
+                // Clear errors for accounts that synced successfully
+                var successDetails = result.data.details || [];
+                successDetails.forEach(function(d) {
+                    if (_emailAccountErrors[d.account]) {
+                        delete _emailAccountErrors[d.account];
+                    }
+                });
+                _emailRenderAccountFilterButtons();
+
                 if (typeof fetchChits === 'function') fetchChits();
             } else if (result.status === 400 && result.data.detail && result.data.detail.indexOf('No email account') !== -1) {
                 console.warn('[Email Check Mail] No email account configured.');
@@ -837,6 +1001,7 @@ function _checkMail() {
             }
         })
         .catch(function(err) {
+            _emailSetPillSpinners(false);
             console.error('[Email Check Mail] Fetch error:', err);
             _showToast('Failed to check mail: ' + err.message, 'error');
         });

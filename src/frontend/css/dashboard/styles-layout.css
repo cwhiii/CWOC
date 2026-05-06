@@ -376,6 +376,7 @@ button.delete:hover {
     padding: 10px;
     height: 40px;
     background-color: var(--btn-bg);
+    color: #fdf5e6;
     border: 1px solid var(--btn-border);
     cursor: pointer;
     font-family: 'Lora', Georgia, serif;

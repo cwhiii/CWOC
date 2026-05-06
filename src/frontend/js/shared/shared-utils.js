@@ -155,7 +155,14 @@ function cwocToast(message, type, duration) {
     + 'border-radius:8px;padding:12px 20px;font-family:Lora,Georgia,serif;font-size:0.95em;'
     + 'box-shadow:0 4px 16px rgba(0,0,0,0.4);z-index:10000;cursor:pointer;'
     + 'max-width:90%;text-align:center;opacity:0;transition:opacity 0.3s ease;';
-  toast.textContent = (icons[type] || '') + '  ' + message;
+  toast.innerHTML = (icons[type] || '') + '  ' + message;
+  if (duration === 0) {
+    // Add dismiss X button for persistent toasts
+    var closeBtn = document.createElement('span');
+    closeBtn.textContent = ' ✕';
+    closeBtn.style.cssText = 'margin-left:12px;font-weight:bold;opacity:0.7;';
+    toast.appendChild(closeBtn);
+  }
   toast.onclick = function () { dismiss(); };
 
   document.body.appendChild(toast);

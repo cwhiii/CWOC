@@ -1406,6 +1406,23 @@ li.cwoc-dragging {
     border-color: #5c4033;
 }
 
+.email-account-pill-error {
+    background: #8b1a1a;
+    color: #fdf5e6;
+    border-color: #5c1010;
+    animation: pillErrorPulse 2s ease-in-out infinite;
+}
+
+.email-account-pill-error:hover {
+    background: #a52a2a;
+    border-color: #8b1a1a;
+}
+
+@keyframes pillErrorPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
 /* ── Scrollable wrapper for email cards ───────────────────────────────────── */
 .email-scroll-wrap {
     flex: 1;

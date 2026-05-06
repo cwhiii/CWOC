@@ -22,6 +22,7 @@
 .tab {
     padding: 10px 10px;
     background-color: var(--btn-bg);
+    color: ivory;
     border: 1px solid #5a3f2a;
     cursor: pointer;
     margin-right: 3px;
@@ -63,7 +64,8 @@
 
 /* ── Active / hover states ──────────────────────────────────────────────── */
 .tab.active {
-    background-color: ivory; /* Match action-button hover */
+    background-color: ivory;
+    color: #3b1f0a;
 }
 
 .tab:hover {
