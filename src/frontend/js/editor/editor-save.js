@@ -337,16 +337,16 @@ async function buildChitObject() {
     const startDate = startDateInput ? startDateInput.value.trim() : '';
     const startTime = startTimeInput ? startTimeInput.value.trim() : '';
     if (!startDate) {
-      alert('Start date is required when Start & End is selected.');
+      cwocToast('Start date is required when Start & End is selected.', 'error');
       return null;
     }
     if (!isAllDay && !startTime) {
-      alert('Start time is required (or check All Day).');
+      cwocToast('Start time is required (or check All Day).', 'error');
       return null;
     }
     if (chit.start_datetime && chit.end_datetime) {
       if (new Date(chit.end_datetime) < new Date(chit.start_datetime)) {
-        alert('End time cannot be before start time.');
+        cwocToast('End time cannot be before start time.', 'error');
         return null;
       }
     }
@@ -354,11 +354,11 @@ async function buildChitObject() {
     const dueDate = dueDateInput ? dueDateInput.value.trim() : '';
     const dueTime = dueTimeInput ? dueTimeInput.value.trim() : '';
     if (!dueDate) {
-      alert('Due date is required when Due is selected.');
+      cwocToast('Due date is required when Due is selected.', 'error');
       return null;
     }
     if (!isAllDay && !dueTime) {
-      alert('Due time is required (or check All Day).');
+      cwocToast('Due time is required (or check All Day).', 'error');
       return null;
     }
   }
@@ -373,7 +373,7 @@ async function buildChitObject() {
     chit.checklist.length === 0 &&
     chit.child_chits.length === 0
   ) {
-    alert("Please provide at least a title, note, date, tag, checklist item, or child chit before saving.");
+    cwocToast("Please provide at least a title, note, date, tag, checklist item, or child chit before saving.", "error");
     return null;
   }
 
@@ -464,7 +464,7 @@ async function _saveInstanceException(dateStr) {
     window.location.href = _getEditorReturnUrl();
   } catch (error) {
     console.error('[_saveInstanceException] Error:', error);
-    alert('Failed to save instance changes.');
+    cwocToast('Failed to save instance changes.', 'error');
   }
 }
 
@@ -526,7 +526,7 @@ async function saveChitData() {
     window.location.href = _getEditorReturnUrl();
   } catch (error) {
     console.error("[saveChitData] Error saving chit:", error);
-    alert("Failed to save chit. Check console for details.");
+    cwocToast("Failed to save chit. Check console for details.", "error");
   } finally {
     _isSaving = false;
   }
@@ -569,7 +569,7 @@ async function saveChitAndStay() {
       setSaveButtonSaved();
     } catch (error) {
       console.error("[saveChitAndStay] Instance error:", error);
-      alert("Failed to save instance changes.");
+      cwocToast("Failed to save instance changes.", "error");
     }
     return;
   }
@@ -620,13 +620,13 @@ async function saveChitAndStay() {
     setSaveButtonSaved();
   } catch (error) {
     console.error("[saveChitAndStay] Error:", error);
-    alert("Failed to save chit. Check console for details.");
+    cwocToast("Failed to save chit. Check console for details.", "error");
   }
 }
 
 function deleteChit() {
   if (!chitId) {
-    alert("No chit to delete.");
+    cwocToast("No chit to delete.", "error");
     return;
   }
   const modal = document.getElementById("deleteChitModal");
@@ -672,7 +672,7 @@ function performDeleteChit() {
     })
     .catch(function (err) {
       console.error("Error deleting chit:", err);
-      alert("Failed to delete chit. Check console for details.");
+      cwocToast("Failed to delete chit. Check console for details.", "error");
     });
 }
 
@@ -771,7 +771,7 @@ function toggleArchived() {
 }
 
 function _showQRCode(e) {
-  if (!chitId) { alert('Save the chit first to generate a QR code.'); return; }
+  if (!chitId) { cwocToast('Save the chit first to generate a QR code.', 'info'); return; }
   var existing = document.getElementById('cwoc-qr-overlay');
   if (existing) { existing.remove(); return; }
 

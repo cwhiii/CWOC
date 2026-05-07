@@ -1,0 +1,1 @@
+No code changes — the attachment issue was caused by the _projectsViewMode undefined error (fixed in previous version) which threw during initialization and prevented fetchChits from ever running. With the split files restored, initialization completes and attachments display correctly in both inbox and editor.

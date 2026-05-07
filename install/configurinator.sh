@@ -254,6 +254,56 @@ setup_virtualenv() {
 }
 
 # ---------------------------------------------------------------------------
+# Phase: Download Milkdown ESM vendor bundles
+# ---------------------------------------------------------------------------
+
+download_milkdown_vendor() {
+    log_step "Downloading Milkdown ESM vendor bundles..."
+
+    local VENDOR_DIR="$APP_DIR/src/static/vendor/milkdown"
+    mkdir -p "$VENDOR_DIR"
+
+    # Pinned Milkdown v7.6.2 ESM bundles from jsdelivr
+    local BASE_URL="https://cdn.jsdelivr.net/npm"
+    local VERSION="7.6.2"
+
+    declare -A BUNDLES=(
+        ["core.js"]="@milkdown/core@${VERSION}/lib/index.es.js"
+        ["ctx.js"]="@milkdown/ctx@${VERSION}/lib/index.es.js"
+        ["prose.js"]="@milkdown/prose@${VERSION}/lib/index.es.js"
+        ["preset-commonmark.js"]="@milkdown/preset-commonmark@${VERSION}/lib/index.es.js"
+        ["plugin-history.js"]="@milkdown/plugin-history@${VERSION}/lib/index.es.js"
+        ["plugin-listener.js"]="@milkdown/plugin-listener@${VERSION}/lib/index.es.js"
+        ["plugin-clipboard.js"]="@milkdown/plugin-clipboard@${VERSION}/lib/index.es.js"
+        ["transformer.js"]="@milkdown/transformer@${VERSION}/lib/index.es.js"
+        ["utils.js"]="@milkdown/utils@${VERSION}/lib/index.es.js"
+    )
+
+    local all_present=true
+    for file in "${!BUNDLES[@]}"; do
+        if [[ ! -f "$VENDOR_DIR/$file" ]] || [[ ! -s "$VENDOR_DIR/$file" ]]; then
+            all_present=false
+            break
+        fi
+    done
+
+    if [[ "$all_present" == "true" ]]; then
+        log_ok "Milkdown vendor bundles already present — skipping download."
+        return
+    fi
+
+    for file in "${!BUNDLES[@]}"; do
+        local url="${BASE_URL}/${BUNDLES[$file]}"
+        if [[ ! -f "$VENDOR_DIR/$file" ]] || [[ ! -s "$VENDOR_DIR/$file" ]]; then
+            wget -q -O "$VENDOR_DIR/$file" "$url" 2>/dev/null \
+                || { log_warn "Failed to download $file — Milkdown will use fallback mode."; rm -f "$VENDOR_DIR/$file"; }
+        fi
+    done
+
+    log_ok "Milkdown vendor bundles downloaded to $VENDOR_DIR"
+}
+
+# ---------------------------------------------------------------------------
 # Phase: Python dependencies
 # ---------------------------------------------------------------------------
 
@@ -769,6 +819,7 @@ main() {
 
         deploy_from_zip
         install_python_deps
+        download_milkdown_vendor
         configure_service
         configure_https
         install_tailscale
@@ -781,6 +832,7 @@ main() {
         deploy_from_zip
         setup_virtualenv
         install_python_deps
+        download_milkdown_vendor
         configure_service
         configure_https
         install_tailscale

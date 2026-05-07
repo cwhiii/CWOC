@@ -1,0 +1,1 @@
+Fixed: restored split view files (main-views-tasks/habits/notes/projects/alarms/indicators.js) to index.html — they contain state variables and code that main-views.js depends on. The previous removal caused _projectsViewMode undefined error breaking all views.

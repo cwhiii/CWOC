@@ -1,0 +1,1 @@
+Fixed "Unread at top" toggle to correctly sort threads with unread messages to the top (previously only worked in flat view). Removed the "Group threads" toggle — email is now always displayed in threaded view.

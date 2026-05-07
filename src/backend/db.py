@@ -63,6 +63,16 @@ def compute_display_name(contact) -> str:
 def serialize_json_field(data: Any) -> Optional[str]:
     if data is None:
         return None
+    # If data is already a JSON string (e.g. from a round-trip through the API),
+    # return it as-is to avoid double-encoding.
+    if isinstance(data, str):
+        stripped = data.strip()
+        if stripped and stripped[0] in ('[', '{', '"'):
+            try:
+                json.loads(stripped)  # validate it's valid JSON
+                return data
+            except (json.JSONDecodeError, ValueError):
+                pass
     try:
         return json.dumps(data)
     except TypeError as e:

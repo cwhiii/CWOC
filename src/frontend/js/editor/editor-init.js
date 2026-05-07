@@ -237,9 +237,10 @@ function _collapseAllZonesForNewChit() {
     'Calendar':   [['datesSection', 'datesContent']],
     'Checklists': [['checklistSection', 'checklistContent']],
     'Alarms':     [['alertsSection', 'alertsContent']],
-    'Projects':   [['projectsSection', 'projectsContent']],
+    'Projects':   [['notesSection', 'notesContent']],
     'Tasks':      [['taskSection', 'taskContent']],
     'Notes':      [['notesSection', 'notesContent']],
+    'Email':      [['emailSection', 'emailContent']],
   };
 
   const params = new URLSearchParams(window.location.search);
@@ -258,6 +259,16 @@ function _collapseAllZonesForNewChit() {
     if (icon) icon.textContent = '🔼';
     section.querySelectorAll('.zone-button:not(.zone-button-persist)').forEach(btn => { btn.style.display = ''; });
   });
+
+  // Scroll to the source view's zone after a brief delay for layout
+  if (zonesToExpand.length > 0) {
+    var _scrollTarget = document.getElementById(zonesToExpand[0][0]);
+    if (_scrollTarget) {
+      setTimeout(function() {
+        _scrollTarget.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 150);
+    }
+  }
 }
 
 function setSelectValue(selectElement, value) {
@@ -402,9 +413,14 @@ async function loadChitData(chitId) {
     const noteTextarea = document.getElementById("note");
     if (noteTextarea) {
       noteTextarea.value = chit.note || "";
-      setTimeout(() => autoGrowNote(noteTextarea), 0);
-      if (chit.note && chit.note.trim()) {
-        setTimeout(() => toggleNotesViewMode(null), 50);
+      // If Milkdown is available, initialize it instead of textarea auto-grow/render
+      if (typeof window.initMilkdownNotesZone === 'function' && window.CwocMilkdown && !window.CwocMilkdown.isFallback) {
+        setTimeout(() => window.initMilkdownNotesZone(), 60);
+      } else {
+        setTimeout(() => autoGrowNote(noteTextarea), 0);
+        if (chit.note && chit.note.trim()) {
+          setTimeout(() => toggleNotesViewMode(null), 50);
+        }
       }
     }
 
@@ -721,6 +737,28 @@ async function loadChitData(chitId) {
     window._loadedChildChits = Array.isArray(chit.child_chits) ? chit.child_chits : [];
 
     applyZoneStates(chit);
+
+    // Scroll to the source view's zone for existing chits
+    var _sourceTab = 'Calendar';
+    try { var _st = localStorage.getItem('cwoc_source_tab'); if (_st) _sourceTab = _st; } catch(e) {}
+    var _tabZoneScrollMap = {
+      'Calendar': 'datesSection',
+      'Checklists': 'checklistSection',
+      'Alarms': 'alertsSection',
+      'Projects': 'notesSection',
+      'Tasks': 'taskSection',
+      'Notes': 'notesSection',
+      'Email': 'emailSection',
+    };
+    var _scrollZoneId = _tabZoneScrollMap[_sourceTab];
+    if (_scrollZoneId) {
+      var _scrollEl = document.getElementById(_scrollZoneId);
+      if (_scrollEl) {
+        setTimeout(function() {
+          _scrollEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 250);
+      }
+    }
 
     // For email chits: move email zone to top of column-one (top left) and auto-collapse dates
     if (typeof hasEmailData === 'function' && hasEmailData(chit)) {
@@ -1181,6 +1219,11 @@ document.addEventListener("DOMContentLoaded", function () {
   } else {
     resetEditorForNewChit();
 
+    // Initialize Milkdown for new chits (empty content)
+    if (typeof window.initMilkdownNotesZone === 'function' && window.CwocMilkdown && !window.CwocMilkdown.isFallback) {
+      setTimeout(() => window.initMilkdownNotesZone(), 60);
+    }
+
     // Pre-populate start/end from URL params
     const params = new URLSearchParams(window.location.search);
     const preStart = params.get('start');
@@ -1296,6 +1339,35 @@ document.addEventListener("DOMContentLoaded", function () {
       }
     }
 
+    // Handle ?prefill=checklist — pre-populate checklist from sessionStorage
+    if (params.get('prefill') === 'checklist') {
+      try {
+        var prefillData = sessionStorage.getItem('cwoc_prefill_checklist');
+        if (prefillData) {
+          sessionStorage.removeItem('cwoc_prefill_checklist');
+          var prefillItems = JSON.parse(prefillData);
+          if (Array.isArray(prefillItems) && prefillItems.length > 0) {
+            // Expand the checklist zone
+            var clSection = document.getElementById('checklistSection');
+            var clContent = document.getElementById('checklistContent');
+            if (clSection && clContent) {
+              clContent.style.display = '';
+              clSection.classList.remove('collapsed');
+              var clIcon = clSection.querySelector('.zone-toggle-icon');
+              if (clIcon) clIcon.textContent = '🔼';
+              clSection.querySelectorAll('.zone-button:not(.zone-button-persist)').forEach(function(btn) { btn.style.display = ''; });
+            }
+            // Load items into the checklist
+            if (window.checklist) {
+              window.checklist.loadItems(prefillItems);
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Failed to load prefill checklist from sessionStorage:', e);
+      }
+    }
+
     // Auto-focus title field for new chits
     const titleInput = document.getElementById('title');
     if (titleInput) setTimeout(() => titleInput.focus(), 350);
@@ -1376,6 +1448,11 @@ document.addEventListener("DOMContentLoaded", function () {
   // ESC key — layered escape chain
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
+      // Email expand modal — handled by its own capture-phase ESC listener
+      if (typeof _emailExpandModalOpen !== 'undefined' && _emailExpandModalOpen) {
+        return;
+      }
+
       // Calculator popover — close before any other ESC action
       if (typeof cwocIsCalculatorOpen === 'function' && cwocIsCalculatorOpen()) {
         cwocCloseCalculator();

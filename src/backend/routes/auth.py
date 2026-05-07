@@ -489,6 +489,8 @@ def list_switchable_users(request: Request):
     """Return a minimal list of active users for the user switcher.
     Available to any authenticated user (not admin-only).
     Returns only id, username, and display_name for each active user."""
+    from src.backend.db import deserialize_json_field
+
     user_id = getattr(request.state, "user_id", None)
     if not user_id:
         raise HTTPException(status_code=401, detail="Authentication required")
@@ -498,11 +500,19 @@ def list_switchable_users(request: Request):
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
-            "SELECT id, username, display_name, profile_image_url, color FROM users WHERE is_active = 1 ORDER BY display_name ASC"
+            "SELECT id, username, display_name, email, emails_json, profile_image_url, color FROM users WHERE is_active = 1 ORDER BY display_name ASC"
         ).fetchall()
 
         return [
-            {"id": row["id"], "username": row["username"], "display_name": row["display_name"], "profile_image_url": row["profile_image_url"], "color": row["color"] if "color" in row.keys() else None}
+            {
+                "id": row["id"],
+                "username": row["username"],
+                "display_name": row["display_name"],
+                "email": row["email"] if "email" in row.keys() else None,
+                "emails_json": deserialize_json_field(row["emails_json"] if "emails_json" in row.keys() else None),
+                "profile_image_url": row["profile_image_url"] if "profile_image_url" in row.keys() else None,
+                "color": row["color"] if "color" in row.keys() else None,
+            }
             for row in rows
         ]
     except Exception as e:

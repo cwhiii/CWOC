@@ -632,7 +632,7 @@ function _convertDBDateToDisplayDate(dateString) {
 
 async function deleteChit() {
   if (!chitId) {
-    alert("No chit to delete.");
+    cwocToast("No chit to delete.", "error");
     return;
   }
   if (!(await cwocConfirm("Are you sure you want to delete this chit?", { title: 'Delete Chit', confirmLabel: '🗑️ Delete', danger: true }))) return;
@@ -666,7 +666,7 @@ async function deleteChit() {
     })
     .catch((err) => {
       console.error("Error deleting chit:", err);
-      alert("Failed to delete chit. Check console for details.");
+      cwocToast("Failed to delete chit. Check console for details.", "error");
     });
 }
 

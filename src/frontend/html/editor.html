@@ -26,6 +26,22 @@
         <link rel="stylesheet" href="/frontend/css/editor/editor.css" />
         <link rel="stylesheet" href="/frontend/css/editor/editor-email.css" />
         <link rel="stylesheet" href="/frontend/css/editor/editor-attachments.css" />
+        <link rel="stylesheet" href="/frontend/css/editor/editor-milkdown.css" />
+        <script type="importmap">
+        {
+            "imports": {
+                "@milkdown/core": "/static/vendor/milkdown/core.js",
+                "@milkdown/ctx": "/static/vendor/milkdown/ctx.js",
+                "@milkdown/prose": "/static/vendor/milkdown/prose.js",
+                "@milkdown/preset-commonmark": "/static/vendor/milkdown/preset-commonmark.js",
+                "@milkdown/plugin-history": "/static/vendor/milkdown/plugin-history.js",
+                "@milkdown/plugin-listener": "/static/vendor/milkdown/plugin-listener.js",
+                "@milkdown/plugin-clipboard": "/static/vendor/milkdown/plugin-clipboard.js",
+                "@milkdown/transformer": "/static/vendor/milkdown/transformer.js",
+                "@milkdown/utils": "/static/vendor/milkdown/utils.js"
+            }
+        }
+        </script>
     </head>
     <body>
         <div class="header-row">
@@ -116,7 +132,7 @@
                                 />
                             </div>
                             <span id="cwoc-owner-chip-container"></span>
-                            <button type="button" id="emailQuickActivateBtn" class="email-quick-btn" onclick="_activateEmailZone()" title="Make this an email"><i class="fas fa-envelope"></i><span class="email-quick-label"> Email</span></button>
+                            <button type="button" id="emailQuickActivateBtn" class="email-quick-btn" onclick="_activateEmailZone()" title="Make this an email"><img src="/static/email.png" style="height:1em;vertical-align:middle;" alt="" /><span class="email-quick-label"> Email</span></button>
                         </label>
                         <input
                             type="text"
@@ -694,6 +710,23 @@
                             <span class="zone-toggle-icon">🔼</span>
                         </div>
                         <div id="notesContent" class="zone-body">
+                            <div id="milkdownFormatToolbar" class="milkdown-format-toolbar" style="display:none;">
+                                <button type="button" title="Bold (Cmd+B)" onclick="_milkdownFormat('bold')"><strong>B</strong></button>
+                                <button type="button" title="Italic (Cmd+I)" onclick="_milkdownFormat('italic')"><em>I</em></button>
+                                <button type="button" title="Strikethrough (Cmd+Shift+X)" onclick="_milkdownFormat('strikethrough')"><s>S</s></button>
+                                <button type="button" title="Link (Cmd+K)" onclick="_milkdownFormat('link')">🔗</button>
+                                <span class="toolbar-sep"></span>
+                                <button type="button" title="Heading 1" onclick="_milkdownFormat('h1')">H1</button>
+                                <button type="button" title="Heading 2" onclick="_milkdownFormat('h2')">H2</button>
+                                <button type="button" title="Heading 3" onclick="_milkdownFormat('h3')">H3</button>
+                                <span class="toolbar-sep"></span>
+                                <button type="button" title="Bullet List" onclick="_milkdownFormat('bulletList')">• List</button>
+                                <button type="button" title="Numbered List" onclick="_milkdownFormat('orderedList')">1. List</button>
+                                <button type="button" title="Blockquote" onclick="_milkdownFormat('blockquote')">❝</button>
+                                <button type="button" title="Code (Cmd+E)" onclick="_milkdownFormat('code')">⟨⟩</button>
+                                <button type="button" title="Horizontal Rule" onclick="_milkdownFormat('hr')">―</button>
+                            </div>
+                            <div id="milkdown-editor-container" class="milkdown-editor" style="display:none;"></div>
                             <div id="notesFormatToolbar" class="notes-format-toolbar">
                                 <button type="button" title="Bold (Cmd+B)" onclick="_notesFormatBtn('b')"><strong>B</strong></button>
                                 <button type="button" title="Italic (Cmd+I)" onclick="_notesFormatBtn('i')"><em>I</em></button>
@@ -922,6 +955,15 @@
                                 </button>
                                 <button
                                     type="button"
+                                    id="createNewChildButton"
+                                    class="zone-button"
+                                    onclick="createNewChildChit(event)"
+                                    title="Create a brand new chit as a child of this project"
+                                >
+                                    <i class="fas fa-file-circle-plus"></i> <span class="hideWhenNarrow">Create</span> New
+                                </button>
+                                <button
+                                    type="button"
                                     id="projectMasterToggleButton"
                                     class="zone-button"
                                     onclick="toggleProjectMaster(event)"
@@ -1039,12 +1081,12 @@
                                 <button type="button" onclick="toggleEmailViewMode(event)" id="email-render-toggle-btn" class="zone-button" title="Toggle rendered markdown view" style="display:none;"><i class="fas fa-eye"></i><span class="hideWhenNarrow"> Render</span></button>
                                 <button type="button" onclick="_emailUndo(event)" class="zone-button notes-undo-redo" title="Undo (Cmd+Z)">↺</button>
                                 <button type="button" onclick="_emailRedo(event)" class="zone-button notes-undo-redo" title="Redo (Cmd+Shift+Z)">↻</button>
-                                <button type="button" id="emailActivateBtn" class="zone-button zone-button-persist" onclick="_activateEmailZone()" title="Make this an email chit"><i class="far fa-envelope"></i><span class="hideWhenNarrow"> Email</span></button>
+                                <button type="button" id="emailActivateBtn" class="zone-button zone-button-persist" onclick="_activateEmailZone()" title="Make this an email chit"><img src="/static/email.png" style="height:1em;vertical-align:middle;" alt="" /><span class="hideWhenNarrow"> Email</span></button>
                             </div>
                             <span class="zone-toggle-icon">🔽</span>
                         </div>
                         <div id="emailContent" class="zone-body">
-                            <div class="email-field"><label>From:</label><span id="emailFrom" class="email-from-display"></span></div>
+                            <div class="email-field"><label>From:</label><span id="emailFrom" class="email-from-display"></span><button type="button" id="emailAddContactBtn" class="email-add-contact-btn" onclick="_emailAddSenderAsContact()" title="Add sender as contact" style="display:none;"><i class="fas fa-plus-circle"></i></button></div>
                             <div class="email-field email-to-field">
                                 <label>To:</label>
                                 <div class="email-autocomplete-wrap">
@@ -1069,6 +1111,10 @@
                                     <div id="emailBccDropdown" class="email-autocomplete-dropdown" style="display:none;"></div>
                                 </div>
                                 <button type="button" class="email-cc-remove-btn" onclick="_toggleEmailCcBcc('bcc')" title="Remove BCC">✕</button>
+                            </div>
+                            <div class="email-field" id="emailSubjectRow">
+                                <label>Subject:</label>
+                                <input id="emailSubject" type="text" placeholder="Subject" autocomplete="off">
                             </div>
                             <div class="email-field email-body-field">
                                 <textarea id="emailBody" rows="8" placeholder="Compose your message (markdown supported)..."></textarea>
@@ -1139,6 +1185,8 @@
                     <button type="button" title="Redo (Cmd+Shift+Z)" onclick="_notesRedo(event)" class="notes-undo-redo">↻</button>
                 </div>
                 <div class="modal-body" style="flex:1;overflow:auto;padding:0.5em 1em;">
+                    <!-- Milkdown WYSIWYG modal container (shown when Milkdown is active) -->
+                    <div id="milkdown-modal-container" class="milkdown-editor" style="display:none;min-height:calc(100vh - 2em - 120px);"></div>
                     <!-- Edit/Render mode container (default) -->
                     <div id="notesModalEditRenderWrap" class="field full-width" style="height:100%;">
                         <div
@@ -1556,6 +1604,10 @@
         <script src="/frontend/js/shared/shared-geocoding.js"></script>
         <script src="/frontend/js/shared/shared-qr.js"></script>
         <script src="/frontend/js/shared/shared-hotkeys.js"></script>
+        <script src="/frontend/js/shared/shared-mobile.js"></script>
+        <script src="/frontend/js/shared/shared-weather.js"></script>
+        <script src="/frontend/js/shared/shared-alarms.js"></script>
+        <script src="/frontend/js/shared/shared-habits.js"></script>
         <script src="/frontend/js/shared/shared.js"></script>
         <script src="/frontend/js/shared/shared-calculator.js"></script>
         <script src="/frontend/js/pages/shared-page.js"></script>
@@ -1575,6 +1627,8 @@
         <script src="/frontend/js/editor/editor-health.js"></script>
         <script src="/frontend/js/editor/editor-email.js"></script>
         <script src="/frontend/js/editor/editor-attachments.js"></script>
+        <script src="/frontend/js/editor/editor-milkdown-chitlink.js"></script>
+        <script type="module" src="/frontend/js/editor/editor-milkdown.js"></script>
         <script src="/frontend/js/editor/editor-save.js"></script>
         <script src="/frontend/js/editor/editor-init.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>

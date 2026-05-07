@@ -384,37 +384,54 @@ Property-based tests for the habits overhaul feature. Uses Python stdlib only (u
 ### 1.18 `src/backend/routes/__init__.py`
 Package marker. No public exports.
 
-### 1.19 `src/backend/routes/chits.py` — Chit CRUD & Import/Export
+### 1.19 `src/backend/routes/chits.py` — Chit CRUD
 
 All chit endpoints are scoped by `owner_id` — users can only access their own chits, plus chits shared with them via the sharing system. The `request.state.user_id` (set by `AuthMiddleware`) is used for ownership filtering, sharing permission checks, and assignment. Uses `resolve_effective_role`, `can_edit_chit`, `can_delete_chit`, and `can_manage_sharing` from `sharing.py` for access control. Includes reserved tag namespace enforcement (`CWOC_System/` prefix) and email field serialization/deserialization.
 
 | Route | Handler | Description |
 |-------|---------|-------------|
 | `GET /api/chits` | `get_all_chits(request)` | Return all non-deleted chits owned by the authenticated user |
-| `GET /api/chits/search` | `search_chits(q, request)` | Global search across all chit fields with boolean operators, #tags, and field-scoped search (field:value / field:(multi word)), scoped to authenticated user |
-| `POST /api/chits` | `create_chit(chit, request)` | Create a new chit with `owner_id`, `owner_display_name`, `owner_username` from authenticated user. Creates notifications for shared users via `_create_share_notifications()` |
-| `GET /api/chit/{chit_id}` | `get_chit(chit_id, request)` | Get a single chit by ID (verifies ownership or shared access via `resolve_effective_role`); includes `effective_role` and `assigned_to_display_name` in response |
-| `PUT /api/chits/{chit_id}` | `update_chit(chit_id, chit, request)` | Update a chit (verifies ownership or manager access via `can_edit_chit`; managers can persist shares/assigned_to via `can_manage_sharing` guard; stealth is always preserved for non-owners; viewers get 403). Creates notifications for newly shared users via `_create_share_notifications()` |
-| `DELETE /api/chits/{chit_id}` | `delete_chit(chit_id, request)` | Soft-delete a chit (owner or manager via `can_delete_chit`; loads owner_settings for role resolution) |
-| `PATCH /api/chits/{chit_id}/recurrence-exceptions` | `patch_recurrence_exceptions(chit_id, body, request)` | Add or update a recurrence exception (verifies ownership) |
-| `PATCH /api/chits/{chit_id}/rsvp` | `update_rsvp_status(chit_id, body, request)` | Update the current user's RSVP status on a shared chit. Validates `rsvp_status` is one of `invited`, `accepted`, `declined` (400 if invalid). Rejects owner (403). Rejects users not in shares (404). Enforces cross-user RSVP protection (managers cannot update another user's RSVP). Updates the user's `rsvp_status` in the shares JSON, syncs corresponding notification status, saves with `modified_datetime`, logs audit entry. Returns `{ "message": "RSVP status updated", "rsvp_status": "<value>" }` |
-| `GET /api/export/chits` | `export_chits(request)` | Export authenticated user's chits as JSON envelope |
-| `GET /api/export/userdata` | `export_userdata(request)` | Export authenticated user's settings + contacts as JSON envelope |
-| `GET /api/export/all` | `export_all(request)` | Export authenticated user's data (chits + settings + contacts + standalone alerts) as combined JSON envelope |
-| `POST /api/import/chits` | `import_chits(req, request)` | Import chits from JSON envelope (scoped to authenticated user) |
-| `POST /api/import/userdata` | `import_userdata(req, request)` | Import user data from JSON envelope (scoped to authenticated user) |
-| `POST /api/import/all` | `import_all(req, request)` | Import all data from combined JSON envelope (scoped to authenticated user) |
+| `POST /api/chits` | `create_chit(chit, request)` | Create a new chit with `owner_id`, `owner_display_name`, `owner_username` from authenticated user |
+| `GET /api/chit/{chit_id}` | `get_chit(chit_id, request)` | Get a single chit by ID (verifies ownership or shared access) |
+| `PUT /api/chits/{chit_id}` | `update_chit(chit_id, chit, request)` | Update a chit (verifies ownership or manager access) |
+| `DELETE /api/chits/{chit_id}` | `delete_chit(chit_id, request)` | Soft-delete a chit (owner or manager) |
+| `PATCH /api/chits/{chit_id}/recurrence-exceptions` | `patch_recurrence_exceptions(chit_id, body, request)` | Add or update a recurrence exception |
+| `PATCH /api/chits/{chit_id}/rsvp` | `update_rsvp_status(chit_id, body, request)` | Update the current user's RSVP status on a shared chit |
 
 **Internal helpers:**
 
 | Function | Description |
 |----------|-------------|
-| `RESERVED_TAG_PREFIX` | Constant: `"cwoc_system/"` — reserved tag namespace prefix (case-insensitive) |
-| `_strip_reserved_tags(tags)` | Remove any user-submitted tags whose name starts with `CWOC_System/` (case-insensitive); preserves non-reserved tags in order; handles both dict and string tag formats |
-| `_validate_tag_name(name)` | Return `False` if the tag name uses the reserved `CWOC_System/` prefix (case-insensitive) |
-| `_enrich_assigned_to_display_names(cursor, chits)` | Batch-lookup display names for `assigned_to` user IDs and add as `assigned_to_display_name` on each chit dict |
+| `_strip_reserved_tags(tags)` | Remove user-submitted tags with reserved `CWOC_System/` prefix |
+| `_validate_tag_name(name)` | Return `False` if tag name uses reserved prefix |
+| `_enrich_assigned_to_display_names(cursor, chits)` | Batch-lookup display names for `assigned_to` user IDs |
 
-Email serialization: `get_all_chits`, `get_chit`, and `search_chits` deserialize `email_to`, `email_cc`, `email_bcc` via `deserialize_json_field` and convert `email_read` to `bool`. `create_chit` and `update_chit` serialize `email_to`, `email_cc`, `email_bcc` via `serialize_json_field` and include all 13 email columns in INSERT/UPDATE SQL. User-submitted tags are stripped of reserved `CWOC_System/` prefixes before `compute_system_tags` is called.
+### 1.19b `src/backend/routes/chits_search.py` — Chit Search
+
+Boolean search expression parser used by global search and admin chit search.
+
+| Route | Handler | Description |
+|-------|---------|-------------|
+| `GET /api/chits/search` | `search_chits(q, request)` | Global search with boolean operators, #tags, field:value |
+
+**Internal helpers:**
+
+| Function | Description |
+|----------|-------------|
+| `_search_filter_chits(chits_list, query_str)` | Filter chit dicts using boolean search expression parser (&&, \|\|, !, #tags, field:value, parentheses) |
+
+### 1.19c `src/backend/routes/chits_import.py` — Chit Import/Export
+
+Data management endpoints for exporting and importing chits, userdata, and combined bundles.
+
+| Route | Handler | Description |
+|-------|---------|-------------|
+| `GET /api/export/chits` | `export_chits(request)` | Export user's chits as JSON envelope |
+| `GET /api/export/userdata` | `export_userdata(request)` | Export user's settings + contacts as JSON envelope |
+| `GET /api/export/all` | `export_all(request)` | Export all user data as combined JSON envelope |
+| `POST /api/import/chits` | `import_chits(req, request)` | Import chits from JSON envelope |
+| `POST /api/import/userdata` | `import_userdata(req, request)` | Import user data from JSON envelope |
+| `POST /api/import/all` | `import_all(req, request)` | Import all data from combined JSON envelope |
 
 ### 1.20 `src/backend/routes/trash.py` — Trash
 
@@ -813,6 +830,7 @@ Provides IMAP sync, SMTP send, email parsing, password encryption, reply/forward
 | `POST /api/email/sync` | `email_sync(request)` | Fetch new messages from configured IMAP servers and soft-delete chits for emails removed from IMAP; returns `{new_count, deleted_count, accounts_synced}` |
 | `POST /api/email/send/{chit_id}` | `email_send(chit_id, request)` | Send a draft email chit via SMTP; on success updates `email_status` to "sent", `email_folder` to "sent", populates `email_message_id`; validates non-empty `email_to` (422 if empty); rejects non-draft chits (400) |
 | `PATCH /api/email/{chit_id}/read` | `email_toggle_read(chit_id, request)` | Toggle `email_read` on the specified email chit; returns `{email_read: bool}` |
+| `GET /api/email/{chit_id}/raw` | `email_download_raw(chit_id, request)` | Re-fetch the raw RFC 2822 email from IMAP by Message-ID and return as `.eml` download; searches across INBOX, Sent, All Mail folders |
 | `GET /api/email/thread/{chit_id}` | `email_thread(chit_id, request)` | Find all related emails in a conversation thread by Message-ID references and normalized subject matching; returns list sorted by `email_date` ascending |
 | `POST /api/email/test-connection` | `email_test_connection(request)` | Test IMAP and SMTP connectivity with provided or saved credentials; returns `{imap: {success, message}, smtp: {success, message}}` |
 | `POST /api/email/backfill-estimate` | `email_backfill_estimate(request)` | Query IMAP for total message count and estimated storage size; returns `{message_count, estimated_mb}` |
@@ -1092,6 +1110,7 @@ Core utility functions shared across all CWOC pages. Must load after `shared-aut
 | `_convertWind(kmh)` | Convert wind speed from km/h for display; returns `{ value, unit }` (metric → km/h, imperial → mph) |
 | `_tempBarRange()` | Return `{ barMin, barMax }` for temperature bar visuals (metric: -10–40°C, imperial: -14–104°F) |
 | `cwocConfirm(message, opts)` | Show a parchment-styled confirm modal; returns a Promise resolving to boolean |
+| `cwocPromptModal(title, placeholder, onConfirm, opts)` | Show a parchment-styled input modal (replaces browser `prompt()`); calls `onConfirm(value)` when user submits |
 | `generateUniqueId()` | Create a unique ID string from timestamp + random base-36 |
 | `formatDate(date)` | Format a Date as `YYYY-Mon-DD` string |
 | `formatTime(date)` | Format a Date as `HH:MM` (24-hour locale string) |
@@ -1554,66 +1573,106 @@ Depends on: `shared-sidebar.js` (`_cwocInitSidebar`, `toggleSidebar`, `restoreSi
 | `_executeWeatherFlash()` | Poll for rendered chit elements then flash chits at a weather location |
 | `_flashChitsAtLocation(location)` | Flash-highlight calendar chits matching a given location |
 
-#### main-views.js
+#### main-views.js (coordinator)
 
 | Function | Description |
 |----------|-------------|
 | `_isViewerRole(chit)` | Check if a chit is shared with viewer-only access (no inline edits allowed) |
 | `_isSharedChit(chit)` | Check if a chit is shared (has an `effective_role` from the sharing system) |
-| `_getUserRsvpStatus(chit)` | Returns the current user's `rsvp_status` from a chit's shares array, or `null` if the user is not a shared user (e.g. owner or not in shares) |
-| `_isDeclinedByCurrentUser(chit)` | Returns true if the current user has declined this shared chit; returns false for owned chits (owners don't have RSVP status) |
+| `_getUserRsvpStatus(chit)` | Returns the current user's `rsvp_status` from a chit's shares array |
+| `_isDeclinedByCurrentUser(chit)` | Returns true if the current user has declined this shared chit |
 | `_emptyState(message)` | Build a styled empty-state message with an optional Create Chit button |
 | `_getTagColor(tagName)` | Get tag color from cached settings tags, fallback to pastel |
 | `_getTagFontColor(tagName)` | Get tag font color from cached settings tags, fallback to dark brown |
-| `_buildChitHeader(chit, titleHtml, settings, opts)` | Build a standard chit card header row with icons, indicators, title, meta, 🔗 shared icon with tooltip (owner, shared users with roles, current user's role) for shared chits, stealth indicator, assignee badge, RSVP status indicators (⏳/✓/✗ per shared user), and RSVP accept/decline action buttons for shared users (calls `PATCH /api/chits/{id}/rsvp`) |
+| `_buildChitHeader(chit, titleHtml, settings, opts)` | Build a standard chit card header row with icons, indicators, title, meta, shared icon, RSVP indicators/buttons |
+| `_buildNotePreview(chit, extraStyle)` | Build an expandable note preview element with "show more/less" toggle |
 | `_renderChitMeta(chit, mode)` | Legacy compact meta builder — kept for backward compat |
-| `_buildNotePreview(chit, extraStyle)` | Build an expandable note preview element with "show more/less" toggle for mobile |
 | `displayChecklistView(chitsToDisplay)` | Render the Checklists tab — chits with interactive checklist items |
-| `displayTasksView(chitsToDisplay)` | Render the Tasks tab — chits with status dropdowns and note previews; dispatches to `displayHabitsView` when in habits mode |
-| `displayHabitsView(chitsToDisplay)` | Render the Habits view — filters by `chit.habit === true`, evaluates period rollover, renders habit cards in 3 sections (🔜 On Deck, 😌 Out of Mind, ✅ Accomplished) with metric boxes, note preview, and debounced save |
-| `_isResetPeriodActive(chit)` | Check if a habit's reset period cooldown is currently active (user acted within the current Daily/Weekly/Monthly period) |
-| `_getResetEndDate(chit)` | Calculate the date when a habit's reset period ends based on `habit_reset_period` and `habit_last_action_date`; returns null if no reset period or no last action date |
-| `_habitUrgencyScore(h)` | Calculate urgency score for a habit (lower = more urgent): days until next action needed = time left in cycle / remaining completions; used to sort On Deck habits |
-| `_getTodayISO()` | Get today's date as an ISO string (YYYY-MM-DD) |
-| `_renderHabitCards(container, habitChits, windowDays)` | Render habit cards into a container with 3-section sorting: 🔜 On Deck (sorted by urgency via `_habitUrgencyScore`), 😌 Out of Mind (reset period active), ✅ Accomplished (complete); cards show metric boxes (📊 Progress with [−][+], 🎯 Cycle %, 📈 Overall %, 🔥 Streak), note preview (markdown, 7-line max), period label; fade-out animation between sections; debounced save on increment/decrement |
-| `_persistHabitUpdate(chit)` | Persist a habit chit's updated `habit_success` and status to the backend via PUT `/api/chits/{id}` |
-| `displayNotesView(chitsToDisplay)` | Render the Notes tab — markdown notes in a masonry column layout |
-| `displayAssignedToMeView(chitsToDisplay)` | Render the "Assigned to Me" view — chits where `assigned_to` matches the current user's ID, with owner badges and role indicators |
-| `_setProjectsMode(mode)` | Set Projects view mode (list or kanban) and re-render |
 | `_restoreViewModeButtons()` | Restore view mode button highlights for Projects, Alarms, and Tasks tabs |
-| `_setAlarmsMode(mode)` | Set Alarms view mode (list or independent) and re-render |
-| `_setTasksMode(mode)` | Set Tasks view mode (tasks, habits, or assigned), persist to localStorage, update button highlights, and re-render |
-| `_tasksViewMode` | Current Tasks view mode string (`'tasks'`, `'habits'`, or `'assigned'`), loaded from localStorage |
-| `_fetchIndependentAlerts()` | Fetch independent alerts from the API and cache locally |
-| `_createIndependentAlert(alertData)` | Create a new independent alert via API and refresh the view |
-| `_updateIndependentAlert(id, alertData)` | Update an existing independent alert via API and refresh |
-| `_deleteIndependentAlert(id)` | Delete an independent alert, clean up runtime state, and refresh |
-| `displayProjectsView(chitsToDisplay)` | Render the Projects tab — list view of project masters with draggable child chits (reorder, touch gesture, long-press quick-edit); list mode now includes project-level HTML5 drag and `enableTouchGesture()` on project boxes for reorder, plus `onLongPress` for quick-edit |
-| `_displayProjectsKanban(chitsToDisplay)` | Render the Projects Kanban view — status columns with drag-and-drop cards; attaches `enableTouchGesture()` to `.kanban-project-header` elements for touch drag-to-reorder of projects with `onLongPress` to open the editor |
-| `displayAlarmsView(chitsToDisplay)` | Render the Alarms tab — list of chits with alerts, or independent alerts board |
-| `_displayIndependentAlertsBoard()` | Render the independent alerts board with Alarms, Timers, and Stopwatches columns; now includes HTML5 drag and `enableTouchGesture()` on `.sa-card` elements for drag-to-reorder within each type column, with order persisted to localStorage |
-| `_addIndependentAlert(type)` | Create a new independent alert of the given type with sensible defaults |
-| `_buildIndependentCard(id, type, data)` | Build an independent alert card element and delegate to type-specific builder |
-| `_parseTimeInput(str)` | Parse various time input formats ("HH:MM", "H:MM AM/PM") into 24h "HH:MM" |
-| `_buildSaAlarmCard(card, id, data)` | Build the UI for an independent alarm card (name, time, days, snooze bar) |
-| `_saFmtTimer(s, tenths)` | Format seconds (with optional tenths) as HH:MM:SS display string |
-| `_buildSaTimerCard(card, id, data)` | Build the UI for an independent timer card (duration inputs, countdown bar, controls) |
-| `_saSwFmt(ms)` | Format milliseconds as HH:MM:SS.cc stopwatch display string |
-| `_buildSaStopwatchCard(card, id, data)` | Build the UI for an independent stopwatch card (display, start/pause/lap/reset) |
-| `_renderSaLaps(container, laps)` | Render lap times list inside a stopwatch card |
-| `filterChits(tab)` | Switch to a tab, update sidebar visibility, and re-render chits; dispatches to `displayEmailView` for the Email tab |
+| `filterChits(tab)` | Switch to a tab, update sidebar visibility, and re-render chits |
 | `searchChits()` | Trigger a re-render of chits (called from sidebar search input) |
 | `highlightMatch(text, query)` | HTML-escape text and wrap query matches in `<mark>` tags |
-| `displayIndicatorsView()` | Render the Indicators tab — health trend charts with responsive SVG, grid-based latest cards |
+
+#### main-views-tasks.js
+
+| Function | Description |
+|----------|-------------|
+| `displayTasksView(chitsToDisplay)` | Render the Tasks tab — chits with status dropdowns and note previews; dispatches to habits/assigned modes |
+| `displayAssignedToMeView(chitsToDisplay)` | Render the "Assigned to Me" view — chits where `assigned_to` matches the current user |
+| `_setTasksMode(mode)` | Set Tasks view mode (tasks, habits, or assigned), persist to localStorage, and re-render |
+| `_tasksViewMode` | Current Tasks view mode string, loaded from localStorage |
+
+#### main-views-habits.js
+
+| Function | Description |
+|----------|-------------|
+| `displayHabitsView(chitsToDisplay)` | Render the Habits view — habit cards in 3 sections (On Deck, Out of Mind, Accomplished) |
+| `_renderHabitCards(container, habitData, windowDays)` | Render habit cards with metric boxes, progress, streaks, and debounced save |
+| `_isResetPeriodActive(chit)` | Check if a habit's reset period cooldown is currently active |
+| `_getResetEndDate(chit)` | Calculate the date when a habit's reset period ends |
+| `_habitUrgencyScore(h)` | Calculate urgency score for a habit (lower = more urgent) |
+| `_getTodayISO()` | Get today's date as YYYY-MM-DD |
+| `_persistHabitUpdate(chit)` | Debounced habit update — delays 1 second, resets on each click |
+| `_optimisticHabitCardUpdate(card, chit, newSuccess, goal)` | Instant UI feedback for habit card changes with section animation |
+| `_updateStatusBadge(card, status)` | Update or remove the status badge on a habit card |
+| `_onHabitsWindowChange(newVal)` | Handle habits success window dropdown change |
+| `_initHabitsWindowDropdown()` | Initialize the sidebar habits success window dropdown from settings |
+
+#### main-views-notes.js
+
+| Function | Description |
+|----------|-------------|
+| `displayNotesView(chitsToDisplay)` | Render the Notes tab — markdown notes in masonry column layout with inline editing |
+
+#### main-views-projects.js
+
+| Function | Description |
+|----------|-------------|
+| `_setProjectsMode(mode)` | Set Projects view mode (list or kanban) and re-render |
+| `_showProjectQuickMenu(e, project)` | Show context menu on Shift+click with "Create New Child Chit" and "Open in Editor" |
+| `_projectQuickCreateChild(project)` | Create a new chit and add it as a child of the given project |
+| `displayProjectsView(chitsToDisplay)` | Render the Projects tab — list view with draggable child chits |
+| `_kanbanFetchAndPreserveScroll()` | Fetch chits and re-render, preserving scroll position |
+| `_displayProjectsKanban(chitsToDisplay)` | Render the Projects Kanban view — status columns with drag-and-drop |
+| `_renderKanbanBoard(chitList, projects, chitMap, _viSettings)` | Inner render for Kanban board with cross-project drag support |
+| `_projectsViewMode` | Current Projects view mode string, loaded from localStorage |
+
+#### main-views-alarms.js
+
+| Function | Description |
+|----------|-------------|
+| `_setAlarmsMode(mode)` | Set Alarms view mode (list or independent) and re-render |
+| `_fetchIndependentAlerts()` | Fetch independent alerts from the API and cache locally |
+| `_createIndependentAlert(alertData)` | Create a new independent alert via API and refresh |
+| `_updateIndependentAlert(id, alertData)` | Update an existing independent alert via API and refresh |
+| `_deleteIndependentAlert(id)` | Delete an independent alert, clean up runtime state, and refresh |
+| `displayAlarmsView(chitsToDisplay)` | Render the Alarms tab — list of chits with alerts |
+| `_displayIndependentAlertsBoard()` | Render the independent alerts board with Alarms, Timers, Stopwatches columns |
+| `_addIndependentAlert(type)` | Create a new independent alert with sensible defaults |
+| `_buildIndependentCard(id, type, data)` | Build an independent alert card element |
+| `_parseTimeInput(str)` | Parse time input formats into 24h "HH:MM" |
+| `_buildSaAlarmCard(card, id, data)` | Build UI for an independent alarm card |
+| `_saFmtTimer(s, tenths)` | Format seconds as HH:MM:SS display string |
+| `_buildSaTimerCard(card, id, data)` | Build UI for an independent timer card |
+| `_saSwFmt(ms)` | Format milliseconds as HH:MM:SS.cc stopwatch display |
+| `_buildSaStopwatchCard(card, id, data)` | Build UI for an independent stopwatch card |
+| `_renderSaLaps(container, laps)` | Render lap times list inside a stopwatch card |
+| `_alarmsViewMode` | Current Alarms view mode string, loaded from localStorage |
+
+#### main-views-indicators.js
+
+| Function | Description |
+|----------|-------------|
+| `displayIndicatorsView()` | Render the Indicators tab — health trend charts with responsive SVG |
+| `_indicatorsLoad()` | Fetch health data from API and render SVG trend charts |
 | `_indSaveSelection()` | Persist selected indicator checkboxes to localStorage |
 | `_indRestoreSelection()` | Restore indicator checkbox selection from localStorage |
-| `_indFmtDate(d)` | Format a Date as YYYY-MM-DD string for indicator date inputs |
-| `_indicatorsSetRange(range)` | Set the indicator time range (day/week/month/year/all) and reload |
-| `_indicatorsHighlightBtn(range)` | Highlight the active time range button in the Indicators sidebar |
-| `_indicatorsLoadCustomRange()` | Load indicators with custom date range from inputs |
-| `_indicatorsLoad()` | Fetch health data from API and render SVG trend charts with expand buttons; attaches `enableTouchGesture()` to `div[data-ind-key]` chart sections for touch drag-to-reorder, with order persisted to localStorage |
-| `_indToggleExpand(key)` | Expand/collapse a single indicator chart — fills available viewport height when expanded, updates on resize |
-| `_enableIndicatorsDragReorder(container)` | Enable drag-to-reorder on indicator chart divs, persists order to localStorage |
+| `_indFmtDate(d)` | Format a Date as YYYY-MM-DD string |
+| `_indicatorsSetRange(range)` | Set the indicator time range and reload |
+| `_indicatorsHighlightBtn(range)` | Highlight the active time range button |
+| `_indicatorsLoadCustomRange()` | Load indicators with custom date range |
+| `_indToggleExpand(key)` | Expand/collapse a single indicator chart |
+| `_enableIndicatorsDragReorder(container)` | Enable drag-to-reorder on indicator chart divs |
 | `_restoreIndicatorsOrder(container)` | Restore saved indicator chart order from localStorage |
 
 #### main-alerts.js
@@ -1659,8 +1718,12 @@ Email tab view — renders the Email dashboard tab with inbox-style list view. L
 | Symbol | Description |
 |--------|-------------|
 | `_emailSubFilter` | Email sub-filter state: `'inbox'` (default), `'bytag'`, `'drafts'`, `'trash'` |
-| `displayEmailView(chitsToDisplay)` | Display email chits in the Email tab list view; filters by sub-filter, sorts by `email_date` descending; renders action bar with Check Mail, Compose, and sub-filter buttons. Called from `filterChits()` dispatch in `main-views.js` |
-| `_buildEmailRow(chit)` | Build a single email row element using `chit-card` CSS class with email-specific additions; shows sender, subject, date, read/unread status, draft/sent badges; bold text + distinct background for unread emails |
+| `_emailUnreadTop` | Whether to sort unread emails to the top (toggle in sidebar) |
+| `_emailDashContactsCache` | Cached contacts array for sender image lookup |
+| `_emailLoadDashContacts()` | Load contacts for sender image lookup (cached after first call) |
+| `_emailGetContactImage(senderRaw)` | Look up a contact's image_url by matching sender email address |
+| `displayEmailView(chitsToDisplay)` | Display email chits in the Email tab list view; filters by sub-filter, sorts by `email_date` descending (with optional unread-at-top); renders action bar with Check Mail, Compose, and sub-filter buttons. Called from `filterChits()` dispatch in `main-views.js` |
+| `_buildEmailCard(chit, viSettings)` | Build a single email card element with contact image in checkbox area (checkbox on hover), sender, subject, preview, date, hover actions |
 | `_setEmailSubFilter(filter)` | Set the email sub-filter (`'inbox'`, `'bytag'`, `'drafts'`, `'trash'`) and refresh the view |
 | `_checkMail()` | Trigger a manual email sync via `POST /api/email/sync`; shows toast with count, refreshes chit list |
 | `_composeEmail()` | Navigate to editor with `?new=email` param to create a draft email chit |
@@ -1668,8 +1731,12 @@ Email tab view — renders the Email dashboard tab with inbox-style list view. L
 | `_updateEmailBadge()` | Update the unread count badge on the Email tab |
 | `_emailEmptyState(container)` | Show empty state for the email tab with Compose and Check Mail buttons |
 | `_escHtml(str)` | Simple HTML escape helper |
+| `_emailGetFileIcon(mimeType)` | Get a file type emoji icon for attachment display in email cards |
 | `_showToast(msg, type)` | Simple toast helper — delegates to shared `showToast` if available |
+| `_emailShowErrorWithSettingsLink(errorMsg, hint)` | Show error toast with "Go to Settings" button for email configuration issues |
+| `_showAccountErrorDetails(nickname, errorMsg)` | Show persistent error toast with Copy Error and Go to Settings buttons |
 | `_toggleEmailReadStatus(chit, card)` | Toggle read/unread status via `PATCH /api/email/{id}/read` and update card visual state |
+| `_toggleEmailUnreadTop()` | Toggle unread-at-top sorting and re-render email view |
 | `_emailBulkToggleRead()` | Bulk toggle read/unread for all selected emails via PATCH |
 | `_emailRepliedToCache` | Cached Set of message IDs that have been replied to (rebuilt each render) |
 | `_emailBuildRepliedCache()` | Build the replied-to cache by scanning all chits for `email_in_reply_to` |
@@ -1956,6 +2023,40 @@ Notes zone: auto-grow, chit linking, markdown render, modal.
 | `_wireNotesModalLivePreview()` | Wire the live preview input listener for real-time markdown rendering (only once) |
 | `_updateNotesModalLivePreview()` | Update the live preview output from the live preview input using `marked.parse()` |
 
+#### editor-milkdown.js (ES Module)
+
+Milkdown WYSIWYG editor loader, content bridge, and format toolbar. Loads Milkdown via dynamic import from self-hosted ESM bundles. Falls back to plain textarea if load fails within 5 seconds.
+
+| Symbol | Description |
+|--------|-------------|
+| `window.CwocMilkdown` | Global namespace: `ready` (Promise), `isLoaded`, `isFallback`, `createEditor()`, `destroyEditor()`, `getMarkdown()`, `setMarkdown()` |
+| `_loadMilkdownModules()` | Dynamic import of all Milkdown ESM modules with 5-second timeout |
+| `_createEditor(container, markdown, options)` | Create a Milkdown editor instance with full plugin set |
+| `_destroyEditor(instance)` | Destroy a Milkdown editor instance and clean up |
+| `_getMarkdown(instance)` | Extract current markdown from an editor instance |
+| `_setMarkdown(instance, markdown)` | Set markdown content in an editor instance |
+| `_addLinkSecurity(container)` | Add `rel="noopener noreferrer"` and `target="_blank"` to all links via MutationObserver |
+| `_initContentBridge(instance)` | Wire Milkdown listener to sync content to hidden `#note` textarea |
+| `_onContentUpdate(markdown)` | Listener callback: sync markdown to textarea, call `markEditorUnsaved()` |
+| `_syncModalToMain()` | Sync modal editor content back to main editor on modal close |
+| `_getActiveMarkdown()` | Return markdown from whichever editor is active (modal or main) |
+| `_milkdownFormat(action)` | Execute ProseMirror format commands (bold, italic, h1–h3, lists, etc.) |
+| `_updateToolbarState()` | Update toolbar button active states based on cursor position |
+| `initMilkdownNotesZone()` | Initialize Milkdown in the Notes zone after page load |
+| `openMilkdownModal()` | Create a Milkdown instance in the Notes modal |
+| `closeMilkdownModal(save)` | Close modal, optionally sync content back, destroy modal instance |
+
+#### editor-milkdown-chitlink.js
+
+Chit link autocomplete plugin for Milkdown. DOM-based dropdown triggered by `[[` in the WYSIWYG editor.
+
+| Symbol | Description |
+|--------|-------------|
+| `createChitLinkPlugin(currentChitId, editorContainer)` | Create the chit link autocomplete controller for a Milkdown editor container |
+| `_milkdownChitLinkDropdown` | Reference to the active autocomplete dropdown element |
+| `_milkdownChitLinkHighlightIdx` | Currently highlighted item index in the dropdown |
+| `_milkdownChitLinkMatches` | Current filtered matches array |
+
 #### editor-send-content.js
 
 Send notes/checklist content to another chit via a single-select chit picker modal.
@@ -1987,6 +2088,9 @@ Send a single checklist item (+ children) to another chit via a quick popup or f
 | `_sendItemPopupOpen` | Boolean flag indicating if the send-item popup is open |
 | `_sendItemTarget` | Current target: `{ item, checklist }` |
 | `_sendItemRecentChits` | Cached array of the 3 most recently edited chits |
+| `_sendItemChitsCache` | Cached full chit list for popup/search (avoids redundant API calls) |
+| `_sendItemChitsCacheTime` | Timestamp of last cache fill |
+| `_SEND_ITEM_CACHE_TTL` | Cache TTL in ms (30 seconds) |
 | `_openSendItemPopup(e, item, checklist)` | Open the quick send popup near a checklist item |
 | `_closeSendItemPopup()` | Close the send-item popup |
 | `_fetchRecentChitsForItem()` | Fetch all chits and populate the recent-3 list |
@@ -1998,6 +2102,8 @@ Send a single checklist item (+ children) to another chit via a quick popup or f
 | `_sendItemSearchUpdateButtons()` | Enable/disable Copy and Move buttons based on selection |
 | `_sendItemSearchApplyFilters()` | Apply search and status filters to the chit list |
 | `_executeSendItem(mode, targetChit)` | Execute copy or move of item subtree to target chit |
+| `_sendItemSpawnNewChit(mode)` | Spawn a new chit editor pre-populated with the item + children (mode: 'copy' or 'move') |
+| `_sendItemConfirmAndNavigate()` | Show save/discard/cancel modal before navigating to the new prefilled editor |
 | `_flashChecklistAddArrow()` | Flash a ↓ arrow at the checklist input when an item is added |
 
 #### editor-alerts.js
@@ -2105,7 +2211,9 @@ Email zone: populate, collect, reply, forward, send. Handles the Email zone in t
 | `hasEmailData(chit)` | Check if a chit has email data (used by `applyZoneStates` for auto-expand); returns `true` if `email_message_id`, `email_status`, or `email_from` is set |
 | `_emailReply()` | Create a reply draft chit via `POST /api/chits` and navigate to the editor; sets `email_to` to original sender, `email_in_reply_to` to original Message-ID, subject prefixed with "Re: " (no doubling), body quoted below separator |
 | `_emailForward()` | Create a forward draft chit via `POST /api/chits` and navigate to the editor; empty `email_to`, subject prefixed with "Fwd: " (no doubling), body quoted below separator |
-| `_emailSend()` | Send the current draft email via `POST /api/email/send/{id}`; validates non-empty To field; shows success/error toast; updates local state and UI to reflect sent status |
+| `_emailSend()` | Send the current draft email with undo-send countdown (7s); validates To field; saves chit first, then shows countdown bar — actual send happens when timer expires; clicking Undo cancels the send |
+| `_emailUndoSendCountdown(chitId, archiveOriginal)` | Show undo-send countdown bar; if timer expires, calls `_emailDoActualSend`; if Undo clicked, cancels |
+| `_emailDoActualSend(chitId, archiveOriginal)` | Actually send the email via `POST /api/email/send/{id}` after undo countdown expires; updates UI to sent state; optionally archives the replied-to email |
 | `_setEmailZoneReadOnly(readOnly)` | Toggle field editability for the email zone (To, Cc, Bcc, Body) — sets `disabled` and `readOnly` properties; hides render toggle when read-only |
 | `_fetchEmailThread(chitId)` | Fetch the email thread for a chit via `GET /api/email/thread/{chit_id}` and render it below the body |
 | `_renderEmailThread(thread, currentId)` | Render the email thread section with sender, date, preview for each message; current email highlighted |
@@ -2125,8 +2233,11 @@ Email zone: populate, collect, reply, forward, send. Handles the Email zone in t
 | `_showEmailSaveButtons(isEmail)` | Toggle between normal and email-specific save buttons; patches CwocSaveSystem |
 | `_emailSaveAndSend()` | Validate To field then delegate to `_emailSend()` |
 | `_openEmailExpandModal()` | Open fullscreen modal for email body with HTML/Text pill toggle, CC/BCC toggles, and action buttons |
+| `_emailDownloadRaw()` | Download the raw .eml file for the current email chit from IMAP via `GET /api/email/{id}/raw` |
 | `_switchExpandView(mode)` | Switch between HTML and Text views in the expand modal |
 | `_closeEmailExpandModal(save)` | Close the email expand modal; if save=true, sync fields back to the zone |
+| `_emailCopyChipsToExpand(sourceInputId, targetInputId)` | Copy recipient chips from the small editor to the expand modal |
+| `_emailCopyChipsFromExpand(expandInputId, smallInputId)` | Copy recipient chips from the expand modal back to the small editor |
 | `_renderEmailAttachmentBar(chit)` | Render email attachment icon chips at the bottom-right of the email body field in the small zone |
 | `_renderExpandEmailAttachmentBar(chit)` | Render email attachment icon chips inside the expand modal body |
 | `_getEmailAttachmentList(chit)` | Parse the attachments list from a chit; returns array or null |
@@ -2259,7 +2370,7 @@ Projects zone: Kanban board for project master chits.
 | `initializeProjectZone(projectChitId)` | Initialize the projects zone — fetch masters, load project data, render Kanban |
 | `clearProjectsContent()` | Clear the projects zone and reset project state |
 | `updateHeaderButtonsVisibility()` | Show/hide Add and Filter buttons based on project master status |
-| `renderChildChitsByStatus()` | Render child chits grouped by status columns with drag-drop between sections |
+| `renderChildChitsByStatus()` | Render child chits grouped by status columns with drag-drop between sections and within-column reorder |
 | `updateChitStatus(chitId, newStatus)` | Update a child chit's status and re-render |
 | `createChildChitCard(chit)` | Create a card element for a child chit with drag handle, status dropdown, title, date, open, move, and delete controls |
 | `handleStatusChange(childChitId, newStatus)` | Update a child chit's status in local state |
@@ -2270,6 +2381,7 @@ Projects zone: Kanban board for project master chits.
 | `openAddChitModal()` | Open a modal to search and select an existing chit to add as a child |
 | `addChildChit(chit)` | Add a chit to the project's child chits and re-render |
 | `addProjectItem()` | Alias for `openAddChitModal()` |
+| `createNewChildChit(event)` | Create a brand new chit via API and immediately add it as a child of the current project |
 | `toggleProjectMaster()` | Toggle project master status with confirmation if children exist |
 | `chitExists(chitId)` | Check if a chit exists in the backend by ID |
 | `loadProjectData(projectChitId)` | Fetch the project chit and all its child chits from the backend |
@@ -3045,6 +3157,25 @@ Attachments zone styles for the chit editor. Uses the parchment theme variables 
 | Upload Progress (`.attachment-progress`) | Pulsing animation for upload status |
 | Responsive — Mobile (≤480px) | Stacked layout for upload area |
 
+#### editor-milkdown.css
+Milkdown WYSIWYG editor theme — parchment aesthetic. Uses CSS variables from `shared-page.css`. Load AFTER `shared-editor.css` and `editor.css`.
+
+| Section | Description |
+|---------|-------------|
+| Editor Container (`.milkdown-editor`) | Border, border-radius, parchment background, focus ring with accent-gold |
+| ProseMirror Content (`.ProseMirror`) | Min-height 6em, max-height 60vh, auto-scroll, padding, outline removal |
+| Headings (h1–h6) | Decreasing sizes from 1.6em to 1em, aged-brown-dark color, Lora font |
+| Blockquotes | Left border 3px accent-gold, italic, subtle background |
+| Code (inline + blocks) | Parchment-medium background, monospace font, border |
+| Links | Info-blue color, underline on hover |
+| Horizontal Rule | Aged-brown-medium border, 50% opacity |
+| Lists | Standard padding and spacing |
+| Format Toolbar (`.milkdown-format-toolbar`) | Horizontal flex layout, parchment header-bg, scrollable, button hover/active states |
+| Chit Link Dropdown (`.milkdown-chitlink-dropdown`) | Fixed position, parchment background, border, shadow, item highlight |
+| Hidden State (`.milkdown-hidden`) | `display: none !important` utility class |
+| Mobile Responsive (≤600px) | Compact toolbar, 200px min editor height, touch targets |
+| Virtual Keyboard (≤500px height) | Reduced max-height for editor |
+
 ### 3.4 Settings HTML — Network Access Block (`settings.html`)
 
 The `#network-access-block` div inside the `#admin-section` `.settings-grid` provides the Tailscale and Ntfy configuration UI.
@@ -3199,6 +3330,12 @@ All HTML pages include the following PWA `<head>` tags: `<link rel="manifest" hr
 <script src="/frontend/js/dashboard/main-sidebar.js"></script>
 <script src="/frontend/js/dashboard/main-hotkeys.js"></script>
 <script src="/frontend/js/dashboard/main-calendar.js"></script>
+<script src="/frontend/js/dashboard/main-views-tasks.js"></script>
+<script src="/frontend/js/dashboard/main-views-habits.js"></script>
+<script src="/frontend/js/dashboard/main-views-notes.js"></script>
+<script src="/frontend/js/dashboard/main-views-projects.js"></script>
+<script src="/frontend/js/dashboard/main-views-alarms.js"></script>
+<script src="/frontend/js/dashboard/main-views-indicators.js"></script>
 <script src="/frontend/js/dashboard/main-views.js"></script>
 <script src="/frontend/js/dashboard/main-alerts.js"></script>
 <script src="/frontend/js/dashboard/main-search.js"></script>
@@ -3222,6 +3359,7 @@ All HTML pages include the following PWA `<head>` tags: `<link rel="manifest" hr
 <link rel="stylesheet" href="/frontend/css/editor/editor.css" />
 <link rel="stylesheet" href="/frontend/css/editor/editor-email.css" />
 <link rel="stylesheet" href="/frontend/css/editor/editor-attachments.css" />
+<link rel="stylesheet" href="/frontend/css/editor/editor-milkdown.css" />
 ```
 
 **CDN scripts (in `<head>`):**
@@ -3267,6 +3405,8 @@ All HTML pages include the following PWA `<head>` tags: `<link rel="manifest" hr
 <script src="/frontend/js/editor/editor-health.js"></script>
 <script src="/frontend/js/editor/editor-email.js"></script>
 <script src="/frontend/js/editor/editor-attachments.js"></script>
+<script src="/frontend/js/editor/editor-milkdown-chitlink.js"></script>
+<script type="module" src="/frontend/js/editor/editor-milkdown.js"></script>
 <script src="/frontend/js/editor/editor-save.js"></script>
 <script src="/frontend/js/editor/editor-sharing.js"></script>
 <script src="/frontend/js/editor/editor-people.js"></script>
@@ -3519,10 +3659,16 @@ shared-auth.js            ← MUST load first (getCurrentUser, isAdmin, waitForA
               │     main-sidebar.js    (thin wrapper — depends on shared-sidebar.js for _cwocInitSidebar, toggleSidebar, etc.)
               │     main-hotkeys.js
               │     main-calendar.js   (uses shared-calendar, shared-indicators)
-              │     main-views.js      (uses shared-tags, shared-sort, shared-indicators)
+              │     main-views-tasks.js
+              │     main-views-habits.js
+              │     main-views-notes.js
+              │     main-views-projects.js
+              │     main-views-alarms.js
+              │     main-views-indicators.js
+              │     main-views.js      (coordinator — uses shared-tags, shared-sort, shared-indicators)
               │     main-alerts.js     (uses shared alarm system from shared.js)
               │     main-search.js
-              │     main-email.js      (email tab view — displayEmailView, _checkMail, _composeEmail, _updateEmailBadge, _emailQuickArchive, _emailQuickDelete, _emailHasReply)
+              │     main-email.js      (email tab view — displayEmailView, _checkMail, _composeEmail, _updateEmailBadge, _emailQuickArchive, _emailQuickDelete, _emailHasReply, _emailGetContactImage, _toggleEmailUnreadTop, _emailShowErrorWithSettingsLink)
               │     main-modals.js
               │     main-init.js       (calls init functions from all above)
               │     main.js            (entry point — calls main-init)
@@ -3543,6 +3689,8 @@ shared-auth.js            ← MUST load first (getCurrentUser, isAdmin, waitForA
                     editor-health.js      (health indicators zone)
                     editor-email.js       (email zone — depends on shared-utils, shared-editor, editor-save; includes thread view and HTML rendering)
                     editor-attachments.js (attachments zone — depends on shared-utils, editor-save)
+                    editor-milkdown-chitlink.js (Milkdown chit link autocomplete plugin)
+                    editor-milkdown.js    (ES module — Milkdown loader, content bridge, format toolbar)
                     editor-save.js        (save/exit logic)
                     editor-sharing.js     (sharing data-layer — uses shared-auth; provides _sharingUserList, getSharingData, hasSharingData for editor-people.js and editor-init.js)
                     editor-init.js        (entry point — calls init functions)

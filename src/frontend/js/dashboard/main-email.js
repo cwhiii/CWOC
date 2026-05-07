@@ -57,6 +57,89 @@ function _emailPersistAccountStatus() {
 /* Whether account filter has been initialized with all accounts */
 var _emailAccountFilterInitialized = false;
 
+/* Cached contacts for sender image lookup */
+var _emailDashContactsCache = null;
+
+/* Cached users for sender image lookup */
+var _emailDashUsersCache = null;
+
+/**
+ * Load contacts for sender image lookup (cached after first call).
+ * Called once when the email view first renders.
+ */
+function _emailLoadDashContacts() {
+    if (_emailDashContactsCache) return;
+    fetch('/api/contacts')
+        .then(function(r) { return r.ok ? r.json() : []; })
+        .then(function(data) { _emailDashContactsCache = data; })
+        .catch(function() { _emailDashContactsCache = []; });
+}
+
+/**
+ * Load users for sender image lookup (cached after first call).
+ */
+function _emailLoadDashUsers() {
+    if (_emailDashUsersCache) return;
+    fetch('/api/auth/switchable-users')
+        .then(function(r) { return r.ok ? r.json() : []; })
+        .then(function(data) { _emailDashUsersCache = data; })
+        .catch(function() { _emailDashUsersCache = []; });
+}
+
+// Kick off contact and user loading early
+setTimeout(_emailLoadDashContacts, 500);
+setTimeout(_emailLoadDashUsers, 600);
+
+/**
+ * Look up a contact's or user's image_url by matching the sender email address.
+ * Checks contacts first, then users.
+ * @param {string} senderRaw — raw "Name <email>" or "email" string
+ * @returns {string|null} — image URL or null
+ */
+function _emailGetContactImage(senderRaw) {
+    if (!senderRaw) return null;
+    // Extract email from "Name <email>" format
+    var emailAddr = senderRaw;
+    var match = senderRaw.match(/<([^>]+)>/);
+    if (match) emailAddr = match[1];
+    emailAddr = emailAddr.toLowerCase().trim();
+
+    // Check contacts
+    if (_emailDashContactsCache) {
+        for (var i = 0; i < _emailDashContactsCache.length; i++) {
+            var c = _emailDashContactsCache[i];
+            if (!c.image_url) continue;
+            var emails = c.emails || [];
+            for (var j = 0; j < emails.length; j++) {
+                if ((emails[j].value || '').toLowerCase().trim() === emailAddr) {
+                    return c.image_url;
+                }
+            }
+        }
+    }
+
+    // Check users
+    if (_emailDashUsersCache) {
+        for (var i = 0; i < _emailDashUsersCache.length; i++) {
+            var u = _emailDashUsersCache[i];
+            if (!u.profile_image_url) continue;
+            // Check primary email
+            if (u.email && u.email.toLowerCase().trim() === emailAddr) {
+                return u.profile_image_url;
+            }
+            // Check multi-value emails
+            var uEmails = u.emails_json || [];
+            for (var j = 0; j < uEmails.length; j++) {
+                if ((uEmails[j].value || '').toLowerCase().trim() === emailAddr) {
+                    return u.profile_image_url;
+                }
+            }
+        }
+    }
+
+    return null;
+}
+
 /**
  * Toggle the email sidebar section body visibility.
  */
@@ -81,9 +164,9 @@ function _updateEmailSidebarVisibility(tab) {
     if (tab === 'Email') {
         var radios = document.querySelectorAll('#email-folder-select input[name="emailFolder"]');
         radios.forEach(function(r) { r.checked = (r.value === _emailSubFilter); });
-        // Sync threaded toggle checkbox
-        var threadedCb = document.getElementById('email-threaded-toggle');
-        if (threadedCb) threadedCb.checked = _emailThreadedView;
+        // Sync unread-at-top toggle checkbox
+        var unreadTopCb = document.getElementById('email-unread-top-toggle');
+        if (unreadTopCb) unreadTopCb.checked = _emailUnreadTop;
         // Populate account filter buttons (ensure settings are loaded first)
         if (window._cwocSettings) {
             _emailRenderAccountFilterButtons();
@@ -188,7 +271,7 @@ function _emailToggleAccountFilter(nickname) {
 
 /**
  * Show a persistent toast with full error details for a failed account.
- * Includes a "Copy Error" button.
+ * Includes a "Copy Error" button and a "Go to Settings" button.
  */
 function _showAccountErrorDetails(nickname, errorMsg) {
     var fullMsg = nickname + ': ' + errorMsg;
@@ -210,7 +293,16 @@ function _showAccountErrorDetails(nickname, errorMsg) {
     toast.appendChild(msgEl);
 
     var btnRow = document.createElement('div');
-    btnRow.style.cssText = 'display:flex;gap:8px;justify-content:flex-end;';
+    btnRow.style.cssText = 'display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;';
+
+    var settingsBtn = document.createElement('button');
+    settingsBtn.textContent = '⚙️ Email Settings';
+    settingsBtn.style.cssText = 'background:#5c1010;color:#fdf5e6;border:1px solid #3a0a0a;border-radius:4px;padding:4px 10px;cursor:pointer;font-family:inherit;font-size:0.85em;';
+    settingsBtn.onclick = function(e) {
+        e.stopPropagation();
+        window.location.href = '/frontend/html/settings.html#email';
+    };
+    btnRow.appendChild(settingsBtn);
 
     var copyBtn = document.createElement('button');
     copyBtn.textContent = '📋 Copy Error';
@@ -223,6 +315,62 @@ function _showAccountErrorDetails(nickname, errorMsg) {
         });
     };
     btnRow.appendChild(copyBtn);
+
+    var closeBtn = document.createElement('button');
+    closeBtn.textContent = '✕ Dismiss';
+    closeBtn.style.cssText = 'background:#5c1010;color:#fdf5e6;border:1px solid #3a0a0a;border-radius:4px;padding:4px 10px;cursor:pointer;font-family:inherit;font-size:0.85em;';
+    closeBtn.onclick = function(e) {
+        e.stopPropagation();
+        toast.style.opacity = '0';
+        setTimeout(function() { if (toast.parentNode) toast.remove(); }, 300);
+    };
+    btnRow.appendChild(closeBtn);
+
+    toast.appendChild(btnRow);
+    document.body.appendChild(toast);
+    requestAnimationFrame(function() { toast.style.opacity = '1'; });
+}
+
+/**
+ * Show an error toast with a "Go to Settings" button for email configuration issues.
+ * @param {string} errorMsg — the error message to display
+ * @param {string} hint — additional hint text
+ */
+function _emailShowErrorWithSettingsLink(errorMsg, hint) {
+    // Remove existing toast
+    var existing = document.getElementById('cwoc-toast');
+    if (existing) existing.remove();
+
+    var toast = document.createElement('div');
+    toast.id = 'cwoc-toast';
+    toast.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);'
+        + 'background:#8b1a1a;color:#fdf5e6;border:2px solid #5c1010;'
+        + 'border-radius:8px;padding:12px 20px;font-family:Lora,Georgia,serif;font-size:0.95em;'
+        + 'box-shadow:0 4px 16px rgba(0,0,0,0.4);z-index:10000;'
+        + 'max-width:90%;text-align:left;opacity:0;transition:opacity 0.3s ease;display:flex;flex-direction:column;gap:8px;';
+
+    var msgEl = document.createElement('div');
+    msgEl.textContent = '⚠️ ' + errorMsg;
+    toast.appendChild(msgEl);
+
+    if (hint) {
+        var hintEl = document.createElement('div');
+        hintEl.style.cssText = 'font-size:0.85em;opacity:0.85;';
+        hintEl.textContent = hint;
+        toast.appendChild(hintEl);
+    }
+
+    var btnRow = document.createElement('div');
+    btnRow.style.cssText = 'display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;';
+
+    var settingsBtn = document.createElement('button');
+    settingsBtn.textContent = '⚙️ Email Settings';
+    settingsBtn.style.cssText = 'background:#5c1010;color:#fdf5e6;border:1px solid #3a0a0a;border-radius:4px;padding:4px 10px;cursor:pointer;font-family:inherit;font-size:0.85em;';
+    settingsBtn.onclick = function(e) {
+        e.stopPropagation();
+        window.location.href = '/frontend/html/settings.html#email';
+    };
+    btnRow.appendChild(settingsBtn);
 
     var closeBtn = document.createElement('button');
     closeBtn.textContent = '✕ Dismiss';
@@ -312,6 +460,131 @@ function _emailStartAutoCheck() {
 // Start auto-check when the page loads (after a short delay for settings to load)
 setTimeout(_emailStartAutoCheck, 3000);
 
+// Check for pending email send (from editor undo-send flow)
+setTimeout(_emailCheckPendingSend, 500);
+
+/**
+ * Check localStorage for a pending email send and show the undo countdown.
+ * Called on dashboard load after navigating from the editor's send action.
+ */
+function _emailCheckPendingSend() {
+    var raw = localStorage.getItem('cwoc_email_pending_send');
+    if (!raw) return;
+    localStorage.removeItem('cwoc_email_pending_send');
+
+    try {
+        var pending = JSON.parse(raw);
+        // Only process if it's recent (within 30 seconds)
+        if (Date.now() - pending.timestamp > 30000) return;
+
+        _emailShowUndoSendBar(pending.chitId, pending.archiveOriginal, pending.inReplyTo);
+    } catch (e) {
+        console.error('[Email] Failed to parse pending send:', e);
+    }
+}
+
+/**
+ * Show the undo-send countdown bar on the dashboard.
+ * @param {string} chitId
+ * @param {boolean} archiveOriginal
+ * @param {string|null} inReplyTo
+ */
+function _emailShowUndoSendBar(chitId, archiveOriginal, inReplyTo) {
+    var DURATION = 7000;
+
+    // Remove any existing
+    var existing = document.getElementById('emailUndoSendToast');
+    if (existing) existing.remove();
+
+    var toast = document.createElement('div');
+    toast.id = 'emailUndoSendToast';
+    toast.className = 'email-undo-toast';
+
+    var msgRow = document.createElement('div');
+    msgRow.className = 'email-undo-msg-row';
+    var msg = document.createElement('span');
+    msg.className = 'email-undo-msg';
+    msg.textContent = '✉️ Sending email...';
+    var undoBtn = document.createElement('button');
+    undoBtn.className = 'email-undo-btn';
+    undoBtn.textContent = 'Undo';
+    msgRow.appendChild(msg);
+    msgRow.appendChild(undoBtn);
+    toast.appendChild(msgRow);
+
+    var barOuter = document.createElement('div');
+    barOuter.className = 'email-undo-bar-outer';
+    var barInner = document.createElement('div');
+    barInner.className = 'email-undo-bar-inner';
+    barOuter.appendChild(barInner);
+    toast.appendChild(barOuter);
+
+    document.body.appendChild(toast);
+
+    var start = Date.now();
+    var dismissed = false;
+
+    var interval = setInterval(function() {
+        var elapsed = Date.now() - start;
+        var pct = Math.max(0, 100 - (elapsed / DURATION) * 100);
+        barInner.style.width = pct + '%';
+        if (elapsed >= DURATION) {
+            clearInterval(interval);
+            if (!dismissed) {
+                dismissed = true;
+                toast.remove();
+                _emailDoActualSendFromDash(chitId, archiveOriginal, inReplyTo);
+            }
+        }
+    }, 50);
+
+    undoBtn.onclick = function() {
+        if (dismissed) return;
+        dismissed = true;
+        clearInterval(interval);
+        toast.remove();
+        _showToast('Send cancelled.', 'info');
+    };
+}
+
+/**
+ * Actually send the email from the dashboard after undo countdown expires.
+ */
+async function _emailDoActualSendFromDash(chitId, archiveOriginal, inReplyTo) {
+    try {
+        var response = await fetch('/api/email/send/' + encodeURIComponent(chitId), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        if (!response.ok) {
+            var errData;
+            try { errData = await response.json(); } catch(e) { errData = { detail: 'Send failed.' }; }
+            _showToast(errData.detail || 'Send failed.', 'error');
+            return;
+        }
+
+        _showToast('Email sent successfully.', 'success');
+
+        // Archive original if requested
+        if (archiveOriginal && inReplyTo) {
+            try {
+                await fetch('/api/email/archive-original', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message_id: inReplyTo })
+                });
+            } catch(e) { console.error('[Email] Failed to archive original:', e); }
+        }
+
+        // Refresh the email list
+        if (typeof fetchChits === 'function') fetchChits();
+    } catch(err) {
+        console.error('[Email] Send from dashboard failed:', err);
+        _showToast('Failed to send email.', 'error');
+    }
+}
+
 /**
  * Display email chits in the Email tab list view.
  * @param {Array} chitsToDisplay - Array of chit objects to render
@@ -391,8 +664,18 @@ function displayEmailView(chitsToDisplay) {
         });
     }
 
-    // Sort by email_date descending (newest first)
+    // Sort by email_date descending (newest first), with pinned at top and optional unread-at-top
     emailChits.sort(function(a, b) {
+        // Pinned always at top
+        var aPinned = a.pinned ? 1 : 0;
+        var bPinned = b.pinned ? 1 : 0;
+        if (aPinned !== bPinned) return bPinned - aPinned;
+        // Unread at top: unread emails first, then read, each group by newest
+        if (_emailUnreadTop) {
+            var aUnread = !a.email_read ? 1 : 0;
+            var bUnread = !b.email_read ? 1 : 0;
+            if (aUnread !== bUnread) return bUnread - aUnread;
+        }
         var da = a.email_date || a.start_datetime || '';
         var db = b.email_date || b.start_datetime || '';
         return db.localeCompare(da);
@@ -424,46 +707,121 @@ function displayEmailView(chitsToDisplay) {
     var scrollWrap = document.createElement('div');
     scrollWrap.className = 'email-scroll-wrap';
 
-    // Render email cards — threaded or flat
-    if (_emailThreadedView) {
-        // Build thread map from ALL emails (cross-folder), then filter to visible
-        var allThreads = _emailGroupByThread(allEmailChits);
-        var visibleIds = new Set(emailChits.map(function(c) { return c.id; }));
+    // Render email cards — always threaded
+    // Build thread map from ALL emails (cross-folder), then filter to visible
+    var allThreads = _emailGroupByThread(allEmailChits);
+    var visibleIds = new Set(emailChits.map(function(c) { return c.id; }));
 
-        // Filter threads to only those with at least one visible message
-        var visibleThreads = [];
-        allThreads.forEach(function(thread) {
-            var visibleMessages = thread.messages.filter(function(m) { return visibleIds.has(m.id); });
-            if (visibleMessages.length > 0) {
-                visibleThreads.push({
-                    messages: thread.messages, // full thread for expansion
-                    latest: visibleMessages[0], // newest visible message as the top card
-                    visibleCount: visibleMessages.length,
-                    totalCount: thread.messages.length
-                });
-            }
-        });
+    // Filter threads to only those with at least one visible message
+    var visibleThreads = [];
+    allThreads.forEach(function(thread) {
+        var visibleMessages = thread.messages.filter(function(m) { return visibleIds.has(m.id); });
+        if (visibleMessages.length > 0) {
+            visibleThreads.push({
+                messages: thread.messages, // full thread for expansion
+                latest: visibleMessages[0], // newest visible message as the top card
+                visibleCount: visibleMessages.length,
+                totalCount: thread.messages.length
+            });
+        }
+    });
 
-        console.log('[Email Threading] Grouped ' + allEmailChits.length + ' emails into ' + allThreads.length + ' threads, ' +
-            visibleThreads.filter(function(t) { return t.totalCount > 1; }).length + ' multi-message threads visible');
+    // Apply pinned-at-top and unread-at-top sorting to threads
+    visibleThreads.sort(function(a, b) {
+        // Pinned always at top
+        var aPinned = a.latest.pinned ? 1 : 0;
+        var bPinned = b.latest.pinned ? 1 : 0;
+        if (aPinned !== bPinned) return bPinned - aPinned;
+        // Thread is "unread" if its latest visible message is unread
+        if (_emailUnreadTop) {
+            var aUnread = !a.latest.email_read ? 1 : 0;
+            var bUnread = !b.latest.email_read ? 1 : 0;
+            if (aUnread !== bUnread) return bUnread - aUnread;
+        }
+        // Within same group, sort by newest
+        var da = a.latest.email_date || a.latest.start_datetime || '';
+        var db = b.latest.email_date || b.latest.start_datetime || '';
+        return db.localeCompare(da);
+    });
 
-        visibleThreads.forEach(function(thread) {
-            if (thread.totalCount <= 1) {
-                // Single message — render as normal card
-                scrollWrap.appendChild(_buildEmailCard(thread.latest, viSettings));
-            } else {
-                // Multi-message thread — render stacked parchment card
-                scrollWrap.appendChild(_buildThreadedEmailCard(thread, viSettings));
-            }
+    console.log('[Email Threading] Grouped ' + allEmailChits.length + ' emails into ' + allThreads.length + ' threads, ' +
+        visibleThreads.filter(function(t) { return t.totalCount > 1; }).length + ' multi-message threads visible');
+
+    // Pagination: if enabled, only render first PAGE_SIZE threads
+    var paginateEnabled = (window._cwocSettings || {}).paginate_email === '1';
+    var PAGE_SIZE = 50;
+    var totalThreads = visibleThreads.length;
+    var threadsToRender = paginateEnabled ? visibleThreads.slice(0, PAGE_SIZE) : visibleThreads;
+
+    threadsToRender.forEach(function(thread) {
+        if (thread.totalCount <= 1) {
+            // Single message — render as normal card
+            scrollWrap.appendChild(_buildEmailCard(thread.latest, viSettings));
+        } else {
+            // Multi-message thread — render stacked parchment card
+            scrollWrap.appendChild(_buildThreadedEmailCard(thread, viSettings));
+        }
+    });
+
+    // "Load More" button if paginated and there are more threads
+    if (paginateEnabled && totalThreads > PAGE_SIZE) {
+        var loadMoreWrap = document.createElement('div');
+        loadMoreWrap.className = 'email-load-more-wrap';
+        var loadMoreBtn = document.createElement('button');
+        loadMoreBtn.className = 'cwoc-btn email-load-more-btn';
+        var remaining = totalThreads - PAGE_SIZE;
+        loadMoreBtn.textContent = 'Load More (' + remaining + ' remaining)';
+        loadMoreBtn.addEventListener('click', function() {
+            _emailLoadMoreThreads(scrollWrap, visibleThreads, PAGE_SIZE, viSettings, loadMoreWrap);
         });
-    } else {
-        // Flat view
-        emailChits.forEach(function(chit) {
-            scrollWrap.appendChild(_buildEmailCard(chit, viSettings));
-        });
+        loadMoreWrap.appendChild(loadMoreBtn);
+        scrollWrap.appendChild(loadMoreWrap);
     }
 
     container.appendChild(scrollWrap);
+}
+
+/** Current pagination offset — tracks how many threads have been rendered */
+var _emailPaginationOffset = 0;
+
+/**
+ * Load more threads into the email scroll wrapper (pagination).
+ * @param {HTMLElement} scrollWrap — the scroll container
+ * @param {Array} allThreads — full array of visible threads
+ * @param {number} currentOffset — how many have been rendered so far
+ * @param {Object} viSettings — visual indicator settings
+ * @param {HTMLElement} loadMoreWrap — the load-more button container to update/remove
+ */
+function _emailLoadMoreThreads(scrollWrap, allThreads, currentOffset, viSettings, loadMoreWrap) {
+    var PAGE_SIZE = 50;
+    var nextBatch = allThreads.slice(currentOffset, currentOffset + PAGE_SIZE);
+
+    // Remove the load-more button temporarily
+    if (loadMoreWrap.parentNode) loadMoreWrap.remove();
+
+    // Render next batch
+    nextBatch.forEach(function(thread) {
+        if (thread.totalCount <= 1) {
+            scrollWrap.appendChild(_buildEmailCard(thread.latest, viSettings));
+        } else {
+            scrollWrap.appendChild(_buildThreadedEmailCard(thread, viSettings));
+        }
+    });
+
+    var newOffset = currentOffset + PAGE_SIZE;
+    var remaining = allThreads.length - newOffset;
+
+    // Re-add load-more button if there are still more
+    if (remaining > 0) {
+        var btn = loadMoreWrap.querySelector('.email-load-more-btn');
+        if (btn) btn.textContent = 'Load More (' + remaining + ' remaining)';
+        // Update the click handler with new offset
+        var newWrap = loadMoreWrap.cloneNode(true);
+        newWrap.querySelector('.email-load-more-btn').addEventListener('click', function() {
+            _emailLoadMoreThreads(scrollWrap, allThreads, newOffset, viSettings, newWrap);
+        });
+        scrollWrap.appendChild(newWrap);
+    }
 }
 
 /**
@@ -484,32 +842,11 @@ function _buildEmailCard(chit, viSettings) {
     }
 
     // Checkbox for multi-select (supports shift+click range selection)
+    // Shows contact image by default, checkbox on hover
     var cbWrap = document.createElement('div');
     cbWrap.className = 'email-cb-wrap';
-    var cb = document.createElement('input');
-    cb.type = 'checkbox';
-    cb.className = 'email-select-cb';
-    cb.dataset.chitId = chit.id;
-    cb.onclick = function(e) {
-        e.stopPropagation();
-        if (e.shiftKey && _emailLastCheckedIndex !== null) {
-            _emailShiftSelect(cb);
-        } else {
-            _emailToggleSelect(chit.id, cb.checked);
-        }
-        // Track this checkbox as the last clicked
-        var allCbs = Array.from(document.querySelectorAll('.email-select-cb'));
-        _emailLastCheckedIndex = allCbs.indexOf(cb);
-    };
-    cbWrap.appendChild(cb);
-    card.appendChild(cbWrap);
 
-    // Content area — single-row layout:
-    // [sender] [subject] [preview ............] [hover actions] [date]
-    var content = document.createElement('div');
-    content.className = 'email-card-content';
-
-    // Parse sender
+    // Parse sender early for contact image
     var senderRaw = chit.email_from || '';
     var senderName = senderRaw;
     var senderEmail = senderRaw;
@@ -521,6 +858,82 @@ function _buildEmailCard(chit, viSettings) {
         senderName = senderRaw.split('@')[0];
         senderEmail = senderRaw;
     }
+
+    // Contact image (shown by default, hidden on hover)
+    var contactImg = document.createElement('div');
+    contactImg.className = 'email-contact-img';
+    var imgUrl = _emailGetContactImage(senderRaw);
+    if (imgUrl) {
+        contactImg.innerHTML = '<img src="' + imgUrl + '" alt="" class="email-contact-avatar">';
+    } else {
+        // Fallback: first letter of sender name
+        var initial = (senderName || '?').charAt(0).toUpperCase();
+        contactImg.innerHTML = '<span class="email-contact-initial">' + initial + '</span>';
+    }
+    cbWrap.appendChild(contactImg);
+
+    var cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.className = 'email-select-cb';
+    cb.dataset.chitId = chit.id;
+    cb.onclick = function(e) {
+        e.stopPropagation();
+        if (e.shiftKey && _emailLastCheckedIndex !== null) {
+            _emailShiftSelect(cb);
+        } else {
+            _emailToggleSelect(chit.id, cb.checked);
+        }
+        // Toggle class for checked state (shows checkbox, hides image)
+        cbWrap.classList.toggle('email-cb-checked', cb.checked);
+        // Track this checkbox as the last clicked
+        var allCbs = Array.from(document.querySelectorAll('.email-select-cb'));
+        _emailLastCheckedIndex = allCbs.indexOf(cb);
+    };
+    cbWrap.appendChild(cb);
+    card.appendChild(cbWrap);
+
+    // Pin icon — clickable toggle, right after the face/checkbox
+    var pinBtn = document.createElement('button');
+    pinBtn.className = 'email-pin-btn';
+    pinBtn.title = chit.pinned ? 'Unpin' : 'Pin';
+    pinBtn.innerHTML = chit.pinned
+        ? '<i class="fas fa-bookmark"></i>'
+        : '<i class="far fa-bookmark"></i>';
+    if (chit.pinned) pinBtn.classList.add('email-pin-active');
+    pinBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        // Toggle pin
+        fetch('/api/chit/' + encodeURIComponent(chit.id))
+            .then(function(r) { return r.ok ? r.json() : null; })
+            .then(function(fullChit) {
+                if (!fullChit) return;
+                fullChit.pinned = !fullChit.pinned;
+                return fetch('/api/chits/' + encodeURIComponent(chit.id), {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(fullChit)
+                });
+            })
+            .then(function(r) {
+                if (r && r.ok) {
+                    chit.pinned = !chit.pinned;
+                    pinBtn.innerHTML = chit.pinned
+                        ? '<i class="fas fa-bookmark"></i>'
+                        : '<i class="far fa-bookmark"></i>';
+                    pinBtn.classList.toggle('email-pin-active', chit.pinned);
+                    pinBtn.title = chit.pinned ? 'Unpin' : 'Pin';
+                    // Re-render to re-sort
+                    if (typeof fetchChits === 'function') fetchChits();
+                }
+            })
+            .catch(function(err) { console.error('Pin toggle failed:', err); });
+    });
+    card.appendChild(pinBtn);
+
+    // Content area — single-row layout:
+    // [sender] [subject] [attachments] [preview ............] [tags] [hover actions] [date]
+    var content = document.createElement('div');
+    content.className = 'email-card-content';
 
     var subject = chit.title || chit.email_subject || '(No Subject)';
     var cleanSubject = _emailStripMarkdown(subject);
@@ -558,8 +971,9 @@ function _buildEmailCard(chit, viSettings) {
     previewEl.className = 'email-card-preview';
     if (bodyText) {
         var cleanText = _emailStripMarkdown(_emailStripHtml(bodyText));
-        var lines = cleanText.split('\n').filter(function(l) { return l.trim(); });
-        previewEl.textContent = lines.slice(0, 2).join(' ').substring(0, 250);
+        // Collapse all whitespace (tabs, newlines, multiple spaces) to single spaces
+        cleanText = cleanText.replace(/\s+/g, ' ').trim();
+        previewEl.textContent = cleanText.substring(0, 250);
     }
 
     // Hover action buttons — appear to the left of the date on hover
@@ -584,7 +998,78 @@ function _buildEmailCard(chit, viSettings) {
     dateEl.className = 'email-meta-date';
     dateEl.textContent = dateStr;
 
-    // Assemble: badges + sender + reply-slot + subject + preview + actions + date
+    // Attachment icons — inline before preview, max 3 with overflow indicator
+    var attachments = chit.attachments;
+    if (typeof attachments === 'string') {
+        try { attachments = JSON.parse(attachments); } catch(e) { attachments = []; }
+    }
+    var attInlineEl = null;
+    if (Array.isArray(attachments) && attachments.length > 0) {
+        attInlineEl = document.createElement('span');
+        attInlineEl.className = 'email-inline-attachments';
+        var maxAtt = Math.min(attachments.length, 2);
+        for (var ai = 0; ai < maxAtt; ai++) {
+            var att = attachments[ai];
+            var attChip = document.createElement('a');
+            attChip.className = 'email-inline-att-chip';
+            attChip.href = '/api/chits/' + encodeURIComponent(chit.id) + '/attachments/' + encodeURIComponent(att.id);
+            attChip.target = '_blank';
+            attChip.title = att.filename || 'Attachment';
+            attChip.addEventListener('click', function(e) { e.stopPropagation(); });
+            attChip.addEventListener('dblclick', function(e) { e.stopPropagation(); });
+            var attIcon = document.createElement('span');
+            attIcon.textContent = _emailGetFileIcon(att.mime_type);
+            attChip.appendChild(attIcon);
+            var attName = document.createElement('span');
+            attName.textContent = att.filename || 'file';
+            attChip.appendChild(attName);
+            attInlineEl.appendChild(attChip);
+        }
+        if (attachments.length > 2) {
+            var moreAtt = document.createElement('span');
+            moreAtt.className = 'email-inline-att-more';
+            moreAtt.textContent = '+' + (attachments.length - 2);
+            moreAtt.title = attachments.length + ' attachments';
+            attInlineEl.appendChild(moreAtt);
+        }
+    }
+
+    // Tag chips — up to 3 non-system tags, shown after preview
+    var chitTags = chit.tags;
+    if (typeof chitTags === 'string') {
+        try { chitTags = JSON.parse(chitTags); } catch(e) { chitTags = []; }
+    }
+    if (!Array.isArray(chitTags)) chitTags = [];
+    var userTags = chitTags.map(function(t) {
+        return (typeof t === 'string') ? t : (t && t.name ? t.name : '');
+    }).filter(function(name) {
+        return name && !isSystemTag(name);
+    });
+    var tagChipsEl = null;
+    if (userTags.length > 0) {
+        tagChipsEl = document.createElement('span');
+        tagChipsEl.className = 'email-inline-tags';
+        var maxTags = Math.min(userTags.length, 3);
+        for (var ti = 0; ti < maxTags; ti++) {
+            var tagChip = document.createElement('span');
+            tagChip.className = 'email-inline-tag-chip';
+            var tagColor = typeof _getTagColor === 'function' ? _getTagColor(userTags[ti]) : '#e8dcc8';
+            var tagFont = typeof contrastColorForBg === 'function' ? contrastColorForBg(tagColor) : '#1a1208';
+            tagChip.style.cssText = 'background:' + tagColor + ';color:' + tagFont + ';';
+            tagChip.textContent = userTags[ti];
+            tagChip.title = userTags[ti];
+            tagChipsEl.appendChild(tagChip);
+        }
+        if (userTags.length > 3) {
+            var moreTag = document.createElement('span');
+            moreTag.className = 'email-inline-tag-more';
+            moreTag.textContent = '+' + (userTags.length - 3);
+            moreTag.title = userTags.slice(3).join(', ');
+            tagChipsEl.appendChild(moreTag);
+        }
+    }
+
+    // Assemble: badges + sender + reply-slot + subject + tags + attachments + preview + actions + date
     if (badgesHtml) {
         var badgeSpan = document.createElement('span');
         badgeSpan.className = 'email-card-badges-inline';
@@ -594,6 +1079,8 @@ function _buildEmailCard(chit, viSettings) {
     content.appendChild(senderEl);
     content.appendChild(replyEl);
     content.appendChild(subjectEl);
+    if (tagChipsEl) content.appendChild(tagChipsEl);
+    if (attInlineEl) content.appendChild(attInlineEl);
     content.appendChild(previewEl);
     content.appendChild(actions);
     content.appendChild(dateEl);
@@ -607,6 +1094,43 @@ function _buildEmailCard(chit, viSettings) {
     }
 
     card.appendChild(content);
+
+    // Attachment thumbnails row — full display below the content row
+    if (Array.isArray(attachments) && attachments.length > 0) {
+        var attRow = document.createElement('div');
+        attRow.className = 'email-attachment-row';
+        attachments.forEach(function(att) {
+            var attEl = document.createElement('a');
+            attEl.className = 'email-attachment-thumb';
+            attEl.href = '/api/chits/' + encodeURIComponent(chit.id) + '/attachments/' + encodeURIComponent(att.id);
+            attEl.target = '_blank';
+            attEl.title = att.filename || 'Attachment';
+            attEl.addEventListener('click', function(e) { e.stopPropagation(); });
+            attEl.addEventListener('dblclick', function(e) { e.stopPropagation(); });
+
+            if (att.mime_type && att.mime_type.startsWith('image/')) {
+                var img = document.createElement('img');
+                img.src = '/api/chits/' + encodeURIComponent(chit.id) + '/attachments/' + encodeURIComponent(att.id);
+                img.alt = att.filename || '';
+                img.loading = 'lazy';
+                img.onerror = function() { this.style.display = 'none'; attEl.textContent = '🖼️'; };
+                attEl.appendChild(img);
+            } else {
+                var iconSpan = document.createElement('span');
+                iconSpan.className = 'email-attachment-icon';
+                iconSpan.textContent = _emailGetFileIcon(att.mime_type);
+                attEl.appendChild(iconSpan);
+                var nameSpan = document.createElement('span');
+                nameSpan.className = 'email-attachment-name';
+                nameSpan.textContent = (att.filename || 'file').length > 12
+                    ? (att.filename || 'file').substring(0, 10) + '\u2026'
+                    : (att.filename || 'file');
+                attEl.appendChild(nameSpan);
+            }
+            attRow.appendChild(attEl);
+        });
+        card.appendChild(attRow);
+    }
 
     // Double-click handler: navigate to editor (consistent with all other views)
     card.addEventListener('dblclick', function(e) {
@@ -700,12 +1224,18 @@ function _emailBulkSelectAll() {
     if (allChecked) {
         // Deselect all
         _emailSelectedIds = [];
-        allCbs.forEach(function(cb) { cb.checked = false; });
+        allCbs.forEach(function(cb) {
+            cb.checked = false;
+            var wrap = cb.closest('.email-cb-wrap');
+            if (wrap) wrap.classList.remove('email-cb-checked');
+        });
     } else {
         // Select all
         _emailSelectedIds = [];
         allCbs.forEach(function(cb) {
             cb.checked = true;
+            var wrap = cb.closest('.email-cb-wrap');
+            if (wrap) wrap.classList.add('email-cb-checked');
             if (cb.dataset.chitId) _emailSelectedIds.push(cb.dataset.chitId);
         });
     }
@@ -715,7 +1245,11 @@ function _emailBulkSelectAll() {
 /** Clear all selections */
 function _emailBulkClear() {
     _emailSelectedIds = [];
-    document.querySelectorAll('.email-scroll-wrap .email-select-cb').forEach(function(cb) { cb.checked = false; });
+    document.querySelectorAll('.email-scroll-wrap .email-select-cb').forEach(function(cb) {
+        cb.checked = false;
+        var wrap = cb.closest('.email-cb-wrap');
+        if (wrap) wrap.classList.remove('email-cb-checked');
+    });
     _emailUpdateBulkBar();
 }
 
@@ -833,7 +1367,11 @@ async function _emailBulkToggleRead() {
         _showToast(count + ' email(s) read status toggled', 'success');
     }
     _emailSelectedIds = [];
-    document.querySelectorAll('.email-scroll-wrap .email-select-cb').forEach(function(cb) { cb.checked = false; });
+    document.querySelectorAll('.email-scroll-wrap .email-select-cb').forEach(function(cb) {
+        cb.checked = false;
+        var wrap = cb.closest('.email-cb-wrap');
+        if (wrap) wrap.classList.remove('email-cb-checked');
+    });
     _emailUpdateBulkBar();
 }
 
@@ -1035,10 +1573,10 @@ function _checkMail() {
                 if (typeof fetchChits === 'function') fetchChits();
             } else if (result.status === 400 && result.data.detail && result.data.detail.indexOf('No email account') !== -1) {
                 console.warn('[Email Check Mail] No email account configured.');
-                _showToast('No email account configured. Go to Settings → Email Account.', 'error');
+                _emailShowErrorWithSettingsLink('No email account configured.', 'Set up an email account in Settings to start syncing.');
             } else if (result.data.detail) {
                 console.error('[Email Check Mail] Error:', result.data.detail);
-                _showToast(result.data.detail, 'error');
+                _emailShowErrorWithSettingsLink(result.data.detail, 'Check your email account settings.');
             } else {
                 console.error('[Email Check Mail] Unexpected response:', result.data);
                 _showToast('Unexpected response from server', 'error');
@@ -1047,7 +1585,7 @@ function _checkMail() {
         .catch(function(err) {
             _emailSetPillSpinners(false);
             console.error('[Email Check Mail] Fetch error:', err);
-            _showToast('Failed to check mail: ' + err.message, 'error');
+            _emailShowErrorWithSettingsLink('Failed to check mail: ' + err.message, 'Verify your email server settings are correct.');
         });
 }
 
@@ -1078,9 +1616,17 @@ function _updateEmailBadge() {
 }
 
 function _emailEmptyState(container) {
+    var folderName = _emailSubFilter || 'inbox';
+    // If filtering by specific accounts, show their names
+    var allAccounts = ((window._cwocSettings || {}).email_accounts || []).filter(function(a) { return a && a.nickname; });
+    var allSelected = _emailAccountFilter.length >= allAccounts.length;
+    var acctLabel = '';
+    if (!allSelected && _emailAccountFilter.length > 0) {
+        acctLabel = _emailAccountFilter.join(', ') + ' ';
+    }
     var div = document.createElement('div');
     div.className = 'cwoc-empty';
-    div.innerHTML = '<p>No emails in this folder.</p>';
+    div.innerHTML = '<p>No emails in ' + acctLabel + folderName + '.</p>';
     container.appendChild(div);
 }
 
@@ -1089,6 +1635,21 @@ function _escHtml(str) {
     var div = document.createElement('div');
     div.textContent = str;
     return div.innerHTML;
+}
+
+/** Get a file type emoji icon for attachment display in email cards */
+function _emailGetFileIcon(mimeType) {
+    if (!mimeType) return '📎';
+    if (mimeType.startsWith('image/')) return '🖼️';
+    if (mimeType.startsWith('video/')) return '🎬';
+    if (mimeType.startsWith('audio/')) return '🎵';
+    if (mimeType.indexOf('pdf') !== -1) return '📄';
+    if (mimeType.indexOf('zip') !== -1 || mimeType.indexOf('archive') !== -1 || mimeType.indexOf('compressed') !== -1) return '📦';
+    if (mimeType.indexOf('spreadsheet') !== -1 || mimeType.indexOf('excel') !== -1) return '📊';
+    if (mimeType.indexOf('presentation') !== -1 || mimeType.indexOf('powerpoint') !== -1) return '📽️';
+    if (mimeType.indexOf('word') !== -1 || mimeType.indexOf('document') !== -1) return '📝';
+    if (mimeType.startsWith('text/')) return '📃';
+    return '📎';
 }
 
 /**
@@ -1115,6 +1676,12 @@ function _emailStripHtml(str) {
     text = text.replace(/&quot;/g, '"');
     text = text.replace(/&#39;/g, "'");
     text = text.replace(/&nbsp;/g, ' ');
+    // Strip zero-width / invisible named entities before DOM decode
+    text = text.replace(/&zwnj;/gi, '');
+    text = text.replace(/&zwj;/gi, '');
+    text = text.replace(/&lrm;/gi, '');
+    text = text.replace(/&rlm;/gi, '');
+    text = text.replace(/&shy;/gi, '');
     // Decode ALL numeric HTML entities (&#NNN; and &#xHHH;)
     text = text.replace(/&#x([0-9a-fA-F]+);/g, function(m, hex) {
         var cp = parseInt(hex, 16);
@@ -1128,6 +1695,14 @@ function _emailStripHtml(str) {
         if (cp === 8204 || cp === 8205 || cp === 8203 || cp === 65279 || cp === 847) return '';
         return String.fromCodePoint(cp);
     });
+    // Decode any remaining named HTML entities via DOM
+    if (text.indexOf('&') !== -1) {
+        var entityEl = document.createElement('textarea');
+        entityEl.innerHTML = text;
+        text = entityEl.value;
+    }
+    // Strip any zero-width / invisible Unicode characters that survived decoding
+    text = text.replace(/[\u200B\u200C\u200D\u200E\u200F\uFEFF\u00AD\u034F]/g, '');
     // Strip raw URLs (http/https links that clutter the preview)
     text = text.replace(/https?:\/\/[^\s)>\]]+/g, '');
     // Collapse excessive whitespace
@@ -1176,6 +1751,8 @@ function _emailShiftSelect(currentCb) {
 
     for (var i = start; i <= end; i++) {
         allCbs[i].checked = newState;
+        var wrap = allCbs[i].closest('.email-cb-wrap');
+        if (wrap) wrap.classList.toggle('email-cb-checked', newState);
         var chitId = allCbs[i].dataset.chitId;
         if (newState && _emailSelectedIds.indexOf(chitId) === -1) {
             _emailSelectedIds.push(chitId);
@@ -1247,16 +1824,21 @@ async function _toggleEmailReadStatus(chit, card) {
 /** Cache of message IDs that have been replied to (built once per render) */
 var _emailRepliedToCache = null;
 
-/** Whether to display emails grouped by thread (stacked parchment view) */
-var _emailThreadedView = true;
+/** Whether to sort unread emails to the top */
+var _emailUnreadTop = false;
 
 /**
- * Toggle between threaded (stacked) and flat email views.
- * Called by the sidebar checkbox.
+ * Toggle unread-at-top sorting.
+ * When enabled, unread threads sort to the top (still by newest within each group).
  */
-function _toggleEmailThreadedView() {
-    var cb = document.getElementById('email-threaded-toggle');
-    _emailThreadedView = cb ? cb.checked : !_emailThreadedView;
+function _toggleEmailUnreadTop() {
+    var cb = document.getElementById('email-unread-top-toggle');
+    _emailUnreadTop = cb ? cb.checked : !_emailUnreadTop;
+    // Update label active states
+    var newestLabel = document.getElementById('email-sort-label-newest');
+    var unreadLabel = document.getElementById('email-sort-label-unread');
+    if (newestLabel) newestLabel.classList.toggle('active', !_emailUnreadTop);
+    if (unreadLabel) unreadLabel.classList.toggle('active', _emailUnreadTop);
     if (typeof filterChits === 'function') filterChits('Email');
 }
 

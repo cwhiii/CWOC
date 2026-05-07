@@ -1,0 +1,1 @@
+Fixed: removed stale split file script tags from index.html (main-views-tasks/habits/notes/projects/alarms/indicators.js) that were causing duplicate function definitions. All code remains in main-views.js. This resolves the _restoreViewModeButtons undefined error and potential attachment display issues caused by script loading conflicts.

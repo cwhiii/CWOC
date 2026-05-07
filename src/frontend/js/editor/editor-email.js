@@ -87,6 +87,8 @@ function _emailSearchContacts(query) {
 
 /**
  * Wire up autocomplete on an email input field.
+ * Supports arrow key navigation and Enter to select.
+ * When a valid email is entered (comma, Enter without dropdown), wraps it in a chip.
  * @param {string} inputId — the input element ID
  * @param {string} dropdownId — the dropdown element ID
  */
@@ -100,50 +102,469 @@ function _wireEmailAutocomplete(inputId, dropdownId) {
   input._emailAcWired = true;
 
   var debounceTimer = null;
+  var _acHighlightIdx = -1;
+
+  function _acHighlight(idx) {
+    var items = dropdown.querySelectorAll('.email-autocomplete-item');
+    items.forEach(function(el, i) {
+      el.classList.toggle('email-ac-highlighted', i === idx);
+    });
+    _acHighlightIdx = idx;
+    // Scroll into view
+    if (idx >= 0 && items[idx]) {
+      items[idx].scrollIntoView({ block: 'nearest' });
+    }
+  }
+
+  function _acSelect(item) {
+    if (!item) return;
+    // Simulate mousedown on the item
+    var event = new MouseEvent('mousedown', { bubbles: true });
+    item.dispatchEvent(event);
+  }
+
+  function _showDropdown() {
+    var val = input.value;
+    // Get the text after the last comma (for multi-recipient fields)
+    var parts = val.split(',');
+    var current = parts[parts.length - 1].trim();
+    if (current.length < 2) { dropdown.style.display = 'none'; _acHighlightIdx = -1; return; }
+
+    var results = _emailSearchContacts(current);
+
+    // Filter out people already in this field's chips
+    var existingEmails = _emailGetChipEmails(input);
+    results = results.filter(function(r) {
+      return existingEmails.indexOf((r.email || '').toLowerCase().trim()) === -1;
+    });
+
+    if (results.length === 0) { dropdown.style.display = 'none'; _acHighlightIdx = -1; return; }
+
+    dropdown.innerHTML = '';
+    _acHighlightIdx = -1;
+    results.forEach(function(r) {
+      var item = document.createElement('div');
+      item.className = 'email-autocomplete-item';
+      var star = r.favorite ? '★ ' : '';
+      var emailDisplay = r.email ? ' &lt;' + _escHtml(r.email) + '&gt;' : '';
+      item.innerHTML = '<span class="email-ac-name">' + star + _escHtml(r.display_name) + '</span>' +
+                       '<span class="email-ac-email">' + emailDisplay + '</span>';
+      item._acData = r;
+      item.addEventListener('mousedown', function(e) {
+        e.preventDefault(); // prevent blur from hiding dropdown
+        _emailChipifyRecipient(input, r);
+        dropdown.style.display = 'none';
+        _acHighlightIdx = -1;
+      });
+      dropdown.appendChild(item);
+    });
+    dropdown.style.display = '';
+  }
 
   input.addEventListener('input', function() {
     clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(function() {
-      var val = input.value;
-      // Get the text after the last comma (for multi-recipient fields)
-      var parts = val.split(',');
-      var current = parts[parts.length - 1].trim();
-      if (current.length < 2) { dropdown.style.display = 'none'; return; }
-
-      var results = _emailSearchContacts(current);
-      console.log('[Email AC] Query:', current, 'Results:', results.length);
-      if (results.length === 0) { dropdown.style.display = 'none'; return; }
-
-      dropdown.innerHTML = '';
-      results.forEach(function(r) {
-        var item = document.createElement('div');
-        item.className = 'email-autocomplete-item';
-        var star = r.favorite ? '★ ' : '';
-        var emailDisplay = r.email ? ' &lt;' + _escHtml(r.email) + '&gt;' : '';
-        item.innerHTML = '<span class="email-ac-name">' + star + _escHtml(r.display_name) + '</span>' +
-                         '<span class="email-ac-email">' + emailDisplay + '</span>';
-        item.addEventListener('mousedown', function(e) {
-          e.preventDefault(); // prevent blur from hiding dropdown
-          // Replace the current partial text with the selected contact
-          var formatted = r.display_name + (r.email ? ' <' + r.email + '>' : '');
-          parts[parts.length - 1] = ' ' + formatted;
-          input.value = parts.join(',');
-          dropdown.style.display = 'none';
-          if (typeof setSaveButtonUnsaved === 'function') setSaveButtonUnsaved();
-        });
-        dropdown.appendChild(item);
-      });
-      dropdown.style.display = '';
-    }, 150);
+    debounceTimer = setTimeout(_showDropdown, 150);
   });
 
   input.addEventListener('blur', function() {
-    setTimeout(function() { dropdown.style.display = 'none'; }, 200);
+    setTimeout(function() {
+      dropdown.style.display = 'none';
+      _acHighlightIdx = -1;
+      // On blur, chipify any remaining valid email in the input
+      _emailChipifyRawInput(input);
+    }, 200);
   });
 
   input.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape') dropdown.style.display = 'none';
+    var items = dropdown.querySelectorAll('.email-autocomplete-item');
+    var isOpen = dropdown.style.display !== 'none' && items.length > 0;
+
+    if (e.key === 'Escape') {
+      dropdown.style.display = 'none';
+      _acHighlightIdx = -1;
+      return;
+    }
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (!isOpen) { _showDropdown(); return; }
+      var next = _acHighlightIdx + 1;
+      if (next >= items.length) next = 0;
+      _acHighlight(next);
+      return;
+    }
+
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (!isOpen) return;
+      var prev = _acHighlightIdx - 1;
+      if (prev < 0) prev = items.length - 1;
+      _acHighlight(prev);
+      return;
+    }
+
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (isOpen && _acHighlightIdx >= 0 && items[_acHighlightIdx]) {
+        // Select the highlighted autocomplete item
+        _acSelect(items[_acHighlightIdx]);
+      } else {
+        // No autocomplete selection — chipify whatever is in the input
+        _emailChipifyRawInput(input);
+      }
+      dropdown.style.display = 'none';
+      _acHighlightIdx = -1;
+      return;
+    }
+
+    // Comma also triggers chipification
+    if (e.key === ',') {
+      // Let the comma be typed, then chipify after a tick
+      setTimeout(function() { _emailChipifyRawInput(input); }, 10);
+    }
   });
+}
+
+/**
+ * Get all email addresses already chipped in a given input's field.
+ * @param {HTMLElement} input
+ * @returns {Array<string>} — lowercase email addresses
+ */
+function _emailGetChipEmails(input) {
+  var container = input.closest('.email-autocomplete-wrap');
+  if (!container) return [];
+  var chipWrap = container.querySelector('.email-chip-container');
+  if (!chipWrap) return [];
+  var emails = [];
+  chipWrap.querySelectorAll('.email-recipient-chip').forEach(function(chip) {
+    var e = (chip.dataset.email || '').toLowerCase().trim();
+    if (e) emails.push(e);
+  });
+  return emails;
+}
+
+/**
+ * Chipify a selected autocomplete result into the chip container.
+ * Includes contact/user image and color for known people.
+ * @param {HTMLElement} input — the text input element
+ * @param {Object} result — { display_name, email, contact, image_url, color }
+ */
+function _emailChipifyRecipient(input, result) {
+  var container = input.closest('.email-autocomplete-wrap');
+  if (!container) return;
+  var chipWrap = container.querySelector('.email-chip-container');
+  if (!chipWrap) {
+    chipWrap = document.createElement('div');
+    chipWrap.className = 'email-chip-container';
+    container.insertBefore(chipWrap, input);
+  }
+
+  // Don't add duplicate in this field
+  var emailVal = (result.email || '').toLowerCase().trim();
+  if (!emailVal) return;
+  var existing = chipWrap.querySelectorAll('.email-recipient-chip');
+  for (var i = 0; i < existing.length; i++) {
+    if ((existing[i].dataset.email || '').toLowerCase() === emailVal) return;
+  }
+
+  // Look up full contact/user info for image and color
+  var knownInfo = result.contact || _emailLookupKnown(emailVal);
+  var isKnown = !!(knownInfo && knownInfo.display_name);
+  var imageUrl = result.image_url || (knownInfo ? knownInfo.image_url : null) || null;
+  var chipColor = result.color || (knownInfo ? knownInfo.color : null) || null;
+  var displayName = result.display_name || (knownInfo ? knownInfo.display_name : '') || '';
+
+  var chip = document.createElement('span');
+  chip.className = 'email-recipient-chip';
+  if (isKnown) {
+    chip.classList.add('email-chip-known');
+  } else {
+    chip.classList.add('email-chip-plain');
+  }
+
+  // Apply contact/user color as background
+  if (chipColor && isKnown) {
+    chip.style.backgroundColor = chipColor;
+    chip.style.borderColor = chipColor;
+    // Use contrasting text color
+    chip.style.color = _emailChipTextColor(chipColor);
+  }
+
+  chip.dataset.email = emailVal;
+  chip.dataset.displayName = displayName;
+  chip.title = emailVal; // Show email on hover
+
+  // Build chip content: [image] [name] [✕]
+  var chipHtml = '';
+  if (imageUrl && isKnown) {
+    chipHtml += '<img src="' + imageUrl + '" class="email-chip-img" alt="">';
+  }
+  var label = displayName || emailVal;
+  chipHtml += '<span class="email-chip-label">' + _escHtml(label) + '</span>';
+  chipHtml += '<button type="button" class="remove-recipient" title="Remove">✕</button>';
+  chip.innerHTML = chipHtml;
+
+  chip.querySelector('.remove-recipient').addEventListener('click', function() {
+    chip.remove();
+    _emailSyncChipsToInput(input);
+    if (typeof setSaveButtonUnsaved === 'function') setSaveButtonUnsaved();
+  });
+  chipWrap.appendChild(chip);
+
+  // Clear the current partial from the input
+  var parts = input.value.split(',');
+  parts[parts.length - 1] = '';
+  input.value = parts.filter(function(p) { return p.trim(); }).join(', ');
+  if (input.value && !input.value.endsWith(', ')) input.value += '';
+
+  _emailSyncChipsToInput(input);
+  if (typeof setSaveButtonUnsaved === 'function') setSaveButtonUnsaved();
+}
+
+/**
+ * Determine text color for a chip based on its background color.
+ * @param {string} hex — hex color string
+ * @returns {string} — '#fff' or '#1a1208'
+ */
+function _emailChipTextColor(hex) {
+  if (!hex) return '#1a1208';
+  var c = hex.replace('#', '');
+  if (c.length === 3) c = c[0]+c[0]+c[1]+c[1]+c[2]+c[2];
+  var r = parseInt(c.substr(0,2), 16);
+  var g = parseInt(c.substr(2,2), 16);
+  var b = parseInt(c.substr(4,2), 16);
+  var lum = (0.299*r + 0.587*g + 0.114*b) / 255;
+  return lum > 0.55 ? '#1a1208' : '#fdf5e6';
+}
+
+/**
+ * Parse raw text from the input and chipify any valid email addresses.
+ * Called on blur, Enter, or comma.
+ * @param {HTMLElement} input — the text input element
+ */
+function _emailChipifyRawInput(input) {
+  var val = input.value.trim();
+  if (!val) return;
+
+  var parts = val.split(',');
+  var remaining = [];
+
+  parts.forEach(function(part) {
+    var trimmed = part.trim();
+    if (!trimmed) return;
+
+    // Extract email from "Name <email>" format or plain email
+    var emailMatch = trimmed.match(/<([^>]+@[^>]+)>/);
+    var nameMatch = trimmed.match(/^"?([^"<]+)"?\s*</);
+    var email = '';
+    var displayName = '';
+
+    if (emailMatch) {
+      email = emailMatch[1].trim();
+      displayName = nameMatch ? nameMatch[1].trim() : '';
+    } else if (trimmed.indexOf('@') !== -1 && trimmed.indexOf(' ') === -1) {
+      // Plain email address
+      email = trimmed;
+      displayName = '';
+    } else {
+      // Not a valid email — keep as remaining text
+      remaining.push(part);
+      return;
+    }
+
+    // Look up if this is a known contact/user
+    var known = _emailLookupKnown(email);
+    _emailChipifyRecipient(input, {
+      display_name: displayName || (known ? known.display_name : ''),
+      email: email,
+      contact: known
+    });
+  });
+
+  input.value = remaining.join(', ').trim();
+}
+
+/**
+ * Look up an email address in the contacts cache to determine if it's known.
+ * Returns display_name, image_url, and color if found.
+ * @param {string} email
+ * @returns {Object|null} — { display_name, image_url, color, type } or null
+ */
+function _emailLookupKnown(email) {
+  if (!email) return null;
+  var q = email.toLowerCase().trim();
+
+  if (_emailContactsCache) {
+    for (var i = 0; i < _emailContactsCache.length; i++) {
+      var c = _emailContactsCache[i];
+      var emails = c.emails || [];
+      for (var j = 0; j < emails.length; j++) {
+        if ((emails[j].value || '').toLowerCase().trim() === q) {
+          return {
+            display_name: c.display_name || c.given_name || '',
+            image_url: c.image_url || null,
+            color: c.color || null,
+            type: 'contact'
+          };
+        }
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Copy chips from a small editor email field to the corresponding expand modal field.
+ * Clears the expand input value and recreates chips from the small editor's chip container.
+ * @param {string} sourceInputId — ID of the small editor input (e.g. 'emailTo')
+ * @param {string} targetInputId — ID of the expand modal input (e.g. 'emailExpandTo')
+ */
+function _emailCopyChipsToExpand(sourceInputId, targetInputId) {
+  var sourceInput = document.getElementById(sourceInputId);
+  var targetInput = document.getElementById(targetInputId);
+  if (!sourceInput || !targetInput) return;
+
+  var sourceContainer = sourceInput.closest('.email-autocomplete-wrap');
+  if (!sourceContainer) return;
+  var sourceChipWrap = sourceContainer.querySelector('.email-chip-container');
+  if (!sourceChipWrap) return;
+
+  var chips = sourceChipWrap.querySelectorAll('.email-recipient-chip');
+  if (chips.length === 0) return;
+
+  // Clear the expand input value since we'll represent everything as chips
+  targetInput.value = '';
+
+  // Recreate each chip in the expand modal field
+  chips.forEach(function(chip) {
+    var email = chip.dataset.email || '';
+    var displayName = chip.dataset.displayName || '';
+    if (!email) return;
+    var known = _emailLookupKnown(email);
+    _emailChipifyRecipient(targetInput, {
+      display_name: displayName,
+      email: email,
+      contact: known,
+      image_url: known ? known.image_url : null,
+      color: known ? known.color : null
+    });
+  });
+}
+
+/**
+ * Copy chips from an expand modal email field back to the corresponding small editor field.
+ * @param {string} expandInputId — ID of the expand modal input (e.g. 'emailExpandTo')
+ * @param {string} smallInputId — ID of the small editor input (e.g. 'emailTo')
+ */
+function _emailCopyChipsFromExpand(expandInputId, smallInputId) {
+  var expandInput = document.getElementById(expandInputId);
+  var smallInput = document.getElementById(smallInputId);
+  if (!expandInput || !smallInput) return;
+
+  // Clear existing chips in the small editor field
+  var smallContainer = smallInput.closest('.email-autocomplete-wrap');
+  if (smallContainer) {
+    var existingChipWrap = smallContainer.querySelector('.email-chip-container');
+    if (existingChipWrap) existingChipWrap.remove();
+  }
+
+  // Get chips from expand modal
+  var expandContainer = expandInput.closest('.email-autocomplete-wrap');
+  if (!expandContainer) return;
+  var expandChipWrap = expandContainer.querySelector('.email-chip-container');
+
+  if (expandChipWrap) {
+    var chips = expandChipWrap.querySelectorAll('.email-recipient-chip');
+    chips.forEach(function(chip) {
+      var email = chip.dataset.email || '';
+      var displayName = chip.dataset.displayName || '';
+      if (!email) return;
+      var known = _emailLookupKnown(email);
+      _emailChipifyRecipient(smallInput, {
+        display_name: displayName,
+        email: email,
+        contact: known,
+        image_url: known ? known.image_url : null,
+        color: known ? known.color : null
+      });
+    });
+  }
+
+  // Also copy any remaining raw text from the expand input
+  var remaining = expandInput.value.trim();
+  if (remaining) {
+    smallInput.value = remaining;
+    _emailChipifyRawInput(smallInput);
+  }
+}
+
+/**
+ * Get the full value of an email field, combining chips + raw input text.
+ * @param {HTMLElement} input
+ * @returns {string}
+ */
+function _emailGetFieldValue(input) {
+  if (!input) return '';
+  var container = input.closest('.email-autocomplete-wrap');
+  var chipWrap = container ? container.querySelector('.email-chip-container') : null;
+  var values = [];
+
+  if (chipWrap) {
+    var chips = chipWrap.querySelectorAll('.email-recipient-chip');
+    chips.forEach(function(chip) {
+      var email = chip.dataset.email || '';
+      var name = chip.dataset.displayName || '';
+      if (name && email) {
+        values.push(name + ' <' + email + '>');
+      } else if (email) {
+        values.push(email);
+      }
+    });
+  }
+
+  // Also include any remaining text in the input
+  var remaining = input.value.trim();
+  if (remaining) {
+    remaining.split(',').forEach(function(p) {
+      var t = p.trim();
+      if (t) values.push(t);
+    });
+  }
+
+  return values.join(', ');
+}
+
+/**
+ * Sync chip data back to the hidden input value for form submission.
+ * The input value becomes a comma-separated list of "Name <email>" or "email".
+ * @param {HTMLElement} input
+ */
+function _emailSyncChipsToInput(input) {
+  var container = input.closest('.email-autocomplete-wrap');
+  if (!container) return;
+  var chipWrap = container.querySelector('.email-chip-container');
+  if (!chipWrap) { return; }
+
+  var chips = chipWrap.querySelectorAll('.email-recipient-chip');
+  var values = [];
+  chips.forEach(function(chip) {
+    var email = chip.dataset.email || '';
+    var name = chip.dataset.displayName || '';
+    if (name && email) {
+      values.push(name + ' <' + email + '>');
+    } else if (email) {
+      values.push(email);
+    }
+  });
+
+  // Append any remaining text in the input
+  var remaining = input.value.trim();
+  if (remaining) {
+    values.push(remaining);
+  }
+
+  // Store the full value in a data attribute for form collection
+  input.dataset.chipValue = values.join(', ');
 }
 
 /**
@@ -264,7 +685,7 @@ async function _deactivateEmailZone() {
     if (typeof cwocConfirm === 'function') {
       confirmed = await cwocConfirm('Clear all email fields? This cannot be undone.', { title: 'Remove Email', confirmLabel: '✕ Remove', danger: true });
     } else {
-      confirmed = confirm('Clear all email fields?');
+      confirmed = false; // cwocConfirm should always be available
     }
     if (!confirmed) return;
   }
@@ -507,7 +928,8 @@ function _hasEmailContent() {
   var toEl = document.getElementById('emailTo');
   var titleEl = document.getElementById('title');
   var bodyEl = document.getElementById('emailBody');
-  return (toEl && toEl.value.trim()) ||
+  var toVal = _emailGetFieldValue(toEl);
+  return !!toVal ||
          (titleEl && titleEl.value.trim()) ||
          (bodyEl && bodyEl.value.trim());
 }
@@ -516,9 +938,12 @@ function _hasEmailContent() {
 function _hasEmailSendableContent() {
   var toEl = document.getElementById('emailTo');
   var titleEl = document.getElementById('title');
+  var subjectEl = document.getElementById('emailSubject');
   var bodyEl = document.getElementById('emailBody');
-  return (toEl && toEl.value.trim()) &&
-         (titleEl && titleEl.value.trim()) &&
+  var toVal = _emailGetFieldValue(toEl);
+  var subjectVal = (subjectEl && subjectEl.value.trim()) || (titleEl && titleEl.value.trim()) || '';
+  return !!toVal &&
+         !!subjectVal &&
          (bodyEl && bodyEl.value.trim());
 }
 
@@ -556,9 +981,9 @@ function _updateEmailSaveButtonVisibility() {
  * Save the chit as a draft, then send it via the email send endpoint.
  */
 async function _emailSaveAndSend() {
-  // Validate To field
+  // Validate To field (check chips + raw input)
   var toEl = document.getElementById('emailTo');
-  var toVal = toEl ? toEl.value.trim() : '';
+  var toVal = _emailGetFieldValue(toEl);
   if (!toVal) {
     if (typeof cwocToast === 'function') cwocToast('Cannot send: no recipients specified.', 'error');
     return;
@@ -570,33 +995,36 @@ async function _emailSaveAndSend() {
 /**
  * Save the chit as a draft, send it, then archive the original email
  * that was being replied to (if this is a reply).
+ * Uses the undo-send countdown — archive happens only after actual send.
  */
 async function _emailSaveAndSendArchive() {
-  // Validate To field
+  // Validate To field (check chips + raw input)
   var toEl = document.getElementById('emailTo');
-  var toVal = toEl ? toEl.value.trim() : '';
+  var toVal = _emailGetFieldValue(toEl);
   if (!toVal) {
     if (typeof cwocToast === 'function') cwocToast('Cannot send: no recipients specified.', 'error');
     return;
   }
-  // Send the email first
-  await _emailSend();
 
-  // Archive the original email if this is a reply (has in_reply_to)
-  if (_emailCurrentChit && _emailCurrentChit.email_in_reply_to) {
-    // Find the original chit by matching email_message_id to our in_reply_to
-    try {
-      var resp = await fetch('/api/email/archive-original', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message_id: _emailCurrentChit.email_in_reply_to })
-      });
-      if (resp.ok) {
-        cwocToast('Original email archived.', 'success');
-      }
-    } catch (e) {
-      console.error('[Email] Failed to archive original:', e);
+  var chitId = window.currentChitId;
+  if (!chitId) {
+    cwocToast('Save the chit before sending.', 'error');
+    return;
+  }
+
+  try {
+    // Save the chit first
+    if (typeof saveChitAndStay === 'function') {
+      cwocToast('Saving before send...', 'info');
+      await saveChitAndStay();
     }
+
+    // Show undo countdown — actual send + archive happens when countdown expires
+    _emailUndoSendCountdown(chitId, true);
+
+  } catch (err) {
+    console.error('[_emailSaveAndSendArchive] Error:', err);
+    cwocToast('Failed to save email before sending.', 'error');
   }
 }
 
@@ -670,6 +1098,18 @@ function initEmailZone(chit) {
     bodyEl.value = chit.email_body_text || '';
   }
 
+  // Populate Subject field (mirrors title)
+  var subjectEl = document.getElementById('emailSubject');
+  if (subjectEl) {
+    subjectEl.value = chit.email_subject || chit.title || '';
+  }
+
+  // Show add-contact button for received emails
+  var addContactBtn = document.getElementById('emailAddContactBtn');
+  if (addContactBtn) {
+    addContactBtn.style.display = (chit.email_status === 'received' && chit.email_from) ? '' : 'none';
+  }
+
   // HTML email rendering: if email_body_html exists and this is a received email,
   // show HTML/Text toggle and render HTML in a sandboxed iframe
   if (chit.email_body_html && (chit.email_status === 'received' || chit.email_status === 'sent')) {
@@ -712,6 +1152,15 @@ function initEmailZone(chit) {
   if (ccEl) ccEl.addEventListener('input', function () { setSaveButtonUnsaved(); });
   if (bccEl) bccEl.addEventListener('input', function () { setSaveButtonUnsaved(); });
   if (bodyEl) bodyEl.addEventListener('input', function () { setSaveButtonUnsaved(); });
+
+  // Wire subject field — syncs to title if title is empty or matches previous subject
+  var subjectEl2 = document.getElementById('emailSubject');
+  if (subjectEl2) {
+    subjectEl2.addEventListener('input', function() {
+      setSaveButtonUnsaved();
+      _emailSyncSubjectToTitle();
+    });
+  }
 
   // Wire all formatting shortcuts on the small zone body textarea
   if (bodyEl && !bodyEl._formatShortcutsWired) {
@@ -767,9 +1216,10 @@ function getEmailData() {
   var bccEl = document.getElementById('emailBcc');
   var bodyEl = document.getElementById('emailBody');
 
-  var toVal = toEl ? toEl.value.trim() : '';
-  var ccVal = ccEl ? ccEl.value.trim() : '';
-  var bccVal = bccEl ? bccEl.value.trim() : '';
+  // Read from chip data attribute if available, otherwise fall back to raw input
+  var toVal = _emailGetFieldValue(toEl);
+  var ccVal = _emailGetFieldValue(ccEl);
+  var bccVal = _emailGetFieldValue(bccEl);
   var bodyVal = bodyEl ? bodyEl.value.trim() : '';
 
   // Only return data if there's some email content
@@ -791,9 +1241,10 @@ function getEmailData() {
   var ccArr = ccVal ? ccVal.split(',').map(function (s) { return s.trim(); }).filter(Boolean) : [];
   var bccArr = bccVal ? bccVal.split(',').map(function (s) { return s.trim(); }).filter(Boolean) : [];
 
-  // Get subject from the title field (email_subject maps to chit title)
+  // Get subject from the email subject field, falling back to title
+  var subjectEl = document.getElementById('emailSubject');
   var titleEl = document.getElementById('title');
-  var subject = titleEl ? titleEl.value.trim() : '';
+  var subject = (subjectEl && subjectEl.value.trim()) || (titleEl ? titleEl.value.trim() : '');
 
   var data = {
     email_to: JSON.stringify(toArr),
@@ -1014,7 +1465,8 @@ async function _emailForward() {
 
 /**
  * Send the current draft email via POST /api/email/send/{id}.
- * Shows success/error toast and updates UI to reflect sent status.
+ * Shows an undo countdown bar — the email is only actually sent when the
+ * countdown expires. Clicking "Undo" cancels the send.
  */
 async function _emailSend() {
   var chitId = window.currentChitId;
@@ -1023,9 +1475,9 @@ async function _emailSend() {
     return;
   }
 
-  // Validate that To field has at least one recipient
+  // Validate that To field has at least one recipient (check chips + raw input)
   var toEl = document.getElementById('emailTo');
-  var toVal = toEl ? toEl.value.trim() : '';
+  var toVal = _emailGetFieldValue(toEl);
   if (!toVal) {
     cwocToast('Cannot send: no recipients specified.', 'error');
     return;
@@ -1038,44 +1490,34 @@ async function _emailSend() {
       await saveChitAndStay();
     }
 
-    var response = await fetch('/api/email/send/' + encodeURIComponent(chitId), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' }
-    });
-
-    if (!response.ok) {
-      var errData;
-      try {
-        errData = await response.json();
-      } catch (e) {
-        errData = { detail: await response.text() };
-      }
-      var errMsg = errData.detail || errData.message || 'Send failed.';
-      cwocToast(errMsg, 'error');
-      return;
-    }
-
-    var result = await response.json();
-    cwocToast('Email sent successfully.', 'success');
-
-    // Update local state to reflect sent status
-    if (_emailCurrentChit) {
-      _emailCurrentChit.email_status = 'sent';
-      _emailCurrentChit.email_folder = 'sent';
-    }
-
-    // Update UI: hide Send button, make fields read-only
-    var sendBtn = document.getElementById('emailSendBtn');
-    if (sendBtn) sendBtn.style.display = 'none';
-    _setEmailZoneReadOnly(true);
-
-    // Refresh the thread view so the sent message appears
-    _fetchEmailThread(chitId);
+    // Show undo countdown — actual send happens when countdown expires
+    _emailUndoSendCountdown(chitId, false);
 
   } catch (err) {
-    console.error('[_emailSend] Error sending email:', err);
-    cwocToast('Failed to send email.', 'error');
+    console.error('[_emailSend] Error saving before send:', err);
+    cwocToast('Failed to save email before sending.', 'error');
   }
+}
+
+/**
+ * Show an undo-send countdown bar. If the user doesn't click Undo,
+ * the email is actually sent when the timer expires.
+ * Stores pending send in localStorage and navigates to the email view.
+ * @param {string} chitId — the chit ID to send
+ * @param {boolean} archiveOriginal — if true, archive the replied-to email after send
+ */
+function _emailUndoSendCountdown(chitId, archiveOriginal) {
+  // Store pending send info in localStorage for the dashboard to pick up
+  var pendingSend = {
+    chitId: chitId,
+    archiveOriginal: archiveOriginal,
+    inReplyTo: (_emailCurrentChit && _emailCurrentChit.email_in_reply_to) || null,
+    timestamp: Date.now()
+  };
+  localStorage.setItem('cwoc_email_pending_send', JSON.stringify(pendingSend));
+
+  // Navigate to the email view
+  window.location.href = '/frontend/html/index.html#Email';
 }
 
 /**
@@ -1121,6 +1563,19 @@ async function _emailDiscardDraft() {
 }
 
 /**
+ * Download the raw .eml file for the current email chit from IMAP.
+ */
+function _emailDownloadRaw() {
+  var chitId = window.currentChitId;
+  if (!chitId) {
+    if (typeof cwocToast === 'function') cwocToast('No email to download.', 'error');
+    return;
+  }
+  // Open the download endpoint in a new tab (triggers browser download)
+  window.open('/api/email/' + encodeURIComponent(chitId) + '/raw', '_blank');
+}
+
+/**
  * Toggle field editability for the email zone.
  *
  * @param {boolean} readOnly — true to disable fields, false to enable
@@ -1130,11 +1585,13 @@ function _setEmailZoneReadOnly(readOnly) {
   var ccEl = document.getElementById('emailCc');
   var bccEl = document.getElementById('emailBcc');
   var bodyEl = document.getElementById('emailBody');
+  var subjectEl = document.getElementById('emailSubject');
 
   if (toEl) { toEl.disabled = readOnly; toEl.readOnly = readOnly; }
   if (ccEl) { ccEl.disabled = readOnly; ccEl.readOnly = readOnly; }
   if (bccEl) { bccEl.disabled = readOnly; bccEl.readOnly = readOnly; }
   if (bodyEl) { bodyEl.disabled = readOnly; bodyEl.readOnly = readOnly; }
+  if (subjectEl) { subjectEl.disabled = readOnly; subjectEl.readOnly = readOnly; }
 
   // Hide rendered output and render toggle when read-only
   var renderedEl2 = document.getElementById('emailBodyRendered');
@@ -1180,7 +1637,11 @@ function _openEmailExpandModal() {
   } else if (status === 'received') {
     actionBtns =
       '<button type="button" class="zone-button" onclick="event.stopPropagation(); _closeEmailExpandModal(true); _emailReply()"><i class="fas fa-reply"></i> Reply</button>' +
-      '<button type="button" class="zone-button" onclick="event.stopPropagation(); _closeEmailExpandModal(true); _emailForward()"><i class="fas fa-share"></i> Forward</button>';
+      '<button type="button" class="zone-button" onclick="event.stopPropagation(); _closeEmailExpandModal(true); _emailForward()"><i class="fas fa-share"></i> Forward</button>' +
+      '<button type="button" class="zone-button" onclick="event.stopPropagation(); _emailDownloadRaw()"><i class="fas fa-download"></i> Raw</button>';
+  } else if (status === 'sent') {
+    actionBtns =
+      '<button type="button" class="zone-button" onclick="event.stopPropagation(); _emailDownloadRaw()"><i class="fas fa-download"></i> Raw</button>';
   }
 
   var disabledAttr = isReadOnly ? ' readonly disabled' : '';
@@ -1218,19 +1679,21 @@ function _openEmailExpandModal() {
       '</div>' +
       '<div class="modal-body" style="flex:1;overflow:auto;padding:0.5em 1em;">' +
         '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">' +
-          '<div style="display:flex;align-items:center;gap:6px;flex:1;min-width:200px;"><strong style="flex-shrink:0;">From:</strong><span style="font-style:italic;color:#5a4a3a;">' + _escapeHtmlAttr(fromEl ? fromEl.textContent : '') + '</span></div>' +
-          '<div style="display:flex;align-items:center;gap:6px;flex:2;min-width:200px;"><strong style="flex-shrink:0;">To:</strong><input id="emailExpandTo" type="text" value="' + _escapeHtmlAttr(toEl ? toEl.value : '') + '" style="flex:1;padding:4px 8px;border:1px inset #c4a882;border-radius:4px;font-family:Lora,Georgia,serif;"' + disabledAttr + '>' +
+          '<div style="display:flex;align-items:center;gap:6px;flex:1;min-width:200px;"><strong style="flex-shrink:0;">From:</strong><span style="font-style:italic;color:#5a4a3a;">' + _escapeHtmlAttr(fromEl ? fromEl.textContent : '') + '</span>' +
+            (status === 'received' && _emailCurrentChit && _emailCurrentChit.email_from ? '<button type="button" class="email-add-contact-btn" onclick="_emailAddSenderAsContact()" title="Add sender as contact"><i class="fas fa-plus-circle"></i></button>' : '') +
+          '</div>' +
+          '<div style="display:flex;align-items:center;gap:6px;flex:2;min-width:200px;"><strong style="flex-shrink:0;">To:</strong><div class="email-autocomplete-wrap" style="flex:1;position:relative;"><input id="emailExpandTo" type="text" value="' + _escapeHtmlAttr(toEl ? toEl.value : '') + '" style="flex:1;padding:4px 8px;border:1px inset #c4a882;border-radius:4px;font-family:Lora,Georgia,serif;" autocomplete="off"' + disabledAttr + '><div id="emailExpandToDropdown" class="email-autocomplete-dropdown" style="display:none;"></div></div>' +
             (isReadOnly ? '' : ' <button type="button" class="email-cc-toggle-btn" id="emailExpandShowCcBtn" onclick="_toggleExpandCcBcc(\'cc\')" title="Add CC">CC</button><button type="button" class="email-cc-toggle-btn" id="emailExpandShowBccBtn" onclick="_toggleExpandCcBcc(\'bcc\')" title="Add BCC">BCC</button>') +
           '</div>' +
         '</div>' +
         '<div class="email-field" id="emailExpandCcRow" style="display:' + (ccEl && ccEl.value.trim() ? '' : 'none') + ';margin-bottom:8px;">' +
           '<label style="min-width:50px;font-weight:600;color:#5a4a3a;font-family:Lora,Georgia,serif;font-size:14px;flex-shrink:0;text-align:right;">CC:</label>' +
-          '<input id="emailExpandCc" type="text" value="' + _escapeHtmlAttr(ccEl ? ccEl.value : '') + '" style="flex:1;padding:4px 8px;border:1px inset #c4a882;border-radius:4px;font-family:Lora,Georgia,serif;"' + disabledAttr + '>' +
+          '<div class="email-autocomplete-wrap" style="flex:1;position:relative;"><input id="emailExpandCc" type="text" value="' + _escapeHtmlAttr(ccEl ? ccEl.value : '') + '" style="flex:1;padding:4px 8px;border:1px inset #c4a882;border-radius:4px;font-family:Lora,Georgia,serif;" autocomplete="off"' + disabledAttr + '><div id="emailExpandCcDropdown" class="email-autocomplete-dropdown" style="display:none;"></div></div>' +
           '<button type="button" class="email-cc-remove-btn" onclick="_toggleExpandCcBcc(\'cc\')" title="Remove CC">✕</button>' +
         '</div>' +
         '<div class="email-field" id="emailExpandBccRow" style="display:' + (bccEl && bccEl.value.trim() ? '' : 'none') + ';margin-bottom:8px;">' +
           '<label style="min-width:50px;font-weight:600;color:#5a4a3a;font-family:Lora,Georgia,serif;font-size:14px;flex-shrink:0;text-align:right;">BCC:</label>' +
-          '<input id="emailExpandBcc" type="text" value="' + _escapeHtmlAttr(bccEl ? bccEl.value : '') + '" style="flex:1;padding:4px 8px;border:1px inset #c4a882;border-radius:4px;font-family:Lora,Georgia,serif;"' + disabledAttr + '>' +
+          '<div class="email-autocomplete-wrap" style="flex:1;position:relative;"><input id="emailExpandBcc" type="text" value="' + _escapeHtmlAttr(bccEl ? bccEl.value : '') + '" style="flex:1;padding:4px 8px;border:1px inset #c4a882;border-radius:4px;font-family:Lora,Georgia,serif;" autocomplete="off"' + disabledAttr + '><div id="emailExpandBccDropdown" class="email-autocomplete-dropdown" style="display:none;"></div></div>' +
           '<button type="button" class="email-cc-remove-btn" onclick="_toggleExpandCcBcc(\'bcc\')" title="Remove BCC">✕</button>' +
         '</div>' +
         '<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">' +
@@ -1282,6 +1745,20 @@ function _openEmailExpandModal() {
   overlay._escHandler = _emailExpandEscHandler;
 
   document.body.appendChild(overlay);
+
+  // Wire autocomplete on expand modal To/Cc/Bcc fields (same as small editor)
+  if (!isReadOnly) {
+    _emailLoadContacts().then(function() {
+      _wireEmailAutocomplete('emailExpandTo', 'emailExpandToDropdown');
+      _wireEmailAutocomplete('emailExpandCc', 'emailExpandCcDropdown');
+      _wireEmailAutocomplete('emailExpandBcc', 'emailExpandBccDropdown');
+
+      // Copy existing chips from the small editor into the expand modal fields
+      _emailCopyChipsToExpand('emailTo', 'emailExpandTo');
+      _emailCopyChipsToExpand('emailCc', 'emailExpandCc');
+      _emailCopyChipsToExpand('emailBcc', 'emailExpandBcc');
+    });
+  }
 
   // Wire all formatting shortcuts on the expand textarea
   var expandTA = document.getElementById('emailExpandBody');
@@ -1562,16 +2039,10 @@ function _closeEmailExpandModal(save) {
       if (expandSubject && titleEl) {
         titleEl.value = expandSubject.value;
       }
-      // Sync To/Cc/Bcc back to the zone fields
-      var expandTo = document.getElementById('emailExpandTo');
-      var toEl = document.getElementById('emailTo');
-      if (expandTo && toEl) toEl.value = expandTo.value;
-      var expandCc = document.getElementById('emailExpandCc');
-      var ccEl = document.getElementById('emailCc');
-      if (expandCc && ccEl) ccEl.value = expandCc.value;
-      var expandBcc = document.getElementById('emailExpandBcc');
-      var bccEl = document.getElementById('emailBcc');
-      if (expandBcc && bccEl) bccEl.value = expandBcc.value;
+      // Sync To/Cc/Bcc chips back to the zone fields
+      _emailCopyChipsFromExpand('emailExpandTo', 'emailTo');
+      _emailCopyChipsFromExpand('emailExpandCc', 'emailCc');
+      _emailCopyChipsFromExpand('emailExpandBcc', 'emailBcc');
       setSaveButtonUnsaved();
     }
   }
@@ -2210,7 +2681,8 @@ function _getEmailAttachmentList(chit) {
 
 /**
  * Build the attachment bar DOM element.
- * Icons flow right-to-left in the bottom-right corner.
+ * Shows image thumbnails for image attachments, icons for others.
+ * Full filenames are always displayed (no truncation).
  * @param {Array} attachments — parsed attachment metadata array
  * @param {string} chitId — the chit ID for download URLs
  * @returns {HTMLElement}
@@ -2227,10 +2699,28 @@ function _buildEmailAttachmentBar(attachments, chitId) {
     item.title = att.filename + ' (' + _formatAttSize(att.size) + ')';
     item.setAttribute('download', att.filename);
 
-    var icon = document.createElement('span');
-    icon.className = 'email-attachment-chip-icon';
-    icon.textContent = typeof _getFileIcon === 'function' ? _getFileIcon(att.mime_type) : '📄';
-    item.appendChild(icon);
+    // Image attachments get a thumbnail preview
+    if (att.mime_type && att.mime_type.startsWith('image/')) {
+      var thumb = document.createElement('img');
+      thumb.className = 'email-attachment-thumb-img';
+      thumb.src = '/api/chits/' + encodeURIComponent(chitId) + '/attachments/' + encodeURIComponent(att.id);
+      thumb.alt = att.filename || '';
+      thumb.loading = 'lazy';
+      thumb.onerror = function() {
+        this.style.display = 'none';
+        // Fallback to icon
+        var fallback = document.createElement('span');
+        fallback.className = 'email-attachment-chip-icon';
+        fallback.textContent = '🖼️';
+        item.insertBefore(fallback, item.firstChild);
+      };
+      item.appendChild(thumb);
+    } else {
+      var icon = document.createElement('span');
+      icon.className = 'email-attachment-chip-icon';
+      icon.textContent = typeof _getFileIcon === 'function' ? _getFileIcon(att.mime_type) : '📄';
+      item.appendChild(icon);
+    }
 
     var name = document.createElement('span');
     name.className = 'email-attachment-chip-name';
@@ -2252,4 +2742,89 @@ function _formatAttSize(bytes) {
   if (!bytes || bytes < 1024) return (bytes || 0) + ' B';
   if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Subject ↔ Title sync
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Sync the email subject field to the title field.
+ * Auto-populates title if it's empty or matches the previous subject value.
+ */
+function _emailSyncSubjectToTitle() {
+  var subjectEl = document.getElementById('emailSubject');
+  var titleEl = document.getElementById('title');
+  if (!subjectEl || !titleEl) return;
+
+  var subjectVal = subjectEl.value.trim();
+  var titleVal = titleEl.value.trim();
+
+  // Auto-populate title if empty or if title matches the old subject (user hasn't customized it)
+  if (!titleVal || titleVal === (subjectEl._prevSubject || '')) {
+    titleEl.value = subjectVal;
+  }
+  subjectEl._prevSubject = subjectVal;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Add sender as contact
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Create a new contact from the sender's email address.
+ * Confirms unsaved changes before navigating to the contact editor.
+ */
+async function _emailAddSenderAsContact() {
+  if (!_emailCurrentChit || !_emailCurrentChit.email_from) return;
+
+  var senderRaw = _emailCurrentChit.email_from;
+  var email = senderRaw;
+  var displayName = '';
+  var match = senderRaw.match(/^"?([^"<]+)"?\s*<([^>]+)>/);
+  if (match) {
+    displayName = match[1].trim();
+    email = match[2].trim();
+  }
+
+  // Check for unsaved changes
+  if (window._cwocSave && window._cwocSave.hasChanges()) {
+    var action = await _emailConfirmUnsavedForNav();
+    if (action === 'cancel') return;
+    if (action === 'save') {
+      if (typeof saveChitAndStay === 'function') await saveChitAndStay();
+    }
+    // 'discard' — just navigate
+  }
+
+  // Navigate to contact editor with pre-populated email
+  var params = new URLSearchParams();
+  params.set('new', '1');
+  params.set('prefill_email', email);
+  if (displayName) params.set('prefill_name', displayName);
+  window.location.href = '/frontend/html/contact-editor.html?' + params.toString();
+}
+
+/**
+ * Show a confirm dialog for unsaved changes before navigation.
+ * Returns 'save', 'discard', or 'cancel'.
+ */
+function _emailConfirmUnsavedForNav() {
+  return new Promise(function(resolve) {
+    if (typeof cwocConfirm === 'function') {
+      // Use a simple 3-option approach
+      cwocConfirm('You have unsaved changes. Save before leaving?', {
+        title: 'Unsaved Changes',
+        confirmLabel: '💾 Save & Go',
+        cancelLabel: '❌ Cancel',
+        extraLabel: '🗑️ Discard',
+        onExtra: function() { resolve('discard'); }
+      }).then(function(confirmed) {
+        resolve(confirmed ? 'save' : 'cancel');
+      });
+    } else {
+      // cwocConfirm should always be available, but fallback gracefully
+      resolve('discard');
+    }
+  });
 }

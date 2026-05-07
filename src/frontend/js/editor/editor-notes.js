@@ -46,6 +46,8 @@ function _closeNotesMoreMenu() {
 }
 
 function autoGrowNote(el) {
+  // When Milkdown is active, skip textarea auto-grow
+  if (window.CwocMilkdown && !window.CwocMilkdown.isFallback) return;
   el.style.height = "auto";
   const maxH = Math.floor(window.innerHeight * 0.6);
   el.style.height = Math.min(el.scrollHeight, maxH) + "px";
@@ -217,7 +219,10 @@ function toggleNotesViewMode(event) {
 function copyNotesToClipboard(event, source) {
   if (event) event.stopPropagation();
   let text = "";
-  if (source === "modal") {
+  // Use Milkdown's active markdown when available
+  if (window.CwocMilkdown && !window.CwocMilkdown.isFallback && typeof window._getActiveMarkdown === 'function') {
+    text = window._getActiveMarkdown();
+  } else if (source === "modal") {
     const modalInput = document.getElementById("notes-markdown-input-modal");
     text = modalInput ? modalInput.innerText : "";
   } else {
@@ -242,7 +247,10 @@ function copyNotesToClipboard(event, source) {
 function downloadNotes(event, source) {
   if (event) event.stopPropagation();
   let text = "";
-  if (source === "modal") {
+  // Use Milkdown's active markdown when available
+  if (window.CwocMilkdown && !window.CwocMilkdown.isFallback && typeof window._getActiveMarkdown === 'function') {
+    text = window._getActiveMarkdown();
+  } else if (source === "modal") {
     const modalInput = document.getElementById("notes-markdown-input-modal");
     text = modalInput ? modalInput.innerText : "";
   } else {
@@ -262,6 +270,29 @@ function openNotesModal(event) {
   if (event) event.stopPropagation();
   const modal = document.getElementById("notesModal");
   if (!modal) return;
+
+  // If Milkdown is active, use Milkdown modal
+  if (window.CwocMilkdown && !window.CwocMilkdown.isFallback && typeof window.openMilkdownModal === 'function') {
+    var milkdownModalContainer = document.getElementById('milkdown-modal-container');
+    var editRenderWrap = document.getElementById('notesModalEditRenderWrap');
+    var livePreviewWrap = document.getElementById('notesModalLivePreviewWrap');
+    var oldModalToolbar = document.getElementById('notesModalFormatToolbar');
+    var renderBtn = document.getElementById('modal-render-toggle-btn');
+    var modeToggle = document.getElementById('notesModalModeToggle');
+
+    // Show Milkdown container, hide legacy containers
+    if (milkdownModalContainer) milkdownModalContainer.style.display = '';
+    if (editRenderWrap) editRenderWrap.style.display = 'none';
+    if (livePreviewWrap) livePreviewWrap.style.display = 'none';
+    if (oldModalToolbar) oldModalToolbar.style.display = 'none';
+    if (renderBtn) renderBtn.style.display = 'none';
+    if (modeToggle) modeToggle.style.display = 'none';
+
+    modal.style.display = "flex";
+    window.openMilkdownModal();
+    return;
+  }
+
   const textarea = document.getElementById("note");
   const modalInput = document.getElementById("notes-markdown-input-modal");
   const modalOutput = document.getElementById("notes-rendered-output-modal");
@@ -280,6 +311,16 @@ function openNotesModal(event) {
 function closeNotesModal(save) {
   const modal = document.getElementById("notesModal");
   if (modal) modal.style.display = "none";
+
+  // If Milkdown is active, use Milkdown close
+  if (window.CwocMilkdown && !window.CwocMilkdown.isFallback && typeof window.closeMilkdownModal === 'function') {
+    window.closeMilkdownModal(save);
+    // Restore modal containers for next open
+    var milkdownModalContainer = document.getElementById('milkdown-modal-container');
+    if (milkdownModalContainer) milkdownModalContainer.style.display = 'none';
+    return;
+  }
+
   if (save) {
     // Get content from whichever mode is active
     var text = '';

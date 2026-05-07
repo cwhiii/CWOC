@@ -1,0 +1,1 @@
+Checklist progress counts (X/Y ✓) now exclude empty items across all views — dashboard chit headers, project list/kanban child counts, aggregate project counts, grandchild counts, editor project zone, and the inline progress updater.

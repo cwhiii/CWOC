@@ -163,6 +163,8 @@ from src.backend.migrations import (
     migrate_add_checklist_autosave,
     migrate_add_view_order,
     migrate_add_recent_tags,
+    migrate_add_paginate_email,
+    migrate_fix_double_encoded_attachments,
 )
 
 # Initialize database and run all migrations (same order as before)
@@ -217,6 +219,8 @@ migrate_create_ha_config()
 migrate_add_checklist_autosave()
 migrate_add_view_order()
 migrate_add_recent_tags()
+migrate_add_paginate_email()
+migrate_fix_double_encoded_attachments()
 seed_version_info()
 
 # One-time cleanup: fix sent emails that still have CWOC_System/Email/Drafts tag
@@ -250,6 +254,8 @@ except Exception as _ce:
 from src.backend.routes.auth import auth_router
 from src.backend.routes.users import users_router
 from src.backend.routes.chits import router as chits_router
+from src.backend.routes.chits_search import router as chits_search_router
+from src.backend.routes.chits_import import router as chits_import_router
 from src.backend.routes.trash import router as trash_router
 from src.backend.routes.settings import router as settings_router
 from src.backend.routes.contacts import router as contacts_router
@@ -270,6 +276,8 @@ from src.backend.routes.admin import admin_router
 app.include_router(auth_router)
 app.include_router(users_router)
 app.include_router(chits_router)
+app.include_router(chits_search_router)
+app.include_router(chits_import_router)
 app.include_router(trash_router)
 app.include_router(sharing_router)
 app.include_router(notifications_router)

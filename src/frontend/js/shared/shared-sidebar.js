@@ -79,6 +79,7 @@ function _cwocInjectSidebar() {
   html += '  </div>';
   html += '  <div class="filter-group" style="margin-top:8px;">';
   html += '    <label class="email-folder-opt" style="cursor:pointer;"><input type="checkbox" id="email-threaded-toggle" onchange="_toggleEmailThreadedView()" checked> <i class="fas fa-layer-group"></i> Group threads</label>';
+  html += '    <label class="email-folder-opt" style="cursor:pointer;margin-top:4px;"><input type="checkbox" id="email-unread-top-toggle" onchange="_toggleEmailUnreadTop()"> <i class="fas fa-envelope"></i> Unread at top</label>';
   html += '  </div>';
   html += '</div>';
 
@@ -134,7 +135,7 @@ function _cwocInjectSidebar() {
   html += '  <label class="sidebar-section-label">View Mode</label>';
   html += '  <div style="display:flex;gap:4px;">';
   html += '    <button class="action-button" id="projects-mode-list" onclick="_setProjectsMode(\'list\')" style="flex:1;margin-bottom:0;font-size:0.8em;padding:6px;">📋 List</button>';
-  html += '    <button class="action-button" id="projects-mode-kanban" onclick="_setProjectsMode(\'kanban\')" style="flex:1;margin-bottom:0;font-size:0.8em;padding:6px;background:ivory;">📊 Kanban</button>';
+  html += '    <button class="action-button" id="projects-mode-kanban" onclick="_setProjectsMode(\'kanban\')" style="flex:1;margin-bottom:0;font-size:0.8em;padding:6px;background:ivory;color:#3b1f0a;">📊 Kanban</button>';
   html += '  </div>';
   html += '</div>';
 
@@ -142,7 +143,7 @@ function _cwocInjectSidebar() {
   html += '<div class="sidebar-section" id="section-alarms-mode" style="display:none;">';
   html += '  <label class="sidebar-section-label">View Mode</label>';
   html += '  <div style="display:flex;gap:4px;">';
-  html += '    <button class="action-button" id="alarms-mode-list" onclick="_setAlarmsMode(\'list\')" style="flex:1;margin-bottom:0;font-size:0.8em;padding:6px;background:ivory;">📋 Chits</button>';
+  html += '    <button class="action-button" id="alarms-mode-list" onclick="_setAlarmsMode(\'list\')" style="flex:1;margin-bottom:0;font-size:0.8em;padding:6px;background:ivory;color:#3b1f0a;">📋 Chits</button>';
   html += '    <button class="action-button" id="alarms-mode-independent" onclick="_setAlarmsMode(\'independent\')" style="flex:1;margin-bottom:0;font-size:0.8em;padding:6px;">🛎️ Independent</button>';
   html += '  </div>';
   html += '</div>';
@@ -151,7 +152,7 @@ function _cwocInjectSidebar() {
   html += '<div class="sidebar-section" id="section-tasks-mode" style="display:none;">';
   html += '  <label class="sidebar-section-label">View Mode</label>';
   html += '  <div style="display:flex;gap:4px;">';
-  html += '    <button class="action-button" id="tasks-mode-tasks" onclick="_setTasksMode(\'tasks\')" style="flex:1;margin-bottom:0;font-size:0.8em;padding:6px;background:ivory;">📋 Tasks</button>';
+  html += '    <button class="action-button" id="tasks-mode-tasks" onclick="_setTasksMode(\'tasks\')" style="flex:1;margin-bottom:0;font-size:0.8em;padding:6px;background:ivory;color:#3b1f0a;">📋 Tasks</button>';
   html += '    <button class="action-button" id="tasks-mode-habits" onclick="_setTasksMode(\'habits\')" style="flex:1;margin-bottom:0;font-size:0.8em;padding:6px;">🎯 Habits</button>';
   html += '    <button class="action-button" id="tasks-mode-assigned" onclick="_setTasksMode(\'assigned\')" style="flex:1;margin-bottom:0;font-size:0.8em;padding:6px;">📌 Assigned</button>';
   html += '  </div>';

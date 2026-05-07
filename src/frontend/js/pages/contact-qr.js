@@ -144,7 +144,7 @@ function showContactQrCode(contact) {
                 info: 'Contact data too large for QR (' + byteLength + ' bytes). Use Export instead.',
             });
         } else {
-            alert('Contact data too large for QR code. Use Export instead.');
+            cwocToast('Contact data too large for QR code. Use Export instead.', 'info');
         }
         return;
     }

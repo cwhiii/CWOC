@@ -1,0 +1,1 @@
+Added "New Chit" button to the checklist item send popup — when right-clicking a checklist item, you can now spawn a brand new chit pre-populated with that item (and its children) in addition to sending to existing chits or searching.

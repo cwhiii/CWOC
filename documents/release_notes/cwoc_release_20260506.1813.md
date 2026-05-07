@@ -1,0 +1,3 @@
+## Release 20260506.1813
+
+Email chip and autocomplete refinements: autocomplete now filters out people already added to the current field (no duplicates within To, CC, or BCC); chips for known contacts/users show their profile image and background color with contrasting text; hovering a chip shows the actual email address as a tooltip; the field value reader now properly counts chips for send validation (fixes "no recipients" error when recipients are only in chips); subject label changed from "Subj:" to "Subject:"; add-contact button also appears in the fullscreen expand modal for received emails.

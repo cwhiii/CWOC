@@ -1,0 +1,1 @@
+Added within-column drag-to-reorder for child chits in the Projects kanban view. Cards can now be reordered within the same status column (both desktop drag and mobile touch), with the new order persisted to the backend via the project's child_chits array. Also added the same reorder capability to the editor's Projects zone.

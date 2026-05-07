@@ -6,6 +6,7 @@ const projectState = {
   projectChit: null, // Current project chit object
   childChits: {}, // Map child chit ID -> chit object
   projectMasters: [], // List of all project master chits for move dropdown
+  _dirtyChildIds: new Set(), // Track which child chits were modified this session
 };
 
 // Single document-level listener to close move-project dropdowns (avoids per-card duplication)
@@ -62,9 +63,11 @@ function clearProjectsContent() {
 function updateHeaderButtonsVisibility() {
   const isMaster = projectState.projectChit?.is_project_master === true;
   const addButton = document.getElementById("addNewChitButton");
+  const createButton = document.getElementById("createNewChildButton");
   const filterButton = document.getElementById("filterProjectItemsBtn");
 
   if (addButton) addButton.style.display = isMaster ? "inline-flex" : "none";
+  if (createButton) createButton.style.display = isMaster ? "inline-flex" : "none";
   if (filterButton)
     filterButton.style.display = isMaster ? "inline-flex" : "none";
 }
@@ -146,21 +149,109 @@ function renderChildChitsByStatus() {
       toggleIcon.textContent = hidden ? "▼" : "▶";
     });
 
-    // Drag and drop on entire section
+    // ── Within-section reorder: placeholder that shifts cards out of the way ──
+    var _editorPlaceholder = null;
+    var _editorDraggedCard = null;
+    var _editorDraggedCardHeight = 36;
+
+    // Track which card is being dragged within this section
+    section.addEventListener("dragstart", function (e) {
+      var card = e.target.closest('.project-item');
+      if (card && list.contains(card)) {
+        _editorDraggedCard = card;
+        _editorDraggedCardHeight = card.offsetHeight || 36;
+      }
+    }, true);
+    section.addEventListener("dragend", function () {
+      _editorDraggedCard = null;
+      if (_editorPlaceholder && _editorPlaceholder.parentNode) _editorPlaceholder.remove();
+      _editorPlaceholder = null;
+    });
+
     section.addEventListener("dragover", (e) => {
       e.preventDefault();
       section.classList.add("drag-over");
+
+      // Show placeholder for within-section reorder
+      if (_editorDraggedCard && list.contains(_editorDraggedCard)) {
+        var items = Array.from(list.querySelectorAll('.project-item[data-chit-id]'));
+        var others = items.filter(function (c) { return c !== _editorDraggedCard; });
+        var insertIdx = others.length;
+        for (var i = 0; i < others.length; i++) {
+          var r = others[i].getBoundingClientRect();
+          if (e.clientY < r.top + r.height / 2) {
+            insertIdx = i;
+            break;
+          }
+        }
+        if (!_editorPlaceholder) {
+          _editorPlaceholder = document.createElement('div');
+          _editorPlaceholder.className = 'cwoc-kanban-drop-placeholder';
+          _editorPlaceholder.style.cssText = 'height:' + _editorDraggedCardHeight + 'px;border:2px dashed #8b5a2b;border-radius:6px;background:rgba(139,90,43,0.08);box-sizing:border-box;margin-bottom:0.3em;transition:height 0.15s ease;';
+        }
+        if (insertIdx >= others.length) {
+          list.appendChild(_editorPlaceholder);
+        } else {
+          list.insertBefore(_editorPlaceholder, others[insertIdx]);
+        }
+      }
     });
-    section.addEventListener("dragleave", () => {
-      section.classList.remove("drag-over");
+    section.addEventListener("dragleave", (e) => {
+      if (!section.contains(e.relatedTarget)) {
+        section.classList.remove("drag-over");
+        if (_editorPlaceholder && _editorPlaceholder.parentNode) _editorPlaceholder.remove();
+      }
     });
     section.addEventListener("drop", (e) => {
       e.preventDefault();
       section.classList.remove("drag-over");
+      if (_editorPlaceholder && _editorPlaceholder.parentNode) _editorPlaceholder.remove();
+      _editorPlaceholder = null;
+
       const chitId = e.dataTransfer.getData("text/plain");
-      if (chitId && projectState.childChits[chitId]) {
+      if (!chitId || !projectState.childChits[chitId]) return;
+
+      var currentStatus = (projectState.childChits[chitId].status || "ToDo");
+      var normalizedCurrent = ({"todo":"ToDo","in progress":"In Progress","blocked":"Blocked","complete":"Complete"})[currentStatus.toLowerCase()] || "ToDo";
+
+      // If dropping in a different status section, change status
+      if (normalizedCurrent !== status) {
         updateChitStatus(chitId, status);
+        return;
       }
+
+      // Same section: reorder within column using placeholder position
+      var items = Array.from(list.querySelectorAll('.project-item[data-chit-id]'));
+      var others = items.filter(function (c) { return c.dataset.chitId !== chitId; });
+      var insertIdx = others.length;
+      for (var i = 0; i < others.length; i++) {
+        var r = others[i].getBoundingClientRect();
+        if (e.clientY < r.top + r.height / 2) {
+          insertIdx = i;
+          break;
+        }
+      }
+      var ids = others.map(function (c) { return c.dataset.chitId; });
+      ids.splice(insertIdx, 0, chitId);
+
+      // Rebuild child_chits order: replace this column's items in the overall array
+      var existingOrder = Array.isArray(projectState.projectChit.child_chits) ? projectState.projectChit.child_chits : [];
+      var colChildIds = new Set(ids);
+      var newOrder = [];
+      var colIdx = 0;
+      existingOrder.forEach(function (cid) {
+        if (colChildIds.has(cid)) {
+          newOrder.push(ids[colIdx++]);
+        } else {
+          newOrder.push(cid);
+        }
+      });
+      while (colIdx < ids.length) {
+        newOrder.push(ids[colIdx++]);
+      }
+      projectState.projectChit.child_chits = newOrder;
+      saveCurrentChit();
+      renderChildChitsByStatus();
     });
 
     grouped[status].forEach((chit) => {
@@ -174,40 +265,153 @@ function renderChildChitsByStatus() {
 
   container.appendChild(projectContainer);
 
-  // Touch drag support for project cards between status columns
+  // Touch drag support: floating card + placeholder (same style as Notes view)
   if (typeof enableTouchGesture === 'function') {
     projectContainer.querySelectorAll('.project-item[data-chit-id]').forEach(function (card) {
       var chitId = card.dataset.chitId;
+      var _edTouchPlaceholder = null;
+      var _edTouchDragging = false;
+      var _edTouchOffsetX = 0;
+      var _edTouchOffsetY = 0;
+
       enableTouchGesture(card, {
-        onDragStart: function () {
-          card.classList.add('dragging');
-          card.style.opacity = '0.4';
+        onDragStart: function (data) {
+          _edTouchDragging = true;
+          var rect = card.getBoundingClientRect();
+          _edTouchOffsetX = (data && data.clientX !== undefined) ? data.clientX - rect.left : rect.width / 2;
+          _edTouchOffsetY = (data && data.clientY !== undefined) ? data.clientY - rect.top : rect.height / 2;
+
+          // Create placeholder
+          _edTouchPlaceholder = document.createElement('div');
+          _edTouchPlaceholder.className = 'cwoc-kanban-drop-placeholder';
+          _edTouchPlaceholder.style.cssText = 'height:' + rect.height + 'px;border:2px dashed #8b5a2b;border-radius:6px;background:rgba(139,90,43,0.08);box-sizing:border-box;margin-bottom:0.3em;transition:height 0.15s ease;';
+          card.parentNode.insertBefore(_edTouchPlaceholder, card);
+
+          // Float the card
+          card.style.position = 'fixed';
+          card.style.left = rect.left + 'px';
+          card.style.top = rect.top + 'px';
+          card.style.width = rect.width + 'px';
+          card.style.zIndex = '10000';
+          card.style.opacity = '0.9';
+          card.style.boxShadow = '0 8px 24px rgba(0,0,0,0.3)';
+          card.style.transition = 'none';
+          card.style.pointerEvents = 'none';
+          document.body.style.overscrollBehavior = 'contain';
         },
         onDragMove: function (data) {
-          // Highlight the section under the finger
-          projectContainer.querySelectorAll('.project-status-section').forEach(function (s) {
-            s.classList.remove('drag-over');
-          });
-          var target = document.elementFromPoint(data.clientX, data.clientY);
-          if (target) {
-            var targetSection = target.closest('.project-status-section');
-            if (targetSection) targetSection.classList.add('drag-over');
-          }
-        },
-        onDragEnd: function (data) {
-          card.classList.remove('dragging');
-          card.style.opacity = '';
+          if (!_edTouchDragging) return;
+
+          // Move floating card
+          card.style.left = (data.clientX - _edTouchOffsetX) + 'px';
+          card.style.top = (data.clientY - _edTouchOffsetY) + 'px';
+
+          // Find target section and position placeholder
           projectContainer.querySelectorAll('.project-status-section').forEach(function (s) {
             s.classList.remove('drag-over');
           });
           var target = document.elementFromPoint(data.clientX, data.clientY);
           if (!target) return;
           var targetSection = target.closest('.project-status-section');
+          if (targetSection) {
+            targetSection.classList.add('drag-over');
+            var listEl = targetSection.querySelector('.project-chit-list');
+            if (listEl && _edTouchPlaceholder) {
+              var items = Array.from(listEl.querySelectorAll('.project-item[data-chit-id]'));
+              var others = items.filter(function (c) { return c !== card; });
+              var insertIdx = others.length;
+              for (var i = 0; i < others.length; i++) {
+                var r = others[i].getBoundingClientRect();
+                if (data.clientY < r.top + r.height / 2) {
+                  insertIdx = i;
+                  break;
+                }
+              }
+              if (insertIdx >= others.length) {
+                listEl.appendChild(_edTouchPlaceholder);
+              } else {
+                listEl.insertBefore(_edTouchPlaceholder, others[insertIdx]);
+              }
+            }
+          }
+        },
+        onDragEnd: function (data) {
+          if (!_edTouchDragging) return;
+          _edTouchDragging = false;
+          document.body.style.overscrollBehavior = '';
+
+          projectContainer.querySelectorAll('.project-status-section').forEach(function (s) {
+            s.classList.remove('drag-over');
+          });
+
+          // Find target section from placeholder position
+          var targetSection = _edTouchPlaceholder ? _edTouchPlaceholder.closest('.project-status-section') : null;
+
+          // Restore card styles
+          card.style.position = '';
+          card.style.left = '';
+          card.style.top = '';
+          card.style.width = '';
+          card.style.zIndex = '';
+          card.style.opacity = '';
+          card.style.boxShadow = '';
+          card.style.transition = '';
+          card.style.pointerEvents = '';
+
+          // Remove placeholder
+          if (_edTouchPlaceholder && _edTouchPlaceholder.parentNode) {
+            _edTouchPlaceholder.remove();
+          }
+          _edTouchPlaceholder = null;
+
           if (!targetSection) return;
           var newStatus = targetSection.dataset.status;
-          if (chitId && projectState.childChits[chitId]) {
+          if (!chitId || !projectState.childChits[chitId]) return;
+
+          var currentStatus = (projectState.childChits[chitId].status || "ToDo");
+          var statusMapLower = {"todo":"ToDo","in progress":"In Progress","blocked":"Blocked","complete":"Complete"};
+          var normalizedCurrent = statusMapLower[currentStatus.toLowerCase()] || "ToDo";
+
+          // Different section: change status
+          if (normalizedCurrent !== newStatus) {
             updateChitStatus(chitId, newStatus);
+            return;
           }
+
+          // Same section: reorder within column
+          var listEl = targetSection.querySelector('.project-chit-list');
+          if (!listEl) return;
+          var items = Array.from(listEl.querySelectorAll('.project-item[data-chit-id]'));
+          var others = items.filter(function (c) { return c !== card; });
+          var insertIdx = others.length;
+          for (var i = 0; i < others.length; i++) {
+            var r = others[i].getBoundingClientRect();
+            if (data.clientY < r.top + r.height / 2) {
+              insertIdx = i;
+              break;
+            }
+          }
+          var ids = others.map(function (c) { return c.dataset.chitId; });
+          ids.splice(insertIdx, 0, chitId);
+
+          // Rebuild child_chits order
+          var existingOrder = Array.isArray(projectState.projectChit.child_chits) ? projectState.projectChit.child_chits : [];
+          var colChildIds = new Set(ids);
+          var newOrder = [];
+          var colIdx = 0;
+          existingOrder.forEach(function (cid) {
+            if (colChildIds.has(cid)) {
+              newOrder.push(ids[colIdx++]);
+            } else {
+              newOrder.push(cid);
+            }
+          });
+          while (colIdx < ids.length) {
+            newOrder.push(ids[colIdx++]);
+          }
+          projectState.projectChit.child_chits = newOrder;
+          saveCurrentChit();
+          renderChildChitsByStatus();
         },
       });
     });
@@ -217,6 +421,8 @@ function renderChildChitsByStatus() {
 function updateChitStatus(chitId, newStatus) {
   if (projectState.childChits[chitId]) {
     projectState.childChits[chitId].status = newStatus;
+    if (!projectState._dirtyChildIds) projectState._dirtyChildIds = new Set();
+    projectState._dirtyChildIds.add(chitId);
     renderChildChitsByStatus();
     saveCurrentChit();
   }
@@ -238,8 +444,11 @@ function createChildChitCard(chit) {
     e.dataTransfer.setData("text/plain", chit.id);
     e.dataTransfer.effectAllowed = "move";
     card.classList.add("dragging");
+    // Hide the card after browser captures drag image so only the placeholder shows
+    requestAnimationFrame(function () { card.style.display = 'none'; });
   });
   card.addEventListener("dragend", () => {
+    card.style.display = '';
     card.classList.remove("dragging");
   });
 
@@ -296,6 +505,19 @@ function createChildChitCard(chit) {
     saveCurrentChit();
   });
   leftContainer.appendChild(titleDiv);
+
+  // Checklist progress count on child chits
+  if (Array.isArray(chit.checklist) && chit.checklist.length > 0) {
+    var _eclItems = chit.checklist.filter(function(i) { return i && i.text && i.text.trim(); });
+    var _eclChecked = _eclItems.filter(function(i) { return i.checked || i.done; }).length;
+    var _eclSuffix = (_eclItems.length > 0 && _eclChecked === _eclItems.length) ? ' ✓' : '';
+    var _eclSpan = document.createElement('span');
+    _eclSpan.className = 'checklist-progress-count';
+    _eclSpan.dataset.chitId = chit.id;
+    _eclSpan.style.cssText = 'font-size:0.8em;opacity:0.7;margin-left:0.5em;font-weight:normal;white-space:nowrap;';
+    _eclSpan.textContent = '(' + _eclChecked + '/' + _eclItems.length + _eclSuffix + ')';
+    leftContainer.appendChild(_eclSpan);
+  }
 
   contentWrapper.appendChild(leftContainer);
 
@@ -423,6 +645,8 @@ function createChildChitCard(chit) {
 function handleStatusChange(childChitId, newStatus) {
   if (projectState.childChits[childChitId]) {
     projectState.childChits[childChitId].status = newStatus;
+    if (!projectState._dirtyChildIds) projectState._dirtyChildIds = new Set();
+    projectState._dirtyChildIds.add(childChitId);
   }
 }
 
@@ -435,6 +659,8 @@ function handleDueDateChange(childChitId, newDueDate) {
     } else {
       projectState.childChits[childChitId].due_datetime = null;
     }
+    if (!projectState._dirtyChildIds) projectState._dirtyChildIds = new Set();
+    projectState._dirtyChildIds.add(childChitId);
   }
 }
 
@@ -495,16 +721,23 @@ async function saveProjectChanges() {
   }
 
   try {
-    // Save updated child chits (status, due date)
-    const childSavePromises = Object.values(projectState.childChits).map(
-      async (child) => {
+    // Only save child chits that were actually modified during this editing session
+    const dirtyIds = projectState._dirtyChildIds || new Set();
+    if (dirtyIds.size === 0) return;
+
+    const childSavePromises = Array.from(dirtyIds).map(
+      async (childId) => {
+        const child = projectState.childChits[childId];
+        if (!child) return; // was deleted during session
         const chitUpdate = {
           ...child,
           tags: child.tags || [],
           checklist: child.checklist || [],
-          is_project_master: false, // Ensure child chits are not project masters
+          is_project_master: false,
         };
-        const isNewChild = !(await chitExists(child.id));
+        // Always PUT for existing children — they were loaded from the server
+        // Only POST if this is a brand-new child created in this session
+        const isNewChild = !!child._isNewChild;
         const method = isNewChild ? "POST" : "PUT";
         const url = isNewChild ? "/api/chits" : `/api/chits/${child.id}`;
         const res = await fetch(url, {
@@ -514,19 +747,19 @@ async function saveProjectChanges() {
         });
         if (!res.ok) {
           console.warn(`Failed to save child chit ${child.id}: ${res.status}`);
+        } else if (isNewChild) {
+          // Clear the new flag after successful creation
+          delete child._isNewChild;
         }
       },
     );
-
-    // NOTE: The project chit itself is saved by the editor's main save flow
-    // (saveChitData / saveChitAndStay). We only save child chits here to avoid
-    // overwriting the project with stale projectState data (which caused ghost
-    // duplicates with title "New Project" and no color).
 
     const results = await Promise.all(childSavePromises);
     if (results.some((res) => res && !res.ok)) {
       console.warn("Some child chit save operations failed:", results);
     }
+    // Clear dirty set after save
+    projectState._dirtyChildIds = new Set();
   } catch (error) {
     console.error("Error saving project changes:", error);
     cwocToast("Failed to save project changes.", "error");
@@ -857,6 +1090,39 @@ function addChildChit(chit) {
 // Modified addProjectItem to open the modal
 function addProjectItem() {
   openAddChitModal();
+}
+
+/**
+ * Create a brand new chit and immediately add it as a child of this project.
+ * Opens the editor for the new chit after creation.
+ */
+async function createNewChildChit(event) {
+  if (event) { event.preventDefault(); event.stopPropagation(); }
+  if (!projectState.projectChit) {
+    cwocToast("No project loaded to create a child chit.", "error");
+    return;
+  }
+
+  cwocPromptModal("Create New Child Chit", "Enter chit title…", async function(title) {
+    try {
+      // Create the new chit via API
+      var newChit = { title: title, status: "ToDo" };
+      var resp = await fetch("/api/chits", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newChit),
+      });
+      if (!resp.ok) throw new Error("Failed to create chit");
+      var created = await resp.json();
+
+      // Add the new chit as a child of this project
+      addChildChit(created);
+      cwocToast('Created "' + title + '" and added to project.', "success");
+    } catch (err) {
+      console.error("Error creating new child chit:", err);
+      cwocToast("Failed to create new child chit.", "error");
+    }
+  });
 }
 
 // Toggles project master status, with confirmation if children exist

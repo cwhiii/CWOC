@@ -727,7 +727,7 @@ function addAlarm() {
   const time = document.getElementById("alarmTime")?.value.trim() || "";
   const recurrence = document.getElementById("alarmRecurrence")?.value || "none";
   const days = Array.from(document.querySelectorAll(".alarm-day:checked")).map((cb) => cb.value);
-  if (!time) { alert("Please enter a time for the alarm."); return; }
+  if (!time) { cwocToast("Please enter a time for the alarm.", "error"); return; }
   const alarm = { _type: "alarm", name, time, recurrence, days, enabled: true };
   if (_editingAlarmIdx !== null) {
     window._alertsData.alarms[_editingAlarmIdx] = alarm;
@@ -804,7 +804,7 @@ function addTimer() {
   const s = parseInt(document.getElementById("timerSecondsModal")?.value) || 0;
   const loop = document.getElementById("timerLoopModal")?.checked || false;
   const totalSeconds = h * 3600 + m * 60 + s;
-  if (totalSeconds <= 0) { alert("Please enter a duration greater than 0."); return; }
+  if (totalSeconds <= 0) { cwocToast("Please enter a duration greater than 0.", "error"); return; }
   const timer = { _type: "timer", name, totalSeconds, loop };
   if (_editingTimerIdx !== null) {
     window._alertsData.timers[_editingTimerIdx] = timer;
@@ -1266,7 +1266,7 @@ function addNotification() {
   const unit = document.getElementById("notificationUnit")?.value || "minutes";
   const onlyIfUndone = document.getElementById("notificationOnlyIfUndone")?.checked ?? true;
   const message = document.getElementById("notificationMessage")?.value?.trim() || '';
-  if (!value || value <= 0) { alert("Please enter a valid number."); return; }
+  if (!value || value <= 0) { cwocToast("Please enter a valid number.", "error"); return; }
   window._alertsData.notifications.push({ _type: "notification", value, unit, afterTarget: false, only_if_undone: onlyIfUndone, message });
   closeNotificationModal(true);
   renderNotificationsContainer();

@@ -1,0 +1,3 @@
+## Release 20260506.1803
+
+Email editor overhaul: autocomplete now supports arrow key navigation and Enter to select; valid emails wrap into chips (teal for known contacts/users, neutral for plain addresses); added Subject field in the small email zone that auto-syncs to the title; undo-send countdown now shows on the dashboard email view after navigating away from the editor; threaded emails are 30% taller; sender profile images are slightly larger (34px) with a dark brown border; added "+" button on From field for received emails to create a new contact pre-filled with the sender's email; contact editor now accepts prefill_email and prefill_name URL params.

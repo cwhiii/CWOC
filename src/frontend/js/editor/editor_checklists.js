@@ -308,7 +308,7 @@ class Checklist {
     if (typeof cwocConfirm === 'function') {
       confirmed = await cwocConfirm("Delete " + checkedCount + " checked item" + (checkedCount > 1 ? "s" : "") + "?", { title: "Clear Checked", danger: true, confirmLabel: "Delete" });
     } else {
-      confirmed = confirm("Delete " + checkedCount + " checked item" + (checkedCount > 1 ? "s" : "") + "?");
+      confirmed = false; // cwocConfirm should always be available
     }
     if (!confirmed) return;
     this._pushUndoState();

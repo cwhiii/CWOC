@@ -1,0 +1,3 @@
+# Release 20260505.2256
+
+Integrated Milkdown WYSIWYG markdown editor into the chit editor's Notes zone. The editor provides inline rich text editing (headings, bold, italic, lists, blockquotes, code, links) while storing standard markdown. Self-hosted ESM bundles loaded via import map — no build step or npm required. Includes a format toolbar, `[[` chit link autocomplete, full-screen modal editing, content bridge to the existing save system, parchment theme CSS, link security hardening, and graceful fallback to plain textarea when vendor files are unavailable. Updated configurator with Milkdown download step, help documentation, and property-based tests for filtering, insertion format, paste sanitization, and XSS prevention.

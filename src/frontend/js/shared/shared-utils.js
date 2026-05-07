@@ -182,6 +182,88 @@ function cwocToast(message, type, duration) {
   }
 }
 
+/**
+ * Show a styled input modal (replaces browser prompt()).
+ * @param {string} title - Modal title text
+ * @param {string} placeholder - Input placeholder text
+ * @param {function} onConfirm - Called with the input value when confirmed
+ * @param {object} [opts] - Optional: { defaultValue: '' }
+ */
+function cwocPromptModal(title, placeholder, onConfirm, opts) {
+  opts = opts || {};
+  // Remove any existing prompt modal
+  document.querySelectorAll('.cwoc-prompt-modal-overlay').forEach(function(el) { el.remove(); });
+
+  var overlay = document.createElement('div');
+  overlay.className = 'cwoc-prompt-modal-overlay';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;';
+
+  var modal = document.createElement('div');
+  modal.style.cssText = 'background:#fffaf0;border:2px solid #6b4e31;border-radius:8px;padding:24px;min-width:300px;max-width:400px;width:90%;font-family:Lora,Georgia,serif;box-shadow:0 8px 32px rgba(0,0,0,0.3);';
+
+  var titleEl = document.createElement('h3');
+  titleEl.style.cssText = 'margin:0 0 12px 0;color:#4a2c2a;font-size:1.1em;';
+  titleEl.textContent = title;
+  modal.appendChild(titleEl);
+
+  var input = document.createElement('input');
+  input.type = 'text';
+  input.placeholder = placeholder || '';
+  input.value = opts.defaultValue || '';
+  input.style.cssText = 'width:100%;padding:8px 10px;font-family:Lora,Georgia,serif;font-size:1em;border:1px solid #a0522d;border-radius:4px;background:#fff8f0;box-sizing:border-box;color:#1a1208;';
+  modal.appendChild(input);
+
+  var btnRow = document.createElement('div');
+  btnRow.style.cssText = 'display:flex;gap:8px;justify-content:flex-end;margin-top:16px;';
+
+  var cancelBtn = document.createElement('button');
+  cancelBtn.textContent = 'Cancel';
+  cancelBtn.style.cssText = 'padding:6px 14px;font-family:Lora,Georgia,serif;font-size:0.9em;background:#e8dcc8;color:#4a2c2a;border:1px solid #a0522d;border-radius:4px;cursor:pointer;';
+  cancelBtn.addEventListener('mouseenter', function() { this.style.background = '#d4c5a9'; });
+  cancelBtn.addEventListener('mouseleave', function() { this.style.background = '#e8dcc8'; });
+
+  var confirmBtn = document.createElement('button');
+  confirmBtn.textContent = 'Create';
+  confirmBtn.style.cssText = 'padding:6px 14px;font-family:Lora,Georgia,serif;font-size:0.9em;background:#8b5a2b;color:#fdf5e6;border:1px solid #5a3f2a;border-radius:4px;cursor:pointer;font-weight:bold;';
+  confirmBtn.addEventListener('mouseenter', function() { this.style.background = '#6b4e31'; });
+  confirmBtn.addEventListener('mouseleave', function() { this.style.background = '#8b5a2b'; });
+
+  btnRow.appendChild(cancelBtn);
+  btnRow.appendChild(confirmBtn);
+  modal.appendChild(btnRow);
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+
+  function close() { overlay.remove(); }
+
+  cancelBtn.addEventListener('click', close);
+  overlay.addEventListener('click', function(e) { if (e.target === overlay) close(); });
+
+  confirmBtn.addEventListener('click', function() {
+    var val = input.value.trim();
+    if (!val) { input.focus(); return; }
+    close();
+    onConfirm(val);
+  });
+
+  input.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      var val = input.value.trim();
+      if (!val) return;
+      close();
+      onConfirm(val);
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      close();
+    }
+  });
+
+  // Focus the input after a tick
+  setTimeout(function() { input.focus(); input.select(); }, 50);
+}
+
 // ── Temperature & Wind Conversion (unit_system-aware) ────────────────────────
 
 /**

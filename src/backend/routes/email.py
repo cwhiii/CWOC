@@ -8,6 +8,7 @@ import email
 import email.message
 import email.utils
 import email.policy
+import html as html_mod
 import imaplib
 import logging
 import mimetypes
@@ -476,6 +477,16 @@ def _strip_html_tags(html: str) -> str:
     text = text.replace("&quot;", '"')
     text = text.replace("&#39;", "'")
     text = text.replace("&nbsp;", " ")
+    # Strip zero-width / invisible named entities
+    text = text.replace("&zwnj;", "")
+    text = text.replace("&zwj;", "")
+    text = text.replace("&lrm;", "")
+    text = text.replace("&rlm;", "")
+    text = text.replace("&shy;", "")
+    # Decode any remaining HTML entities (numeric and named)
+    text = html_mod.unescape(text)
+    # Strip zero-width / invisible Unicode characters that survived decoding
+    text = re.sub(r"[\u200B\u200C\u200D\u200E\u200F\uFEFF\u00AD\u034F]", "", text)
     # Collapse excessive whitespace but preserve paragraph breaks
     text = re.sub(r"\n{3,}", "\n\n", text)
     text = re.sub(r"[ \t]+", " ", text)
@@ -1998,6 +2009,138 @@ def email_toggle_read(chit_id: str, request: Request):
     finally:
         if conn:
             conn.close()
+            conn.close()
+
+
+# ───────────────────────────────────────────────────────────────────────────
+# GET /api/email/{chit_id}/raw — Download raw email (.eml) from IMAP
+# ───────────────────────────────────────────────────────────────────────────
+
+@email_router.get("/api/email/{chit_id}/raw")
+def email_download_raw(chit_id: str, request: Request):
+    """Re-fetch the raw RFC 2822 email from IMAP and return as .eml download.
+
+    Looks up the chit's email_message_id, connects to the appropriate IMAP
+    account, searches for the message, and returns the raw bytes.
+    """
+    from fastapi.responses import Response
+
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        cursor.execute(
+            "SELECT email_message_id, email_account_id, email_subject, owner_id FROM chits WHERE id = ?",
+            (chit_id,),
+        )
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Email chit not found.")
+
+        message_id = row["email_message_id"]
+        account_id = row["email_account_id"]
+        subject = row["email_subject"] or "email"
+        owner_id = row["owner_id"]
+
+        if not message_id:
+            raise HTTPException(status_code=400, detail="This chit has no email Message-ID.")
+
+        # Load the email account credentials
+        cursor.execute(
+            "SELECT email_accounts FROM settings WHERE user_id = ?",
+            (owner_id,),
+        )
+        settings_row = cursor.fetchone()
+        if not settings_row or not settings_row["email_accounts"]:
+            raise HTTPException(status_code=400, detail="No email accounts configured.")
+
+        import json as _json
+        accounts = _json.loads(settings_row["email_accounts"]) if settings_row["email_accounts"] else []
+        account = None
+        for acct in accounts:
+            if acct.get("id") == account_id:
+                account = acct
+                break
+
+        if not account:
+            # Fallback: try first account
+            if accounts:
+                account = accounts[0]
+            else:
+                raise HTTPException(status_code=400, detail="Email account not found.")
+
+        imap_host = account.get("imap_host", "")
+        imap_port = int(account.get("imap_port", 993))
+        imap_user = account.get("email", "")
+        imap_pass = _decrypt_password(account.get("password", ""))
+
+        if not imap_host or not imap_user or not imap_pass:
+            raise HTTPException(status_code=400, detail="Incomplete IMAP credentials.")
+
+        # Connect to IMAP and search for the message
+        imap = None
+        try:
+            imap = imaplib.IMAP4_SSL(imap_host, imap_port)
+            imap.login(imap_user, imap_pass)
+
+            # Search across common folders
+            raw_bytes = None
+            for folder in ["INBOX", "Sent", "[Gmail]/Sent Mail", "[Gmail]/All Mail", "INBOX.Sent", "Drafts"]:
+                try:
+                    status, _ = imap.select(folder, readonly=True)
+                    if status != "OK":
+                        continue
+                    # Search by Message-ID header
+                    search_criteria = f'(HEADER Message-ID "{message_id}")'
+                    status, data = imap.search(None, search_criteria)
+                    if status != "OK" or not data[0]:
+                        continue
+                    uid = data[0].split()[0]
+                    status, msg_data = imap.fetch(uid, "(BODY.PEEK[])")
+                    if status == "OK" and msg_data:
+                        for part in msg_data:
+                            if isinstance(part, tuple):
+                                raw_bytes = part[1]
+                                break
+                    if raw_bytes:
+                        break
+                except Exception:
+                    continue
+
+            if not raw_bytes:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Could not find the original email on the mail server. It may have been deleted."
+                )
+
+            # Build a safe filename from the subject
+            safe_subject = "".join(c for c in subject if c.isalnum() or c in " -_").strip()[:50]
+            if not safe_subject:
+                safe_subject = "email"
+            filename = f"{safe_subject}.eml"
+
+            return Response(
+                content=raw_bytes,
+                media_type="message/rfc822",
+                headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+            )
+
+        finally:
+            if imap:
+                try:
+                    imap.logout()
+                except Exception:
+                    pass
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Raw email download error: %s", e)
+        raise HTTPException(status_code=500, detail=f"Failed to download raw email: {str(e)}")
+    finally:
+        if conn:
             conn.close()
 
 

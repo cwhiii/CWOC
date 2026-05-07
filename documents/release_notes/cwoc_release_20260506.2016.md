@@ -1,0 +1,1 @@
+Email view: pinned messages now sort to the top (above unread, above newest), with a bookmark icon indicator. Body preview text now collapses all whitespace (tabs, newlines, multiple spaces) into single spaces so actual content is visible. Email card content is now vertically centered within each row.

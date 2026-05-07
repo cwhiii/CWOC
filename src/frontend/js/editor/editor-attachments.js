@@ -365,7 +365,7 @@ async function _deleteAttachment(attachmentId, filename) {
       danger: true,
     });
   } else {
-    confirmed = confirm('Delete attachment "' + filename + '"?');
+    confirmed = false; // cwocConfirm should always be available
   }
   if (!confirmed) return;
 

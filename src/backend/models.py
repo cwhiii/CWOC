@@ -69,6 +69,7 @@ class Settings(BaseModel):
     checklist_autosave: Optional[str] = "1"      # "1" = auto-save checklist changes, "0" = require manual save
     view_order: Optional[str] = None             # JSON array of tab names in user's preferred order
     recent_tags: Optional[List[str]] = None      # Recently used tag paths (persisted across sessions)
+    paginate_email: Optional[str] = "0"          # "1" = paginate email view (50 per page), "0" = show all
 
 class Chit(BaseModel):
     id: Optional[str] = None

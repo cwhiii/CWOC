@@ -4915,6 +4915,31 @@ input.location {
 .send-item-search-btn:hover {
     background: var(--button-hover, #c4a484);
 }
+.send-item-new-chit-btn {
+    flex: 1;
+    border: 1px solid var(--accent-teal, #008080);
+    background: var(--parchment-medium, #faebd7);
+    border-radius: 4px;
+    padding: 6px 8px;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.8em;
+    color: var(--accent-teal, #008080);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    justify-content: center;
+    transition: background 0.15s, color 0.15s;
+}
+.send-item-new-chit-btn:hover {
+    background: var(--accent-teal, #008080);
+    color: #fff;
+}
+.send-item-new-row {
+    display: flex;
+    gap: 6px;
+    margin-top: 6px;
+}
 
 /* Send icon on checklist items (appears on hover, next to trash) */
 .checklist-send-icon {

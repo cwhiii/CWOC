@@ -1,0 +1,1 @@
+Restored the full attachment thumbnail row below email cards (image previews, file icons with names). The inline attachment chips in the content row are also still present. If attachments still don't appear, the issue is in the data — the attachments field may be null/empty for those chits in the database.

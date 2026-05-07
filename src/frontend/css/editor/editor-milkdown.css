@@ -1,0 +1,289 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   CWOC Milkdown Editor Theme — Parchment Aesthetic
+   
+   Styles the Milkdown WYSIWYG editor to match CWOC's 1940s parchment theme.
+   Uses CSS variables from shared-page.css as the canonical source.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Editor Container ──────────────────────────────────────────────────── */
+
+.milkdown-editor {
+    position: relative;
+    border: 1px solid var(--aged-brown-medium, #8b4513);
+    border-radius: 6px;
+    background: var(--parchment-light, #fdf5e6);
+    font-family: 'Lora', Georgia, serif;
+    font-size: 16px;
+    color: #1a1208;
+    line-height: 1.6;
+    transition: box-shadow 0.2s ease;
+}
+
+.milkdown-editor:focus-within {
+    box-shadow: 0 0 0 2px var(--accent-gold, #d4af37);
+}
+
+/* ── ProseMirror Content Area ──────────────────────────────────────────── */
+
+.milkdown-editor .ProseMirror {
+    min-height: 6em;
+    max-height: 60vh;
+    overflow-y: auto;
+    padding: 0.75em 1em;
+    outline: none;
+    word-wrap: break-word;
+    white-space: pre-wrap;
+}
+
+.milkdown-editor .ProseMirror p {
+    margin: 0 0 0.5em 0;
+}
+
+.milkdown-editor .ProseMirror p:last-child {
+    margin-bottom: 0;
+}
+
+/* ── Headings ──────────────────────────────────────────────────────────── */
+
+.milkdown-editor h1,
+.milkdown-editor h2,
+.milkdown-editor h3,
+.milkdown-editor h4,
+.milkdown-editor h5,
+.milkdown-editor h6 {
+    color: var(--aged-brown-dark, #4a2c2a);
+    font-family: 'Lora', Georgia, serif;
+    font-weight: 700;
+    margin: 0.8em 0 0.4em 0;
+    line-height: 1.3;
+}
+
+.milkdown-editor h1 { font-size: 1.6em; }
+.milkdown-editor h2 { font-size: 1.4em; }
+.milkdown-editor h3 { font-size: 1.2em; }
+.milkdown-editor h4 { font-size: 1.1em; }
+.milkdown-editor h5 { font-size: 1.05em; }
+.milkdown-editor h6 { font-size: 1em; }
+
+/* ── Blockquotes ───────────────────────────────────────────────────────── */
+
+.milkdown-editor blockquote {
+    border-left: 3px solid var(--accent-gold, #d4af37);
+    margin: 0.5em 0;
+    padding: 0.3em 0.8em;
+    font-style: italic;
+    color: var(--aged-brown-dark, #4a2c2a);
+    background: rgba(212, 175, 55, 0.05);
+}
+
+/* ── Code ──────────────────────────────────────────────────────────────── */
+
+.milkdown-editor code {
+    background: var(--parchment-medium, #faebd7);
+    border: 1px solid var(--aged-brown-medium, #8b4513);
+    border-radius: 3px;
+    padding: 0.1em 0.35em;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.9em;
+    color: var(--aged-brown-dark, #4a2c2a);
+}
+
+.milkdown-editor pre {
+    background: var(--parchment-medium, #faebd7);
+    border: 1px solid var(--aged-brown-medium, #8b4513);
+    border-radius: 6px;
+    padding: 0.75em 1em;
+    overflow-x: auto;
+    margin: 0.5em 0;
+}
+
+.milkdown-editor pre code {
+    background: none;
+    border: none;
+    padding: 0;
+    font-size: 0.85em;
+}
+
+/* ── Links ─────────────────────────────────────────────────────────────── */
+
+.milkdown-editor a {
+    color: var(--info-blue, #4682b4);
+    text-decoration: none;
+}
+
+.milkdown-editor a:hover {
+    text-decoration: underline;
+}
+
+/* ── Horizontal Rule ───────────────────────────────────────────────────── */
+
+.milkdown-editor hr {
+    border: none;
+    border-top: 2px solid var(--aged-brown-medium, #8b4513);
+    margin: 1em 0;
+    opacity: 0.5;
+}
+
+/* ── Lists ─────────────────────────────────────────────────────────────── */
+
+.milkdown-editor ul,
+.milkdown-editor ol {
+    margin: 0.4em 0;
+    padding-left: 1.5em;
+}
+
+.milkdown-editor li {
+    margin-bottom: 0.2em;
+}
+
+/* ── Strong & Emphasis ─────────────────────────────────────────────────── */
+
+.milkdown-editor strong {
+    font-weight: 700;
+    color: #1a1208;
+}
+
+.milkdown-editor em {
+    font-style: italic;
+}
+
+.milkdown-editor s {
+    text-decoration: line-through;
+    opacity: 0.7;
+}
+
+/* ── Images ────────────────────────────────────────────────────────────── */
+
+.milkdown-editor img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 4px;
+    margin: 0.5em 0;
+}
+
+/* ── Format Toolbar ────────────────────────────────────────────────────── */
+
+.milkdown-format-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 4px 8px;
+    background: var(--header-bg, #e0d4b5);
+    border: 1px solid var(--aged-brown-medium, #8b4513);
+    border-radius: 6px;
+    margin-bottom: 6px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+}
+
+.milkdown-format-toolbar button {
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.85em;
+    color: var(--aged-brown-dark, #4a2c2a);
+    cursor: pointer;
+    white-space: nowrap;
+    min-width: 28px;
+    min-height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.milkdown-format-toolbar button:hover {
+    background: var(--parchment-medium, #faebd7);
+    border-color: var(--aged-brown-medium, #8b4513);
+}
+
+.milkdown-format-toolbar button.active {
+    background: var(--button-bg, #d2b48c);
+    border-color: var(--aged-brown-medium, #8b4513);
+}
+
+.milkdown-format-toolbar .toolbar-sep {
+    width: 1px;
+    height: 20px;
+    background: var(--aged-brown-medium, #8b4513);
+    opacity: 0.3;
+    margin: 0 4px;
+    flex-shrink: 0;
+}
+
+/* ── Chit Link Autocomplete Dropdown ───────────────────────────────────── */
+
+.milkdown-chitlink-dropdown {
+    position: fixed;
+    z-index: 9999;
+    background: #fff8e1;
+    border: 2px solid #8b4513;
+    border-radius: 6px;
+    max-height: 200px;
+    overflow-y: auto;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    font-size: 0.9em;
+    min-width: 200px;
+    font-family: 'Lora', Georgia, serif;
+}
+
+.milkdown-chitlink-dropdown .chitlink-item {
+    padding: 6px 10px;
+    cursor: pointer;
+    border-bottom: 1px solid #e0d4b5;
+    color: #1a1208;
+}
+
+.milkdown-chitlink-dropdown .chitlink-item:last-child {
+    border-bottom: none;
+}
+
+.milkdown-chitlink-dropdown .chitlink-item.highlighted {
+    background: #f0e6d0;
+}
+
+.milkdown-chitlink-dropdown .chitlink-item:hover {
+    background: #f0e6d0;
+}
+
+/* ── Milkdown Hidden State ─────────────────────────────────────────────── */
+
+.milkdown-hidden {
+    display: none !important;
+}
+
+/* ── Mobile Responsive ─────────────────────────────────────────────────── */
+
+@media (max-width: 600px) {
+    .milkdown-format-toolbar {
+        gap: 1px;
+        padding: 3px 4px;
+    }
+
+    .milkdown-format-toolbar button {
+        padding: 6px 6px;
+        min-width: 32px;
+        min-height: 32px;
+        font-size: 0.8em;
+    }
+
+    .milkdown-editor .ProseMirror {
+        min-height: 200px;
+        padding: 0.5em 0.75em;
+    }
+
+    .milkdown-chitlink-dropdown {
+        max-width: calc(100vw - 2em);
+    }
+}
+
+/* ── Virtual Keyboard Adjustments ──────────────────────────────────────── */
+
+@media (max-height: 500px) {
+    .milkdown-editor .ProseMirror {
+        max-height: 40vh;
+    }
+}

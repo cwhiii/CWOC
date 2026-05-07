@@ -55,6 +55,7 @@ DO NOT INSTALL THINGS!
 - The dashboard (`index.html` + `main.js` + `styles.css`) has its own independent styling. All other pages share `shared-page.css`.
 - `CwocSaveSystem` (in `shared-page.js`) provides the standard save/cancel button pattern — use it for any page with editable state.
 - External CDN libraries (Flatpickr, Font Awesome 6, marked.js) are loaded via `<link>` / `<script>` tags in HTML. Do not add npm dependencies.
+- **NEVER use browser system prompts/alerts (`prompt()`, `alert()`, `confirm()`).** Always use a custom styled modal following the parchment theme. Use the existing modal overlay pattern (fixed overlay + centered modal with `#fffaf0` background, `#6b4e31` border, Lora font). Input modals should have a text field, Cancel and Confirm buttons styled as `.zone-button` or `.action-button`.
 
 ## Incremental Template & Custom Element Adoption
 

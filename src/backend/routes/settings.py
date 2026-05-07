@@ -243,6 +243,7 @@ def save_settings(settings: Settings, request: Request):
             "checklist_autosave": settings.checklist_autosave or "1",
             "view_order": settings.view_order,
             "recent_tags": serialize_json_field(settings.recent_tags),
+            "paginate_email": settings.paginate_email or "0",
         }
 
         cursor.execute(
@@ -258,8 +259,8 @@ def save_settings(settings: Settings, request: Request):
                 map_default_lat, map_default_lon, map_default_zoom, map_auto_zoom,
                 email_account, email_accounts,
                 attachment_max_size_mb, attachment_max_storage_mb,
-                default_share_contacts, checklist_autosave, view_order, recent_tags
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                default_share_contacts, checklist_autosave, view_order, recent_tags, paginate_email
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 new_settings_dict["user_id"],
@@ -308,6 +309,7 @@ def save_settings(settings: Settings, request: Request):
                 new_settings_dict["checklist_autosave"],
                 new_settings_dict["view_order"],
                 new_settings_dict.get("recent_tags"),
+                new_settings_dict["paginate_email"],
             )
         )
 

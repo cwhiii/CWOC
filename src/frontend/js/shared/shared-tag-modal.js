@@ -273,7 +273,7 @@ var cwocTagModal = (function() {
 
     var newName = (nameInput ? nameInput.value.trim() : '');
     if (!newName) {
-      alert('Tag name cannot be empty.');
+      cwocToast('Tag name cannot be empty.', 'error');
       return;
     }
 
@@ -339,7 +339,7 @@ var cwocTagModal = (function() {
         danger: true,
       });
     } else {
-      confirmed = confirm('Delete tag "' + _currentTagName + '"? This removes it globally.');
+      confirmed = false; // cwocConfirm should always be available
     }
     if (!confirmed) return;
 
@@ -655,11 +655,11 @@ var cwocTagModal = (function() {
 
     var userId = picker.value;
     var role = roleSelect.value;
-    if (!userId) { alert('Please select a user to share with.'); return; }
+    if (!userId) { cwocToast('Please select a user to share with.', 'error'); return; }
 
     for (var i = 0; i < _currentTagShares.length; i++) {
       if (_currentTagShares[i].user_id === userId) {
-        alert('This user already has access to this tag.');
+        cwocToast('This user already has access to this tag.', 'error');
         return;
       }
     }

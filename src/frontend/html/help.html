@@ -410,26 +410,21 @@
                 <li><strong>← Notes</strong> — Appends note lines as new checklist items. Recognizes markdown checklist syntax (<code>- [ ]</code> / <code>- [x]</code>), bullet points, and plain lines. Indentation is preserved.</li>
             </ul>
             <h4>Notes Zone</h4>
-            <p>The notes zone supports <strong>Obsidian-style live preview</strong> with three render modes, cycled by clicking the mode button in the zone header:</p>
-            <ul>
-                <li><strong>📝 Source</strong> — Plain textarea showing raw markdown syntax. Full editing with the format toolbar visible.</li>
-                <li><strong>✨ Live Preview</strong> — Obsidian-style hybrid: you see formatted/rendered text, but clicking into any block reveals its raw markdown for editing. Moving the cursor away re-renders that block. You're editing the source while mostly seeing the finished result.</li>
-                <li><strong>👁️ Reading</strong> — Fully rendered markdown, non-editable. Double-click to return to Source mode.</li>
-            </ul>
-            <p><strong>Format Toolbar:</strong> Visible in Source and Live Preview modes. Buttons for Bold, Italic, Strikethrough, Link, Headings (H1/H2/H3 dropdown), Bullet List, Numbered List, Blockquote, Inline Code, and Horizontal Rule.</p>
+            <p>The notes zone provides a <strong>rich WYSIWYG markdown editor</strong> powered by Milkdown. You see formatted text as you type — headings, bold, italic, lists, blockquotes, and code all render inline. The underlying data remains standard markdown.</p>
+            <p><strong>Format Toolbar:</strong> Above the editor, buttons for Bold, Italic, Strikethrough, Link, Headings (H1/H2/H3), Bullet List, Numbered List, Blockquote, Inline Code, and Horizontal Rule. On mobile, the toolbar scrolls horizontally.</p>
             <p><strong>Keyboard Shortcuts:</strong></p>
             <ul>
-                <li><kbd>Ctrl+B</kbd> — Bold</li>
-                <li><kbd>Ctrl+I</kbd> — Italic</li>
-                <li><kbd>Ctrl+K</kbd> — Link</li>
-                <li><kbd>Ctrl+E</kbd> — Inline Code</li>
-                <li><kbd>Ctrl+Shift+X</kbd> — Strikethrough</li>
-                <li><kbd>Ctrl+Shift+1/2/3</kbd> — Heading 1/2/3</li>
-                <li><kbd>Ctrl+Shift+7</kbd> — Numbered List</li>
-                <li><kbd>Ctrl+Shift+8</kbd> — Bullet List</li>
-                <li><kbd>Ctrl+Shift+.</kbd> — Blockquote</li>
-                <li><kbd>Ctrl+Shift+-</kbd> — Horizontal Rule</li>
+                <li><kbd>Ctrl+B</kbd> / <kbd>Cmd+B</kbd> — Bold</li>
+                <li><kbd>Ctrl+I</kbd> / <kbd>Cmd+I</kbd> — Italic</li>
+                <li><kbd>Ctrl+K</kbd> / <kbd>Cmd+K</kbd> — Link</li>
+                <li><kbd>Ctrl+E</kbd> / <kbd>Cmd+E</kbd> — Inline Code</li>
+                <li><kbd>Ctrl+Shift+X</kbd> / <kbd>Cmd+Shift+X</kbd> — Strikethrough</li>
+                <li><kbd>Ctrl+Z</kbd> / <kbd>Cmd+Z</kbd> — Undo</li>
+                <li><kbd>Ctrl+Shift+Z</kbd> / <kbd>Cmd+Shift+Z</kbd> — Redo</li>
             </ul>
+            <p><strong>Chit Link Autocomplete:</strong> Type <code>[[</code> to trigger an autocomplete dropdown showing matching chit titles. Use Arrow keys to navigate, Enter to select, Escape to dismiss. The selected title is inserted as <code>[[title]]</code>.</p>
+            <p><strong>Expand to Modal:</strong> Click the Expand button in the zone header to open a full-screen editing modal with the same WYSIWYG editor. Click "Done" to save changes back to the main editor.</p>
+            <p><strong>Fallback Mode:</strong> If the rich editor's vendor files are unavailable (e.g., first install before configurator runs), the editor falls back to a plain textarea with the same format toolbar and markdown render toggle. A brief toast notification appears when fallback mode activates.</p>
             <p>The <strong>← Checklist</strong> button appends all checklist items to the notes as markdown checklist lines (<code>- [ ] item</code> / <code>- [x] item</code>). Both conversions are additive — they don't remove existing content from either zone.</p>
             <p>Use <code>[[chit title]]</code> to link to other chits — an autocomplete dropdown appears as you type inside the brackets.</p>
             <h4>Location Zone</h4>
@@ -468,6 +463,12 @@
             <p>Users can pick a profile color from the standard palette or any custom colors defined in Settings. This color appears on their chips in the editor People zone, the sidebar People filter, and tints the editor background.</p>
             <p>User chips are visually distinguished from contact chips by a thicker, very dark brown border and a <i class="fas fa-user"></i> icon placeholder (when no profile image is set). The sidebar People filter includes both contacts and system users.</p>
             <p>Managers have the same sharing-management permissions as owners — they can add and remove shared users, change roles, and toggle stealth. Viewers see the People zone in read-only mode with no toggles or stealth control.</p>
+            <h4>Projects Zone</h4>
+            <p>The Projects zone manages project master status and child chits. Two buttons for adding children:</p>
+            <ul>
+                <li><strong>Add Chit</strong> — Opens a modal to browse and select existing chits as children</li>
+                <li><strong>Create New</strong> — Prompts for a title, creates a brand new chit with status "ToDo", and immediately adds it as a child of the project</li>
+            </ul>
             <h4>Owner Chip</h4>
             <p>The chit owner's display name is shown as a chip in the title zone header, inline with the "Title" label and the pinned icon. The chip uses the same visual style as people chips (background color, thumbnail image or placeholder). The owner chip is always displayed, even when the current user is the owner.</p>
             <h3 id="quick-edit">Quick Edit Modal</h3>
@@ -486,6 +487,12 @@
             <ul>
                 <li><strong>Double-click</strong> — Open in editor</li>
                 <li><strong>Shift+click</strong> — Edit note in place</li>
+            </ul>
+            <h4>Projects View</h4>
+            <ul>
+                <li><strong>Double-click header</strong> — Open project in editor</li>
+                <li><strong>Shift+click header</strong> — Project quick menu (create new child chit, open in editor)</li>
+                <li><strong>Double-click child</strong> — Open child chit in editor</li>
             </ul>
             <h4>Quick Edit Modal</h4>
             <ul>
@@ -1040,6 +1047,10 @@ action:
     <script src="/frontend/js/shared/shared-geocoding.js"></script>
     <script src="/frontend/js/shared/shared-qr.js"></script>
     <script src="/frontend/js/shared/shared-hotkeys.js"></script>
+    <script src="/frontend/js/shared/shared-mobile.js"></script>
+    <script src="/frontend/js/shared/shared-weather.js"></script>
+    <script src="/frontend/js/shared/shared-alarms.js"></script>
+    <script src="/frontend/js/shared/shared-habits.js"></script>
     <script src="/frontend/js/shared/shared.js"></script>
     <script src="/frontend/js/shared/shared-calculator.js"></script>
     <script src="/frontend/js/pages/shared-page.js"></script>

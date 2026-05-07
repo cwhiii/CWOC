@@ -366,7 +366,7 @@
     border-top: none;
     border-radius: 0 0 4px 4px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    z-index: 100;
+    z-index: 1000;
     max-height: 200px;
     overflow-y: auto;
 }
@@ -385,7 +385,8 @@
     border-bottom: none;
 }
 
-.email-autocomplete-item:hover {
+.email-autocomplete-item:hover,
+.email-autocomplete-item.email-ac-highlighted {
     background-color: var(--parchment-medium);
 }
 
@@ -906,31 +907,29 @@
 /* ── Email Attachment Bar (bottom of email body) ───────────────────────── */
 .email-attachment-bar {
     display: flex;
-    flex-wrap: wrap-reverse;
-    justify-content: flex-end;
+    flex-wrap: wrap;
+    justify-content: flex-start;
     align-items: flex-end;
-    gap: 6px;
+    gap: 8px;
     margin-top: 8px;
-    padding: 6px 0 0;
+    padding: 8px 0 0;
     border-top: 1px dashed rgba(139, 90, 43, 0.2);
 }
 
 .email-attachment-chip {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
-    padding: 4px 10px;
-    background: rgba(90, 60, 30, 0.15);
+    gap: 6px;
+    padding: 5px 10px;
+    background: rgba(90, 60, 30, 0.1);
     border: 1px solid rgba(139, 90, 43, 0.3);
-    border-radius: 14px;
+    border-radius: 6px;
     font-family: 'Lora', Georgia, serif;
-    font-size: 0.8em;
+    font-size: 0.85em;
     color: #3a2a1a;
     text-decoration: none;
     cursor: pointer;
     transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
-    max-width: 180px;
-    overflow: hidden;
 }
 
 .email-attachment-chip:hover {
@@ -941,13 +940,19 @@
 
 .email-attachment-chip-icon {
     flex-shrink: 0;
-    font-size: 1.1em;
+    font-size: 1.2em;
 }
 
 .email-attachment-chip-name {
-    overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.email-attachment-thumb-img {
+    max-height: 48px;
+    max-width: 80px;
+    border-radius: 4px;
+    object-fit: cover;
+    border: 1px solid rgba(139, 90, 43, 0.2);
 }
 
 /* ── Responsive — mobile ───────────────────────────────────────────────── */
@@ -960,4 +965,163 @@
         font-size: 0.75em;
         max-width: 140px;
     }
+}
+
+/* ── Undo Send Toast ───────────────────────────────────────────────────── */
+.email-undo-send-toast {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 9999;
+    background: #fff5e6;
+    border: 2px solid #8b5a2b;
+    border-radius: 8px;
+    padding: 0.75em 1.2em 0.5em;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+    min-width: 280px;
+    max-width: 420px;
+    font-family: 'Lora', Georgia, serif;
+}
+
+.email-undo-send-toast .email-undo-msg-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.8em;
+    margin-bottom: 0.5em;
+}
+
+.email-undo-send-toast .email-undo-msg {
+    font-size: 0.9em;
+    color: #1a1208;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+
+.email-undo-send-toast .email-undo-btn {
+    padding: 4px 12px;
+    cursor: pointer;
+    font-weight: bold;
+    border: 1px solid #8b5a2b;
+    border-radius: 4px;
+    background: #f5e6cc;
+    color: #1a1208;
+    font-family: inherit;
+    flex-shrink: 0;
+    transition: background 0.15s;
+}
+
+.email-undo-send-toast .email-undo-btn:hover {
+    background: #e8d5b0;
+}
+
+.email-undo-send-toast .email-undo-bar-outer {
+    width: 100%;
+    height: 6px;
+    background: #f5e6cc;
+    border: 1px solid #8b4513;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.email-undo-send-toast .email-undo-bar-inner {
+    height: 100%;
+    width: 100%;
+    background: linear-gradient(90deg, #d4af37 0%, #c8965a 60%, #8b4513 100%);
+    transition: width 0.1s linear;
+    border-radius: 3px;
+}
+
+/* ── Email Chip Container ──────────────────────────────────────────────── */
+.email-chip-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 4px 0;
+    width: 100%;
+}
+
+/* Known contact/user chip — teal like existing recipient chips */
+.email-recipient-chip.email-chip-known {
+    background-color: var(--accent-teal, #008080);
+    color: var(--parchment-light, #fdf5e6);
+    border: 1px solid #006666;
+}
+
+/* Plain/unknown email chip — neutral border */
+.email-recipient-chip.email-chip-plain {
+    background-color: var(--parchment-medium, #e8dcc8);
+    color: var(--aged-brown-dark, #4a2c2a);
+    border: 1px solid var(--aged-brown-medium, #8b5a2b);
+}
+
+.email-chip-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 180px;
+}
+
+/* Chip profile image */
+.email-chip-img {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+/* ── Add Contact Button (From field) ───────────────────────────────────── */
+.email-add-contact-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border: none;
+    background: none;
+    color: var(--accent-teal, #008080);
+    font-size: 1.1em;
+    cursor: pointer;
+    border-radius: 50%;
+    transition: background 0.15s, color 0.15s;
+    flex-shrink: 0;
+    margin-left: 6px;
+    padding: 0;
+}
+
+.email-add-contact-btn:hover {
+    background: rgba(0, 128, 128, 0.15);
+    color: #006060;
+}
+
+/* ── Email Subject Field in Zone ───────────────────────────────────────── */
+#emailSubject {
+    flex: 1;
+    padding: 8px 12px;
+    border: 1px inset var(--aged-brown-medium);
+    border-radius: 4px;
+    font-size: 14px;
+    font-family: 'Lora', Georgia, serif;
+    background-color: var(--input-bg);
+    color: var(--text-color);
+    box-sizing: border-box;
+}
+
+#emailSubject:focus {
+    outline: none;
+    border-color: var(--accent-teal);
+    box-shadow: 0 0 0 2px rgba(0, 128, 128, 0.25);
+}
+
+#emailSubject:disabled,
+#emailSubject[readonly] {
+    background-color: var(--parchment-medium);
+    color: var(--aged-brown-dark);
+    border: 1px dotted var(--aged-brown-light);
+    cursor: default;
+    opacity: 0.85;
 }

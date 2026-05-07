@@ -158,6 +158,30 @@
                 if (gn) setTimeout(function () { gn.focus(); }, 100);
                 // Apply default vault setting for new contacts
                 _applyDefaultVaultSetting();
+
+                // Prefill from URL params (e.g. from email "add sender as contact")
+                var prefillEmail = params.get('prefill_email');
+                var prefillName = params.get('prefill_name');
+                if (prefillEmail) {
+                    // Add the email to the emails multi-value field
+                    _setMultiValueEntries('emails', [{ label: 'Email', value: prefillEmail }]);
+                }
+                if (prefillName) {
+                    // Try to split into given/surname
+                    var nameParts = prefillName.trim().split(/\s+/);
+                    var gnEl = document.getElementById('givenName');
+                    var snEl = document.getElementById('surname');
+                    if (gnEl && nameParts.length > 0) {
+                        gnEl.value = nameParts[0];
+                        if (snEl && nameParts.length > 1) {
+                            snEl.value = nameParts.slice(1).join(' ');
+                        }
+                        _updateDisplayNameHeader();
+                    }
+                }
+                if (prefillEmail || prefillName) {
+                    if (_saveSystem) _saveSystem.markUnsaved();
+                }
             }
         }
     });

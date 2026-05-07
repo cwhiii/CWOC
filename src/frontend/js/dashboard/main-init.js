@@ -733,7 +733,7 @@ function _updateTabCounts(filteredChits) {
   const unique = filteredChits.filter(c => !c._virtual);
 
   const counts = {
-    Checklists: unique.filter(c => Array.isArray(c.checklist) && c.checklist.length > 0).length,
+    Checklists: unique.filter(c => Array.isArray(c.checklist) && c.checklist.some(i => i && i.text && i.text.trim())).length,
     Alarms: unique.filter(c => {
       if (!Array.isArray(c.alerts) || c.alerts.length === 0) return c.alarm || c.notification;
       return c.alerts.length > 0;
@@ -825,19 +825,7 @@ function _applyChitDisplayOptions() {
     });
   }
 
-  // Fade past chits in non-calendar views (only chits that have ENDED, not overdue ones)
-  if (_chitOptions.fade_past_chits && currentTab !== 'Calendar') {
-    document.querySelectorAll('.chit-card[data-chit-id]').forEach(el => {
-      const chitId = el.dataset.chitId;
-      const chit = chits.find(c => c.id === chitId);
-      if (!chit) return;
-      // Only fade if the event has an end_datetime that's passed (not due_datetime — that's overdue)
-      const endTime = chit.end_datetime ? new Date(chit.end_datetime) : null;
-      if (endTime && endTime < now && chit.status !== 'Complete') {
-        el.style.opacity = '0.5';
-      }
-    });
-  }
+  // (Past-chit fading only applies to calendar view — handled above)
 
   // Highlight overdue and/or blocked chits — single pass handles both + combo
   {

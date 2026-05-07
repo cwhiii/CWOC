@@ -110,20 +110,22 @@ async function moveChecklistItemCrossChit(fromChitId, fromIndex, toChitId, toInd
  */
 function _updateChecklistProgressCount(container, chit) {
   if (!container || !chit || !Array.isArray(chit.checklist)) return;
-  var checked = chit.checklist.filter(function (item) { return item.checked || item.done; }).length;
-  var total = chit.checklist.length;
+  var nonEmpty = chit.checklist.filter(function (item) { return item && item.text && item.text.trim(); });
+  var checked = nonEmpty.filter(function (item) { return item.checked || item.done; }).length;
+  var total = nonEmpty.length;
+  var suffix = (total > 0 && checked === total) ? ' ✓' : '';
   // Look for the inline count span in the header (new location)
   var countSpan = container.querySelector('.checklist-progress-count[data-chit-id="' + chit.id + '"]');
   if (countSpan) {
-    countSpan.textContent = '(' + checked + '/' + total + ' ✓)';
+    countSpan.textContent = '(' + checked + '/' + total + suffix + ')';
     return;
   }
   // Fallback: old-style progress div
   var children = container.children;
   for (var i = 0; i < children.length; i++) {
     var el = children[i];
-    if (el.tagName === 'DIV' && el.textContent.indexOf('✓') !== -1 && /^\d+\/\d+/.test(el.textContent.trim())) {
-      el.textContent = checked + '/' + total + ' ✓';
+    if (el.tagName === 'DIV' && /^\d+\/\d+/.test(el.textContent.trim())) {
+      el.textContent = checked + '/' + total + suffix;
       return;
     }
   }
@@ -174,7 +176,8 @@ function renderInlineChecklist(container, chit, onUpdate) {
       // Update the progress count element if it exists
       _updateChecklistProgressCount(container, chit);
       // Strike through title if all items are now checked
-      var allDone = chit.checklist.length > 0 && chit.checklist.every(function(i) { return i.checked || i.done; });
+      var _nonEmptyItems = chit.checklist.filter(function(i) { return i && i.text && i.text.trim(); });
+      var allDone = _nonEmptyItems.length > 0 && _nonEmptyItems.every(function(i) { return i.checked || i.done; });
       var card = container.closest('.chit-card') || container;
       if (allDone) { card.classList.add('checklist-all-done'); }
       else { card.classList.remove('checklist-all-done'); }

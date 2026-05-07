@@ -1087,6 +1087,17 @@
                         <p class="setting-hint">When checked, new habits will appear on the calendar by default. Each habit can override this in its editor.</p>
                     </div>
                     <div class="setting-group">
+                        <h3>📂 Projects</h3>
+
+                        <div class="setting-inline" style="flex-wrap:wrap;">
+                            <label class="cwoc-checkbox-label" style="white-space:normal;"><input type="checkbox" id="projects-show-child-count" onchange="setSaveButtonUnsaved();" /> Show child chit count on project masters</label>
+                        </div>
+                        <div class="setting-inline" style="flex-wrap:wrap;">
+                            <label class="cwoc-checkbox-label" style="white-space:normal;"><input type="checkbox" id="projects-show-checklist-count" onchange="setSaveButtonUnsaved();" /> Show aggregate checklist progress on project masters</label>
+                        </div>
+                        <p class="setting-hint">Controls the progress counters displayed on project master headers in the dashboard.</p>
+                    </div>
+                    <div class="setting-group">
                         <h3>🌍 Geography</h3>
 
                         <label class="setting-subheader">🗺️ Map Settings</label>
@@ -1177,7 +1188,7 @@
                         <p id="pwa-notif-status" class="setting-hint" style="margin-top:6px;font-size:0.8em;"></p>
                     </div>
                     <div class="setting-group">
-                        <h3>✉️ Email</h3>
+                        <h3><img src="/static/email.png" style="height:1.2em;vertical-align:middle;margin-right:4px;" alt="Email" /> Email</h3>
 
                         <label class="setting-subheader">📧 Accounts</label>
                         <div id="emailAccountsSummary" style="margin-bottom:8px;font-size:0.9em;color:#4a2c2a;"></div>
@@ -1205,6 +1216,13 @@
                         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px;">
                             <button type="button" id="emailBackfillBtn" class="standard-button" onclick="emailBackfill()">📥 Backfill</button>
                             <span id="emailBackfillResult" style="font-size:0.85em;"></span>
+                        </div>
+
+                        <label class="setting-subheader">📄 Display</label>
+                        <div class="setting-inline">
+                            <label for="emailPaginate">Paginate Emails</label>
+                            <input type="checkbox" id="emailPaginate" />
+                            <span class="setting-hint" style="margin:0;font-size:0.8em;">Load 50 at a time with "Load More" button</span>
                         </div>
 
                         <label class="setting-subheader">✍️ Signature</label>
@@ -1806,10 +1824,20 @@
             <script src="/frontend/js/shared/shared-geocoding.js"></script>
             <script src="/frontend/js/shared/shared-qr.js"></script>
             <script src="/frontend/js/shared/shared-hotkeys.js"></script>
+            <script src="/frontend/js/shared/shared-mobile.js"></script>
+            <script src="/frontend/js/shared/shared-weather.js"></script>
+            <script src="/frontend/js/shared/shared-alarms.js"></script>
+            <script src="/frontend/js/shared/shared-habits.js"></script>
             <script src="/frontend/js/shared/shared.js"></script>
             <script src="/frontend/js/shared/shared-calculator.js"></script>
             <script src="/frontend/js/pages/shared-page.js"></script>
             <script src="/frontend/js/pages/shared-editor.js"></script>
+            <script src="/frontend/js/pages/settings-email.js"></script>
+            <script src="/frontend/js/pages/settings-data.js"></script>
+            <script src="/frontend/js/pages/settings-sharing.js"></script>
+            <script src="/frontend/js/pages/settings-integrations.js"></script>
+            <script src="/frontend/js/pages/settings-version.js"></script>
+            <script src="/frontend/js/pages/settings-views.js"></script>
             <script src="/frontend/js/pages/settings.js"></script>
             <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
             <script>

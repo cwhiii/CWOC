@@ -1,0 +1,1 @@
+Added checklist progress count (X/Y ✓) to project master headers in both list and kanban views. Project headers now also show an inline note snippet (first line of markdown, truncated to fit the single line) after the title and count.

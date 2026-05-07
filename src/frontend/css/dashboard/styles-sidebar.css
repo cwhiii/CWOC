@@ -461,3 +461,77 @@
     background: rgba(139, 90, 43, 0.3);
     border-radius: 3px;
 }
+
+/* ── Email sort toggle (Newest / Unread) ──────────────────────────────────── */
+.email-sort-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 4px 0;
+}
+
+.email-sort-toggle .switch {
+    position: relative;
+    display: inline-block;
+    width: 36px;
+    height: 18px;
+    margin: 0;
+    vertical-align: middle;
+}
+
+.email-sort-toggle .switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.email-sort-toggle .slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: var(--aged-brown-light, #a0522d);
+    transition: 0.2s;
+    border-radius: 18px;
+    border: 1px solid var(--aged-brown-medium, #8b4513);
+}
+
+.email-sort-toggle .slider:before {
+    position: absolute;
+    content: "";
+    height: 14px;
+    width: 14px;
+    left: 2px;
+    bottom: 1px;
+    background-color: var(--parchment-light, #fdf5e6);
+    transition: 0.2s;
+    border-radius: 50%;
+}
+
+.email-sort-toggle input:checked + .slider {
+    background-color: #008080;
+    border-color: #006060;
+}
+
+.email-sort-toggle input:checked + .slider:before {
+    transform: translateX(17px);
+}
+
+.email-sort-label {
+    font-size: 0.82em;
+    font-family: 'Lora', Georgia, serif;
+    color: var(--aged-brown-medium, #8b4513);
+    opacity: 0.6;
+    transition: opacity 0.2s, color 0.2s;
+    user-select: none;
+    cursor: default;
+}
+
+.email-sort-label.active {
+    opacity: 1;
+    color: var(--aged-brown-dark, #4a2c2a);
+    font-weight: 600;
+}

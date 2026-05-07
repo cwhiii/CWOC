@@ -13,7 +13,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from src.backend.db import DB_PATH, deserialize_json_field, serialize_json_field
-from src.backend.routes.chits import _search_filter_chits
+from src.backend.routes.chits_search import _search_filter_chits
 
 logger = logging.getLogger(__name__)
 

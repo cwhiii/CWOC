@@ -230,11 +230,12 @@ button:disabled:not(.status-icon-button) {
     margin-bottom: 20px;
     background: var(--zone-body-bg);
     flex: 1;
-    overflow: hidden;
+    overflow: visible;
     transition: height 0.3s ease;
 }
 
 .zone-container.collapsed {
+    overflow: hidden;
     height: 48px;
     opacity: 0.55;
     transition: opacity 0.2s, height 0.3s ease;

@@ -26,6 +26,9 @@ var _sendItemPopup = null;
 var _sendItemPopupOpen = false;
 var _sendItemTarget = null; // { item, checklist }
 var _sendItemRecentChits = []; // cached recent chits
+var _sendItemChitsCache = null; // cached full chit list for popup/search
+var _sendItemChitsCacheTime = 0; // timestamp of last cache
+var _SEND_ITEM_CACHE_TTL = 30000; // 30 seconds cache TTL
 
 /* ── Open the per-item send popup ─────────────────────────────────────────── */
 
@@ -95,9 +98,19 @@ function _closeSendItemPopup() {
 
 async function _fetchRecentChitsForItem() {
   try {
-    var response = await fetch('/api/chits');
-    if (!response.ok) throw new Error('Failed to fetch chits');
-    var allChits = await response.json();
+    var now = Date.now();
+    var allChits;
+
+    // Use cache if fresh
+    if (_sendItemChitsCache && (now - _sendItemChitsCacheTime) < _SEND_ITEM_CACHE_TTL) {
+      allChits = _sendItemChitsCache;
+    } else {
+      var response = await fetch('/api/chits');
+      if (!response.ok) throw new Error('Failed to fetch chits');
+      allChits = await response.json();
+      _sendItemChitsCache = allChits;
+      _sendItemChitsCacheTime = now;
+    }
 
     // Exclude current chit, sort by modified_datetime descending
     var available = allChits
@@ -145,6 +158,10 @@ function _renderSendItemPopup(allChits) {
   html += '</div>';
   html += '<div class="send-item-footer">';
   html += '<button class="send-item-search-btn" title="Search all chits"><i class="fas fa-search"></i> Search...</button>';
+  html += '<div class="send-item-new-row">';
+  html += '<button class="send-item-new-chit-btn send-item-copy-new" title="Copy item to a new chit"><i class="fas fa-copy"></i> Copy to New</button>';
+  html += '<button class="send-item-new-chit-btn send-item-move-new" title="Move item to a new chit"><i class="fas fa-arrow-right"></i> Move to New</button>';
+  html += '</div>';
   html += '</div>';
 
   _sendItemPopup.innerHTML = html;
@@ -177,6 +194,22 @@ function _renderSendItemPopup(allChits) {
       _closeSendItemPopup();
       _sendItemTarget = preservedTarget;
       _openSendItemSearchModal();
+    });
+  }
+
+  var copyNewBtn = _sendItemPopup.querySelector('.send-item-copy-new');
+  if (copyNewBtn) {
+    copyNewBtn.addEventListener('click', function(ev) {
+      ev.stopPropagation();
+      _sendItemSpawnNewChit('copy');
+    });
+  }
+
+  var moveNewBtn = _sendItemPopup.querySelector('.send-item-move-new');
+  if (moveNewBtn) {
+    moveNewBtn.addEventListener('click', function(ev) {
+      ev.stopPropagation();
+      _sendItemSpawnNewChit('move');
     });
   }
 
@@ -232,6 +265,8 @@ function _openSendItemSearchModal() {
       + '<div class="modal-footer-new">'
       + '<span id="sendItemSelectedName" style="font-size:0.85em;opacity:0.7;flex:1;"></span>'
       + '<button class="modal-button-new cancel" id="sendItemCancelBtn">Cancel</button>'
+      + '<button class="modal-button-new" id="sendItemCopyNewBtn" style="background:var(--accent-teal,#008080);color:#fff;border-color:var(--accent-teal,#008080);"><i class="fas fa-copy"></i> Copy to New</button>'
+      + '<button class="modal-button-new" id="sendItemMoveNewBtn" style="background:var(--accent-teal,#008080);color:#fff;border-color:var(--accent-teal,#008080);"><i class="fas fa-arrow-right"></i> Move to New</button>'
       + '<button class="modal-button-new" id="sendItemCopyBtn" disabled>&#x1F4CB; Copy</button>'
       + '<button class="modal-button-new" id="sendItemMoveBtn" disabled>&#x1F4E4; Move</button>'
       + '</div>'
@@ -244,6 +279,14 @@ function _openSendItemSearchModal() {
       _sendItemDoSearch();
     });
     document.getElementById('sendItemCancelBtn').addEventListener('click', function() { _closeSendItemSearchModal(); });
+    document.getElementById('sendItemCopyNewBtn').addEventListener('click', function() {
+      _closeSendItemSearchModal();
+      _sendItemSpawnNewChit('copy');
+    });
+    document.getElementById('sendItemMoveNewBtn').addEventListener('click', function() {
+      _closeSendItemSearchModal();
+      _sendItemSpawnNewChit('move');
+    });
     document.getElementById('sendItemCopyBtn').addEventListener('click', function() {
       var chit = _sendItemSearchModal._selectedChit;
       if (chit) _executeSendItem('copy', chit);
@@ -291,9 +334,20 @@ function _closeSendItemSearchModal() {
 
 async function _fetchChitsForItemSearch() {
   try {
-    var response = await fetch('/api/chits');
-    if (!response.ok) throw new Error('Failed to fetch chits');
-    var allChits = await response.json();
+    var now = Date.now();
+    var allChits;
+
+    // Use cache if fresh
+    if (_sendItemChitsCache && (now - _sendItemChitsCacheTime) < _SEND_ITEM_CACHE_TTL) {
+      allChits = _sendItemChitsCache;
+    } else {
+      var response = await fetch('/api/chits');
+      if (!response.ok) throw new Error('Failed to fetch chits');
+      allChits = await response.json();
+      _sendItemChitsCache = allChits;
+      _sendItemChitsCacheTime = now;
+    }
+
     var available = allChits
       .filter(function(c) { return c.id !== window.currentChitId && !c.deleted; })
       .sort(function(a, b) { return (a.title || '').localeCompare(b.title || ''); });
@@ -496,6 +550,10 @@ async function _executeSendItem(mode, targetChit) {
 
     if (!saveResp.ok) throw new Error('Failed to save target chit');
 
+    // Invalidate cache since target chit was modified
+    _sendItemChitsCache = null;
+    _sendItemChitsCacheTime = 0;
+
     var actionLabel = mode === 'copy' ? 'Copied' : 'Moved';
     var itemCount = subtree.length;
     var itemLabel = itemCount === 1 ? 'item' : itemCount + ' items';
@@ -505,6 +563,131 @@ async function _executeSendItem(mode, targetChit) {
     console.error('Error sending checklist item:', err);
     cwocToast('Failed to send item: ' + err.message, 'error');
   }
+}
+
+/* ── Spawn a new chit pre-populated with the item + children ──────────────── */
+
+function _sendItemSpawnNewChit(mode) {
+  if (!_sendItemTarget) return;
+  var item = _sendItemTarget.item;
+  var checklist = _sendItemTarget.checklist;
+
+  // Get the subtree (item + all children)
+  var subtree = checklist.getSubtree(item);
+
+  // Calculate level demotion: make the item top-level (level 0)
+  var levelOffset = item.level;
+
+  // Build new items with demoted levels and new IDs
+  var newItems = subtree.map(function(srcItem) {
+    return {
+      id: generateUniqueId(),
+      text: srcItem.text,
+      level: Math.max(0, srcItem.level - levelOffset),
+      checked: srcItem.checked
+    };
+  });
+
+  // Store in sessionStorage for the new editor to pick up
+  try {
+    sessionStorage.setItem('cwoc_prefill_checklist', JSON.stringify(newItems));
+  } catch (e) {
+    console.error('Failed to store checklist items in sessionStorage:', e);
+    cwocToast('Failed to prepare checklist items.', 'error');
+    return;
+  }
+
+  _closeSendItemPopup();
+
+  // If moving, remove items from source checklist first
+  if (mode === 'move') {
+    checklist._pushUndoState();
+    var subtreeIds = subtree.map(function(i) { return i.id; });
+    checklist.items = checklist.items.filter(function(i) {
+      return subtreeIds.indexOf(i.id) === -1;
+    });
+    checklist.render();
+    checklist._notifyChange();
+  }
+
+  // Show save/discard/cancel modal before navigating away
+  _sendItemConfirmAndNavigate();
+}
+
+/**
+ * Show the standard unsaved-changes modal before navigating to the new chit editor.
+ * Save & Continue: saves current chit, then navigates.
+ * Discard & Continue: discards changes, then navigates.
+ * Cancel: stays on current page, removes prefill data.
+ */
+function _sendItemConfirmAndNavigate() {
+  var targetUrl = '/frontend/html/editor.html?prefill=checklist';
+
+  // If no unsaved changes, just save quietly and go
+  if (window._cwocSave && !window._cwocSave.hasChanges()) {
+    window.location.href = targetUrl;
+    return;
+  }
+
+  // Show the save/discard/cancel modal
+  var existing = document.getElementById('cwoc-unsaved-modal');
+  if (existing) existing.remove();
+
+  var modal = document.createElement('div');
+  modal.id = 'cwoc-unsaved-modal';
+  modal.className = 'modal';
+  modal.style.display = 'flex';
+  modal.innerHTML = '<div class="modal-content">'
+    + '<h3>Unsaved Changes</h3>'
+    + '<p>You have unsaved changes. What would you like to do?</p>'
+    + '<div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;">'
+    + '<button class="standard-button" id="cwoc-spawn-cancel">Cancel</button>'
+    + '<button class="standard-button" id="cwoc-spawn-save">💾 Save &amp; Continue</button>'
+    + '<button class="standard-button" id="cwoc-spawn-discard" style="background:#a0522d;color:#fdf5e6;">🗑️ Discard &amp; Continue</button>'
+    + '</div>'
+    + '</div>';
+  document.body.appendChild(modal);
+
+  // Cancel — stay here, clean up prefill data
+  document.getElementById('cwoc-spawn-cancel').onclick = function() {
+    modal.remove();
+    sessionStorage.removeItem('cwoc_prefill_checklist');
+  };
+
+  // Save & Continue — save current chit, then navigate
+  document.getElementById('cwoc-spawn-save').onclick = function() {
+    modal.remove();
+    if (typeof saveChitAndStay === 'function') {
+      saveChitAndStay().then(function() {
+        window.location.href = targetUrl;
+      }).catch(function(e) {
+        console.error('Failed to save before navigating:', e);
+        cwocToast('Save failed. Please save manually.', 'error');
+        sessionStorage.removeItem('cwoc_prefill_checklist');
+      });
+    } else {
+      window.location.href = targetUrl;
+    }
+  };
+
+  // Discard & Continue — abandon changes, navigate
+  document.getElementById('cwoc-spawn-discard').onclick = function() {
+    modal.remove();
+    if (typeof _cancelServerTimersForChit === 'function') _cancelServerTimersForChit();
+    if (typeof rollbackAttachmentChanges === 'function') rollbackAttachmentChanges();
+    window._cwocSkipBeforeUnload = true;
+    window.location.href = targetUrl;
+  };
+
+  // ESC closes the modal (same as Cancel)
+  var onKey = function(e) {
+    if (e.key === 'Escape') {
+      modal.remove();
+      sessionStorage.removeItem('cwoc_prefill_checklist');
+      document.removeEventListener('keydown', onKey);
+    }
+  };
+  document.addEventListener('keydown', onKey);
 }
 
 /* ── Flash arrow on new item add ──────────────────────────────────────────── */

@@ -1,0 +1,1 @@
+Replaced the email "Unread at top" checkbox and "Group threads" checkbox with a single Newest/Unread toggle switch. Threading is now always on; the toggle switches sort order between newest-first and unread-first.

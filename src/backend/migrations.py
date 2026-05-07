@@ -1863,3 +1863,84 @@ def migrate_add_recent_tags():
     finally:
         if conn:
             conn.close()
+
+# ── Paginate Email: migration ────────────────────────────────────────────
+
+def migrate_add_paginate_email():
+    """Add paginate_email column to settings table.
+
+    When '1', the email dashboard view loads 50 messages at a time with a
+    'Load More' button instead of rendering all at once.
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        cursor.execute("PRAGMA table_info(settings)")
+        settings_cols = [col[1] for col in cursor.fetchall()]
+        if "paginate_email" not in settings_cols:
+            cursor.execute("ALTER TABLE settings ADD COLUMN paginate_email TEXT DEFAULT '0'")
+            logger.info("Added paginate_email column to settings table")
+
+        conn.commit()
+    except Exception as e:
+        logger.error(f"Error in migrate_add_paginate_email: {str(e)}")
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+
+def migrate_fix_double_encoded_attachments():
+    """Fix attachments fields that were double-encoded by serialize_json_field.
+
+    When a chit with attachments was updated via PUT, the attachments string
+    was passed through json.dumps() again, wrapping it in extra quotes/escaping.
+    This migration detects and unwraps any double-encoded values.
+    """
+    import json
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT id, attachments FROM chits WHERE attachments IS NOT NULL AND attachments != ''")
+        rows = cursor.fetchall()
+        fixed = 0
+        for chit_id, att_raw in rows:
+            if not att_raw:
+                continue
+            # Try to detect double-encoding: if parsing gives a string instead of a list,
+            # it's been double-encoded. Keep unwrapping until we get a list or give up.
+            value = att_raw
+            unwrap_count = 0
+            while isinstance(value, str) and unwrap_count < 5:
+                try:
+                    parsed = json.loads(value)
+                    if isinstance(parsed, list):
+                        # Got the actual array — check if we needed to unwrap
+                        if unwrap_count > 0:
+                            # The original DB value was double-encoded; save the clean version
+                            cursor.execute("UPDATE chits SET attachments = ? WHERE id = ?", (value, chit_id))
+                            fixed += 1
+                        break
+                    elif isinstance(parsed, str):
+                        # Still a string after parsing — double-encoded, unwrap further
+                        value = parsed
+                        unwrap_count += 1
+                    else:
+                        break  # unexpected type
+                except (json.JSONDecodeError, ValueError):
+                    break  # not valid JSON, leave as-is
+
+        if fixed > 0:
+            conn.commit()
+            logger.info(f"Fixed {fixed} double-encoded attachments fields")
+        else:
+            logger.info("No double-encoded attachments found")
+    except Exception as e:
+        logger.error(f"Error in migrate_fix_double_encoded_attachments: {str(e)}")
+    finally:
+        if conn:
+            conn.close()

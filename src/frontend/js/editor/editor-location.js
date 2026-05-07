@@ -309,7 +309,7 @@ function onAddDefaultLocation(event) {
   if (event) event.stopPropagation();
   var defaultLoc = getDefaultLocation();
   if (!defaultLoc) {
-    alert('No default location set — configure in Settings');
+    cwocToast('No default location set — configure in Settings', 'error');
     return;
   }
   var locationInput = document.getElementById('location');
@@ -427,7 +427,7 @@ function onCompactLocationSelect() {
 function searchLocationMap(event) {
   const locationInput = document.getElementById("location");
   if (!locationInput || !locationInput.value.trim()) {
-    alert("Please enter a location first.");
+    cwocToast("Please enter a location first.", "error");
     return;
   }
 
@@ -455,7 +455,7 @@ function searchLocationMap(event) {
     })
     .catch((error) => {
       console.error("Error fetching location data:", error);
-      alert(`Error fetching location data: ${error.message}`);
+      cwocToast('Error fetching location data: ' + error.message, 'error');
     });
 }
 
@@ -476,7 +476,7 @@ function openLocationDirections(event) {
   if (event) { event.stopPropagation(); event.preventDefault(); }
   const loc = document.getElementById("location");
   if (!loc || !loc.value) {
-    alert("Please enter a destination first.");
+    cwocToast("Please enter a destination first.", "error");
     return;
   }
   const co = (window._cwocSettings && window._cwocSettings.chit_options) || {};
