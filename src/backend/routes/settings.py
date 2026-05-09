@@ -286,6 +286,8 @@ def save_settings(settings: Settings, request: Request):
             "recent_tags": serialize_json_field(settings.recent_tags),
             "paginate_email": settings.paginate_email or "0",
             "bundles_multi_placement": settings.bundles_multi_placement or "0",
+            "bundles_enabled": settings.bundles_enabled or "1",
+            "bundles_show_count": settings.bundles_show_count or "both",
         }
 
         cursor.execute(
@@ -302,8 +304,8 @@ def save_settings(settings: Settings, request: Request):
                 email_account, email_accounts,
                 attachment_max_size_mb, attachment_max_storage_mb,
                 default_share_contacts, checklist_autosave, view_order, recent_tags, paginate_email,
-                bundles_multi_placement
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                bundles_multi_placement, bundles_enabled, bundles_show_count
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 new_settings_dict["user_id"],
@@ -354,6 +356,8 @@ def save_settings(settings: Settings, request: Request):
                 new_settings_dict.get("recent_tags"),
                 new_settings_dict["paginate_email"],
                 new_settings_dict["bundles_multi_placement"],
+                new_settings_dict["bundles_enabled"],
+                new_settings_dict["bundles_show_count"],
             )
         )
 

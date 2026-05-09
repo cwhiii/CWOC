@@ -21,6 +21,13 @@ DO NOT INSTALL THINGS!
 - **Proactively consolidate.** When adding new functionality, always check: can this reuse an existing shared pattern? Would a small refactor to an existing shared file make this cleaner for everyone? If the cost is trivial, do it. If it's not worth the change, leave a comment explaining why.
 - **One source of truth.** If the same HTML structure, CSS, or JS logic appears on multiple pages, it must live in a shared file (`shared-page.js`, `shared-page.css`, `shared.js`). Page-specific files should only contain what's truly unique to that page.
 
+## Steal First, Build Second
+- Before building anything new, search the codebase for existing code that does the same or similar thing. Reuse it directly, or extract it into a shared function and call it from both places.
+- If a UI component already exists somewhere (color picker, modal, confirm dialog, tag chips, etc.), use that EXACT same code — same function, same CSS class, same HTML structure. Do not create a second version.
+- Parameterize instead of duplicating. One function with variable inputs is always better than multiple near-identical functions. If two things differ by one or two values, make those values parameters.
+- When building a new feature, look at how similar features were built. Copy the pattern, not the code. If the pattern itself can be extracted into a reusable utility, do that.
+- The goal: if something looks or behaves the same in two places, it must BE the same code running in both places. Not a copy. Not a "similar implementation." The SAME function call.
+
 ## Keep It Simple
 - This is a vanilla JS/HTML/CSS project with no frameworks and no build step. Do not introduce bundlers, transpilers, or JS module systems.
 - Prefer straightforward, readable code over clever abstractions. Favor flat control flow with early returns and guard clauses over deep nesting.

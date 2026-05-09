@@ -135,7 +135,17 @@ function _refreshBundleTabsInPlace() {
 function _filterByBundle(chits, activeBundle) {
     if (!activeBundle) return chits;
 
-    if (activeBundle === 'Everything Else') {
+    // "Everything Else" is the catch-all — returns emails with NO bundle tag
+    // Match by name OR by checking if it's the non-removable bundle
+    var isEverythingElse = (activeBundle === 'Everything Else');
+    if (!isEverythingElse && _emailBundlesData) {
+        var matchedBundle = _emailBundlesData.find(function(b) { return b.name === activeBundle; });
+        if (matchedBundle && (matchedBundle.removable === 0 || matchedBundle.removable === false || matchedBundle.removable === '0')) {
+            isEverythingElse = true;
+        }
+    }
+
+    if (isEverythingElse) {
         return chits.filter(function(c) {
             var tags = c.tags || [];
             if (typeof tags === 'string') {
@@ -168,7 +178,16 @@ function _filterByBundle(chits, activeBundle) {
  * @returns {number}
  */
 function _getBundleUnreadCount(bundleName, emailChits) {
-    if (bundleName === 'Everything Else') {
+    // Check if this is the catch-all bundle (by name or by removable flag)
+    var isEverythingElse = (bundleName === 'Everything Else');
+    if (!isEverythingElse && _emailBundlesData) {
+        var matchedBundle = _emailBundlesData.find(function(b) { return b.name === bundleName; });
+        if (matchedBundle && (matchedBundle.removable === 0 || matchedBundle.removable === false || matchedBundle.removable === '0')) {
+            isEverythingElse = true;
+        }
+    }
+
+    if (isEverythingElse) {
         return emailChits.filter(function(c) {
             var tags = c.tags || [];
             if (typeof tags === 'string') {
@@ -194,6 +213,37 @@ function _getBundleUnreadCount(bundleName, emailChits) {
         });
         return hasTag && !c.email_read;
     }).length;
+}
+
+/**
+ * Get all inbox email chits from the global chits array.
+ * This is the single source of truth — no parameter passing needed.
+ */
+function _getAllInboxEmailChits() {
+    var allChits;
+    try { allChits = chits; } catch(e) { allChits = null; }
+    if (!allChits || !Array.isArray(allChits)) {
+        console.warn('[Bundles] _getAllInboxEmailChits: chits not available, type=' + typeof allChits);
+        return [];
+    }
+    console.log('[Bundles] _getAllInboxEmailChits: global chits.length=' + allChits.length);
+    var emailChits = allChits.filter(function(c) {
+        return (c.email_message_id || c.email_status);
+    });
+    console.log('[Bundles] _getAllInboxEmailChits: email chits=' + emailChits.length);
+    var inboxChits = emailChits.filter(function(c) {
+        if (c.deleted || c.archived) return false;
+        var tags = c.tags || [];
+        if (typeof tags === 'string') { try { tags = JSON.parse(tags); } catch(e) { tags = []; } }
+        var isInbox = tags.some(function(t) {
+            var name = (typeof t === 'string') ? t : (t && t.name ? t.name : '');
+            return name === 'CWOC_System/Email/Inbox';
+        });
+        if (!isInbox && c.email_folder === 'inbox') isInbox = true;
+        return isInbox;
+    });
+    console.log('[Bundles] _getAllInboxEmailChits: inbox chits=' + inboxChits.length);
+    return inboxChits;
 }
 
 /* ── Toolbar Rendering ────────────────────────────────────────────────────── */
@@ -360,10 +410,13 @@ function _renderBundleTabs(container, bundles, emailChits) {
 
             // Count badge (unread, total, both, or none — based on setting)
             var countMode = (window._cwocSettings || {}).bundles_show_count || 'both';
+            var allInbox = _getAllInboxEmailChits();
+            console.log('[Bundles] COUNT for "' + bundle.name + '": countMode=' + countMode + ', allInbox.length=' + allInbox.length + ', removable=' + bundle.removable);
             var badgeText = '';
             if (countMode !== 'none') {
-                var unreadCount = _getBundleUnreadCount(bundle.name, emailChits);
-                var totalCount = _filterByBundle(emailChits, bundle.name).length;
+                var unreadCount = _getBundleUnreadCount(bundle.name, allInbox);
+                var totalCount = _filterByBundle(allInbox, bundle.name).length;
+                console.log('[Bundles]   unread=' + unreadCount + ', total=' + totalCount);
 
                 if (countMode === 'both') {
                     badgeText = unreadCount + '/' + totalCount;
@@ -372,6 +425,9 @@ function _renderBundleTabs(container, bundles, emailChits) {
                 } else if (countMode === 'unread') {
                     badgeText = '' + unreadCount;
                 }
+                console.log('[Bundles]   badgeText="' + badgeText + '"');
+            } else {
+                console.log('[Bundles]   countMode is none, skipping badge');
             }
 
             if (badgeText) {

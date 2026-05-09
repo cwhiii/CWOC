@@ -71,6 +71,8 @@ class Settings(BaseModel):
     recent_tags: Optional[List[str]] = None      # Recently used tag paths (persisted across sessions)
     paginate_email: Optional[str] = "0"          # "1" = paginate email view (50 per page), "0" = show all
     bundles_multi_placement: Optional[str] = "0" # "1" = emails can appear in multiple bundles, "0" = first match only
+    bundles_enabled: Optional[str] = "1"         # "1" = show bundle tabs, "0" = hide
+    bundles_show_count: Optional[str] = "both"   # "both", "unread", "total", "none"
 
 class Chit(BaseModel):
     id: Optional[str] = None
