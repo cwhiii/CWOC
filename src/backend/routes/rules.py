@@ -344,6 +344,22 @@ def update_rule(rule_id: str, rule: RuleUpdate, request: Request):
 
         conn.commit()
 
+        # If this is a bundle rule, trigger reclassification in background
+        cursor.execute(
+            "SELECT bundle_id FROM bundle_rules WHERE rule_id = ? AND owner_id = ?",
+            (rule_id, user_id),
+        )
+        is_bundle_rule = cursor.fetchone()
+        if is_bundle_rule:
+            import threading
+            def _bg_reclass():
+                try:
+                    from src.backend.routes.bundles import reclassify_all_emails
+                    reclassify_all_emails(user_id)
+                except Exception as e:
+                    logger.error(f"Reclassify after rule update failed: {e}")
+            threading.Thread(target=_bg_reclass, daemon=True).start()
+
         # Return the updated rule
         cursor.execute(
             "SELECT * FROM rules WHERE id = ? AND owner_id = ?",

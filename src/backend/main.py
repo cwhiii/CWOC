@@ -302,19 +302,27 @@ app.include_router(ha_router)
 app.include_router(admin_router)
 app.include_router(bundles_router)
 
-# ── Reclassify emails into bundles on every startup ──────────────────────
-try:
-    import sqlite3 as _rc_sqlite3
-    from src.backend.routes.bundles import reclassify_all_emails as _rc_reclassify
-    _rc_conn = _rc_sqlite3.connect(DB_PATH)
-    _rc_cur = _rc_conn.cursor()
-    _rc_cur.execute("SELECT DISTINCT owner_id FROM bundles")
-    _rc_owners = [r[0] for r in _rc_cur.fetchall()]
-    _rc_conn.close()
-    for _rc_oid in _rc_owners:
-        _rc_reclassify(_rc_oid)
-except Exception as _rc_err:
-    logger.warning(f"Startup reclassification failed: {_rc_err}")
+# ── Reclassify emails into bundles on every startup (async, non-blocking) ──
+import threading as _rc_threading
+
+def _startup_reclassify():
+    """Run bundle reclassification in a background thread so it doesn't block startup."""
+    import time
+    time.sleep(3)  # Wait for server to be fully ready
+    try:
+        import sqlite3 as _s
+        from src.backend.routes.bundles import reclassify_all_emails
+        conn = _s.connect(DB_PATH)
+        cur = conn.cursor()
+        cur.execute("SELECT DISTINCT owner_id FROM bundles")
+        owners = [r[0] for r in cur.fetchall()]
+        conn.close()
+        for oid in owners:
+            reclassify_all_emails(oid)
+    except Exception as e:
+        logger.warning(f"Startup reclassification failed: {e}")
+
+_rc_threading.Thread(target=_startup_reclassify, daemon=True).start()
 
 
 # ═══════════════════════════════════════════════════════════════════════════

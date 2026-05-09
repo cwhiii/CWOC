@@ -523,6 +523,16 @@ def delete_bundle(bundle_id: str, request: Request):
         )
 
         conn.commit()
+
+        # Reclassify in background (emails from deleted bundle need re-sorting)
+        import threading
+        def _bg_reclass():
+            try:
+                reclassify_all_emails(user_id)
+            except Exception as e:
+                logger.error(f"Reclassify after bundle delete failed: {e}")
+        threading.Thread(target=_bg_reclass, daemon=True).start()
+
         return {"message": "Bundle deleted", "id": bundle_id}
     except HTTPException:
         raise
@@ -579,11 +589,14 @@ def associate_rule_with_bundle(bundle_id: str, body: BundleRuleAssociate, reques
         )
         conn.commit()
 
-        # Reclassify all emails now that a new rule is associated
-        try:
-            reclassify_all_emails(user_id)
-        except Exception as reclass_err:
-            logger.error(f"Error reclassifying after rule association: {reclass_err}")
+        # Reclassify all emails in background now that a new rule is associated
+        import threading
+        def _bg_reclass():
+            try:
+                reclassify_all_emails(user_id)
+            except Exception as e:
+                logger.error(f"Reclassify after rule association failed: {e}")
+        threading.Thread(target=_bg_reclass, daemon=True).start()
 
         return {
             "id": assoc_id,

@@ -31,6 +31,7 @@ DO NOT INSTALL THINGS!
 ## Keep It Simple
 - This is a vanilla JS/HTML/CSS project with no frameworks and no build step. Do not introduce bundlers, transpilers, or JS module systems.
 - Prefer straightforward, readable code over clever abstractions. Favor flat control flow with early returns and guard clauses over deep nesting.
+- **Make anything possible async.** Startup tasks, background processing, classification, data syncing — anything that doesn't need to complete before the user sees the page should run in a background thread or after a delay. Never block server startup or page rendering with work that can happen in the background.
 - Solve the current problem cleanly. Only refactor when a pattern repeats three or more times.
 
 ## Naming Conventions

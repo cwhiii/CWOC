@@ -124,6 +124,46 @@ function _refreshBundleTabsInPlace() {
     _bundleRefreshInProgress = false;
 }
 
+/**
+ * Refresh just the badge counts on existing bundle tabs without full re-render.
+ * Called after read/unread toggle to update counts in place.
+ */
+function _refreshBundleTabCounts() {
+    var tabs = document.querySelectorAll('.bundle-tab');
+    if (!tabs.length) return;
+    var countMode = (window._cwocSettings || {}).bundles_show_count || 'both';
+    if (countMode === 'none') return;
+    var allInbox = _getAllInboxEmailChits();
+
+    tabs.forEach(function(tab) {
+        var bundleName = tab.dataset.bundleName;
+        if (!bundleName) return;
+
+        // Remove existing badge
+        var existingBadge = tab.querySelector('.bundle-unread-badge');
+        if (existingBadge) existingBadge.remove();
+
+        var unreadCount = _getBundleUnreadCount(bundleName, allInbox);
+        var totalCount = _filterByBundle(allInbox, bundleName).length;
+
+        var badgeText = '';
+        if (countMode === 'both') {
+            badgeText = unreadCount + '/' + totalCount;
+        } else if (countMode === 'total') {
+            badgeText = '' + totalCount;
+        } else if (countMode === 'unread') {
+            badgeText = '' + unreadCount;
+        }
+
+        if (badgeText) {
+            var badge = document.createElement('span');
+            badge.className = 'bundle-unread-badge';
+            badge.textContent = badgeText;
+            tab.appendChild(badge);
+        }
+    });
+}
+
 /* ── Filtering ────────────────────────────────────────────────────────────── */
 
 /**
@@ -496,12 +536,7 @@ function _renderBundleTabs(container, bundles, emailChits) {
  * @param {string|null} bundleName — bundle name or null to clear
  */
 function _setActiveBundle(bundleName) {
-    // Toggle off if clicking the already-active tab
-    if (_emailActiveBundle === bundleName) {
-        _emailActiveBundle = null;
-    } else {
-        _emailActiveBundle = bundleName;
-    }
+    _emailActiveBundle = bundleName;
 
     // Persist to localStorage
     _persistActiveBundle();

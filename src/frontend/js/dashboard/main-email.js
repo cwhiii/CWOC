@@ -669,14 +669,8 @@ function displayEmailView(chitsToDisplay) {
     // Apply bundle filter (only when sub-filter is "inbox")
     var allInboxChits = emailChits.slice(); // Keep full list for bundle tab counts
     if (_emailSubFilter === 'inbox' && typeof _filterByBundle === 'function') {
-        // If no bundle selected, default to the first (leftmost) bundle
-        if (!_emailActiveBundle && _emailBundlesData && _emailBundlesData.length > 0) {
-            _emailActiveBundle = _emailBundlesData[0].name;
-            _persistActiveBundle();
-        }
         if (_emailActiveBundle) {
             emailChits = _filterByBundle(emailChits, _emailActiveBundle);
-            console.log('[Bundles] Filter "' + _emailActiveBundle + '": ' + allInboxChits.length + ' → ' + emailChits.length);
         }
     }
 
@@ -1326,6 +1320,7 @@ async function _emailBulkToggleRead() {
         }
     }
     if (typeof _updateEmailBadge === 'function') _updateEmailBadge();
+    if (typeof _refreshBundleTabCounts === 'function') _refreshBundleTabCounts();
     if (failCount > 0) {
         _showToast(successCount + ' toggled, ' + failCount + ' failed', failCount === count ? 'error' : 'info');
     } else {
@@ -1772,6 +1767,9 @@ async function _toggleEmailReadStatus(chit, card) {
 
         // Update unread badge
         if (typeof _updateEmailBadge === 'function') _updateEmailBadge();
+
+        // Refresh bundle tab counts
+        if (typeof _refreshBundleTabCounts === 'function') _refreshBundleTabCounts();
 
         _showToast(data.email_read ? 'Marked as read' : 'Marked as unread', 'success');
     } catch (err) {
