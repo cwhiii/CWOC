@@ -70,6 +70,7 @@ class Settings(BaseModel):
     view_order: Optional[str] = None             # JSON array of tab names in user's preferred order
     recent_tags: Optional[List[str]] = None      # Recently used tag paths (persisted across sessions)
     paginate_email: Optional[str] = "0"          # "1" = paginate email view (50 per page), "0" = show all
+    bundles_multi_placement: Optional[str] = "0" # "1" = emails can appear in multiple bundles, "0" = first match only
 
 class Chit(BaseModel):
     id: Optional[str] = None
@@ -136,6 +137,7 @@ class Chit(BaseModel):
     attachments: Optional[str] = None            # JSON array of {id, filename, size, mime_type, uploaded_at}
     availability: Optional[str] = None           # "busy", "free", or null/"-" (unset)
     checklist_autosave: Optional[bool] = None     # Per-chit override: None=use global, True/False=override
+    nest_thread_id: Optional[str] = None          # ID of an email chit in the target thread
 
 class MultiValueEntry(BaseModel):
     label: Optional[str] = None    # "Work", "Home", "Mobile", custom
@@ -301,3 +303,22 @@ class HAWebhookPayload(BaseModel):
     item_text: Optional[str] = None      # for add_checklist_item
     fields: Optional[Dict[str, Any]] = None  # for update_chit (arbitrary field updates)
     payload: Optional[Dict[str, Any]] = None # for trigger_rule (passed as entity dict)
+
+
+# ── Email Bundles Models ─────────────────────────────────────────────────
+
+class BundleCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    color: Optional[str] = None
+
+class BundleUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    color: Optional[str] = None
+
+class BundleReorder(BaseModel):
+    bundle_ids: List[str]  # Ordered list of bundle IDs
+
+class BundleRuleAssociate(BaseModel):
+    rule_id: str

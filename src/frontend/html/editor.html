@@ -26,22 +26,7 @@
         <link rel="stylesheet" href="/frontend/css/editor/editor.css" />
         <link rel="stylesheet" href="/frontend/css/editor/editor-email.css" />
         <link rel="stylesheet" href="/frontend/css/editor/editor-attachments.css" />
-        <link rel="stylesheet" href="/frontend/css/editor/editor-milkdown.css" />
-        <script type="importmap">
-        {
-            "imports": {
-                "@milkdown/core": "/static/vendor/milkdown/core.js",
-                "@milkdown/ctx": "/static/vendor/milkdown/ctx.js",
-                "@milkdown/prose": "/static/vendor/milkdown/prose.js",
-                "@milkdown/preset-commonmark": "/static/vendor/milkdown/preset-commonmark.js",
-                "@milkdown/plugin-history": "/static/vendor/milkdown/plugin-history.js",
-                "@milkdown/plugin-listener": "/static/vendor/milkdown/plugin-listener.js",
-                "@milkdown/plugin-clipboard": "/static/vendor/milkdown/plugin-clipboard.js",
-                "@milkdown/transformer": "/static/vendor/milkdown/transformer.js",
-                "@milkdown/utils": "/static/vendor/milkdown/utils.js"
-            }
-        }
-        </script>
+
     </head>
     <body>
         <div class="header-row">
@@ -710,23 +695,6 @@
                             <span class="zone-toggle-icon">🔼</span>
                         </div>
                         <div id="notesContent" class="zone-body">
-                            <div id="milkdownFormatToolbar" class="milkdown-format-toolbar" style="display:none;">
-                                <button type="button" title="Bold (Cmd+B)" onclick="_milkdownFormat('bold')"><strong>B</strong></button>
-                                <button type="button" title="Italic (Cmd+I)" onclick="_milkdownFormat('italic')"><em>I</em></button>
-                                <button type="button" title="Strikethrough (Cmd+Shift+X)" onclick="_milkdownFormat('strikethrough')"><s>S</s></button>
-                                <button type="button" title="Link (Cmd+K)" onclick="_milkdownFormat('link')">🔗</button>
-                                <span class="toolbar-sep"></span>
-                                <button type="button" title="Heading 1" onclick="_milkdownFormat('h1')">H1</button>
-                                <button type="button" title="Heading 2" onclick="_milkdownFormat('h2')">H2</button>
-                                <button type="button" title="Heading 3" onclick="_milkdownFormat('h3')">H3</button>
-                                <span class="toolbar-sep"></span>
-                                <button type="button" title="Bullet List" onclick="_milkdownFormat('bulletList')">• List</button>
-                                <button type="button" title="Numbered List" onclick="_milkdownFormat('orderedList')">1. List</button>
-                                <button type="button" title="Blockquote" onclick="_milkdownFormat('blockquote')">❝</button>
-                                <button type="button" title="Code (Cmd+E)" onclick="_milkdownFormat('code')">⟨⟩</button>
-                                <button type="button" title="Horizontal Rule" onclick="_milkdownFormat('hr')">―</button>
-                            </div>
-                            <div id="milkdown-editor-container" class="milkdown-editor" style="display:none;"></div>
                             <div id="notesFormatToolbar" class="notes-format-toolbar">
                                 <button type="button" title="Bold (Cmd+B)" onclick="_notesFormatBtn('b')"><strong>B</strong></button>
                                 <button type="button" title="Italic (Cmd+I)" onclick="_notesFormatBtn('i')"><em>I</em></button>
@@ -1185,8 +1153,6 @@
                     <button type="button" title="Redo (Cmd+Shift+Z)" onclick="_notesRedo(event)" class="notes-undo-redo">↻</button>
                 </div>
                 <div class="modal-body" style="flex:1;overflow:auto;padding:0.5em 1em;">
-                    <!-- Milkdown WYSIWYG modal container (shown when Milkdown is active) -->
-                    <div id="milkdown-modal-container" class="milkdown-editor" style="display:none;min-height:calc(100vh - 2em - 120px);"></div>
                     <!-- Edit/Render mode container (default) -->
                     <div id="notesModalEditRenderWrap" class="field full-width" style="height:100%;">
                         <div
@@ -1627,8 +1593,6 @@
         <script src="/frontend/js/editor/editor-health.js"></script>
         <script src="/frontend/js/editor/editor-email.js"></script>
         <script src="/frontend/js/editor/editor-attachments.js"></script>
-        <script src="/frontend/js/editor/editor-milkdown-chitlink.js"></script>
-        <script type="module" src="/frontend/js/editor/editor-milkdown.js"></script>
         <script src="/frontend/js/editor/editor-save.js"></script>
         <script src="/frontend/js/editor/editor-init.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>

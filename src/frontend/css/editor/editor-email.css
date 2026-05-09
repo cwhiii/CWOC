@@ -955,6 +955,20 @@
     border: 1px solid rgba(139, 90, 43, 0.2);
 }
 
+/* ── Email attachment origin indicator (in Attachments zone) ───────────── */
+.email-attachment-origin {
+    border-left: 3px solid #8b4513;
+    background: rgba(139, 69, 19, 0.05);
+}
+
+.email-attachment-origin::after {
+    content: '✉';
+    margin-left: 6px;
+    font-size: 0.8em;
+    opacity: 0.6;
+    title: 'From email';
+}
+
 /* ── Responsive — mobile ───────────────────────────────────────────────── */
 @media (max-width: 480px) {
     .email-attachment-bar {

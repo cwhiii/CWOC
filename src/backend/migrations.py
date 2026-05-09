@@ -1944,3 +1944,150 @@ def migrate_fix_double_encoded_attachments():
     finally:
         if conn:
             conn.close()
+
+# ── Email Bundles: migration ─────────────────────────────────────────────
+
+def migrate_create_bundles_tables():
+    """Create bundles and bundle_rules tables if they don't exist.
+    Also adds bundles_multi_placement column to settings table.
+
+    The bundles table stores user-defined email bundle categories with
+    display properties (name, description, order, removability).
+
+    The bundle_rules junction table links bundles to their classification
+    rules in the rules table.
+
+    Fully idempotent — uses CREATE TABLE IF NOT EXISTS and PRAGMA table_info checks.
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        # ── Create bundles table ─────────────────────────────────────────
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS bundles (
+                id TEXT PRIMARY KEY,
+                owner_id TEXT,
+                name TEXT,
+                description TEXT,
+                color TEXT,
+                display_order INTEGER DEFAULT 0,
+                is_default BOOLEAN DEFAULT 0,
+                removable BOOLEAN DEFAULT 1,
+                created_datetime TEXT,
+                modified_datetime TEXT
+            )
+        """)
+
+        # ── Create bundle_rules junction table ───────────────────────────
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS bundle_rules (
+                id TEXT PRIMARY KEY,
+                bundle_id TEXT,
+                rule_id TEXT,
+                owner_id TEXT,
+                created_datetime TEXT
+            )
+        """)
+
+        # ── Add bundles_multi_placement to settings table ────────────────
+        cursor.execute("PRAGMA table_info(settings)")
+        columns = [col[1] for col in cursor.fetchall()]
+        if "bundles_multi_placement" not in columns:
+            cursor.execute("ALTER TABLE settings ADD COLUMN bundles_multi_placement BOOLEAN DEFAULT 0")
+            logger.info("Added bundles_multi_placement column to settings table")
+
+        # ── Add bundles_enabled to settings table ────────────────────────
+        cursor.execute("PRAGMA table_info(settings)")
+        columns = [col[1] for col in cursor.fetchall()]
+        if "bundles_enabled" not in columns:
+            cursor.execute("ALTER TABLE settings ADD COLUMN bundles_enabled BOOLEAN DEFAULT 1")
+            logger.info("Added bundles_enabled column to settings table")
+        if "bundles_show_count" not in columns:
+            cursor.execute("ALTER TABLE settings ADD COLUMN bundles_show_count TEXT DEFAULT 'both'")
+            logger.info("Added bundles_show_count column to settings table")
+
+        # ── Add color column to bundles table if missing ─────────────────
+        cursor.execute("PRAGMA table_info(bundles)")
+        bundle_columns = [col[1] for col in cursor.fetchall()]
+        if "color" not in bundle_columns:
+            cursor.execute("ALTER TABLE bundles ADD COLUMN color TEXT")
+            logger.info("Added color column to bundles table")
+
+        conn.commit()
+        logger.info("Bundles tables created/verified")
+
+        # ── Deduplicate bundles (fix for double-initialization) ──────────
+        cursor.execute("SELECT DISTINCT owner_id FROM bundles")
+        owners = [r[0] for r in cursor.fetchall()]
+        for oid in owners:
+            cursor.execute(
+                "SELECT id, name, display_order FROM bundles WHERE owner_id = ? ORDER BY display_order ASC, created_datetime ASC",
+                (oid,),
+            )
+            all_bundles = cursor.fetchall()
+            seen_names = {}
+            for bid, bname, border in all_bundles:
+                lower_name = bname.lower()
+                if lower_name in seen_names:
+                    # Duplicate — delete this one and its rules
+                    cursor.execute("DELETE FROM bundle_rules WHERE bundle_id = ?", (bid,))
+                    cursor.execute("DELETE FROM bundles WHERE id = ?", (bid,))
+                    logger.info(f"Removed duplicate bundle '{bname}' (id={bid}) for owner {oid}")
+                else:
+                    seen_names[lower_name] = bid
+        conn.commit()
+
+        # ── Deduplicate "Bundle: " rules (fix for double-initialization) ─
+        cursor.execute("SELECT DISTINCT owner_id FROM rules")
+        rule_owners = [r[0] for r in cursor.fetchall()]
+        for oid in rule_owners:
+            cursor.execute(
+                "SELECT id, name FROM rules WHERE owner_id = ? AND name LIKE 'Bundle: %' ORDER BY created_datetime ASC",
+                (oid,),
+            )
+            all_bundle_rules = cursor.fetchall()
+            seen_rule_names = {}
+            for rid, rname in all_bundle_rules:
+                lower_rname = rname.lower()
+                if lower_rname in seen_rule_names:
+                    # Duplicate rule — delete its bundle_rules associations and the rule itself
+                    cursor.execute("DELETE FROM bundle_rules WHERE rule_id = ?", (rid,))
+                    cursor.execute("DELETE FROM rules WHERE id = ?", (rid,))
+                    logger.info(f"Removed duplicate rule '{rname}' (id={rid}) for owner {oid}")
+                else:
+                    seen_rule_names[lower_rname] = rid
+        conn.commit()
+
+    except Exception as e:
+        logger.error(f"Error creating bundles tables: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
+# ── Email Thread Nests: migration ────────────────────────────────────────
+
+def migrate_add_nest_thread_id():
+    """Add nest_thread_id column to chits table if it doesn't exist.
+
+    This column stores the ID of an email chit in the target thread,
+    allowing non-email chits to be nested into email threads.
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(chits)")
+        columns = [col[1] for col in cursor.fetchall()]
+        if "nest_thread_id" not in columns:
+            cursor.execute("ALTER TABLE chits ADD COLUMN nest_thread_id TEXT DEFAULT NULL")
+            conn.commit()
+            logger.info("Added nest_thread_id column to chits table")
+    except Exception as e:
+        logger.error(f"Error adding nest_thread_id column: {str(e)}")
+        raise
+    finally:
+        if conn:
+            conn.close()

@@ -61,15 +61,11 @@ const weatherIcons = {
   99: "⛈️",
 };
 
-// Default color palette — used by editor-color.js and editor-save.js
+// Default color palette — references shared _cwocDefaultColors from shared-utils.js
+// Adds "Transparent" as the first option (editor-specific, not in shared palette)
 const defaultColors = [
   { hex: "transparent", name: "Transparent" },
-  { hex: "#C66B6B", name: "Dusty Rose" },
-  { hex: "#D68A59", name: "Burnt Sienna" },
-  { hex: "#E3B23C", name: "Golden Ochre" },
-  { hex: "#8A9A5B", name: "Mossy Sage" },
-  { hex: "#6B8299", name: "Slate Teal" },
-  { hex: "#8B6B99", name: "Muted Lilac" },
+  ...(_cwocDefaultColors || [])
 ];
 
 // ── Small shared utilities ───────────────────────────────────────────────────

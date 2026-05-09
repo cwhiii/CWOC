@@ -7,17 +7,17 @@ This plan implements the ability to attach any non-email chit to an existing ema
 ## Tasks
 
 - [ ] 1. Add nest_thread_id column and model update
-  - [ ] 1.1 Add migration function `migrate_add_nest_thread_id()` in `src/backend/migrations.py`
+  - [x] 1.1 Add migration function `migrate_add_nest_thread_id()` in `src/backend/migrations.py`
     - Follow existing column-existence-check pattern
     - Add `nest_thread_id TEXT DEFAULT NULL` to chits table
     - Register the migration call in `src/backend/main.py` startup sequence
     - _Requirements: 1.1, 1.2_
 
-  - [ ] 1.2 Add `nest_thread_id` field to Chit model in `src/backend/models.py`
+  - [x] 1.2 Add `nest_thread_id` field to Chit model in `src/backend/models.py`
     - Add `nest_thread_id: Optional[str] = None` to the Chit class
     - _Requirements: 1.3_
 
-  - [ ] 1.3 Write property test for nest reference validation (Property 1)
+  - [-] 1.3 Write property test for nest reference validation (Property 1)
     - **Property 1: Nest Reference Validation**
     - For any chit saved with a non-null nest_thread_id, the save succeeds iff the referenced ID corresponds to an existing email chit
     - Test in `src/backend/test_email_nests.py`

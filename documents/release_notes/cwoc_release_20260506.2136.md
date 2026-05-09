@@ -1,0 +1,1 @@
+Email editor expand view: attachments now show image thumbnails at the bottom with full filenames (no truncation). Non-image attachments show file type icons with full names. Dashboard inline attachment chips also show full filenames.

@@ -98,8 +98,10 @@ When making **substantial changes** to a JS function that builds DOM via string 
 ## Escape Key Behavior
 - ESC should NEVER navigate away from a page while any modal or overlay is open. It must close the topmost modal first.
 - Only when no modals are open should ESC trigger page exit — and it must always check for unsaved changes before navigating.
+- **One ESC press = one action.** A single ESC keypress must never trigger two things (e.g., close a modal AND exit the page). Modal ESC handlers must call `e.stopImmediatePropagation()` and `e.preventDefault()` to prevent the event from reaching page-level ESC handlers. Use the capture phase (`addEventListener('keydown', handler, true)`) so the modal handler fires first.
 - ESC priority chain: close QR modal → close upgrade/update modal → close tag modal → close delete confirm → close unsaved-changes modal → blur focused input → exit page (with save check).
 - Every page that has modals must implement this layered ESC pattern. Don't rely on separate ESC listeners per modal — use a single handler that checks from innermost to outermost.
+- **ESC always means cancel.** Every modal or confirmation dialog must treat ESC as equivalent to clicking Cancel/Dismiss. This includes `cwocConfirm`, custom modals, and any new modal added in the future. Never let ESC confirm or submit an action.
 
 when adding code, ensure youre doing so in an organized manner. Use the applicable section if there is one, and if not, make a new section. 
 

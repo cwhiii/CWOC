@@ -1,0 +1,505 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   CWOC Dashboard — Email Bundles
+   Styles for the permanent two-row bundle toolbar and bundle tabs.
+
+   Row 1: Bulk action controls (select all, archive, tag, mark read/unread)
+   Row 2: Bundle tabs (one per bundle) + "+" create button
+
+   Uses CSS variables from styles-variables.css.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Bundle Toolbar Container ───────────────────────────────────────────── */
+.bundle-toolbar {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background-color: var(--parchment-medium);
+    border-bottom: 1px solid var(--sidebar-border);
+    box-shadow: 0 2px 4px rgba(74, 44, 42, 0.12);
+    font-family: 'Lora', Georgia, serif;
+    flex-shrink: 0;
+}
+
+/* ── Row 1: Bulk Action Controls ────────────────────────────────────────── */
+.bundle-toolbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    border-bottom: 1px solid rgba(107, 78, 49, 0.2);
+    flex-wrap: wrap;
+    min-height: 36px;
+}
+
+.bundle-toolbar-actions .bundle-select-all {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: var(--aged-brown-medium);
+    flex-shrink: 0;
+}
+
+.bundle-toolbar-actions .bundle-action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 3px 10px;
+    border: 1px solid #c4a882;
+    border-radius: 12px;
+    background: rgba(139, 90, 43, 0.1);
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.8em;
+    font-weight: bold;
+    color: var(--aged-brown-dark, #4a2c2a);
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, opacity 0.2s;
+    min-height: 28px;
+    white-space: nowrap;
+}
+
+/* Greyed-out (inactive) state — muted */
+.bundle-toolbar-actions .bundle-action-btn.inactive {
+    color: #a08060;
+    border-color: rgba(107, 78, 49, 0.2);
+    background: transparent;
+    cursor: default;
+    pointer-events: none;
+    opacity: 0.5;
+}
+
+/* Active state — matches email-sub-btn style */
+.bundle-toolbar-actions .bundle-action-btn.active {
+    color: var(--aged-brown-dark, #4a2c2a);
+    border-color: #c4a882;
+    background: rgba(139, 90, 43, 0.1);
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.bundle-toolbar-actions .bundle-action-btn.active:hover {
+    background: rgba(139, 90, 43, 0.2);
+    border-color: #8b5a2b;
+}
+
+/* Selected count indicator */
+.bundle-toolbar-actions .bundle-selected-count {
+    font-size: 0.8em;
+    color: var(--aged-brown-medium);
+    font-weight: 600;
+    margin-left: auto;
+    white-space: nowrap;
+}
+
+/* ── Row 2: Bundle Tabs ─────────────────────────────────────────────────── */
+.bundle-tabs-row {
+    display: flex;
+    align-items: flex-end;
+    padding: 4px 8px 0;
+    min-height: 36px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(107, 78, 49, 0.3) transparent;
+    -webkit-overflow-scrolling: touch;
+}
+
+.bundle-tabs-row::-webkit-scrollbar {
+    height: 4px;
+}
+
+.bundle-tabs-row::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.bundle-tabs-row::-webkit-scrollbar-thumb {
+    background-color: rgba(107, 78, 49, 0.3);
+    border-radius: 2px;
+}
+
+/* Individual bundle tab */
+.bundle-tab {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 6px 14px;
+    margin: 0 1px;
+    min-width: 100px;
+    border: none;
+    border-bottom: 3px solid transparent;
+    border-radius: 4px 4px 0 0;
+    background: rgba(139, 90, 43, 0.08);
+    color: var(--aged-brown-dark, #4a2c2a);
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.82em;
+    font-weight: bold;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s, border-color 0.15s, opacity 0.15s;
+    flex-shrink: 0;
+}
+
+.bundle-tab:hover {
+    background: rgba(139, 90, 43, 0.15);
+}
+
+/* Active tab — bold bottom border, stronger background */
+.bundle-tab.active {
+    border-bottom-color: var(--aged-brown-dark, #4a2c2a);
+    background: rgba(139, 90, 43, 0.18);
+    font-weight: 900;
+    opacity: 1 !important;
+}
+
+/* ── Unread Count Badge ─────────────────────────────────────────────────── */
+.bundle-tab .bundle-unread-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    border-radius: 8px;
+    background-color: var(--aged-brown-medium);
+    color: var(--parchment-light);
+    font-size: 0.7em;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.bundle-tab .bundle-unread-badge:empty {
+    display: none;
+}
+
+/* ── "+" Create Bundle Button ───────────────────────────────────────────── */
+.bundle-add-btn {
+    padding: 4px 10px;
+    height: 28px;
+    background-color: #8b5a2b;
+    border: 1px solid #5a3f2a;
+    border-radius: 3px;
+    color: #fdf5e6;
+    cursor: pointer;
+    font-family: 'Lora', Georgia, serif;
+    font-weight: bold;
+    font-size: 0.85em;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: 6px;
+    flex-shrink: 0;
+    transition: background 0.2s;
+}
+
+.bundle-add-btn:hover {
+    background-color: #6b4e31;
+    color: #d2b48c;
+}
+
+/* ── Dimmed State (sub-filter is not "inbox") ───────────────────────────── */
+.bundle-tabs-row.dimmed .bundle-tab {
+    opacity: 0.4;
+    pointer-events: none;
+    cursor: default;
+}
+
+.bundle-tabs-row.dimmed .bundle-add-btn {
+    opacity: 0.4;
+    pointer-events: none;
+    cursor: default;
+}
+
+.bundle-tabs-row.dimmed .bundle-tab .bundle-unread-badge {
+    display: none;
+}
+
+/* ── Mobile Responsive Rules ────────────────────────────────────────────── */
+@media (max-width: 600px) {
+    .bundle-toolbar-actions {
+        gap: 6px;
+        padding: 5px 8px;
+        flex-wrap: wrap;
+    }
+
+    .bundle-toolbar-actions .bundle-action-btn {
+        padding: 4px 8px;
+        font-size: 0.8em;
+    }
+
+    .bundle-tabs-row {
+        padding: 0 4px;
+        /* Horizontal scroll for tabs on mobile */
+        overflow-x: auto;
+        flex-wrap: nowrap;
+    }
+
+    .bundle-tab {
+        padding: 5px 10px;
+        font-size: 0.8em;
+    }
+
+    .bundle-add-btn {
+        width: 26px;
+        height: 26px;
+        font-size: 1em;
+    }
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Bundle Context Menu
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.bundle-context-menu {
+    position: fixed;
+    z-index: 9998;
+    min-width: 140px;
+    background: #fffaf0;
+    border: 2px solid #6b4e31;
+    border-radius: 6px;
+    box-shadow: 0 4px 16px rgba(26, 18, 8, 0.25);
+    font-family: 'Lora', Georgia, serif;
+    padding: 4px 0;
+    user-select: none;
+}
+
+.bundle-context-menu-item {
+    display: block;
+    width: 100%;
+    padding: 8px 16px;
+    border: none;
+    background: transparent;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.9em;
+    font-weight: 600;
+    color: #3d2b1f;
+    text-align: left;
+    cursor: pointer;
+    transition: background-color 0.15s, color 0.15s;
+}
+
+.bundle-context-menu-item:hover {
+    background-color: #f0e6d6;
+    color: #1a1208;
+}
+
+.bundle-context-menu-item.danger {
+    color: #a03030;
+}
+
+.bundle-context-menu-item.danger:hover {
+    background-color: #f5e0e0;
+    color: #8b1a1a;
+}
+
+/* ── Drag-and-drop reorder active state ─────────────────────────────────── */
+.bundle-tabs-row.reorder-active .bundle-tab {
+    cursor: grab;
+}
+
+.bundle-tabs-row.reorder-active .bundle-tab.dragging {
+    opacity: 0.5;
+    cursor: grabbing;
+}
+
+.bundle-tabs-row.reorder-active .bundle-tab.drag-over-left {
+    border-left: 3px solid #6b4e31;
+}
+
+.bundle-tabs-row.reorder-active .bundle-tab.drag-over-right {
+    border-right: 3px solid #6b4e31;
+}
+
+@media (max-width: 600px) {
+    .bundle-context-menu {
+        min-width: 120px;
+    }
+
+    .bundle-context-menu-item {
+        padding: 10px 16px;
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Bundle Modal
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Modal Overlay ──────────────────────────────────────────────────────── */
+.cwoc-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(26, 18, 8, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+}
+
+/* ── Modal Container ────────────────────────────────────────────────────── */
+.cwoc-modal.bundle-modal {
+    background: #fffaf0;
+    border: 2px solid #6b4e31;
+    border-radius: 8px;
+    padding: 24px;
+    width: 90%;
+    max-width: 420px;
+    box-shadow: 0 8px 32px rgba(26, 18, 8, 0.3);
+    font-family: 'Lora', Georgia, serif;
+}
+
+.bundle-modal-title {
+    margin: 0 0 16px 0;
+    font-size: 1.3em;
+    color: #1a1208;
+    font-weight: 700;
+}
+
+/* ── Form Fields ────────────────────────────────────────────────────────── */
+.bundle-modal-field {
+    margin-bottom: 14px;
+}
+
+.bundle-modal-field label {
+    display: block;
+    margin-bottom: 4px;
+    font-size: 0.9em;
+    font-weight: 600;
+    color: #3d2b1f;
+}
+
+.bundle-modal-field input[type="text"],
+.bundle-modal-field textarea {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px 10px;
+    border: 1px inset #c4a882;
+    border-radius: 4px;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.95em;
+    color: #1a1208;
+    background: #fff;
+}
+
+.bundle-modal-field input[type="text"]:focus,
+.bundle-modal-field textarea:focus {
+    outline: none;
+    border-color: #6b4e31;
+    box-shadow: 0 0 0 2px rgba(107, 78, 49, 0.2);
+}
+
+.bundle-modal-field textarea {
+    resize: vertical;
+    min-height: 50px;
+}
+
+/* ── Action Buttons ─────────────────────────────────────────────────────── */
+.bundle-modal-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-top: 18px;
+}
+
+.bundle-modal-actions .zone-button {
+    padding: 8px 16px;
+    border: 1px solid #6b4e31;
+    border-radius: 4px;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.9em;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s, color 0.2s;
+    background: transparent;
+    color: #6b4e31;
+}
+
+.bundle-modal-actions .zone-button:hover {
+    background-color: #f0e6d6;
+}
+
+.bundle-modal-actions .bundle-define-rule-btn {
+    background-color: #6b4e31;
+    color: #fffaf0;
+}
+
+.bundle-modal-actions .bundle-define-rule-btn:hover {
+    background-color: #5a3d22;
+}
+
+.bundle-modal-actions .bundle-define-rule-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* ── Hint / Error Message ───────────────────────────────────────────────── */
+.bundle-modal-hint {
+    margin: 10px 0 0 0;
+    padding: 0;
+    font-size: 0.85em;
+    color: #a03030;
+    font-weight: 600;
+    display: none;
+}
+
+/* ── Mobile Responsive ──────────────────────────────────────────────────── */
+@media (max-width: 600px) {
+    .cwoc-modal.bundle-modal {
+        width: 95%;
+        padding: 18px;
+    }
+
+    .bundle-modal-actions .zone-button {
+        min-height: 44px;
+        padding: 10px 14px;
+    }
+}
+
+
+/* ── Bundle Color Picker (uses shared .cwoc-color-swatch from shared-page.css) ── */
+.bundle-color-picker {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 6px;
+    align-items: center;
+}
+
+/* ── Priority arrow between tabs (single-placement mode) ───────────────── */
+.bundle-tab-arrow {
+    display: inline-flex;
+    align-items: center;
+    color: rgba(107, 78, 49, 0.4);
+    font-size: 0.9em;
+    margin: 0 2px;
+    user-select: none;
+    flex-shrink: 0;
+}
+
+/* ── Always-on drag styles (no reorder-active needed) ───────────────────── */
+.bundle-tab[draggable="true"] {
+    cursor: grab;
+}
+
+.bundle-tab[draggable="true"]:active {
+    cursor: grabbing;
+}
+
+.bundle-tab.dragging {
+    opacity: 0.5;
+}
+
+.bundle-tab.drag-over-left {
+    border-left: 3px solid #6b4e31;
+}
+
+.bundle-tab.drag-over-right {
+    border-right: 3px solid #6b4e31;
+}

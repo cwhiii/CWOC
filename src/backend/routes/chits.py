@@ -137,6 +137,7 @@ def get_all_chits(request: Request):
 
 
 
+@router.post("/api/chits")
 def create_chit(chit: Chit, request: Request):
     conn = None
     try:

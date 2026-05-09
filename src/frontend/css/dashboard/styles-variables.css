@@ -47,3 +47,30 @@
     --btn-hover: #6b4e31;
     --btn-hover-text: #d2b48c;
 }
+
+/* ── Color Swatches (same as editor.css .color-swatch — shared across pages) ── */
+.color-swatch {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: border-color 0.2s ease;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 2em;
+    padding: 0;
+}
+.color-swatch:hover {
+    border-color: #666;
+}
+.color-swatch.selected {
+    border-color: #000;
+}
+.cwoc-color-none {
+    background: #fffaf0;
+    border: 2px solid #ccc;
+    font-size: 1.2em;
+    color: #666;
+}

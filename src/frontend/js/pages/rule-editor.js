@@ -1340,11 +1340,14 @@ function _validate() {
         errors.push('At least one condition is required.');
     }
 
-    if (_actions.length === 0) {
-        errors.push('At least one action is required.');
-    } else {
-        var hasValidAction = _actions.some(function(a) { return a.type; });
-        if (!hasValidAction) errors.push('At least one action must have a type selected.');
+    // Bundle rules don't need user-defined actions (auto-added on save)
+    if (!window._isBundleRule) {
+        if (_actions.length === 0) {
+            errors.push('At least one action is required.');
+        } else {
+            var hasValidAction = _actions.some(function(a) { return a.type; });
+            if (!hasValidAction) errors.push('At least one action must have a type selected.');
+        }
     }
 
     return errors;
@@ -1398,6 +1401,16 @@ async function saveRule(andExit) {
         confirm_before_apply: document.getElementById('rule-confirm').checked
     };
 
+    // For bundle rules: auto-add the "add_tag" action with the bundle tag
+    if (window._isBundleRule && window._ruleBundleId) {
+        // Get bundle name from the rule name ("Bundle: X" → X)
+        var ruleName = payload.name || '';
+        var bundleName = ruleName.replace(/^Bundle:\s*/, '');
+        if (bundleName) {
+            payload.actions = [{ type: 'add_tag', params: { tag: 'CWOC_System/Bundle/' + bundleName } }];
+        }
+    }
+
     // Schedule config
     if (payload.trigger_type === 'scheduled') {
         payload.schedule_config = {
@@ -1440,6 +1453,20 @@ async function saveRule(andExit) {
         _saveSystem.markSaved();
         cwocToast('Rule saved');
 
+        // Associate rule with bundle if this is a new bundle rule
+        if (window._ruleBundleId && saved.id) {
+            try {
+                await fetch('/api/bundles/' + encodeURIComponent(window._ruleBundleId) + '/rules', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ rule_id: saved.id })
+                });
+                window._ruleBundleId = null; // Only associate once
+            } catch (assocErr) {
+                console.error('Failed to associate rule with bundle:', assocErr);
+            }
+        }
+
         // Update URL to include id for new rules
         if (!window.location.search.includes('id=')) {
             var newUrl = window.location.pathname + '?id=' + encodeURIComponent(_ruleId);
@@ -1447,7 +1474,8 @@ async function saveRule(andExit) {
         }
 
         if (andExit) {
-            window.location.href = '/frontend/html/rules-manager.html';
+            var exitUrl = window._ruleReturnUrl || '/frontend/html/rules-manager.html';
+            window.location.href = exitUrl;
         }
     } catch (e) {
         console.error('Error saving rule:', e);
@@ -1460,7 +1488,8 @@ function cancelOrExit() {
     if (_saveSystem) {
         _saveSystem.cancelOrExit();
     } else {
-        window.location.href = '/frontend/html/rules-manager.html';
+        var exitUrl = window._ruleReturnUrl || '/frontend/html/rules-manager.html';
+        window.location.href = exitUrl;
     }
 }
 
@@ -1591,7 +1620,99 @@ document.addEventListener('DOMContentLoaded', function() {
     // Check for existing rule ID in URL
     var params = new URLSearchParams(window.location.search);
     var ruleId = params.get('id');
+    var returnUrl = params.get('return');
+    var bundleId = params.get('bundle_id');
+    var presetTrigger = params.get('trigger');
+
+    // Override return URL if provided
+    if (returnUrl) {
+        _saveSystem.getReturnUrl = function() { return returnUrl; };
+    }
+
+    // Store bundle_id for association after save
+    window._ruleBundleId = bundleId || null;
+    window._ruleReturnUrl = returnUrl || null;
+
     if (ruleId) {
         _loadRule(ruleId);
+    }
+
+    // For new bundle rules: pre-set trigger and lock it
+    if (!ruleId && presetTrigger) {
+        var triggerEl = document.getElementById('rule-trigger');
+        if (triggerEl) {
+            triggerEl.value = presetTrigger;
+            _onTriggerChange();
+            // Lock trigger for bundle rules
+            if (bundleId) {
+                triggerEl.disabled = true;
+                triggerEl.title = 'Bundle rules always use "Email Received" trigger';
+            }
+        }
+    }
+
+    // Bundle mode: auto-set name, description, hide actions
+    if (bundleId && !ruleId) {
+        window._isBundleRule = true;
+        // Fetch bundle info to get name and description
+        getCachedSettings().then(function(s) {
+            var bundles = s.bundles || [];
+            var bundle = bundles.find(function(b) { return b.id === bundleId; });
+            if (bundle) {
+                var nameEl = document.getElementById('rule-name');
+                if (nameEl) {
+                    nameEl.value = 'Bundle: ' + bundle.name;
+                    nameEl.readOnly = true;
+                    nameEl.style.opacity = '0.7';
+                    nameEl.title = 'Bundle rule names are set automatically';
+                }
+                var descEl = document.getElementById('rule-description');
+                if (descEl && bundle.description) {
+                    descEl.value = bundle.description;
+                }
+            }
+        });
+        // Collapse actions section with new label — bundle rules auto-add the tag action,
+        // but user can optionally add more actions
+        var actionsSection = document.querySelector('.rule-section:has(#actions-container)') ||
+                             document.getElementById('actions-container');
+        if (actionsSection) {
+            var parent = actionsSection.closest('.rule-section') || actionsSection;
+            // Find or create a header for the section
+            var sectionHeader = parent.querySelector('h3, .rule-section-header, label');
+            if (sectionHeader) {
+                sectionHeader.textContent = '▶ Also apply additional actions (optional)';
+                sectionHeader.style.cursor = 'pointer';
+                sectionHeader.style.opacity = '0.7';
+                var actionsBody = parent.querySelector('#actions-container') || parent.querySelector('.rule-section-body');
+                if (actionsBody) {
+                    actionsBody.style.display = 'none';
+                    sectionHeader.addEventListener('click', function() {
+                        var isHidden = actionsBody.style.display === 'none';
+                        actionsBody.style.display = isHidden ? '' : 'none';
+                        sectionHeader.textContent = (isHidden ? '▼' : '▶') + ' Also apply additional actions (optional)';
+                    });
+                }
+            } else {
+                // Fallback: just collapse the whole section
+                parent.style.display = 'none';
+            }
+        }
+
+        // Hide trigger section — always "Email Received" for bundles
+        var triggerSection = document.getElementById('rule-trigger');
+        if (triggerSection) {
+            var triggerParent = triggerSection.closest('.rule-section') || triggerSection.parentElement;
+            if (triggerParent) triggerParent.style.display = 'none';
+        }
+
+        // Default "Confirm before applying" to NO for bundle rules
+        var confirmEl = document.getElementById('rule-confirm');
+        if (confirmEl) {
+            confirmEl.checked = false;
+            // Hide the confirm toggle — not relevant for bundles
+            var confirmRow = confirmEl.closest('.rule-toggle-row') || confirmEl.parentElement;
+            if (confirmRow) confirmRow.style.display = 'none';
+        }
     }
 });

@@ -284,6 +284,20 @@
                 <li><strong>Auto-check</strong> — Configure automatic mail checking intervals in Settings → Email → Syncing (5, 15, 30, or 60 minutes)</li>
                 <li><strong>Deletion Sync</strong> — When you delete an email in Gmail (or any IMAP provider), the deletion propagates to CWOC on the next sync. The deleted email chit is soft-deleted and moved to Trash. This happens automatically during every mail check, whether manual or auto-check</li>
             </ul>
+            <h4>Email Bundles</h4>
+            <p>Bundles organize your inbox into categories, similar to Google Inbox. Emails are automatically sorted into bundles based on rules you define. Two default bundles are created automatically:</p>
+            <ul>
+                <li><strong>From Contacts</strong> — Emails from senders in your contacts list</li>
+                <li><strong>Everything Else</strong> — Emails that don't match any other bundle's rules</li>
+            </ul>
+            <p>Bundle tabs appear in a toolbar above your email list when viewing the Inbox sub-filter. Click a tab to filter emails to that bundle. The toolbar also shows unread counts per bundle.</p>
+            <ul>
+                <li><strong>Create Bundle</strong> — Click the "+" button at the end of the tab row. Enter a name and optional description, then click "Define Rule" to set up the classification rule in the Rule Editor</li>
+                <li><strong>Edit / Delete</strong> — Right-click (or long-press on mobile) a bundle tab to open the context menu with Edit, Reorder, and Delete options. "Everything Else" cannot be deleted</li>
+                <li><strong>Reorder</strong> — Choose "Reorder" from the context menu, then drag tabs to rearrange. In single-placement mode, order determines priority (first match wins)</li>
+                <li><strong>Multi-Placement</strong> — By default, each email goes to the first matching bundle only. Enable "Allow Multi-Placement" in Settings → Email to let emails appear in multiple bundles simultaneously</li>
+                <li><strong>Bulk Actions</strong> — Use the Select All checkbox, Archive, Tag, and Mark Read/Unread buttons in the toolbar row above the bundle tabs to act on multiple emails at once</li>
+            </ul>
             <h4>Email Formatting Shortcuts</h4>
             <p>These keyboard shortcuts work in both the small email zone and the expanded editor. The expanded editor also has a toolbar with buttons for each action.</p>
             <ul>
@@ -410,7 +424,7 @@
                 <li><strong>← Notes</strong> — Appends note lines as new checklist items. Recognizes markdown checklist syntax (<code>- [ ]</code> / <code>- [x]</code>), bullet points, and plain lines. Indentation is preserved.</li>
             </ul>
             <h4>Notes Zone</h4>
-            <p>The notes zone provides a <strong>rich WYSIWYG markdown editor</strong> powered by Milkdown. You see formatted text as you type — headings, bold, italic, lists, blockquotes, and code all render inline. The underlying data remains standard markdown.</p>
+            <p>The notes zone provides a <strong>markdown editor</strong> with a format toolbar and render toggle. Write in markdown and switch between edit and rendered views. The underlying data is standard markdown.</p>
             <p><strong>Format Toolbar:</strong> Above the editor, buttons for Bold, Italic, Strikethrough, Link, Headings (H1/H2/H3), Bullet List, Numbered List, Blockquote, Inline Code, and Horizontal Rule. On mobile, the toolbar scrolls horizontally.</p>
             <p><strong>Keyboard Shortcuts:</strong></p>
             <ul>
@@ -423,8 +437,7 @@
                 <li><kbd>Ctrl+Shift+Z</kbd> / <kbd>Cmd+Shift+Z</kbd> — Redo</li>
             </ul>
             <p><strong>Chit Link Autocomplete:</strong> Type <code>[[</code> to trigger an autocomplete dropdown showing matching chit titles. Use Arrow keys to navigate, Enter to select, Escape to dismiss. The selected title is inserted as <code>[[title]]</code>.</p>
-            <p><strong>Expand to Modal:</strong> Click the Expand button in the zone header to open a full-screen editing modal with the same WYSIWYG editor. Click "Done" to save changes back to the main editor.</p>
-            <p><strong>Fallback Mode:</strong> If the rich editor's vendor files are unavailable (e.g., first install before configurator runs), the editor falls back to a plain textarea with the same format toolbar and markdown render toggle. A brief toast notification appears when fallback mode activates.</p>
+            <p><strong>Expand to Modal:</strong> Click the Expand button in the zone header to open a full-screen editing modal. Click "Done" to save changes back to the main editor.</p>
             <p>The <strong>← Checklist</strong> button appends all checklist items to the notes as markdown checklist lines (<code>- [ ] item</code> / <code>- [x] item</code>). Both conversions are additive — they don't remove existing content from either zone.</p>
             <p>Use <code>[[chit title]]</code> to link to other chits — an autocomplete dropdown appears as you type inside the brackets.</p>
             <h4>Location Zone</h4>
@@ -702,7 +715,7 @@
                 <li><strong>Default Filters</strong> — Per-tab default search text</li>
                 <li><strong>Visual Indicators</strong> — Per-indicator visibility (Always / Never / If Space), combine alerts toggle</li>
                 <li><strong>Habits</strong> — Success rate window (7/30/90 days or all time), default show habits on calendar toggle</li>
-                <li><strong>Version &amp; Updates</strong> — Current version, upgrade button, update log</li>
+                <li><strong>Version &amp; Updates</strong> — Current version, upgrade button, update log, restart service (admin only)</li>
                 <li><strong>Data</strong> — Audit log link, trash link, audit log pruning limits</li>
                 <li><strong>Data Management</strong> — JSON export/import for chit data and user data (add or replace modes), plus iCalendar (.ics) import for Google Calendar, Apple Calendar, and Outlook</li>
                 <li><strong>Kiosk</strong> — Select which tags to display on the unauthenticated kiosk view, and launch it</li>

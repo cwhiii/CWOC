@@ -1,0 +1,1 @@
+Fixed: ESC in email expand modal now uses stopImmediatePropagation to prevent the editor's ESC handler from also firing and closing the chit. Removed duplicate attachment display in email inbox view (kept only inline chips). Removed auto-open of Attachments zone that was causing side effects.

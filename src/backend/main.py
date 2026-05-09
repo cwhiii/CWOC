@@ -20,6 +20,7 @@
 #   src/backend/routes/network_access.py — Network access provider config
 #   src/backend/routes/push.py — Web Push notification endpoints
 #   src/backend/routes/ntfy.py — Ntfy push notification sender & endpoints
+#   src/backend/routes/bundles.py — Email bundle CRUD & rule associations
 #   src/backend/middleware.py   — Auth middleware (session validation)
 #
 # PWA files served directly from src/pwa/:
@@ -165,6 +166,8 @@ from src.backend.migrations import (
     migrate_add_recent_tags,
     migrate_add_paginate_email,
     migrate_fix_double_encoded_attachments,
+    migrate_create_bundles_tables,
+    migrate_add_nest_thread_id,
 )
 
 # Initialize database and run all migrations (same order as before)
@@ -221,6 +224,8 @@ migrate_add_view_order()
 migrate_add_recent_tags()
 migrate_add_paginate_email()
 migrate_fix_double_encoded_attachments()
+migrate_create_bundles_tables()
+migrate_add_nest_thread_id()
 seed_version_info()
 
 # One-time cleanup: fix sent emails that still have CWOC_System/Email/Drafts tag
@@ -272,6 +277,7 @@ from src.backend.routes.attachments import attachments_router
 from src.backend.routes.rules import router as rules_router
 from src.backend.routes.ha import ha_router
 from src.backend.routes.admin import admin_router
+from src.backend.routes.bundles import bundles_router
 
 app.include_router(auth_router)
 app.include_router(users_router)
@@ -294,6 +300,21 @@ app.include_router(attachments_router)
 app.include_router(rules_router)
 app.include_router(ha_router)
 app.include_router(admin_router)
+app.include_router(bundles_router)
+
+# ── Reclassify emails into bundles on every startup ──────────────────────
+try:
+    import sqlite3 as _rc_sqlite3
+    from src.backend.routes.bundles import reclassify_all_emails as _rc_reclassify
+    _rc_conn = _rc_sqlite3.connect(DB_PATH)
+    _rc_cur = _rc_conn.cursor()
+    _rc_cur.execute("SELECT DISTINCT owner_id FROM bundles")
+    _rc_owners = [r[0] for r in _rc_cur.fetchall()]
+    _rc_conn.close()
+    for _rc_oid in _rc_owners:
+        _rc_reclassify(_rc_oid)
+except Exception as _rc_err:
+    logger.warning(f"Startup reclassification failed: {_rc_err}")
 
 
 # ═══════════════════════════════════════════════════════════════════════════

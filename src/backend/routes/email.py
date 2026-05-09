@@ -23,6 +23,7 @@ from uuid import uuid4
 
 from src.backend.db import DB_PATH, serialize_json_field, compute_system_tags
 from src.backend.rules_engine import dispatch_trigger
+from src.backend.routes.bundles import classify_email_into_bundle, classify_email_into_bundles
 
 logger = logging.getLogger(__name__)
 
@@ -1571,7 +1572,41 @@ def email_sync(request: Request):
 
         conn.commit()
 
+        # ── Bundle classification for new email chits ─────────────────
+        if all_email_chits:
+            try:
+                # Read the bundles_multi_placement setting
+                multi_placement = False
+                try:
+                    conn2 = sqlite3.connect(DB_PATH)
+                    c2 = conn2.cursor()
+                    c2.execute(
+                        "SELECT bundles_multi_placement FROM settings WHERE user_id = ?",
+                        (user_id,),
+                    )
+                    row = c2.fetchone()
+                    if row and row[0]:
+                        multi_placement = bool(row[0])
+                    conn2.close()
+                except Exception as e:
+                    logger.warning(f"Failed to read bundles_multi_placement setting: {e}")
+
+                for email_chit_data in all_email_chits:
+                    try:
+                        if multi_placement:
+                            classify_email_into_bundles(email_chit_data, user_id)
+                        else:
+                            classify_email_into_bundle(email_chit_data, user_id)
+                    except Exception as e:
+                        logger.warning(
+                            "Bundle classification failed for chit %s: %s",
+                            email_chit_data.get("id", "?"), e,
+                        )
+            except Exception as e:
+                logger.warning(f"Bundle classification error: {e}")
+
         # Fire-and-forget: dispatch rules engine triggers for new email chits
+        # (non-bundle "email_received" rules still fire via normal dispatch)
         try:
             for email_chit_data in all_email_chits:
                 logger.info("Firing rules engine trigger: email_received for chit %s, owner %s", email_chit_data.get("id", "?"), user_id)

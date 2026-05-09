@@ -128,14 +128,22 @@ class AuthMiddleware(BaseHTTPMiddleware):
         if _is_excluded(path, method):
             return await call_next(request)
 
+        # Debug: log bundles requests
+        _is_bundles = (path == "/api/bundles")
+
         # Periodic session cleanup
         _request_counter += 1
         if _request_counter >= _CLEANUP_INTERVAL:
             _request_counter = 0
+            if _is_bundles:
+                logger.warning("[bundles-debug] Cleanup triggered on this request")
             _cleanup_expired_sessions()
 
         # Read session cookie
         token = request.cookies.get(SESSION_COOKIE_NAME)
+
+        if _is_bundles:
+            logger.warning(f"[bundles-debug] cookie present: {bool(token)}, token: {token[:12] if token else 'NONE'}")
 
         if token:
             # Look up session in database
@@ -152,6 +160,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
                     (token,),
                 ).fetchone()
 
+                if _is_bundles:
+                    logger.warning(f"[bundles-debug] session row found: {bool(row)}")
+
                 if row:
                     now = datetime.utcnow()
                     expires = datetime.fromisoformat(row["expires_datetime"].replace("Z", ""))
@@ -160,6 +171,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
                     # Check expiry: absolute expiry OR 24h inactivity
                     session_expired = now > expires
                     session_inactive = (now - last_active).total_seconds() > _INACTIVITY_SECONDS
+
+                    if _is_bundles:
+                        logger.warning(f"[bundles-debug] expired={session_expired}, inactive={session_inactive}, is_active={row['is_active']}")
 
                     if not session_expired and not session_inactive and row["is_active"]:
                         # Valid session — update last_active and inject user info
@@ -175,17 +189,23 @@ class AuthMiddleware(BaseHTTPMiddleware):
                         return await call_next(request)
                     else:
                         # Expired or inactive session — clean it up
+                        if _is_bundles:
+                            logger.warning("[bundles-debug] Deleting expired/inactive session")
                         conn.execute("DELETE FROM sessions WHERE token = ?", (token,))
                         conn.commit()
 
             except Exception as e:
                 logger.error(f"Auth middleware error: {e}")
+                if _is_bundles:
+                    logger.warning(f"[bundles-debug] EXCEPTION in auth: {e}")
             finally:
                 if conn:
                     conn.close()
 
         # No valid session — return appropriate error
         if path.startswith("/api/"):
+            if _is_bundles:
+                logger.warning("[bundles-debug] Returning 401")
             return JSONResponse(
                 status_code=401,
                 content={"detail": "Authentication required"},

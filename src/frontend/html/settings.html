@@ -1224,6 +1224,26 @@
                             <input type="checkbox" id="emailPaginate" />
                             <span class="setting-hint" style="margin:0;font-size:0.8em;">Load 50 at a time with "Load More" button</span>
                         </div>
+                        <div class="setting-inline">
+                            <label for="bundlesMultiPlacement">Allow Multi-Placement</label>
+                            <input type="checkbox" id="bundlesMultiPlacement" />
+                        </div>
+                        <p class="setting-hint">When enabled, emails can appear in multiple bundles. When disabled, each email goes to the first matching bundle (left to right).</p>
+                        <div class="setting-inline">
+                            <label for="bundlesEnabled">Enable Email Bundles</label>
+                            <input type="checkbox" id="bundlesEnabled" />
+                        </div>
+                        <p class="setting-hint">Show bundle tabs in the Email view for categorizing emails</p>
+                        <div class="setting-inline">
+                            <label for="bundlesShowCount">Bundle Count Display</label>
+                            <select id="bundlesShowCount">
+                                <option value="both">Unread / Total</option>
+                                <option value="unread">Unread only</option>
+                                <option value="total">Total only</option>
+                                <option value="none">Hidden</option>
+                            </select>
+                        </div>
+                        <p class="setting-hint">What count to show on bundle tabs</p>
 
                         <label class="setting-subheader">✍️ Signature</label>
                         <div class="setting-subsection-body">
@@ -1622,6 +1642,7 @@
                             <button id="upgrade-reopen-btn" class="standard-button" style="width:100%;display:none;">🔄 Upgrade in progress</button>
                             <button id="update-log-btn" class="standard-button" style="width:100%;margin-top:6px;" onclick="loadLastLog()">📄 Show Log</button>
                             <button id="release-notes-btn" class="standard-button" style="width:100%;margin-top:6px;" onclick="showReleaseNotes()">📋 Release Notes</button>
+                            <button id="restart-btn" class="standard-button" style="width:100%;margin-top:6px;display:none;" onclick="restartCwoc()">🔁 Restart CWOC</button>
                         </div>
                     </div>
                 </div>

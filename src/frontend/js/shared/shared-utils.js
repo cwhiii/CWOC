@@ -12,7 +12,7 @@
  *             shared-geocoding.js, shared-qr.js, shared.js
  */
 
-console.log('%c[CWOC] post-mega src/ layout — 20260429.1655', 'color:#8b4513;font-weight:bold;');
+// Version is logged once via _logCwocVersion() in shared.js
 
 // ── Settings Cache ───────────────────────────────────────────────────────────
 // Promise-based cache so concurrent callers share a single in-flight request.
@@ -112,9 +112,9 @@ function cwocConfirm(message, opts) {
 
     // ESC to cancel
     var onKey = function (e) {
-      if (e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', onKey); resolve(false); }
+      if (e.key === 'Escape') { e.stopImmediatePropagation(); e.preventDefault(); overlay.remove(); document.removeEventListener('keydown', onKey); resolve(false); }
     };
-    document.addEventListener('keydown', onKey);
+    document.addEventListener('keydown', onKey, true);
 
     // Click outside to cancel
     overlay.addEventListener('click', function (e) { if (e.target === overlay) { overlay.remove(); document.removeEventListener('keydown', onKey); resolve(false); } });
@@ -379,6 +379,77 @@ function isLightColor(hex) {
   var g = parseInt(hex.substr(2, 2), 16);
   var b = parseInt(hex.substr(4, 2), 16);
   return (r * 299 + g * 587 + b * 114) / 1000 > 140;
+}
+
+// ── Shared Color Picker ──────────────────────────────────────────────────────
+
+/** Default color palette used across CWOC (editor color zone, bundle tabs, etc.) */
+var _cwocDefaultColors = [
+  { hex: '#C66B6B', name: 'Dusty Rose' },
+  { hex: '#D68A59', name: 'Burnt Sienna' },
+  { hex: '#E3B23C', name: 'Golden Ochre' },
+  { hex: '#8A9A5B', name: 'Mossy Sage' },
+  { hex: '#6B8299', name: 'Slate Teal' },
+  { hex: '#8B6B99', name: 'Muted Lilac' }
+];
+
+/**
+ * Render a color picker (swatches) into a container element.
+ * Uses the default palette + user's custom colors from settings.
+ * Calls onChange(hex) when a swatch is clicked.
+ *
+ * @param {HTMLElement} container — element to render swatches into (cleared first)
+ * @param {string} currentColor — currently selected hex color (or '' for none)
+ * @param {Function} onChange — callback(hex) when selection changes
+ * @param {object} [opts] — options: { showNone: true } to include a "no color" swatch
+ */
+function cwocRenderColorPicker(container, currentColor, onChange, opts) {
+  opts = opts || {};
+  container.innerHTML = '';
+
+  var colors = _cwocDefaultColors.slice();
+
+  // Add custom colors from settings
+  var customColors = (window._cwocSettings || {}).custom_colors;
+  if (Array.isArray(customColors)) {
+    customColors.forEach(function(c) {
+      var hex = (typeof c === 'string') ? c : (c.hex || c.color || '');
+      var name = (typeof c === 'string') ? c : (c.name || c.hex || '');
+      if (hex) colors.push({ hex: hex, name: name });
+    });
+  }
+
+  // "None" swatch
+  if (opts.showNone !== false) {
+    var noneSwatch = document.createElement('button');
+    noneSwatch.type = 'button';
+    noneSwatch.className = 'color-swatch cwoc-color-none';
+    noneSwatch.textContent = '\u2718';
+    noneSwatch.title = 'No color';
+    if (!currentColor) noneSwatch.classList.add('selected');
+    noneSwatch.addEventListener('click', function() {
+      container.querySelectorAll('.color-swatch').forEach(function(s) { s.classList.remove('selected'); });
+      noneSwatch.classList.add('selected');
+      onChange('');
+    });
+    container.appendChild(noneSwatch);
+  }
+
+  // Color swatches
+  colors.forEach(function(c) {
+    var swatch = document.createElement('button');
+    swatch.type = 'button';
+    swatch.className = 'color-swatch';
+    swatch.style.backgroundColor = c.hex;
+    swatch.title = c.name;
+    if (c.hex.toLowerCase() === (currentColor || '').toLowerCase()) swatch.classList.add('selected');
+    swatch.addEventListener('click', function() {
+      container.querySelectorAll('.color-swatch').forEach(function(s) { s.classList.remove('selected'); });
+      swatch.classList.add('selected');
+      onChange(c.hex);
+    });
+    container.appendChild(swatch);
+  });
 }
 
 /**

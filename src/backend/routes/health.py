@@ -660,3 +660,47 @@ async def run_update():
             return
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Restart Service (admin only)
+# ═══════════════════════════════════════════════════════════════════════════
+
+@router.post("/api/restart")
+async def restart_service(request: Request):
+    """Restart the CWOC systemd service. Admin only."""
+    # Check admin
+    user_id = getattr(request.state, "user_id", None)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        row = conn.execute(
+            "SELECT is_admin FROM users WHERE id = ?", (user_id,)
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        if not row["is_admin"]:
+            raise HTTPException(status_code=403, detail="Admin access required")
+    finally:
+        if conn:
+            conn.close()
+
+    # Schedule the restart after a short delay so the response reaches the client
+    async def _deferred_restart():
+        await asyncio.sleep(2)
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "sudo", "systemctl", "restart", "cwoc",
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            await proc.wait()
+        except Exception:
+            pass
+
+    asyncio.create_task(_deferred_restart())
+    return {"status": "restarting"}

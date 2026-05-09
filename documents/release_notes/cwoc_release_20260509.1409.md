@@ -1,0 +1,1 @@
+Fixed email view quick action buttons (archive, delete, mark unread) to have a solid background matching the card, so dates behind them are no longer visible through the buttons across all three sub-views (inbox, archive, sent).

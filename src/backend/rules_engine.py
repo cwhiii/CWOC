@@ -271,9 +271,22 @@ def evaluate_leaf(
 
     # ── String comparison operators ──────────────────────────────
     if operator == "equals":
-        return field_str == value_str
+        if field_str == value_str:
+            return True
+        # For email fields: extract address from "Name <email>" format
+        if field in ("email_from", "email_to", "email_cc", "email_bcc"):
+            import re
+            match = re.search(r'<([^>]+)>', field_str)
+            if match:
+                return match.group(1).lower() == value_str
+        return False
 
     if operator == "not_equals":
+        if field in ("email_from", "email_to", "email_cc", "email_bcc"):
+            import re
+            match = re.search(r'<([^>]+)>', field_str)
+            if match:
+                return match.group(1).lower() != value_str
         return field_str != value_str
 
     if operator == "contains":

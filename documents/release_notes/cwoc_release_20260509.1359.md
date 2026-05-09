@@ -1,0 +1,1 @@
+Fixed cwocConfirm ESC handler so it stops event propagation. Previously, pressing ESC would both cancel the modal AND trigger the page-level ESC exit. Now uses capture phase + stopImmediatePropagation to ensure one ESC press = one action only.

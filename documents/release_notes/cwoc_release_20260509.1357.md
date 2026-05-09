@@ -1,0 +1,1 @@
+Cleaned up redundant console logging on page load — removed hardcoded layout banner, downgraded noisy informational logs (sync attempts, email threading stats, PWA registration, weather scheduling, bulk operation step-by-step) to console.debug so they're hidden by default. Normal console now shows only: auth confirmation, WebSocket connected, and version.

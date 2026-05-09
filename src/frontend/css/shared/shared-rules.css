@@ -157,6 +157,7 @@
 .trigger-badge.contact_created { background: #e2d9f3; color: #4a2c8a; border-color: #d0c4e8; }
 .trigger-badge.contact_updated { background: #fde2e4; color: #842029; border-color: #f5c2c7; }
 .trigger-badge.scheduled       { background: #e8dcc8; color: var(--aged-brown-dark); border-color: #c4a484; }
+.trigger-badge.bundle-rule-badge { background: #f5e6d3; color: #6b4e31; border-color: #d4a574; font-size: 0.75em; }
 
 /* Rule name link */
 .rule-name-link {

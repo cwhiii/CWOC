@@ -302,3 +302,74 @@ function releaseNotesNext() {
 function closeReleaseNotesModal() {
   document.getElementById('release-notes-modal').style.display = 'none';
 }
+
+
+// ── Restart CWOC (admin only) ────────────────────────────────────────────────
+
+async function restartCwoc() {
+  var confirmed = await cwocConfirm(
+    'This will restart the CWOC service. The app will be briefly unavailable.',
+    { title: 'Restart CWOC', confirmLabel: '🔁 Restart', danger: true }
+  );
+  if (!confirmed) return;
+
+  var btn = document.getElementById('restart-btn');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = '🔁 Restarting...';
+  }
+
+  try {
+    var res = await fetch('/api/restart', { method: 'POST' });
+    if (!res.ok) {
+      var err = await res.json().catch(function() { return {}; });
+      throw new Error(err.detail || 'Restart failed');
+    }
+    cwocToast('Restarting CWOC — page will reload shortly...', 'success');
+    // Wait a few seconds then try to reload once the server is back
+    setTimeout(function() { _waitForServerAndReload(); }, 4000);
+  } catch (e) {
+    console.error('Restart error:', e);
+    cwocToast('Restart failed: ' + e.message, 'error');
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = '🔁 Restart CWOC';
+    }
+  }
+}
+
+function _waitForServerAndReload() {
+  var attempts = 0;
+  var maxAttempts = 20;
+  var interval = setInterval(async function() {
+    attempts++;
+    try {
+      var res = await fetch('/health', { cache: 'no-store' });
+      if (res.ok) {
+        clearInterval(interval);
+        window.location.reload();
+      }
+    } catch (e) {
+      // Server still down, keep trying
+    }
+    if (attempts >= maxAttempts) {
+      clearInterval(interval);
+      cwocToast('Server may still be restarting. Try refreshing manually.', 'warning');
+      var btn = document.getElementById('restart-btn');
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = '🔁 Restart CWOC';
+      }
+    }
+  }, 2000);
+}
+
+// Show restart button for admins only
+if (typeof waitForAuth === 'function') {
+  waitForAuth().then(function() {
+    if (typeof isAdmin === 'function' && isAdmin()) {
+      var restartBtn = document.getElementById('restart-btn');
+      if (restartBtn) restartBtn.style.display = '';
+    }
+  });
+}

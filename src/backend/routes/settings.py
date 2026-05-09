@@ -83,6 +83,47 @@ def get_settings(user_id: str, request: Request):
         settings["checklist_autosave"] = settings.get("checklist_autosave", "1")
         settings["view_order"] = deserialize_json_field(settings.get("view_order"))
         settings["recent_tags"] = deserialize_json_field(settings.get("recent_tags"))
+
+        # ── Include bundles data (piggyback on settings to avoid separate API call) ──
+        try:
+            cursor.execute(
+                "SELECT * FROM bundles WHERE owner_id = ? ORDER BY display_order ASC",
+                (authenticated_user_id,),
+            )
+            bundle_rows = cursor.fetchall()
+            if not bundle_rows:
+                # Auto-initialize default bundles
+                conn.close()
+                conn = None
+                from src.backend.routes.bundles import _initialize_default_bundles
+                try:
+                    _initialize_default_bundles(authenticated_user_id)
+                except Exception as init_err:
+                    logger.error(f"Failed to init default bundles: {init_err}")
+                conn = sqlite3.connect(DB_PATH)
+                cursor = conn.cursor()
+                cursor.execute(
+                    "SELECT * FROM bundles WHERE owner_id = ? ORDER BY display_order ASC",
+                    (authenticated_user_id,),
+                )
+                bundle_rows = cursor.fetchall()
+
+            bundles = []
+            if bundle_rows:
+                bundle_cols = [col[0] for col in cursor.description]
+                for brow in bundle_rows:
+                    b = dict(zip(bundle_cols, brow))
+                    cursor.execute(
+                        "SELECT rule_id FROM bundle_rules WHERE bundle_id = ? AND owner_id = ?",
+                        (b["id"], authenticated_user_id),
+                    )
+                    b["rule_ids"] = [r[0] for r in cursor.fetchall()]
+                    bundles.append(b)
+            settings["bundles"] = bundles
+        except Exception as bundle_err:
+            logger.error(f"Error loading bundles in settings: {bundle_err}")
+            settings["bundles"] = []
+
         return settings
     except Exception as e:
         logger.error(f"Error fetching settings: {str(e)}")
@@ -244,6 +285,7 @@ def save_settings(settings: Settings, request: Request):
             "view_order": settings.view_order,
             "recent_tags": serialize_json_field(settings.recent_tags),
             "paginate_email": settings.paginate_email or "0",
+            "bundles_multi_placement": settings.bundles_multi_placement or "0",
         }
 
         cursor.execute(
@@ -259,8 +301,9 @@ def save_settings(settings: Settings, request: Request):
                 map_default_lat, map_default_lon, map_default_zoom, map_auto_zoom,
                 email_account, email_accounts,
                 attachment_max_size_mb, attachment_max_storage_mb,
-                default_share_contacts, checklist_autosave, view_order, recent_tags, paginate_email
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                default_share_contacts, checklist_autosave, view_order, recent_tags, paginate_email,
+                bundles_multi_placement
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 new_settings_dict["user_id"],
@@ -310,6 +353,7 @@ def save_settings(settings: Settings, request: Request):
                 new_settings_dict["view_order"],
                 new_settings_dict.get("recent_tags"),
                 new_settings_dict["paginate_email"],
+                new_settings_dict["bundles_multi_placement"],
             )
         )
 

@@ -1206,6 +1206,15 @@ class SettingsManager {
     var emailPaginateEl = document.getElementById("emailPaginate");
     if (emailPaginateEl) emailPaginateEl.checked = this.settings.paginate_email === '1';
 
+    var bundlesMultiEl = document.getElementById("bundlesMultiPlacement");
+    if (bundlesMultiEl) bundlesMultiEl.checked = this.settings.bundles_multi_placement === '1';
+
+    var bundlesEnabledEl = document.getElementById("bundlesEnabled");
+    if (bundlesEnabledEl) bundlesEnabledEl.checked = (this.settings.bundles_enabled !== '0');
+
+    var bundlesShowCountEl = document.getElementById("bundlesShowCount");
+    if (bundlesShowCountEl) bundlesShowCountEl.value = this.settings.bundles_show_count || 'unread';
+
     const genderToggle = document.getElementById("gender-toggle");
     if (genderToggle) genderToggle.value = this.settings.sex || "Man";
     _updatePillToggle('sex-pill', this.settings.sex || 'Man');
@@ -1459,6 +1468,9 @@ class SettingsManager {
       },
       checklist_autosave: document.getElementById("checklist-autosave-toggle")?.checked ? '1' : '0',
       paginate_email: document.getElementById("emailPaginate")?.checked ? '1' : '0',
+      bundles_multi_placement: document.getElementById("bundlesMultiPlacement")?.checked ? '1' : '0',
+      bundles_enabled: document.getElementById("bundlesEnabled")?.checked ? '1' : '0',
+      bundles_show_count: document.getElementById("bundlesShowCount")?.value || 'unread',
       saved_locations: JSON.stringify(collectLocationsData()),
       audit_log_max_days: (() => { const cb = document.getElementById("audit-prune-enabled"); if (cb && !cb.checked) return null; const v = (document.getElementById("audit-max-days") || {}).value; return v === '' ? null : parseInt(v, 10); })(),
       audit_log_max_mb: (() => { const cb = document.getElementById("audit-prune-enabled"); if (cb && !cb.checked) return null; const v = (document.getElementById("audit-max-mb") || {}).value; return v === '' ? null : parseInt(v, 10); })(),

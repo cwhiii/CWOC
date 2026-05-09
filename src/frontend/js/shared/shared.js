@@ -796,7 +796,7 @@ async function _checkRecurrenceAutoArchive(parentId) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(chit)
       });
-      console.log(`Auto-archived recurring chit ${parentId} — all instances complete`);
+      console.debug(`Auto-archived recurring chit ${parentId} — all instances complete`);
     }
   } catch (e) {
     console.error('Auto-archive check failed:', e);
@@ -1653,7 +1653,7 @@ function initSyncWebSocket() {
 
   var proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   var url = proto + '//' + window.location.host + '/ws/sync';
-  console.log('CWOC Sync: trying WebSocket', url);
+  console.debug('CWOC Sync: trying WebSocket', url);
 
   try {
     var ws = new WebSocket(url);
@@ -1683,14 +1683,14 @@ function initSyncWebSocket() {
         window._cwocSyncReconnectDelay = Math.min(window._cwocSyncReconnectDelay * 2, 30000);
       } else {
         // Never connected — fall back to polling
-        console.log('CWOC Sync: WebSocket failed, falling back to HTTP polling');
+        console.debug('CWOC Sync: WebSocket failed, falling back to HTTP polling');
         _startSyncPolling();
       }
     };
 
     ws.onerror = function() { /* onclose handles it */ };
   } catch (e) {
-    console.log('CWOC Sync: WebSocket not available, using HTTP polling');
+    console.debug('CWOC Sync: WebSocket not available, using HTTP polling');
     _startSyncPolling();
   }
 }
@@ -1704,7 +1704,7 @@ function _startSyncPolling() {
   }).catch(function() {});
   // Poll every 2 seconds
   window._cwocSyncPollTimer = setInterval(_pollSync, 2000);
-  console.log('CWOC Sync: HTTP polling started');
+  console.debug('CWOC Sync: HTTP polling started');
 }
 
 function _pollSync() {
@@ -2933,7 +2933,7 @@ function _evaluateHabitRollover(chit) {
   chit.habit_success = 0;
   if (isComplete) chit.status = '';
 
-  console.log('[Rollover] ' + (chit.title || chit.id) + ': snapshotted ' + habitSuccess + '/' + habitGoal + ' into ' + previousPeriod + ', reset to 0');
+  console.debug('[Rollover] ' + (chit.title || chit.id) + ': snapshotted ' + habitSuccess + '/' + habitGoal + ' into ' + previousPeriod + ', reset to 0');
   return true;
 }
 

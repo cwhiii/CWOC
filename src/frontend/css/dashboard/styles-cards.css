@@ -1558,7 +1558,7 @@ li.cwoc-dragging {
     align-items: center;
     gap: 8px;
     position: relative;
-    padding-right: 5em;
+    padding-right: 10em;
 }
 
 /* ── Inline badges (Draft/Sent/Replied) ───────────────────────────────────── */
@@ -1860,22 +1860,24 @@ li.cwoc-dragging {
 }
 
 /* ── Hover action buttons ─────────────────────────────────────────────────── */
-/* ── Hover action buttons — pinned to the left of the date ────────────────── */
+/* ── Hover action buttons — pinned to the right, covering the date ─────────── */
 .email-hover-actions {
     display: none;
     position: absolute;
-    right: 5em;
-    top: 50%;
-    transform: translateY(-50%);
+    right: 0;
+    top: 0;
+    bottom: 0;
+    z-index: 2;
     align-items: center;
     gap: 2px;
-    background: #f5edd8;
-    padding: 2px 6px;
-    border-radius: 4px;
+    background: #fdf5e6;
+    padding: 2px 12px;
+    border-radius: 0;
 }
 
 .email-card:hover .email-hover-actions {
     display: flex;
+    background: #f5edd8;
 }
 
 /* On hover, ensure preview text is fully visible */
@@ -1915,6 +1917,11 @@ li.cwoc-dragging {
 @media (max-width: 768px) {
     .email-hover-actions {
         display: flex;
+        background: #fdf5e6;
+    }
+
+    .email-card:hover .email-hover-actions {
+        background: #f5edd8;
     }
 
     .email-hover-btn {
@@ -2030,10 +2037,9 @@ li.cwoc-dragging {
 
 /* ── Email attachment thumbnails in card view ──────────────────────────────── */
 .email-attachment-row {
-    display: flex;
-    gap: 6px;
-    padding: 4px 8px 4px 48px;
-    flex-wrap: wrap;
+    display: inline-flex;
+    gap: 4px;
+    flex-shrink: 0;
     align-items: center;
 }
 

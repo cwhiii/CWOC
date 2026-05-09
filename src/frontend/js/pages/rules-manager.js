@@ -86,7 +86,11 @@ function renderRulesTable() {
         html += '    <span class="rule-enabled-slider"></span>';
         html += '  </label>';
         html += '</td>';
-        html += '<td><a class="rule-name-link" href="/frontend/html/rule-editor.html?id=' + encodeURIComponent(rule.id) + '">' + _escHtml(rule.name) + '</a></td>';
+        html += '<td><a class="rule-name-link" href="/frontend/html/rule-editor.html?id=' + encodeURIComponent(rule.id) + '">' + _escHtml(rule.name) + '</a>';
+        if (rule.name && rule.name.indexOf('Bundle: ') === 0) {
+            html += ' <span class="trigger-badge bundle-rule-badge" title="Email Bundle classification rule">📦 Bundle</span>';
+        }
+        html += '</td>';
         html += '<td><span class="trigger-badge ' + _escHtml(rule.trigger_type || '') + '">' + _escHtml(_triggerLabel(rule.trigger_type)) + '</span></td>';
         html += '<td style="text-align:center;">' + (rule.priority != null ? rule.priority : '—') + '</td>';
         html += '<td>' + _formatTimestamp(rule.last_run_datetime) + '</td>';

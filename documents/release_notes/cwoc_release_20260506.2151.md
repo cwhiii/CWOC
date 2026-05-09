@@ -1,0 +1,1 @@
+Email inbox: moved attachment thumbnails inline within the content row, positioned between the body preview and the hover quick controls. They now sit to the left of where the quick controls appear on hover, so no overlap.

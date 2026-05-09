@@ -173,6 +173,8 @@ function _updateEmailSidebarVisibility(tab) {
         } else if (typeof getCachedSettings === 'function') {
             getCachedSettings().then(function() { _emailRenderAccountFilterButtons(); });
         }
+        // Bundle fetch is now triggered by _renderBundleToolbar when the Email view renders
+        // (after fetchChits succeeds, guaranteeing auth is valid)
     }
 }
 
@@ -450,10 +452,10 @@ function _emailStartAutoCheck() {
         if (isNaN(ms) || ms < 60000) return;
 
         _emailAutoCheckTimer = setInterval(function() {
-            console.log('[Email] Auto-check mail (interval: ' + interval + 'm)');
+            console.debug('[Email] Auto-check mail (interval: ' + interval + 'm)');
             _checkMail();
         }, ms);
-        console.log('[Email] Auto-check scheduled every ' + interval + ' min');
+        console.debug('[Email] Auto-check scheduled every ' + interval + ' min');
     });
 }
 
@@ -664,6 +666,20 @@ function displayEmailView(chitsToDisplay) {
         });
     }
 
+    // Apply bundle filter (only when sub-filter is "inbox")
+    var allInboxChits = emailChits.slice(); // Keep full list for bundle tab counts
+    if (_emailSubFilter === 'inbox' && typeof _filterByBundle === 'function') {
+        // If no bundle selected, default to the first (leftmost) bundle
+        if (!_emailActiveBundle && _emailBundlesData && _emailBundlesData.length > 0) {
+            _emailActiveBundle = _emailBundlesData[0].name;
+            _persistActiveBundle();
+        }
+        if (_emailActiveBundle) {
+            emailChits = _filterByBundle(emailChits, _emailActiveBundle);
+            console.log('[Bundles] Filter "' + _emailActiveBundle + '": ' + allInboxChits.length + ' → ' + emailChits.length);
+        }
+    }
+
     // Sort by email_date descending (newest first), with pinned at top and optional unread-at-top
     emailChits.sort(function(a, b) {
         // Pinned always at top
@@ -682,23 +698,20 @@ function displayEmailView(chitsToDisplay) {
     });
 
     if (emailChits.length === 0) {
+        // Still show bundle toolbar even when no emails match — use FULL inbox for counts
+        if (typeof _renderBundleToolbar === 'function') {
+            var bundleToolbar = _renderBundleToolbar(allInboxChits);
+            container.appendChild(bundleToolbar);
+        }
         _emailEmptyState(container);
         return;
     }
 
-    // Bulk actions bar (hidden until items selected)
-    var bulkBar = document.createElement('div');
-    bulkBar.id = 'emailBulkBar';
-    bulkBar.className = 'email-bulk-bar';
-    bulkBar.style.display = 'none';
-    bulkBar.innerHTML =
-        '<label class="email-bulk-select-all-label"><input type="checkbox" id="emailBulkSelectAllCb" class="email-select-cb" onclick="_emailBulkSelectAll()"> <span id="emailBulkSelectAllLabel">Select All</span></label>' +
-        '<span id="emailBulkCount">0 selected</span>' +
-        '<button class="cwoc-btn" onclick="_emailBulkArchive()"><i class="fas fa-archive"></i> Archive</button>' +
-        '<button class="cwoc-btn" onclick="_emailBulkTag()"><i class="fas fa-tag"></i> Tag</button>' +
-        '<button class="cwoc-btn" onclick="_emailBulkToggleRead()"><i class="fas fa-envelope-open"></i> Mark Read/Unread</button>' +
-        '<button class="cwoc-btn" onclick="_emailBulkClear()">Clear</button>';
-    container.appendChild(bulkBar);
+    // Permanent bundle toolbar — pass FULL inbox list for accurate counts on all tabs
+    if (typeof _renderBundleToolbar === 'function') {
+        var bundleToolbar = _renderBundleToolbar(allInboxChits);
+        container.appendChild(bundleToolbar);
+    }
 
     // Get visual indicator settings
     var viSettings = (window._cwocSettings || {}).visual_indicators || {};
@@ -744,7 +757,7 @@ function displayEmailView(chitsToDisplay) {
         return db.localeCompare(da);
     });
 
-    console.log('[Email Threading] Grouped ' + allEmailChits.length + ' emails into ' + allThreads.length + ' threads, ' +
+    console.debug('[Email Threading] Grouped ' + allEmailChits.length + ' emails into ' + allThreads.length + ' threads, ' +
         visibleThreads.filter(function(t) { return t.totalCount > 1; }).length + ' multi-message threads visible');
 
     // Pagination: if enabled, only render first PAGE_SIZE threads
@@ -998,40 +1011,10 @@ function _buildEmailCard(chit, viSettings) {
     dateEl.className = 'email-meta-date';
     dateEl.textContent = dateStr;
 
-    // Attachment icons — inline before preview, max 3 with overflow indicator
+    // Parse attachments for the thumbnail row below
     var attachments = chit.attachments;
     if (typeof attachments === 'string') {
         try { attachments = JSON.parse(attachments); } catch(e) { attachments = []; }
-    }
-    var attInlineEl = null;
-    if (Array.isArray(attachments) && attachments.length > 0) {
-        attInlineEl = document.createElement('span');
-        attInlineEl.className = 'email-inline-attachments';
-        var maxAtt = Math.min(attachments.length, 2);
-        for (var ai = 0; ai < maxAtt; ai++) {
-            var att = attachments[ai];
-            var attChip = document.createElement('a');
-            attChip.className = 'email-inline-att-chip';
-            attChip.href = '/api/chits/' + encodeURIComponent(chit.id) + '/attachments/' + encodeURIComponent(att.id);
-            attChip.target = '_blank';
-            attChip.title = att.filename || 'Attachment';
-            attChip.addEventListener('click', function(e) { e.stopPropagation(); });
-            attChip.addEventListener('dblclick', function(e) { e.stopPropagation(); });
-            var attIcon = document.createElement('span');
-            attIcon.textContent = _emailGetFileIcon(att.mime_type);
-            attChip.appendChild(attIcon);
-            var attName = document.createElement('span');
-            attName.textContent = att.filename || 'file';
-            attChip.appendChild(attName);
-            attInlineEl.appendChild(attChip);
-        }
-        if (attachments.length > 2) {
-            var moreAtt = document.createElement('span');
-            moreAtt.className = 'email-inline-att-more';
-            moreAtt.textContent = '+' + (attachments.length - 2);
-            moreAtt.title = attachments.length + ' attachments';
-            attInlineEl.appendChild(moreAtt);
-        }
     }
 
     // Tag chips — up to 3 non-system tags, shown after preview
@@ -1080,24 +1063,11 @@ function _buildEmailCard(chit, viSettings) {
     content.appendChild(replyEl);
     content.appendChild(subjectEl);
     if (tagChipsEl) content.appendChild(tagChipsEl);
-    if (attInlineEl) content.appendChild(attInlineEl);
     content.appendChild(previewEl);
-    content.appendChild(actions);
-    content.appendChild(dateEl);
 
-    // Apply contrast-safe text colors when a custom chit color is set
-    if (card._contrastColor) {
-        senderEl.style.color = card._contrastColor;
-        subjectEl.style.color = card._contrastColor;
-        previewEl.style.color = card._contrastColor;
-        dateEl.style.color = card._contrastColor;
-    }
-
-    card.appendChild(content);
-
-    // Attachment thumbnails row — full display below the content row
+    // Attachment thumbnails — inline, between preview and hover actions
     if (Array.isArray(attachments) && attachments.length > 0) {
-        var attRow = document.createElement('div');
+        var attRow = document.createElement('span');
         attRow.className = 'email-attachment-row';
         attachments.forEach(function(att) {
             var attEl = document.createElement('a');
@@ -1122,15 +1092,26 @@ function _buildEmailCard(chit, viSettings) {
                 attEl.appendChild(iconSpan);
                 var nameSpan = document.createElement('span');
                 nameSpan.className = 'email-attachment-name';
-                nameSpan.textContent = (att.filename || 'file').length > 12
-                    ? (att.filename || 'file').substring(0, 10) + '\u2026'
-                    : (att.filename || 'file');
+                nameSpan.textContent = att.filename || 'file';
                 attEl.appendChild(nameSpan);
             }
             attRow.appendChild(attEl);
         });
-        card.appendChild(attRow);
+        content.appendChild(attRow);
     }
+
+    content.appendChild(actions);
+    content.appendChild(dateEl);
+
+    // Apply contrast-safe text colors when a custom chit color is set
+    if (card._contrastColor) {
+        senderEl.style.color = card._contrastColor;
+        subjectEl.style.color = card._contrastColor;
+        previewEl.style.color = card._contrastColor;
+        dateEl.style.color = card._contrastColor;
+    }
+
+    card.appendChild(content);
 
     // Double-click handler: navigate to editor (consistent with all other views)
     card.addEventListener('dblclick', function(e) {
@@ -1180,13 +1161,11 @@ function _emailFormatDateSmart(emailDate) {
 
 /** Toggle a chit's selection state */
 function _emailToggleSelect(chitId, checked) {
-    console.log('[Email Select] Toggle:', chitId, 'checked:', checked);
     if (checked && _emailSelectedIds.indexOf(chitId) === -1) {
         _emailSelectedIds.push(chitId);
     } else if (!checked) {
         _emailSelectedIds = _emailSelectedIds.filter(function(id) { return id !== chitId; });
     }
-    console.log('[Email Select] Selected IDs:', _emailSelectedIds);
     _emailUpdateBulkBar();
 }
 
@@ -1255,28 +1234,21 @@ function _emailBulkClear() {
 
 /** Bulk archive selected emails */
 async function _emailBulkArchive() {
-    if (_emailSelectedIds.length === 0) {
-        console.warn('[Email Bulk Archive] No items selected');
-        return;
-    }
+    if (_emailSelectedIds.length === 0) return;
     var count = _emailSelectedIds.length;
-    console.log('[Email Bulk Archive] Archiving ' + count + ' items:', _emailSelectedIds);
+    console.debug('[Email Bulk Archive] Archiving ' + count + ' items');
     var successCount = 0;
     var failCount = 0;
     for (var i = 0; i < _emailSelectedIds.length; i++) {
         var chitId = _emailSelectedIds[i];
         try {
-            console.log('[Email Bulk Archive] Fetching chit:', chitId);
             var resp = await fetch('/api/chit/' + encodeURIComponent(chitId));
-            console.log('[Email Bulk Archive] GET /api/chit/' + chitId + ' status:', resp.status);
             if (!resp.ok) {
-                var errText = await resp.text();
-                console.error('[Email Bulk Archive] GET failed for ' + chitId + ':', resp.status, errText);
+                console.error('[Email Bulk Archive] GET failed for ' + chitId + ':', resp.status);
                 failCount++;
                 continue;
             }
             var chit = await resp.json();
-            console.log('[Email Bulk Archive] Chit fetched, archived=' + chit.archived + ', title=' + chit.title);
             chit.archived = true;
             // The GET API may return JSON-array fields as strings (already serialized).
             // The PUT API (Pydantic) expects actual arrays. Parse string→array where needed.
@@ -1291,27 +1263,23 @@ async function _emailBulkArchive() {
             ['email_to', 'email_cc', 'email_bcc'].forEach(function(f) {
                 if (Array.isArray(chit[f])) chit[f] = JSON.stringify(chit[f]);
             });
-            console.log('[Email Bulk Archive] PUTting chit with archived=true');
             var putResp = await fetch('/api/chits/' + encodeURIComponent(chitId), {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(chit)
             });
-            console.log('[Email Bulk Archive] PUT /api/chits/' + chitId + ' status:', putResp.status);
             if (!putResp.ok) {
-                var putErr = await putResp.text();
-                console.error('[Email Bulk Archive] PUT failed for ' + chitId + ':', putResp.status, putErr);
+                console.error('[Email Bulk Archive] PUT failed for ' + chitId + ':', putResp.status);
                 failCount++;
             } else {
                 successCount++;
-                console.log('[Email Bulk Archive] Successfully archived ' + chitId);
             }
         } catch (e) {
             console.error('[Email Bulk Archive] Exception for ' + chitId + ':', e);
             failCount++;
         }
     }
-    console.log('[Email Bulk Archive] Done. Success: ' + successCount + ', Failed: ' + failCount);
+    console.debug('[Email Bulk Archive] Done. Success: ' + successCount + ', Failed: ' + failCount);
     if (failCount > 0) {
         _showToast(successCount + ' archived, ' + failCount + ' failed', failCount === count ? 'error' : 'info');
     } else {
@@ -1323,12 +1291,9 @@ async function _emailBulkArchive() {
 
 /** Bulk toggle read/unread for all selected emails */
 async function _emailBulkToggleRead() {
-    if (_emailSelectedIds.length === 0) {
-        console.warn('[Email Bulk Read] No items selected');
-        return;
-    }
+    if (_emailSelectedIds.length === 0) return;
     var count = _emailSelectedIds.length;
-    console.log('[Email Bulk Read] Toggling ' + count + ' items:', _emailSelectedIds);
+    console.debug('[Email Bulk Read] Toggling ' + count + ' items');
     var successCount = 0;
     var failCount = 0;
     for (var i = 0; i < _emailSelectedIds.length; i++) {
@@ -1427,7 +1392,7 @@ async function _emailBulkTag() {
 
     applyBtn.onclick = async function() {
         var tagsToApply = picker ? picker.getSelected() : selectedTags;
-        console.log('[Email Bulk Tag] Tags to apply:', tagsToApply, 'to', _emailSelectedIds.length, 'chits');
+        console.debug('[Email Bulk Tag] Tags to apply:', tagsToApply, 'to', _emailSelectedIds.length, 'chits');
         if (tagsToApply.length === 0) {
             _showToast('No tags selected', 'info');
             return;
@@ -1501,17 +1466,15 @@ function _setEmailSubFilter(filter) {
 }
 
 function _checkMail() {
-    console.log('[Email Check Mail] Starting sync...');
+    console.debug('[Email] Syncing...');
     _showToast('Checking mail...', 'info');
     _emailSetPillSpinners(true);
     fetch('/api/email/sync', { method: 'POST' })
         .then(function(r) {
-            console.log('[Email Check Mail] Response status:', r.status);
             return r.json().then(function(data) { return { ok: r.ok, status: r.status, data: data }; });
         })
         .then(function(result) {
             _emailSetPillSpinners(false);
-            console.log('[Email Check Mail] Result:', JSON.stringify(result.data));
             if (result.ok && result.data.new_count !== undefined) {
                 // Build detailed message with per-account info
                 var details = result.data.details || [];
@@ -1519,7 +1482,7 @@ function _checkMail() {
                     return d.account + ': ' + d.new + ' new' + (d.skipped_dupes ? ', ' + d.skipped_dupes + ' skipped' : '') + ' (checked ' + d.imap_found + ' since ' + d.since + ')';
                 });
                 if (detailParts.length) {
-                    console.log('[Email Check Mail] ' + detailParts.join(' | '));
+                    console.debug('[Email Check Mail] ' + detailParts.join(' | '));
                 }
 
                 if (result.data.new_count > 0) {

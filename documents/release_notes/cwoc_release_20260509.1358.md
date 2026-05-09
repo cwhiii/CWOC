@@ -1,0 +1,1 @@
+Fixed Email Bundles not rendering on first load — bundle tabs and "+" button now appear immediately. Added help documentation for the Bundles feature. Fixed timing issue where async bundle fetch completed after toolbar was already rendered with empty data.

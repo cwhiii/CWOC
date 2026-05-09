@@ -1736,7 +1736,7 @@ function _openEmailExpandModal() {
   function _emailExpandEscHandler(e) {
     if (e.key === 'Escape') {
       e.preventDefault();
-      e.stopPropagation();
+      e.stopImmediatePropagation();
       _closeEmailExpandModal(false);
       document.removeEventListener('keydown', _emailExpandEscHandler, true);
     }
@@ -2634,17 +2634,23 @@ function _renderEmailAttachmentBar(chit) {
   var existing = document.getElementById('emailAttachmentBar');
   if (existing) existing.remove();
 
+  // No inline display in the small editor — the Attachments zone handles it.
+  // Just mark email-origin attachments in the zone for visual distinction.
   var attachments = _getEmailAttachmentList(chit);
   if (!attachments || attachments.length === 0) return;
 
-  var bar = _buildEmailAttachmentBar(attachments, chit.id);
-  bar.id = 'emailAttachmentBar';
-
-  // Insert after the email body field (textarea or iframe)
-  var bodyField = document.querySelector('.email-body-field');
-  if (bodyField) {
-    bodyField.appendChild(bar);
-  }
+  // Mark email attachments with a visual indicator after zone renders
+  setTimeout(function() {
+    var attContent = document.getElementById('attachmentsContent');
+    if (!attContent) return;
+    var attItems = attContent.querySelectorAll('[data-attachment-id]');
+    attItems.forEach(function(item) {
+      var attId = item.dataset.attachmentId;
+      if (attId && attachments.some(function(a) { return a.id === attId; })) {
+        item.classList.add('email-attachment-origin');
+      }
+    });
+  }, 200);
 }
 
 /**

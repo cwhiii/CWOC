@@ -29,6 +29,7 @@
         <link rel="stylesheet" href="/frontend/css/dashboard/styles-modals.css" />
         <link rel="stylesheet" href="/frontend/css/dashboard/styles-responsive.css" />
         <link rel="stylesheet" href="/frontend/css/dashboard/styles.css" />
+        <link rel="stylesheet" href="/frontend/css/dashboard/styles-email-bundles.css" />
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" />
         <link rel="stylesheet" href="/frontend/css/shared/shared-calculator.css" />
         <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
@@ -351,6 +352,33 @@
             </div>
         </div>
         <div class="author-info"><span id="cwoc-footer-copyright" class="cwoc-footer-copyright">&copy; 2026 C.W.&rsquo;s Omni Chits</span> &middot; <a href="https://www.cwholemaniii.com/pages/home.shtml" target="_blank">www.cwholemaniii.com</a></div>
+        <!-- ── Bundle Modal Template ──────────────────────────────────────── -->
+        <template id="tmpl-bundle-modal">
+            <div class="cwoc-modal-overlay" id="bundleModalOverlay">
+                <div class="cwoc-modal bundle-modal">
+                    <h3 class="bundle-modal-title">Create Bundle</h3>
+                    <div class="bundle-modal-field">
+                        <label for="bundleNameInput">Name</label>
+                        <input type="text" id="bundleNameInput" placeholder="e.g. Newsletters" maxlength="50">
+                    </div>
+                    <div class="bundle-modal-field">
+                        <label for="bundleDescInput">Description (optional)</label>
+                        <textarea id="bundleDescInput" rows="2" placeholder="What kind of emails go here?"></textarea>
+                    </div>
+                    <div class="bundle-modal-field">
+                        <label>Tab Color (optional)</label>
+                        <div class="bundle-color-picker" id="bundleColorPicker"></div>
+                        <input type="hidden" id="bundleColorInput" value="">
+                    </div>
+                    <div class="bundle-modal-actions">
+                        <button class="zone-button" id="bundleCancelBtn">Cancel</button>
+                        <button class="zone-button bundle-define-rule-btn" id="bundleDefineRuleBtn">Define Rule</button>
+                    </div>
+                    <p class="bundle-modal-hint" id="bundleModalHint"></p>
+                </div>
+            </div>
+        </template>
+
         <script src="/frontend/js/shared/shared-auth.js"></script>
         <script src="/frontend/js/shared/shared-utils.js"></script>
         <script src="/frontend/js/shared/shared-touch.js"></script>
@@ -387,6 +415,7 @@
         <script src="/frontend/js/dashboard/main-modals.js"></script>
         <script src="/frontend/js/dashboard/main-init.js"></script>
         <script src="/frontend/js/dashboard/main-email.js"></script>
+        <script src="/frontend/js/dashboard/main-email-bundles.js"></script>
         <script src="/frontend/js/dashboard/main.js"></script>
         <script>
         /* Populate profile menu button tooltip with username once auth is ready */

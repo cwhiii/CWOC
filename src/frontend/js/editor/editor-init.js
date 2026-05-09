@@ -413,14 +413,9 @@ async function loadChitData(chitId) {
     const noteTextarea = document.getElementById("note");
     if (noteTextarea) {
       noteTextarea.value = chit.note || "";
-      // If Milkdown is available, initialize it instead of textarea auto-grow/render
-      if (typeof window.initMilkdownNotesZone === 'function' && window.CwocMilkdown && !window.CwocMilkdown.isFallback) {
-        setTimeout(() => window.initMilkdownNotesZone(), 60);
-      } else {
-        setTimeout(() => autoGrowNote(noteTextarea), 0);
-        if (chit.note && chit.note.trim()) {
-          setTimeout(() => toggleNotesViewMode(null), 50);
-        }
+      setTimeout(() => autoGrowNote(noteTextarea), 0);
+      if (chit.note && chit.note.trim()) {
+        setTimeout(() => toggleNotesViewMode(null), 50);
       }
     }
 
@@ -1218,11 +1213,6 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   } else {
     resetEditorForNewChit();
-
-    // Initialize Milkdown for new chits (empty content)
-    if (typeof window.initMilkdownNotesZone === 'function' && window.CwocMilkdown && !window.CwocMilkdown.isFallback) {
-      setTimeout(() => window.initMilkdownNotesZone(), 60);
-    }
 
     // Pre-populate start/end from URL params
     const params = new URLSearchParams(window.location.search);

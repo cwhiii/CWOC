@@ -29,7 +29,7 @@ function registerServiceWorker() {
 
     navigator.serviceWorker.register('/sw.js', { scope: '/' })
         .then(function(registration) {
-            console.log('[PWA] Service worker registered, scope:', registration.scope);
+            console.debug('[PWA] Service worker registered, scope:', registration.scope);
         })
         .catch(function(error) {
             console.error('[PWA] Service worker registration failed:', error);
@@ -117,7 +117,7 @@ function _detectStandaloneMode() {
         if (btn) {
             btn.style.display = 'none';
         }
-        console.log('[PWA] Running in standalone mode — install button hidden');
+        console.debug('[PWA] Running in standalone mode — install button hidden');
     }
 
     return isStandalone;

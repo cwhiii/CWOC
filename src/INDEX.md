@@ -38,7 +38,7 @@ Package marker. No public exports.
 | `serve_icon_192()` | `GET /static/cwoc-icon-192.png` — Serve 192×192 PWA icon from `src/pwa/` |
 | `serve_icon_512()` | `GET /static/cwoc-icon-512.png` — Serve 512×512 PWA icon from `src/pwa/` |
 
-Registers all route modules (including `auth_router`, `users_router`, `sharing_router`, `notifications_router`, `network_access_router`, `push_router`, `ntfy_router`, `email_router`, `attachments_router`, `rules_router`, and `ha_router`), runs all migrations (including `migrate_add_multi_user()`, `migrate_add_sharing()`, `migrate_add_kiosk_users()`, `migrate_add_network_access()`, `migrate_add_notifications()`, `migrate_habits_overhaul()`, `migrate_habits_phase2()`, `migrate_add_push_subscriptions()`, `migrate_add_vapid_keys()`, `migrate_add_map_settings()`, `migrate_add_contact_dates()`, `migrate_add_email_fields()`, `migrate_add_attachments()`, `migrate_add_email_body_html()`, `migrate_add_fts5()`, `migrate_add_contact_vault()`, `migrate_create_rules_tables()`, and `migrate_create_ha_config()`) and `init_db()` at import time, mounts `StaticFiles` for frontend, static, data, and PWA directories.
+Registers all route modules (including `auth_router`, `users_router`, `sharing_router`, `notifications_router`, `network_access_router`, `push_router`, `ntfy_router`, `email_router`, `attachments_router`, `rules_router`, `bundles_router`, and `ha_router`), runs all migrations (including `migrate_add_multi_user()`, `migrate_add_sharing()`, `migrate_add_kiosk_users()`, `migrate_add_network_access()`, `migrate_add_notifications()`, `migrate_habits_overhaul()`, `migrate_habits_phase2()`, `migrate_add_push_subscriptions()`, `migrate_add_vapid_keys()`, `migrate_add_map_settings()`, `migrate_add_contact_dates()`, `migrate_add_email_fields()`, `migrate_add_attachments()`, `migrate_add_email_body_html()`, `migrate_add_fts5()`, `migrate_add_contact_vault()`, `migrate_create_rules_tables()`, `migrate_create_ha_config()`, and `migrate_create_bundles_tables()`) and `init_db()` at import time, mounts `StaticFiles` for frontend, static, data, and PWA directories.
 
 ### 1.3 `src/backend/models.py` — Pydantic Models
 
@@ -63,6 +63,10 @@ Registers all route modules (including `auth_router`, `users_router`, `sharing_r
 | `RuleReorder` | Reorder rules request — `rule_ids` (List[str]) — ordered list of rule IDs |
 | `HAConfigUpdate` | HA config update request — `ha_base_url` (Optional[str]), `ha_access_token` (Optional[str]), `ha_poll_interval` (Optional[int], default 30) |
 | `HAWebhookPayload` | HA webhook payload — `action` (str), `user_id` (Optional[str]), `chit_id` (Optional[str]), `chit_title` (Optional[str]), `title` (Optional[str]), `note` (Optional[str]), `tags` (Optional[List[str]]), `status` (Optional[str]), `priority` (Optional[str]), `due_datetime` (Optional[str]), `checklist` (Optional[List[Dict]]), `item_text` (Optional[str]), `fields` (Optional[Dict]), `payload` (Optional[Dict]) |
+| `BundleCreate` | Create bundle request — `name` (str), `description` (Optional[str]) |
+| `BundleUpdate` | Update bundle request — `name` (Optional[str]), `description` (Optional[str]) |
+| `BundleReorder` | Reorder bundles request — `bundle_ids` (List[str]) — ordered list of bundle IDs |
+| `BundleRuleAssociate` | Associate rule with bundle request — `rule_id` (str) |
 
 ### 1.4 `src/backend/db.py` — Database Helpers & Shared State
 
@@ -133,6 +137,7 @@ All migrations run at startup. Each checks if the column/table already exists be
 | `migrate_add_email_accounts()` | Add `email_accounts` (TEXT) column to settings table for multi-account email; add `email_account_id` (TEXT) to chits; migrate existing `email_account` data into `email_accounts` array with generated IDs. Fully idempotent |
 | `migrate_create_ha_config()` | Create `ha_config` table with columns: `id` (INTEGER PRIMARY KEY CHECK id=1), `ha_base_url` (TEXT), `ha_access_token` (TEXT), `ha_webhook_secret` (TEXT), `ha_poll_interval` (INTEGER DEFAULT 30), `configured_by` (TEXT), `modified_datetime` (TEXT). INSERT OR IGNORE a single row with id=1 and auto-generated UUID for ha_webhook_secret. Fully idempotent |
 | `migrate_add_view_order()` | Add `view_order` (TEXT) column to settings table for storing user's custom tab order as a JSON array. Fully idempotent |
+| `migrate_create_bundles_tables()` | Create `bundles` table (id, owner_id, name, description, display_order, is_default, removable, created_datetime, modified_datetime), `bundle_rules` junction table (id, bundle_id, rule_id, owner_id, created_datetime), and add `bundles_multi_placement` (BOOLEAN DEFAULT 0) column to settings table. Fully idempotent |
 
 ### 1.6 `src/backend/serializers.py` — vCard & CSV
 
@@ -545,6 +550,7 @@ Contact endpoints are scoped by `owner_id`. Users can access their own contacts 
 | `GET /api/update/log` | `get_update_log()` | Get the last update log |
 | `GET /api/release-notes` | `get_release_notes()` | Return all release notes as a list of `{version, content}` objects (newest first), scanned from `cwoc_release_*.md` files |
 | `GET /api/update/run` | `run_update()` | Run upgrade (SSE stream) |
+| `POST /api/restart` | `restart_service()` | Restart the CWOC systemd service (admin only) |
 | `GET /api/kiosk` | `get_kiosk(tags)` | Return combined non-deleted, non-stealth chits matching any of the specified tags (comma-separated, case-insensitive). Unauthenticated endpoint |
 | `GET /api/kiosk/config` | `get_kiosk_config()` | Return saved kiosk tag list and `week_start_day` from settings. Prioritises the row with kiosk tags configured. Unauthenticated endpoint |
 | `GET /kiosk` | `kiosk_page()` | Serve `kiosk.html` page (unauthenticated) |
@@ -1073,6 +1079,54 @@ Config flow step titles, field labels, error messages.
 #### `icons.json` — Service Icons
 
 MDI icon mappings for each service action.
+
+### 1.44 `src/backend/routes/bundles.py` — Bundle CRUD & Classification
+
+Provides endpoints for creating, reading, updating, deleting bundles, reordering bundle display order, managing bundle-rule associations, initializing default bundles for new users, and email classification into bundles (single-placement and multi-placement). All endpoints scoped by `owner_id` from authenticated user.
+
+| Route | Handler | Description |
+|-------|---------|-------------|
+| `GET /api/bundles` | `get_bundles(request)` | Return all bundles for the authenticated user sorted by display_order ASC; includes associated rule_ids and `bundles_multi_placement` setting; auto-initializes defaults if none exist |
+| `POST /api/bundles` | `create_bundle(bundle, request)` | Create a new bundle; validates non-empty name and no case-insensitive duplicate for owner; returns 400/422 on validation failure |
+| `PUT /api/bundles/{bundle_id}` | `update_bundle(bundle_id, bundle, request)` | Update bundle name/description; migrates tags on chits if name changed; returns 404 if not found/owned |
+| `DELETE /api/bundles/{bundle_id}` | `delete_bundle(bundle_id, request)` | Delete a bundle; returns 403 if non-removable, 404 if not found; removes bundle tags from chits, deletes associated rules and bundle_rules |
+| `PUT /api/bundles/reorder` | `reorder_bundles(reorder, request)` | Reorder bundles by setting display_order from ordered ID list; validates all IDs belong to user |
+| `POST /api/bundles/{bundle_id}/rules` | `associate_rule_with_bundle(bundle_id, body, request)` | Associate an existing rule with a bundle |
+| `DELETE /api/bundles/{bundle_id}/rules/{rule_id}` | `remove_rule_from_bundle(bundle_id, rule_id, request)` | Remove a rule association from a bundle |
+
+**Internal helpers:**
+
+| Function | Description |
+|----------|-------------|
+| `_row_to_dict(cursor, row)` | Convert a cursor row to a dict using column names |
+| `_query_bundles(cursor, owner_id)` | Query all bundles for an owner sorted by display_order ASC |
+| `_rename_bundle_tags(cursor, owner_id, old_name, new_name)` | Update `CWOC_System/Bundle/{old}` → `CWOC_System/Bundle/{new}` on all affected chits |
+| `_remove_bundle_tag_from_chits(cursor, owner_id, bundle_name)` | Remove a bundle tag from all chits that have it |
+| `_initialize_default_bundles(owner_id)` | Create "From Contacts" and "Everything Else" default bundles with associated rule |
+| `_load_user_contacts(cursor, owner_id)` | Load user's contacts for cross-reference conditions |
+| `_get_rules_for_bundle(cursor, bundle_id, owner_id)` | Load all rules associated with a bundle |
+| `_add_tag_to_chit(cursor, chit_id, tag, owner_id)` | Add a tag to a chit's tags JSON array |
+| `classify_email_into_bundle(chit, owner_id)` | Single-placement classification — first matching bundle wins |
+| `classify_email_into_bundles(chit, owner_id)` | Multi-placement classification — all matching bundles assigned |
+
+### 1.45 `src/backend/test_email_bundles_properties.py` — Email Bundles Property Tests
+
+Property-based tests for the Email Bundles feature. Uses hypothesis for property-based testing. 12 properties across 12 test classes.
+
+| Class | Description |
+|-------|-------------|
+| `TestProperty1BundleCRUDRoundTrip` | Create → read → update → read round-trip preserves all fields. **Validates: Requirements 1.1, 8.2, 8.3** |
+| `TestProperty2OwnerScopingIsolation` | Bundle owned by user B never returned for user A queries; cross-user CRUD returns 404/no-op. **Validates: Requirements 1.3, 8.8** |
+| `TestProperty3BundleRenameTagMigration` | Rename bundle N→M: all chits get new tag, none retain old tag, count preserved. **Validates: Requirements 3.5, 7.7** |
+| `TestProperty4BundleDeleteTagCleanup` | Delete bundle: zero chits carry tag, bundle_rules deleted, rules deleted. **Validates: Requirements 3.6, 7.5** |
+| `TestProperty5BundleListSortOrder` | GET /api/bundles returns bundles sorted by display_order ascending. **Validates: Requirements 5.1, 8.1** |
+| `TestProperty6BundleFilteringCorrectness` | Named bundle filter returns exactly matching chits; Everything Else returns untagged; union = complete set. **Validates: Requirements 5.2, 5.3, 9.1, 9.2** |
+| `TestProperty7UnreadCountComputation` | Unread count = chits in bundle with email_read=false; single-placement sum = total. **Validates: Requirements 5.8, 9.6** |
+| `TestProperty8BundleNameValidation` | Empty/whitespace rejected; case-insensitive duplicates rejected; valid names accepted. **Validates: Requirements 6.4** |
+| `TestProperty9BundleReorderPersistence` | Reorder persists display_order 0,1,2...; subsequent GET returns new order. **Validates: Requirements 7.6, 8.5** |
+| `TestProperty10BundleFilterComposesWithSubFilter` | Non-inbox sub-filter ignores bundle filter; inbox sub-filter applies it. **Validates: Requirements 9.3** |
+| `TestProperty11SinglePlacementPriorityOrdering` | Single-placement assigns only first matching bundle's tag (by display_order). **Validates: Requirements 12.2** |
+| `TestProperty12MultiPlacementCompleteness` | Multi-placement assigns tags for ALL matching bundles. **Validates: Requirements 12.3** |
 
 ---
 
@@ -1750,6 +1804,47 @@ Email tab view — renders the Email dashboard tab with inbox-style list view. L
 | `_emailShiftSelect(currentCb)` | Shift+click range selection — checks/unchecks all checkboxes between last clicked and current |
 | `_emailLastCheckedIndex` | Tracks the last clicked checkbox index for shift+click range selection |
 
+#### main-email-bundles.js
+
+Email bundle toolbar, tabs, filtering, creation modal, context menu, and drag-to-reorder. Loaded by `index.html` after `main-email.js`.
+
+| Symbol | Description |
+|--------|-------------|
+| `_emailActiveBundle` | Currently active bundle name (persisted to localStorage) |
+| `_emailBundlesData` | Cached bundles array from API |
+| `_fetchBundles(callback)` | Fetch bundles from `GET /api/bundles` and cache; calls callback with bundle data |
+| `_filterByBundle(chits, activeBundle)` | Filter email chits by active bundle tag; "Everything Else" returns chits with no bundle tag |
+| `_getBundleUnreadCount(bundleName, emailChits)` | Compute unread count for a bundle (chits with bundle tag and email_read=false) |
+| `_renderBundleToolbar(emailChits)` | Build the permanent two-row toolbar (Row 1: bulk actions, Row 2: bundle tabs) |
+| `_renderBundleTabs(container, bundles, emailChits)` | Render bundle tabs with unread badges and "+" button |
+| `_setActiveBundle(bundleName)` | Set active bundle, persist to localStorage, refresh view |
+| `_persistActiveBundle()` | Save active bundle to localStorage key `cwoc_email_active_bundle` |
+| `_updateBundleTabActiveStates()` | Update tab visual active states |
+| `_bundleOnSubFilterChange(newFilter)` | Reset/dim bundle tabs when sub-filter changes away from inbox |
+| `_emailBundleSelectAll(checked)` | Select/deselect all visible email checkboxes |
+| `_bundleUpdateActionStates()` | Enable/disable bulk action buttons based on selection count |
+| `_openBundleModal(editBundle)` | Open bundle creation/edit modal; pre-populates if editing |
+| `_bundleModalEscHandler(e)` | ESC key handler for bundle modal (closes modal) |
+| `_closeBundleModal()` | Close the bundle modal and remove ESC listener |
+| `_bundleModalSubmit()` | Validate and submit bundle modal (create or update) |
+| `_bundleModalCreate(name, description)` | POST to `/api/bundles`, then navigate to Rule Editor |
+| `_bundleModalUpdate(name, description)` | PUT to `/api/bundles/{id}` to update name/description |
+| `_showBundleModalHint(msg)` | Show validation hint message in the modal |
+| `_showBundleContextMenu(bundle, x, y)` | Show context menu on bundle tab (Edit, Reorder, Delete) |
+| `_closeBundleContextMenu()` | Close the bundle context menu |
+| `_bundleContextMenuOutsideClick(e)` | Outside-click handler to close context menu |
+| `_bundleContextMenuEscHandler(e)` | ESC handler to close context menu |
+| `_attachBundleTabContextMenu(tab, bundle)` | Attach right-click and long-press handlers to a bundle tab |
+| `_deleteBundleConfirm(bundle)` | Show delete confirmation via `cwocConfirm()`, then DELETE bundle |
+| `_enableBundleReorder()` | Enable drag-and-drop reorder mode on bundle tabs |
+| `_bundleReorderDragStart(e)` | Drag start handler for bundle reorder |
+| `_bundleReorderDragEnd(e)` | Drag end handler for bundle reorder |
+| `_bundleReorderDragOver(e)` | Drag over handler for bundle reorder (visual feedback) |
+| `_bundleReorderDrop(e)` | Drop handler for bundle reorder (rearrange DOM) |
+| `_persistBundleReorder(orderedIds)` | PUT to `/api/bundles/reorder` with new order |
+| `_bundleReorderFinishOnClick(e)` | Click-outside handler to finish reorder mode |
+| `_disableBundleReorder()` | Disable reorder mode and remove drag listeners |
+
 #### main-modals.js
 
 | Function | Description |
@@ -2022,40 +2117,6 @@ Notes zone: auto-grow, chit linking, markdown render, modal.
 | `_switchNotesModalMode(mode)` | Switch the notes modal between Edit/Render and Live Preview modes; syncs content between panes |
 | `_wireNotesModalLivePreview()` | Wire the live preview input listener for real-time markdown rendering (only once) |
 | `_updateNotesModalLivePreview()` | Update the live preview output from the live preview input using `marked.parse()` |
-
-#### editor-milkdown.js (ES Module)
-
-Milkdown WYSIWYG editor loader, content bridge, and format toolbar. Loads Milkdown via dynamic import from self-hosted ESM bundles. Falls back to plain textarea if load fails within 5 seconds.
-
-| Symbol | Description |
-|--------|-------------|
-| `window.CwocMilkdown` | Global namespace: `ready` (Promise), `isLoaded`, `isFallback`, `createEditor()`, `destroyEditor()`, `getMarkdown()`, `setMarkdown()` |
-| `_loadMilkdownModules()` | Dynamic import of all Milkdown ESM modules with 5-second timeout |
-| `_createEditor(container, markdown, options)` | Create a Milkdown editor instance with full plugin set |
-| `_destroyEditor(instance)` | Destroy a Milkdown editor instance and clean up |
-| `_getMarkdown(instance)` | Extract current markdown from an editor instance |
-| `_setMarkdown(instance, markdown)` | Set markdown content in an editor instance |
-| `_addLinkSecurity(container)` | Add `rel="noopener noreferrer"` and `target="_blank"` to all links via MutationObserver |
-| `_initContentBridge(instance)` | Wire Milkdown listener to sync content to hidden `#note` textarea |
-| `_onContentUpdate(markdown)` | Listener callback: sync markdown to textarea, call `markEditorUnsaved()` |
-| `_syncModalToMain()` | Sync modal editor content back to main editor on modal close |
-| `_getActiveMarkdown()` | Return markdown from whichever editor is active (modal or main) |
-| `_milkdownFormat(action)` | Execute ProseMirror format commands (bold, italic, h1–h3, lists, etc.) |
-| `_updateToolbarState()` | Update toolbar button active states based on cursor position |
-| `initMilkdownNotesZone()` | Initialize Milkdown in the Notes zone after page load |
-| `openMilkdownModal()` | Create a Milkdown instance in the Notes modal |
-| `closeMilkdownModal(save)` | Close modal, optionally sync content back, destroy modal instance |
-
-#### editor-milkdown-chitlink.js
-
-Chit link autocomplete plugin for Milkdown. DOM-based dropdown triggered by `[[` in the WYSIWYG editor.
-
-| Symbol | Description |
-|--------|-------------|
-| `createChitLinkPlugin(currentChitId, editorContainer)` | Create the chit link autocomplete controller for a Milkdown editor container |
-| `_milkdownChitLinkDropdown` | Reference to the active autocomplete dropdown element |
-| `_milkdownChitLinkHighlightIdx` | Currently highlighted item index in the dropdown |
-| `_milkdownChitLinkMatches` | Current filtered matches array |
 
 #### editor-send-content.js
 
@@ -2515,6 +2576,8 @@ Settings page logic: tags, colors, clocks, locations, indicators, import/export,
 | `releaseNotesPrev()` | Navigate to the next older release note |
 | `releaseNotesNext()` | Navigate to the next newer release note |
 | `closeReleaseNotesModal()` | Close the release notes modal |
+| `restartCwoc()` | Admin-only: confirm and POST to `/api/restart` to restart the CWOC service |
+| `_waitForServerAndReload()` | Poll `/health` after restart and reload the page once the server is back |
 | `_renderDefaultNotifList(type, items)` | Render default notification rows for a given type ('start' or 'due') |
 | `_addDefaultNotifRow(type)` | Add a new default notification row for a given type |
 | `_gatherDefaultNotifList(type)` | Gather default notification rows from the DOM for a given type |
@@ -3099,6 +3162,26 @@ All `@media` breakpoint rules for the dashboard.
 #### styles.css
 Coordinator file — loads LAST among dashboard sub-stylesheets. Contains only rules that don't fit into any single sub-stylesheet or future overrides.
 
+#### styles-email-bundles.css
+Email bundle toolbar, tabs, modal, and context menu styles. Loaded after `styles.css` in `index.html`.
+
+| Section | Description |
+|---------|-------------|
+| Bundle Toolbar Container (`.bundle-toolbar`) | Sticky two-row toolbar with parchment background and bottom shadow |
+| Row 1: Bulk Action Controls (`.bundle-toolbar-actions`) | Select all, archive, tag, mark read/unread buttons; greyed-out when no selection |
+| Row 2: Bundle Tabs (`.bundle-tabs-row`) | Horizontal scrollable tab bar with active tab accent border |
+| Unread Count Badge (`.bundle-unread-badge`) | Small circular badge on bundle tabs showing unread count |
+| "+" Create Bundle Button (`.bundle-add-btn`) | Subtle circular button at end of tab row |
+| Dimmed State (`.bundle-tabs-row.dimmed`) | Opacity 0.4 and non-interactive when sub-filter is not "inbox" |
+| Mobile Responsive | Horizontal scroll for tabs, wrapping for controls at ≤600px |
+| Context Menu (`.bundle-context-menu`) | Parchment dropdown with Edit, Reorder, Delete options |
+| Drag-and-drop Reorder (`.bundle-tabs-row.reorder-active`) | Grab cursor, drag-over highlight, drop indicator |
+| Bundle Modal (`.cwoc-modal.bundle-modal`) | Centered overlay modal with name input, description textarea, action buttons |
+| Modal Form Fields (`.bundle-modal-field`) | Input and textarea styling within the modal |
+| Modal Action Buttons (`.bundle-modal-actions`) | Cancel and Define Rule/Save button row |
+| Modal Hint (`.bundle-modal-hint`) | Validation error/hint message display |
+| Modal Mobile Responsive | Full-width modal at ≤600px |
+
 | Section | Description |
 |---------|-------------|
 | (coordinator) | Loads after all sub-stylesheets; currently empty — reserved for overrides |
@@ -3156,25 +3239,6 @@ Attachments zone styles for the chit editor. Uses the parchment theme variables 
 | Upload Area (`.attachment-upload-area`) | Dashed border drop zone with drag-over highlight |
 | Upload Progress (`.attachment-progress`) | Pulsing animation for upload status |
 | Responsive — Mobile (≤480px) | Stacked layout for upload area |
-
-#### editor-milkdown.css
-Milkdown WYSIWYG editor theme — parchment aesthetic. Uses CSS variables from `shared-page.css`. Load AFTER `shared-editor.css` and `editor.css`.
-
-| Section | Description |
-|---------|-------------|
-| Editor Container (`.milkdown-editor`) | Border, border-radius, parchment background, focus ring with accent-gold |
-| ProseMirror Content (`.ProseMirror`) | Min-height 6em, max-height 60vh, auto-scroll, padding, outline removal |
-| Headings (h1–h6) | Decreasing sizes from 1.6em to 1em, aged-brown-dark color, Lora font |
-| Blockquotes | Left border 3px accent-gold, italic, subtle background |
-| Code (inline + blocks) | Parchment-medium background, monospace font, border |
-| Links | Info-blue color, underline on hover |
-| Horizontal Rule | Aged-brown-medium border, 50% opacity |
-| Lists | Standard padding and spacing |
-| Format Toolbar (`.milkdown-format-toolbar`) | Horizontal flex layout, parchment header-bg, scrollable, button hover/active states |
-| Chit Link Dropdown (`.milkdown-chitlink-dropdown`) | Fixed position, parchment background, border, shadow, item highlight |
-| Hidden State (`.milkdown-hidden`) | `display: none !important` utility class |
-| Mobile Responsive (≤600px) | Compact toolbar, 200px min editor height, touch targets |
-| Virtual Keyboard (≤500px height) | Reduced max-height for editor |
 
 ### 3.4 Settings HTML — Network Access Block (`settings.html`)
 
@@ -3340,6 +3404,7 @@ All HTML pages include the following PWA `<head>` tags: `<link rel="manifest" hr
 <script src="/frontend/js/dashboard/main-alerts.js"></script>
 <script src="/frontend/js/dashboard/main-search.js"></script>
 <script src="/frontend/js/dashboard/main-email.js"></script>
+<script src="/frontend/js/dashboard/main-email-bundles.js"></script>
 <script src="/frontend/js/dashboard/main-modals.js"></script>
 <script src="/frontend/js/dashboard/main-init.js"></script>
 <script src="/frontend/js/dashboard/main.js"></script>
@@ -3359,7 +3424,6 @@ All HTML pages include the following PWA `<head>` tags: `<link rel="manifest" hr
 <link rel="stylesheet" href="/frontend/css/editor/editor.css" />
 <link rel="stylesheet" href="/frontend/css/editor/editor-email.css" />
 <link rel="stylesheet" href="/frontend/css/editor/editor-attachments.css" />
-<link rel="stylesheet" href="/frontend/css/editor/editor-milkdown.css" />
 ```
 
 **CDN scripts (in `<head>`):**
@@ -3405,8 +3469,6 @@ All HTML pages include the following PWA `<head>` tags: `<link rel="manifest" hr
 <script src="/frontend/js/editor/editor-health.js"></script>
 <script src="/frontend/js/editor/editor-email.js"></script>
 <script src="/frontend/js/editor/editor-attachments.js"></script>
-<script src="/frontend/js/editor/editor-milkdown-chitlink.js"></script>
-<script type="module" src="/frontend/js/editor/editor-milkdown.js"></script>
 <script src="/frontend/js/editor/editor-save.js"></script>
 <script src="/frontend/js/editor/editor-sharing.js"></script>
 <script src="/frontend/js/editor/editor-people.js"></script>
@@ -3669,6 +3731,7 @@ shared-auth.js            ← MUST load first (getCurrentUser, isAdmin, waitForA
               │     main-alerts.js     (uses shared alarm system from shared.js)
               │     main-search.js
               │     main-email.js      (email tab view — displayEmailView, _checkMail, _composeEmail, _updateEmailBadge, _emailQuickArchive, _emailQuickDelete, _emailHasReply, _emailGetContactImage, _toggleEmailUnreadTop, _emailShowErrorWithSettingsLink)
+              │     main-email-bundles.js (bundle toolbar, tabs, filtering, modal, context menu, reorder — _fetchBundles, _filterByBundle, _renderBundleToolbar, _openBundleModal, _showBundleContextMenu)
               │     main-modals.js
               │     main-init.js       (calls init functions from all above)
               │     main.js            (entry point — calls main-init)
@@ -3689,8 +3752,6 @@ shared-auth.js            ← MUST load first (getCurrentUser, isAdmin, waitForA
                     editor-health.js      (health indicators zone)
                     editor-email.js       (email zone — depends on shared-utils, shared-editor, editor-save; includes thread view and HTML rendering)
                     editor-attachments.js (attachments zone — depends on shared-utils, editor-save)
-                    editor-milkdown-chitlink.js (Milkdown chit link autocomplete plugin)
-                    editor-milkdown.js    (ES module — Milkdown loader, content bridge, format toolbar)
                     editor-save.js        (save/exit logic)
                     editor-sharing.js     (sharing data-layer — uses shared-auth; provides _sharingUserList, getSharingData, hasSharingData for editor-people.js and editor-init.js)
                     editor-init.js        (entry point — calls init functions)
