@@ -117,9 +117,11 @@ function _refreshBundleTabsInPlace() {
     if (!row2) return;
     if (_bundleRefreshInProgress) return;
     _bundleRefreshInProgress = true;
-    // Trigger a full re-render via filterChits so tabs render with data
-    if (typeof filterChits === 'function') {
-        filterChits('Email');
+    // Re-render tabs with correct counts
+    _renderBundleTabs(row2, _emailBundlesData || [], _getAllInboxEmailChits());
+    // Now that bundles data is loaded, re-render email list with filter applied
+    if (_emailActiveBundle && typeof displayChits === 'function') {
+        displayChits();
     }
     _bundleRefreshInProgress = false;
 }
@@ -505,12 +507,16 @@ function _renderBundleTabs(container, bundles, emailChits) {
             container.appendChild(tab);
 
             // Add → separator between tabs when single-placement (shows priority order)
+            // Arrow between every tab, but not after the last one
             var isMultiPlacement = (window._cwocSettings || {}).bundles_multi_placement === '1';
-            if (!isMultiPlacement && bundle.name !== 'Everything Else') {
-                var arrow = document.createElement('span');
-                arrow.className = 'bundle-tab-arrow';
-                arrow.textContent = '\u203A';
-                container.appendChild(arrow);
+            if (!isMultiPlacement) {
+                var currentIdx = sortedBundles.indexOf(bundle);
+                if (currentIdx < sortedBundles.length - 1) {
+                    var arrow = document.createElement('span');
+                    arrow.className = 'bundle-tab-arrow';
+                    arrow.innerHTML = '<i class="fas fa-chevron-right"></i>';
+                    container.appendChild(arrow);
+                }
             }
         });
     }

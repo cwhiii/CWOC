@@ -188,7 +188,8 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    margin-left: 6px;
+    margin-left: auto;
+    margin-right: 1em;
     flex-shrink: 0;
     transition: background 0.2s;
 }
@@ -476,9 +477,11 @@
 .bundle-tab-arrow {
     display: inline-flex;
     align-items: center;
-    color: rgba(107, 78, 49, 0.4);
-    font-size: 0.9em;
-    margin: 0 2px;
+    justify-content: center;
+    align-self: center;
+    color: rgba(107, 78, 49, 0.5);
+    font-size: 1.1em;
+    margin: 0 4px;
     user-select: none;
     flex-shrink: 0;
 }

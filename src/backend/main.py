@@ -302,27 +302,9 @@ app.include_router(ha_router)
 app.include_router(admin_router)
 app.include_router(bundles_router)
 
-# ── Reclassify emails into bundles on every startup (async, non-blocking) ──
-import threading as _rc_threading
-
-def _startup_reclassify():
-    """Run bundle reclassification in a background thread so it doesn't block startup."""
-    import time
-    time.sleep(3)  # Wait for server to be fully ready
-    try:
-        import sqlite3 as _s
-        from src.backend.routes.bundles import reclassify_all_emails
-        conn = _s.connect(DB_PATH)
-        cur = conn.cursor()
-        cur.execute("SELECT DISTINCT owner_id FROM bundles")
-        owners = [r[0] for r in cur.fetchall()]
-        conn.close()
-        for oid in owners:
-            reclassify_all_emails(oid)
-    except Exception as e:
-        logger.warning(f"Startup reclassification failed: {e}")
-
-_rc_threading.Thread(target=_startup_reclassify, daemon=True).start()
+# ── Bundle reclassification is triggered by rule changes, not on startup ──
+# Triggers: rule update (PUT), rule association (POST), bundle delete (DELETE)
+# New emails are classified individually during email sync.
 
 
 # ═══════════════════════════════════════════════════════════════════════════

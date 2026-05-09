@@ -445,6 +445,26 @@ def update_bundle(bundle_id: str, bundle: BundleUpdate, request: Request):
                             (serialize_json_field(actions), current_time, rid),
                         )
 
+            # Sync rule name to match bundle name
+            for rid in rule_ids:
+                cursor.execute(
+                    "UPDATE rules SET name = ?, modified_datetime = ? WHERE id = ? AND owner_id = ?",
+                    (f"Bundle: {new_name}", current_time, rid, user_id),
+                )
+
+        # Sync rule description to match bundle description (always, even if name didn't change)
+        if bundle.description is not None:
+            cursor.execute(
+                "SELECT rule_id FROM bundle_rules WHERE bundle_id = ? AND owner_id = ?",
+                (bundle_id, user_id),
+            )
+            desc_rule_ids = [r[0] for r in cursor.fetchall()]
+            for rid in desc_rule_ids:
+                cursor.execute(
+                    "UPDATE rules SET description = ?, modified_datetime = ? WHERE id = ? AND owner_id = ?",
+                    (bundle.description, current_time, rid, user_id),
+                )
+
         conn.commit()
 
         # Return updated bundle

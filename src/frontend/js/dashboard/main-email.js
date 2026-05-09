@@ -666,12 +666,10 @@ function displayEmailView(chitsToDisplay) {
         });
     }
 
-    // Apply bundle filter (only when sub-filter is "inbox")
+    // Apply bundle filter (only when sub-filter is "inbox" AND bundles data is loaded)
     var allInboxChits = emailChits.slice(); // Keep full list for bundle tab counts
-    if (_emailSubFilter === 'inbox' && typeof _filterByBundle === 'function') {
-        if (_emailActiveBundle) {
-            emailChits = _filterByBundle(emailChits, _emailActiveBundle);
-        }
+    if (_emailSubFilter === 'inbox' && typeof _filterByBundle === 'function' && _emailActiveBundle && _emailBundlesData) {
+        emailChits = _filterByBundle(emailChits, _emailActiveBundle);
     }
 
     // Sort by email_date descending (newest first), with pinned at top and optional unread-at-top
@@ -909,31 +907,32 @@ function _buildEmailCard(chit, viSettings) {
     if (chit.pinned) pinBtn.classList.add('email-pin-active');
     pinBtn.addEventListener('click', function(e) {
         e.stopPropagation();
-        // Toggle pin
-        fetch('/api/chit/' + encodeURIComponent(chit.id))
-            .then(function(r) { return r.ok ? r.json() : null; })
-            .then(function(fullChit) {
-                if (!fullChit) return;
-                fullChit.pinned = !fullChit.pinned;
-                return fetch('/api/chits/' + encodeURIComponent(chit.id), {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(fullChit)
-                });
-            })
+        var newPinned = !chit.pinned;
+        fetch('/api/chits/' + encodeURIComponent(chit.id), {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pinned: newPinned })
+        })
             .then(function(r) {
                 if (r && r.ok) {
-                    chit.pinned = !chit.pinned;
-                    pinBtn.innerHTML = chit.pinned
+                    chit.pinned = newPinned;
+                    // Update global chits array
+                    if (typeof chits !== 'undefined' && Array.isArray(chits)) {
+                        var found = chits.find(function(c) { return c.id === chit.id; });
+                        if (found) found.pinned = newPinned;
+                    }
+                    pinBtn.innerHTML = newPinned
                         ? '<i class="fas fa-bookmark"></i>'
                         : '<i class="far fa-bookmark"></i>';
-                    pinBtn.classList.toggle('email-pin-active', chit.pinned);
-                    pinBtn.title = chit.pinned ? 'Unpin' : 'Pin';
-                    // Re-render to re-sort
-                    if (typeof fetchChits === 'function') fetchChits();
+                    pinBtn.classList.toggle('email-pin-active', newPinned);
+                    pinBtn.title = newPinned ? 'Unpin' : 'Pin';
+                    // Re-render to re-sort (pinned goes to top)
+                    if (typeof displayChits === 'function') displayChits();
+                } else {
+                    console.error('[Email] Pin toggle failed:', r.status);
                 }
             })
-            .catch(function(err) { console.error('Pin toggle failed:', err); });
+            .catch(function(err) { console.error('[Email] Pin toggle failed:', err); });
     });
     card.appendChild(pinBtn);
 
