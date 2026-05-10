@@ -149,14 +149,15 @@ function displayNotesView(chitsToDisplay) {
       }
       chitElement.appendChild(noteEl);
 
-      // Double-click: open in editor. Shift+click: edit in place.
+      // Double-click: open in editor.
       chitElement.addEventListener("dblclick", () => {
         storePreviousState();
         window.location.href = `/editor?id=${chit.id}`;
       });
-      chitElement.addEventListener("click", (e) => {
-        if (!e.shiftKey) return;
-        e.preventDefault();
+      // Single click on note text: edit in place
+      noteEl.addEventListener("click", (e) => {
+        if (e.shiftKey) return; // shift+click handled on card level
+        e.stopPropagation();
         // Prevent inline editing for viewer-role shared chits
         if (_isViewerRole(chit)) return;
         // Toggle in-place editing
@@ -166,15 +167,30 @@ function displayNotesView(chitsToDisplay) {
         noteEl.style.borderRadius = '4px';
         noteEl.style.padding = '6px';
         noteEl.style.whiteSpace = 'pre-wrap';
+        noteEl.style.maxHeight = 'none';
+        noteEl.style.overflow = 'visible';
+        noteEl.style.userSelect = 'text';
         chitElement.style.cursor = 'auto';
+        chitElement.style.overflow = 'visible';
+        chitElement.style.userSelect = 'text';
         chitElement.setAttribute('draggable', 'false');
         noteEl.textContent = chit.note || '';
         noteEl.focus();
+        // Re-layout so cards below push down to accommodate expanded height
+        var _notesContainer = chitElement.closest('.notes-view');
+        if (_notesContainer && typeof applyNotesLayout === 'function') {
+          setTimeout(function() { applyNotesLayout(_notesContainer); }, 10);
+        }
         const saveEdit = () => {
           noteEl.contentEditable = 'false';
           noteEl.style.outline = '';
           noteEl.style.padding = '';
+          noteEl.style.maxHeight = '';
+          noteEl.style.overflow = '';
+          noteEl.style.userSelect = '';
           chitElement.style.cursor = 'grab';
+          chitElement.style.overflow = '';
+          chitElement.style.userSelect = '';
           chitElement.removeAttribute('draggable');
           const newNote = noteEl.textContent;
           if (newNote !== chit.note) {
@@ -188,14 +204,36 @@ function displayNotesView(chitsToDisplay) {
               noteEl.innerHTML = resolveChitLinks(marked.parse(chit.note), chits);
             }
           }
+          // Re-layout after exiting edit mode (cards snap back)
+          if (_notesContainer && typeof applyNotesLayout === 'function') {
+            setTimeout(function() { applyNotesLayout(_notesContainer); }, 10);
+          }
         };
         noteEl.addEventListener('blur', saveEdit, { once: true });
         noteEl.addEventListener('keydown', (ke) => {
           if (ke.key === 'Escape') { ke.preventDefault(); noteEl.blur(); }
         });
+        // Re-layout as user types (card height may change)
+        var _relayoutTimer = null;
+        var _inputHandler = function() {
+          clearTimeout(_relayoutTimer);
+          _relayoutTimer = setTimeout(function() {
+            if (_notesContainer && typeof applyNotesLayout === 'function') applyNotesLayout(_notesContainer);
+          }, 150);
+        };
+        noteEl.addEventListener('input', _inputHandler);
+        noteEl.addEventListener('blur', function() { noteEl.removeEventListener('input', _inputHandler); }, { once: true });
       });
-      // Long-press on mobile: toggle in-place editing (same as shift-click)
-      // Uses unified touch gesture: drag to reorder, very long press to edit
+      // Shift+click on card: open quick-edit modal
+      chitElement.addEventListener("click", (e) => {
+        if (!e.shiftKey) return;
+        e.preventDefault();
+        if (typeof showQuickEditModal === 'function' && !_isViewerRole(chit)) {
+          showQuickEditModal(chit, function () { displayChits(); });
+        }
+      });
+      // Long-press on mobile: open quick-edit modal (same as shift-click on desktop)
+      // Uses unified touch gesture: drag to reorder, very long press to quick-edit
       // (enableTouchGesture is attached after all cards are added, via enableNotesDragReorder)
       notesView.appendChild(chitElement);
     });
@@ -243,44 +281,14 @@ function displayNotesView(chitsToDisplay) {
   // On desktop, use the masonry-aware notes drag.
   var _notesMobileMode = (window.innerWidth <= 480);
   if (_notesMobileMode) {
-    // Build long-press map: inline note editing (same as shift-click)
+    // Build long-press map: open quick-edit modal (same as shift-click on desktop)
     var _notesLpMap = {};
     sortedChits.forEach(function (chit) {
       if (_isViewerRole(chit)) return;
       _notesLpMap[chit.id] = function () {
-        var card = notesView.querySelector('[data-chit-id="' + chit.id + '"]');
-        if (!card) return;
-        var noteEl = card.querySelector('.note-content');
-        if (!noteEl || noteEl.contentEditable === 'true') return;
-        noteEl.contentEditable = 'true';
-        noteEl.style.outline = '2px solid #8b4513';
-        noteEl.style.borderRadius = '4px';
-        noteEl.style.padding = '6px';
-        noteEl.style.whiteSpace = 'pre-wrap';
-        card.style.cursor = 'auto';
-        card.setAttribute('draggable', 'false');
-        noteEl.textContent = chit.note || '';
-        noteEl.focus();
-        var _saveEdit = function () {
-          noteEl.contentEditable = 'false';
-          noteEl.style.outline = '';
-          noteEl.style.padding = '';
-          card.style.cursor = '';
-          card.removeAttribute('draggable');
-          var newNote = noteEl.textContent;
-          if (newNote !== chit.note) {
-            fetch('/api/chits/' + chit.id, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(Object.assign({}, chit, { note: newNote }))
-            }).then(function (r) { if (r.ok) { chit.note = newNote; if (typeof fetchChits === 'function') fetchChits(); } });
-          } else {
-            if (typeof marked !== 'undefined' && chit.note) {
-              noteEl.innerHTML = (typeof resolveChitLinks === 'function') ? resolveChitLinks(marked.parse(chit.note), chits) : marked.parse(chit.note);
-            }
-          }
-        };
-        noteEl.addEventListener('blur', _saveEdit, { once: true });
+        if (typeof showQuickEditModal === 'function') {
+          showQuickEditModal(chit, function () { displayChits(); });
+        }
       };
     });
     enableDragToReorder(notesView, 'Notes', function () { displayChits(); }, _notesLpMap);

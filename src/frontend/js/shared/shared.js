@@ -1190,6 +1190,7 @@ function enableNotesDragReorder(container, tab, onReorder) {
 
     card.addEventListener('mousedown', (e) => {
       if (e.target.closest('input, textarea, select, button, a, ul, li, [contenteditable="true"]')) return;
+      if (e.target.closest('.note-content')) return;
       if (card.querySelector('[contenteditable="true"]')) return;
       if (e.button !== 0) return;
       e.preventDefault();
@@ -1243,6 +1244,7 @@ function enableNotesDragReorder(container, tab, onReorder) {
       enableTouchGesture(card, {
         onDragStart: function (data) {
           if (data.target && data.target.closest && data.target.closest('input, textarea, select, button, a, [contenteditable="true"]')) return;
+          if (data.target && data.target.closest && data.target.closest('.note-content')) return;
           if (card.querySelector('[contenteditable="true"]')) return;
 
           var rect = card.getBoundingClientRect();
