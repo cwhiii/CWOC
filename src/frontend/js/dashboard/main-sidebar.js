@@ -181,6 +181,7 @@ function _clearAllFilters() {
   document.querySelectorAll('#priority-multi input[type="checkbox"]').forEach(function(cb) { cb.checked = false; });
   var sp = document.getElementById('show-pinned'); if (sp) sp.checked = true;
   var sa = document.getElementById('show-archived'); if (sa) sa.checked = false;
+  var ss = document.getElementById('show-snoozed'); if (ss) ss.checked = false;
   var su = document.getElementById('show-unmarked'); if (su) su.checked = true;
   var hpd = document.getElementById('hide-past-due'); if (hpd) hpd.checked = false;
   var hc = document.getElementById('hide-complete'); if (hc) hc.checked = false;

@@ -1367,6 +1367,12 @@ async function _handleFocusAddress(focusType, address) {
   // Set focus mode flag to prevent fitBounds from overriding our centered view
   _mapsFocusMode = true;
 
+  // Set period to "All Time" so the focused chit is guaranteed to be visible
+  var periodSelect = document.getElementById('period-select');
+  if (periodSelect) periodSelect.value = 'all';
+  _mapsPeriodOffset = 0;
+  _updateMapsDateDisplay();
+
   // Set the mode based on focus type
   var mode = (focusType === 'contact') ? 'people' : 'chits';
   _mapsSetMode(mode);

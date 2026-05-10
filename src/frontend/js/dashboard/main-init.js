@@ -602,6 +602,17 @@ function displayChits() {
   // Apply archive/pinned filter
   filteredChits = _applyArchiveFilter(filteredChits);
 
+  // Apply snooze filter — hide snoozed chits unless "show snoozed" is checked
+  var _showSnoozedCb = document.getElementById('show-snoozed');
+  var _showSnoozed = _showSnoozedCb ? _showSnoozedCb.checked : false;
+  if (!_showSnoozed) {
+    var _nowMs = Date.now();
+    filteredChits = filteredChits.filter(function(c) {
+      if (!c.snoozed_until) return true;
+      return new Date(c.snoozed_until).getTime() <= _nowMs;
+    });
+  }
+
   // Apply hide-past-due filter
   const hidePastDue = document.getElementById('hide-past-due')?.checked ?? false;
   if (hidePastDue) {
@@ -966,6 +977,7 @@ document.addEventListener("DOMContentLoaded", function () {
     window._cwocSettings = window._cwocSettings || {};
     if (s.overdue_border_color) window._cwocSettings.overdue_border_color = s.overdue_border_color;
     if (s.blocked_border_color) window._cwocSettings.blocked_border_color = s.blocked_border_color;
+    window._cwocSettings.show_map_thumbnails = s.show_map_thumbnails !== '0';
     // Initialize hide-declined checkbox from saved setting
     var _hdCb = document.getElementById('hide-declined');
     if (_hdCb && s.hide_declined === '1') _hdCb.checked = true;

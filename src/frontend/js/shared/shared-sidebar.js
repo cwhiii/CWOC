@@ -299,6 +299,7 @@ function _cwocInjectSidebar() {
   html += '      <div class="multi-select">';
   html += '        <label><input type="checkbox" id="show-pinned" checked /> <i class="fas fa-bookmark" style="color:#8b5a2b;"></i> Pinned</label>';
   html += '        <label><input type="checkbox" id="show-archived" /> 📦 Archived</label>';
+  html += '        <label><input type="checkbox" id="show-snoozed" /> 😴 Snoozed</label>';
   html += '        <label><input type="checkbox" id="show-unmarked" checked /> 📄 Unmarked</label>';
   html += '        <hr style="border:0;border-top:1px dashed #c4a882;margin:4px 0;" />';
   html += '        <label><input type="checkbox" id="hide-past-due" /> 🚫 Hide Past-Due</label>';
@@ -649,8 +650,8 @@ function _wireFilterCheckboxes(context) {
     });
   }
 
-  /* Display checkboxes (show-pinned, show-archived, etc.) */
-  var displayIds = ['show-pinned', 'show-archived', 'show-unmarked', 'hide-past-due', 'hide-complete', 'hide-declined', 'hide-habits', 'hide-email-received', 'hide-email-sent', 'filter-shared-with-me', 'filter-shared-by-me'];
+  /* Display checkboxes (show-pinned, show-archived, show-snoozed, etc.) */
+  var displayIds = ['show-pinned', 'show-archived', 'show-snoozed', 'show-unmarked', 'hide-past-due', 'hide-complete', 'hide-declined', 'hide-habits', 'hide-email-received', 'hide-email-sent', 'filter-shared-with-me', 'filter-shared-by-me'];
   displayIds.forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.onchange = function() { cb(); };

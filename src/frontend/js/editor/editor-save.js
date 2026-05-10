@@ -424,6 +424,9 @@ async function buildChitObject() {
     chit.checklist_autosave = null;
   }
 
+  // Include snoozed_until (preserved from loaded chit, or set via snooze modal)
+  chit.snoozed_until = window._currentSnoozedUntil || null;
+
   return chit;
 }
 

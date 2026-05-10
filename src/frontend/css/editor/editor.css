@@ -4993,3 +4993,43 @@ input.location {
         visibility: visible !important;
     }
 }
+
+/* ── Snooze modal ─────────────────────────────────────────────────────────── */
+.snooze-presets {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+    gap: 8px;
+    margin-bottom: 4px;
+}
+
+.snooze-preset-btn {
+    padding: 8px 12px;
+    border: 1px solid #c4a882;
+    border-radius: 4px;
+    background: #fdf5e6;
+    color: #4a2c2a;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.85em;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.snooze-preset-btn:hover {
+    background: #e8d5b7;
+    border-color: #8b5a2b;
+}
+
+.snooze-preset-btn:active {
+    background: #d4b896;
+}
+
+.snooze-cancel-btn {
+    background: transparent;
+    border-color: #999;
+    color: #666;
+}
+
+.snooze-cancel-btn:hover {
+    background: #f0e8d8;
+    border-color: #666;
+}

@@ -17,6 +17,7 @@
  * browser's post-drag click event has had a chance to fire.
  */
 function _markDragJustEnded() {
+  console.log('[DRAG] _markDragJustEnded called', new Error().stack);
   window._dragJustEnded = true;
   // Clear after a generous delay — the browser's post-drag click can fire
   // asynchronously, so we hold the flag for 300ms to be safe.
@@ -33,8 +34,13 @@ document.addEventListener('click', function (e) {
     e.preventDefault();
   }
 }, true);
+// DEBUG: trace dblclick events
+document.addEventListener('dblclick', function (e) {
+  console.log('[DBLCLICK-CAPTURE] target:', e.target.tagName, e.target.className, '_dragJustEnded:', window._dragJustEnded);
+}, true);
 document.addEventListener('dblclick', function (e) {
   if (!window._dragJustEnded) return;
+  console.log('[DRAG-GUARD] BLOCKING dblclick, target:', e.target.tagName, e.target.className);
   if (e.target.closest('.chit-card, .timed-event, .month-event, .all-day-event, .day-event, .itinerary-event, .kanban-project-header, .projects-child-item')) {
     e.stopPropagation();
     e.preventDefault();
@@ -126,13 +132,15 @@ function enableDragToReorder(container, tab, onReorder, longPressMap) {
   });
 
   container.addEventListener('dragend', () => {
-    if (draggedEl) draggedEl.classList.remove('cwoc-dragging');
-    draggedEl = null;
-    container.querySelectorAll('.chit-card').forEach(c => {
-      c.style.borderTop = '';
-      c.style.borderBottom = '';
-    });
-    _markDragJustEnded();
+    if (draggedEl) {
+      draggedEl.classList.remove('cwoc-dragging');
+      draggedEl = null;
+      container.querySelectorAll('.chit-card').forEach(c => {
+        c.style.borderTop = '';
+        c.style.borderBottom = '';
+      });
+      _markDragJustEnded();
+    }
   });
 
   container.addEventListener('dragover', (e) => {

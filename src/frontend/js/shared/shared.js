@@ -552,6 +552,28 @@ function showQuickEditModal(chit, onRefresh) {
   });
   actionRow.appendChild(archBtn);
 
+  // Snooze button
+  const isSnoozed = chit.snoozed_until && new Date(chit.snoozed_until) > new Date();
+  const snzBtn = document.createElement('button');
+  snzBtn.style.cssText = iconBtnStyle + `background:${isSnoozed ? '#d4c5a9' : '#fdf5e6'};color:#666;`;
+  snzBtn.innerHTML = isSnoozed ? '😴 Unsnooze' : '😴 Snooze';
+  snzBtn.title = isSnoozed ? 'Wake up now' : 'Snooze this chit';
+  snzBtn.addEventListener('click', async () => {
+    if (isSnoozed) {
+      // Unsnooze
+      try {
+        await fetch(`/api/chits/${chitId}/snooze`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ until: null }) });
+        close();
+        if (typeof cwocToast === 'function') cwocToast('Chit unsnoozed.', 'info');
+        if (typeof fetchChits === 'function') fetchChits(); else if (onRefresh) onRefresh();
+      } catch (e) { console.error('Unsnooze failed:', e); }
+    } else {
+      // Show inline snooze presets
+      _showSnoozeSubMenu(actionRow, snzBtn, chitId, close, onRefresh);
+    }
+  });
+  actionRow.appendChild(snzBtn);
+
   // Delete — always present, shows sub-options for recurring
   const delBtn = document.createElement('button');
   delBtn.style.cssText = iconBtnStyle + 'background:#fdf5e6;color:#a33;';
@@ -625,6 +647,43 @@ function showQuickEditModal(chit, onRefresh) {
   document.body.appendChild(overlay);
   function onKey(e) { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', onKey); } }
   document.addEventListener('keydown', onKey);
+}
+
+/**
+ * Show inline snooze presets in the quick-edit modal.
+ */
+function _showSnoozeSubMenu(actionRow, snzBtn, chitId, closeModal, onRefresh) {
+  // Replace action row content with snooze presets
+  var presets = [
+    { label: '15 min', minutes: 15 },
+    { label: '1 hour', minutes: 60 },
+    { label: '4 hours', minutes: 240 },
+    { label: '1 day', minutes: 1440 },
+    { label: '3 days', minutes: 4320 },
+    { label: '1 week', minutes: 10080 },
+  ];
+  var container = document.createElement('div');
+  container.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;';
+  presets.forEach(function(p) {
+    var btn = document.createElement('button');
+    btn.style.cssText = 'padding:6px 10px;border:1px solid #c4a882;border-radius:4px;background:#fdf5e6;color:#4a2c2a;font-family:Lora,Georgia,serif;font-size:0.8em;cursor:pointer;';
+    btn.textContent = p.label;
+    btn.addEventListener('click', async function() {
+      try {
+        await fetch('/api/chits/' + chitId + '/snooze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ minutes: p.minutes }) });
+        closeModal();
+        if (typeof cwocToast === 'function') cwocToast('Snoozed for ' + p.label, 'info');
+        if (typeof fetchChits === 'function') fetchChits(); else if (onRefresh) onRefresh();
+      } catch (e) { console.error('Snooze failed:', e); }
+    });
+    container.appendChild(btn);
+  });
+  var cancelBtn = document.createElement('button');
+  cancelBtn.style.cssText = 'padding:6px 10px;border:1px solid #999;border-radius:4px;background:transparent;color:#666;font-family:Lora,Georgia,serif;font-size:0.8em;cursor:pointer;';
+  cancelBtn.textContent = 'Cancel';
+  cancelBtn.addEventListener('click', function() { container.remove(); });
+  container.appendChild(cancelBtn);
+  actionRow.parentElement.appendChild(container);
 }
 
 /**
@@ -1377,10 +1436,12 @@ function _onNotesDragEnd(e) {
 
   if (!_notesDragState) return;
 
-  // Suppress any click/dblclick that fires after this mouseup
-  if (typeof _markDragJustEnded === 'function') _markDragJustEnded();
-
   const s = _notesDragState;
+
+  // Only suppress click/dblclick if the mouse actually moved (real drag, not just a click)
+  if (s.targetCol !== undefined) {
+    if (typeof _markDragJustEnded === 'function') _markDragJustEnded();
+  }
 
   // Clean up indicator and card styles
   s.container.querySelectorAll('.notes-drop-indicator').forEach(el => el.remove());

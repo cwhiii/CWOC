@@ -496,8 +496,10 @@
             </ul>
             <h4>Owner Chip</h4>
             <p>The chit owner's display name is shown as a chip in the title zone header, inline with the "Title" label and the pinned icon. The chip uses the same visual style as people chips (background color, thumbnail image or placeholder). The owner chip is always displayed, even when the current user is the owner.</p>
+            <h4>Snooze</h4>
+            <p>The <strong>😴 Snooze</strong> button in the editor header hides a chit from all views until a specified date/time. When snoozed, the chit is automatically hidden from the dashboard (like archived), but it reappears automatically when the snooze expires. Presets: 15 min, 30 min, 1 hour, 4 hours, 8 hours, 1 day, 3 days, 1 week, or a custom date/time. Click "Wake Up Now" to unsnooze early. Snoozed chits show a 😴 badge on their cards. Use the "😴 Snoozed" checkbox in the Display filter group to reveal snoozed chits. Snooze is also available from the Quick Edit modal (Shift+click a chit).</p>
             <h3 id="quick-edit">Quick Edit Modal</h3>
-            <p>Shift+click any chit. Edit title (double-click), change Priority/Severity/Status, Pin/Archive/Delete/QR. Recurring chits get per-field "All" checkboxes and series edit options.</p>
+            <p>Shift+click any chit. Edit title (double-click), change Priority/Severity/Status, Pin/Archive/Snooze/Delete/QR. Recurring chits get per-field "All" checkboxes and series edit options.</p>
             <h3 id="mouse">Mouse Interactions</h3>
             <h4>On Calendar Events</h4>
             <ul>
@@ -581,7 +583,7 @@
                 <li><strong>Priority</strong> — Multi-select: Any, Low, Medium, High</li>
                 <li><strong>Tags</strong> — Multi-select with search. Favorites appear first</li>
                 <li><strong>People</strong> — Multi-select from contacts assigned to chits</li>
-                <li><strong>Show</strong> — Toggle visibility of Pinned, Archived, Unmarked chits, and Hide Past-Due</li>
+                <li><strong>Show</strong> — Toggle visibility of Pinned, Archived, Snoozed, Unmarked chits, and Hide Past-Due</li>
             </ul>
             <p>When any filter is active, a "✕ Clear All" button appears. If the current tab has a default filter (configured in Settings → Default Filters), a "🔄 Defaults" button resets to that filter.</p>
             <h4>Sorting</h4>

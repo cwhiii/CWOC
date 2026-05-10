@@ -88,7 +88,7 @@ function _nestIsEmailChit(chit) {
  */
 function _nestButtonClick() {
   if (_nestCurrentThreadId) {
-    _nestRemove();
+    _nestConfirmRemove();
   } else {
     _nestOpenPicker();
   }
@@ -109,6 +109,19 @@ function _nestSelectThread(threadId, subject) {
   _nestSetActive(subject);
   _nestClosePicker();
   setSaveButtonUnsaved();
+}
+
+/**
+ * Confirm removal of the nest association via modal.
+ */
+async function _nestConfirmRemove() {
+  var subject = _nestCurrentSubject || '(unknown thread)';
+  var confirmed = await cwocConfirm(
+    'Remove nest from "' + subject + '"?\n\nThis chit will no longer appear in that email thread.',
+    { title: 'Remove Nest', confirmLabel: 'Remove', danger: false }
+  );
+  if (!confirmed) return;
+  _nestRemove();
 }
 
 /**
@@ -309,7 +322,7 @@ function _nestSetActive(subject) {
   if (label) {
     label.textContent = _nestTruncateSubject(subject);
     label.style.display = '';
-    label.onclick = function() { _nestButtonClick(); };
+    label.onclick = function() { _nestConfirmRemove(); };
   }
 }
 

@@ -43,6 +43,7 @@ function displayNotesView(chitsToDisplay) {
       titleRow.style.cssText = "display:flex;align-items:center;gap:0.3em;font-weight:bold;margin-bottom:0.2em;";
       if (chit.pinned) { const i = document.createElement('i'); i.className = 'fas fa-bookmark'; i.title = 'Pinned'; i.style.fontSize = '0.85em'; titleRow.appendChild(i); }
       if (chit.archived) { const i = document.createElement('span'); i.textContent = '📦'; i.title = 'Archived'; titleRow.appendChild(i); }
+      if (chit.snoozed_until && new Date(chit.snoozed_until) > new Date()) { const i = document.createElement('span'); i.textContent = '😴'; i.title = 'Snoozed until ' + new Date(chit.snoozed_until).toLocaleString(); titleRow.appendChild(i); }
       // Stealth indicator — visible only to the owner (Requirement 6.5)
       if (chit.stealth) {
         var _notesStealth = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
@@ -90,6 +91,24 @@ function displayNotesView(chitsToDisplay) {
             }
           }
           titleRow.appendChild(wxSpan);
+        }
+      }
+      // Map location icon (clickable — opens Maps page centered on location)
+      if (chit.location && chit.location.trim()) {
+        var _nwS = window._cwocSettings;
+        if (!_nwS || (_nwS.show_map_thumbnails !== false && _nwS.show_map_thumbnails !== '0')) {
+          var _nwMapIcon = document.createElement('i');
+          _nwMapIcon.className = 'fas fa-map-marker-alt chit-location-icon';
+          _nwMapIcon.title = chit.location + ' — click to view on map';
+          _nwMapIcon.style.cursor = 'pointer';
+          _nwMapIcon.addEventListener('click', (function(loc) {
+            return function(e) {
+              e.stopPropagation();
+              e.preventDefault();
+              window.location.href = '/maps?focus=chit&address=' + encodeURIComponent(loc);
+            };
+          })(chit.location));
+          titleRow.appendChild(_nwMapIcon);
         }
       }
       const titleSpan = document.createElement('span');

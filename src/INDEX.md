@@ -139,6 +139,7 @@ All migrations run at startup. Each checks if the column/table already exists be
 | `migrate_add_view_order()` | Add `view_order` (TEXT) column to settings table for storing user's custom tab order as a JSON array. Fully idempotent |
 | `migrate_create_bundles_tables()` | Create `bundles` table (id, owner_id, name, description, display_order, is_default, removable, created_datetime, modified_datetime), `bundle_rules` junction table (id, bundle_id, rule_id, owner_id, created_datetime), and add `bundles_multi_placement` (BOOLEAN DEFAULT 0) column to settings table. Fully idempotent |
 | `migrate_add_nest_thread_id()` | Add `nest_thread_id` (TEXT DEFAULT NULL) column to chits table for nesting non-email chits into email threads. Uses column-existence-check pattern (`PRAGMA table_info` → check → `ALTER TABLE`). Fully idempotent |
+| `migrate_add_snoozed_until()` | Add `snoozed_until` (TEXT DEFAULT NULL) column to chits table for chit-level snooze. Fully idempotent |
 
 ### 1.6 `src/backend/serializers.py` — vCard & CSV
 
@@ -181,7 +182,8 @@ All migrations run at startup. Each checks if the column/table already exists be
 | `_weather_hourly_loop()` | Background loop — runs `weather_update()` every hour for 7-day chits |
 | `_weather_daily_loop()` | Background loop — runs `weather_update()` every 24h for 8–16 day chits |
 | `_alert_push_loop()` | Background loop — runs every 60 seconds, checks for chits whose start/due time falls within the last 60-second window, sends push notifications to chit owners via `_send_chit_push()` and ntfy notifications via `_send_chit_ntfy()` |
-| `start_weather_schedulers()` | Start weather background loops (hourly + daily) and the alert push loop |
+| `_snooze_check_loop()` | Background loop — runs every 60 seconds, clears `snoozed_until` for expired snoozes and sends push notification |
+| `start_weather_schedulers()` | Start weather background loops (hourly + daily), alert push loop, and snooze check loop |
 | `_is_scheduled_rule_due(rule, now)` | Check whether a scheduled rule is due for execution based on its `schedule_config` (frequency, interval, time_of_day) and `last_run_datetime`. Supports daily and hourly frequencies with 90-second grace for scheduler jitter |
 | `_rules_scheduled_loop()` | Background loop — runs every 60 seconds, loads all enabled scheduled rules, checks if each is due, queries matching entities (chits or contacts), evaluates condition tree, executes or queues actions, inserts execution log entries, updates rule metadata. On first iteration runs after 5-second delay to catch overdue rules after restart |
 | `start_rules_scheduler()` | Register the background rules scheduler task as an asyncio task. Called from `main.py` on startup |
@@ -403,6 +405,7 @@ All chit endpoints are scoped by `owner_id` — users can only access their own 
 | `DELETE /api/chits/{chit_id}` | `delete_chit(chit_id, request)` | Soft-delete a chit (owner or manager) |
 | `PATCH /api/chits/{chit_id}/recurrence-exceptions` | `patch_recurrence_exceptions(chit_id, body, request)` | Add or update a recurrence exception |
 | `PATCH /api/chits/{chit_id}/rsvp` | `update_rsvp_status(chit_id, body, request)` | Update the current user's RSVP status on a shared chit |
+| `POST /api/chits/{chit_id}/snooze` | `snooze_chit(chit_id, request)` | Snooze/unsnooze a chit. Body: `{"minutes": N}` or `{"until": "ISO"}` or `{"until": null}` to unsnooze. Owner-only |
 
 **Internal helpers:**
 
@@ -1394,6 +1397,7 @@ Coordinator for shared code between dashboard and editor. Contains glue code for
 | Function | Description |
 |----------|-------------|
 | `showQuickEditModal(chit, onRefresh)` | Quick-edit modal — shift+click on any calendar chit; shows editable dropdowns, recurrence options, and RSVP accept/decline controls for shared chits (calls `PATCH /api/chits/{id}/rsvp`) |
+| `_showSnoozeSubMenu(actionRow, snzBtn, chitId, closeModal, onRefresh)` | Show inline snooze presets in the quick-edit modal |
 | `_showDeleteSubMenu(actionRow, delBtn, parentId, chitId, dateStr, chit, closeModal, onRefresh)` | Show a delete sub-menu with options: this instance / this and following / all / cancel |
 | `showRecurrenceActionModal(chit, onRefresh)` | Backward-compat alias for `showQuickEditModal` |
 | `_recurrenceAddException(parentId, exception)` | Add or replace an exception on a recurring chit via PATCH |
@@ -1661,6 +1665,10 @@ Depends on: `shared-sidebar.js` (`_cwocInitSidebar`, `toggleSidebar`, `restoreSi
 | `_getTagFontColor(tagName)` | Get tag font color from cached settings tags, fallback to dark brown |
 | `_buildChitHeader(chit, titleHtml, settings, opts)` | Build a standard chit card header row with icons, indicators, title, meta, shared icon, RSVP indicators/buttons |
 | `_buildNotePreview(chit, extraStyle)` | Build an expandable note preview element with "show more/less" toggle |
+| `_hasNonDefaultLocation(chit)` | Check if a chit's location differs from the user's default saved location |
+| `_buildMapThumbnail(chit)` | Build a small static OSM map thumbnail for chit cards (Tasks, Checklists, Notes) |
+| `_renderMapTile(container, lat, lon)` | Render an OSM tile image with pin overlay into a container element |
+| `_buildMapIcon(chit)` | Build a simple map pin icon for compact views (Calendar, Alarms, Projects) |
 | `_renderChitMeta(chit, mode)` | Legacy compact meta builder — kept for backward compat |
 | `displayChecklistView(chitsToDisplay)` | Render the Checklists tab — chits with interactive checklist items |
 | `_restoreViewModeButtons()` | Restore view mode button highlights for Projects, Alarms, and Tasks tabs |
@@ -2371,6 +2379,22 @@ Nest button logic: thread picker, nest/un-nest, button state management. Handles
 | `_nestClosePicker()` | Close and remove picker modal overlay |
 | `_nestSetActive(subject)` | Set button to active state (blue, shows truncated subject label) |
 | `_nestSetInactive()` | Set button to inactive state (muted brown, no label) |
+
+#### editor-snooze.js
+
+Snooze zone: hide a chit from views until a specified time. Provides the snooze modal with preset durations and a custom date/time picker. When snoozed, the chit behaves like archived but auto-unsnoozes at the specified time. Depends on: `shared.js` (`cwocToast`, `setSaveButtonUnsaved`). Loaded before: `editor-save.js`, `editor-init.js`.
+
+| Symbol | Description |
+|--------|-------------|
+| `_currentSnoozedUntil` | Global: current snooze expiry ISO string or null |
+| `_initSnooze(chit)` | Initialize snooze state from loaded chit data |
+| `_updateSnoozeButton()` | Update snooze button appearance based on current state |
+| `_formatSnoozeLabel(date)` | Format a date for display in snooze tooltip |
+| `_openSnoozeModal()` | Open the snooze modal with presets and custom picker |
+| `_closeSnoozeModal()` | Close the snooze modal overlay |
+| `_doSnooze(minutes)` | Snooze for a given number of minutes (preset) |
+| `_doSnoozeCustom()` | Snooze until a custom date/time from the modal inputs |
+| `_doUnsnooze()` | Remove snooze (wake up now) |
 
 #### editor-save.js
 
@@ -3173,6 +3197,8 @@ Chit card styling, notes masonry layout, markdown, people chips, view-specific l
 | Declined Chit (`.chit-card.declined-chit`) | Faded visual treatment for chits declined by the current user (`opacity: 0.35`, hover `0.7`); also applies to calendar events (`.timed-event.declined-chit`, `.day-event.declined-chit`, `.month-event.declined-chit`, `.all-day-event.declined-chit`, `.itinerary-event.declined-chit`) |
 | RSVP Indicators (`.cwoc-rsvp-indicators`, `.cwoc-rsvp-indicator`) | Small per-user RSVP status indicators on chit cards — `invited` (⏳ neutral), `accepted` (✓ green), `declined` (✗ muted/strikethrough) with display name tooltips |
 | RSVP Action Buttons (`.cwoc-rsvp-actions`, `.cwoc-rsvp-btn`) | Accept/decline action buttons on shared chit cards — `.cwoc-rsvp-accept-btn.cwoc-rsvp-btn-active` (green tint), `.cwoc-rsvp-decline-btn.cwoc-rsvp-btn-active` (red tint) |
+| Map Thumbnail (`.chit-map-thumbnail`) | Small OSM map tile on chit cards (Tasks, Checklists, Notes) for non-default locations — 120×80px, bottom-right, with pin overlay |
+| Map Pin Icon (`.chit-location-icon`) | Compact map-marker-alt icon for Alarms/Projects/Calendar views |
 
 #### styles-hotkeys.css
 Hotkey overlay, panels, reference overlay, and sidebar dimming.
@@ -3532,6 +3558,7 @@ All HTML pages include the following PWA `<head>` tags: `<link rel="manifest" hr
 <script src="/frontend/js/editor/editor-email.js"></script>
 <script src="/frontend/js/editor/editor-attachments.js"></script>
 <script src="/frontend/js/editor/editor-nest.js"></script>
+<script src="/frontend/js/editor/editor-snooze.js"></script>
 <script src="/frontend/js/editor/editor-save.js"></script>
 <script src="/frontend/js/editor/editor-sharing.js"></script>
 <script src="/frontend/js/editor/editor-people.js"></script>
@@ -3816,6 +3843,7 @@ shared-auth.js            ← MUST load first (getCurrentUser, isAdmin, waitForA
                     editor-email.js       (email zone — depends on shared-utils, shared-editor, editor-save; includes thread view and HTML rendering)
                     editor-attachments.js (attachments zone — depends on shared-utils, editor-save)
                     editor-nest.js        (nest button + thread picker — depends on shared-utils, editor-save)
+                    editor-snooze.js      (snooze modal + state — depends on shared.js; provides _initSnooze, _currentSnoozedUntil for editor-save)
                     editor-save.js        (save/exit logic)
                     editor-sharing.js     (sharing data-layer — uses shared-auth; provides _sharingUserList, getSharingData, hasSharingData for editor-people.js and editor-init.js)
                     editor-init.js        (entry point — calls init functions)

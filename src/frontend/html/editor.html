@@ -70,6 +70,9 @@
                     <button id="archivedButton" class="delete archive-btn" onclick="toggleArchived()" title="Toggle Archived State">
                         📦 Archive
                     </button>
+                    <button id="snoozeButton" class="delete archive-btn" onclick="_openSnoozeModal()" title="Snooze this chit (hide until a specified time)">
+                        😴 Snooze
+                    </button>
                     <button id="deleteButton" class="delete" onclick="deleteChit()">
                         <i class="fas fa-trash-alt"></i> Delete
                     </button>
@@ -1612,6 +1615,7 @@
         <script src="/frontend/js/editor/editor-email.js"></script>
         <script src="/frontend/js/editor/editor-attachments.js"></script>
         <script src="/frontend/js/editor/editor-nest.js"></script>
+        <script src="/frontend/js/editor/editor-snooze.js"></script>
         <script src="/frontend/js/editor/editor-save.js"></script>
         <script src="/frontend/js/editor/editor-init.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>

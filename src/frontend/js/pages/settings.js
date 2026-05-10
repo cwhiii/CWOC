@@ -1387,6 +1387,9 @@ class SettingsManager {
     var defaultShareContactsCb = document.getElementById('default-share-contacts');
     if (defaultShareContactsCb) defaultShareContactsCb.checked = (this.settings.default_share_contacts === '1');
 
+    var showMapThumbsCb = document.getElementById('show-map-thumbnails');
+    if (showMapThumbsCb) showMapThumbsCb.checked = (this.settings.show_map_thumbnails !== '0');
+
     var attachSizeEl = document.getElementById('attachmentMaxSizeMb');
     if (attachSizeEl && this.settings.attachment_max_size_mb) attachSizeEl.value = this.settings.attachment_max_size_mb;
     var attachStorageEl = document.getElementById('attachmentMaxStorageMb');
@@ -1491,6 +1494,7 @@ class SettingsManager {
       attachment_max_size_mb: ((document.getElementById('attachmentMaxSizeMb') || {}).value || '10'),
       attachment_max_storage_mb: ((document.getElementById('attachmentMaxStorageMb') || {}).value || '500'),
       default_share_contacts: (document.getElementById('default-share-contacts') && document.getElementById('default-share-contacts').checked) ? '1' : '0',
+      show_map_thumbnails: (document.getElementById('show-map-thumbnails') && document.getElementById('show-map-thumbnails').checked) ? '1' : '0',
       view_order: _collectViewOrder(),
     };
   }

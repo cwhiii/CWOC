@@ -2148,3 +2148,41 @@ def migrate_cleanup_audit_junk_fields():
     finally:
         if conn:
             conn.close()
+
+
+def migrate_add_show_map_thumbnails():
+    """Add show_map_thumbnails column to settings table."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(settings)")
+        existing = {row[1] for row in cursor.fetchall()}
+        if "show_map_thumbnails" not in existing:
+            cursor.execute("ALTER TABLE settings ADD COLUMN show_map_thumbnails TEXT DEFAULT '1'")
+            conn.commit()
+            logger.info("Added show_map_thumbnails column to settings table")
+    except Exception as e:
+        logger.error(f"Error adding show_map_thumbnails column: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
+def migrate_add_snoozed_until():
+    """Add snoozed_until column to chits table for chit-level snooze."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(chits)")
+        existing = {row[1] for row in cursor.fetchall()}
+        if "snoozed_until" not in existing:
+            cursor.execute("ALTER TABLE chits ADD COLUMN snoozed_until TEXT")
+            conn.commit()
+            logger.info("Added snoozed_until column to chits table")
+    except Exception as e:
+        logger.error(f"Error adding snoozed_until column: {str(e)}")
+    finally:
+        if conn:
+            conn.close()

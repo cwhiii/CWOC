@@ -689,6 +689,9 @@ async function loadChitData(chitId) {
       }
     }
 
+    // Initialize snooze state from loaded chit
+    if (typeof _initSnooze === 'function') _initSnooze(chit);
+
     _loadTags().then((tags) => {
       _renderTags(tags, chit.tags || []);
     });

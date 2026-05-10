@@ -161,6 +161,7 @@ def get_all_chits(request: Request):
             chit["email_cc"] = deserialize_json_field(chit.get("email_cc"))
             chit["email_bcc"] = deserialize_json_field(chit.get("email_bcc"))
             chit["email_read"] = bool(chit.get("email_read")) if chit.get("email_read") is not None else None
+            chit["snoozed_until"] = chit.get("snoozed_until")
             chits.append(chit)
 
         # Enrich chits with assigned_to_display_name (batch lookup)
@@ -214,8 +215,8 @@ def create_chit(chit: Chit, request: Request):
                 email_message_id, email_from, email_to, email_cc, email_bcc,
                 email_subject, email_body_text, email_body_html, email_date, email_folder,
                 email_status, email_read, email_in_reply_to, email_references,
-                attachments, availability
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                attachments, availability, snoozed_until
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 chit_id,
@@ -280,6 +281,7 @@ def create_chit(chit: Chit, request: Request):
                 chit.email_references,
                 serialize_json_field(chit.attachments) if chit.attachments else None,
                 chit.availability,
+                chit.snoozed_until,
             )
         )
         # Create notifications for shared users on new chit creation
@@ -377,6 +379,7 @@ def get_chit(chit_id: str, request: Request):
         chit["email_cc"] = deserialize_json_field(chit.get("email_cc"))
         chit["email_bcc"] = deserialize_json_field(chit.get("email_bcc"))
         chit["email_read"] = bool(chit.get("email_read")) if chit.get("email_read") is not None else None
+        chit["snoozed_until"] = chit.get("snoozed_until")
         chit["effective_role"] = effective_role
 
         # Enrich with assigned_to_display_name
@@ -459,7 +462,7 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                     email_message_id = ?, email_from = ?, email_to = ?, email_cc = ?, email_bcc = ?,
                     email_subject = ?, email_body_text = ?, email_body_html = ?, email_date = ?, email_folder = ?,
                     email_status = ?, email_read = ?, email_in_reply_to = ?, email_references = ?,
-                    attachments = ?, availability = ?, nest_thread_id = ?
+                    attachments = ?, availability = ?, nest_thread_id = ?, snoozed_until = ?
                 WHERE id = ?
                 """,
                 (
@@ -521,6 +524,7 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                     serialize_json_field(chit.attachments) if chit.attachments else None,
                     chit.availability,
                     chit.nest_thread_id,
+                    chit.snoozed_until,
                     chit_id,
                 )
             )
@@ -570,6 +574,7 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                     "email_in_reply_to": chit.email_in_reply_to,
                     "email_references": chit.email_references,
                     "attachments": serialize_json_field(chit.attachments) if chit.attachments else None,
+                    "snoozed_until": chit.snoozed_until,
                 }
                 diff = compute_audit_diff(old_chit_dict, new_chit_dict, exclude_fields={
                     "modified_datetime", "created_datetime", "id", "owner_id",
@@ -626,8 +631,8 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                     email_message_id, email_from, email_to, email_cc, email_bcc,
                     email_subject, email_body_text, email_body_html, email_date, email_folder,
                     email_status, email_read, email_in_reply_to, email_references,
-                    attachments, availability
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    attachments, availability, snoozed_until
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     chit_id,
@@ -692,6 +697,7 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                     chit.email_references,
                     serialize_json_field(chit.attachments) if chit.attachments else None,
                     chit.availability,
+                    chit.snoozed_until,
                 )
             )
             # Audit logging for chit creation
@@ -977,3 +983,52 @@ def update_rsvp_status(chit_id: str, body: dict, request: Request):
             conn.close()
 
 
+
+# ── Snooze endpoint ───────────────────────────────────────────────────────
+
+@router.post("/api/chits/{chit_id}/snooze")
+def snooze_chit(chit_id: str, request: Request, body: dict = {}):
+    """Snooze a chit until a specified datetime. Hides it from views until then.
+
+    Body: { "until": "ISO 8601 datetime" } or { "minutes": 30 }
+    To unsnooze: { "until": null }
+    """
+    conn = None
+    try:
+        user_id = request.state.user_id
+        data = body
+
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("SELECT owner_id FROM chits WHERE id = ? AND (deleted = 0 OR deleted IS NULL)", (chit_id,))
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Chit not found")
+        if row[0] != user_id:
+            raise HTTPException(status_code=403, detail="Only the owner can snooze a chit")
+
+        # Determine snoozed_until value
+        snoozed_until = None
+        if "until" in data:
+            snoozed_until = data["until"]  # ISO string or null
+        elif "minutes" in data:
+            from datetime import timedelta
+            minutes = int(data["minutes"])
+            snoozed_until = (datetime.utcnow() + timedelta(minutes=minutes)).isoformat()
+
+        current_time = datetime.utcnow().isoformat()
+        cursor.execute(
+            "UPDATE chits SET snoozed_until = ?, modified_datetime = ? WHERE id = ?",
+            (snoozed_until, current_time, chit_id),
+        )
+        conn.commit()
+
+        return {"message": "Chit snoozed" if snoozed_until else "Chit unsnoozed", "snoozed_until": snoozed_until}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error snoozing chit {chit_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to snooze chit: {str(e)}")
+    finally:
+        if conn:
+            conn.close()

@@ -73,6 +73,7 @@ class Settings(BaseModel):
     bundles_multi_placement: Optional[str] = "0" # "1" = emails can appear in multiple bundles, "0" = first match only
     bundles_enabled: Optional[str] = "1"         # "1" = show bundle tabs, "0" = hide
     bundles_show_count: Optional[str] = "both"   # "both", "unread", "total", "none"
+    show_map_thumbnails: Optional[str] = "1"     # "1" = show map thumbnails on cards, "0" = hide
 
 class Chit(BaseModel):
     id: Optional[str] = None
@@ -140,6 +141,7 @@ class Chit(BaseModel):
     availability: Optional[str] = None           # "busy", "free", or null/"-" (unset)
     checklist_autosave: Optional[bool] = None     # Per-chit override: None=use global, True/False=override
     nest_thread_id: Optional[str] = None          # ID of an email chit in the target thread
+    snoozed_until: Optional[str] = None           # ISO 8601 datetime — chit hidden from views until this time
 
 class MultiValueEntry(BaseModel):
     label: Optional[str] = None    # "Work", "Home", "Mobile", custom

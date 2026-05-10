@@ -2,7 +2,7 @@ l# Implementation Plan: Email Thread Nests
 
 ## Overview
 
-This plan implements the ability to attach any non-email chit to an existing email thread via a `nest_thread_id` field. The implementation proceeds from backend data model changes through API endpoints to frontend UI components, with property-based tests validating correctness properties throughout.
+This plan implements the ability to attach any non-email chit to an existing email thread via a `nest_thread_id` field. The implementation proceeds from backend data model changes through API endpoints to frontend UI components, with property-based tests validatiwhat you have, but flio it 180 degress, and makeng correctness properties throughout.
 
 ## Tasks
 

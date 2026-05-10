@@ -812,6 +812,40 @@ async def _alert_push_loop():
             logger.error(f"Alert push loop unexpected error: {e}")
 
 
+async def _snooze_check_loop():
+    """Background task: unsnooze chits whose snoozed_until has passed.
+
+    Runs every 60 seconds. Clears snoozed_until for expired snoozes,
+    effectively making the chit visible in views again.
+    """
+    while True:
+        try:
+            await asyncio.sleep(60)
+            now = datetime.utcnow().isoformat()
+            conn = sqlite3.connect(DB_PATH)
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT id, owner_id, title FROM chits WHERE snoozed_until IS NOT NULL AND snoozed_until <= ?",
+                (now,),
+            )
+            rows = cursor.fetchall()
+            if rows:
+                for row in rows:
+                    chit_id, owner_id, title = row
+                    cursor.execute("UPDATE chits SET snoozed_until = NULL WHERE id = ?", (chit_id,))
+                    logger.info(f"Unsnoozed chit {chit_id} ('{title}') for user {owner_id}")
+                    # Send push notification that snooze ended
+                    try:
+                        _send_chit_push(owner_id, chit_id, title or "Untitled", "Snooze ended", "now visible again")
+                    except Exception:
+                        pass
+                conn.commit()
+            conn.close()
+        except Exception as e:
+            logger.error(f"Snooze check loop error: {e}")
+            await asyncio.sleep(60)
+
+
 async def start_weather_schedulers():
     """Register background weather tasks. Called from main.py on startup."""
     from src.backend.routes.audit import _run_auto_prune
@@ -827,7 +861,8 @@ async def start_weather_schedulers():
     asyncio.create_task(_weather_hourly_loop())
     asyncio.create_task(_weather_daily_loop())
     asyncio.create_task(_alert_push_loop())
-    logger.info("Weather scheduler tasks started (hourly + daily + alert push)")
+    asyncio.create_task(_snooze_check_loop())
+    logger.info("Weather scheduler tasks started (hourly + daily + alert push + snooze check)")
 
 
 # ══════════════════════════════════════════════════════════════════════════

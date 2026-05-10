@@ -149,6 +149,12 @@ function _buildChitHeader(chit, titleHtml, settings, opts) {
     icon.title = 'Archived';
     left.appendChild(icon);
   }
+  if (chit.snoozed_until && new Date(chit.snoozed_until) > new Date()) {
+    const icon = document.createElement('span');
+    icon.textContent = '😴';
+    icon.title = 'Snoozed until ' + new Date(chit.snoozed_until).toLocaleString();
+    left.appendChild(icon);
+  }
 
   // Stealth indicator — visible only to the owner (Requirement 6.5)
   if (chit.stealth) {
@@ -226,6 +232,12 @@ function _buildChitHeader(chit, titleHtml, settings, opts) {
       }
       left.appendChild(wxSpan);
     }
+  }
+
+  // Map pin icon for non-default locations (compact views only — skip if thumbnail will be shown)
+  if (!_opts.skipMapIcon && chit.location && chit.location.trim()) {
+    var _mapIcon = _buildMapIcon(chit);
+    if (_mapIcon) left.appendChild(_mapIcon);
   }
 
   // Attachment indicator — now handled by _getAllIndicators in shared-indicators.js
@@ -469,6 +481,98 @@ function _buildChitHeader(chit, titleHtml, settings, opts) {
   return row;
 }
 
+/* ── Map location helpers (thumbnail + icon) ─────────────────────────────── */
+
+/**
+ * Check if a chit's location differs from the user's default saved location.
+ * Returns true if the chit has a location AND it's not the default.
+ */
+function _hasNonDefaultLocation(chit) {
+  if (!chit.location || !chit.location.trim()) return false;
+  var defaultLoc = typeof getDefaultLocation === 'function' ? getDefaultLocation() : null;
+  if (!defaultLoc || !defaultLoc.address) return true; // no default set — any location qualifies
+  return chit.location.trim().toLowerCase() !== defaultLoc.address.trim().toLowerCase();
+}
+
+/**
+ * Build a map location element for a chit card.
+ * Shows a map tile thumbnail (or icon fallback) that double-clicks to open the Maps page.
+ * Returns null if the chit has no non-default location.
+ * Respects the show_map_thumbnails user setting.
+ *
+ * @param {object} chit
+ * @returns {HTMLElement|null}
+ */
+function _buildMapThumbnail(chit) {
+  if (!_hasNonDefaultLocation(chit)) return null;
+  // Respect user setting (may be string '0' or boolean false)
+  var s = window._cwocSettings;
+  if (s && (s.show_map_thumbnails === false || s.show_map_thumbnails === '0')) return null;
+
+  var container = document.createElement('div');
+  container.className = 'chit-map-thumbnail';
+  container.title = chit.location + ' — double-click to view on map';
+
+  // Try to get cached geocode coordinates
+  var coords = typeof getGeocodeCached === 'function' ? getGeocodeCached(chit.location) : null;
+  if (coords && coords.lat && coords.lon) {
+    _renderMapTile(container, coords.lat, coords.lon);
+  } else {
+    // Show placeholder while geocoding
+    container.innerHTML = '<i class="fas fa-map-marker-alt" style="font-size:1.2em;opacity:0.5;"></i>';
+    // Async geocode and replace with tile
+    if (typeof _geocodeAddress === 'function') {
+      _geocodeAddress(chit.location).then(function(result) {
+        if (result && result.lat && result.lon) {
+          _renderMapTile(container, result.lat, result.lon);
+        }
+      }).catch(function() { /* keep placeholder */ });
+    }
+  }
+
+  return container;
+}
+
+/**
+ * Render an OSM static tile image into a container element.
+ * Uses zoom level 14 for a neighborhood-level view.
+ */
+function _renderMapTile(container, lat, lon) {
+  var zoom = 14;
+  var tileX = Math.floor((lon + 180) / 360 * Math.pow(2, zoom));
+  var tileY = Math.floor((1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, zoom));
+  var tileUrl = 'https://tile.openstreetmap.org/' + zoom + '/' + tileX + '/' + tileY + '.png';
+  var img = document.createElement('img');
+  img.src = tileUrl;
+  img.alt = 'Map';
+  img.loading = 'lazy';
+  img.className = 'chit-map-tile-img';
+  container.innerHTML = '';
+  container.appendChild(img);
+  // Add a small pin overlay
+  var pin = document.createElement('i');
+  pin.className = 'fas fa-map-marker-alt chit-map-pin-overlay';
+  container.appendChild(pin);
+}
+
+/**
+ * Build a simple map pin icon for compact views (Calendar, Alarms, Projects).
+ * Returns null if the chit has no non-default location.
+ * Respects the show_map_thumbnails user setting.
+ *
+ * @param {object} chit
+ * @returns {HTMLElement|null}
+ */
+function _buildMapIcon(chit) {
+  if (!_hasNonDefaultLocation(chit)) return null;
+  var s = window._cwocSettings;
+  if (s && (s.show_map_thumbnails === false || s.show_map_thumbnails === '0')) return null;
+  var icon = document.createElement('i');
+  icon.className = 'fas fa-map-marker-alt chit-location-icon';
+  icon.title = chit.location;
+  return icon;
+}
+
 // Compact meta for Notes view (just icons before title, no meta row)
 function _renderChitMeta(chit, mode) {
   // Legacy — kept for any remaining callers but views should use _buildChitHeader
@@ -514,7 +618,7 @@ function displayChecklistView(chitsToDisplay) {
       if (chit.archived) chitElement.classList.add("archived-chit");
       if (_isDeclinedByCurrentUser(chit)) chitElement.classList.add("declined-chit");
 
-      chitElement.appendChild(_buildChitHeader(chit, `<a href="/editor?id=${chit.id}">${chit.title || '(Untitled)'}</a>`, _viSettings, { checklistCount: true }));
+      chitElement.appendChild(_buildChitHeader(chit, `<a href="/editor?id=${chit.id}">${chit.title || '(Untitled)'}</a>`, _viSettings, { checklistCount: true, skipMapIcon: true }));
 
       // Strike out the title when every non-empty checklist item is checked
       const _clNonEmpty = (chit.checklist || []).filter(i => i && i.text && i.text.trim());
@@ -537,7 +641,15 @@ function displayChecklistView(chitsToDisplay) {
         chitElement.appendChild(roList);
       }
 
-      chitElement.addEventListener("dblclick", () => {
+      // Map thumbnail for non-default locations
+      var _clMapThumb = _buildMapThumbnail(chit);
+      if (_clMapThumb) chitElement.appendChild(_clMapThumb);
+
+      chitElement.addEventListener("dblclick", (e) => {
+        if (e.target.closest('.chit-map-thumbnail')) {
+          window.location.href = '/maps?focus=chit&address=' + encodeURIComponent(chit.location);
+          return;
+        }
         storePreviousState();
         window.location.href = `/editor?id=${chit.id}`;
       });

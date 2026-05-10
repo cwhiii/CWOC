@@ -53,7 +53,7 @@ function displayTasksView(chitsToDisplay) {
     if (chit.status === "Complete") chitElement.classList.add("completed-task");
     if (_isDeclinedByCurrentUser(chit)) chitElement.classList.add("declined-chit");
 
-    chitElement.appendChild(_buildChitHeader(chit, `<a href="/editor?id=${chit.id}">${chit.title || '(Untitled)'}</a>`, _viSettings, { hideStatus: true }));
+    chitElement.appendChild(_buildChitHeader(chit, `<a href="/editor?id=${chit.id}">${chit.title || '(Untitled)'}</a>`, _viSettings, { hideStatus: true, skipMapIcon: true }));
 
     // Status + note preview in a row
     const controls = document.createElement("div");
@@ -133,7 +133,16 @@ function displayTasksView(chitsToDisplay) {
 
     chitElement.appendChild(controls);
 
-    chitElement.addEventListener("dblclick", () => {
+    // Map thumbnail for non-default locations
+    var _tkMapThumb = _buildMapThumbnail(chit);
+    if (_tkMapThumb) chitElement.appendChild(_tkMapThumb);
+
+    chitElement.addEventListener("dblclick", (e) => {
+      // If double-clicked on the map thumbnail, navigate to maps instead
+      if (e.target.closest('.chit-map-thumbnail')) {
+        window.location.href = '/maps?focus=chit&address=' + encodeURIComponent(chit.location);
+        return;
+      }
       storePreviousState();
       window.location.href = `/editor?id=${chit.id}`;
     });
@@ -202,7 +211,7 @@ function displayAssignedToMeView(chitsToDisplay) {
     if (chit.status === 'Complete') chitElement.classList.add('completed-task');
     if (_isDeclinedByCurrentUser(chit)) chitElement.classList.add('declined-chit');
 
-    chitElement.appendChild(_buildChitHeader(chit, '<a href="/editor?id=' + chit.id + '">' + (chit.title || '(Untitled)') + '</a>', _viSettings, { hideStatus: true }));
+    chitElement.appendChild(_buildChitHeader(chit, '<a href="/editor?id=' + chit.id + '">' + (chit.title || '(Untitled)') + '</a>', _viSettings, { hideStatus: true, skipMapIcon: true }));
 
     // Status + note preview in a row
     var controls = document.createElement('div');
@@ -254,7 +263,15 @@ function displayAssignedToMeView(chitsToDisplay) {
 
     chitElement.appendChild(controls);
 
-    chitElement.addEventListener('dblclick', function() {
+    // Map thumbnail for non-default locations
+    var _amMapThumb = _buildMapThumbnail(chit);
+    if (_amMapThumb) chitElement.appendChild(_amMapThumb);
+
+    chitElement.addEventListener('dblclick', function(e) {
+      if (e.target.closest('.chit-map-thumbnail')) {
+        window.location.href = '/maps?focus=chit&address=' + encodeURIComponent(chit.location);
+        return;
+      }
       storePreviousState();
       window.location.href = '/editor?id=' + chit.id;
     });
