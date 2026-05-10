@@ -571,10 +571,16 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                     "email_references": chit.email_references,
                     "attachments": serialize_json_field(chit.attachments) if chit.attachments else None,
                 }
-                diff = compute_audit_diff(old_chit_dict, new_chit_dict, exclude_fields={"modified_datetime", "created_datetime"})
+                diff = compute_audit_diff(old_chit_dict, new_chit_dict, exclude_fields={
+                    "modified_datetime", "created_datetime", "id", "owner_id",
+                    "owner_display_name", "owner_username", "deleted_datetime",
+                })
                 if diff:
                     actor = get_actor_from_request(request)
-                    insert_audit_entry(conn, "chit", chit_id, "updated", actor, changes=diff, entity_summary=chit.title)
+                    # Check if this is a revert operation (signaled by ?revert=1 query param)
+                    is_revert = request.query_params.get("revert") == "1"
+                    audit_action = "reverted" if is_revert else "updated"
+                    insert_audit_entry(conn, "chit", chit_id, audit_action, actor, changes=diff, entity_summary=chit.title)
             except Exception as e:
                 logger.error(f"Audit logging failed for chit update (best-effort): {str(e)}")
 

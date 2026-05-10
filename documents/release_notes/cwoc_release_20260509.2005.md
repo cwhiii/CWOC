@@ -1,0 +1,1 @@
+Added chit revert from audit log — expand any "updated" chit entry in the audit log and click "⏪ Revert to Before This Edit" to restore the chit's fields to their previous values. The revert is recorded as a new audit entry with action "reverted" for full traceability.

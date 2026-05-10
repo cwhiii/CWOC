@@ -2,10 +2,12 @@
  * editor-nest.js — Nest button logic for associating chits with email threads
  *
  * Provides the nest button in the editor title row that allows users to attach
- * any non-email chit to an existing email thread. When active, the button turns
- * blue and shows the first 15 characters of the thread subject. Clicking an
- * active button removes the nest; clicking an inactive button opens the thread
- * picker modal.
+ * any non-email chit to an existing email thread. When active, the button shows
+ * the thread subject in a cream pill next to it. Clicking an active button
+ * removes the nest; clicking an inactive button opens the thread picker modal.
+ *
+ * The picker reuses the same modal pattern as the "Add Chit" modal in Projects,
+ * filtered to only show email chits.
  *
  * Depends on: shared.js (setSaveButtonUnsaved, cwocToast)
  * Loaded before: editor-init.js
@@ -15,15 +17,12 @@
 
 var _nestCurrentThreadId = null;
 var _nestCurrentSubject = '';
-var _nestPickerEscHandler = null;
 
 /* ── Public API ─────────────────────────────────────────────────────────────── */
 
 /**
  * Initialize the nest button state based on the loaded chit data.
  * Called from loadChitData() in editor-init.js after the chit is loaded.
- *
- * @param {Object} chit — the chit object from the API
  */
 function initNestButton(chit) {
   var btn = document.getElementById('nestButton');
@@ -68,8 +67,6 @@ function initNestButton(chit) {
 
 /**
  * Return the current nest_thread_id for inclusion in the save payload.
- *
- * @returns {Object} object with nest_thread_id key
  */
 function getNestData() {
   return { nest_thread_id: _nestCurrentThreadId || null };
@@ -77,9 +74,6 @@ function getNestData() {
 
 /**
  * Check if a chit is an email chit (has email_message_id or email_status).
- *
- * @param {Object} chit — the chit object
- * @returns {boolean} true if the chit is an email chit
  */
 function _nestIsEmailChit(chit) {
   return !!(chit && (chit.email_message_id || chit.email_status));
@@ -104,9 +98,6 @@ function _nestButtonClick() {
 
 /**
  * Set the nest association to a selected thread.
- *
- * @param {string} threadId — the ID of the email chit in the target thread
- * @param {string} subject — the thread subject line
  */
 function _nestSelectThread(threadId, subject) {
   _nestCurrentThreadId = threadId;
@@ -134,200 +125,178 @@ function _nestRemove() {
   setSaveButtonUnsaved();
 }
 
-/* ── Thread Picker Modal ────────────────────────────────────────────────────── */
+
+/* ── Thread Picker Modal (same pattern as Add Chit modal in Projects) ───────── */
 
 /**
- * Open the thread picker modal — fetches recent threads and renders the list.
+ * Open the nest picker modal — fetches all chits, filters to email only,
+ * displays in the same table modal as the project "Add Chit" modal.
+ * Single-click a row to select that email chit as the nest target.
  */
 async function _nestOpenPicker() {
-  try {
-    var threads = await _nestFetchThreads('');
-    _nestRenderPicker(threads);
-  } catch (e) {
-    console.error('[_nestOpenPicker] Error:', e);
-    cwocToast('Could not load email threads. Check your connection.', 'error');
-  }
-}
+  var modal = document.getElementById("nestChitModal");
+  if (!modal) {
+    modal = document.createElement("div");
+    modal.id = "nestChitModal";
+    modal.className = "modal-overlay-new";
+    document.body.appendChild(modal);
 
-/**
- * Fetch recent email threads from the API.
- *
- * @param {string} query — optional search filter
- * @returns {Promise<Array>} array of thread objects
- */
-async function _nestFetchThreads(query) {
-  var url = '/api/email/threads/recent';
-  if (query) url += '?q=' + encodeURIComponent(query);
+    modal.innerHTML =
+      '<div class="modal-content-new">' +
+        '<div class="modal-header-new">' +
+          '<h2>Select Email Thread</h2>' +
+          '<div class="modal-buttons"></div>' +
+        '</div>' +
+        '<div class="modal-body-new">' +
+          '<div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;">' +
+            '<input type="text" id="nestChitSearch" class="chit-search-input-new" placeholder="Search email chits..." autofocus style="flex:1;">' +
+          '</div>' +
+          '<table class="chit-table-new">' +
+            '<thead><tr><th>Subject</th><th>From</th><th>Date</th></tr></thead>' +
+            '<tbody id="nestChitList"></tbody>' +
+          '</table>' +
+        '</div>' +
+        '<div class="modal-footer-new">' +
+          '<button class="modal-button-new cancel" id="nestChitCancelBtn">Cancel</button>' +
+        '</div>' +
+      '</div>';
 
-  var response = await fetch(url);
-  if (!response.ok) {
-    throw new Error('Failed to fetch threads: ' + response.status);
-  }
-  return await response.json();
-}
+    // Cancel button
+    document.getElementById("nestChitCancelBtn").addEventListener("click", function() {
+      modal.style.display = "none";
+    });
 
-/**
- * Render the thread picker modal with the given threads list.
- *
- * @param {Array} threads — array of thread summary objects
- */
-function _nestRenderPicker(threads) {
-  // Remove any existing picker
-  _nestClosePicker();
-
-  // Create overlay
-  var overlay = document.createElement('div');
-  overlay.className = 'cwoc-modal-overlay';
-  overlay.id = 'nestThreadPickerOverlay';
-
-  // Create modal
-  var modal = document.createElement('div');
-  modal.className = 'cwoc-modal nest-thread-picker-modal';
-
-  // Title
-  var title = document.createElement('h3');
-  title.textContent = 'Select Email Thread';
-  title.style.cssText = 'margin:0 0 12px 0;font-family:Lora,Georgia,serif;color:#6b4e31;';
-  modal.appendChild(title);
-
-  // Search input
-  var search = document.createElement('input');
-  search.type = 'text';
-  search.id = 'nestPickerSearch';
-  search.className = 'nest-picker-search';
-  search.placeholder = 'Filter by subject...';
-  modal.appendChild(search);
-
-  // Thread list container
-  var list = document.createElement('div');
-  list.className = 'nest-picker-list';
-  list.id = 'nestPickerList';
-  _nestRenderList(list, threads);
-  modal.appendChild(list);
-
-  // Cancel button
-  var cancelBtn = document.createElement('button');
-  cancelBtn.type = 'button';
-  cancelBtn.className = 'zone-button';
-  cancelBtn.textContent = 'Cancel';
-  cancelBtn.style.cssText = 'margin-top:12px;';
-  cancelBtn.onclick = function () { _nestClosePicker(); };
-  modal.appendChild(cancelBtn);
-
-  overlay.appendChild(modal);
-  document.body.appendChild(overlay);
-
-  // Focus search input
-  search.focus();
-
-  // Wire up search filtering with debounce
-  var _searchTimeout = null;
-  search.addEventListener('input', function () {
-    var q = search.value.trim();
-    clearTimeout(_searchTimeout);
-    _searchTimeout = setTimeout(async function () {
-      try {
-        var filtered = await _nestFetchThreads(q);
-        _nestRenderList(list, filtered);
-      } catch (e) {
-        console.error('[_nestOpenPicker] Search error:', e);
+    // Click overlay to close
+    modal.addEventListener("click", function(e) {
+      if (e.target === modal) {
+        modal.style.display = "none";
       }
-    }, 300);
-  });
+    });
 
-  // ESC handler — capture phase, stop propagation (ESC priority chain)
-  _nestPickerEscHandler = function (e) {
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      _nestClosePicker();
-    }
-  };
-  document.addEventListener('keydown', _nestPickerEscHandler, true);
-
-  // Click overlay to dismiss
-  overlay.addEventListener('click', function (e) {
-    if (e.target === overlay) {
-      _nestClosePicker();
-    }
-  });
-}
-
-/**
- * Render the list of threads inside the picker list container.
- *
- * @param {HTMLElement} listEl — the list container element
- * @param {Array} threads — array of thread summary objects
- */
-function _nestRenderList(listEl, threads) {
-  listEl.innerHTML = '';
-
-  if (!threads || threads.length === 0) {
-    var empty = document.createElement('div');
-    empty.className = 'nest-picker-empty';
-    empty.textContent = 'No email threads found. Send or receive emails first.';
-    listEl.appendChild(empty);
-    return;
-  }
-
-  threads.forEach(function (thread) {
-    var item = document.createElement('div');
-    item.className = 'nest-picker-item';
-    item.setAttribute('role', 'button');
-    item.setAttribute('tabindex', '0');
-
-    var subjectSpan = document.createElement('span');
-    subjectSpan.className = 'nest-picker-subject';
-    subjectSpan.textContent = thread.subject || '(No subject)';
-
-    var metaSpan = document.createElement('span');
-    metaSpan.className = 'nest-picker-meta';
-    var dateStr = '';
-    if (thread.latest_date) {
-      try {
-        var d = new Date(thread.latest_date);
-        dateStr = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-      } catch (e) { dateStr = thread.latest_date; }
-    }
-    metaSpan.textContent = dateStr + (thread.message_count ? ' · ' + thread.message_count + ' msgs' : '');
-
-    item.appendChild(subjectSpan);
-    item.appendChild(metaSpan);
-
-    item.onclick = function () {
-      _nestSelectThread(thread.thread_id, thread.subject);
-    };
-    item.onkeydown = function (e) {
-      if (e.key === 'Enter' || e.key === ' ') {
+    // ESC to close (capture phase, layered: clear search first, then close)
+    document.addEventListener("keydown", function(e) {
+      if (e.key === "Escape" && modal.style.display === "flex") {
         e.preventDefault();
-        _nestSelectThread(thread.thread_id, thread.subject);
+        e.stopImmediatePropagation();
+        var searchInput = document.getElementById("nestChitSearch");
+        if (searchInput && searchInput.value.trim()) {
+          searchInput.value = "";
+          searchInput.dispatchEvent(new Event("input"));
+        } else {
+          modal.style.display = "none";
+        }
       }
-    };
+    }, true);
+  }
 
-    listEl.appendChild(item);
-  });
+  modal.style.display = "flex";
+
+  try {
+    var response = await fetch("/api/chits");
+    if (!response.ok) throw new Error("Failed to fetch chits");
+    var allChits = await response.json();
+
+    // Filter to only email chits (have email_message_id or email_status), not deleted
+    var emailChits = allChits
+      .filter(function(c) {
+        return (c.email_message_id || c.email_status) && !c.deleted;
+      })
+      .sort(function(a, b) {
+        var da = a.email_date || a.modified_datetime || '';
+        var db = b.email_date || b.modified_datetime || '';
+        return db.localeCompare(da);
+      });
+
+    modal._emailChits = emailChits;
+
+    var listEl = document.getElementById("nestChitList");
+    var searchInput = document.getElementById("nestChitSearch");
+
+    function renderNestChits(chitsToRender) {
+      listEl.innerHTML = "";
+      if (chitsToRender.length === 0) {
+        listEl.innerHTML = '<tr><td colspan="3" style="text-align:center;opacity:0.6;padding:12px;">No email chits found.</td></tr>';
+        return;
+      }
+      chitsToRender.forEach(function(chit) {
+        var row = document.createElement("tr");
+        row.style.cursor = "pointer";
+        row.addEventListener("click", function() {
+          var subject = chit.email_subject || chit.title || '';
+          _nestSelectThread(chit.id, subject);
+          modal.style.display = "none";
+        });
+        row.addEventListener("mouseenter", function() { row.style.background = "rgba(74,144,217,0.1)"; });
+        row.addEventListener("mouseleave", function() { row.style.background = ""; });
+
+        var subjectCell = document.createElement("td");
+        subjectCell.textContent = chit.email_subject || chit.title || '(No Subject)';
+        row.appendChild(subjectCell);
+
+        var fromCell = document.createElement("td");
+        fromCell.textContent = chit.email_from || '';
+        fromCell.style.fontSize = "0.85em";
+        row.appendChild(fromCell);
+
+        var dateCell = document.createElement("td");
+        dateCell.style.fontSize = "0.85em";
+        dateCell.style.whiteSpace = "nowrap";
+        if (chit.email_date) {
+          try {
+            var d = new Date(chit.email_date);
+            dateCell.textContent = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+          } catch(e) { dateCell.textContent = chit.email_date; }
+        }
+        row.appendChild(dateCell);
+
+        listEl.appendChild(row);
+      });
+    }
+
+    function _filterNestChits() {
+      var term = (searchInput.value || "").toLowerCase().trim();
+      var filtered = modal._emailChits;
+      if (term) {
+        filtered = filtered.filter(function(c) {
+          var subject = (c.email_subject || c.title || '').toLowerCase();
+          var from = (c.email_from || '').toLowerCase();
+          return subject.indexOf(term) !== -1 || from.indexOf(term) !== -1;
+        });
+      }
+      renderNestChits(filtered);
+      var headerH2 = modal.querySelector('.modal-header-new h2');
+      if (headerH2) headerH2.textContent = 'Select Email Thread (' + filtered.length + ' shown)';
+    }
+
+    searchInput.removeEventListener("input", _filterNestChits);
+    searchInput.addEventListener("input", _filterNestChits);
+
+    // Initial render
+    searchInput.value = "";
+    renderNestChits(emailChits);
+    var headerH2 = modal.querySelector('.modal-header-new h2');
+    if (headerH2) headerH2.textContent = 'Select Email Thread (' + emailChits.length + ' available)';
+    setTimeout(function() { searchInput.focus(); }, 50);
+
+  } catch (error) {
+    console.error("[_nestOpenPicker] Error:", error);
+    cwocToast("Could not load email chits. Check your connection.", "error");
+    modal.style.display = "none";
+  }
 }
 
 /**
- * Close and remove the thread picker modal.
+ * Close the nest picker modal.
  */
 function _nestClosePicker() {
-  var overlay = document.getElementById('nestThreadPickerOverlay');
-  if (overlay) overlay.remove();
-
-  // Remove ESC handler
-  if (_nestPickerEscHandler) {
-    document.removeEventListener('keydown', _nestPickerEscHandler, true);
-    _nestPickerEscHandler = null;
-  }
+  var modal = document.getElementById("nestChitModal");
+  if (modal) modal.style.display = "none";
 }
 
 /* ── UI State Helpers ───────────────────────────────────────────────────────── */
 
 /**
- * Set the nest button to active state (blue, with subject label).
- *
- * @param {string} subject — the thread subject to display
+ * Set the nest button to active state (with subject label pill).
  */
 function _nestSetActive(subject) {
   var btn = document.getElementById('nestButton');
@@ -345,7 +314,7 @@ function _nestSetActive(subject) {
 }
 
 /**
- * Set the nest button to inactive state (muted, no label).
+ * Set the nest button to inactive state (no label).
  */
 function _nestSetInactive() {
   var btn = document.getElementById('nestButton');
@@ -362,11 +331,8 @@ function _nestSetInactive() {
 }
 
 /**
- * Truncate a subject string to the first 25 characters.
- * Returns the full string if it's 25 characters or shorter.
- *
- * @param {string} subject — the subject string to truncate
- * @returns {string} truncated subject (max 25 chars)
+ * Truncate a subject string to the first 35 characters.
+ * Returns the full string if it's 35 characters or shorter.
  */
 function _nestTruncateSubject(subject) {
   if (!subject) return '';

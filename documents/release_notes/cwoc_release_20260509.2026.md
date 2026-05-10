@@ -1,0 +1,1 @@
+Added "Revert to Before This Edit" button in the audit log. Expand any chit update entry with revertible field changes (checklist, note, status, etc.) and click the button to restore the chit to its previous state. System-tag-only entries don't show the button since those are auto-computed.

@@ -168,6 +168,7 @@ from src.backend.migrations import (
     migrate_fix_double_encoded_attachments,
     migrate_create_bundles_tables,
     migrate_add_nest_thread_id,
+    migrate_cleanup_audit_junk_fields,
 )
 
 # Initialize database and run all migrations (same order as before)
@@ -226,6 +227,7 @@ migrate_add_paginate_email()
 migrate_fix_double_encoded_attachments()
 migrate_create_bundles_tables()
 migrate_add_nest_thread_id()
+migrate_cleanup_audit_junk_fields()
 seed_version_info()
 
 # One-time cleanup: fix sent emails that still have CWOC_System/Email/Drafts tag

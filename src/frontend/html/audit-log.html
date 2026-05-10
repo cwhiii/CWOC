@@ -176,6 +176,7 @@
         .action-badge.created { background: #c8e6c9; color: #2e7d32; }
         .action-badge.updated { background: #fff3cd; color: #856404; }
         .action-badge.deleted { background: #f8d7da; color: #b22222; }
+        .action-badge.reverted { background: #d1ecf1; color: #0c5460; }
 
         /* ── Entity link ── */
         .entity-link {
@@ -184,6 +185,28 @@
             cursor: pointer;
         }
         .entity-link:hover { color: #8b4513; }
+
+        /* ── Revert button ── */
+        .revert-btn {
+            display: inline-block;
+            margin-top: 8px;
+            padding: 4px 12px;
+            font-size: 0.85em;
+            font-family: 'Lora', serif;
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #0c5460;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .revert-btn:hover {
+            background: #bee5eb;
+        }
+        .revert-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
 
         /* ── Delete modal ── */
         .nuke-count { font-size: 1.1em; font-weight: bold; margin: 8px 0; }
@@ -462,6 +485,19 @@
         </div>
     </div>
 
+    <!-- ═══ REVERT CONFIRMATION MODAL ═══ -->
+    <div class="modal" id="revert-confirm-modal">
+        <div class="modal-content" style="text-align:center;">
+            <h3 style="color:#0c5460;">⏪ Revert Chit?</h3>
+            <p id="revert-confirm-msg" style="font-weight:bold;"></p>
+            <p style="font-size:0.85em;opacity:0.7;">This will undo the changes from this edit and create a new audit entry.</p>
+            <div style="display:flex;gap:8px;justify-content:center;margin-top:12px;">
+                <button class="standard-button" onclick="closeRevertConfirm()">Cancel</button>
+                <button class="cwoc-btn" onclick="executeRevert()" style="background:#0c5460;color:#fff;">⏪ Revert</button>
+            </div>
+        </div>
+    </div>
+
     <script src="/frontend/js/shared/shared-auth.js"></script>
     <script src="/frontend/js/shared/shared-utils.js"></script>
     <script src="/frontend/js/shared/shared-touch.js"></script>
@@ -712,7 +748,7 @@
             html += `</tr>`;
             // Hidden detail row
             html += `<tr class="audit-detail-row" id="detail-${idx}" style="display:none;"><td colspan="${colCount}">`;
-            html += renderChanges(entry.changes);
+            html += renderChanges(entry.changes, entry, idx);
             html += `</td></tr>`;
         });
 
@@ -754,7 +790,7 @@
         });
     }
 
-    function renderChanges(changes) {
+    function renderChanges(changes, entry, entryIdx) {
         if (!changes || !Array.isArray(changes) || changes.length === 0) {
             return '<em style="opacity:0.6;">No field changes recorded.</em>';
         }
@@ -765,6 +801,18 @@
             html += `<tr><td><strong>${escHtml(c.field || '—')}</strong></td><td class="change-old">${escHtml(oldVal)}</td><td class="change-new">${escHtml(newVal)}</td></tr>`;
         });
         html += '</tbody></table>';
+        // Add revert button for chit update entries that have revertible fields
+        if (entry && entry.entity_type === 'chit' && entry.action === 'updated' && entry.entity_id) {
+            var skipFields = ['id', 'owner_id', 'owner_display_name', 'owner_username', 'created_datetime', 'modified_datetime', 'effective_role', 'assigned_to_display_name', 'tags'];
+            var hasRevertible = changes.some(function(c) {
+                return c.field && skipFields.indexOf(c.field) === -1;
+            });
+            if (hasRevertible) {
+                var safeId = escHtml(entry.entity_id).replace(/'/g, "\\'");
+                var safeSummary = escHtml(entry.entity_summary || '').replace(/'/g, "\\'");
+                html += `<button class="revert-btn" onclick="openRevertConfirm('${safeId}', '${entryIdx}', '${safeSummary}')">⏪ Revert to Before This Edit</button>`;
+            }
+        }
         return html;
     }
 
@@ -982,9 +1030,105 @@
         populateActors();
     }
 
+    // ── Revert Chit ──
+    let _revertChitId = null;
+    let _revertAuditEntry = null;
+
+    function openRevertConfirm(chitId, auditIdx, entitySummary) {
+        var entry = auditEntries[parseInt(auditIdx)];
+        if (!entry) return;
+        _revertChitId = chitId;
+        _revertAuditEntry = entry;
+        document.getElementById('revert-confirm-msg').textContent = 'Revert "' + (entitySummary || 'this chit') + '" to before this edit?';
+        // Reset modal buttons in case they were replaced by an error
+        var modal = document.getElementById('revert-confirm-modal');
+        var btnWrap = modal.querySelectorAll('div[style*="flex"]')[0];
+        if (btnWrap) {
+            btnWrap.innerHTML = '<button class="standard-button" onclick="closeRevertConfirm()">Cancel</button>' +
+                '<button class="cwoc-btn" onclick="executeRevert()" style="background:#0c5460;color:#fff;">⏪ Revert</button>';
+        }
+        modal.style.display = 'flex';
+    }
+
+    function closeRevertConfirm() {
+        document.getElementById('revert-confirm-modal').style.display = 'none';
+        _revertChitId = null;
+        _revertAuditEntry = null;
+    }
+
+    async function executeRevert() {
+        if (!_revertChitId || !_revertAuditEntry) return;
+        var chitId = _revertChitId;
+        var changes = _revertAuditEntry.changes;
+        closeRevertConfirm();
+
+        if (!changes || !Array.isArray(changes) || changes.length === 0) {
+            console.error('No changes to revert');
+            return;
+        }
+
+        try {
+            // Fetch the current chit
+            var resp = await fetch('/api/chit/' + encodeURIComponent(chitId));
+            if (!resp.ok) throw new Error('Failed to fetch chit');
+            var chit = await resp.json();
+
+            // Apply old values from the audit entry
+            var reverted = [];
+            changes.forEach(function(c) {
+                if (!c.field) return;
+                // Skip metadata fields and computed fields not in the Chit model
+                if (['id', 'owner_id', 'owner_display_name', 'owner_username', 'created_datetime', 'modified_datetime', 'effective_role', 'assigned_to_display_name'].indexOf(c.field) !== -1) return;
+                // Skip 'tags' — system tags are auto-computed by the backend based on chit properties
+                if (c.field === 'tags') return;
+                chit[c.field] = (c.old === undefined) ? null : c.old;
+                reverted.push(c.field + ': ' + JSON.stringify(c.new) + ' → ' + JSON.stringify(c.old));
+            });
+
+            if (reverted.length === 0) {
+                throw new Error('Nothing to revert — this entry only contains auto-computed changes (system tags)');
+            }
+
+            // Remove computed fields that aren't part of the Chit model
+            delete chit.effective_role;
+            delete chit.assigned_to_display_name;
+
+            // Ensure email list fields are JSON strings as the model expects
+            ['email_to', 'email_cc', 'email_bcc'].forEach(function(f) {
+                if (chit[f] && typeof chit[f] === 'object') {
+                    chit[f] = JSON.stringify(chit[f]);
+                }
+            });
+
+            // Save via PUT with revert flag
+            var saveResp = await fetch('/api/chits/' + encodeURIComponent(chitId) + '?revert=1', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(chit)
+            });
+            if (!saveResp.ok) {
+                var err = await saveResp.json().catch(function() { return {}; });
+                throw new Error(err.detail || 'Save failed (' + saveResp.status + ')');
+            }
+            // Refresh the audit log to show the new entry
+            applyFilters();
+        } catch (e) {
+            console.error('Revert error:', e);
+            document.getElementById('revert-confirm-msg').textContent = 'Error: ' + e.message;
+            document.getElementById('revert-confirm-modal').style.display = 'flex';
+            var modal = document.getElementById('revert-confirm-modal');
+            var btnWrap = modal.querySelectorAll('div[style*="flex"]')[0];
+            if (btnWrap) {
+                btnWrap.innerHTML = '<button class="standard-button" onclick="closeRevertConfirm()">Dismiss</button>';
+            }
+        }
+    }
+
     // ── ESC key: close modals first, then default shared-page.js behavior ──
     document.addEventListener('keydown', function(e) {
         if (e.key !== 'Escape') return;
+        var revertModal = document.getElementById('revert-confirm-modal');
+        if (revertModal && revertModal.style.display === 'flex') { closeRevertConfirm(); e.stopImmediatePropagation(); return; }
         var nukeConfirm = document.getElementById('nuke-confirm-modal');
         if (nukeConfirm && nukeConfirm.style.display === 'flex') { closeNukeConfirm(); e.stopImmediatePropagation(); return; }
         var deleteModal = document.getElementById('delete-modal');

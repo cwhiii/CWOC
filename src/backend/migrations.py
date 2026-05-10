@@ -2091,3 +2091,60 @@ def migrate_add_nest_thread_id():
     finally:
         if conn:
             conn.close()
+
+
+# ── Audit Log Cleanup: remove bogus fields from existing entries ─────────
+
+def migrate_cleanup_audit_junk_fields():
+    """Remove bogus 'id', 'owner_id', 'owner_display_name', 'owner_username',
+    'deleted_datetime' fields from existing audit_log changes arrays.
+    Deletes entries that have no real changes left after cleanup."""
+    import json as _json
+
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        # Check if audit_log table exists
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='audit_log'")
+        if not cursor.fetchone():
+            return
+
+        junk_fields = {"id", "owner_id", "owner_display_name", "owner_username", "deleted_datetime"}
+
+        cursor.execute("SELECT id, changes FROM audit_log WHERE changes IS NOT NULL")
+        rows = cursor.fetchall()
+
+        cleaned = 0
+        deleted = 0
+        for row_id, changes_raw in rows:
+            try:
+                changes = _json.loads(changes_raw)
+            except (ValueError, TypeError):
+                continue
+            if not isinstance(changes, list):
+                continue
+
+            filtered = [c for c in changes if c.get("field") not in junk_fields]
+            if len(filtered) == len(changes):
+                continue  # No junk fields in this entry
+
+            if not filtered:
+                # No real changes left — delete the entry
+                cursor.execute("DELETE FROM audit_log WHERE id = ?", (row_id,))
+                deleted += 1
+            else:
+                # Update with cleaned changes
+                cursor.execute("UPDATE audit_log SET changes = ? WHERE id = ?",
+                               (_json.dumps(filtered), row_id))
+                cleaned += 1
+
+        conn.commit()
+        if cleaned or deleted:
+            logger.info(f"Audit cleanup: cleaned {cleaned} entries, deleted {deleted} empty entries")
+    except Exception as e:
+        logger.error(f"Error cleaning audit log junk fields: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
