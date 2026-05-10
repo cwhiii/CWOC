@@ -2478,6 +2478,45 @@ async function _fetchEmailThread(chitId) {
 }
 
 /**
+ * Build a nested chit thread item element (for items with is_nest: true).
+ * Renders with nest icon, chit title, and note preview.
+ * Click navigates to that chit's editor page.
+ * @param {Object} entry — nested chit entry from the API (has is_nest: true)
+ * @returns {HTMLElement}
+ */
+function _buildNestedChitThreadItem(entry) {
+  var item = document.createElement('div');
+  item.className = 'email-thread-item email-nest-card';
+  item.style.cursor = 'pointer';
+
+  // Nest icon + title row
+  var titleRow = document.createElement('div');
+  titleRow.className = 'email-thread-sender';
+  titleRow.innerHTML = '<img src="/static/nest-eggs.svg" class="email-nest-icon" style="height:1.2em;vertical-align:middle;" alt="" /> ';
+  var titleSpan = document.createElement('span');
+  titleSpan.textContent = entry.title || '(Untitled)';
+  titleRow.appendChild(titleSpan);
+  item.appendChild(titleRow);
+
+  // Note preview (first 100 chars)
+  var notePreview = entry.note || '';
+  if (notePreview.length > 100) notePreview = notePreview.substring(0, 100) + '…';
+  if (notePreview) {
+    var preview = document.createElement('div');
+    preview.className = 'email-thread-preview';
+    preview.textContent = notePreview;
+    item.appendChild(preview);
+  }
+
+  // Click navigates to that chit's editor page
+  item.addEventListener('click', function() {
+    window.location.href = '/frontend/html/editor.html?id=' + encodeURIComponent(entry.id);
+  });
+
+  return item;
+}
+
+/**
  * Build a single thread item element.
  * @param {Object} entry — thread entry from the API
  * @param {string} currentId — the current chit's ID
@@ -2555,8 +2594,8 @@ function _renderEmailThread(thread, currentId) {
     stack.className = 'email-thread-stack';
     stack.title = 'Click to expand thread';
 
-    // Show the 2 most recent non-current entries as stacked previews
-    var others = thread.filter(function(e) { return e.id !== currentId; });
+    // Show the 2 most recent non-current email entries as stacked previews (exclude nests)
+    var others = thread.filter(function(e) { return e.id !== currentId && !e.is_nest; });
     var topTwo = others.slice(-2);
 
     // Build the visual stack layers (back to front)
@@ -2601,7 +2640,11 @@ function _renderEmailThread(thread, currentId) {
     list.appendChild(collapseBtn);
 
     thread.forEach(function(entry) {
-      list.appendChild(_buildThreadItem(entry, currentId));
+      if (entry.is_nest) {
+        list.appendChild(_buildNestedChitThreadItem(entry));
+      } else {
+        list.appendChild(_buildThreadItem(entry, currentId));
+      }
     });
 
     section.appendChild(list);
@@ -2611,7 +2654,11 @@ function _renderEmailThread(thread, currentId) {
     list.className = 'email-thread-list';
 
     thread.forEach(function(entry) {
-      list.appendChild(_buildThreadItem(entry, currentId));
+      if (entry.is_nest) {
+        list.appendChild(_buildNestedChitThreadItem(entry));
+      } else {
+        list.appendChild(_buildThreadItem(entry, currentId));
+      }
     });
 
     section.appendChild(list);

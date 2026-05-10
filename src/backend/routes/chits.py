@@ -32,6 +32,45 @@ router = APIRouter()
 RESERVED_TAG_PREFIX = "cwoc_system/"
 
 
+def _validate_nest_thread_id(cursor, chit):
+    """Validate nest_thread_id on save.
+
+    Rules:
+    - Email chits (has email_message_id or email_status) cannot have nest_thread_id set
+    - If nest_thread_id is non-null, the referenced chit must exist and be an email chit
+    Raises HTTPException(422) on validation failure.
+    """
+    # Treat empty string as null
+    nest_id = chit.nest_thread_id if chit.nest_thread_id else None
+
+    # Check if the chit being saved is itself an email chit
+    if nest_id and (chit.email_message_id or chit.email_status):
+        raise HTTPException(
+            status_code=422,
+            detail="Email chits cannot be nested into threads — they already belong to threads natively",
+        )
+
+    if nest_id:
+        cursor.execute(
+            "SELECT id, email_message_id, email_status FROM chits WHERE id = ?",
+            (nest_id,),
+        )
+        ref_row = cursor.fetchone()
+        if not ref_row:
+            raise HTTPException(
+                status_code=422,
+                detail="nest_thread_id references a chit that does not exist",
+            )
+        # ref_row is a tuple: (id, email_message_id, email_status)
+        ref_email_message_id = ref_row[1]
+        ref_email_status = ref_row[2]
+        if not ref_email_message_id and not ref_email_status:
+            raise HTTPException(
+                status_code=422,
+                detail="nest_thread_id must reference an email chit (has email_message_id or email_status)",
+            )
+
+
 def _strip_reserved_tags(tags):
     """Remove any user-submitted tags that start with CWOC_System/ (case-insensitive).
 
@@ -156,6 +195,10 @@ def create_chit(chit: Chit, request: Request):
         # Strip any reserved CWOC_System/ tags from user-submitted tags before computing system tags
         chit.tags = _strip_reserved_tags(chit.tags)
         chit_tags = compute_system_tags(chit)
+
+        # Validate nest_thread_id before saving
+        _validate_nest_thread_id(cursor, chit)
+
         cursor.execute(
             """
             INSERT INTO chits (
@@ -269,6 +312,8 @@ def create_chit(chit: Chit, request: Request):
         except Exception:
             pass  # Never block the API response for rules engine
         return chit_data
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error creating chit: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to create chit: {str(e)}")
@@ -396,6 +441,9 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
             # Capture old state for audit diff
             old_chit_dict = existing_dict_check
 
+            # Validate nest_thread_id before saving
+            _validate_nest_thread_id(cursor, chit)
+
             # Update existing chit
             cursor.execute(
                 """
@@ -411,7 +459,7 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                     email_message_id = ?, email_from = ?, email_to = ?, email_cc = ?, email_bcc = ?,
                     email_subject = ?, email_body_text = ?, email_body_html = ?, email_date = ?, email_folder = ?,
                     email_status = ?, email_read = ?, email_in_reply_to = ?, email_references = ?,
-                    attachments = ?, availability = ?
+                    attachments = ?, availability = ?, nest_thread_id = ?
                 WHERE id = ?
                 """,
                 (
@@ -472,6 +520,7 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                     chit.email_references,
                     serialize_json_field(chit.attachments) if chit.attachments else None,
                     chit.availability,
+                    chit.nest_thread_id,
                     chit_id,
                 )
             )
@@ -552,6 +601,9 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
             user_row = cursor.fetchone()
             owner_display_name = user_row[0] if user_row else ""
             owner_username = user_row[1] if user_row else request.state.username
+
+            # Validate nest_thread_id before saving
+            _validate_nest_thread_id(cursor, chit)
 
             cursor.execute(
                 """
@@ -668,6 +720,8 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
         except Exception:
             pass  # Never block the API response for rules engine
         return chit_data
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error updating/creating chit: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to update/create chit: {str(e)}")

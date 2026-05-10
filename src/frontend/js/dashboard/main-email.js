@@ -715,6 +715,10 @@ function displayEmailView(chitsToDisplay) {
     // Render email cards — always threaded
     // Build thread map from ALL emails (cross-folder), then filter to visible
     var allThreads = _emailGroupByThread(allEmailChits);
+
+    // Inject nested chits (non-email chits with nest_thread_id) into threads
+    _emailInjectNests(allThreads);
+
     var visibleIds = new Set(emailChits.map(function(c) { return c.id; }));
 
     // Filter threads to only those with at least one visible message
@@ -1909,6 +1913,114 @@ function _emailGroupByThread(emailChits) {
     return threads;
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// Nest injection — inject non-email chits into their associated threads
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Inject nested chits (non-email chits with nest_thread_id) into their
+ * associated email threads. Called after _emailGroupByThread() completes.
+ *
+ * Nested chits are sorted within the thread:
+ *   1. Chits with due_date — ascending by due_date
+ *   2. Chits with only start_datetime — ascending by start_datetime
+ *   3. Chits with neither date — placed after the top email
+ *
+ * Invariants:
+ *   - Nested chits are marked with _isNest = true
+ *   - Nested chits never appear as the topmost card (index 0 / latest)
+ *   - Nested chits never appear independently in the email inbox list
+ *
+ * @param {Array} threads — array of thread objects from _emailGroupByThread
+ *        Each thread: { messages: [...], latest: chit }
+ * @returns {Array} the same threads array, mutated with injected nests
+ */
+function _emailInjectNests(threads) {
+    // Get all loaded chits from the global array
+    if (typeof chits === 'undefined' || !Array.isArray(chits)) return threads;
+
+    // Find all non-email chits with a non-null nest_thread_id
+    var nestedChits = chits.filter(function(c) {
+        if (!c.nest_thread_id) return false;
+        // Must not be an email chit itself
+        if (c.email_message_id || c.email_status) return false;
+        // Must not be deleted
+        if (c.deleted) return false;
+        return true;
+    });
+
+    if (nestedChits.length === 0) return threads;
+
+    // Build a lookup: chit ID -> thread index, for all email chits in all threads
+    var chitIdToThreadIdx = {};
+    for (var i = 0; i < threads.length; i++) {
+        var msgs = threads[i].messages;
+        for (var j = 0; j < msgs.length; j++) {
+            chitIdToThreadIdx[msgs[j].id] = i;
+        }
+    }
+
+    // Inject each nested chit into its target thread
+    nestedChits.forEach(function(nestChit) {
+        var threadIdx = chitIdToThreadIdx[nestChit.nest_thread_id];
+        if (threadIdx === undefined) return; // target thread not found
+
+        // Mark as nest
+        var injected = Object.assign({}, nestChit);
+        injected._isNest = true;
+
+        threads[threadIdx].messages.push(injected);
+    });
+
+    // Re-sort each thread's messages: emails first (newest-first), then nests sorted by date
+    threads.forEach(function(thread) {
+        var emailMsgs = [];
+        var nestMsgs = [];
+
+        thread.messages.forEach(function(m) {
+            if (m._isNest) {
+                nestMsgs.push(m);
+            } else {
+                emailMsgs.push(m);
+            }
+        });
+
+        // Emails stay sorted newest-first (already sorted by _emailGroupByThread)
+        // Sort nested chits: due_date ascending, then start_datetime ascending, then no-date
+        nestMsgs.sort(function(a, b) {
+            var aDue = a.due_date || a.due_datetime || '';
+            var bDue = b.due_date || b.due_datetime || '';
+            var aStart = a.start_datetime || '';
+            var bStart = b.start_datetime || '';
+
+            // Group: has due_date, has only start_datetime, has neither
+            var aGroup = aDue ? 0 : (aStart ? 1 : 2);
+            var bGroup = bDue ? 0 : (bStart ? 1 : 2);
+
+            if (aGroup !== bGroup) return aGroup - bGroup;
+
+            // Within same group, sort ascending by the relevant date
+            if (aGroup === 0) return aDue.localeCompare(bDue);
+            if (aGroup === 1) return aStart.localeCompare(bStart);
+            // Group 2 (no dates) — stable order (preserve original array order)
+            return 0;
+        });
+
+        // Rebuild messages: top email first, then nests, then remaining emails
+        // This ensures the top card (index 0) is always an email
+        var topEmail = emailMsgs[0]; // newest email = top card
+        var restEmails = emailMsgs.slice(1);
+
+        // Final order: [top email] + [sorted nests] + [remaining emails newest-first]
+        thread.messages = [topEmail].concat(nestMsgs).concat(restEmails);
+
+        // Ensure latest is always an email chit (never a nest)
+        thread.latest = topEmail;
+    });
+
+    return threads;
+}
+
 /**
  * Build a Set of message IDs that have been replied to.
  * Only counts replies/forwards that the user actually sent or drafted —
@@ -1934,6 +2046,123 @@ function _emailHasReply(messageId) {
     if (!messageId) return false;
     if (!_emailRepliedToCache) _emailBuildRepliedCache();
     return _emailRepliedToCache.has(messageId.trim());
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Nested chit card (for chits injected into email threads)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Build a card for a nested (non-email) chit displayed within an email thread.
+ * Uses the same card structure as email cards but with a nest icon (fa-dove)
+ * replacing email-specific indicators (read/unread dot, reply arrow).
+ *
+ * @param {Object} chit — the nested chit object (has _isNest = true)
+ * @returns {HTMLElement} The nested chit card element
+ */
+function _buildNestedChitCard(chit) {
+    var card = document.createElement('div');
+    card.className = 'chit-card email-card email-nest-card';
+    card.dataset.chitId = chit.id;
+    if (typeof applyChitColors === 'function') {
+        var bg = typeof chitColor === 'function' ? chitColor(chit) : '#fdf6e3';
+        applyChitColors(card, bg);
+        card._contrastColor = typeof contrastColorForBg === 'function' ? contrastColorForBg(bg) : null;
+    }
+
+    // Nest icon (replaces the checkbox/contact image area)
+    var nestIconWrap = document.createElement('div');
+    nestIconWrap.className = 'email-cb-wrap email-nest-icon';
+    nestIconWrap.innerHTML = '<img src="/static/nest-eggs.svg" style="height:1.2em;vertical-align:middle;" alt="" />';
+    nestIconWrap.title = 'Nested chit';
+    card.appendChild(nestIconWrap);
+
+    // Content area — same structure as email cards
+    var content = document.createElement('div');
+    content.className = 'email-card-content';
+
+    // Title (replaces sender in email cards)
+    var titleEl = document.createElement('span');
+    titleEl.className = 'email-card-sender';
+    titleEl.textContent = chit.title || '(Untitled)';
+    titleEl.title = chit.title || '';
+
+    // Content preview — first line of note, or checklist summary, or status
+    var previewEl = document.createElement('span');
+    previewEl.className = 'email-card-preview';
+    var previewText = _nestGetContentPreview(chit);
+    if (previewText) {
+        previewEl.textContent = previewText;
+    }
+
+    // Date — show due_date or start_datetime if available
+    var dateEl = document.createElement('span');
+    dateEl.className = 'email-meta-date';
+    var nestDate = chit.due_date || chit.due_datetime || chit.start_datetime || '';
+    if (nestDate) {
+        dateEl.textContent = _emailFormatDateSmart(nestDate);
+    }
+
+    // Assemble content
+    content.appendChild(titleEl);
+    content.appendChild(previewEl);
+    content.appendChild(dateEl);
+
+    // Apply contrast-safe text colors when a custom chit color is set
+    if (card._contrastColor) {
+        titleEl.style.color = card._contrastColor;
+        previewEl.style.color = card._contrastColor;
+        dateEl.style.color = card._contrastColor;
+    }
+
+    card.appendChild(content);
+
+    // Click navigates to editor
+    card.addEventListener('dblclick', function(e) {
+        if (typeof storePreviousState === 'function') storePreviousState();
+        window.location.href = '/frontend/html/editor.html?id=' + encodeURIComponent(chit.id);
+    });
+    // Single click also navigates (nested chits don't need multi-select)
+    card.addEventListener('click', function(e) {
+        if (typeof storePreviousState === 'function') storePreviousState();
+        window.location.href = '/frontend/html/editor.html?id=' + encodeURIComponent(chit.id);
+    });
+
+    return card;
+}
+
+/**
+ * Get a content preview string for a nested chit.
+ * Priority: first line of note → checklist summary → status.
+ * @param {Object} chit
+ * @returns {string}
+ */
+function _nestGetContentPreview(chit) {
+    // First line of note
+    if (chit.note) {
+        var noteText = typeof _emailStripMarkdown === 'function'
+            ? _emailStripMarkdown(chit.note)
+            : chit.note;
+        var firstLine = noteText.split('\n').filter(function(l) { return l.trim(); })[0];
+        if (firstLine) return firstLine.trim().substring(0, 120);
+    }
+
+    // Checklist summary
+    var checklist = chit.checklist;
+    if (typeof checklist === 'string') {
+        try { checklist = JSON.parse(checklist); } catch(e) { checklist = null; }
+    }
+    if (Array.isArray(checklist) && checklist.length > 0) {
+        var done = checklist.filter(function(item) { return item.checked || item.done; }).length;
+        return '☑ ' + done + '/' + checklist.length + ' items';
+    }
+
+    // Status
+    if (chit.status) {
+        return chit.status;
+    }
+
+    return '';
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -2013,6 +2242,15 @@ function _toggleThreadExpand(wrapper, thread, viSettings) {
             // Show all messages in the thread (full cross-folder view)
             thread.messages.forEach(function(chit) {
                 if (chit.id === thread.latest.id) return; // skip the top card
+
+                // Use nested chit card for items with _isNest flag
+                if (chit._isNest) {
+                    var nestCard = _buildNestedChitCard(chit);
+                    nestCard.classList.add('email-thread-child-card');
+                    expanded.appendChild(nestCard);
+                    return;
+                }
+
                 var card = _buildEmailCard(chit, viSettings);
                 card.classList.add('email-thread-child-card');
                 // Add folder indicator for messages from other folders

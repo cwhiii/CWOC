@@ -117,6 +117,11 @@ Ensure there's no tasks that require installing software (no hypothisys!), or ru
 
 no installs, no pip, no npm.
 
+## Tests Are Optional
+- Running tests is optional (since we can't install dependencies in this environment). Writing tests is equally optional — if execution is optional, so is creation.
+- When task lists include test steps, mark them as optional rather than required. They should still be written out as tasks, just flagged as optional.
+- Tests are never a blocker for completing a feature.
+
 ## Help & Reference
 Ensure that any time you change or add a feature that has or should have, documentaion that you update both the help & reference, as applicable.
 

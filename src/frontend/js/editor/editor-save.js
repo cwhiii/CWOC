@@ -404,6 +404,14 @@ async function buildChitObject() {
     }
   }
 
+  // Include nest data (nest_thread_id for email thread association)
+  if (typeof getNestData === 'function') {
+    var nestData = getNestData();
+    if (nestData) {
+      chit.nest_thread_id = nestData.nest_thread_id;
+    }
+  }
+
   // Include attachments data
   if (typeof getAttachmentsData === 'function') {
     chit.attachments = getAttachmentsData();

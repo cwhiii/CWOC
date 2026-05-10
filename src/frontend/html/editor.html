@@ -26,6 +26,7 @@
         <link rel="stylesheet" href="/frontend/css/editor/editor.css" />
         <link rel="stylesheet" href="/frontend/css/editor/editor-email.css" />
         <link rel="stylesheet" href="/frontend/css/editor/editor-attachments.css" />
+        <link rel="stylesheet" href="/frontend/css/editor/editor-nest.css" />
 
     </head>
     <body>
@@ -118,6 +119,8 @@
                             </div>
                             <span id="cwoc-owner-chip-container"></span>
                             <button type="button" id="emailQuickActivateBtn" class="email-quick-btn" onclick="_activateEmailZone()" title="Make this an email"><img src="/static/email.png" style="height:1em;vertical-align:middle;" alt="" /><span class="email-quick-label"> Email</span></button>
+                            <button type="button" id="nestButton" class="email-quick-btn" onclick="_nestButtonClick()" title="Nest into email thread" style="display:none;"><img src="/static/nest.svg" style="height:1.4em;margin:-0.2em 0;vertical-align:middle;" alt="" /><span class="email-quick-label"> Nest</span></button><span id="nestButtonLabel" class="nest-label-pill" style="display:none;"></span>
+                            <input type="hidden" id="nestThreadId" value="" />
                         </label>
                         <input
                             type="text"
@@ -916,17 +919,19 @@
                                 <button
                                     type="button"
                                     id="addNewChitButton"
-                                    class="zone-button"
+                                    class="zone-button zone-button-conditional"
                                     onclick="addProjectItem(event)"
+                                    style="display:none;"
                                 >
                                     <i class="fas fa-plus"></i> Add Chit
                                 </button>
                                 <button
                                     type="button"
                                     id="createNewChildButton"
-                                    class="zone-button"
+                                    class="zone-button zone-button-conditional"
                                     onclick="createNewChildChit(event)"
                                     title="Create a brand new chit as a child of this project"
+                                    style="display:none;"
                                 >
                                     <i class="fas fa-file-circle-plus"></i> <span class="hideWhenNarrow">Create</span> New
                                 </button>
@@ -1555,6 +1560,19 @@
             </div>
         </div>
         <div class="author-info"><span id="cwoc-footer-copyright" class="cwoc-footer-copyright">&copy; 2026 C.W.&rsquo;s Omni Chits</span> &middot; <a href="https://www.cwholemaniii.com/pages/home.shtml" target="_blank">www.cwholemaniii.com</a> <span id="chitUuidDisplay" class="chit-uuid-display"></span></div>
+
+        <!-- Nest Thread Picker Template -->
+        <template id="tmpl-nest-thread-picker">
+            <div class="cwoc-modal-overlay" id="nestThreadPickerOverlay">
+                <div class="cwoc-modal nest-thread-picker-modal">
+                    <h3 style="margin:0 0 12px 0;font-family:Lora,Georgia,serif;color:#6b4e31;">Select Email Thread</h3>
+                    <input type="text" id="nestPickerSearch" placeholder="Filter by subject..." class="nest-picker-search" />
+                    <div class="nest-picker-list" id="nestPickerList"></div>
+                    <button type="button" class="zone-button" onclick="_nestClosePicker()" style="margin-top:12px;">Cancel</button>
+                </div>
+            </div>
+        </template>
+
         <script src="/frontend/js/editor/editor_checklists.js"></script>
         <script src="/frontend/js/editor/editor_projects.js"></script>
         <script src="/frontend/js/shared/shared-auth.js"></script>
@@ -1593,6 +1611,7 @@
         <script src="/frontend/js/editor/editor-health.js"></script>
         <script src="/frontend/js/editor/editor-email.js"></script>
         <script src="/frontend/js/editor/editor-attachments.js"></script>
+        <script src="/frontend/js/editor/editor-nest.js"></script>
         <script src="/frontend/js/editor/editor-save.js"></script>
         <script src="/frontend/js/editor/editor-init.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>

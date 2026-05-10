@@ -1,0 +1,257 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   CWOC Nest Button & Thread Picker Styles — Chit Editor
+   
+   Styles for the Nest button in the editor title row, the thread picker
+   modal, and nested chit cards in thread views.
+   Uses the parchment theme variables from shared-editor.css.
+   
+   Load AFTER shared-editor.css and editor.css.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Modal Overlay (needed because editor doesn't load dashboard CSS) ──── */
+.cwoc-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(26, 18, 8, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+}
+
+/* ── Editor override: email-quick-btn always expanded (no hover-to-reveal) */
+.editor .email-quick-btn,
+.pinned-archived-group .email-quick-btn {
+    max-width: 120px;
+    padding: 4px 8px;
+    gap: 4px;
+}
+
+.editor .email-quick-btn .email-quick-label,
+.pinned-archived-group .email-quick-btn .email-quick-label {
+    opacity: 1;
+    max-width: 80px;
+}
+
+/* ── Nest Button Active State ──────────────────────────────────────────── */
+#nestButton.nest-button-active {
+    /* no visual change to button itself */
+}
+
+/* ── Nest Label Pill (cream box next to button) ────────────────────────── */
+.nest-label-pill {
+    display: inline-block;
+    vertical-align: middle;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.9em;
+    background: var(--parchment-dark, #fff8dc);
+    color: #3a2a1a;
+    padding: 3px 9px;
+    border-radius: 4px;
+    border: 1px solid rgba(107, 78, 49, 0.25);
+    margin-left: 5px;
+    max-width: 280px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+/* ── Thread Picker Modal ───────────────────────────────────────────────── */
+.nest-thread-picker-modal {
+    background-color: #fffaf0;
+    border: 2px solid #6b4e31;
+    border-radius: 10px;
+    padding: 20px;
+    font-family: 'Lora', Georgia, serif;
+    width: 90%;
+    max-width: 480px;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+}
+
+.nest-thread-picker-modal h3 {
+    margin: 0 0 12px 0;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 1.2em;
+    color: #4a2c2a;
+    border-bottom: 1px solid #6b4e31;
+    padding-bottom: 8px;
+}
+
+/* ── Thread Picker Search Input ────────────────────────────────────────── */
+.nest-picker-search {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px inset #8b5a2b;
+    border-radius: 4px;
+    font-size: 14px;
+    font-family: 'Lora', Georgia, serif;
+    background-color: #fdf5e6;
+    color: #4a2c2a;
+    box-sizing: border-box;
+    margin-bottom: 10px;
+    min-height: 44px;
+}
+
+.nest-picker-search:focus {
+    outline: none;
+    border-color: #4a90d9;
+    box-shadow: 0 0 0 2px rgba(74, 144, 217, 0.25);
+}
+
+.nest-picker-search::placeholder {
+    color: #a0522d;
+    font-style: italic;
+}
+
+/* ── Thread Picker List (scrollable) ───────────────────────────────────── */
+.nest-picker-list {
+    flex: 1;
+    overflow-y: auto;
+    max-height: 320px;
+    border: 1px solid rgba(107, 78, 49, 0.3);
+    border-radius: 4px;
+    margin-bottom: 12px;
+    background: rgba(253, 245, 230, 0.5);
+}
+
+.nest-picker-list:empty::after {
+    content: "No email threads found.";
+    display: block;
+    padding: 16px;
+    text-align: center;
+    color: #8b7355;
+    font-style: italic;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.9em;
+}
+
+/* ── Thread Picker Item ────────────────────────────────────────────────── */
+.nest-picker-item {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 10px 12px;
+    min-height: 44px;
+    cursor: pointer;
+    border-bottom: 1px solid rgba(107, 78, 49, 0.15);
+    transition: background-color 0.15s;
+    font-family: 'Lora', Georgia, serif;
+}
+
+.nest-picker-item:last-child {
+    border-bottom: none;
+}
+
+.nest-picker-item:hover {
+    background-color: rgba(74, 144, 217, 0.1);
+}
+
+.nest-picker-item:active {
+    background-color: rgba(74, 144, 217, 0.2);
+}
+
+.nest-picker-item-subject {
+    font-weight: 600;
+    font-size: 0.9em;
+    color: #3a2a1a;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.nest-picker-item-meta {
+    font-size: 0.78em;
+    color: #8b7355;
+    margin-top: 2px;
+}
+
+/* ── Nested Chit Card in Thread View ───────────────────────────────────── */
+.email-nest-card {
+    padding: 8px 12px;
+    border: 1px solid rgba(74, 144, 217, 0.25);
+    border-left: 3px solid #4a90d9;
+    border-radius: 6px;
+    background: rgba(74, 144, 217, 0.04);
+    transition: background 0.15s, border-color 0.15s;
+    cursor: pointer;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.email-nest-card:hover {
+    background: rgba(74, 144, 217, 0.1);
+    border-color: rgba(74, 144, 217, 0.4);
+}
+
+/* ── Nest Icon ─────────────────────────────────────────────────────────── */
+.email-nest-icon {
+    color: #4a90d9;
+    font-size: 1.1em;
+    flex-shrink: 0;
+    width: 20px;
+    text-align: center;
+}
+
+/* ── Nested Chit Card Content ──────────────────────────────────────────── */
+.email-nest-card-content {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.email-nest-card-title {
+    font-family: 'Lora', Georgia, serif;
+    font-weight: 600;
+    font-size: 0.88em;
+    color: #3a2a1a;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.email-nest-card-preview {
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.78em;
+    color: #8b7355;
+    margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ── Responsive — Mobile (≤480px) ──────────────────────────────────────── */
+@media (max-width: 480px) {
+    .nest-thread-picker-modal {
+        width: 95%;
+        max-height: 90vh;
+        padding: 16px;
+    }
+
+    .nest-picker-search {
+        font-size: 16px; /* prevents iOS zoom on focus */
+    }
+
+    .nest-picker-item {
+        padding: 12px;
+        min-height: 48px;
+    }
+
+    .nest-button-label {
+        max-width: 70px;
+        font-size: 0.65em;
+    }
+
+    .email-nest-card {
+        padding: 10px 12px;
+        min-height: 48px;
+    }
+}

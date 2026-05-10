@@ -1946,6 +1946,30 @@ def email_thread(chit_id: str, request: Request):
             })
 
         result.sort(key=lambda x: x.get("email_date") or "")
+
+        # Query nested chits: non-deleted chits whose nest_thread_id references any thread member
+        if thread_ids:
+            placeholders = ",".join("?" for _ in thread_ids)
+            cursor.execute(
+                f"SELECT id, title, note, status, due_datetime, start_datetime "
+                f"FROM chits WHERE nest_thread_id IN ({placeholders}) "
+                f"AND (deleted = 0 OR deleted IS NULL)",
+                list(thread_ids),
+            )
+            for row in cursor.fetchall():
+                nest_dict = dict(row)
+                note_raw = nest_dict.get("note") or ""
+                note_preview = note_raw[:100]
+                result.append({
+                    "id": nest_dict["id"],
+                    "title": nest_dict.get("title") or "",
+                    "note": note_preview,
+                    "status": nest_dict.get("status") or "",
+                    "due_datetime": nest_dict.get("due_datetime") or "",
+                    "start_datetime": nest_dict.get("start_datetime") or "",
+                    "is_nest": True,
+                })
+
         return result
 
     except HTTPException:
@@ -1953,6 +1977,82 @@ def email_thread(chit_id: str, request: Request):
     except Exception as e:
         logger.error("Email thread error: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to load email thread: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
+# ───────────────────────────────────────────────────────────────────────────
+# GET /api/email/threads/recent — Recent email threads for thread picker
+# ───────────────────────────────────────────────────────────────────────────
+
+@email_router.get("/api/email/threads/recent")
+def email_threads_recent(request: Request, q: str = None):
+    """Return the 20 most recent email threads for the thread picker.
+
+    Groups email chits by normalized subject (stripping Re:/Fwd:/Fw: prefixes)
+    and returns thread summaries sorted by latest email_date descending.
+
+    Query Parameters:
+        q (optional): Case-insensitive substring filter on normalized subject.
+
+    Returns:
+        JSON array of thread summaries:
+        ``[{thread_id, subject, latest_date, message_count}]``
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        # Fetch all non-deleted email chits with their subject and date
+        cursor.execute(
+            "SELECT id, email_subject, title, email_date "
+            "FROM chits "
+            "WHERE (deleted = 0 OR deleted IS NULL) "
+            "AND email_message_id IS NOT NULL"
+        )
+
+        # Group by normalized subject
+        threads: dict = {}  # normalized_subject_lower -> {subject, latest_date, message_count, thread_id}
+        for row in cursor.fetchall():
+            row_dict = dict(row)
+            raw_subject = row_dict.get("email_subject") or row_dict.get("title") or ""
+            normalized = _strip_email_prefixes(raw_subject)
+            norm_key = normalized.lower()
+
+            email_date = row_dict.get("email_date") or ""
+
+            if norm_key not in threads:
+                threads[norm_key] = {
+                    "subject": normalized or "(No Subject)",
+                    "latest_date": email_date,
+                    "message_count": 1,
+                    "thread_id": row_dict["id"],
+                }
+            else:
+                threads[norm_key]["message_count"] += 1
+                # Update thread_id and latest_date if this email is newer
+                if email_date > threads[norm_key]["latest_date"]:
+                    threads[norm_key]["latest_date"] = email_date
+                    threads[norm_key]["thread_id"] = row_dict["id"]
+
+        # Apply optional search filter
+        results = list(threads.values())
+        if q:
+            q_lower = q.lower()
+            results = [t for t in results if q_lower in t["subject"].lower()]
+
+        # Sort by latest_date descending
+        results.sort(key=lambda x: x.get("latest_date") or "", reverse=True)
+
+        # Return top 20
+        return results[:20]
+
+    except Exception as e:
+        logger.error("Failed to load recent threads: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to load recent threads")
     finally:
         if conn:
             conn.close()

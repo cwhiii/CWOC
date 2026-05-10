@@ -783,6 +783,11 @@ async function loadChitData(chitId) {
       initAttachmentsZone(chit);
     }
 
+    // Initialize nest button (for associating chits with email threads)
+    if (typeof initNestButton === 'function') {
+      initNestButton(chit);
+    }
+
     // Auto-expand email modal if opened from email view (expand=email param)
     if (typeof hasEmailData === 'function' && hasEmailData(chit)) {
       var _urlParams = new URLSearchParams(window.location.search);

@@ -139,7 +139,7 @@ def purge_chit(chit_id: str, request: Request):
 
         # Verify the chit exists and is deleted
         row = cursor.execute(
-            "SELECT id, owner_id FROM chits WHERE id = ? AND deleted = 1", (chit_id,)
+            "SELECT id, owner_id, email_message_id, email_status FROM chits WHERE id = ? AND deleted = 1", (chit_id,)
         ).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Chit not found in trash")
@@ -147,6 +147,13 @@ def purge_chit(chit_id: str, request: Request):
         # Non-admins can only purge their own chits
         if row["owner_id"] != user_id and not _is_admin(conn, user_id):
             raise HTTPException(status_code=403, detail="Not authorized")
+
+        # Cascade cleanup: if this is an email chit, null out any nest_thread_id references
+        if row["email_message_id"] or row["email_status"]:
+            cursor.execute(
+                "UPDATE chits SET nest_thread_id = NULL WHERE nest_thread_id = ?",
+                (chit_id,),
+            )
 
         cursor.execute("DELETE FROM chits WHERE id = ? AND deleted = 1", (chit_id,))
         conn.commit()

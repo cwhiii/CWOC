@@ -27,6 +27,7 @@ function saveCurrentChit() {
 }
 
 async function initializeProjectZone(projectChitId) {
+  console.log('[initializeProjectZone] called with:', projectChitId);
   if (!projectChitId) {
     console.warn("initializeProjectZone called without projectChitId");
     clearProjectsContent();
@@ -36,9 +37,11 @@ async function initializeProjectZone(projectChitId) {
   try {
     // Fetch all project masters for move dropdowns
     projectState.projectMasters = await fetchProjectMasters();
+    console.log('[initializeProjectZone] fetched masters:', projectState.projectMasters.length);
 
     // Load the project chit and its child chits
     await loadProjectData(projectChitId);
+    console.log('[initializeProjectZone] loadProjectData done. is_project_master:', projectState.projectChit?.is_project_master);
 
     // Render child chits grouped by status inside the Projects Zone
     renderChildChitsByStatus();
@@ -46,7 +49,7 @@ async function initializeProjectZone(projectChitId) {
     // Update header buttons visibility
     updateHeaderButtonsVisibility();
   } catch (error) {
-    console.error("Error initializing Projects Zone:", error);
+    console.error("[initializeProjectZone] ERROR:", error);
     clearProjectsContent();
   }
 }
@@ -62,6 +65,7 @@ function clearProjectsContent() {
 // Update header buttons visibility based on project master status
 function updateHeaderButtonsVisibility() {
   const isMaster = projectState.projectChit?.is_project_master === true;
+  console.log('[updateHeaderButtonsVisibility] isMaster:', isMaster, '| projectChit:', projectState.projectChit?.id, '| is_project_master:', projectState.projectChit?.is_project_master);
   const addButton = document.getElementById("addNewChitButton");
   const createButton = document.getElementById("createNewChildButton");
   const filterButton = document.getElementById("filterProjectItemsBtn");
@@ -1141,6 +1145,7 @@ async function toggleProjectMaster() {
 
   try {
     const currentValue = projectMasterInput.value === "true";
+    console.log('[toggleProjectMaster] chitId:', chitId, '| currentValue:', currentValue, '| will become:', !currentValue);
 
     if (currentValue) {
       // currently master, about to remove
@@ -1154,15 +1159,18 @@ async function toggleProjectMaster() {
     }
 
     projectMasterInput.value = currentValue ? "false" : "true";
+    console.log('[toggleProjectMaster] set input to:', projectMasterInput.value);
 
     if (projectMasterInput.value === "true") {
+      console.log('[toggleProjectMaster] calling initializeProjectZone...');
       await initializeProjectZone(chitId);
+      console.log('[toggleProjectMaster] initializeProjectZone done. projectState.projectChit:', projectState.projectChit);
     } else {
       clearProjectsContent();
     }
     saveCurrentChit();
   } catch (error) {
-    console.error("Error in toggleProjectMaster:", error);
+    console.error("[toggleProjectMaster] ERROR:", error);
     cwocToast("Failed to toggle project master status.", "error");
     projectMasterInput.value = "false"; // revert on failure
   }
@@ -1197,6 +1205,10 @@ async function loadProjectData(projectChitId) {
       throw new Error(`Failed to load project chit ${projectChitId}`);
     }
     projectState.projectChit = await projectResponse.json();
+    // Force is_project_master true — we're initializing the project zone,
+    // which only happens when the chit is (or is becoming) a master.
+    // The server may not reflect this yet if the toggle hasn't been saved.
+    projectState.projectChit.is_project_master = true;
   }
 
   projectState.childChits = {};

@@ -38,7 +38,7 @@ Package marker. No public exports.
 | `serve_icon_192()` | `GET /static/cwoc-icon-192.png` — Serve 192×192 PWA icon from `src/pwa/` |
 | `serve_icon_512()` | `GET /static/cwoc-icon-512.png` — Serve 512×512 PWA icon from `src/pwa/` |
 
-Registers all route modules (including `auth_router`, `users_router`, `sharing_router`, `notifications_router`, `network_access_router`, `push_router`, `ntfy_router`, `email_router`, `attachments_router`, `rules_router`, `bundles_router`, and `ha_router`), runs all migrations (including `migrate_add_multi_user()`, `migrate_add_sharing()`, `migrate_add_kiosk_users()`, `migrate_add_network_access()`, `migrate_add_notifications()`, `migrate_habits_overhaul()`, `migrate_habits_phase2()`, `migrate_add_push_subscriptions()`, `migrate_add_vapid_keys()`, `migrate_add_map_settings()`, `migrate_add_contact_dates()`, `migrate_add_email_fields()`, `migrate_add_attachments()`, `migrate_add_email_body_html()`, `migrate_add_fts5()`, `migrate_add_contact_vault()`, `migrate_create_rules_tables()`, `migrate_create_ha_config()`, and `migrate_create_bundles_tables()`) and `init_db()` at import time, mounts `StaticFiles` for frontend, static, data, and PWA directories.
+Registers all route modules (including `auth_router`, `users_router`, `sharing_router`, `notifications_router`, `network_access_router`, `push_router`, `ntfy_router`, `email_router`, `attachments_router`, `rules_router`, `bundles_router`, and `ha_router`), runs all migrations (including `migrate_add_multi_user()`, `migrate_add_sharing()`, `migrate_add_kiosk_users()`, `migrate_add_network_access()`, `migrate_add_notifications()`, `migrate_habits_overhaul()`, `migrate_habits_phase2()`, `migrate_add_push_subscriptions()`, `migrate_add_vapid_keys()`, `migrate_add_map_settings()`, `migrate_add_contact_dates()`, `migrate_add_email_fields()`, `migrate_add_attachments()`, `migrate_add_email_body_html()`, `migrate_add_fts5()`, `migrate_add_contact_vault()`, `migrate_create_rules_tables()`, `migrate_create_ha_config()`, `migrate_create_bundles_tables()`, and `migrate_add_nest_thread_id()`) and `init_db()` at import time, mounts `StaticFiles` for frontend, static, data, and PWA directories.
 
 ### 1.3 `src/backend/models.py` — Pydantic Models
 
@@ -48,7 +48,7 @@ Registers all route modules (including `auth_router`, `users_router`, `sharing_r
 | `SharedTagEntry` | Tag-level share entry with `tag: str` and `shares: List[ShareEntry]` |
 | `Tag` | Tag with name, color, fontColor, favorite |
 | `Settings` | User settings — time format, tags, colors, indicators, calendar config, audit limits, habits success window, shared_tags, hide_declined, map settings (map_default_lat, map_default_lon, map_default_zoom, map_auto_zoom), email_account (JSON string containing email config), default_share_contacts, etc. |
-| `Chit` | Core chit model — title, note, dates, status, checklist, alerts, recurrence, location, color, people, habit, habit_goal, habit_success, show_on_calendar, habit_reset_period, habit_last_action_date, habit_hide_overall, perpetual, shares, stealth, assigned_to, email fields (email_message_id, email_from, email_to, email_cc, email_bcc, email_subject, email_body_text, email_date, email_folder, email_status, email_read, email_in_reply_to, email_references), etc. |
+| `Chit` | Core chit model — title, note, dates, status, checklist, alerts, recurrence, location, color, people, habit, habit_goal, habit_success, show_on_calendar, habit_reset_period, habit_last_action_date, habit_hide_overall, perpetual, shares, stealth, assigned_to, email fields (email_message_id, email_from, email_to, email_cc, email_bcc, email_subject, email_body_text, email_date, email_folder, email_status, email_read, email_in_reply_to, email_references), nest_thread_id (Optional[str] — ID of an email chit in the target thread for nesting non-email chits into email threads), etc. |
 | `MultiValueEntry` | Label/value pair for contact multi-value fields (phone, email, etc.) |
 | `Contact` | Contact model — name fields, phones, emails, addresses, dates, social, security, notes, tags, color, shared_to_vault |
 | `ImportRequest` | Import envelope — mode ("add"/"replace") + data dict |
@@ -138,6 +138,7 @@ All migrations run at startup. Each checks if the column/table already exists be
 | `migrate_create_ha_config()` | Create `ha_config` table with columns: `id` (INTEGER PRIMARY KEY CHECK id=1), `ha_base_url` (TEXT), `ha_access_token` (TEXT), `ha_webhook_secret` (TEXT), `ha_poll_interval` (INTEGER DEFAULT 30), `configured_by` (TEXT), `modified_datetime` (TEXT). INSERT OR IGNORE a single row with id=1 and auto-generated UUID for ha_webhook_secret. Fully idempotent |
 | `migrate_add_view_order()` | Add `view_order` (TEXT) column to settings table for storing user's custom tab order as a JSON array. Fully idempotent |
 | `migrate_create_bundles_tables()` | Create `bundles` table (id, owner_id, name, description, display_order, is_default, removable, created_datetime, modified_datetime), `bundle_rules` junction table (id, bundle_id, rule_id, owner_id, created_datetime), and add `bundles_multi_placement` (BOOLEAN DEFAULT 0) column to settings table. Fully idempotent |
+| `migrate_add_nest_thread_id()` | Add `nest_thread_id` (TEXT DEFAULT NULL) column to chits table for nesting non-email chits into email threads. Uses column-existence-check pattern (`PRAGMA table_info` → check → `ALTER TABLE`). Fully idempotent |
 
 ### 1.6 `src/backend/serializers.py` — vCard & CSV
 
@@ -410,6 +411,7 @@ All chit endpoints are scoped by `owner_id` — users can only access their own 
 | `_strip_reserved_tags(tags)` | Remove user-submitted tags with reserved `CWOC_System/` prefix |
 | `_validate_tag_name(name)` | Return `False` if tag name uses reserved prefix |
 | `_enrich_assigned_to_display_names(cursor, chits)` | Batch-lookup display names for `assigned_to` user IDs |
+| `_validate_nest_thread_id(cursor, chit)` | Validate `nest_thread_id` on save — if non-null, verifies the referenced chit exists and is an email chit (`email_message_id IS NOT NULL OR email_status IS NOT NULL`); rejects nest on email chits themselves; returns 422 on invalid |
 
 ### 1.19b `src/backend/routes/chits_search.py` — Chit Search
 
@@ -446,7 +448,7 @@ All trash endpoints are user-scoped: regular users see/act on only their own del
 |-------|---------|-------------|
 | `GET /api/trash` | `get_trash(request)` | List soft-deleted chits (own only; admins see all) |
 | `POST /api/trash/{chit_id}/restore` | `restore_chit(chit_id, request)` | Restore a soft-deleted chit (own only; admins can restore any) |
-| `DELETE /api/trash/{chit_id}/purge` | `purge_chit(chit_id, request)` | Permanently delete a chit (own only; admins can purge any) |
+| `DELETE /api/trash/{chit_id}/purge` | `purge_chit(chit_id, request)` | Permanently delete a chit (own only; admins can purge any). On email chit deletion, cascades cleanup: nulls `nest_thread_id` on any chits referencing the deleted chit |
 
 | Helper | Description |
 |--------|-------------|
@@ -837,7 +839,8 @@ Provides IMAP sync, SMTP send, email parsing, password encryption, reply/forward
 | `POST /api/email/send/{chit_id}` | `email_send(chit_id, request)` | Send a draft email chit via SMTP; on success updates `email_status` to "sent", `email_folder` to "sent", populates `email_message_id`; validates non-empty `email_to` (422 if empty); rejects non-draft chits (400) |
 | `PATCH /api/email/{chit_id}/read` | `email_toggle_read(chit_id, request)` | Toggle `email_read` on the specified email chit; returns `{email_read: bool}` |
 | `GET /api/email/{chit_id}/raw` | `email_download_raw(chit_id, request)` | Re-fetch the raw RFC 2822 email from IMAP by Message-ID and return as `.eml` download; searches across INBOX, Sent, All Mail folders |
-| `GET /api/email/thread/{chit_id}` | `email_thread(chit_id, request)` | Find all related emails in a conversation thread by Message-ID references and normalized subject matching; returns list sorted by `email_date` ascending |
+| `GET /api/email/thread/{chit_id}` | `email_thread(chit_id, request)` | Find all related emails in a conversation thread by Message-ID references and normalized subject matching; returns list sorted by `email_date` ascending. Includes nested chits (non-email chits with `nest_thread_id` referencing any thread member) with `is_nest: true` flag |
+| `GET /api/email/threads/recent` | `email_threads_recent(request, q)` | Return 20 most recent email threads for the thread picker; uses `_strip_email_prefixes()` normalization to group by subject; optional `q` query parameter for case-insensitive substring filter on subject; sorted by latest `email_date` descending; returns `[{thread_id, subject, latest_date, message_count}]` |
 | `POST /api/email/test-connection` | `email_test_connection(request)` | Test IMAP and SMTP connectivity with provided or saved credentials; returns `{imap: {success, message}, smtp: {success, message}}` |
 | `POST /api/email/backfill-estimate` | `email_backfill_estimate(request)` | Query IMAP for total message count and estimated storage size; returns `{message_count, estimated_mb}` |
 
@@ -1127,6 +1130,24 @@ Property-based tests for the Email Bundles feature. Uses hypothesis for property
 | `TestProperty10BundleFilterComposesWithSubFilter` | Non-inbox sub-filter ignores bundle filter; inbox sub-filter applies it. **Validates: Requirements 9.3** |
 | `TestProperty11SinglePlacementPriorityOrdering` | Single-placement assigns only first matching bundle's tag (by display_order). **Validates: Requirements 12.2** |
 | `TestProperty12MultiPlacementCompleteness` | Multi-placement assigns tags for ALL matching bundles. **Validates: Requirements 12.3** |
+
+### 1.46 `src/backend/test_email_nests.py` — Email Thread Nests Property Tests
+
+Property-based tests for the Email Thread Nests feature. Uses hypothesis for property-based testing. 11 properties across 11 test classes.
+
+| Class | Description |
+|-------|-------------|
+| `TestProperty1NestReferenceValidation` | Save with non-null nest_thread_id succeeds iff referenced ID is an existing email chit; rejects non-existent or non-email references. **Validates: Requirements 1.4** |
+| `TestProperty2CascadeCleanupOnDelete` | Permanently deleting an email chit nulls nest_thread_id on all referencing chits; no other chits affected. **Validates: Requirements 1.5** |
+| `TestProperty3SubjectLabelTruncation` | Displayed text is first 15 chars if length > 15, or full string otherwise; result never exceeds 15 chars. **Validates: Requirements 2.5, 2.6** |
+| `TestProperty4NestButtonVisibility` | Nest button hidden iff chit has non-null email_message_id or email_status; visible for all other chits. **Validates: Requirements 2.7** |
+| `TestProperty5ThreadSearchFiltering` | Filtered results contain exactly those threads whose subject contains the query as a case-insensitive substring. **Validates: Requirements 3.3, 7.5** |
+| `TestProperty6NestedChitThreadMembership` | Expanded view includes exactly those non-email chits whose nest_thread_id matches any chit in the thread. **Validates: Requirements 5.1, 6.1** |
+| `TestProperty7NestedChitSortOrder` | Chits with due_date sort ascending, then start_datetime ascending, then after top email; stable within groups. **Validates: Requirements 5.2** |
+| `TestProperty8TopCardInvariant` | Topmost visible card of collapsed thread is always an email chit; nested chit never selected as top card. **Validates: Requirements 5.3** |
+| `TestProperty9InboxExclusionInvariant` | No chit with non-null nest_thread_id appears as independent entry in email inbox list. **Validates: Requirements 5.4** |
+| `TestProperty10NestThreadIdApiRoundTrip` | Saving a valid nest_thread_id and retrieving returns the same value; setting to null results in null on retrieval. **Validates: Requirements 7.1, 7.2** |
+| `TestProperty11ThreadEndpointIncludesNests` | Thread endpoint response includes all non-deleted chits whose nest_thread_id references any thread member, each with is_nest=true. **Validates: Requirements 7.3** |
 
 ---
 
@@ -1803,6 +1824,9 @@ Email tab view — renders the Email dashboard tab with inbox-style list view. L
 | `_emailStripMarkdown(str)` | Strip markdown formatting (links, bold, italic, code, headings) returning plain text |
 | `_emailShiftSelect(currentCb)` | Shift+click range selection — checks/unchecks all checkboxes between last clicked and current |
 | `_emailLastCheckedIndex` | Tracks the last clicked checkbox index for shift+click range selection |
+| `_emailInjectNests(threads)` | Inject nested chits into email threads after grouping — filters chits with non-null `nest_thread_id`, injects into matching threads, sorts by due_date → start_datetime → position after top email, marks with `_isNest = true` flag |
+| `_buildNestedChitCard(chit)` | Build card for nested chit in thread view — renders nest icon (fa-dove), chit title, content preview; click navigates to editor |
+| `_nestGetContentPreview(chit)` | Get content preview for nested chit card — first line of note, checklist summary, or status |
 
 #### main-email-bundles.js
 
@@ -2277,7 +2301,8 @@ Email zone: populate, collect, reply, forward, send. Handles the Email zone in t
 | `_emailDoActualSend(chitId, archiveOriginal)` | Actually send the email via `POST /api/email/send/{id}` after undo countdown expires; updates UI to sent state; optionally archives the replied-to email |
 | `_setEmailZoneReadOnly(readOnly)` | Toggle field editability for the email zone (To, Cc, Bcc, Body) — sets `disabled` and `readOnly` properties; hides render toggle when read-only |
 | `_fetchEmailThread(chitId)` | Fetch the email thread for a chit via `GET /api/email/thread/{chit_id}` and render it below the body |
-| `_renderEmailThread(thread, currentId)` | Render the email thread section with sender, date, preview for each message; current email highlighted |
+| `_renderEmailThread(thread, currentId)` | Render the email thread section with sender, date, preview for each message; current email highlighted; renders nested chits (entries with `is_nest: true`) using `_buildNestedChitThreadItem()` |
+| `_buildNestedChitThreadItem(entry)` | Build nested chit item for editor thread view — renders nest icon, title, and preview for chits with `is_nest: true`; click navigates to that chit's editor page |
 | `toggleEmailViewMode(event)` | Toggle email body between edit (textarea) and rendered (markdown) views in the small zone |
 | `_setEmailRenderToggleLabel(isRendered)` | Update the email render toggle button label/icon |
 | `_switchEmailExpandMode(mode)` | Switch email expand modal between 'editrender' and 'livepreview' modes |
@@ -2326,6 +2351,27 @@ Attachments zone: upload, list, download, delete. Handles the Attachments zone i
 | `_uploadFiles(files)` | Upload one or more files to the current chit via `POST /api/chits/{id}/attachments` |
 | `_deleteAttachment(attachmentId, filename)` | Delete an attachment via `DELETE /api/chits/{id}/attachments/{id}` with confirmation |
 
+#### editor-nest.js
+
+Nest button logic: thread picker, nest/un-nest, button state management. Handles the nest-into-email-thread feature in the chit editor: button visibility based on chit type, thread picker modal, nest association management. Depends on: `shared-utils.js` (`cwocToast`), `editor-save.js` (`setSaveButtonUnsaved`). Loaded before: `editor-save.js`, `editor-init.js`.
+
+| Symbol | Description |
+|--------|-------------|
+| `initNestButton(chit)` | Initialize nest button state based on `chit.nest_thread_id`; hides button for email chits |
+| `getNestData()` | Return current `nest_thread_id` value for save payload |
+| `_nestIsEmailChit(chit)` | Return true if chit has `email_message_id` or `email_status` (used to hide nest button) |
+| `_nestButtonClick()` | Toggle: if active, remove nest; if inactive, open picker |
+| `_nestOpenPicker()` | Fetch recent threads via `GET /api/email/threads/recent`, render picker modal |
+| `_nestSelectThread(threadId, subject)` | Set `nest_thread_id`, update button to active state, mark dirty |
+| `_nestRemove()` | Clear `nest_thread_id`, update button to inactive state, mark dirty |
+| `_nestTruncateSubject(subject)` | Return first 15 chars of subject (or full if shorter) |
+| `_nestFetchThreads(query)` | Fetch recent threads from API with optional query filter |
+| `_nestRenderPicker(threads)` | Render thread picker modal from template |
+| `_nestRenderList(listEl, threads)` | Render thread list items inside picker |
+| `_nestClosePicker()` | Close and remove picker modal overlay |
+| `_nestSetActive(subject)` | Set button to active state (blue, shows truncated subject label) |
+| `_nestSetInactive()` | Set button to inactive state (muted brown, no label) |
+
 #### editor-save.js
 
 Save system: build chit object, save, delete, pin, archive, QR.
@@ -2338,7 +2384,7 @@ Save system: build chit object, save, delete, pin, archive, QR.
 | `convertMonthFormat(dateStr)` | Convert `YYYY-Mon-DD` format to `YYYY-MM-DD` numeric format |
 | `setMediaSource(elementId, src)` | Set the `src` attribute of a media element, validating the URL first |
 | `isValidMediaSource(src)` | Validate a media source URL (non-empty, parseable, not "editor") |
-| `buildChitObject()` | Collect all form values into a chit object; returns null if validation fails |
+| `buildChitObject()` | Collect all form values into a chit object; includes `getNestData()` result for nest_thread_id; returns null if validation fails |
 | `_showInstanceBanner(dateStr)` | Show a banner indicating single recurrence instance editing |
 | `_saveInstanceException(dateStr)` | Save changes as a recurrence exception for a single instance via PATCH |
 | `_isSaving` | Guard flag to prevent concurrent save operations |
@@ -3240,6 +3286,21 @@ Attachments zone styles for the chit editor. Uses the parchment theme variables 
 | Upload Progress (`.attachment-progress`) | Pulsing animation for upload status |
 | Responsive — Mobile (≤480px) | Stacked layout for upload area |
 
+#### editor-nest.css
+Nest button and thread picker styles for the chit editor. Uses the parchment theme variables from `shared-editor.css`. Load AFTER `shared-editor.css` and `editor.css`.
+
+| Section | Description |
+|---------|-------------|
+| Nest Button Label (`.nest-button-label`) | Smaller font, ellipsis overflow, max-width for truncated subject display |
+| Nest Button Active (`.nest-button-active`) | Blue color matching pinned button active state |
+| Thread Picker Modal (`.nest-thread-picker-modal`) | Parchment modal styling (background #fffaf0, border #6b4e31, Lora font) |
+| Picker Search (`.nest-picker-search`) | Search input styling for thread filter |
+| Picker List (`.nest-picker-list`) | Scrollable list with max-height |
+| Picker Item (`.nest-picker-item`) | Individual thread entry (44px min height for touch targets) |
+| Nested Chit Card (`.email-nest-card`) | Nested chit card in thread view with subtle left border tint |
+| Nest Icon (`.email-nest-icon`) | Nest icon (fa-dove) styling |
+| Responsive — Mobile (≤480px) | Mobile-friendly with 44px minimum tap targets |
+
 ### 3.4 Settings HTML — Network Access Block (`settings.html`)
 
 The `#network-access-block` div inside the `#admin-section` `.settings-grid` provides the Tailscale and Ntfy configuration UI.
@@ -3424,6 +3485,7 @@ All HTML pages include the following PWA `<head>` tags: `<link rel="manifest" hr
 <link rel="stylesheet" href="/frontend/css/editor/editor.css" />
 <link rel="stylesheet" href="/frontend/css/editor/editor-email.css" />
 <link rel="stylesheet" href="/frontend/css/editor/editor-attachments.css" />
+<link rel="stylesheet" href="/frontend/css/editor/editor-nest.css" />
 ```
 
 **CDN scripts (in `<head>`):**
@@ -3469,6 +3531,7 @@ All HTML pages include the following PWA `<head>` tags: `<link rel="manifest" hr
 <script src="/frontend/js/editor/editor-health.js"></script>
 <script src="/frontend/js/editor/editor-email.js"></script>
 <script src="/frontend/js/editor/editor-attachments.js"></script>
+<script src="/frontend/js/editor/editor-nest.js"></script>
 <script src="/frontend/js/editor/editor-save.js"></script>
 <script src="/frontend/js/editor/editor-sharing.js"></script>
 <script src="/frontend/js/editor/editor-people.js"></script>
@@ -3730,7 +3793,7 @@ shared-auth.js            ← MUST load first (getCurrentUser, isAdmin, waitForA
               │     main-views.js      (coordinator — uses shared-tags, shared-sort, shared-indicators)
               │     main-alerts.js     (uses shared alarm system from shared.js)
               │     main-search.js
-              │     main-email.js      (email tab view — displayEmailView, _checkMail, _composeEmail, _updateEmailBadge, _emailQuickArchive, _emailQuickDelete, _emailHasReply, _emailGetContactImage, _toggleEmailUnreadTop, _emailShowErrorWithSettingsLink)
+              │     main-email.js      (email tab view — displayEmailView, _checkMail, _composeEmail, _updateEmailBadge, _emailQuickArchive, _emailQuickDelete, _emailHasReply, _emailGetContactImage, _toggleEmailUnreadTop, _emailShowErrorWithSettingsLink, _emailInjectNests, _buildNestedChitCard, _nestGetContentPreview)
               │     main-email-bundles.js (bundle toolbar, tabs, filtering, modal, context menu, reorder — _fetchBundles, _filterByBundle, _renderBundleToolbar, _openBundleModal, _showBundleContextMenu)
               │     main-modals.js
               │     main-init.js       (calls init functions from all above)
@@ -3752,6 +3815,7 @@ shared-auth.js            ← MUST load first (getCurrentUser, isAdmin, waitForA
                     editor-health.js      (health indicators zone)
                     editor-email.js       (email zone — depends on shared-utils, shared-editor, editor-save; includes thread view and HTML rendering)
                     editor-attachments.js (attachments zone — depends on shared-utils, editor-save)
+                    editor-nest.js        (nest button + thread picker — depends on shared-utils, editor-save)
                     editor-save.js        (save/exit logic)
                     editor-sharing.js     (sharing data-layer — uses shared-auth; provides _sharingUserList, getSharingData, hasSharingData for editor-people.js and editor-init.js)
                     editor-init.js        (entry point — calls init functions)
