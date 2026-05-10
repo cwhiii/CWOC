@@ -232,6 +232,13 @@ function displayNotesView(chitsToDisplay) {
           showQuickEditModal(chit, function () { displayChits(); });
         }
       });
+      // Right-click on card: open context menu
+      chitElement.addEventListener("contextmenu", (e) => {
+        e.preventDefault();
+        if (typeof _showChitContextMenu === 'function' && !_isViewerRole(chit)) {
+          _showChitContextMenu(e, chit, function () { displayChits(); });
+        }
+      });
       // Long-press on mobile: open quick-edit modal (same as shift-click on desktop)
       // Uses unified touch gesture: drag to reorder, very long press to quick-edit
       // (enableTouchGesture is attached after all cards are added, via enableNotesDragReorder)

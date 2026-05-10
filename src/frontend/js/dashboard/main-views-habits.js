@@ -599,6 +599,21 @@ function _renderHabitCards(container, habitData, windowDays) {
       if (typeof storePreviousState === 'function') storePreviousState();
       window.location.href = '/editor?id=' + chit.id;
     });
+    // Shift+click: open quick-edit modal
+    card.addEventListener('click', function(e) {
+      if (!e.shiftKey) return;
+      e.preventDefault();
+      if (typeof showQuickEditModal === 'function') {
+        showQuickEditModal(chit, function () { displayChits(); });
+      }
+    });
+    // Right-click: open context menu
+    card.addEventListener('contextmenu', function(e) {
+      e.preventDefault();
+      if (typeof _showChitContextMenu === 'function') {
+        _showChitContextMenu(e, chit, function() { displayChits(); });
+      }
+    });
     if (typeof enableTouchGesture === 'function') {
       enableTouchGesture(card, {
         onLongPress: function () {

@@ -653,6 +653,21 @@ function displayChecklistView(chitsToDisplay) {
         storePreviousState();
         window.location.href = `/editor?id=${chit.id}`;
       });
+      // Shift+click: open quick-edit modal
+      chitElement.addEventListener("click", (e) => {
+        if (!e.shiftKey) return;
+        e.preventDefault();
+        if (typeof showQuickEditModal === 'function' && !_isViewerRole(chit)) {
+          showQuickEditModal(chit, function() { displayChits(); });
+        }
+      });
+      // Right-click: open context menu
+      chitElement.addEventListener("contextmenu", (e) => {
+        e.preventDefault();
+        if (typeof _showChitContextMenu === 'function' && !_isViewerRole(chit)) {
+          _showChitContextMenu(e, chit, function() { displayChits(); });
+        }
+      });
       checklistView.appendChild(chitElement);
     });
   }

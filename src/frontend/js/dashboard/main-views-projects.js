@@ -311,6 +311,13 @@ function displayProjectsView(chitsToDisplay) {
       if (typeof _isViewerRole === 'function' && _isViewerRole(project)) return;
       _showProjectQuickMenu(e, project);
     });
+    // Right-click: show project quick menu
+    header.addEventListener("contextmenu", function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (typeof _isViewerRole === 'function' && _isViewerRole(project)) return;
+      _showProjectQuickMenu(e, project);
+    });
 
     // HTML5 drag for project-level reorder (desktop parity)
     box.addEventListener("dragstart", function (e) {
@@ -413,6 +420,21 @@ function displayProjectsView(chitsToDisplay) {
           li.addEventListener("dblclick", () => {
             storePreviousState();
             window.location.href = `/editor?id=${child.id}`;
+          });
+          // Shift+click: open quick-edit modal
+          li.addEventListener("click", function(e) {
+            if (!e.shiftKey) return;
+            e.preventDefault();
+            if (typeof showQuickEditModal === 'function' && !(typeof _isViewerRole === 'function' && _isViewerRole(child))) {
+              showQuickEditModal(child, function() { displayChits(); });
+            }
+          });
+          // Right-click: open context menu
+          li.addEventListener("contextmenu", function(e) {
+            e.preventDefault();
+            if (typeof _showChitContextMenu === 'function' && !(typeof _isViewerRole === 'function' && _isViewerRole(child))) {
+              _showChitContextMenu(e, child, function() { displayChits(); });
+            }
           });
         }
 
@@ -999,6 +1021,13 @@ function _renderKanbanBoard(chitList, projects, chitMap, _viSettings) {
       if (typeof _isViewerRole === 'function' && _isViewerRole(project)) return;
       _showProjectQuickMenu(e, project);
     });
+    // Right-click: show project quick menu
+    header.addEventListener("contextmenu", function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (typeof _isViewerRole === 'function' && _isViewerRole(project)) return;
+      _showProjectQuickMenu(e, project);
+    });
 
     // Track where mousedown originated for dragstart filtering
     var _projectDragOrigin = null;
@@ -1231,6 +1260,21 @@ function _renderKanbanBoard(chitList, projects, chitMap, _viSettings) {
         card.addEventListener("dblclick", () => {
           storePreviousState();
           window.location.href = `/editor?id=${child.id}`;
+        });
+        // Shift+click: open quick-edit modal
+        card.addEventListener("click", function(e) {
+          if (!e.shiftKey) return;
+          e.preventDefault();
+          if (typeof showQuickEditModal === 'function' && !(typeof _isViewerRole === 'function' && _isViewerRole(child))) {
+            showQuickEditModal(child, function() { displayChits(); });
+          }
+        });
+        // Right-click: open context menu
+        card.addEventListener("contextmenu", function(e) {
+          e.preventDefault();
+          if (typeof _showChitContextMenu === 'function' && !(typeof _isViewerRole === 'function' && _isViewerRole(child))) {
+            _showChitContextMenu(e, child, function() { displayChits(); });
+          }
         });
 
         // Touch gesture: floating card + placeholder reorder (same style as Notes view)

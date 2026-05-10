@@ -687,6 +687,142 @@ function _showSnoozeSubMenu(actionRow, snzBtn, chitId, closeModal, onRefresh) {
 }
 
 /**
+ * Show a positioned context menu for a chit (right-click style).
+ * Uses the same visual style as the project quick menu: parchment background,
+ * positioned at cursor, menu items with hover highlight and icons.
+ *
+ * @param {MouseEvent} e — the contextmenu event (for positioning)
+ * @param {object} chit — the chit object
+ * @param {function} onRefresh — callback after changes (usually displayChits)
+ */
+function _showChitContextMenu(e, chit, onRefresh) {
+  // Remove any existing context menu
+  document.querySelectorAll('.cwoc-chit-context-menu-overlay').forEach(function(el) { el.remove(); });
+
+  var chitId = chit._isVirtual ? chit._parentId : chit.id;
+
+  var overlay = document.createElement('div');
+  overlay.className = 'cwoc-chit-context-menu-overlay';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:9999;';
+
+  var menu = document.createElement('div');
+  menu.className = 'cwoc-chit-context-menu';
+  menu.style.cssText = 'position:fixed;background:#fffaf0;border:2px solid #6b4e31;border-radius:8px;padding:8px 0;min-width:200px;box-shadow:0 8px 24px rgba(0,0,0,0.3);font-family:Lora,Georgia,serif;';
+
+  // Position near the click, clamped to viewport
+  var menuX = Math.min(e.clientX, window.innerWidth - 220);
+  var menuY = Math.min(e.clientY, window.innerHeight - 300);
+  menu.style.left = menuX + 'px';
+  menu.style.top = menuY + 'px';
+
+  // Menu title
+  var titleEl = document.createElement('div');
+  titleEl.style.cssText = 'padding:4px 14px 8px;font-weight:bold;color:#4a2c2a;font-size:0.95em;border-bottom:1px solid rgba(139,90,43,0.2);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:250px;';
+  titleEl.textContent = chit.title || '(Untitled)';
+  titleEl.title = chit.title || '';
+  menu.appendChild(titleEl);
+
+  function _close() { overlay.remove(); document.removeEventListener('keydown', _escHandler, true); }
+
+  function _menuItem(icon, label, onClick) {
+    var item = document.createElement('div');
+    item.style.cssText = 'padding:8px 14px;cursor:pointer;display:flex;align-items:center;gap:8px;font-size:0.95em;color:#1a1208;';
+    item.innerHTML = '<span style="width:18px;text-align:center;">' + icon + '</span> ' + label;
+    item.addEventListener('mouseenter', function() { this.style.background = '#f0e6d0'; });
+    item.addEventListener('mouseleave', function() { this.style.background = ''; });
+    item.addEventListener('click', function() { _close(); onClick(); });
+    menu.appendChild(item);
+  }
+
+  // Open in Editor
+  _menuItem('<i class="fas fa-pen-to-square" style="color:#6b4e31;"></i>', 'Open in Editor', function() {
+    if (typeof storePreviousState === 'function') storePreviousState();
+    window.location.href = '/editor?id=' + chitId;
+  });
+
+  // Quick Edit (full modal)
+  _menuItem('<i class="fas fa-sliders" style="color:#6b4e31;"></i>', 'Quick Edit', function() {
+    showQuickEditModal(chit, onRefresh);
+  });
+
+  // Separator
+  var sep1 = document.createElement('div');
+  sep1.style.cssText = 'border-top:1px solid rgba(139,90,43,0.2);margin:4px 0;';
+  menu.appendChild(sep1);
+
+  // Pin / Unpin
+  var isPinned = !!chit.pinned;
+  _menuItem(isPinned ? '<i class="fas fa-bookmark" style="color:#8b5a2b;"></i>' : '<i class="far fa-bookmark" style="color:#6b4e31;"></i>', isPinned ? 'Unpin' : 'Pin', function() {
+    fetch('/api/chit/' + chitId).then(function(r) { return r.ok ? r.json() : null; }).then(function(full) {
+      if (!full) return;
+      full.pinned = !full.pinned;
+      return fetch('/api/chits/' + chitId, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(full) });
+    }).then(function() { if (onRefresh) onRefresh(); });
+  });
+
+  // Archive / Unarchive
+  var isArchived = !!chit.archived;
+  _menuItem(isArchived ? '📦' : '📦', isArchived ? 'Unarchive' : 'Archive', function() {
+    fetch('/api/chit/' + chitId).then(function(r) { return r.ok ? r.json() : null; }).then(function(full) {
+      if (!full) return;
+      full.archived = !full.archived;
+      return fetch('/api/chits/' + chitId, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(full) });
+    }).then(function() { if (onRefresh) onRefresh(); });
+  });
+
+  // Snooze
+  var isSnoozed = chit.snoozed_until && new Date(chit.snoozed_until) > new Date();
+  _menuItem('😴', isSnoozed ? 'Unsnooze' : 'Snooze 1 hour', function() {
+    if (isSnoozed) {
+      fetch('/api/chits/' + chitId + '/snooze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ until: null }) })
+        .then(function() { if (typeof cwocToast === 'function') cwocToast('Unsnoozed.', 'info'); if (onRefresh) onRefresh(); });
+    } else {
+      fetch('/api/chits/' + chitId + '/snooze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ minutes: 60 }) })
+        .then(function() { if (typeof cwocToast === 'function') cwocToast('Snoozed for 1 hour.', 'info'); if (onRefresh) onRefresh(); });
+    }
+  });
+
+  // Separator
+  var sep2 = document.createElement('div');
+  sep2.style.cssText = 'border-top:1px solid rgba(139,90,43,0.2);margin:4px 0;';
+  menu.appendChild(sep2);
+
+  // Delete
+  _menuItem('<i class="fas fa-trash-alt" style="color:#a33;"></i>', 'Delete', function() {
+    cwocConfirm('Delete this chit?', { title: 'Delete Chit', confirmLabel: '🗑️ Delete', danger: true }).then(function(confirmed) {
+      if (!confirmed) return;
+      var delTitle = chit.title || '(Untitled)';
+      fetch('/api/chits/' + chitId, { method: 'DELETE' }).then(function() {
+        if (onRefresh) onRefresh();
+        if (typeof _showDeleteUndoToast === 'function') {
+          _showDeleteUndoToast(chitId, delTitle, null, function() {
+            fetch('/api/trash/' + chitId + '/restore', { method: 'POST' }).then(function() { if (onRefresh) onRefresh(); });
+          });
+        }
+      });
+    });
+  });
+
+  overlay.appendChild(menu);
+  document.body.appendChild(overlay);
+
+  // Click overlay to close
+  overlay.addEventListener('click', function(ev) {
+    if (ev.target === overlay) _close();
+  });
+
+  // ESC to close
+  function _escHandler(ev) {
+    if (ev.key === 'Escape') {
+      ev.preventDefault();
+      ev.stopImmediatePropagation();
+      _close();
+    }
+  }
+  document.addEventListener('keydown', _escHandler, true);
+}
+
+/**
  * Show a delete sub-menu replacing the delete button with options:
  * This instance / This and following / All / Cancel
  */

@@ -217,6 +217,15 @@ function attachCalendarChitEvents(el, chit) {
       showQuickEditModal(chit, function() { displayChits(); });
     }
   });
+  el.addEventListener("contextmenu", function(e) {
+    if (window._dragJustEnded) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (typeof _isViewerRole === 'function' && _isViewerRole(chit)) return;
+    if (typeof _showChitContextMenu === 'function') {
+      _showChitContextMenu(e, chit, function() { displayChits(); });
+    }
+  });
 }
 
 /**
