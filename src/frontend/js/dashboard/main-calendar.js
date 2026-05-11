@@ -690,6 +690,57 @@ function displayMonthView(chitsToDisplay) {
   });
 }
 
+function _buildItineraryEvent(chit, _viSettings) {
+  const chitElement = document.createElement("div");
+  chitElement.className = "itinerary-event";
+  chitElement.style.display = "flex";
+  chitElement.style.justifyContent = "flex-start";
+  chitElement.style.padding = "10px";
+  applyChitColors(chitElement, chitColor(chit));
+  chitElement.style.marginBottom = "5px";
+  chitElement.style.borderRadius = "5px";
+  chitElement.style.marginLeft = "100px";
+
+  if ((chit.due_datetime || chit.status) && chit.status === "Complete") {
+    chitElement.classList.add("completed-task");
+  }
+  if (typeof _isDeclinedByCurrentUser === 'function' && _isDeclinedByCurrentUser(chit)) chitElement.classList.add("declined-chit");
+  if (chit.point_in_time && !chit.start_datetime && !chit.due_datetime) chitElement.classList.add("point-in-time");
+
+  const timeColumn = document.createElement("div");
+  timeColumn.className = "time-column";
+  timeColumn.style.width = "100px";
+  timeColumn.style.marginRight = "15px";
+
+  if (chit.all_day || chit.allDay) {
+    timeColumn.innerHTML = '';
+  } else if (chit.start_datetime_obj) {
+    const chitStart = chit.start_datetime_obj;
+    const chitEnd = chit.end_datetime_obj || new Date(chitStart.getTime() + 60 * 60 * 1000);
+    timeColumn.innerHTML = `${formatTime(chitStart)} - ${formatTime(chitEnd)}`;
+  } else if (chit.due_datetime) {
+    const dueDate = new Date(chit.due_datetime);
+    timeColumn.innerHTML = `⌚ ${formatTime(dueDate)}`;
+  } else if (chit.point_in_time) {
+    const pitDate = new Date(chit.point_in_time);
+    timeColumn.innerHTML = `📌 ${formatTime(pitDate)}`;
+  }
+
+  const detailsColumn = document.createElement("div");
+  detailsColumn.className = "details-column";
+  detailsColumn.style.textAlign = "center";
+  detailsColumn.style.flex = "1";
+
+  const indicators = typeof _getAllIndicators === 'function' ? _getAllIndicators(chit, _viSettings, 'card') : '';
+  const pinnedIcon = chit.pinned ? '<i class="fas fa-bookmark" style="font-size:0.85em;"></i> ' : '';
+  detailsColumn.innerHTML = `<span style="font-weight: bold; font-size: 1.1em;">${indicators}${pinnedIcon}${chit.title || '(Untitled)'}</span>`;
+
+  chitElement.appendChild(timeColumn);
+  chitElement.appendChild(detailsColumn);
+  attachCalendarChitEvents(chitElement, chit);
+  return chitElement;
+}
+
 function displayItineraryView(chitsToDisplay) {
   const chitList = document.getElementById("chit-list");
   chitList.innerHTML = "";
@@ -725,7 +776,10 @@ function displayItineraryView(chitsToDisplay) {
   if (futureChits.length === 0) {
     itineraryView.innerHTML = _emptyState("No upcoming events found.");
   } else {
+    // Group chits by day
+    const dayGroups = [];
     let currentDay = null;
+    let currentGroup = null;
     futureChits.forEach((chit) => {
       const chitDateRaw = chit.start_datetime_obj || (chit.due_datetime ? new Date(chit.due_datetime) : null) || (chit.point_in_time ? new Date(chit.point_in_time) : new Date());
       const chitDate = new Date(chitDateRaw);
@@ -733,63 +787,47 @@ function displayItineraryView(chitsToDisplay) {
 
       if (!currentDay || chitDate.getTime() !== currentDay.getTime()) {
         currentDay = chitDate;
-        const daySeparator = document.createElement("div");
-        daySeparator.className = "day-separator";
-        if (chitDate.toDateString() === new Date().toDateString()) daySeparator.classList.add("today");
-        daySeparator.innerHTML = `<hr><h3>${formatDate(chitDate)}</h3>`;
-        itineraryView.appendChild(daySeparator);
+        currentGroup = { date: chitDate, allDay: [], timed: [] };
+        dayGroups.push(currentGroup);
+      }
+      if (chit.all_day || chit.allDay) {
+        currentGroup.allDay.push(chit);
+      } else {
+        currentGroup.timed.push(chit);
+      }
+    });
+
+    dayGroups.forEach((group) => {
+      // Day separator header
+      const daySeparator = document.createElement("div");
+      daySeparator.className = "day-separator";
+      if (group.date.toDateString() === new Date().toDateString()) daySeparator.classList.add("today");
+      daySeparator.innerHTML = `<hr><h3>${formatDate(group.date)}</h3>`;
+      itineraryView.appendChild(daySeparator);
+
+      // All-day section
+      if (group.allDay.length > 0) {
+        const allDayLabel = document.createElement("div");
+        allDayLabel.style.cssText = "margin-left:100px;padding:4px 10px;font-size:0.85em;font-weight:bold;color:#6b4e31;opacity:0.8;border-bottom:1px dashed #c4a97d;margin-bottom:4px;";
+        allDayLabel.textContent = "🗓️ All Day";
+        itineraryView.appendChild(allDayLabel);
+
+        group.allDay.forEach((chit) => {
+          itineraryView.appendChild(_buildItineraryEvent(chit, _viSettings));
+        });
       }
 
-      const chitElement = document.createElement("div");
-      chitElement.className = "itinerary-event";
-      chitElement.style.display = "flex";
-      chitElement.style.justifyContent = "flex-start";
-      chitElement.style.padding = "10px";
-      applyChitColors(chitElement, chitColor(chit));
-      chitElement.style.marginBottom = "5px";
-      chitElement.style.borderRadius = "5px";
-      chitElement.style.marginLeft = "100px";
-
-      // Fade completed tasks
-      if ((chit.due_datetime || chit.status) && chit.status === "Complete") {
-        chitElement.classList.add("completed-task");
-      }
-      if (typeof _isDeclinedByCurrentUser === 'function' && _isDeclinedByCurrentUser(chit)) chitElement.classList.add("declined-chit");
-      if (chit.point_in_time && !chit.start_datetime && !chit.due_datetime) chitElement.classList.add("point-in-time");
-
-      const timeColumn = document.createElement("div");
-      timeColumn.className = "time-column";
-      timeColumn.style.width = "100px";
-      timeColumn.style.marginRight = "15px";
-
-      if (chit.start_datetime_obj) {
-        const chitStart = chit.start_datetime_obj;
-        const chitEnd =
-          chit.end_datetime_obj || new Date(chitStart.getTime() + 60 * 60 * 1000);
-        timeColumn.innerHTML = `${formatTime(chitStart)} - ${formatTime(chitEnd)}`;
-      } else if (chit.due_datetime) {
-        // Due-date-only chit
-        const dueDate = new Date(chit.due_datetime);
-        timeColumn.innerHTML = chit.all_day ? '⌚ All Day' : `⌚ ${formatTime(dueDate)}`;
-      } else if (chit.point_in_time) {
-        const pitDate = new Date(chit.point_in_time);
-        timeColumn.innerHTML = `📌 ${formatTime(pitDate)}`;
+      // Timed section
+      if (group.timed.length > 0 && group.allDay.length > 0) {
+        const timedLabel = document.createElement("div");
+        timedLabel.style.cssText = "margin-left:100px;padding:4px 10px;font-size:0.85em;font-weight:bold;color:#6b4e31;opacity:0.8;border-bottom:1px dashed #c4a97d;margin-bottom:4px;margin-top:6px;";
+        timedLabel.textContent = "⏰ Timed";
+        itineraryView.appendChild(timedLabel);
       }
 
-      const detailsColumn = document.createElement("div");
-      detailsColumn.className = "details-column";
-      detailsColumn.style.textAlign = "center";
-      detailsColumn.style.flex = "1";
-
-      // Visual indicators before title
-      const indicators = typeof _getAllIndicators === 'function' ? _getAllIndicators(chit, _viSettings, 'card') : '';
-      const pinnedIcon = chit.pinned ? '<i class="fas fa-bookmark" style="font-size:0.85em;"></i> ' : '';
-      detailsColumn.innerHTML = `<span style="font-weight: bold; font-size: 1.1em;">${indicators}${pinnedIcon}${chit.title || '(Untitled)'}</span>`;
-
-      chitElement.appendChild(timeColumn);
-      chitElement.appendChild(detailsColumn);
-      attachCalendarChitEvents(chitElement, chit);
-      itineraryView.appendChild(chitElement);
+      group.timed.forEach((chit) => {
+        itineraryView.appendChild(_buildItineraryEvent(chit, _viSettings));
+      });
     });
   }
 

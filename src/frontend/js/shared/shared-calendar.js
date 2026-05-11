@@ -511,6 +511,8 @@ async function _onCalDragEnd(e) {
       body: JSON.stringify(chit),
     });
     console.log('Calendar drag saved:', chit.id, putResp.status, 'start:', chit.start_datetime, 'end:', chit.end_datetime, 'due:', chit.due_datetime);
+    // Re-apply fade for past events after position change
+    if (typeof _applyChitDisplayOptions === 'function') _applyChitDisplayOptions();
   } catch (err) {
     console.error('Calendar drag save failed:', err);
   }
