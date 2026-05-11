@@ -1,0 +1,1 @@
+Fixed ==highlight== markdown syntax not working in the editor — marked.js was loading after shared-utils.js so the extension never registered. Moved marked.js to load before shared-utils in editor.html.

@@ -98,7 +98,7 @@ function _isChecklistAutosaveActive() {
 
 /**
  * Debounced auto-save of checklist data only.
- * Waits 1.5s after last change before saving.
+ * Waits 2s after last change before saving.
  */
 function _checklistAutosave() {
   if (!_isChecklistAutosaveActive()) return;
@@ -107,7 +107,7 @@ function _checklistAutosave() {
   if (_checklistAutosaveTimer) clearTimeout(_checklistAutosaveTimer);
   _checklistAutosaveTimer = setTimeout(function() {
     _doChecklistAutosave();
-  }, 1500);
+  }, 2000);
 }
 
 /**

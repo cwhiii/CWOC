@@ -185,22 +185,58 @@ class Checklist {
   createInput() {
     this.input = document.createElement("input");
     this.input.type = "text";
-    this.input.placeholder = "Add new item and press Enter";
+    this.input.placeholder = "Add new item (auto-saves after 2s)";
     this.input.className = "checklist-input";
+    this._inputDebounceTimer = null;
     var self = this;
+
+    // Debounced auto-add: if user stops typing for 2s, auto-add the item
+    this.input.addEventListener("input", function() {
+      if (self._inputDebounceTimer) clearTimeout(self._inputDebounceTimer);
+      if (self.input.value.trim() !== "") {
+        self.input.classList.add("debounce-pending");
+        self._inputDebounceTimer = setTimeout(function() {
+          if (self.input.value.trim() !== "") {
+            self.addNewItem(self.input.value.trim());
+            self.input.value = "";
+            self.input.classList.remove("debounce-pending");
+            if (typeof _flashChecklistAddArrow === 'function') _flashChecklistAddArrow();
+          }
+        }, 2000);
+      } else {
+        self.input.classList.remove("debounce-pending");
+      }
+    });
+
     this.input.addEventListener("keydown", (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "z" && !e.shiftKey) {
         e.preventDefault(); self.undo();
       } else if ((e.metaKey || e.ctrlKey) && e.key === "z" && e.shiftKey) {
         e.preventDefault(); self.redo();
       } else if (e.key === "Enter" && this.input.value.trim() !== "") {
+        // Instant save on Enter — cancel any pending debounce
+        if (self._inputDebounceTimer) { clearTimeout(self._inputDebounceTimer); self._inputDebounceTimer = null; }
+        self.input.classList.remove("debounce-pending");
         this.addNewItem(this.input.value.trim());
         this.input.value = "";
         if (typeof _flashChecklistAddArrow === 'function') _flashChecklistAddArrow();
       } else if (e.key === "Escape") {
+        // Cancel pending debounce on Escape
+        if (self._inputDebounceTimer) { clearTimeout(self._inputDebounceTimer); self._inputDebounceTimer = null; }
+        self.input.classList.remove("debounce-pending");
         if (typeof cancelOrExit === "function") cancelOrExit();
       }
     });
+
+    // Also save on blur if there's text (existing behavior #1)
+    this.input.addEventListener("blur", function() {
+      if (self._inputDebounceTimer) { clearTimeout(self._inputDebounceTimer); self._inputDebounceTimer = null; }
+      if (self.input.value.trim() !== "") {
+        self.addNewItem(self.input.value.trim());
+        self.input.value = "";
+      }
+    });
+
     this.container.insertBefore(this.input, this.container.firstChild);
   }
 
@@ -514,6 +550,20 @@ class Checklist {
       ta.style.height = ta.scrollHeight + 'px';
     };
     ta.addEventListener('input', autoSize);
+
+    // Debounced auto-save while editing: save after 2s of no typing
+    var editDebounceTimer = null;
+    ta.addEventListener('input', function() {
+      if (editDebounceTimer) clearTimeout(editDebounceTimer);
+      if (ta.value.trim() !== "") {
+        editDebounceTimer = setTimeout(function() {
+          if (self.editingItem && ta.value.trim() !== "") {
+            item.text = ta.value.trim();
+            self._notifyChange();
+          }
+        }, 2000);
+      }
+    });
 
     ta.focus();
     autoSize();

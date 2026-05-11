@@ -963,7 +963,7 @@ hr {
 }
 
 mark {
-    background: #f5e6a3;
+    background: #ffe033;
     color: #1a1208;
     padding: 1px 3px;
     border-radius: 2px;
@@ -2107,11 +2107,16 @@ mark {
     border-radius: 4px;
     background: var(--input-bg, #fdf5e6);
     color: var(--text-color, #4a2c2a);
+    transition: border-color 0.3s, box-shadow 0.3s;
 }
 .checklist-input:focus {
     outline: none;
     border-color: var(--accent-teal, #008080);
     box-shadow: 0 0 0 1px rgba(0, 128, 128, 0.25);
+}
+.checklist-input.debounce-pending {
+    border-color: var(--accent-teal, #008080);
+    box-shadow: 0 0 0 2px rgba(0, 128, 128, 0.15);
 }
 
 .completed-checklist-container {

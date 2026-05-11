@@ -234,7 +234,7 @@ function copyNotesToClipboard(event, source) {
   let text = "";
   if (source === "modal") {
     const modalInput = document.getElementById("notes-markdown-input-modal");
-    text = modalInput ? modalInput.innerText : "";
+    text = modalInput ? _getContentEditableText(modalInput) : "";
   } else {
     const textarea = document.getElementById("note");
     text = textarea ? textarea.value : "";
@@ -259,7 +259,7 @@ function downloadNotes(event, source) {
   let text = "";
   if (source === "modal") {
     const modalInput = document.getElementById("notes-markdown-input-modal");
-    text = modalInput ? modalInput.innerText : "";
+    text = modalInput ? _getContentEditableText(modalInput) : "";
   } else {
     const textarea = document.getElementById("note");
     text = textarea ? textarea.value : "";
@@ -368,9 +368,9 @@ function toggleModalNotesRender() {
     _setNotesRenderToggleLabel(false, "modal");
   } else {
     if (typeof marked !== "undefined") {
-      modalOutput.innerHTML = marked.parse(modalInput.innerText || "");
+      modalOutput.innerHTML = marked.parse(_getContentEditableText(modalInput) || "");
     } else {
-      modalOutput.innerHTML = `<pre style="white-space:pre-wrap;">${modalInput.innerText}</pre>`;
+      modalOutput.innerHTML = `<pre style="white-space:pre-wrap;">${_getContentEditableText(modalInput)}</pre>`;
     }
     modalOutput.style.display = "block";
     modalInput.style.display = "none";

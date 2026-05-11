@@ -1,0 +1,1 @@
+Added 2-second debounced auto-save to checklist new-item input and inline editing. Typing and pausing for 2s auto-adds/saves the item without needing Enter. Enter still works instantly. Existing checklist autosave timer also aligned to 2s. Visual border glow indicates pending auto-save.
