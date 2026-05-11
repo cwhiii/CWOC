@@ -47,7 +47,7 @@ function _buildNotePreview(chit, extraStyle) {
   var notePreview = document.createElement('div');
   notePreview.className = 'note-preview';
   if (typeof marked !== 'undefined') {
-    notePreview.innerHTML = resolveChitLinks(marked.parse(chit.note.slice(0, 500)), chits);
+    notePreview.innerHTML = resolveChitLinks(marked.parse(chit.note.slice(0, 500), { breaks: true }), chits);
   } else {
     notePreview.textContent = chit.note.slice(0, 300) + (chit.note.length > 300 ? '…' : '');
   }
@@ -635,7 +635,12 @@ function displayChecklistView(chitsToDisplay) {
           if (item.checked || item.done) return;
           var row = document.createElement('div');
           row.style.cssText = 'padding:2px 0;';
-          row.textContent = '☐ ' + (item.text || item.label || '');
+          var rowText = document.createElement('span');
+          rowText.textContent = '☐ ';
+          row.appendChild(rowText);
+          var rowMd = document.createElement('span');
+          renderChecklistItemMarkdown(rowMd, item.text || item.label || '');
+          row.appendChild(rowMd);
           roList.appendChild(row);
         });
         chitElement.appendChild(roList);

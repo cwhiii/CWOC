@@ -959,7 +959,14 @@ input.error {
 hr {
     margin: 10px 0;
     border: 0;
-    border-top: 1px dashed var(--aged-brown-light);
+    border-top: 2px solid var(--aged-brown-dark);
+}
+
+mark {
+    background: #f5e6a3;
+    color: #1a1208;
+    padding: 1px 3px;
+    border-radius: 2px;
 }
 
 .completed-section-hidden {
@@ -2201,6 +2208,51 @@ hr {
     white-space: pre-wrap;
     word-break: break-word;
     cursor: text;
+}
+
+/* Markdown rendered inside checklist items */
+.checklist-text p { margin: 0; }
+.checklist-text p + p { margin-top: 0.4em; }
+.checklist-text code {
+    background: rgba(107, 78, 49, 0.1);
+    padding: 0.1em 0.3em;
+    border-radius: 3px;
+    font-size: 0.9em;
+}
+.checklist-text a {
+    color: var(--accent-teal, #008080);
+    text-decoration: underline;
+}
+.checklist-text strong { font-weight: 700; }
+.checklist-text em { font-style: italic; }
+.checklist-text del { text-decoration: line-through; opacity: 0.7; }
+.checklist-text img { max-height: 1.4em; vertical-align: middle; }
+.checklist-text h1, .checklist-text h2, .checklist-text h3,
+.checklist-text h4, .checklist-text h5, .checklist-text h6 {
+    margin: 0.3em 0 0.2em 0;
+    font-size: 1em;
+    font-weight: 700;
+}
+.checklist-text h1 { font-size: 1.2em; }
+.checklist-text h2 { font-size: 1.1em; }
+.checklist-text ul, .checklist-text ol {
+    margin: 0.2em 0;
+    padding-left: 1.4em;
+}
+.checklist-text li { margin: 0.1em 0; }
+.checklist-text blockquote {
+    margin: 0.3em 0;
+    padding-left: 0.8em;
+    border-left: 3px solid rgba(107, 78, 49, 0.3);
+    opacity: 0.85;
+}
+.checklist-text pre {
+    margin: 0.3em 0;
+    padding: 0.4em 0.6em;
+    background: rgba(107, 78, 49, 0.08);
+    border-radius: 4px;
+    overflow-x: auto;
+    font-size: 0.9em;
 }
 
 .checklist-edit-input {

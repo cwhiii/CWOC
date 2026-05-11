@@ -1,0 +1,1 @@
+Fixed scroll jumping when clicking the note textarea. autoGrowNote now preserves scroll position during height recalculation. Also changed rendered note output from double-click to single-click to switch back to edit mode. Checklist markdown rendering now strips generated input elements and prevents links from stealing focus.

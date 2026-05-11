@@ -1,0 +1,1 @@
+Notes textarea in edit mode now expands to fill available viewport height (up to the bottom of the screen) rather than capping at 60%. It grows to fit content without exceeding the viewport, and becomes scrollable only when content overflows. Also re-sizes on window resize.

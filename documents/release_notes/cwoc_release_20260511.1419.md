@@ -1,0 +1,1 @@
+Fixed note textarea shrinking to ~6 lines when clicking to edit. autoGrowNote now caps at 70vh instead of calculating from element position (which was unreliable after layout changes). Switching from rendered to edit mode preserves the rendered height as a starting point.

@@ -170,6 +170,13 @@
     overflow-x: auto;
 }
 
+.email-body-preview mark {
+    background: #f5e6a3;
+    color: #1a1208;
+    padding: 1px 3px;
+    border-radius: 2px;
+}
+
 .email-body-preview-label {
     font-size: 0.8em;
     color: var(--aged-brown-light, #a0522d);

@@ -590,7 +590,7 @@ function _loadLoginMessage() {
       if (data && data.message) {
         textarea.value = data.message;
         if (preview && typeof marked !== 'undefined') {
-          preview.innerHTML = marked.parse(data.message);
+          preview.innerHTML = marked.parse(data.message, { breaks: true });
         }
       }
       if (data && data.instance_name && instanceInput) {
@@ -601,7 +601,7 @@ function _loadLoginMessage() {
 
   textarea.addEventListener('input', function() {
     if (preview && typeof marked !== 'undefined') {
-      preview.innerHTML = marked.parse(textarea.value);
+      preview.innerHTML = marked.parse(textarea.value, { breaks: true });
     }
     setSaveButtonUnsaved();
   });

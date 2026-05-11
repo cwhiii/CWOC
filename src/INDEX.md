@@ -1222,10 +1222,11 @@ Unified touch gesture system for drag and long-press interactions.
 
 #### shared-checklist.js
 
-Inline checklist interactions for dashboard views — toggle, move, cross-chit move, and drag-and-drop rendering.
+Inline checklist interactions for dashboard views — toggle, move, cross-chit move, drag-and-drop rendering, and inline markdown rendering.
 
 | Function | Description |
 |----------|-------------|
+| `renderChecklistItemMarkdown(span, text)` | Render markdown inline for a checklist item's text span (bold, italic, links, code, strikethrough) using marked.js |
 | `toggleChecklistItem(chitId, itemIndex, newChecked)` | Toggle a checklist item's checked state and save via API |
 | `moveChecklistItem(chitId, fromIndex, toIndex)` | Move a checklist item within a chit's checklist and save |
 | `moveChecklistItemCrossChit(fromChitId, fromIndex, toChitId, toIndex)` | Move a checklist item between chits (or within the same chit) and save both |
@@ -1485,6 +1486,8 @@ Coordinator for shared code between dashboard and editor. Contains glue code for
 | `_showQuickAlertCreatedActions(type)` | Replace quick alert modal content with Done and View buttons after creation |
 | `_showQuickAlertToast(type)` | Show a brief toast confirming alert creation (non-dashboard pages) |
 | `_initSharedHotkeys()` | Register the global keydown listener for !, \`, ~ hotkeys on all pages |
+| `_printNoteWithChoice(text, title)` | Show a modal with Raw/Rendered choice, then open a print tab with the note content |
+| `_openPrintTab(text, title, mode)` | Print note content via a hidden iframe without leaving the page (raw or rendered) |
 | `getCurrentPeriodDate(chit)` | Return the current period's date as a `YYYY-MM-DD` string for a recurring chit based on its frequency (daily, weekly, monthly, yearly, custom interval) |
 | `_getPreviousPeriodDate(chit)` | Return the previous period's date as a `YYYY-MM-DD` string for a recurring chit, one interval before the current period |
 | `_evaluateHabitRollover(chit)` | Detect period change for a habit chit; if the current period has advanced, snapshot `habit_success`/`habit_goal` into a recurrence exception for the ended period, reset `habit_success` to 0, and clear Complete status. Returns whether rollover occurred |
@@ -2163,6 +2166,7 @@ Notes zone: auto-grow, chit linking, markdown render, modal.
 | `_switchNotesModalMode(mode)` | Switch the notes modal between Edit/Render and Live Preview modes; syncs content between panes |
 | `_wireNotesModalLivePreview()` | Wire the live preview input listener for real-time markdown rendering (only once) |
 | `_updateNotesModalLivePreview()` | Update the live preview output from the live preview input using `marked.parse()` |
+| `_printNote(event)` | Print note from the editor — shows Raw/Rendered choice modal, opens print tab |
 
 #### editor-send-content.js
 

@@ -12,6 +12,31 @@
  *             shared-geocoding.js, shared-qr.js, shared.js
  */
 
+// ── Global marked.js configuration ──────────────────────────────────────────
+// Enable GFM line breaks globally so single newlines render as <br>.
+// This applies to ALL marked.parse() calls without needing per-call options.
+if (typeof marked !== 'undefined' && marked.use) {
+  marked.use({ breaks: true });
+
+  // ==highlight== extension — wraps ==text== in <mark> tags
+  marked.use({
+    extensions: [{
+      name: 'highlight',
+      level: 'inline',
+      start: function(src) { var m = src.match(/==/); return m ? m.index : -1; },
+      tokenizer: function(src) {
+        var match = src.match(/^==([^=]+)==/);
+        if (match) {
+          return { type: 'highlight', raw: match[0], text: match[1] };
+        }
+      },
+      renderer: function(token) {
+        return '<mark>' + token.text + '</mark>';
+      }
+    }]
+  });
+}
+
 // Version is logged once via _logCwocVersion() in shared.js
 
 // ── Settings Cache ───────────────────────────────────────────────────────────

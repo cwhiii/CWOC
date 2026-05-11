@@ -1,0 +1,1 @@
+Fix: Notes with single newlines (no blank line between text) now correctly render as line breaks instead of collapsing into one line. Added global `marked.use({ breaks: true })` in shared-utils.js and fixed script load order so marked.js loads before shared scripts in editor.html and settings.html.

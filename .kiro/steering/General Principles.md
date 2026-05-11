@@ -63,6 +63,7 @@ DO NOT INSTALL THINGS!
 - Include all relevant context in each log: coordinates, element info, computed values, conditions evaluated, which branch was taken and why.
 - Never assume which part is working. Log everything so the exact failure point is immediately visible.
 - Use `console.log` with a clear prefix tag (e.g. `[FeatureName]`) so logs are filterable.
+- **Never remove logging until explicitly told to.** When the user asks to add logging, it stays in the code until the user says to remove it. Do not clean it up, strip it out, or "simplify" it away in subsequent changes.
 
 ## Frontend Architecture
 - All JS is loaded via `<script>` tags in HTML — no ES modules, no imports. Load order matters: `shared.js` before page-specific scripts.

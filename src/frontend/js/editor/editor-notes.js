@@ -46,9 +46,25 @@ function _closeNotesMoreMenu() {
 }
 
 function autoGrowNote(el) {
-  el.style.height = "auto";
-  const maxH = Math.floor(window.innerHeight * 0.6);
-  el.style.height = Math.min(el.scrollHeight, maxH) + "px";
+  // Measure content height
+  el.style.height = "0px";
+  var contentH = el.scrollHeight;
+  var maxH = window.innerHeight;
+  var targetH = Math.min(contentH, maxH);
+  if (targetH < 48) targetH = 48;
+
+  // Set the parent (.field.full-width) height — textarea is 100% of it
+  var parent = el.parentElement;
+  if (parent) parent.style.height = targetH + "px";
+
+  // Set the grandparent (.zone-body) height so it wraps
+  var grandparent = parent ? parent.parentElement : null;
+  if (grandparent) grandparent.style.height = "auto";
+
+  // Reset textarea height to fill parent
+  el.style.height = "100%";
+  el.style.overflowY = contentH > maxH ? "auto" : "hidden";
+
   _checkChitLinkAutocomplete(el);
 }
 
@@ -192,22 +208,21 @@ function toggleNotesViewMode(event) {
 
   const isCurrentlyRendered = rendered.style.display !== "none";
   if (isCurrentlyRendered) {
-    // Switch to edit — restore textarea at same visual height as rendered div
-    const h = rendered.offsetHeight;
+    // Switch to edit — restore textarea and resize parent to fit content
     rendered.style.display = "none";
     textarea.style.display = "";
-    if (h > 0) textarea.style.height = h + "px";
-    textarea.focus();
     _setNotesRenderToggleLabel(false, "main");
+    autoGrowNote(textarea);
+    textarea.focus();
   } else {
-    // Switch to rendered — capture textarea height first
-    const h = textarea.offsetHeight || textarea.scrollHeight;
+    // Switch to rendered — reset parent height so rendered div flows naturally
+    var parent = textarea.parentElement;
+    if (parent) parent.style.height = "";
     if (typeof marked !== "undefined") {
       rendered.innerHTML = marked.parse(textarea.value || "");
     } else {
       rendered.innerHTML = `<pre style="white-space:pre-wrap;">${textarea.value}</pre>`;
     }
-    rendered.style.minHeight = h + "px";
     rendered.style.display = "block";
     textarea.style.display = "none";
     _setNotesRenderToggleLabel(true, "main");
@@ -297,7 +312,17 @@ function closeNotesModal(save) {
     const mainNote = document.getElementById("note");
     if (mainNote) {
       mainNote.value = text;
-      autoGrowNote(mainNote);
+      // If rendered view is showing, re-render; otherwise resize textarea
+      const rendered = document.getElementById("notes-rendered-output");
+      if (rendered && rendered.style.display !== "none") {
+        if (typeof marked !== "undefined") {
+          rendered.innerHTML = marked.parse(text || "", { breaks: true });
+        } else {
+          rendered.innerHTML = '<pre style="white-space:pre-wrap;">' + text + '</pre>';
+        }
+      } else {
+        autoGrowNote(mainNote);
+      }
       setSaveButtonUnsaved();
     }
   }

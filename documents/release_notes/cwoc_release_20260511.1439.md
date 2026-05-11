@@ -1,0 +1,1 @@
+Fixed note textarea size: changed min-height from 6em to 20em with overflow-y:auto so the textarea is always a usable size with internal scrolling, regardless of parent CSS constraints. Removed debug logging.

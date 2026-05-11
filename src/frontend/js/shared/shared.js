@@ -856,6 +856,13 @@ function _showChitContextMenu(e, chit, onRefresh) {
   sep2.style.cssText = 'border-top:1px solid rgba(139,90,43,0.2);margin:4px 0;';
   menu.appendChild(sep2);
 
+  // Print Note (only if chit has notes)
+  if (chit.note && chit.note.trim()) {
+    _menuItem('<i class="fas fa-print" style="color:#6b4e31;"></i>', 'Print Note', function() {
+      _printNoteWithChoice(chit.note, chit.title);
+    });
+  }
+
   // Delete
   _menuItem('<i class="fas fa-trash-alt" style="color:#a33;"></i>', 'Delete', function() {
     cwocConfirm('Delete this chit?', { title: 'Delete Chit', confirmLabel: '🗑️ Delete', danger: true }).then(function(confirmed) {
@@ -1572,7 +1579,7 @@ function enableNotesDragReorder(container, tab, onReorder) {
               }).then(function (r) { if (r.ok) { chit.note = newNote; if (typeof fetchChits === 'function') fetchChits(); } });
             } else {
               if (typeof marked !== 'undefined' && chit.note) {
-                noteEl.innerHTML = (typeof resolveChitLinks === 'function') ? resolveChitLinks(marked.parse(chit.note), chits) : marked.parse(chit.note);
+                noteEl.innerHTML = (typeof resolveChitLinks === 'function') ? resolveChitLinks(marked.parse(chit.note, { breaks: true }), chits) : marked.parse(chit.note, { breaks: true });
               }
             }
           };
@@ -4256,6 +4263,315 @@ function _initSharedHotkeys() {
       return;
     }
   });
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// PRINT NOTE — shared print logic (used by editor and dashboard context menu)
+// ══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Show a modal with Raw / Rendered choice, then open print tab.
+ * @param {string} text - The note markdown content
+ * @param {string} title - The chit title
+ */
+function _printNoteWithChoice(text, title) {
+  // Remove any existing print modal
+  var existing = document.getElementById('cwoc-print-choice-modal');
+  if (existing) existing.remove();
+
+  var overlay = document.createElement('div');
+  overlay.id = 'cwoc-print-choice-modal';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;';
+
+  var box = document.createElement('div');
+  box.style.cssText = 'background:#fffaf0;border:2px solid #8b5a2b;border-radius:8px;padding:20px 28px;max-width:340px;width:90%;font-family:Lora,Georgia,serif;color:#2b1e0f;box-shadow:0 4px 16px rgba(0,0,0,0.3);text-align:center;';
+
+  var h3 = document.createElement('h3');
+  h3.style.cssText = 'margin:0 0 12px;font-size:1.2em;color:#4a2c2a;';
+  h3.textContent = 'Print Note';
+  box.appendChild(h3);
+
+  var p = document.createElement('p');
+  p.style.cssText = 'margin:0 0 18px;font-size:1em;line-height:1.4;';
+  p.textContent = 'How would you like to print?';
+  box.appendChild(p);
+
+  var btnRow = document.createElement('div');
+  btnRow.style.cssText = 'display:flex;gap:10px;justify-content:center;flex-wrap:wrap;';
+
+  var rawBtn = document.createElement('button');
+  rawBtn.className = 'standard-button';
+  rawBtn.innerHTML = '<i class="fas fa-file-lines"></i> Raw';
+  rawBtn.style.cssText = 'padding:8px 16px;font-family:inherit;cursor:pointer;';
+  rawBtn.onclick = function() { overlay.remove(); _openPrintTab(text, title, 'raw'); };
+
+  var renderedBtn = document.createElement('button');
+  renderedBtn.className = 'standard-button';
+  renderedBtn.innerHTML = '<i class="fas fa-eye"></i> Rendered';
+  renderedBtn.style.cssText = 'padding:8px 16px;font-family:inherit;cursor:pointer;';
+  renderedBtn.onclick = function() { overlay.remove(); _openPrintTab(text, title, 'rendered'); };
+
+  var cancelBtn = document.createElement('button');
+  cancelBtn.className = 'standard-button';
+  cancelBtn.textContent = 'Cancel';
+  cancelBtn.style.cssText = 'padding:8px 16px;font-family:inherit;cursor:pointer;opacity:0.7;';
+  cancelBtn.onclick = function() { overlay.remove(); };
+
+  btnRow.appendChild(rawBtn);
+  btnRow.appendChild(renderedBtn);
+  btnRow.appendChild(cancelBtn);
+  box.appendChild(btnRow);
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+
+  // ESC to close
+  function _escHandler(ev) {
+    if (ev.key === 'Escape') {
+      ev.preventDefault();
+      ev.stopImmediatePropagation();
+      overlay.remove();
+      document.removeEventListener('keydown', _escHandler, true);
+    }
+  }
+  document.addEventListener('keydown', _escHandler, true);
+
+  // Click overlay to close
+  overlay.addEventListener('click', function(ev) {
+    if (ev.target === overlay) overlay.remove();
+  });
+}
+
+/**
+ * Print note content using a hidden iframe — no new tab, no page change.
+ * @param {string} text - Raw markdown text
+ * @param {string} title - Chit title
+ * @param {string} mode - 'raw' or 'rendered'
+ */
+function _openPrintTab(text, title, mode) {
+  var printTitle = title || 'Note';
+  var bodyContent = '';
+
+  if (mode === 'rendered') {
+    if (typeof marked !== 'undefined') {
+      var rendered = marked.parse(text);
+      if (typeof DOMPurify !== 'undefined') {
+        rendered = DOMPurify.sanitize(rendered);
+      }
+      bodyContent = '<div class="rendered-content">' + rendered + '</div>';
+    } else {
+      bodyContent = '<div class="rendered-content">' + text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>') + '</div>';
+    }
+  } else {
+    bodyContent = '<pre class="raw-content">' + text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</pre>';
+  }
+
+  var html = '<!DOCTYPE html><html><head><meta charset="UTF-8">'
+    + '<title>Print: ' + printTitle.replace(/</g,'&lt;') + '</title>'
+    + '<style>'
+    + 'body { font-family: Lora, Georgia, serif; max-width: 800px; margin: 0 auto; padding: 20px 40px; color: #1a1208; }'
+    + 'h1 { font-size: 1.4em; border-bottom: 1px solid #8b5a2b; padding-bottom: 8px; margin-bottom: 16px; }'
+    + '.raw-content { font-family: "Courier New", Courier, monospace; font-size: 0.9em; white-space: pre-wrap; word-wrap: break-word; line-height: 1.6; }'
+    + '.rendered-content { line-height: 1.6; }'
+    + '.rendered-content h1, .rendered-content h2, .rendered-content h3 { margin: 0.8em 0 0.4em; }'
+    + '.rendered-content ul, .rendered-content ol { padding-left: 1.5em; }'
+    + '.rendered-content code { background: #f0e6d0; padding: 2px 4px; border-radius: 3px; font-size: 0.9em; }'
+    + '.rendered-content pre { background: #f5f0e8; padding: 12px; border-radius: 4px; overflow-x: auto; }'
+    + '.rendered-content pre code { background: none; padding: 0; }'
+    + '.rendered-content blockquote { border-left: 3px solid #8b5a2b; margin: 0.5em 0; padding: 0.3em 1em; color: #4a2c2a; }'
+    + '.rendered-content table { border-collapse: collapse; width: 100%; }'
+    + '.rendered-content th, .rendered-content td { border: 1px solid #8b5a2b; padding: 6px 10px; text-align: left; }'
+    + '.print-meta { font-size: 0.85em; color: #6b4e31; margin-bottom: 16px; }'
+    + '@media print { body { padding: 0; } @page { size: landscape; } }'
+    + '</style></head><body>'
+    + '<h1>' + printTitle.replace(/&/g,'&amp;').replace(/</g,'&lt;') + '</h1>'
+    + '<div class="print-meta">Printed from C.W.\'s Omni Chits \u2014 ' + new Date().toLocaleDateString() + '</div>'
+    + bodyContent
+    + '</body></html>';
+
+  // Use a hidden iframe to print without leaving the page
+  var iframe = document.getElementById('cwoc-print-iframe');
+  if (!iframe) {
+    iframe = document.createElement('iframe');
+    iframe.id = 'cwoc-print-iframe';
+    iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:800px;height:600px;border:none;visibility:hidden;';
+    document.body.appendChild(iframe);
+  }
+
+  var doc = iframe.contentDocument || iframe.contentWindow.document;
+  doc.open();
+  doc.write(html);
+  doc.close();
+
+  // Wait for content to render, then print
+  setTimeout(function() {
+    iframe.contentWindow.focus();
+    iframe.contentWindow.print();
+  }, 200);
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Print Checklist
+// ══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Print checklist — shows a modal with "Include completed items" checkbox,
+ * then prints via hidden iframe.
+ * @param {object} checklist - The Checklist instance (has .items array)
+ */
+function _printChecklist(checklist) {
+  if (!checklist || !checklist.items || checklist.items.length === 0) {
+    if (typeof cwocToast === 'function') cwocToast('No checklist items to print.', 'info');
+    return;
+  }
+
+  // Remove any existing print modal
+  var existing = document.getElementById('cwoc-print-checklist-modal');
+  if (existing) existing.remove();
+
+  var overlay = document.createElement('div');
+  overlay.id = 'cwoc-print-checklist-modal';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;';
+
+  var box = document.createElement('div');
+  box.style.cssText = 'background:#fffaf0;border:2px solid #8b5a2b;border-radius:8px;padding:20px 28px;max-width:340px;width:90%;font-family:Lora,Georgia,serif;color:#2b1e0f;box-shadow:0 4px 16px rgba(0,0,0,0.3);text-align:center;';
+
+  var h3 = document.createElement('h3');
+  h3.style.cssText = 'margin:0 0 12px;font-size:1.2em;color:#4a2c2a;';
+  h3.textContent = 'Print Checklist';
+  box.appendChild(h3);
+
+  // Checkbox option row
+  var optRow = document.createElement('label');
+  optRow.style.cssText = 'display:flex;align-items:center;gap:8px;justify-content:center;margin:0 0 18px;font-size:1em;cursor:pointer;';
+  var cb = document.createElement('input');
+  cb.type = 'checkbox';
+  cb.checked = false;
+  cb.style.cssText = 'width:18px;height:18px;cursor:pointer;';
+  var cbLabel = document.createElement('span');
+  cbLabel.textContent = 'Include completed items';
+  optRow.appendChild(cb);
+  optRow.appendChild(cbLabel);
+  box.appendChild(optRow);
+
+  var btnRow = document.createElement('div');
+  btnRow.style.cssText = 'display:flex;gap:10px;justify-content:center;flex-wrap:wrap;';
+
+  var printBtn = document.createElement('button');
+  printBtn.className = 'standard-button';
+  printBtn.innerHTML = '<i class="fas fa-print"></i> Print';
+  printBtn.style.cssText = 'padding:8px 16px;font-family:inherit;cursor:pointer;';
+  printBtn.onclick = function() {
+    overlay.remove();
+    _executePrintChecklist(checklist, cb.checked);
+  };
+
+  var cancelBtn = document.createElement('button');
+  cancelBtn.className = 'standard-button';
+  cancelBtn.textContent = 'Cancel';
+  cancelBtn.style.cssText = 'padding:8px 16px;font-family:inherit;cursor:pointer;opacity:0.7;';
+  cancelBtn.onclick = function() { overlay.remove(); };
+
+  btnRow.appendChild(printBtn);
+  btnRow.appendChild(cancelBtn);
+  box.appendChild(btnRow);
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+
+  // ESC to close
+  function _escHandler(ev) {
+    if (ev.key === 'Escape') {
+      ev.preventDefault();
+      ev.stopImmediatePropagation();
+      overlay.remove();
+      document.removeEventListener('keydown', _escHandler, true);
+    }
+  }
+  document.addEventListener('keydown', _escHandler, true);
+
+  // Click overlay to close
+  overlay.addEventListener('click', function(ev) {
+    if (ev.target === overlay) overlay.remove();
+  });
+}
+
+/**
+ * Actually render and print the checklist via hidden iframe.
+ * @param {object} checklist - The Checklist instance
+ * @param {boolean} includeCompleted - Whether to include checked items
+ */
+function _executePrintChecklist(checklist, includeCompleted) {
+  var titleEl = document.getElementById('title');
+  var printTitle = (titleEl ? titleEl.value.trim() : '') || 'Checklist';
+
+  var unchecked = checklist.items.filter(function(i) { return !i.checked; });
+  var checked = checklist.items.filter(function(i) { return i.checked; });
+
+  var buildItemsHtml = function(items) {
+    var html = '';
+    items.forEach(function(item) {
+      var indent = item.level * 24;
+      var checkbox = item.checked
+        ? '<span class="cb checked">☑</span>'
+        : '<span class="cb">☐</span>';
+      var textClass = item.checked ? 'item-text checked-text' : 'item-text';
+      var escapedText = item.text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      html += '<div class="checklist-row" style="padding-left:' + indent + 'px;">'
+        + checkbox + '<span class="' + textClass + '">' + escapedText + '</span></div>';
+    });
+    return html;
+  };
+
+  var bodyContent = '';
+  if (unchecked.length > 0) {
+    bodyContent += buildItemsHtml(unchecked);
+  }
+  if (includeCompleted && checked.length > 0) {
+    bodyContent += '<div class="completed-divider">Completed (' + checked.length + ')</div>';
+    bodyContent += buildItemsHtml(checked);
+  }
+
+  if (!bodyContent) {
+    if (typeof cwocToast === 'function') cwocToast('No items to print.', 'info');
+    return;
+  }
+
+  var html = '<!DOCTYPE html><html><head><meta charset="UTF-8">'
+    + '<title>Print: ' + printTitle.replace(/</g, '&lt;') + '</title>'
+    + '<style>'
+    + 'body { font-family: Lora, Georgia, serif; max-width: 800px; margin: 0 auto; padding: 20px 40px; color: #1a1208; }'
+    + 'h1 { font-size: 1.4em; border-bottom: 1px solid #8b5a2b; padding-bottom: 8px; margin-bottom: 16px; }'
+    + '.print-meta { font-size: 0.85em; color: #6b4e31; margin-bottom: 16px; }'
+    + '.checklist-row { display: flex; align-items: baseline; gap: 8px; padding: 4px 0; line-height: 1.5; }'
+    + '.cb { font-size: 1.2em; flex-shrink: 0; }'
+    + '.cb.checked { color: #6b4e31; }'
+    + '.item-text { font-size: 1em; }'
+    + '.checked-text { text-decoration: line-through; opacity: 0.6; }'
+    + '.completed-divider { margin: 16px 0 8px; padding-top: 8px; border-top: 1px solid #8b5a2b; font-size: 0.9em; color: #6b4e31; font-style: italic; }'
+    + '@media print { body { padding: 0; } }'
+    + '</style></head><body>'
+    + '<h1>' + printTitle.replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</h1>'
+    + '<div class="print-meta">Printed from C.W.\'s Omni Chits \u2014 ' + new Date().toLocaleDateString() + '</div>'
+    + bodyContent
+    + '</body></html>';
+
+  // Use the same hidden iframe approach as _openPrintTab
+  var iframe = document.getElementById('cwoc-print-iframe');
+  if (!iframe) {
+    iframe = document.createElement('iframe');
+    iframe.id = 'cwoc-print-iframe';
+    iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:800px;height:600px;border:none;visibility:hidden;';
+    document.body.appendChild(iframe);
+  }
+
+  var doc = iframe.contentDocument || iframe.contentWindow.document;
+  doc.open();
+  doc.write(html);
+  doc.close();
+
+  setTimeout(function() {
+    iframe.contentWindow.focus();
+    iframe.contentWindow.print();
+  }, 200);
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

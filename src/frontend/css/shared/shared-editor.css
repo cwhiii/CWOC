@@ -354,10 +354,9 @@ button:disabled:not(.status-icon-button):not(.sidebar-close-btn):not(.mobile-vie
     gap: 20px;
 }
 
-/* Grid children must not overflow their column */
+/* Grid children must not overflow their column horizontally */
 .main-zones-grid > * {
     min-width: 0;
-    overflow: hidden;
 }
 
 /* ── Toggle Switch (reusable on/off toggle) ────────────────────────────── */

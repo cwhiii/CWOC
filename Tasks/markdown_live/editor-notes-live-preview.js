@@ -671,6 +671,41 @@ function _nlpExtractPrefix(line) {
   return '';
 }
 
+/**
+ * Renumber consecutive ordered list lines following a given line element.
+ * Called after inserting a new numbered list item in live preview mode.
+ *
+ * @param {HTMLElement} afterLine — the newly inserted line element
+ * @param {string} indent — the whitespace indent to match
+ * @param {string} sep — the separator (". " or ") ")
+ * @param {number} startNum — the number the NEXT line should have
+ */
+function _nlpRenumberFollowingLines(afterLine, indent, sep, startNum) {
+  var escapedIndent = indent.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  var escapedSep = sep.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  var linePattern = new RegExp('^' + escapedIndent + '(\\d+)' + escapedSep);
+
+  var sibling = afterLine.nextElementSibling;
+  var expectedNum = startNum;
+  while (sibling && sibling.classList.contains('nlp-line')) {
+    var raw = sibling.dataset.raw || '';
+    var m = raw.match(linePattern);
+    if (!m) break; // not a matching list item — stop
+
+    var currentNum = parseInt(m[1], 10);
+    if (currentNum !== expectedNum) {
+      // Rebuild this line with the correct number
+      var newRaw = indent + expectedNum + sep + raw.substring(m[0].length);
+      var idx = parseInt(sibling.dataset.lineIdx) || 0;
+      var rebuilt = _nlpBuildLine(newRaw, idx);
+      sibling.parentNode.replaceChild(rebuilt, sibling);
+      sibling = rebuilt;
+    }
+    expectedNum++;
+    sibling = sibling.nextElementSibling;
+  }
+}
+
 // ── Cursor Tracking & Token Activation ───────────────────────────────────
 
 /**
@@ -1085,23 +1120,97 @@ function _nlpOnKeydown(e) {
     var before = fullRaw.substring(0, splitPos);
     var after = fullRaw.substring(splitPos);
 
+    // ── List continuation: determine prefix for the new line ──
+    var newLinePrefix = '';
+    var contentAfterPrefix = fullRaw.substring(prefix.length);
+
+    // If the line is ONLY the prefix (empty list item), remove the prefix instead
+    if (!contentAfterPrefix.trim()) {
+      // Replace current line with empty line (break out of list)
+      var idx = parseInt(lineEl.dataset.lineIdx) || 0;
+      var newCurrent = _nlpBuildLine('', idx);
+      lineEl.parentNode.replaceChild(newCurrent, lineEl);
+      _nlpReindex();
+      var firstTokBreak = newCurrent.querySelector('.nlp-tok');
+      if (firstTokBreak) {
+        _nlpActivateToken(firstTokBreak);
+        _nlpPlaceCursor(firstTokBreak, 0);
+      } else {
+        var rangeBreak = document.createRange();
+        rangeBreak.selectNodeContents(newCurrent);
+        rangeBreak.collapse(true);
+        var sBreak = window.getSelection();
+        sBreak.removeAllRanges();
+        sBreak.addRange(rangeBreak);
+      }
+      if (typeof setSaveButtonUnsaved === 'function') setSaveButtonUnsaved();
+      return;
+    }
+
+    // Checkbox continuation: unchecked
+    var checkMatch = prefix.match(/^(\s*[-*+]\s)\[[ xX]\]\s$/);
+    if (checkMatch) {
+      newLinePrefix = checkMatch[1] + '[ ] ';
+    }
+    // Unordered list continuation
+    if (!newLinePrefix) {
+      var ulMatch = prefix.match(/^(\s*[-*+]\s)$/);
+      if (ulMatch) newLinePrefix = ulMatch[1];
+    }
+    // Ordered list continuation: increment number
+    if (!newLinePrefix) {
+      var olMatch = prefix.match(/^(\s*)(\d+)([.)]\s)$/);
+      if (olMatch) {
+        newLinePrefix = olMatch[1] + (parseInt(olMatch[2], 10) + 1) + olMatch[3];
+      }
+    }
+    // Blockquote continuation
+    if (!newLinePrefix) {
+      var quoteMatch = prefix.match(/^(\s*>\s?)$/);
+      if (quoteMatch) newLinePrefix = quoteMatch[1];
+    }
+
     // Rebuild current line with text before cursor
     var idx = parseInt(lineEl.dataset.lineIdx) || 0;
     var newCurrent = _nlpBuildLine(before, idx);
     lineEl.parentNode.replaceChild(newCurrent, lineEl);
 
-    // Create new line div with text after cursor
-    var newLine = _nlpBuildLine(after, idx + 1);
+    // Create new line div with prefix + text after cursor
+    var newLineRaw = newLinePrefix + after;
+    var newLine = _nlpBuildLine(newLineRaw, idx + 1);
     newCurrent.after(newLine);
+
+    // Renumber subsequent ordered list items if we just inserted a numbered item
+    var olRenumberMatch = newLinePrefix.match(/^(\s*)(\d+)([.)]\s)$/);
+    if (olRenumberMatch) {
+      _nlpRenumberFollowingLines(newLine, olRenumberMatch[1], olRenumberMatch[3], parseInt(olRenumberMatch[2], 10) + 1);
+    }
 
     // Re-index all lines
     _nlpReindex();
 
-    // Place cursor at start of new line
-    var firstTok = newLine.querySelector('.nlp-tok');
-    if (firstTok) {
-      _nlpActivateToken(firstTok);
-      _nlpPlaceCursor(firstTok, 0);
+    // Place cursor after the prefix in the new line
+    var cursorTarget = newLinePrefix.length;
+    var toks = newLine.querySelectorAll('.nlp-tok');
+    if (toks.length > 0) {
+      // Find the token at the cursor target offset
+      var offset = 0;
+      var placed = false;
+      for (var ti = 0; ti < toks.length; ti++) {
+        var tokRawLen = (toks[ti].dataset.raw || '').length;
+        if (offset + tokRawLen >= cursorTarget) {
+          _nlpActivateToken(toks[ti]);
+          _nlpPlaceCursor(toks[ti], cursorTarget - offset);
+          placed = true;
+          break;
+        }
+        offset += tokRawLen;
+      }
+      if (!placed) {
+        var lastTok = toks[toks.length - 1];
+        _nlpActivateToken(lastTok);
+        _nlpPlaceCursor(lastTok, (lastTok.dataset.raw || '').length);
+      }
     } else {
       // Empty line — place cursor in the line div itself
       var range = document.createRange();
@@ -2166,25 +2275,105 @@ function _emailNlpOnKeydown(e) {
     var before = fullRaw.substring(0, splitPos);
     var after = fullRaw.substring(splitPos);
 
+    // ── List continuation: determine prefix for the new line ──
+    var newLinePrefix = '';
+    var contentAfterPrefix = fullRaw.substring(prefix.length);
+
+    // If the line is ONLY the prefix (empty list item), remove the prefix instead
+    if (!contentAfterPrefix.trim()) {
+      var idx = parseInt(lineEl.dataset.lineIdx) || 0;
+      var newCurrent = _nlpBuildLine('', idx);
+      lineEl.parentNode.replaceChild(newCurrent, lineEl);
+      _emailReindex();
+      var firstTokBreak = newCurrent.querySelector('.nlp-tok');
+      if (firstTokBreak) {
+        _emailActivateToken(firstTokBreak);
+        _nlpPlaceCursor(firstTokBreak, 0);
+      } else {
+        var rangeBreak = document.createRange();
+        rangeBreak.selectNodeContents(newCurrent);
+        rangeBreak.collapse(true);
+        var sBreak = window.getSelection();
+        sBreak.removeAllRanges();
+        sBreak.addRange(rangeBreak);
+      }
+      if (typeof setSaveButtonUnsaved === 'function') setSaveButtonUnsaved();
+      return;
+    }
+
+    // Checkbox continuation: unchecked
+    var checkMatch = prefix.match(/^(\s*[-*+]\s)\[[ xX]\]\s$/);
+    if (checkMatch) {
+      newLinePrefix = checkMatch[1] + '[ ] ';
+    }
+    // Unordered list continuation
+    if (!newLinePrefix) {
+      var ulMatch = prefix.match(/^(\s*[-*+]\s)$/);
+      if (ulMatch) newLinePrefix = ulMatch[1];
+    }
+    // Ordered list continuation: increment number
+    if (!newLinePrefix) {
+      var olMatch = prefix.match(/^(\s*)(\d+)([.)]\s)$/);
+      if (olMatch) {
+        newLinePrefix = olMatch[1] + (parseInt(olMatch[2], 10) + 1) + olMatch[3];
+      }
+    }
+    // Blockquote continuation
+    if (!newLinePrefix) {
+      var quoteMatch = prefix.match(/^(\s*>\s?)$/);
+      if (quoteMatch) newLinePrefix = quoteMatch[1];
+    }
+
     var idx = parseInt(lineEl.dataset.lineIdx) || 0;
     var newCurrent = _nlpBuildLine(before, idx);
     lineEl.parentNode.replaceChild(newCurrent, lineEl);
 
-    var newLine = _nlpBuildLine(after, idx + 1);
+    var newLineRaw = newLinePrefix + after;
+    var newLine = _nlpBuildLine(newLineRaw, idx + 1);
     newCurrent.after(newLine);
+
+    // Renumber subsequent ordered list items if we just inserted a numbered item
+    var olRenumberMatch2 = newLinePrefix.match(/^(\s*)(\d+)([.)]\s)$/);
+    if (olRenumberMatch2) {
+      _nlpRenumberFollowingLines(newLine, olRenumberMatch2[1], olRenumberMatch2[3], parseInt(olRenumberMatch2[2], 10) + 1);
+    }
+
     _emailReindex();
 
-    var firstTok = newLine.querySelector('.nlp-tok');
-    if (firstTok) {
-      _emailActivateToken(firstTok);
-      _nlpPlaceCursor(firstTok, 0);
+    // Place cursor after the prefix in the new line
+    var cursorTarget = newLinePrefix.length;
+    var toks = newLine.querySelectorAll('.nlp-tok');
+    if (toks.length > 0 && cursorTarget > 0) {
+      var offset = 0;
+      var placed = false;
+      for (var ti = 0; ti < toks.length; ti++) {
+        var tokRawLen = (toks[ti].dataset.raw || '').length;
+        if (offset + tokRawLen >= cursorTarget) {
+          _emailActivateToken(toks[ti]);
+          _nlpPlaceCursor(toks[ti], cursorTarget - offset);
+          placed = true;
+          break;
+        }
+        offset += tokRawLen;
+      }
+      if (!placed) {
+        var lastTok = toks[toks.length - 1];
+        _emailActivateToken(lastTok);
+        _nlpPlaceCursor(lastTok, (lastTok.dataset.raw || '').length);
+      }
     } else {
-      var range = document.createRange();
-      range.selectNodeContents(newLine);
-      range.collapse(true);
-      var s = window.getSelection();
-      s.removeAllRanges();
-      s.addRange(range);
+      var firstTok = newLine.querySelector('.nlp-tok');
+      if (firstTok) {
+        _emailActivateToken(firstTok);
+        _nlpPlaceCursor(firstTok, 0);
+      } else {
+        var range = document.createRange();
+        range.selectNodeContents(newLine);
+        range.collapse(true);
+        var s = window.getSelection();
+        s.removeAllRanges();
+        s.addRange(range);
+      }
     }
     if (typeof setSaveButtonUnsaved === 'function') setSaveButtonUnsaved();
     return;

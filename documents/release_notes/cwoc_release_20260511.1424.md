@@ -1,0 +1,1 @@
+Fixed note textarea appearing at only 6 lines when switching from rendered to edit mode. The textarea now immediately takes the rendered output's height before autoGrowNote runs, preventing the small-textarea flash and scroll jump.

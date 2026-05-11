@@ -1,0 +1,1 @@
+Fixed notes small editor overflow when returning from the full editor — textarea now sizes itself directly instead of relying on a fixed parent height, and properly handles the case where rendered mode is active.

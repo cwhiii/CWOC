@@ -507,7 +507,7 @@ async function _undoSendContent(mode, targetChit, undoData) {
           var rendered = document.getElementById('notes-rendered-output');
           if (rendered && rendered.style.display !== 'none') {
             if (typeof marked !== 'undefined') {
-              rendered.innerHTML = marked.parse(noteEl.value || '');
+              rendered.innerHTML = marked.parse(noteEl.value || '', { breaks: true });
             } else {
               rendered.innerHTML = '<pre style="white-space:pre-wrap;">' + noteEl.value + '</pre>';
             }

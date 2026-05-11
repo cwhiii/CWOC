@@ -145,7 +145,7 @@ function displayNotesView(chitsToDisplay) {
       noteEl.className = "note-content";
       noteEl.style.cssText = "overflow-y:auto;";
       if (typeof marked !== "undefined" && chit.note) {
-        noteEl.innerHTML = resolveChitLinks(marked.parse(chit.note), chits);
+        noteEl.innerHTML = resolveChitLinks(marked.parse(chit.note, { breaks: true }), chits);
       } else {
         noteEl.style.whiteSpace = "pre-wrap";
         noteEl.textContent = chit.note;
@@ -204,7 +204,7 @@ function displayNotesView(chitsToDisplay) {
             }).then(r => { if (r.ok) { chit.note = newNote; fetchChits(); } });
           } else {
             if (typeof marked !== 'undefined' && chit.note) {
-              noteEl.innerHTML = resolveChitLinks(marked.parse(chit.note), chits);
+              noteEl.innerHTML = resolveChitLinks(marked.parse(chit.note, { breaks: true }), chits);
             }
           }
           // Re-layout after exiting edit mode (cards snap back)

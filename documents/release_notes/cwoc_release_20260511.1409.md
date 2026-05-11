@@ -1,0 +1,1 @@
+Fixed checklist markdown rendering to support block-level elements (headers, bullet lists, numbered lists, blockquotes, code blocks) in multi-line checklist items. Single-line items still render compactly without extra paragraph wrapping.

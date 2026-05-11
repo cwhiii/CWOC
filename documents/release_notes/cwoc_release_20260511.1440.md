@@ -1,0 +1,1 @@
+Fixed note textarea sizing: now uses viewport-relative height (calc(100vh - 300px)) which bypasses parent CSS constraints entirely. The textarea fills most of the viewport height with internal scrolling for long content.

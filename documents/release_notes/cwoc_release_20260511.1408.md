@@ -1,0 +1,1 @@
+Fixed: Editor now prompts about unsaved changes on page refresh/close via the browser's native beforeunload dialog. Previously, refreshing the page with unsaved note content would silently discard changes.

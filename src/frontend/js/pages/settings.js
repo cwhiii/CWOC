@@ -1609,7 +1609,7 @@ document.addEventListener("DOMContentLoaded", () => {
           ta.addEventListener('input', function() {
             var preview = document.getElementById('login-message-preview');
             if (preview && typeof marked !== 'undefined') {
-              preview.innerHTML = marked.parse(ta.value || '');
+              preview.innerHTML = marked.parse(ta.value || '', { breaks: true });
             }
           });
         }

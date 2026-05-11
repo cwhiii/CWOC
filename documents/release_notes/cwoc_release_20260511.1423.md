@@ -1,0 +1,1 @@
+List continuation on Enter now renumbers subsequent ordered list items. When a new numbered item is inserted (e.g. between "2." and "3."), all following items are automatically incremented to maintain correct sequential numbering. Works in source mode, live preview, and the email editor.

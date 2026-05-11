@@ -55,6 +55,13 @@
     line-height: 1.4;
 }
 
+/* Horizontal rules in notes — solid dark lines */
+.chit-card hr {
+    margin: 10px 0;
+    border: 0;
+    border-top: 2px solid var(--aged-brown-dark, #4a2c2a);
+}
+
 /* ── Header row: [icons] Title ... meta values ────────────────────────────── */
 .chit-header-row {
     display: flex;
@@ -337,6 +344,13 @@ li.cwoc-dragging {
     margin: 0.5em 0;
     padding: 0.3em 0.8em;
     opacity: 0.85;
+}
+.notes-view .note-content mark,
+.chit-card mark {
+    background: #f5e6a3;
+    color: #1a1208;
+    padding: 1px 3px;
+    border-radius: 2px;
 }
 
 /* ── Notes drag drop indicator ────────────────────────────────────────────── */

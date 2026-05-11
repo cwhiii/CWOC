@@ -802,7 +802,15 @@ function _cancelServerTimersForChit() {
 // Track whether the chit was saved — if not, cancel timers on page unload
 var _editorSavedBeforeLeave = false;
 
-window.addEventListener('beforeunload', function() {
+window.addEventListener('beforeunload', function(e) {
+  if (window._cwocSkipBeforeUnload) return;
+  // Prompt the user if there are unsaved changes
+  if (window._cwocSave && window._cwocSave.hasChanges()) {
+    e.preventDefault();
+    e.returnValue = '';
+    return '';
+  }
+  // Clean up server timers if not saved
   if (!_editorSavedBeforeLeave) {
     _cancelServerTimersForChit();
   }

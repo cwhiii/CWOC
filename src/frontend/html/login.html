@@ -255,6 +255,7 @@
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script>
         // ── Load welcome message and instance name ──
+        if (typeof marked !== 'undefined' && marked.use) { marked.use({ breaks: true }); }
         (function () {
             fetch('/api/auth/login-message')
                 .then(function (r) { return r.json(); })

@@ -1,0 +1,1 @@
+Added Print Note feature: a print button in the editor's Notes zone Data menu and a "Print Note" option in the dashboard right-click context menu. Offers Raw (monospace markdown) or Rendered (formatted HTML) output, opens in a new tab, and auto-triggers the browser print dialog.

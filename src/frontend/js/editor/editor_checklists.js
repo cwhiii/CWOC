@@ -121,9 +121,18 @@ class Checklist {
       if (typeof _toggleChecklistAutosaveChit === 'function') _toggleChecklistAutosaveChit(e);
     });
 
+    var menuPrint = document.createElement("button");
+    menuPrint.innerHTML = '<i class="fas fa-print"></i> Print checklist';
+    menuPrint.addEventListener("click", function(e) {
+      e.stopPropagation(); e.preventDefault();
+      self._moreMenu.style.display = 'none';
+      if (typeof _printChecklist === 'function') _printChecklist(self);
+    });
+
     this._moreMenu.appendChild(menuClear);
     this._moreMenu.appendChild(menuToNote);
     this._moreMenu.appendChild(menuSend);
+    this._moreMenu.appendChild(menuPrint);
     this._moreMenu.appendChild(menuAutosave);
     this._moreWrapper.appendChild(this._moreBtn);
     this._moreWrapper.appendChild(this._moreMenu);
@@ -351,7 +360,7 @@ class Checklist {
     var span = document.createElement("span");
     span.className = "checklist-text";
     span.style.whiteSpace = "pre-wrap";
-    span.textContent = item.text;
+    renderChecklistItemMarkdown(span, item.text);
     span.addEventListener("click", (e) => { e.stopPropagation(); this.startEditing(item, span, e); });
     tw.appendChild(span);
 
@@ -543,7 +552,7 @@ class Checklist {
       if (itemEl) itemEl.setAttribute("draggable", "true");
       ta.remove();
       textSpan.style.display = "";
-      textSpan.textContent = item.text;
+      renderChecklistItemMarkdown(textSpan, item.text);
       self.editingItem = null;
     };
 
@@ -554,7 +563,7 @@ class Checklist {
       var insertIdx = idx + 1;
       while (insertIdx < self.items.length && self.items[insertIdx].level > item.level) insertIdx++;
       self.items.splice(insertIdx, 0, newItem);
-      ta.remove(); textSpan.style.display = ""; textSpan.textContent = item.text; self.editingItem = null;
+      ta.remove(); textSpan.style.display = ""; renderChecklistItemMarkdown(textSpan, item.text); self.editingItem = null;
       self.render();
       setTimeout(function() {
         var newEl = self.container.querySelector('[data-id="' + newItem.id + '"]');
@@ -569,7 +578,7 @@ class Checklist {
       else if (direction === "next" && idx < self.items.length - 1) target = self.items[idx + 1];
       if (target && !target.checked) {
         if (ta.value.trim() !== "") { item.text = ta.value.trim(); self._notifyChange(); }
-        ta.remove(); textSpan.style.display = ""; textSpan.textContent = item.text; self.editingItem = null;
+        ta.remove(); textSpan.style.display = ""; renderChecklistItemMarkdown(textSpan, item.text); self.editingItem = null;
         self.render();
         setTimeout(function() {
           var el = self.container.querySelector('[data-id="' + target.id + '"]');
@@ -831,11 +840,16 @@ function _noteToChecklistFromHeader(e) {
  * Lines starting with "- [ ] " or "- [x] " are recognized as markdown checklists
  * (preserving checked state). Lines starting with "- " or "* " have the prefix stripped.
  * Indented lines (2 or 4 spaces, or tab) get corresponding indent levels.
- * Clears the note after moving.
+ * Clears the note after moving. Shows an undo toast to reverse the operation.
  */
 function _copyNoteToChecklist(checklist) {
   var noteEl = document.getElementById('note');
   if (!noteEl || !noteEl.value.trim()) return;
+
+  // Snapshot state before the move for undo
+  var prevNoteContent = noteEl.value;
+  var prevChecklistItems = JSON.parse(JSON.stringify(checklist.items));
+
   var lines = noteEl.value.split('\n');
   var newItems = [];
   lines.forEach(function(line) {
@@ -891,18 +905,42 @@ function _copyNoteToChecklist(checklist) {
   if (typeof setSaveButtonUnsaved === 'function') setSaveButtonUnsaved();
   var rendered = document.getElementById('notes-rendered-output');
   if (rendered && rendered.style.display !== 'none') rendered.innerHTML = '';
+
+  // Show undo toast
+  _showDeleteUndoToast(null, null, null, function() {
+    // Undo: restore note and checklist to pre-move state
+    noteEl.value = prevNoteContent;
+    checklist.items = prevChecklistItems;
+    checklist.render();
+    checklist._notifyChange();
+    if (typeof autoGrowNote === 'function') autoGrowNote(noteEl);
+    if (typeof setSaveButtonUnsaved === 'function') setSaveButtonUnsaved();
+    var rendered = document.getElementById('notes-rendered-output');
+    if (rendered && rendered.style.display !== 'none') {
+      if (typeof marked !== 'undefined') {
+        rendered.innerHTML = marked.parse(prevNoteContent || '', { breaks: true });
+      } else {
+        rendered.innerHTML = '<pre style="white-space:pre-wrap;">' + prevNoteContent + '</pre>';
+      }
+    }
+  }, '📋 Moved notes to checklist');
 }
 
 /**
  * Move checklist items into the note field as proper markdown checklists.
  * Each item becomes a markdown task list item: `- [ ] text` or `- [x] text`.
  * Sub-levels are indented with 2 spaces per level.
- * Clears the checklist after moving.
+ * Clears the checklist after moving. Shows an undo toast to reverse the operation.
  */
 function _copyChecklistToNote(checklist) {
   var noteEl = document.getElementById('note');
   if (!noteEl) return;
   if (!checklist.items || checklist.items.length === 0) return;
+
+  // Snapshot state before the move for undo
+  var prevNoteContent = noteEl.value;
+  var prevChecklistItems = JSON.parse(JSON.stringify(checklist.items));
+
   var lines = checklist.items.map(function(item) {
     var indent = '  '.repeat(item.level);
     var checkbox = item.checked ? '- [x] ' : '- [ ] ';
@@ -926,11 +964,30 @@ function _copyChecklistToNote(checklist) {
   var rendered = document.getElementById('notes-rendered-output');
   if (rendered && rendered.style.display !== 'none') {
     if (typeof marked !== 'undefined') {
-      rendered.innerHTML = marked.parse(noteEl.value || '');
+      rendered.innerHTML = marked.parse(noteEl.value || '', { breaks: true });
     } else {
       rendered.innerHTML = '<pre style="white-space:pre-wrap;">' + noteEl.value + '</pre>';
     }
   }
+
+  // Show undo toast
+  _showDeleteUndoToast(null, null, null, function() {
+    // Undo: restore note and checklist to pre-move state
+    noteEl.value = prevNoteContent;
+    checklist.items = prevChecklistItems;
+    checklist.render();
+    checklist._notifyChange();
+    if (typeof autoGrowNote === 'function') autoGrowNote(noteEl);
+    if (typeof setSaveButtonUnsaved === 'function') setSaveButtonUnsaved();
+    var rendered = document.getElementById('notes-rendered-output');
+    if (rendered && rendered.style.display !== 'none') {
+      if (typeof marked !== 'undefined') {
+        rendered.innerHTML = marked.parse(prevNoteContent || '', { breaks: true });
+      } else {
+        rendered.innerHTML = '<pre style="white-space:pre-wrap;">' + prevNoteContent + '</pre>';
+      }
+    }
+  }, '📝 Moved checklist to notes');
 }
 
 // ── Checklist Auto-Complete / Auto-Archive ───────────────────────────────────

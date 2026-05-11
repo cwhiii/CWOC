@@ -1,0 +1,1 @@
+Fixed note textarea being capped at ~6 lines (102px). The CSS rule `.main-zones-grid > *` had `overflow: hidden` which clipped the textarea vertically regardless of its style.height. Changed to `overflow-x: hidden; overflow-y: visible` so the textarea can grow to show note content.

@@ -306,7 +306,7 @@ function _renderCurrentReleaseNote() {
   if (header) header.textContent = 'v' + note.version;
 
   if (typeof marked !== 'undefined') {
-    content.innerHTML = marked.parse(note.content);
+    content.innerHTML = marked.parse(note.content, { breaks: true });
   } else {
     content.textContent = note.content;
   }
