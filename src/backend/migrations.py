@@ -2186,3 +2186,24 @@ def migrate_add_snoozed_until():
     finally:
         if conn:
             conn.close()
+
+
+# ── Session Lifetime Setting: migration ──────────────────────────────────
+
+def migrate_add_session_lifetime():
+    """Add session_lifetime column to settings table."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(settings)")
+        existing = {row[1] for row in cursor.fetchall()}
+        if "session_lifetime" not in existing:
+            cursor.execute("ALTER TABLE settings ADD COLUMN session_lifetime TEXT DEFAULT '24'")
+            conn.commit()
+            logger.info("Added session_lifetime column to settings table")
+    except Exception as e:
+        logger.error(f"Error adding session_lifetime column: {str(e)}")
+    finally:
+        if conn:
+            conn.close()

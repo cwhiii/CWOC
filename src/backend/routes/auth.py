@@ -33,7 +33,22 @@ _MAX_ATTEMPTS = 10
 _WINDOW_SECONDS = 900  # 15 minutes
 
 SESSION_COOKIE_NAME = "cwoc_session"
-SESSION_LIFETIME_HOURS = 24
+SESSION_LIFETIME_HOURS = 24  # Default fallback
+
+
+def _get_session_lifetime_hours(conn: sqlite3.Connection, user_id: str) -> int:
+    """Read the session_lifetime setting for a user. Returns hours (0 = never expire)."""
+    try:
+        row = conn.execute(
+            "SELECT session_lifetime FROM settings WHERE user_id = ?",
+            (user_id,),
+        ).fetchone()
+        if row and row[0]:
+            val = int(row[0])
+            return val  # 0 means never expire
+    except Exception:
+        pass
+    return SESSION_LIFETIME_HOURS
 
 
 def _check_rate_limit(username: str) -> bool:
@@ -68,7 +83,12 @@ def _create_session(conn: sqlite3.Connection, user_id: str) -> str:
     """Create a new session row and return the token."""
     token = str(uuid.uuid4())
     now = _utcnow_iso()
-    expires = (datetime.utcnow() + timedelta(hours=SESSION_LIFETIME_HOURS)).isoformat() + "Z"
+    lifetime_hours = _get_session_lifetime_hours(conn, user_id)
+    if lifetime_hours == 0:
+        # Never expire: set expiry far in the future (10 years)
+        expires = (datetime.utcnow() + timedelta(days=3650)).isoformat() + "Z"
+    else:
+        expires = (datetime.utcnow() + timedelta(hours=lifetime_hours)).isoformat() + "Z"
     conn.execute(
         "INSERT INTO sessions (token, user_id, created_datetime, expires_datetime, last_active_datetime) "
         "VALUES (?, ?, ?, ?, ?)",
@@ -78,15 +98,19 @@ def _create_session(conn: sqlite3.Connection, user_id: str) -> str:
     return token
 
 
-def _set_session_cookie(response: JSONResponse, token: str) -> JSONResponse:
+def _set_session_cookie(response: JSONResponse, token: str, lifetime_hours: int = SESSION_LIFETIME_HOURS) -> JSONResponse:
     """Set the session cookie on a response."""
+    if lifetime_hours == 0:
+        max_age = 3650 * 24 * 3600  # ~10 years
+    else:
+        max_age = lifetime_hours * 3600
     response.set_cookie(
         key=SESSION_COOKIE_NAME,
         value=token,
         httponly=True,
         path="/",
         samesite="lax",
-        max_age=SESSION_LIFETIME_HOURS * 3600,  # persist across browser restarts
+        max_age=max_age,
     )
     return response
 
@@ -140,6 +164,7 @@ def login(body: LoginRequest):
 
         # Success — clear rate limit and create session
         _clear_attempts(username_lower)
+        lifetime_hours = _get_session_lifetime_hours(conn, row["id"])
         token = _create_session(conn, row["id"])
 
         data = {
@@ -149,7 +174,7 @@ def login(body: LoginRequest):
             "is_admin": bool(row["is_admin"]),
         }
         response = JSONResponse(content=data)
-        _set_session_cookie(response, token)
+        _set_session_cookie(response, token, lifetime_hours)
         return response
 
     except HTTPException:
@@ -461,6 +486,7 @@ def switch_user(body: LoginRequest, request: Request):
 
         # Create new session for target user
         _clear_attempts(username_lower)
+        lifetime_hours = _get_session_lifetime_hours(conn, row["id"])
         token = _create_session(conn, row["id"])
 
         data = {
@@ -469,7 +495,7 @@ def switch_user(body: LoginRequest, request: Request):
             "display_name": row["display_name"],
         }
         response = JSONResponse(content=data)
-        _set_session_cookie(response, token)
+        _set_session_cookie(response, token, lifetime_hours)
         return response
 
     except HTTPException:

@@ -83,6 +83,7 @@ def get_settings(user_id: str, request: Request):
         settings["checklist_autosave"] = settings.get("checklist_autosave", "1")
         settings["view_order"] = deserialize_json_field(settings.get("view_order"))
         settings["recent_tags"] = deserialize_json_field(settings.get("recent_tags"))
+        settings["session_lifetime"] = settings.get("session_lifetime", "24")
 
         # ── Include bundles data (piggyback on settings to avoid separate API call) ──
         try:
@@ -288,6 +289,7 @@ def save_settings(settings: Settings, request: Request):
             "bundles_multi_placement": settings.bundles_multi_placement or "0",
             "bundles_enabled": settings.bundles_enabled or "1",
             "bundles_show_count": settings.bundles_show_count or "both",
+            "session_lifetime": settings.session_lifetime or "24",
         }
 
         cursor.execute(
@@ -304,8 +306,8 @@ def save_settings(settings: Settings, request: Request):
                 email_account, email_accounts,
                 attachment_max_size_mb, attachment_max_storage_mb,
                 default_share_contacts, checklist_autosave, view_order, recent_tags, paginate_email,
-                bundles_multi_placement, bundles_enabled, bundles_show_count
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                bundles_multi_placement, bundles_enabled, bundles_show_count, session_lifetime
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 new_settings_dict["user_id"],
@@ -358,6 +360,7 @@ def save_settings(settings: Settings, request: Request):
                 new_settings_dict["bundles_multi_placement"],
                 new_settings_dict["bundles_enabled"],
                 new_settings_dict["bundles_show_count"],
+                new_settings_dict["session_lifetime"],
             )
         )
 

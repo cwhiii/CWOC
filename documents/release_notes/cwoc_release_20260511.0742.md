@@ -1,0 +1,1 @@
+Added disk storage display to Version & Updates section showing system disk usage and CWOC-specific data storage with percentage of disk used. Added configurable session lifetime setting (1hr/12hr/24hr/1wk/1mo/never) in Administration.

@@ -369,6 +369,88 @@
     background: #6b4226;
 }
 
+/* ── Snooze row with circular minute buttons ─────────────────────────────── */
+.cwoc-alert-snooze-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    justify-content: center;
+    width: 100%;
+    margin-top: 4px;
+}
+
+.cwoc-alert-snooze-row > i {
+    font-size: 1.3em;
+    color: #6b4e31;
+}
+
+.cwoc-alert-snooze-circle {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: 2px solid #8b5a2b;
+    background: #fdf5e6;
+    color: #4a2c2a;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.85em;
+    font-weight: bold;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s, transform 0.1s;
+}
+
+.cwoc-alert-snooze-circle:hover {
+    background: #f0e6d3;
+    transform: scale(1.08);
+}
+
+.cwoc-alert-snooze-circle:active {
+    transform: scale(0.95);
+    background: #e8d9c0;
+}
+
+/* ── Context Menu Snooze Circles ─────────────────────────────────────────── */
+.cwoc-ctx-snooze-circle {
+    width: 26px;
+    height: 26px;
+    min-width: 26px;
+    min-height: 26px;
+    max-width: 26px;
+    max-height: 26px;
+    border-radius: 50%;
+    border: 1.5px solid #8b5a2b;
+    background: #fdf5e6;
+    color: #4a2c2a;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 10px;
+    font-weight: bold;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    margin: 0;
+    flex-shrink: 0;
+    line-height: 1;
+    box-sizing: border-box;
+    -webkit-appearance: none;
+    appearance: none;
+    outline: none;
+    transition: background 0.15s, transform 0.1s, box-shadow 0.15s;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+}
+.cwoc-ctx-snooze-circle:hover {
+    background: #e8d9c0;
+    transform: scale(1.15);
+    box-shadow: 0 2px 6px rgba(107,66,38,0.3);
+}
+.cwoc-ctx-snooze-circle:active {
+    transform: scale(0.9);
+    background: #d4c5a9;
+}
+
 
 /* ── Generic Modal (used by profile switcher, etc.) ──────────────────────── */
 .modal {

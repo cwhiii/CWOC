@@ -18,6 +18,9 @@ function displayNotesView(chitsToDisplay) {
 
   const filteredNotes = [...chitsToDisplay].filter((chit) => chit.note && chit.note.trim() !== "");
   const sortedChits = currentSortField ? filteredNotes : filteredNotes.sort((a, b) => {
+      // Pinned items always sort to the top
+      if (a.pinned && !b.pinned) return -1;
+      if (!a.pinned && b.pinned) return 1;
       const dateA = new Date(
         a.last_edited || a.created_datetime || a.start_datetime || 0,
       );

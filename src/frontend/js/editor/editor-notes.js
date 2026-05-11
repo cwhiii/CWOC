@@ -260,6 +260,8 @@ function downloadNotes(event, source) {
 
 function openNotesModal(event) {
   if (event) event.stopPropagation();
+  // Never open fullscreen modal on mobile — zone already fills screen
+  if (window.innerWidth <= 768) return;
   const modal = document.getElementById("notesModal");
   if (!modal) return;
 

@@ -1395,6 +1395,9 @@ class SettingsManager {
     var attachStorageEl = document.getElementById('attachmentMaxStorageMb');
     if (attachStorageEl && this.settings.attachment_max_storage_mb) attachStorageEl.value = this.settings.attachment_max_storage_mb;
 
+    var sessionLifetimeEl = document.getElementById('session-lifetime-select');
+    if (sessionLifetimeEl) sessionLifetimeEl.value = this.settings.session_lifetime || '24';
+
     if (this.settings.view_order) {
       var savedOrder = this.settings.view_order;
       if (typeof savedOrder === 'string') {
@@ -1496,6 +1499,7 @@ class SettingsManager {
       default_share_contacts: (document.getElementById('default-share-contacts') && document.getElementById('default-share-contacts').checked) ? '1' : '0',
       show_map_thumbnails: (document.getElementById('show-map-thumbnails') && document.getElementById('show-map-thumbnails').checked) ? '1' : '0',
       view_order: _collectViewOrder(),
+      session_lifetime: (document.getElementById('session-lifetime-select') || {}).value || '24',
     };
   }
 
@@ -1591,6 +1595,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   window.settingsManager = new SettingsManager();
   loadVersionInfo();
+  refreshDiskUsage();
 
   _loadTagSharingData();
 

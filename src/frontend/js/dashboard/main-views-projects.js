@@ -41,61 +41,147 @@ function _showProjectQuickMenu(e, project) {
 
   var menu = document.createElement('div');
   menu.className = 'cwoc-project-quick-menu';
-  menu.style.cssText = 'position:fixed;background:#fffaf0;border:2px solid #6b4e31;border-radius:8px;padding:8px 0;min-width:200px;box-shadow:0 8px 24px rgba(0,0,0,0.3);font-family:Lora,Georgia,serif;';
+  menu.style.cssText = 'position:fixed;background:url("/static/parchment.jpg") center/cover;background-color:#fffaf0;border:2px solid #6b4e31;border-radius:8px;padding:8px 0;min-width:200px;box-shadow:0 8px 24px rgba(0,0,0,0.3);font-family:Lora,Georgia,serif;';
 
-  // Position near the click
+  // Position near the click, clamped to viewport
   var menuX = Math.min(e.clientX, window.innerWidth - 220);
-  var menuY = Math.min(e.clientY, window.innerHeight - 150);
+  var menuY = Math.min(e.clientY, window.innerHeight - 350);
   menu.style.left = menuX + 'px';
   menu.style.top = menuY + 'px';
 
-  // Menu title
-  var titleEl = document.createElement('div');
-  titleEl.style.cssText = 'padding:4px 14px 8px;font-weight:bold;color:#4a2c2a;font-size:0.95em;border-bottom:1px solid rgba(139,90,43,0.2);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:250px;';
-  titleEl.textContent = project.title || '(Untitled Project)';
-  titleEl.title = project.title || '';
-  menu.appendChild(titleEl);
+  function _close() { overlay.remove(); document.removeEventListener('keydown', _escHandler, true); }
 
-  // "Create New Child Chit" option
-  var createItem = document.createElement('div');
-  createItem.style.cssText = 'padding:8px 14px;cursor:pointer;display:flex;align-items:center;gap:8px;font-size:0.95em;color:#1a1208;';
-  createItem.innerHTML = '<i class="fas fa-file-circle-plus" style="color:#6b4e31;width:16px;text-align:center;"></i> Create New Child Chit';
-  createItem.addEventListener('mouseenter', function() { this.style.background = '#f0e6d0'; });
-  createItem.addEventListener('mouseleave', function() { this.style.background = ''; });
-  createItem.addEventListener('click', function() {
-    overlay.remove();
+  function _menuItem(icon, label, onClick) {
+    var item = document.createElement('div');
+    item.style.cssText = 'padding:8px 14px;cursor:pointer;display:flex;align-items:center;gap:8px;font-size:0.95em;color:#1a1208;';
+    item.innerHTML = '<span style="width:18px;text-align:center;">' + icon + '</span> ' + label;
+    item.addEventListener('mouseenter', function() { this.style.background = '#f0e6d0'; });
+    item.addEventListener('mouseleave', function() { this.style.background = ''; });
+    item.addEventListener('click', function() { _close(); onClick(); });
+    menu.appendChild(item);
+  }
+
+  function _separator() {
+    var sep = document.createElement('div');
+    sep.style.cssText = 'border-top:1px solid rgba(139,90,43,0.2);margin:4px 0;';
+    menu.appendChild(sep);
+  }
+
+  // ── Project-specific items (top) ──
+  _menuItem('<i class="fas fa-file-circle-plus" style="color:#6b4e31;"></i>', 'Create New Child Chit', function() {
     _projectQuickCreateChild(project);
   });
-  menu.appendChild(createItem);
 
-  // "Open in Editor" option
-  var openItem = document.createElement('div');
-  openItem.style.cssText = 'padding:8px 14px;cursor:pointer;display:flex;align-items:center;gap:8px;font-size:0.95em;color:#1a1208;';
-  openItem.innerHTML = '<i class="fas fa-pen-to-square" style="color:#6b4e31;width:16px;text-align:center;"></i> Open Project in Editor';
-  openItem.addEventListener('mouseenter', function() { this.style.background = '#f0e6d0'; });
-  openItem.addEventListener('mouseleave', function() { this.style.background = ''; });
-  openItem.addEventListener('click', function() {
-    overlay.remove();
-    storePreviousState();
+  _menuItem('<i class="fas fa-pen-to-square" style="color:#6b4e31;"></i>', 'Open in Editor', function() {
+    if (typeof storePreviousState === 'function') storePreviousState();
     window.location.href = '/editor?id=' + project.id;
   });
-  menu.appendChild(openItem);
+
+  // Quick Edit (full modal)
+  _menuItem('<i class="fas fa-sliders" style="color:#6b4e31;"></i>', 'Quick Edit', function() {
+    if (typeof showQuickEditModal === 'function') showQuickEditModal(project, function() { displayChits(); });
+  });
+
+  _separator();
+
+  // ── Standard chit actions ──
+  var isPinned = !!project.pinned;
+  _menuItem(isPinned ? '<i class="fas fa-bookmark" style="color:#8b5a2b;"></i>' : '<i class="far fa-bookmark" style="color:#6b4e31;"></i>', isPinned ? 'Unpin' : 'Pin', function() {
+    fetch('/api/chits/' + project.id + '/fields', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pinned: !isPinned })
+    }).then(function() { if (typeof displayChits === 'function') displayChits(); });
+  });
+
+  var isArchived = !!project.archived;
+  _menuItem('📦', isArchived ? 'Unarchive' : 'Archive', function() {
+    fetch('/api/chits/' + project.id + '/fields', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ archived: !isArchived })
+    }).then(function() { if (typeof displayChits === 'function') displayChits(); });
+  });
+
+  var isSnoozed = project.snoozed_until && new Date(project.snoozed_until) > new Date();
+  if (isSnoozed) {
+    _menuItem('😴', 'Unsnooze', function() {
+      fetch('/api/chits/' + project.id + '/snooze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ until: null }) })
+        .then(function() { if (typeof cwocToast === 'function') cwocToast('Unsnoozed.', 'info'); if (typeof displayChits === 'function') displayChits(); });
+    });
+  } else {
+    // Snooze row: emoji + circular minute buttons
+    var snoozeRow = document.createElement('div');
+    snoozeRow.style.cssText = 'padding:5px 10px;display:flex;align-items:center;gap:5px;';
+    var snoozeEmoji = document.createElement('span');
+    snoozeEmoji.style.cssText = 'width:18px;text-align:center;font-size:0.95em;flex-shrink:0;';
+    snoozeEmoji.textContent = '😴';
+    snoozeRow.appendChild(snoozeEmoji);
+    [{mins: 60, label: 'H', title: '1 hour'}, {mins: 1440, label: 'D', title: '1 day'}, {mins: 10080, label: 'W', title: '1 week'}, {mins: 20160, label: 'F', title: '1 fortnight'}, {mins: 43200, label: 'M', title: '1 month'}].forEach(function(opt) {
+      var circleBtn = document.createElement('button');
+      circleBtn.className = 'cwoc-ctx-snooze-circle';
+      circleBtn.textContent = opt.label;
+      circleBtn.title = opt.title;
+      circleBtn.addEventListener('click', function() {
+        _close();
+        // Immediately hide the chit locally
+        project.snoozed_until = new Date(Date.now() + opt.mins * 60 * 1000).toISOString();
+        if (typeof chits !== 'undefined') {
+          var _lp = chits.find(function(c) { return c.id === project.id; });
+          if (_lp) _lp.snoozed_until = project.snoozed_until;
+        }
+        if (typeof displayChits === 'function') displayChits();
+        _showSnoozeUndoToast(project.id, project.title, opt.mins, function() {
+          fetch('/api/chits/' + project.id + '/snooze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ until: null }) })
+            .then(function() {
+              project.snoozed_until = null;
+              if (typeof chits !== 'undefined') {
+                var _lp2 = chits.find(function(c) { return c.id === project.id; });
+                if (_lp2) _lp2.snoozed_until = null;
+              }
+              if (typeof displayChits === 'function') displayChits();
+            });
+        });
+        // Persist to server
+        fetch('/api/chits/' + project.id + '/snooze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ minutes: opt.mins }) });
+      });
+      snoozeRow.appendChild(circleBtn);
+    });
+    menu.appendChild(snoozeRow);
+  }
+
+  _separator();
+
+  _menuItem('<i class="fas fa-trash-alt" style="color:#a33;"></i>', 'Delete', function() {
+    if (typeof cwocConfirm === 'function') {
+      cwocConfirm('Delete this project?', { title: 'Delete Project', confirmLabel: '🗑️ Delete', danger: true }).then(function(confirmed) {
+        if (!confirmed) return;
+        fetch('/api/chits/' + project.id, { method: 'DELETE' }).then(function() {
+          if (typeof displayChits === 'function') displayChits();
+          if (typeof _showDeleteUndoToast === 'function') {
+            _showDeleteUndoToast(project.id, project.title || '(Untitled)', null, function() {
+              fetch('/api/trash/' + project.id + '/restore', { method: 'POST' }).then(function() { if (typeof displayChits === 'function') displayChits(); });
+            });
+          }
+        });
+      });
+    }
+  });
 
   overlay.appendChild(menu);
   document.body.appendChild(overlay);
 
   // Click overlay to close
   overlay.addEventListener('click', function(ev) {
-    if (ev.target === overlay) overlay.remove();
+    if (ev.target === overlay) _close();
   });
 
   // ESC to close
   function _escHandler(ev) {
     if (ev.key === 'Escape') {
       ev.preventDefault();
-      ev.stopPropagation();
-      overlay.remove();
-      document.removeEventListener('keydown', _escHandler, true);
+      ev.stopImmediatePropagation();
+      _close();
     }
   }
   document.addEventListener('keydown', _escHandler, true);
@@ -368,6 +454,7 @@ function displayProjectsView(chitsToDisplay) {
         titleRow.appendChild(bullet);
 
         const childTitle = document.createElement("span");
+        childTitle.className = "projects-child-title";
         childTitle.style.cssText = "font-weight:bold;";
         childTitle.textContent = child ? (child.title || "(Untitled)") : `[${childId.slice(0,8)}…]`;
         titleRow.appendChild(childTitle);
@@ -429,12 +516,9 @@ function displayProjectsView(chitsToDisplay) {
               showQuickEditModal(child, function() { displayChits(); });
             }
           });
-          // Right-click: open context menu
+          // Right-click: suppress default (no context menu on child items)
           li.addEventListener("contextmenu", function(e) {
             e.preventDefault();
-            if (typeof _showChitContextMenu === 'function' && !(typeof _isViewerRole === 'function' && _isViewerRole(child))) {
-              _showChitContextMenu(e, child, function() { displayChits(); });
-            }
           });
         }
 
@@ -1067,6 +1151,7 @@ function _renderKanbanBoard(chitList, projects, chitMap, _viSettings) {
 
     // Kanban columns row
     const columnsRow = document.createElement("div");
+    columnsRow.className = "kanban-columns-row";
     columnsRow.style.cssText = "display:flex;gap:0;min-height:80px;";
 
     // Group children by status
@@ -1083,12 +1168,14 @@ function _renderKanbanBoard(chitList, projects, chitMap, _viSettings) {
 
     statuses.forEach(status => {
       const col = document.createElement("div");
+      col.className = "kanban-column";
       col.style.cssText = "flex:1;min-width:0;border-right:2px solid rgba(139,90,43,0.35);padding:0.5em;display:flex;flex-direction:column;gap:0.3em;background:rgba(255,255,255,0.15);";
       col.dataset.status = status;
       col.dataset.projectId = project.id;
 
       // Column header
       const colHeader = document.createElement("div");
+      colHeader.className = "kanban-col-header";
       colHeader.style.cssText = "font-weight:bold;opacity:0.85;text-align:center;padding:5px 0 8px;border-bottom:2px solid rgba(139,90,43,0.3);margin-bottom:8px;white-space:nowrap;";
       colHeader.textContent = status;
       col.appendChild(colHeader);
@@ -1110,6 +1197,7 @@ function _renderKanbanBoard(chitList, projects, chitMap, _viSettings) {
         }
 
         const titleEl = document.createElement("div");
+        titleEl.className = "kanban-card-title";
         titleEl.style.cssText = "font-weight:bold;margin-bottom:3px;";
         const titleTextSpan = document.createElement("span");
         titleTextSpan.textContent = child.title || "(Untitled)";
@@ -1272,9 +1360,6 @@ function _renderKanbanBoard(chitList, projects, chitMap, _viSettings) {
         // Right-click: open context menu
         card.addEventListener("contextmenu", function(e) {
           e.preventDefault();
-          if (typeof _showChitContextMenu === 'function' && !(typeof _isViewerRole === 'function' && _isViewerRole(child))) {
-            _showChitContextMenu(e, child, function() { displayChits(); });
-          }
         });
 
         // Touch gesture: floating card + placeholder reorder (same style as Notes view)

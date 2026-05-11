@@ -1768,17 +1768,18 @@ li.cwoc-dragging {
 
     .email-card-content {
         flex-wrap: wrap;
-        padding-right: 4em;
+        padding-right: 4.5em;
     }
 
     .email-card-sender {
-        flex: 0 0 auto;
-        max-width: 120px;
+        flex: 1 1 auto;
+        max-width: none;
     }
 
     .email-card-subject {
-        flex: 0 0 auto;
-        max-width: 140px;
+        flex: 1 1 100%;
+        max-width: none;
+        margin-right: 0;
     }
 
     .email-card-preview {
@@ -1913,15 +1914,14 @@ li.cwoc-dragging {
     color: #b42828;
 }
 
-/* On mobile, always show hover actions (no hover state) */
+/* On mobile, hide hover actions (use long-press menu + swipe instead) */
 @media (max-width: 768px) {
     .email-hover-actions {
-        display: flex;
-        background: #fdf5e6;
+        display: none !important;
     }
 
     .email-card:hover .email-hover-actions {
-        background: #f5edd8;
+        display: none !important;
     }
 
     .email-hover-btn {
@@ -2008,6 +2008,15 @@ li.cwoc-dragging {
 
 .email-card-flash {
     animation: emailCardFlash 1.5s ease-out;
+}
+
+/* ── Email swipe-to-action indicator ──────────────────────────────────────── */
+.email-swipe-indicator {
+    overflow: hidden;
+}
+/* Prevent horizontal scroll during email swipe */
+#chit-list:has(.email-card) {
+    overflow-x: hidden;
 }
 
 /* ── Email Load More Button (pagination) ──────────────────────────────────── */
@@ -2217,10 +2226,16 @@ li.cwoc-dragging {
         padding-left: 6px;
     }
     .email-thread-badge {
-        font-size: 0.65em;
-        min-width: 16px;
-        height: 16px;
-        line-height: 16px;
+        font-size: 0.85em;
+        min-width: 26px;
+        height: 26px;
+        line-height: 26px;
+        padding: 0 6px;
+        margin: 0 2px 0 0;
+        position: absolute;
+        right: 3.5em;
+        top: 50%;
+        transform: translateY(-50%);
     }
     .email-thread-ribbon {
         width: 4px;

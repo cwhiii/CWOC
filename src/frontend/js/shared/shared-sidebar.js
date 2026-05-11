@@ -350,11 +350,16 @@ function _cwocInjectSidebar() {
   html += '  </div>';
   html += '</div>';
 
-  /* Notification Inbox */
+  /* Notification Inbox & Trash */
   html += '<div class="sidebar-section" id="section-notif-inbox">';
-  html += '  <button class="action-button cwoc-notif-inbox-btn" id="notif-inbox-btn" title="Sharing notifications">';
-  html += '    🔔 Notifications <span class="cwoc-notif-badge" id="notif-badge" style="display:none;">0</span>';
-  html += '  </button>';
+  html += '  <div style="display:flex;gap:6px;">';
+  html += '    <button class="action-button" id="notif-inbox-btn" title="Sharing notifications" style="flex:1;">';
+  html += '      🔔 Notifications <span class="cwoc-notif-badge" id="notif-badge" style="display:none;">0</span>';
+  html += '    </button>';
+  html += '    <button class="action-button" id="sidebar-trash-btn" title="View deleted chits" style="flex:1;">';
+  html += '      🗑️ Trash';
+  html += '    </button>';
+  html += '  </div>';
   html += '  <div class="cwoc-notif-inbox-list" id="notif-inbox-list" style="display:none;"></div>';
   html += '</div>';
 
@@ -534,6 +539,10 @@ function _cwocInitSidebar(context) {
   /* Notifications */
   var notifBtn = document.getElementById('notif-inbox-btn');
   if (notifBtn) notifBtn.onclick = function() { _cb('onNotificationToggle')(); };
+
+  /* Trash */
+  var trashBtn = document.getElementById('sidebar-trash-btn');
+  if (trashBtn) trashBtn.onclick = function() { window.location.href = '/frontend/html/trash.html'; };
 
   /* Filters toggle is now handled by inline onclick on the label */
 

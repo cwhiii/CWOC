@@ -445,6 +445,41 @@ def health_check():
     return {"status": "healthy"}
 
 
+@router.get("/api/disk-usage")
+def get_disk_usage():
+    """Return disk usage stats: total, used, free (in bytes) for the data partition,
+    plus CWOC-specific storage (DB + attachments + contacts + users)."""
+    import shutil
+    try:
+        # Use the data directory (where the DB lives) to get the relevant partition
+        data_dir = os.path.dirname(DB_PATH) if DB_PATH else "/app/data"
+        if not os.path.isdir(data_dir):
+            data_dir = "/"
+        usage = shutil.disk_usage(data_dir)
+
+        # Calculate CWOC storage: sum of all files in /app/data/
+        cwoc_storage = 0
+        cwoc_data_dir = "/app/data" if os.path.isdir("/app/data") else data_dir
+        for dirpath, dirnames, filenames in os.walk(cwoc_data_dir):
+            for f in filenames:
+                try:
+                    fp = os.path.join(dirpath, f)
+                    if os.path.isfile(fp):
+                        cwoc_storage += os.path.getsize(fp)
+                except OSError:
+                    pass
+
+        return {
+            "total": usage.total,
+            "used": usage.used,
+            "free": usage.free,
+            "cwoc_storage": cwoc_storage,
+        }
+    except Exception as e:
+        logger.error(f"Error getting disk usage: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get disk usage: {str(e)}")
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # SSL Certificate Download
 # ═══════════════════════════════════════════════════════════════════════════

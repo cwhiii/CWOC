@@ -3200,17 +3200,73 @@ button.archive-btn.archived-active {
         box-sizing: border-box;
     }
 
+    /* Project zone: reduce margins and padding on mobile */
+    .project-container {
+        padding: 4px;
+        margin-top: 4px;
+    }
+    .project-status-section {
+        padding: 4px 0 8px 0;
+        margin-bottom: 8px;
+    }
+    .project-status-section > h3,
+    .project-status-header {
+        padding: 4px 8px;
+        font-size: 0.9em;
+        margin-bottom: 4px;
+    }
+
     /* Project items: compact */
     .project-item {
-        padding: 4px 6px;
+        padding: 3px 4px;
     }
     .project-item > div:first-child {
         flex-wrap: wrap;
-        gap: 4px;
+        gap: 3px;
+    }
+    .project-item > div:first-child > div.left-container {
+        gap: 0.4em;
+    }
+    .project-item-title {
+        font-size: 0.85em;
+        padding: 1px 3px;
+    }
+    .project-drag-handle {
+        width: 14px;
+        height: 14px;
+        margin-right: 0.4em;
+        font-size: 10px;
+    }
+    .project-dropdown-fixed,
+    .project-item-status-dropdown,
+    .status-dropdown {
+        width: 80px;
+        min-width: 80px;
+        max-width: 80px;
+        font-size: 0.75em;
+        padding: 2px 4px;
     }
     .project-item > div:first-child > div.right-container {
         width: 100%;
         justify-content: flex-start;
+        gap: 0.3em;
+    }
+    .project-item input[type="date"] {
+        font-size: 0.8em;
+        padding: 1px 4px;
+    }
+    .project-item button {
+        padding: 3px 4px;
+        font-size: 0.85em;
+    }
+    .project-delete-item {
+        padding: 3px 6px;
+        min-width: 28px;
+        height: 26px;
+    }
+    .project-remove-child-btn {
+        font-size: 0.8em;
+        padding: 1px 4px;
     }
 }
 
@@ -5032,4 +5088,1104 @@ input.location {
 .snooze-cancel-btn:hover {
     background: #f0e8d8;
     border-color: #666;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   Mobile Zone Navigation — Swipe-based single-zone view for ≤768px
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+/* ── Sticky Zone Navigation Header ────────────────────────────────────────── */
+.mobile-zone-nav-header {
+    display: none;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: url("/static/parchment.jpg") center/cover;
+    background-color: #f5e6d3;
+    border-bottom: 2px solid #c4a882;
+    padding: 8px 12px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-family: 'Lora', Georgia, serif;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+.mobile-zone-nav-header .mobile-zone-nav-prev,
+.mobile-zone-nav-header .mobile-zone-nav-next {
+    background: #8b5a2b;
+    color: #fff8e1;
+    border: 1px solid #5a3f2a;
+    border-radius: 3px;
+    padding: 6px 10px;
+    font-size: 1em;
+    cursor: pointer;
+    min-width: 36px;
+    min-height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+}
+
+.mobile-zone-nav-header .mobile-zone-nav-prev:active,
+.mobile-zone-nav-header .mobile-zone-nav-next:active {
+    background: #5a3f2a;
+}
+
+.mobile-zone-nav-header .mobile-zone-nav-title {
+    font-size: 0.95em;
+    font-weight: 600;
+    color: #4a2c2a;
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.mobile-zone-nav-header .mobile-zone-nav-chit-title {
+    flex: 0 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+    opacity: 0.7;
+    font-weight: normal;
+    font-size: 0.9em;
+}
+
+.mobile-zone-nav-header .mobile-zone-nav-zone-name {
+    flex-shrink: 0;
+    white-space: nowrap;
+    font-weight: 600;
+}
+
+.mobile-zone-nav-header .mobile-zone-nav-counter {
+    font-size: 0.75em;
+    color: #8b5a2b;
+    opacity: 0.7;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+/* ── Left Actions Sidebar (slide from left) ───────────────────────────────── */
+.mobile-actions-sidebar-backdrop {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 999;
+}
+
+.mobile-actions-sidebar-backdrop.active {
+    display: block;
+}
+
+.mobile-actions-sidebar {
+    position: fixed;
+    top: 0;
+    left: -300px;
+    width: 280px;
+    height: 100%;
+    background: url("/static/parchment.jpg") center/cover;
+    background-color: #faebd7;
+    border-right: 2px solid #8b4513;
+    z-index: 2001;
+    overflow-y: auto;
+    overscroll-behavior: none;
+    -webkit-overflow-scrolling: auto;
+    padding: 12px;
+    box-sizing: border-box;
+    transition: left 0.25s ease;
+    font-family: 'Lora', Georgia, serif;
+    box-shadow: 4px 0 16px rgba(0, 0, 0, 0.2);
+    visibility: hidden;
+}
+
+.mobile-actions-sidebar.active {
+    left: 0;
+    visibility: visible;
+}
+
+.mobile-actions-sidebar-title {
+    margin: 0 0 8px 0;
+    font-size: 1.1em;
+    color: #4a2c2a;
+    text-align: center;
+    border-bottom: 1px solid #a0522d;
+    padding-bottom: 6px;
+}
+
+.mobile-actions-sidebar-items {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.mobile-actions-sidebar-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: 'Lora', Georgia, serif;
+    font-weight: bold;
+    font-size: 0.9em;
+    color: #4a2c2a;
+    background: #fdf5e6;
+    border: 1px solid #a0522d;
+    min-height: 38px;
+    width: 100%;
+    text-align: left;
+    transition: background 0.15s;
+}
+
+.mobile-actions-sidebar-btn:active {
+    background: #c4a484;
+}
+
+.mobile-actions-sidebar-btn.delete {
+    color: #8b0000;
+    border-color: #c44;
+}
+
+.mobile-actions-sidebar-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.mobile-actions-sidebar-close {
+    display: block;
+    width: 100%;
+    margin-top: 8px;
+    padding: 8px;
+    text-align: center;
+    font-weight: bold;
+    font-family: 'Lora', Georgia, serif;
+    background: #a0522d;
+    color: #fff8e1;
+    border: 1px solid #4a2c2a;
+    border-radius: 4px;
+    cursor: pointer;
+    min-height: 44px;
+    font-size: 1em;
+}
+
+.mobile-actions-sidebar-close:active {
+    background: #5a3f2a;
+}
+
+/* ── Zone List Overlay (slide from right) ─────────────────────────────────── */
+.mobile-zone-list-backdrop {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 2000;
+}
+
+.mobile-zone-list-backdrop.active {
+    display: block;
+}
+
+.mobile-zone-list-panel {
+    position: fixed;
+    top: 0;
+    right: -260px;
+    width: 240px;
+    height: 100%;
+    background: url("/static/parchment.jpg") center/cover;
+    background-color: #faebd7;
+    border-left: 2px solid #8b4513;
+    z-index: 2001;
+    overflow-y: auto;
+    overscroll-behavior: none;
+    -webkit-overflow-scrolling: auto;
+    padding: 12px;
+    box-sizing: border-box;
+    transition: right 0.25s ease;
+    font-family: 'Lora', Georgia, serif;
+    box-shadow: -4px 0 16px rgba(0, 0, 0, 0.2);
+    visibility: hidden;
+}
+
+.mobile-zone-list-panel.active {
+    right: 0;
+    visibility: visible;
+}
+
+.mobile-zone-list-title {
+    margin: 0 0 8px 0;
+    font-size: 1.1em;
+    color: #4a2c2a;
+    text-align: center;
+    border-bottom: 1px solid #a0522d;
+    padding-bottom: 6px;
+}
+
+.mobile-zone-list-items {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.mobile-zone-list-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    margin: 0;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: 'Lora', Georgia, serif;
+    font-weight: bold;
+    font-size: 0.9em;
+    color: #4a2c2a;
+    background: #fdf5e6;
+    border: 1px solid #a0522d;
+    min-height: 38px;
+}
+
+.mobile-zone-list-item:active {
+    background: #c4a484;
+}
+
+.mobile-zone-list-item.active {
+    background: ivory;
+    border-color: #8b4513;
+    border-width: 2px;
+}
+
+.mobile-zone-list-item.empty {
+    opacity: 0.4;
+    font-weight: normal;
+    font-style: italic;
+}
+
+.mobile-zone-list-icon {
+    font-size: 1.1em;
+    flex-shrink: 0;
+    width: 24px;
+    text-align: center;
+}
+
+.mobile-zone-list-label {
+    flex: 1;
+}
+
+.mobile-zone-list-close {
+    display: block;
+    width: 100%;
+    margin-top: 8px;
+    padding: 8px;
+    text-align: center;
+    font-weight: bold;
+    font-family: 'Lora', Georgia, serif;
+    background: #a0522d;
+    color: #fff8e1;
+    border: 1px solid #4a2c2a;
+    border-radius: 4px;
+    cursor: pointer;
+    min-height: 44px;
+}
+
+/* ── Mobile Zone Mode Body Adjustments ────────────────────────────────────── */
+@media (max-width: 768px) {
+    body.mobile-zone-mode {
+        padding: 0;
+        margin: 0;
+        width: 100%;
+        height: 100vh;
+        height: 100dvh;
+        max-width: 100vw;
+        display: flex;
+        flex-direction: column;
+        overflow-x: hidden;
+    }
+
+    /* Hide the editor header bar entirely — actions accessible via swipe right */
+    body.mobile-zone-mode .header-row {
+        display: none !important;
+    }
+
+    /* Hide the footer */
+    body.mobile-zone-mode .author-info {
+        display: none !important;
+    }
+
+    /* Hide title/weather container — title is now a zone in the list */
+    body.mobile-zone-mode #titleWeatherContainer {
+        display: none !important;
+    }
+
+    /* Title zone styling handled in zone content layout section below */
+
+    body.mobile-zone-mode .mobile-zone-nav-header {
+        display: flex;
+        position: sticky;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 100;
+        flex-shrink: 0;
+    }
+
+    body.mobile-zone-mode .main-zones-grid {
+        display: block !important;
+        padding: 0 !important;
+        gap: 0;
+        width: 100% !important;
+        height: 100%;
+    }
+
+    /* Make column wrappers transparent so zones lay out directly */
+    body.mobile-zone-mode .column-one,
+    body.mobile-zone-mode .column-two {
+        display: block !important;
+        overflow-x: hidden !important;
+        overflow-y: visible !important;
+        min-width: 0;
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+
+    body.mobile-zone-mode .zone-container {
+        border-radius: 0;
+        margin: 0;
+        border-left: none;
+        border-right: none;
+        width: 100% !important;
+        max-width: 100% !important;
+        overflow-x: hidden !important;
+        overflow-y: visible !important;
+        position: static !important;
+        left: auto !important;
+        right: auto !important;
+        transform: none !important;
+    }
+
+    /* Zone headers: show only actions row (title/icon hidden by later rule) */
+    body.mobile-zone-mode .zone-container .zone-header {
+        pointer-events: auto;
+    }
+
+    /* Zone body scrolls within the fixed viewport */
+    body.mobile-zone-mode .zone-container .zone-body {
+        display: flex !important;
+        flex-direction: column;
+        padding: 8px 1em !important;
+        width: 100% !important;
+        box-sizing: border-box;
+    }
+
+    /* Editor: fills remaining space, scrolls internally */
+    body.mobile-zone-mode .editor {
+        padding: 0 !important;
+        margin: 0 !important;
+        max-width: 100% !important;
+        width: 100% !important;
+        overflow-x: hidden !important;
+        overflow-y: auto !important;
+        border: none !important;
+        box-shadow: none !important;
+        border-radius: 0 !important;
+        flex: 1;
+        min-height: 0;
+        overscroll-behavior-y: contain;
+    }
+
+    /* Override the grid > * overflow rule */
+    body.mobile-zone-mode .main-zones-grid > * {
+        overflow-x: hidden !important;
+        overflow-y: visible !important;
+        min-width: 0 !important;
+        width: 100% !important;
+    }
+}
+
+/* ── Mobile Zone Mode: Zone Content Layout ────────────────────────────────── */
+@media (max-width: 768px) {
+    /* Show zone header actions INSIDE the zone body (at top) instead of hidden header */
+    body.mobile-zone-mode .zone-container .zone-header {
+        display: flex !important;
+        border: none;
+        background: none;
+        padding: 6px 1em;
+        margin: 0;
+        min-height: auto;
+    }
+
+    /* Hide the zone title and toggle icon (nav bar handles that) */
+    body.mobile-zone-mode .zone-container .zone-header .zone-title {
+        display: none;
+    }
+    body.mobile-zone-mode .zone-container .zone-header .zone-toggle-icon {
+        display: none;
+    }
+
+    /* Show only the zone-actions row */
+    body.mobile-zone-mode .zone-container .zone-header .zone-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        width: 100%;
+        justify-content: flex-start;
+    }
+
+    /* Make zone-actions buttons visible */
+    body.mobile-zone-mode .zone-container .zone-header .zone-button {
+        display: inline-flex !important;
+    }
+
+    /* Hide expand-to-fullscreen buttons — zones already fill screen on mobile */
+    body.mobile-zone-mode #open-notes-modal-button,
+    body.mobile-zone-mode #emailExpandBtn,
+    body.mobile-zone-mode #open-people-modal-button {
+        display: none !important;
+    }
+
+    /* Menu backdrop — blocks all interaction when a zone-more-menu is open */
+    .mobile-menu-backdrop {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.3);
+        z-index: 1999;
+    }
+    .mobile-menu-backdrop.active {
+        display: block;
+    }
+
+    /* Fix dropdown menus overflowing off-screen on mobile */
+    body.mobile-zone-mode .zone-more-menu {
+        position: fixed !important;
+        top: auto !important;
+        bottom: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        width: 100% !important;
+        max-width: 100vw !important;
+        min-width: unset !important;
+        border-radius: 12px 12px 0 0;
+        box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.25);
+        z-index: 2000;
+        padding: 12px 0;
+    }
+
+    body.mobile-zone-mode .zone-more-menu button {
+        padding: 12px 16px;
+        min-height: 44px;
+        font-size: 1em;
+    }
+
+    body.mobile-zone-mode .notes-toolbar-dropdown-menu {
+        position: fixed !important;
+        top: auto !important;
+        bottom: 60px !important;
+        left: 8px !important;
+        right: 8px !important;
+        width: auto !important;
+        max-width: calc(100vw - 16px) !important;
+        border-radius: 8px;
+        box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.2);
+        z-index: 2000;
+    }
+
+    /* ── Title Zone ───────────────────────────────────────────────────────── */
+    body.mobile-zone-mode #titleWeatherContainer.mobile-zone-active {
+        display: flex !important;
+        flex-direction: column;
+        gap: 12px;
+        width: 100% !important;
+        padding: 12px !important;
+        border: none;
+        border-radius: 0;
+        box-shadow: none;
+        background: transparent;
+    }
+
+    body.mobile-zone-mode #titleWeatherContainer.mobile-zone-active label {
+        flex-wrap: wrap;
+        gap: 8px;
+        font-size: 0.9em;
+    }
+
+    body.mobile-zone-mode #titleWeatherContainer.mobile-zone-active #title {
+        font-size: 1.1em;
+        padding: 12px;
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    body.mobile-zone-mode #titleWeatherContainer.mobile-zone-active .pinned-archived-group {
+        gap: 8px;
+    }
+
+    body.mobile-zone-mode #titleWeatherContainer.mobile-zone-active #compactWeatherSection {
+        display: none;
+    }
+
+    /* Hide email quick-activate button in title zone on mobile */
+    body.mobile-zone-mode #titleWeatherContainer.mobile-zone-active #emailQuickActivateBtn {
+        display: none !important;
+    }
+
+    /* Move nest button to controls area and style it like other action buttons */
+    body.mobile-zone-mode #titleWeatherContainer.mobile-zone-active #nestButton {
+        display: none !important;
+    }
+    body.mobile-zone-mode #titleWeatherContainer.mobile-zone-active #nestButtonLabel {
+        display: none !important;
+    }
+
+    /* Title zone action controls (Save, Exit, Delete, etc.) */
+    body.mobile-zone-mode .mobile-title-zone-controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 12px;
+        padding-top: 12px;
+        border-top: 1px solid #c4a882;
+        width: 100%;
+    }
+
+    body.mobile-zone-mode .mobile-title-zone-btn {
+        flex: 1 1 calc(50% - 4px);
+        min-height: 44px;
+        padding: 8px 12px;
+        font-family: 'Lora', Georgia, serif;
+        font-size: 0.85em;
+        font-weight: bold;
+        color: #4a2c2a;
+        background: #fdf5e6;
+        border: 1px solid #a0522d;
+        border-radius: 4px;
+        cursor: pointer;
+        text-align: center;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+    }
+
+    body.mobile-zone-mode .mobile-title-zone-btn:active {
+        background: #c4a484;
+    }
+
+    body.mobile-zone-mode .mobile-title-zone-btn.danger {
+        color: #8b0000;
+        border-color: #c44;
+    }
+
+    body.mobile-zone-mode .mobile-title-zone-btn.cancel {
+        background: #e8d5b7;
+    }
+
+    body.mobile-zone-mode .mobile-title-zone-btn:disabled {
+        opacity: 0.5;
+    }
+
+    /* ── Notes Zone: textarea fills all available space ───────────────────── */
+    body.mobile-zone-mode #notesContent {
+        flex: 1;
+        display: flex !important;
+        flex-direction: column;
+    }
+
+    body.mobile-zone-mode #notesContent .field.full-width {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+    }
+
+    body.mobile-zone-mode #notesContent #note {
+        flex: 1;
+        min-height: calc(100vh - 180px) !important;
+        height: auto !important;
+        resize: none;
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    /* ── Checklist Zone: fill space, proper spacing ──────────────────────── */
+    body.mobile-zone-mode #checklistContent {
+        flex: 1;
+        display: flex !important;
+        flex-direction: column;
+    }
+
+    body.mobile-zone-mode #checklistContent .checklist-container {
+        flex: 1;
+        overflow-y: auto;
+        padding: 4px;
+    }
+
+    body.mobile-zone-mode #checklistContent .checklist-container input[type="text"] {
+        margin-right: 4px;
+        flex: 1;
+        min-width: 0;
+    }
+
+    body.mobile-zone-mode #checklistContent .checklist-item {
+        padding-right: 4px;
+    }
+
+    /* ── Email Zone: compact single-line fields, fill space ──────────────── */
+    body.mobile-zone-mode #emailContent {
+        flex: 1;
+        display: flex !important;
+        flex-direction: column;
+        gap: 2px;
+    }
+
+    body.mobile-zone-mode #emailContent .email-field {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        gap: 6px;
+        width: 100%;
+        padding: 2px 0;
+    }
+
+    body.mobile-zone-mode #emailContent .email-field label {
+        min-width: 36px;
+        flex-shrink: 0;
+        font-size: 0.85em;
+        text-align: right;
+    }
+
+    body.mobile-zone-mode #emailContent .email-field input,
+    body.mobile-zone-mode #emailContent .email-autocomplete-wrap {
+        flex: 1;
+        min-width: 0;
+    }
+
+    body.mobile-zone-mode #emailContent .email-autocomplete-wrap input {
+        width: 100%;
+    }
+
+    body.mobile-zone-mode #emailContent .email-body-field {
+        flex: 1;
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    body.mobile-zone-mode #emailContent #emailBody {
+        flex: 1;
+        min-height: calc(100vh - 260px) !important;
+        resize: none;
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    body.mobile-zone-mode #emailContent .email-cc-toggle-btn {
+        padding: 4px 8px;
+        min-height: 30px;
+        font-size: 0.8em;
+    }
+
+    body.mobile-zone-mode #emailContent .email-field .field {
+        width: 100%;
+    }
+
+    /* ── Task Zone: compact layout ────────────────────────────────────────── */
+    body.mobile-zone-mode #taskContent .priority-status-group {
+        gap: 12px;
+    }
+
+    body.mobile-zone-mode #taskContent .priority-status-group > .field {
+        flex-direction: row;
+        align-items: center;
+        gap: 10px;
+    }
+
+    body.mobile-zone-mode #taskContent .priority-status-group > .field label {
+        min-width: 70px;
+        text-align: right;
+    }
+
+    body.mobile-zone-mode #taskContent .priority-status-group > .field select {
+        flex: 1;
+        min-height: 44px;
+    }
+
+    /* ── Dates Zone: clean radio/checkbox sizing, compact inputs ─────────── */
+    body.mobile-zone-mode #datesContent .date-mode-group {
+        display: flex !important;
+        flex-direction: column;
+        gap: 0;
+        width: 100%;
+        padding: 0;
+        margin: 0;
+        border-spacing: 0;
+    }
+
+    body.mobile-zone-mode #datesContent .date-mode-row {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        padding: 4px 0;
+        margin: 0;
+    }
+
+    body.mobile-zone-mode #datesContent .date-mode-label {
+        display: flex;
+        align-items: flex-start;
+        gap: 0;
+        white-space: nowrap;
+        padding: 0;
+        margin: 0;
+        min-width: 0;
+        width: auto;
+    }
+
+    /* Radios & checkboxes: fixed width column so they all align vertically */
+    body.mobile-zone-mode #datesContent .date-mode-label input[type="radio"],
+    body.mobile-zone-mode #datesContent .date-mode-label input[type="checkbox"] {
+        width: 16px !important;
+        height: 16px !important;
+        min-width: 16px !important;
+        min-height: 16px !important;
+        margin: 2px 6px 0 0 !important;
+        padding: 0 !important;
+        flex-shrink: 0;
+        flex-grow: 0;
+    }
+
+    /* Fields block indented to align with label text (16px radio + 6px gap = 22px) */
+    body.mobile-zone-mode #datesContent .date-mode-fields {
+        margin-left: 22px;
+        width: calc(100% - 22px);
+        padding-left: 0;
+        flex-wrap: wrap;
+        gap: 6px;
+        box-sizing: border-box;
+    }
+
+    body.mobile-zone-mode #datesContent .date-mode-fields input[type="text"] {
+        flex: 1;
+        min-width: 80px;
+        max-width: 100%;
+        min-height: 34px;
+        padding: 4px 8px;
+    }
+
+    body.mobile-zone-mode #datesContent .date-mode-fields select {
+        min-height: 34px;
+    }
+
+    body.mobile-zone-mode #datesContent .cwoc-inline-label-sm {
+        font-size: 0.85em;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+
+    /* ── Location Zone: full width inputs ─────────────────────────────────── */
+    body.mobile-zone-mode #locationContent input,
+    body.mobile-zone-mode #locationContent select {
+        width: 100%;
+        box-sizing: border-box;
+        min-height: 44px;
+    }
+
+    body.mobile-zone-mode #locationContent .field {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    /* ── Tags Zone: match people zone styling ─────────────────────────────── */
+    body.mobile-zone-mode #tagsContent {
+        flex: 1;
+        display: flex !important;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    body.mobile-zone-mode #tagsContent .tags-zone-container {
+        flex-direction: column;
+        width: 100%;
+    }
+
+    body.mobile-zone-mode #tagsContent .tags-search-row {
+        width: 100%;
+    }
+
+    body.mobile-zone-mode #tagsContent .tags-search-row input {
+        width: 100%;
+        box-sizing: border-box;
+        min-height: 40px;
+    }
+
+    body.mobile-zone-mode #tagsContent .active-tags-list {
+        width: 100%;
+        min-width: unset;
+    }
+
+    body.mobile-zone-mode #tagsContent .verticalBox {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        width: 100%;
+    }
+
+    body.mobile-zone-mode #tagsContent .tag-container {
+        flex: 1;
+        overflow-y: auto;
+        overflow-x: hidden;
+        width: 100% !important;
+        max-width: 100% !important;
+        box-sizing: border-box;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    /* Tag tree rows: rendered with inline styles + data-tag-row attribute.
+       Force checkboxes small and ensure badges don't overflow */
+    body.mobile-zone-mode #tagsContent .tag-container input[type="checkbox"] {
+        width: 16px !important;
+        height: 16px !important;
+        min-height: unset !important;
+        min-width: unset !important;
+        padding: 0 !important;
+        flex: 0 0 16px !important;
+    }
+
+    body.mobile-zone-mode #tagsContent .tag-container div[data-tag-row] {
+        width: 100%;
+        box-sizing: border-box;
+        overflow: hidden;
+    }
+
+    body.mobile-zone-mode #tagsContent .tag-container div[data-tag-row] span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    body.mobile-zone-mode #tagsContent #favRecentRow {
+        flex-wrap: wrap;
+    }
+
+    body.mobile-zone-mode #tagsContent .tag-container-Active {
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    /* ── People Zone: proper spacing, not crammed ────────────────────────── */
+    body.mobile-zone-mode #peopleContent .field {
+        flex-direction: column;
+        align-items: stretch;
+        width: 100%;
+        padding-right: 0;
+    }
+
+    body.mobile-zone-mode #peopleContent input {
+        width: 100%;
+        box-sizing: border-box;
+        min-height: 40px;
+        margin-right: 0;
+    }
+
+    body.mobile-zone-mode #peopleContent .people-chip {
+        max-width: calc(100% - 8px);
+    }
+
+    /* ── Alerts Zone: full width buttons ──────────────────────────────────── */
+    body.mobile-zone-mode #alertsContent button {
+        min-height: 44px;
+    }
+
+    body.mobile-zone-mode #alertsContent .field {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+    }
+
+    /* ── Projects Zone: fill space ────────────────────────────────────────── */
+    body.mobile-zone-mode #projectsContent {
+        flex: 1;
+        display: flex !important;
+        flex-direction: column;
+    }
+
+    body.mobile-zone-mode #projectsContent .status-items-container {
+        flex: 1;
+        overflow-y: auto;
+    }
+
+    /* ── Color Zone: grid fills width ─────────────────────────────────────── */
+    body.mobile-zone-mode #colorContent {
+        width: 100%;
+    }
+
+    body.mobile-zone-mode #colorContent .color-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
+        gap: 6px;
+        width: 100%;
+    }
+
+    /* ── Health Indicators Zone: prevent overflow, wrap labels ───────────── */
+    body.mobile-zone-mode #healthIndicatorsContent .entry {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 6px;
+        width: 100%;
+        overflow: hidden;
+    }
+
+    body.mobile-zone-mode #healthIndicatorsContent .entry label {
+        white-space: normal;
+        word-wrap: break-word;
+        overflow-wrap: break-word;
+    }
+
+    body.mobile-zone-mode #healthIndicatorsContent input,
+    body.mobile-zone-mode #healthIndicatorsContent select {
+        width: 100%;
+        box-sizing: border-box;
+        min-height: 38px;
+    }
+
+    body.mobile-zone-mode #healthIndicatorsContent .bp-inputs {
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+
+    body.mobile-zone-mode #healthIndicatorsContent .bp-inputs input {
+        width: calc(50% - 4px);
+        min-width: 60px;
+    }
+
+    /* ── Attachments Zone: fill space ─────────────────────────────────────── */
+    body.mobile-zone-mode #attachmentsContent {
+        flex: 1;
+        display: flex !important;
+        flex-direction: column;
+    }
+
+    /* ── General: all inputs/selects touch-friendly ───────────────────────── */
+    body.mobile-zone-mode .zone-body input[type="text"],
+    body.mobile-zone-mode .zone-body input[type="number"],
+    body.mobile-zone-mode .zone-body input[type="date"],
+    body.mobile-zone-mode .zone-body select,
+    body.mobile-zone-mode .zone-body textarea {
+        min-height: 38px;
+        font-size: 16px; /* prevents iOS zoom on focus */
+        box-sizing: border-box;
+        max-width: 100%;
+    }
+
+    /* Checkboxes/radios: normal size, NOT oversized */
+    body.mobile-zone-mode .zone-body input[type="checkbox"],
+    body.mobile-zone-mode .zone-body input[type="radio"] {
+        width: 16px;
+        height: 16px;
+        min-height: unset !important;
+        flex-shrink: 0;
+        margin: 0;
+    }
+
+    body.mobile-zone-mode .zone-body button {
+        min-height: 36px;
+    }
+
+    /* Show .hideWhenNarrow labels on zone header buttons */
+    body.mobile-zone-mode .zone-header .zone-button .hideWhenNarrow {
+        display: inline !important;
+    }
+
+    /* Prevent anything from overflowing viewport */
+    body.mobile-zone-mode .zone-body > * {
+        max-width: 100%;
+        box-sizing: border-box;
+    }
+
+    /* Zone fills full space — no bottom gap */
+    body.mobile-zone-mode .zone-container {
+        flex: 1;
+        min-height: 0;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════════
+       MOBILE: Hide date & time inputs unless they have a value
+       On mobile, date and time inputs in the dates zone are hidden by default.
+       They appear when they have a value (via .has-value class set by JS).
+       ═══════════════════════════════════════════════════════════════════════ */
+    body.mobile-zone-mode #datesContent .time-input {
+        display: none !important;
+    }
+    body.mobile-zone-mode #datesContent .time-input.has-value {
+        display: inline-block !important;
+    }
+    body.mobile-zone-mode #datesContent .time-input:focus {
+        display: inline-block !important;
+    }
+    body.mobile-zone-mode #datesContent .date-input {
+        display: none !important;
+    }
+    body.mobile-zone-mode #datesContent .date-input.has-value {
+        display: inline-block !important;
+    }
+    body.mobile-zone-mode #datesContent .date-input:focus {
+        display: inline-block !important;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════════
+       MOBILE: Right hamburger button shows zone name
+       ═══════════════════════════════════════════════════════════════════════ */
+    body.mobile-zone-mode .mobile-zone-nav-header .mobile-zone-nav-next {
+        font-size: 0.82em;
+        padding: 6px 8px;
+        white-space: nowrap;
+        min-width: auto;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════════
+       MOBILE: Notes format toolbar always visible inline (no fullscreen)
+       ═══════════════════════════════════════════════════════════════════════ */
+    body.mobile-zone-mode #notesFormatToolbar {
+        display: flex !important;
+        flex-wrap: wrap;
+        gap: 2px;
+        padding: 4px;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════════
+       MOBILE: Email format toolbar always visible inline (no fullscreen)
+       ═══════════════════════════════════════════════════════════════════════ */
+    body.mobile-zone-mode #emailInlineFormatToolbar {
+        display: flex !important;
+        flex-wrap: wrap;
+        gap: 2px;
+        padding: 4px;
+    }
+
+    /* Show HTML/Text toggle on mobile (normally only in expand modal) */
+    body.mobile-zone-mode #emailHtmlToggleRow {
+        display: flex !important;
+        gap: 4px;
+        padding: 4px 0;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════════
+       MOBILE: Never show fullscreen modals — block them via CSS too
+       ═══════════════════════════════════════════════════════════════════════ */
+    body.mobile-zone-mode #notesModal,
+    body.mobile-zone-mode #emailExpandModal,
+    body.mobile-zone-mode #peopleExpandModal {
+        display: none !important;
+    }
 }

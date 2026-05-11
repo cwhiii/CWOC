@@ -582,10 +582,15 @@ function _getPreviousPeriodDate(chit, currentPeriod) {
 async function _persistHabitRollover(chit) {
   if (!chit || !chit.id) return;
   try {
+    // Strip fields not in the Chit model to avoid 422
+    var payload = Object.assign({}, chit);
+    delete payload.owner_id; delete payload.effective_role; delete payload.assigned_to_display_name;
+    delete payload.deleted_datetime; delete payload.owner_display_name; delete payload.owner_username;
+    delete payload.habit_periods; delete payload.email_account_id;
     var resp = await fetch('/api/chits/' + chit.id, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(chit)
+      body: JSON.stringify(payload)
     });
     if (!resp.ok) {
       console.error('[_persistHabitRollover] Failed to save rollover for chit ' + chit.id + ':', resp.status);

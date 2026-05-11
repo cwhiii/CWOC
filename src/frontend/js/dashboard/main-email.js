@@ -492,7 +492,7 @@ function _emailCheckPendingSend() {
  * @param {string|null} inReplyTo
  */
 function _emailShowUndoSendBar(chitId, archiveOriginal, inReplyTo) {
-    var DURATION = 7000;
+    var DURATION = 5000;
 
     // Remove any existing
     var existing = document.getElementById('emailUndoSendToast');
@@ -893,7 +893,14 @@ function _buildEmailCard(chit, viSettings) {
             _emailToggleSelect(chit.id, cb.checked);
         }
         // Toggle class for checked state (shows checkbox, hides image)
-        cbWrap.classList.toggle('email-cb-checked', cb.checked);
+        if (cb.checked) {
+            cbWrap.classList.add('email-cb-checked');
+        } else {
+            // Delay reverting to contact image so the uncheck is visible first
+            setTimeout(function() {
+                if (!cb.checked) cbWrap.classList.remove('email-cb-checked');
+            }, 1000);
+        }
         // Track this checkbox as the last clicked
         var allCbs = Array.from(document.querySelectorAll('.email-select-cb'));
         _emailLastCheckedIndex = allCbs.indexOf(cb);
@@ -1116,6 +1123,153 @@ function _buildEmailCard(chit, viSettings) {
         if (typeof storePreviousState === 'function') storePreviousState();
         window.location.href = '/frontend/html/editor.html?id=' + chit.id + '&expand=email';
     });
+
+    // Right-click: open context menu
+    card.addEventListener('contextmenu', function(e) {
+        if (e.target.classList.contains('email-select-cb')) return;
+        e.preventDefault();
+        if (typeof _showChitContextMenu === 'function') {
+            _showChitContextMenu(e, chit, function() { if (typeof displayChits === 'function') displayChits(); });
+        }
+    });
+
+    // ── Swipe gesture: right → archive, left → delete ────────────────────
+    (function(_card, _chit) {
+        var _swStartX = 0;
+        var _swStartY = 0;
+        var _swDragging = false;
+        var _swIndicator = null;
+        var _swThreshold = 0.4; // 40% of card width to trigger
+        var _swDragOffset = 0; // offset at the moment dragging starts
+
+        _card.addEventListener('touchstart', function(e) {
+            if (e.target.closest('.email-select-cb, .email-hover-btn, .email-pin-btn, a')) return;
+            var touch = e.touches[0];
+            _swStartX = touch.clientX;
+            _swStartY = touch.clientY;
+            _swDragging = false;
+            _swDragOffset = 0;
+        }, { passive: true });
+
+        _card.addEventListener('touchmove', function(e) {
+            if (_swStartX === null) return;
+            var touch = e.touches[0];
+            var dx = touch.clientX - _swStartX;
+            var dy = touch.clientY - _swStartY;
+
+            // If vertical movement dominates, don't swipe
+            if (!_swDragging && Math.abs(dy) > Math.abs(dx)) {
+                _swStartX = null;
+                return;
+            }
+
+            // Start swiping after 10px horizontal
+            if (!_swDragging && Math.abs(dx) > 10) {
+                _swDragging = true;
+                _swDragOffset = dx; // remember the offset so card starts from 0
+                window._emailSwipeActive = true;
+                _card.style.transition = 'none';
+                _card.style.zIndex = '10';
+                _card.style.position = 'relative';
+
+                // Create indicator as a sibling behind the card
+                _swIndicator = document.createElement('div');
+                _swIndicator.className = 'email-swipe-indicator';
+                var rect = _card.getBoundingClientRect();
+                _swIndicator.style.cssText = 'position:absolute;top:' + (_card.offsetTop) + 'px;left:0;right:0;height:' + rect.height + 'px;display:flex;align-items:center;padding:0 1.5em;font-family:Lora,Georgia,serif;font-size:0.95em;font-weight:bold;border-radius:4px;pointer-events:none;box-sizing:border-box;';
+                _card.parentNode.style.position = 'relative';
+                _card.parentNode.insertBefore(_swIndicator, _card);
+            }
+
+            if (_swDragging) {
+                e.preventDefault();
+                var visualDx = dx - _swDragOffset; // starts from 0
+                _card.style.transform = 'translateX(' + visualDx + 'px)';
+
+                // Update indicator based on direction
+                if (visualDx > 0) {
+                    _swIndicator.style.justifyContent = 'flex-start';
+                    _swIndicator.style.background = '#d4edda';
+                    _swIndicator.style.color = '#155724';
+                    _swIndicator.innerHTML = '<i class="fas fa-archive" style="margin-right:8px;font-size:1.2em;"></i> Archive';
+                    var pctR = Math.min(Math.abs(visualDx) / (_card.offsetWidth * _swThreshold), 1);
+                    _swIndicator.style.opacity = String(0.4 + pctR * 0.6);
+                } else {
+                    _swIndicator.style.justifyContent = 'flex-end';
+                    _swIndicator.style.background = '#f8d7da';
+                    _swIndicator.style.color = '#721c24';
+                    _swIndicator.innerHTML = 'Delete <i class="fas fa-trash" style="margin-left:8px;font-size:1.2em;"></i>';
+                    var pctL = Math.min(Math.abs(visualDx) / (_card.offsetWidth * _swThreshold), 1);
+                    _swIndicator.style.opacity = String(0.4 + pctL * 0.6);
+                }
+            }
+        }, { passive: false });
+
+        _card.addEventListener('touchend', function(e) {
+            if (!_swDragging) { _swStartX = null; return; }
+            _swDragging = false;
+            window._emailSwipeActive = false;
+
+            var touch = e.changedTouches[0];
+            var dx = touch.clientX - _swStartX;
+            var visualDx = dx - _swDragOffset;
+            var cardWidth = _card.offsetWidth;
+            var triggered = Math.abs(visualDx) > cardWidth * _swThreshold;
+
+            if (triggered && visualDx > 0) {
+                // Complete right swipe → archive
+                _card.style.transition = 'transform 0.2s ease-out';
+                _card.style.transform = 'translateX(' + cardWidth + 'px)';
+                setTimeout(function() {
+                    if (_swIndicator) { _swIndicator.remove(); _swIndicator = null; }
+                    _card.style.transform = '';
+                    _card.style.transition = '';
+                    _card.style.position = '';
+                    _card.style.zIndex = '';
+                    _emailQuickArchive(_chit, _card);
+                }, 200);
+            } else if (triggered && visualDx < 0) {
+                // Complete left swipe → delete
+                _card.style.transition = 'transform 0.2s ease-out';
+                _card.style.transform = 'translateX(-' + cardWidth + 'px)';
+                setTimeout(function() {
+                    if (_swIndicator) { _swIndicator.remove(); _swIndicator = null; }
+                    _card.style.transform = '';
+                    _card.style.transition = '';
+                    _card.style.position = '';
+                    _card.style.zIndex = '';
+                    _emailQuickDelete(_chit, _card);
+                }, 200);
+            } else {
+                // Snap back
+                _card.style.transition = 'transform 0.25s ease-out';
+                _card.style.transform = 'translateX(0)';
+                setTimeout(function() {
+                    if (_swIndicator) { _swIndicator.remove(); _swIndicator = null; }
+                    _card.style.transition = '';
+                    _card.style.position = '';
+                    _card.style.zIndex = '';
+                }, 250);
+            }
+            _swStartX = null;
+        });
+
+        _card.addEventListener('touchcancel', function() {
+            if (_swDragging) {
+                _swDragging = false;
+                window._emailSwipeActive = false;
+                _card.style.transition = 'transform 0.25s ease-out';
+                _card.style.transform = 'translateX(0)';
+                setTimeout(function() {
+                    if (_swIndicator) { _swIndicator.remove(); _swIndicator = null; }
+                    _card.style.transition = '';
+                    _card.style.position = '';
+                    _card.style.zIndex = '';
+                }, 250);
+            }
+            _swStartX = null;
+        });
+    })(card, chit);
 
     return card;
 }
@@ -2408,7 +2562,7 @@ function _emailRestoreCard(card) {
  * @param {function} onUndo - Called when user clicks Undo
  */
 function _emailUndoToast(message, onExpire, onUndo) {
-    var DURATION = 10000;
+    var DURATION = 5000;
 
     // Remove any existing email undo toast
     var existing = document.getElementById('emailUndoToast');

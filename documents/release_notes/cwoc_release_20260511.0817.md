@@ -1,0 +1,1 @@
+Mobile editor nav bar now uses the chit's color as its background, with proper contrasting text colors via contrastColorForBg. Buttons invert (text color becomes button bg, chit color becomes button text). Updates live when the user changes the chit color.

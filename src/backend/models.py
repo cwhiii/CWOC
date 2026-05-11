@@ -74,8 +74,12 @@ class Settings(BaseModel):
     bundles_enabled: Optional[str] = "1"         # "1" = show bundle tabs, "0" = hide
     bundles_show_count: Optional[str] = "both"   # "both", "unread", "total", "none"
     show_map_thumbnails: Optional[str] = "1"     # "1" = show map thumbnails on cards, "0" = hide
+    session_lifetime: Optional[str] = "24"       # Session lifetime in hours: "1", "12", "24", "168" (1 week), "720" (1 month), "0" (never expire)
 
 class Chit(BaseModel):
+    class Config:
+        extra = "ignore"
+
     id: Optional[str] = None
     title: Optional[str] = None
     note: Optional[str] = None

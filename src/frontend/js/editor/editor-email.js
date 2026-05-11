@@ -608,6 +608,20 @@ function _activateEmailZone() {
     colOne.insertBefore(emailSection, colOne.firstChild);
   }
 
+  // On mobile, hide title container and navigate to email zone
+  if (window.innerWidth <= 768 && typeof _mobileZoneModeActive !== 'undefined' && _mobileZoneModeActive) {
+    var _tc = document.getElementById('titleWeatherContainer');
+    if (_tc) _tc.classList.remove('mobile-zone-active');
+    // Navigate to the email zone in mobile zone mode
+    var visibleZones = _getMobileVisibleZones();
+    for (var _zi = 0; _zi < visibleZones.length; _zi++) {
+      if (visibleZones[_zi].id === 'emailSection') {
+        _mobileShowZone(_zi);
+        break;
+      }
+    }
+  }
+
   // Expand the zone
   var emailContent = document.getElementById('emailContent');
   if (emailSection && emailContent) {
@@ -1606,6 +1620,9 @@ function _setEmailZoneReadOnly(readOnly) {
  * Open a fullscreen modal for the email body (expand button).
  */
 function _openEmailExpandModal() {
+  // Never open fullscreen modal on mobile — zone already fills screen
+  if (window.innerWidth <= 768) return;
+
   var existing = document.getElementById('emailExpandModal');
   if (existing) existing.remove();
 

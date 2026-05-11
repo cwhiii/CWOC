@@ -168,9 +168,28 @@ class AuthMiddleware(BaseHTTPMiddleware):
                     expires = datetime.fromisoformat(row["expires_datetime"].replace("Z", ""))
                     last_active = datetime.fromisoformat(row["last_active_datetime"].replace("Z", ""))
 
-                    # Check expiry: absolute expiry OR 24h inactivity
+                    # Check expiry: absolute expiry OR inactivity timeout
                     session_expired = now > expires
-                    session_inactive = (now - last_active).total_seconds() > _INACTIVITY_SECONDS
+                    # Look up user's session_lifetime to determine inactivity window
+                    _user_inactivity = _INACTIVITY_SECONDS
+                    try:
+                        sl_row = conn.execute(
+                            "SELECT session_lifetime FROM settings WHERE user_id = ?",
+                            (row["user_id"],),
+                        ).fetchone()
+                        if sl_row and sl_row[0]:
+                            sl_val = int(sl_row[0])
+                            if sl_val == 0:
+                                _user_inactivity = None  # Never expire on inactivity
+                            else:
+                                _user_inactivity = sl_val * 3600  # Use session lifetime as inactivity window too
+                    except Exception:
+                        pass
+
+                    if _user_inactivity is None:
+                        session_inactive = False
+                    else:
+                        session_inactive = (now - last_active).total_seconds() > _user_inactivity
 
                     if _is_bundles:
                         logger.warning(f"[bundles-debug] expired={session_expired}, inactive={session_inactive}, is_active={row['is_active']}")

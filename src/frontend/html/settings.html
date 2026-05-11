@@ -1276,6 +1276,20 @@
                             <p class="setting-hint">Supports Markdown formatting. Shown on the login page.</p>
                             <textarea id="login-message-input" rows="4" placeholder="Welcome message (supports Markdown)..." style="width:100%;box-sizing:border-box;font-family:'Lora',Georgia,serif;font-size:0.95em;border:1px solid #8b5a2b;border-radius:5px;padding:8px;background:#f5e6cc;resize:vertical;"></textarea>
                             <div id="login-message-preview" style="margin-top:8px;padding:10px;background:rgba(139,90,43,0.05);border:1px solid rgba(139,90,43,0.15);border-radius:6px;min-height:2em;"></div>
+
+                            <label class="setting-subheader" style="margin-top:14px;">🔑 Session Lifetime</label>
+                            <p class="setting-hint">How long before users must re-authenticate. Applies on next login.</p>
+                            <div class="setting-inline">
+                                <label for="session-lifetime-select">Require re-login after</label>
+                                <select id="session-lifetime-select" onchange="setSaveButtonUnsaved();">
+                                    <option value="1">1 hour</option>
+                                    <option value="12">12 hours</option>
+                                    <option value="24" selected>24 hours</option>
+                                    <option value="168">1 week</option>
+                                    <option value="720">1 month</option>
+                                    <option value="0">Never</option>
+                                </select>
+                            </div>
                         </div>
                         <div class="setting-group">
                             <h3>🛠️ Tools</h3>
@@ -1637,7 +1651,12 @@
                             <h3>🔄 Version &amp; Updates</h3>
                             <div style="margin-bottom:12px;font-size:0.9em;">
                                 <div style="margin-bottom:4px;">Version: <span id="version-display">Loading...</span></div>
-                                <div>Updated: <span id="version-date">Loading...</span></div>
+                                <div style="margin-bottom:4px;">Updated: <span id="version-date">Loading...</span></div>
+                                <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+                                    <span>Disk: <span id="disk-usage-display">—</span></span>
+                                    <button type="button" id="disk-refresh-btn" onclick="refreshDiskUsage()" style="background:none;border:none;cursor:pointer;font-size:0.9em;padding:2px 4px;color:#8b5a2b;" title="Refresh disk usage">🔄</button>
+                                </div>
+                                <div>CWOC Data: <span id="cwoc-storage-display">—</span></div>
                             </div>
                             <button id="upgrade-btn" class="standard-button" style="width:100%;">⬆️ Upgrade</button>
                             <button id="upgrade-reopen-btn" class="standard-button" style="width:100%;display:none;">🔄 Upgrade in progress</button>

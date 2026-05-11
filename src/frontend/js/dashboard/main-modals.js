@@ -639,34 +639,30 @@ async function deleteChit() {
   var delId = chitId;
   var chit = chits.find(function(c) { return c.id === delId; });
   var delTitle = (chit && chit.title) || "(Untitled)";
+  // Immediately hide locally
+  if (chit) chit.deleted = true;
+  currentTab = previousState.tab;
+  currentView = previousState.view;
+  document
+    .querySelectorAll(".tab")
+    .forEach((t) => t.classList.remove("active"));
+  document
+    .querySelector(
+      `.tab:nth-child(${["Calendar", "Checklists", "Tasks", "Notes"].indexOf(currentTab) + 1})`,
+    )
+    .classList.add("active");
+  document.getElementById("period-select").value = currentView;
+  displayChits();
+  _showDeleteUndoToast(delId, delTitle, null, function () {
+    if (chit) chit.deleted = false;
+    fetch("/api/trash/" + delId + "/restore", { method: "POST" })
+      .then(function () { fetchChits(); })
+      .catch(function (err) { console.error("Undo restore failed:", err); });
+  });
+  // Persist to server
   fetch(`/api/chits/${delId}`, { method: "DELETE" })
-    .then((response) => {
-      if (!response.ok)
-        throw new Error(`HTTP error! status: ${response.status}`);
-      return response.json();
-    })
-    .then(() => {
-      currentTab = previousState.tab;
-      currentView = previousState.view;
-      document
-        .querySelectorAll(".tab")
-        .forEach((t) => t.classList.remove("active"));
-      document
-        .querySelector(
-          `.tab:nth-child(${["Calendar", "Checklists", "Tasks", "Notes"].indexOf(currentTab) + 1})`,
-        )
-        .classList.add("active");
-      document.getElementById("period-select").value = currentView;
-      fetchChits();
-      _showDeleteUndoToast(delId, delTitle, null, function () {
-        fetch("/api/trash/" + delId + "/restore", { method: "POST" })
-          .then(function () { fetchChits(); })
-          .catch(function (err) { console.error("Undo restore failed:", err); });
-      });
-    })
     .catch((err) => {
       console.error("Error deleting chit:", err);
-      cwocToast("Failed to delete chit. Check console for details.", "error");
     });
 }
 

@@ -1,0 +1,1 @@
+Fixed mobile editor opening email chits on the title zone instead of the email zone. The mobile zone system now starts on the notes zone (neutral landing) when coming from Email tab if the email zone isn't visible yet, then navigates to the email zone once loadChitData completes and makes it visible. Also fixed _activateEmailZone to navigate directly to the email zone on mobile.

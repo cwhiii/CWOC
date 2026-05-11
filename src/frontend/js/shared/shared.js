@@ -696,6 +696,7 @@ function _showSnoozeSubMenu(actionRow, snzBtn, chitId, closeModal, onRefresh) {
  * @param {function} onRefresh — callback after changes (usually displayChits)
  */
 function _showChitContextMenu(e, chit, onRefresh) {
+  console.log('[ContextMenu] Opening for chit:', chit.id, chit.title);
   // Remove any existing context menu
   document.querySelectorAll('.cwoc-chit-context-menu-overlay').forEach(function(el) { el.remove(); });
 
@@ -707,20 +708,13 @@ function _showChitContextMenu(e, chit, onRefresh) {
 
   var menu = document.createElement('div');
   menu.className = 'cwoc-chit-context-menu';
-  menu.style.cssText = 'position:fixed;background:#fffaf0;border:2px solid #6b4e31;border-radius:8px;padding:8px 0;min-width:200px;box-shadow:0 8px 24px rgba(0,0,0,0.3);font-family:Lora,Georgia,serif;';
+  menu.style.cssText = 'position:fixed;background:url("/static/parchment.jpg") center/cover;background-color:#fffaf0;border:2px solid #6b4e31;border-radius:8px;padding:8px 0;min-width:200px;max-width:200px;box-shadow:0 8px 24px rgba(0,0,0,0.3);font-family:Lora,Georgia,serif;';
 
   // Position near the click, clamped to viewport
   var menuX = Math.min(e.clientX, window.innerWidth - 220);
   var menuY = Math.min(e.clientY, window.innerHeight - 300);
   menu.style.left = menuX + 'px';
   menu.style.top = menuY + 'px';
-
-  // Menu title
-  var titleEl = document.createElement('div');
-  titleEl.style.cssText = 'padding:4px 14px 8px;font-weight:bold;color:#4a2c2a;font-size:0.95em;border-bottom:1px solid rgba(139,90,43,0.2);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:250px;';
-  titleEl.textContent = chit.title || '(Untitled)';
-  titleEl.title = chit.title || '';
-  menu.appendChild(titleEl);
 
   function _close() { overlay.remove(); document.removeEventListener('keydown', _escHandler, true); }
 
@@ -730,7 +724,12 @@ function _showChitContextMenu(e, chit, onRefresh) {
     item.innerHTML = '<span style="width:18px;text-align:center;">' + icon + '</span> ' + label;
     item.addEventListener('mouseenter', function() { this.style.background = '#f0e6d0'; });
     item.addEventListener('mouseleave', function() { this.style.background = ''; });
-    item.addEventListener('click', function() { _close(); onClick(); });
+    item.addEventListener('click', function(ev) {
+      ev.stopPropagation();
+      console.log('[ContextMenu] Clicked:', label, 'chitId:', chitId);
+      _close();
+      try { onClick(); } catch (err) { console.error('[ContextMenu] Error in', label, ':', err); }
+    });
     menu.appendChild(item);
   }
 
@@ -753,34 +752,104 @@ function _showChitContextMenu(e, chit, onRefresh) {
   // Pin / Unpin
   var isPinned = !!chit.pinned;
   _menuItem(isPinned ? '<i class="fas fa-bookmark" style="color:#8b5a2b;"></i>' : '<i class="far fa-bookmark" style="color:#6b4e31;"></i>', isPinned ? 'Unpin' : 'Pin', function() {
-    fetch('/api/chit/' + chitId).then(function(r) { return r.ok ? r.json() : null; }).then(function(full) {
-      if (!full) return;
-      full.pinned = !full.pinned;
-      return fetch('/api/chits/' + chitId, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(full) });
-    }).then(function() { if (onRefresh) onRefresh(); });
+    fetch('/api/chits/' + chitId + '/fields', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pinned: !isPinned })
+    }).then(function(r) {
+      if (r.ok) {
+        // Update local chit data so re-render reflects the change
+        chit.pinned = !isPinned;
+        if (typeof chits !== 'undefined') {
+          var local = chits.find(function(c) { return c.id === chitId; });
+          if (local) local.pinned = !isPinned;
+        }
+      }
+      if (onRefresh) onRefresh();
+    }).catch(function(err) { console.error('[ContextMenu] Pin error:', err); });
   });
 
   // Archive / Unarchive
   var isArchived = !!chit.archived;
   _menuItem(isArchived ? '📦' : '📦', isArchived ? 'Unarchive' : 'Archive', function() {
-    fetch('/api/chit/' + chitId).then(function(r) { return r.ok ? r.json() : null; }).then(function(full) {
-      if (!full) return;
-      full.archived = !full.archived;
-      return fetch('/api/chits/' + chitId, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(full) });
-    }).then(function() { if (onRefresh) onRefresh(); });
+    var newArchived = !isArchived;
+    // Immediately hide locally
+    chit.archived = newArchived;
+    if (typeof chits !== 'undefined') {
+      var local = chits.find(function(c) { return c.id === chitId; });
+      if (local) local.archived = newArchived;
+    }
+    if (onRefresh) onRefresh();
+    // Show undo toast
+    _showArchiveUndoToast(chit.title, newArchived, function() {
+      // Undo: revert the archive state
+      chit.archived = !newArchived;
+      if (typeof chits !== 'undefined') {
+        var local2 = chits.find(function(c) { return c.id === chitId; });
+        if (local2) local2.archived = !newArchived;
+      }
+      if (onRefresh) onRefresh();
+      fetch('/api/chits/' + chitId + '/fields', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ archived: !newArchived })
+      });
+    });
+    // Persist to server
+    fetch('/api/chits/' + chitId + '/fields', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ archived: newArchived })
+    });
   });
 
   // Snooze
   var isSnoozed = chit.snoozed_until && new Date(chit.snoozed_until) > new Date();
-  _menuItem('😴', isSnoozed ? 'Unsnooze' : 'Snooze 1 hour', function() {
-    if (isSnoozed) {
+  if (isSnoozed) {
+    _menuItem('😴', 'Unsnooze', function() {
       fetch('/api/chits/' + chitId + '/snooze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ until: null }) })
         .then(function() { if (typeof cwocToast === 'function') cwocToast('Unsnoozed.', 'info'); if (onRefresh) onRefresh(); });
-    } else {
-      fetch('/api/chits/' + chitId + '/snooze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ minutes: 60 }) })
-        .then(function() { if (typeof cwocToast === 'function') cwocToast('Snoozed for 1 hour.', 'info'); if (onRefresh) onRefresh(); });
-    }
-  });
+    });
+  } else {
+    // Snooze row: emoji + circular minute buttons
+    var snoozeRow = document.createElement('div');
+    snoozeRow.style.cssText = 'padding:5px 10px;display:flex;align-items:center;gap:5px;';
+    var snoozeEmoji = document.createElement('span');
+    snoozeEmoji.style.cssText = 'width:18px;text-align:center;font-size:0.95em;flex-shrink:0;';
+    snoozeEmoji.textContent = '😴';
+    snoozeRow.appendChild(snoozeEmoji);
+    [{mins: 60, label: 'H', title: '1 hour'}, {mins: 1440, label: 'D', title: '1 day'}, {mins: 10080, label: 'W', title: '1 week'}, {mins: 20160, label: 'F', title: '1 fortnight'}, {mins: 43200, label: 'M', title: '1 month'}].forEach(function(opt) {
+      var circleBtn = document.createElement('button');
+      circleBtn.className = 'cwoc-ctx-snooze-circle';
+      circleBtn.textContent = opt.label;
+      circleBtn.title = opt.title;
+      circleBtn.addEventListener('click', function() {
+        _close();
+        // Immediately hide the chit locally
+        chit.snoozed_until = new Date(Date.now() + opt.mins * 60 * 1000).toISOString();
+        if (typeof chits !== 'undefined') {
+          var _localChit = chits.find(function(c) { return c.id === chitId; });
+          if (_localChit) _localChit.snoozed_until = chit.snoozed_until;
+        }
+        if (onRefresh) onRefresh();
+        _showSnoozeUndoToast(chitId, chit.title, opt.mins, function() {
+          fetch('/api/chits/' + chitId + '/snooze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ until: null }) })
+            .then(function() {
+              chit.snoozed_until = null;
+              if (typeof chits !== 'undefined') {
+                var _lc = chits.find(function(c) { return c.id === chitId; });
+                if (_lc) _lc.snoozed_until = null;
+              }
+              if (onRefresh) onRefresh();
+            });
+        });
+        // Persist to server
+        fetch('/api/chits/' + chitId + '/snooze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ minutes: opt.mins }) });
+      });
+      snoozeRow.appendChild(circleBtn);
+    });
+    menu.appendChild(snoozeRow);
+  }
 
   // Separator
   var sep2 = document.createElement('div');
@@ -792,16 +861,58 @@ function _showChitContextMenu(e, chit, onRefresh) {
     cwocConfirm('Delete this chit?', { title: 'Delete Chit', confirmLabel: '🗑️ Delete', danger: true }).then(function(confirmed) {
       if (!confirmed) return;
       var delTitle = chit.title || '(Untitled)';
-      fetch('/api/chits/' + chitId, { method: 'DELETE' }).then(function() {
-        if (onRefresh) onRefresh();
-        if (typeof _showDeleteUndoToast === 'function') {
-          _showDeleteUndoToast(chitId, delTitle, null, function() {
-            fetch('/api/trash/' + chitId + '/restore', { method: 'POST' }).then(function() { if (onRefresh) onRefresh(); });
-          });
-        }
-      });
+      // Immediately hide locally
+      chit.deleted = true;
+      if (typeof chits !== 'undefined') {
+        var _delLocal = chits.find(function(c) { return c.id === chitId; });
+        if (_delLocal) _delLocal.deleted = true;
+      }
+      if (onRefresh) onRefresh();
+      if (typeof _showDeleteUndoToast === 'function') {
+        _showDeleteUndoToast(chitId, delTitle, null, function() {
+          // Undo: restore locally and on server
+          chit.deleted = false;
+          if (typeof chits !== 'undefined') {
+            var _restLocal = chits.find(function(c) { return c.id === chitId; });
+            if (_restLocal) _restLocal.deleted = false;
+          }
+          fetch('/api/trash/' + chitId + '/restore', { method: 'POST' }).then(function() { if (onRefresh) onRefresh(); });
+        });
+      }
+      // Persist to server
+      fetch('/api/chits/' + chitId, { method: 'DELETE' });
     });
   });
+
+  // ── Email-specific actions (archive, delete, mark unread) — only in Email view ──
+  if ((chit.email_from || chit.email_subject || chit.email_date) && typeof currentTab !== 'undefined' && currentTab === 'Email') {
+    var emailSep = document.createElement('div');
+    emailSep.style.cssText = 'border-top:1px solid rgba(139,90,43,0.2);margin:4px 0;';
+    menu.appendChild(emailSep);
+
+    _menuItem('<i class="fas fa-archive" style="color:#155724;"></i>', 'Archive', function() {
+      var card = document.querySelector('.email-card[data-chit-id="' + chitId + '"]');
+      if (card && typeof _emailQuickArchive === 'function') {
+        _emailQuickArchive(chit, card);
+      } else {
+        chit.archived = true;
+        if (typeof chits !== 'undefined') {
+          var _lc = chits.find(function(c) { return c.id === chitId; });
+          if (_lc) _lc.archived = true;
+        }
+        if (onRefresh) onRefresh();
+        fetch('/api/chits/' + chitId + '/fields', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ archived: true }) });
+      }
+    });
+
+    var isRead = !!chit.email_read;
+    _menuItem('<i class="fas fa-envelope' + (isRead ? '' : '-open') + '" style="color:#6b4e31;"></i>', isRead ? 'Mark Unread' : 'Mark Read', function() {
+      if (typeof _toggleEmailReadStatus === 'function') {
+        var card = document.querySelector('.email-card[data-chit-id="' + chitId + '"]');
+        _toggleEmailReadStatus(chit, card);
+      }
+    });
+  }
 
   overlay.appendChild(menu);
   document.body.appendChild(overlay);
@@ -1675,8 +1786,8 @@ function _onNotesDragKey(e) {
  * @param {function} onExpire - Called when toast expires (no undo)
  * @param {function} onUndo - Called when user clicks Undo
  */
-function _showDeleteUndoToast(chitId, chitTitle, onExpire, onUndo) {
-  var DURATION = 10000;
+function _showDeleteUndoToast(chitId, chitTitle, onExpire, onUndo, customMessage) {
+  var DURATION = 5000;
   var toast = document.createElement("div");
   toast.style.cssText = "position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:9999;background:#fff5e6;border:2px solid #8b5a2b;border-radius:8px;padding:0.75em 1.2em 0.5em;box-shadow:0 4px 16px rgba(0,0,0,0.3);min-width:280px;max-width:420px;font-family:Lora, Georgia, serif;";
 
@@ -1684,7 +1795,12 @@ function _showDeleteUndoToast(chitId, chitTitle, onExpire, onUndo) {
   msgRow.style.cssText = "display:flex;align-items:center;justify-content:space-between;gap:0.8em;margin-bottom:0.5em;";
   var msg = document.createElement("span");
   msg.style.cssText = "font-size:0.9em;color:#1a1208;";
-  msg.textContent = "🗑️ Deleted: " + (chitTitle || "(Untitled)");
+  var _msgContent = customMessage || ("🗑️ Deleted: " + (chitTitle || "(Untitled)"));
+  if (_msgContent.indexOf('<') !== -1) {
+    msg.innerHTML = _msgContent;
+  } else {
+    msg.textContent = _msgContent;
+  }
   var undoBtn = document.createElement("button");
   undoBtn.textContent = "Undo";
   undoBtn.style.cssText = "padding:4px 12px;cursor:pointer;font-weight:bold;border:1px solid #8b5a2b;border-radius:4px;background:#f5e6cc;color:#1a1208;font-family:inherit;";
@@ -1725,6 +1841,38 @@ function _showDeleteUndoToast(chitId, chitTitle, onExpire, onUndo) {
     toast.remove();
     if (onUndo) onUndo();
   };
+}
+
+/**
+ * Show an undo toast for archive/unarchive actions.
+ * Delegates to _showDeleteUndoToast with a custom message.
+ */
+function _showArchiveUndoToast(chitTitle, archived, onUndo) {
+  var message = (archived ? "📦 Archived: " : "📦 Unarchived: ") + (chitTitle || "(Untitled)");
+  _showDeleteUndoToast(null, chitTitle, null, onUndo, message);
+}
+
+/**
+ * Show an undo toast for snooze actions.
+ * Shows the snooze-until time (if <24h) or date (if ≥24h).
+ * @param {string} chitId - The chit ID (for unsnooze API call)
+ * @param {string} chitTitle - The chit title for display
+ * @param {number} mins - Snooze duration in minutes
+ * @param {function} onUndo - Called when user clicks Undo
+ */
+function _showSnoozeUndoToast(chitId, chitTitle, mins, onUndo) {
+  var untilDate = new Date(Date.now() + mins * 60 * 1000);
+  var untilStr;
+  if (mins < 1440) {
+    // Less than a day: show time
+    untilStr = untilDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  } else {
+    // A day or more: show date
+    untilStr = untilDate.toLocaleDateString([], { month: 'short', day: 'numeric' });
+    if (mins >= 43200) untilStr = untilDate.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+  var message = "😴 Snoozed: " + (chitTitle || "(Untitled)") + " until <b>" + untilStr + "</b>";
+  _showDeleteUndoToast(null, chitTitle, null, onUndo, message);
 }
 
 
@@ -2256,6 +2404,7 @@ function initMobileSidebar() {
 
   document.addEventListener('touchend', function (e) {
     if (!_swipeTracking || !_isMobileOverlay()) { _swipeTracking = false; return; }
+    if (window._emailSwipeActive) { _swipeTracking = false; return; }
     var touch = e.changedTouches[0];
     var dx = touch.clientX - _swipeStartX;
     var dy = Math.abs(touch.clientY - _swipeStartY);
@@ -2553,6 +2702,7 @@ function initMobileViewsButton() {
 
   document.addEventListener('touchend', function (e) {
     if (!_vsTracking || !_isMobileOverlay()) { _vsTracking = false; return; }
+    if (window._emailSwipeActive) { _vsTracking = false; return; }
     var touch = e.changedTouches[0];
     var dx = touch.clientX - _vsStartX;
     var dy = Math.abs(touch.clientY - _vsStartY);
@@ -3191,10 +3341,15 @@ function _getPreviousPeriodDate(chit, currentPeriod) {
 async function _persistHabitRollover(chit) {
   if (!chit || !chit.id) return;
   try {
+    // Strip fields not in the Chit model to avoid 422
+    var payload = Object.assign({}, chit);
+    delete payload.owner_id; delete payload.effective_role; delete payload.assigned_to_display_name;
+    delete payload.deleted_datetime; delete payload.owner_display_name; delete payload.owner_username;
+    delete payload.habit_periods; delete payload.email_account_id;
     var resp = await fetch('/api/chits/' + chit.id, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(chit)
+      body: JSON.stringify(payload)
     });
     if (!resp.ok) {
       console.error('[_persistHabitRollover] Failed to save rollover for chit ' + chit.id + ':', resp.status);

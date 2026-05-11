@@ -494,11 +494,14 @@ button.delete:hover {
     right: -260px;
     width: 240px;
     height: 100%;
-    background: var(--parchment-medium, #faebd7);
+    background: url("/static/parchment.jpg") center/cover;
+    background-color: var(--parchment-medium, #faebd7);
     border-left: 2px solid var(--aged-brown-medium, #8b4513);
     z-index: 2001;
     transition: right 0.25s ease;
     overflow-y: auto;
+    overscroll-behavior: none;
+    -webkit-overflow-scrolling: auto;
     padding: 12px;
     box-sizing: border-box;
     box-shadow: -4px 0 16px rgba(0, 0, 0, 0.2);

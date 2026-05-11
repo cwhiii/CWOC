@@ -663,6 +663,13 @@ function displayChits() {
   // Apply sort
   filteredChits = _applySort(filteredChits);
 
+  // Pinned chits float to top (all views except Calendar)
+  if (currentTab !== "Calendar") {
+    var pinned = filteredChits.filter(function(c) { return !!c.pinned; });
+    var unpinned = filteredChits.filter(function(c) { return !c.pinned; });
+    filteredChits = pinned.concat(unpinned);
+  }
+
   // Expand recurring chits for Calendar tab
   if (currentTab === "Calendar") {
     // Exclude habits hidden from calendar (habit=true && show_on_calendar=false)
@@ -684,6 +691,9 @@ function displayChits() {
     });
     filteredChits = expanded;
   }
+
+  // Tag the container with the current view for CSS scoping
+  listContainer.dataset.view = currentTab.toLowerCase();
 
   switch (currentTab) {
     case "Calendar":

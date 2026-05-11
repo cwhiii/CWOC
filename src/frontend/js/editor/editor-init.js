@@ -29,6 +29,8 @@ function _initializeChitId() {
 }
 
 function toggleZone(event, sectionId, contentId) {
+  // In mobile zone mode, zone headers don't collapse/expand
+  if (_mobileZoneModeActive) return;
   cwocToggleZone(event, sectionId, contentId);
 }
 
@@ -237,7 +239,7 @@ function _collapseAllZonesForNewChit() {
     'Calendar':   [['datesSection', 'datesContent']],
     'Checklists': [['checklistSection', 'checklistContent']],
     'Alarms':     [['alertsSection', 'alertsContent']],
-    'Projects':   [['notesSection', 'notesContent']],
+    'Projects':   [['checklistSection', 'checklistContent']],
     'Tasks':      [['taskSection', 'taskContent']],
     'Notes':      [['notesSection', 'notesContent']],
     'Email':      [['emailSection', 'emailContent']],
@@ -616,6 +618,9 @@ async function loadChitData(chitId) {
     // Sync All Day button appearance from checkbox state
     if (typeof _updateAllDayBtnState === 'function') _updateAllDayBtnState();
 
+    // Update time input visibility for mobile
+    if (typeof _updateTimeInputVisibility === 'function') _updateTimeInputVisibility();
+
     // Now apply habit toggle (must be after _setDateMode and allDay setup)
     if (chit.habit) {
       var _hCb = document.getElementById('habitEnabled');
@@ -743,7 +748,7 @@ async function loadChitData(chitId) {
       'Calendar': 'datesSection',
       'Checklists': 'checklistSection',
       'Alarms': 'alertsSection',
-      'Projects': 'notesSection',
+      'Projects': 'checklistSection',
       'Tasks': 'taskSection',
       'Notes': 'notesSection',
       'Email': 'emailSection',
@@ -779,6 +784,21 @@ async function loadChitData(chitId) {
     // Initialize email zone with chit data
     if (typeof initEmailZone === 'function') {
       initEmailZone(chit);
+    }
+
+    // On mobile, if we came from Email tab, navigate to the email zone now that it's visible
+    if (window.innerWidth <= 768 && typeof _mobileZoneModeActive !== 'undefined' && _mobileZoneModeActive) {
+      var _srcTab = '';
+      try { _srcTab = localStorage.getItem('cwoc_source_tab') || ''; } catch(e) {}
+      if (_srcTab === 'Email' && typeof hasEmailData === 'function' && hasEmailData(chit)) {
+        var _vz = _getMobileVisibleZones();
+        for (var _ei = 0; _ei < _vz.length; _ei++) {
+          if (_vz[_ei].id === 'emailSection') {
+            _mobileShowZone(_ei);
+            break;
+          }
+        }
+      }
     }
 
     // Initialize attachments zone
@@ -962,6 +982,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
   // Initialize mobile actions modal (replaces header buttons on mobile)
   if (typeof initMobileActionsModal === 'function') initMobileActionsModal();
+
+  // Initialize mobile zone navigation (swipe between zones on mobile)
+  if (typeof initMobileZoneNav === 'function') initMobileZoneNav();
 
   // Tag search filter-as-you-type
   var labelsInput = document.getElementById('labels');
@@ -1324,6 +1347,12 @@ document.addEventListener("DOMContentLoaded", function () {
       var colOne = document.querySelector('.column-one');
       if (emailSection && colOne) {
         colOne.insertBefore(emailSection, colOne.firstChild);
+      }
+
+      // On mobile, hide title container immediately (mobile zone system will manage visibility)
+      if (window.innerWidth <= 768) {
+        var _tc = document.getElementById('titleWeatherContainer');
+        if (_tc) _tc.style.display = 'none';
       }
 
       // Auto-expand email modal if expand=email param is present (compose from email view)

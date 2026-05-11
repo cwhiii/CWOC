@@ -1231,6 +1231,8 @@ var _expandModalSort = null;
  */
 function openPeopleExpandModal(event) {
   if (event) event.stopPropagation();
+  // Never open fullscreen modal on mobile — zone already fills screen
+  if (window.innerWidth <= 768) return;
   var modal = document.getElementById('peopleExpandModal');
   if (!modal) return;
 

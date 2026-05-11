@@ -1,0 +1,1 @@
+Fixed mobile dates zone alignment: radios and checkboxes now use fixed 16px size with explicit 6px right margin, overriding the base table-cell layout. The date-mode-group is forced to flex-column, eliminating table display interference. Labels top-align with inputs, and all radio/checkbox controls sit in a perfectly straight vertical line.

@@ -1,0 +1,1 @@
+Fixed mobile editor swipe: moved body swipe listeners to document level so right-edge swipes register properly. Swipe left → actions, swipe right → zone list. Hidden the editor header bar entirely in mobile zone mode (actions still accessible via swipe-left).

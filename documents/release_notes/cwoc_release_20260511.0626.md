@@ -1,0 +1,1 @@
+Fixed mobile zone navigation layout — zones were pushed off-screen to the right. Root cause: editor container centering (width: 95%, margin: auto), body padding, and column wrapper divs taking up space. Fixed by forcing full-width layout in zone mode, removing body padding, hiding inactive column wrappers, and overriding grid/overflow constraints.

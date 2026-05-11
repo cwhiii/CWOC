@@ -98,6 +98,9 @@ function onDateModeChange() {
   }
 
   if (!_dateModeSuppressUnsaved) setSaveButtonUnsaved();
+
+  // Update time input visibility for mobile
+  if (typeof _updateTimeInputVisibility === 'function') _updateTimeInputVisibility();
 }
 
 /** Toggle status to Complete when the Due date Complete checkbox is checked */
@@ -862,3 +865,44 @@ function _fmtPerpetualDate(raw) {
   }
   return raw;
 }
+
+/* ── Mobile: Toggle .has-value class on time inputs ───────────────────────── */
+
+/**
+ * Update .has-value class on all date and time inputs in the dates zone.
+ * On mobile, these inputs are hidden unless they have this class.
+ * Called after date mode changes, after loading chit data, and on input.
+ */
+function _updateTimeInputVisibility() {
+  var inputs = document.querySelectorAll('#datesContent .time-input, #datesContent .date-input');
+  inputs.forEach(function(input) {
+    if (input.value && input.value.trim()) {
+      input.classList.add('has-value');
+    } else {
+      input.classList.remove('has-value');
+    }
+  });
+}
+
+// Attach input listeners to date and time fields so .has-value updates live
+(function() {
+  document.addEventListener('DOMContentLoaded', function() {
+    var inputs = document.querySelectorAll('#datesContent .time-input, #datesContent .date-input');
+    inputs.forEach(function(input) {
+      input.addEventListener('input', function() {
+        _updateTimeInputVisibility();
+      });
+      input.addEventListener('change', function() {
+        _updateTimeInputVisibility();
+      });
+      // On focus, add has-value so it stays visible while editing
+      input.addEventListener('focus', function() {
+        input.classList.add('has-value');
+      });
+      // On blur, re-evaluate based on actual value
+      input.addEventListener('blur', function() {
+        _updateTimeInputVisibility();
+      });
+    });
+  });
+})();

@@ -232,28 +232,52 @@ function _showAlertModal(opts) {
   btnRow.appendChild(dismissBtn);
 
   if (opts.showSnooze) {
-    const snoozeBtn = document.createElement("button");
-    snoozeBtn.className = "cwoc-alert-btn";
-    snoozeBtn.textContent = "💤 Snooze";
-    snoozeBtn.onclick = () => {
-      _globalStopAlarm();
-      if (typeof _globalStopTimer === 'function') _globalStopTimer();
-      if (typeof _sharedStopAlarm === 'function') _sharedStopAlarm();
-      if (typeof _sharedStopTimer === 'function') _sharedStopTimer();
-      _dismissAlertModal(overlay, opts.onDismiss);
-      if (opts.snoozeKey) {
-        const snoozeMs = _getSnoozeMs();
-        const untilTs = Date.now() + snoozeMs;
-        _persistSnooze(opts.snoozeKey, untilTs);
-        if (opts.triggerKey) _globalTriggeredAlarms.delete(opts.triggerKey);
-        syncSend('alert_snoozed', { snoozeKey: opts.snoozeKey, triggerKey: opts.triggerKey, snoozeUntil: untilTs });
-      }
-      // Re-render to show snooze countdown bar
-      if (currentTab === 'Alarms' && _alarmsViewMode === 'independent') {
-        setTimeout(function() { displayChits(); }, 400);
-      }
-    };
-    btnRow.appendChild(snoozeBtn);
+    const snoozeRow = document.createElement("div");
+    snoozeRow.className = "cwoc-alert-snooze-row";
+
+    const snoozeIcon = document.createElement("i");
+    snoozeIcon.className = "fa-solid fa-clock-rotate-left";
+    snoozeIcon.title = "Snooze";
+    snoozeRow.appendChild(snoozeIcon);
+
+    [{mins: 60, label: 'H', title: '1 hour'}, {mins: 1440, label: 'D', title: '1 day'}, {mins: 10080, label: 'W', title: '1 week'}, {mins: 20160, label: 'F', title: '1 fortnight'}, {mins: 43200, label: 'M', title: '1 month'}].forEach(function(opt) {
+      const circleBtn = document.createElement("button");
+      circleBtn.className = "cwoc-alert-snooze-circle";
+      circleBtn.textContent = opt.label;
+      circleBtn.title = opt.title;
+      circleBtn.onclick = () => {
+        _globalStopAlarm();
+        if (typeof _globalStopTimer === 'function') _globalStopTimer();
+        if (typeof _sharedStopAlarm === 'function') _sharedStopAlarm();
+        if (typeof _sharedStopTimer === 'function') _sharedStopTimer();
+        _dismissAlertModal(overlay, opts.onDismiss);
+        if (opts.snoozeKey) {
+          const snoozeMs = opt.mins * 60 * 1000;
+          const untilTs = Date.now() + snoozeMs;
+          _persistSnooze(opts.snoozeKey, untilTs);
+          if (opts.triggerKey) _globalTriggeredAlarms.delete(opts.triggerKey);
+          syncSend('alert_snoozed', { snoozeKey: opts.snoozeKey, triggerKey: opts.triggerKey, snoozeUntil: untilTs });
+        }
+        // Show undo toast
+        if (typeof _showSnoozeUndoToast === 'function') {
+          _showSnoozeUndoToast(opts.chitId || null, opts.title || 'Alert', opt.mins, function() {
+            // Undo: clear the snooze
+            if (opts.snoozeKey) _persistDismiss(opts.snoozeKey);
+            if (opts.triggerKey) _globalTriggeredAlarms.delete(opts.triggerKey);
+            if (currentTab === 'Alarms' && _alarmsViewMode === 'independent') {
+              setTimeout(function() { displayChits(); }, 200);
+            }
+          });
+        }
+        // Re-render to show snooze countdown bar
+        if (currentTab === 'Alarms' && _alarmsViewMode === 'independent') {
+          setTimeout(function() { displayChits(); }, 400);
+        }
+      };
+      snoozeRow.appendChild(circleBtn);
+    });
+
+    btnRow.appendChild(snoozeRow);
   }
 
   modal.appendChild(btnRow);

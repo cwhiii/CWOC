@@ -1,0 +1,1 @@
+Mobile dates zone: removed the ⏰ reveal button. Labels (Start/End, Due, etc.) are now top-aligned with their inputs. Radio buttons and checkboxes are in a perfectly straight vertical line with consistent 16px sizing and 22px left indent for the fields below.

@@ -1093,6 +1093,17 @@
                                 <input id="emailSubject" type="text" placeholder="Subject" autocomplete="off">
                             </div>
                             <div class="email-field email-body-field">
+                                <div id="emailInlineFormatToolbar" class="notes-format-toolbar email-inline-toolbar" style="display:none;">
+                                    <button type="button" title="Bold" onclick="_emailFormatBtn('b','emailBody')"><strong>B</strong></button>
+                                    <button type="button" title="Italic" onclick="_emailFormatBtn('i','emailBody')"><em>I</em></button>
+                                    <button type="button" title="Strikethrough" onclick="_emailFormatBtn('s','emailBody')"><s>S</s></button>
+                                    <button type="button" title="Link" onclick="_emailFormatBtn('k','emailBody')">🔗</button>
+                                    <span class="notes-toolbar-sep"></span>
+                                    <button type="button" title="Bullet List" onclick="_emailFormatBtn('ul','emailBody')">• List</button>
+                                    <button type="button" title="Numbered List" onclick="_emailFormatBtn('ol','emailBody')">1. List</button>
+                                    <button type="button" title="Blockquote" onclick="_emailFormatBtn('q','emailBody')">❝</button>
+                                    <button type="button" title="Code" onclick="_emailFormatBtn('code','emailBody')">⟨⟩</button>
+                                </div>
                                 <textarea id="emailBody" rows="8" placeholder="Compose your message (markdown supported)..."></textarea>
                                 <div id="emailBodyRendered" class="email-rendered-output markdown-output" style="display:none;cursor:pointer;min-height:180px;padding:10px 12px;" title="Double-click to edit" ondblclick="toggleEmailViewMode(event)"></div>
                             </div>
@@ -1618,6 +1629,7 @@
         <script src="/frontend/js/editor/editor-snooze.js"></script>
         <script src="/frontend/js/editor/editor-save.js"></script>
         <script src="/frontend/js/editor/editor-init.js"></script>
+        <script src="/frontend/js/editor/editor-mobile-zones.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
         <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
         <script src="/pwa/pwa-register.js"></script>

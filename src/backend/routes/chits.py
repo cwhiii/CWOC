@@ -801,6 +801,71 @@ def delete_chit(chit_id: str, request: Request):
             conn.close()
 
 
+@router.patch("/api/chits/{chit_id}/fields")
+def patch_chit_fields(chit_id: str, body: dict, request: Request):
+    """Update only the specified fields on a chit.
+    Body: { "pinned": true } or { "archived": true } etc.
+    Only allows safe scalar fields to be patched.
+    """
+    ALLOWED_FIELDS = {
+        "pinned", "archived", "status", "priority", "severity", "color",
+        "title", "note", "location", "all_day", "perpetual", "stealth",
+        "habit_success", "habit_goal", "habit_last_action_date",
+        "habit_hide_overall", "show_on_calendar", "availability",
+        "snoozed_until", "assigned_to",
+    }
+    conn = None
+    try:
+        user_id = request.state.user_id
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT owner_id, shares FROM chits WHERE id = ? AND (deleted = 0 OR deleted IS NULL)", (chit_id,))
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Chit not found")
+        owner_id = row["owner_id"]
+        has_access = (owner_id == user_id)
+        if not has_access:
+            shares = deserialize_json_field(row["shares"]) or []
+            has_access = any(
+                s.get("user_id") == user_id and s.get("role") in ("manager", "editor")
+                for s in shares
+            )
+        if not has_access:
+            raise HTTPException(status_code=404, detail="Chit not found")
+
+        fields_to_update = {k: v for k, v in body.items() if k in ALLOWED_FIELDS}
+        if not fields_to_update:
+            raise HTTPException(status_code=400, detail="No valid fields to update")
+
+        set_clauses = []
+        values = []
+        for field, value in fields_to_update.items():
+            set_clauses.append(f"{field} = ?")
+            if isinstance(value, bool):
+                values.append(1 if value else 0)
+            else:
+                values.append(value)
+
+        set_clauses.append("modified_datetime = ?")
+        values.append(datetime.utcnow().isoformat())
+        values.append(chit_id)
+
+        sql = f"UPDATE chits SET {', '.join(set_clauses)} WHERE id = ?"
+        cursor.execute(sql, values)
+        conn.commit()
+        return {"message": "Updated", "fields": list(fields_to_update.keys())}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error patching chit fields: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
+
+
 @router.patch("/api/chits/{chit_id}/checklist")
 def patch_chit_checklist(chit_id: str, body: dict, request: Request):
     """Save only the checklist field of a chit (auto-save).

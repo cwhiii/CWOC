@@ -1,0 +1,1 @@
+Mobile editor no longer loads the wrong zone while waiting for email. When coming from the Email tab, the mobile zone system now waits (polls every 100ms, up to 5s) until the email zone becomes available, then navigates directly to it. No intermediate zone is shown.

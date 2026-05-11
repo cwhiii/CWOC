@@ -55,6 +55,9 @@ function _setColor(hex, name = "Custom") {
 
   _updateColorPreview(); // Sync preview and selection
 
+  // Update mobile nav bar color to match chit color
+  if (typeof _applyMobileNavBarColor === 'function') _applyMobileNavBarColor();
+
   // Enable save button because color changed
   setSaveButtonUnsaved();
 }

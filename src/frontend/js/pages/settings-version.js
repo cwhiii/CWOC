@@ -1,8 +1,59 @@
 // ── Settings: Version Info, Upgrade, Release Notes ───────────────────────────
-// Version display, upgrade via SSE, release notes modal.
+// Version display, upgrade via SSE, release notes modal, disk usage.
 // Extracted from settings.js for modularity.
 
 let _updateEventSource = null;
+
+// ── Disk Usage ───────────────────────────────────────────────────────────────
+
+function _formatBytes(bytes) {
+  if (bytes == null || isNaN(bytes)) return '—';
+  if (bytes === 0) return '0 B';
+  var units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  var i = Math.floor(Math.log(bytes) / Math.log(1024));
+  if (i >= units.length) i = units.length - 1;
+  var val = bytes / Math.pow(1024, i);
+  return val.toFixed(i === 0 ? 0 : 1) + ' ' + units[i];
+}
+
+async function refreshDiskUsage() {
+  var el = document.getElementById('disk-usage-display');
+  var cwocEl = document.getElementById('cwoc-storage-display');
+  var btn = document.getElementById('disk-refresh-btn');
+  if (!el) return;
+  if (btn) { btn.disabled = true; btn.style.opacity = '0.5'; }
+  try {
+    var res = await fetch('/api/disk-usage');
+    if (!res.ok) throw new Error('Failed to fetch disk usage');
+    var data = await res.json();
+    var usedStr = _formatBytes(data.used);
+    var totalStr = _formatBytes(data.total);
+    var pct = data.total > 0 ? Math.round((data.used / data.total) * 100) : 0;
+    el.textContent = usedStr + ' / ' + totalStr + ' (' + pct + '% used)';
+    // Color-code if getting full
+    if (pct >= 90) {
+      el.style.color = '#b22222';
+    } else if (pct >= 75) {
+      el.style.color = '#a0522d';
+    } else {
+      el.style.color = '';
+    }
+    // CWOC storage (db, attachments, etc.)
+    if (cwocEl && data.cwoc_storage != null) {
+      var cwocPct = data.total > 0 ? Math.round((data.cwoc_storage / data.total) * 100 * 10) / 10 : 0;
+      var cwocPctStr = cwocPct < 0.1 && data.cwoc_storage > 0 ? '<0.1' : cwocPct.toString();
+      cwocEl.textContent = _formatBytes(data.cwoc_storage) + ' (' + cwocPctStr + '% of disk)';
+      cwocEl.style.color = '';
+    }
+  } catch (e) {
+    console.error('Error loading disk usage:', e);
+    el.textContent = 'Unable to load';
+    el.style.color = '#a0522d';
+    if (cwocEl) { cwocEl.textContent = '—'; cwocEl.style.color = ''; }
+  } finally {
+    if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+  }
+}
 
 async function loadVersionInfo() {
   const versionEl = document.getElementById('version-display');

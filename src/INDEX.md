@@ -140,6 +140,7 @@ All migrations run at startup. Each checks if the column/table already exists be
 | `migrate_create_bundles_tables()` | Create `bundles` table (id, owner_id, name, description, display_order, is_default, removable, created_datetime, modified_datetime), `bundle_rules` junction table (id, bundle_id, rule_id, owner_id, created_datetime), and add `bundles_multi_placement` (BOOLEAN DEFAULT 0) column to settings table. Fully idempotent |
 | `migrate_add_nest_thread_id()` | Add `nest_thread_id` (TEXT DEFAULT NULL) column to chits table for nesting non-email chits into email threads. Uses column-existence-check pattern (`PRAGMA table_info` → check → `ALTER TABLE`). Fully idempotent |
 | `migrate_add_snoozed_until()` | Add `snoozed_until` (TEXT DEFAULT NULL) column to chits table for chit-level snooze. Fully idempotent |
+| `migrate_add_session_lifetime()` | Add `session_lifetime` (TEXT DEFAULT '24') column to settings table for configurable session duration. Fully idempotent |
 
 ### 1.6 `src/backend/serializers.py` — vCard & CSV
 
@@ -552,6 +553,7 @@ Contact endpoints are scoped by `owner_id`. Users can access their own contacts 
 | `GET /api/instance-id` | `get_instance_id()` | Get the instance UUID |
 | `GET /api/version` | `get_version()` | Get version info |
 | `GET /health` | `health_check()` | Health check endpoint |
+| `GET /api/disk-usage` | `get_disk_usage()` | Return disk usage stats (total, used, free in bytes) for the data partition |
 | `GET /api/update/log` | `get_update_log()` | Get the last update log |
 | `GET /api/release-notes` | `get_release_notes()` | Return all release notes as a list of `{version, content}` objects (newest first), scanned from `cwoc_release_*.md` files |
 | `GET /api/update/run` | `run_update()` | Run upgrade (SSE stream) |
@@ -592,8 +594,9 @@ Provides login, logout, session management, profile updates, password changes, a
 | `_check_rate_limit(username)` | Return True if the username is rate-limited (≥10 failed attempts in 15 min window) |
 | `_record_failed_attempt(username)` | Record a failed login attempt timestamp |
 | `_clear_attempts(username)` | Clear failed attempts on successful login |
-| `_create_session(conn, user_id)` | Create a new session row and return the token |
-| `_set_session_cookie(response, token)` | Set the `cwoc_session` HttpOnly cookie on a response |
+| `_create_session(conn, user_id)` | Create a new session row using the user's configured session_lifetime and return the token |
+| `_set_session_cookie(response, token, lifetime_hours)` | Set the `cwoc_session` HttpOnly cookie on a response with appropriate max_age |
+| `_get_session_lifetime_hours(conn, user_id)` | Read the session_lifetime setting for a user; returns hours (0 = never expire) |
 | `_clear_session_cookie(response)` | Clear the session cookie on a response |
 
 ### 1.26 `src/backend/routes/users.py` — Admin-Only User Management
@@ -2460,6 +2463,32 @@ Editor initialization, zone management, owner chip rendering, and DOMContentLoad
 | `applyZoneStates(chit)` | Expand zones with data and collapse empty zones after loading a chit; no `sharingSection` entry; `peopleSection` checks `hasSharingData` |
 | `DOMContentLoaded handler` | Main init — wires up save system, Flatpickr, checklist, color swatches, event listeners, hotkeys, ESC chain, and conditionally loads or resets chit data |
 
+#### editor-mobile-zones.js
+
+Mobile swipe-based zone navigation for the chit editor. On mobile (≤768px), transforms the editor into a single-zone-at-a-time view with swipe navigation between zones, a sticky zone header, and a zone list overlay. Depends on: `editor-init.js`, `shared-mobile.js`. Loaded after: `editor-init.js`.
+
+| Symbol | Description |
+|--------|-------------|
+| `_mobileZoneOrder` | Ordered array of zone definitions for mobile navigation (Date, Task, Note, Checklist, Tags, People, Location, Alerts, Projects, Color, Health, Attachments, Email, Habits) |
+| `_mobileCurrentZoneIdx` | Current zone index in mobile view |
+| `_mobileZoneModeActive` | Whether mobile zone mode is currently active |
+| `_mobileTabZoneMap` | Map of dashboard tab names to zone section IDs for determining start zone |
+| `_getMobileVisibleZones()` | Get list of currently visible/available zones (filters out hidden ones) |
+| `_isZoneEmpty(zoneInfo)` | Check if a zone has meaningful content (for greying out in zone list) |
+| `_getMobileStartZoneIdx()` | Get the starting zone index based on the source tab from localStorage |
+| `_mobileShowZone(idx)` | Show a specific zone by index, hiding all others |
+| `_mobileNextZone()` | Navigate to next zone (wraps around) |
+| `_mobilePrevZone()` | Navigate to previous zone (wraps around) |
+| `_createMobileZoneHeader()` | Create the sticky mobile zone navigation header element |
+| `_updateMobileZoneHeader(zoneInfo, idx, total)` | Update the sticky header content (icon, label, counter) |
+| `_createMobileZoneList()` | Create the zone list overlay (slide-in panel from right) |
+| `_openMobileZoneList()` | Open the zone list, refreshing items with empty state |
+| `_closeMobileZoneList()` | Close the zone list overlay |
+| `_initMobileZoneSwipe()` | Initialize swipe gestures (header: prev/next, body: actions/zone-list) |
+| `_activateMobileZoneMode()` | Activate mobile zone mode (add body class, create UI, show starting zone) |
+| `_deactivateMobileZoneMode()` | Deactivate mobile zone mode (restore all zones, remove body class) |
+| `initMobileZoneNav()` | Initialize mobile zone navigation; sets up resize listener |
+
 #### editor_checklists.js
 
 Checklist class: nested items, drag-drop, inline editing, undo.
@@ -2633,6 +2662,8 @@ Settings page logic: tags, colors, clocks, locations, indicators, import/export,
 | `triggerIcsImport()` | Import Calendar (.ics): open file picker, read ICS text, POST to /api/import/ics, display results |
 | `importAllData()` | Import all data: open file picker, read JSON, validate type "all", show mode dialog |
 | `loadVersionInfo()` | Fetch and display the current version and install date from `/api/version` |
+| `refreshDiskUsage()` | Fetch and display disk usage (used/total/percent) from `/api/disk-usage` |
+| `_formatBytes(bytes)` | Format byte count into human-readable string (KB, MB, GB, etc.) |
 | `_closeUpdateModal()` | Close the update modal; show reopen button if upgrade is still running |
 | `startUpgrade()` | Open the upgrade modal and prepare the UI for an upgrade |
 | `runUpgrade()` | Execute the upgrade via SSE from `/api/update/run` |
@@ -3563,6 +3594,7 @@ All HTML pages include the following PWA `<head>` tags: `<link rel="manifest" hr
 <script src="/frontend/js/editor/editor-sharing.js"></script>
 <script src="/frontend/js/editor/editor-people.js"></script>
 <script src="/frontend/js/editor/editor-init.js"></script>
+<script src="/frontend/js/editor/editor-mobile-zones.js"></script>
 
 <!-- 5. CDN (loaded last) -->
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
@@ -3847,6 +3879,7 @@ shared-auth.js            ← MUST load first (getCurrentUser, isAdmin, waitForA
                     editor-save.js        (save/exit logic)
                     editor-sharing.js     (sharing data-layer — uses shared-auth; provides _sharingUserList, getSharingData, hasSharingData for editor-people.js and editor-init.js)
                     editor-init.js        (entry point — calls init functions)
+                    editor-mobile-zones.js (mobile swipe zone navigation — depends on editor-init.js, shared-mobile.js)
 ```
 
 **Key rules:**
