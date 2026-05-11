@@ -1,0 +1,1 @@
+Added "📌 Point in Time" as a radio button date mode in the editor (alongside Start/End, Due, None, Perpetual). Includes date picker, time picker, and a "Now" button that auto-populates to the current moment. Defaults to now when first selected. Does not trigger calendar placement or overdue logic — purely a reference timestamp.

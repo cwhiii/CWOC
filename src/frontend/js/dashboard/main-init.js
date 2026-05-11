@@ -318,8 +318,8 @@ function storePreviousState() {
     hidePastDue: document.getElementById('hide-past-due')?.checked ?? false,
     hideComplete: document.getElementById('hide-complete')?.checked ?? false,
     hideDeclined: document.getElementById('hide-declined')?.checked ?? false,
-    hideEmailReceived: document.getElementById('hide-email-received')?.checked ?? true,
-    hideEmailSent: document.getElementById('hide-email-sent')?.checked ?? true,
+    hideEmailReceived: document.getElementById('show-email-received')?.checked ?? true,
+    hideEmailSent: document.getElementById('show-email-sent')?.checked ?? true,
     highlightOverdue: document.getElementById('highlight-overdue')?.checked ?? true,
     highlightBlocked: document.getElementById('highlight-blocked')?.checked ?? true,
   };
@@ -409,9 +409,9 @@ function _restoreUIState() {
       if (hc) hc.checked = state.hideComplete ?? false;
       const hd = document.getElementById('hide-declined');
       if (hd) hd.checked = state.hideDeclined ?? false;
-      const her = document.getElementById('hide-email-received');
+      const her = document.getElementById('show-email-received');
       if (her) her.checked = state.hideEmailReceived ?? true;
-      const hes = document.getElementById('hide-email-sent');
+      const hes = document.getElementById('show-email-sent');
       if (hes) hes.checked = state.hideEmailSent ?? true;
       const hlO = document.getElementById('highlight-overdue');
       if (hlO && state.highlightOverdue !== undefined) hlO.checked = state.highlightOverdue;
@@ -641,20 +641,20 @@ function displayChits() {
     filteredChits = filteredChits.filter(function(c) { return !c.habit; });
   }
 
-  // Apply hide-email filters (hide email chits from non-Email views)
+  // Apply show-email filters (hide email chits when unchecked, except in Email view)
   if (currentTab !== 'Email') {
-    var _hideEmailRecvCb = document.getElementById('hide-email-received');
-    var _hideEmailSentCb = document.getElementById('hide-email-sent');
-    var hideRecv = _hideEmailRecvCb && _hideEmailRecvCb.checked;
-    var hideSent = _hideEmailSentCb && _hideEmailSentCb.checked;
-    if (hideRecv || hideSent) {
+    var _showEmailRecvCb = document.getElementById('show-email-received');
+    var _showEmailSentCb = document.getElementById('show-email-sent');
+    var showRecv = _showEmailRecvCb ? _showEmailRecvCb.checked : true;
+    var showSent = _showEmailSentCb ? _showEmailSentCb.checked : true;
+    if (!showRecv || !showSent) {
       filteredChits = filteredChits.filter(function(c) {
         if (!(c.email_message_id || c.email_status)) return true;
         var folder = c.email_folder || '';
         var isSent = (folder === 'sent' || c.email_status === 'sent' || c.email_status === 'draft');
         var isReceived = !isSent;
-        if (hideRecv && isReceived) return false;
-        if (hideSent && isSent) return false;
+        if (!showRecv && isReceived) return false;
+        if (!showSent && isSent) return false;
         return true;
       });
     }

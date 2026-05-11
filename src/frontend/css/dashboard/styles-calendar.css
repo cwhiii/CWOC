@@ -161,6 +161,18 @@
     cursor: pointer;
 }
 
+/* ── Point in Time events — pointy ends on both sides ───────────────────── */
+.timed-event.point-in-time,
+.day-event.point-in-time,
+.all-day-event.point-in-time,
+.month-event.point-in-time,
+.itinerary-event.point-in-time {
+    clip-path: polygon(8px 0%, calc(100% - 8px) 0%, 100% 50%, calc(100% - 8px) 100%, 8px 100%, 0% 50%);
+    border: none;
+    padding-left: 12px;
+    padding-right: 12px;
+}
+
 /* ── Month view ─────────────────────────────────────────────────────────── */
 .month-view {
     display: flex;

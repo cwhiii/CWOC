@@ -315,8 +315,8 @@ function _cwocInjectSidebar() {
   html += '        <label><input type="checkbox" id="hide-complete" /> ✅ Hide Complete</label>';
   html += '        <label><input type="checkbox" id="hide-declined" /> 🚫 Hide Declined</label>';
   html += '        <label><input type="checkbox" id="hide-habits" /> 🎯 Hide Habits</label>';
-  html += '        <label><input type="checkbox" id="hide-email-received" checked /> 📨 Hide Email (Received)</label>';
-  html += '        <label><input type="checkbox" id="hide-email-sent" checked /> 📤 Hide Email (Sent)</label>';
+  html += '        <label><input type="checkbox" id="show-email-received" checked /> 📨 Show Email (Received)</label>';
+  html += '        <label><input type="checkbox" id="show-email-sent" checked /> 📤 Show Email (Sent)</label>';
   html += '        <hr style="border:0;border-top:1px dashed #c4a882;margin:4px 0;" />';
   html += '        <label><input type="checkbox" id="filter-shared-with-me" /> 🔗 Shared with me</label>';
   html += '        <label><input type="checkbox" id="filter-shared-by-me" /> 📤 Shared by me</label>';
@@ -659,7 +659,7 @@ function _wireFilterCheckboxes(context) {
   }
 
   /* Display checkboxes (show-pinned, show-archived, show-snoozed, etc.) */
-  var displayIds = ['show-pinned', 'show-archived', 'show-snoozed', 'show-unmarked', 'hide-past-due', 'hide-complete', 'hide-declined', 'hide-habits', 'hide-email-received', 'hide-email-sent', 'filter-shared-with-me', 'filter-shared-by-me'];
+  var displayIds = ['show-pinned', 'show-archived', 'show-snoozed', 'show-unmarked', 'hide-past-due', 'hide-complete', 'hide-declined', 'hide-habits', 'show-email-received', 'show-email-sent', 'filter-shared-with-me', 'filter-shared-by-me'];
   displayIds.forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.onchange = function() { cb(); };
@@ -707,8 +707,8 @@ function _updateClearAllButton() {
   var hideComplete = document.getElementById('hide-complete');
   var hideDeclined = document.getElementById('hide-declined');
   var hideHabits = document.getElementById('hide-habits');
-  var hideEmailReceived = document.getElementById('hide-email-received');
-  var hideEmailSent = document.getElementById('hide-email-sent');
+  var showEmailReceived = document.getElementById('show-email-received');
+  var showEmailSent = document.getElementById('show-email-sent');
   var hasDisplayFilter = (showPinned && !showPinned.checked)
     || (showArchived && showArchived.checked)
     || (showUnmarked && !showUnmarked.checked)
@@ -716,8 +716,8 @@ function _updateClearAllButton() {
     || (hideComplete && hideComplete.checked)
     || (hideDeclined && hideDeclined.checked)
     || (hideHabits && hideHabits.checked)
-    || (hideEmailReceived && !hideEmailReceived.checked)
-    || (hideEmailSent && !hideEmailSent.checked);
+    || (showEmailReceived && !showEmailReceived.checked)
+    || (showEmailSent && !showEmailSent.checked);
 
   /* Sharing filters (now part of Display group) */
   var hasSharingFilter = (document.getElementById('filter-shared-with-me') || {}).checked

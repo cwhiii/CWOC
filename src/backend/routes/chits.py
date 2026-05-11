@@ -283,7 +283,7 @@ def create_chit(chit: Chit, request: Request):
         cursor.execute(
             """
             INSERT INTO chits (
-                id, title, note, tags, start_datetime, end_datetime, due_datetime,
+                id, title, note, tags, start_datetime, end_datetime, due_datetime, point_in_time,
                 completed_datetime, status, priority, severity, checklist, alarm, notification,
                 recurrence, recurrence_id, location, color, people, pinned, archived,
                 deleted, created_datetime, modified_datetime, is_project_master, child_chits, all_day, alerts,
@@ -296,7 +296,7 @@ def create_chit(chit: Chit, request: Request):
                 email_subject, email_body_text, email_body_html, email_date, email_folder,
                 email_status, email_read, email_in_reply_to, email_references,
                 attachments, availability, snoozed_until
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 chit_id,
@@ -306,6 +306,7 @@ def create_chit(chit: Chit, request: Request):
                 chit.start_datetime,
                 chit.end_datetime,
                 chit.due_datetime,
+                chit.point_in_time,
                 chit.completed_datetime,
                 chit.status,
                 chit.priority,
@@ -552,7 +553,7 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
             cursor.execute(
                 """
                 UPDATE chits SET
-                    title = ?, note = ?, tags = ?, start_datetime = ?, end_datetime = ?, due_datetime = ?,
+                    title = ?, note = ?, tags = ?, start_datetime = ?, end_datetime = ?, due_datetime = ?, point_in_time = ?,
                     completed_datetime = ?, status = ?, priority = ?, severity = ?, checklist = ?, alarm = ?, notification = ?,
                     recurrence = ?, recurrence_id = ?, location = ?, color = ?, people = ?, pinned = ?,
                     archived = ?, deleted = ?, modified_datetime = ?, is_project_master = ?, child_chits = ?, all_day = ?, alerts = ?,
@@ -573,6 +574,7 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                     chit.start_datetime,
                     chit.end_datetime,
                     chit.due_datetime,
+                    chit.point_in_time,
                     chit.completed_datetime,
                     chit.status,
                     chit.priority,
@@ -634,7 +636,8 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                 new_chit_dict = {
                     "title": chit.title, "note": chit.note, "tags": serialize_json_field(chit_tags),
                     "start_datetime": chit.start_datetime, "end_datetime": chit.end_datetime,
-                    "due_datetime": chit.due_datetime, "completed_datetime": chit.completed_datetime,
+                    "due_datetime": chit.due_datetime, "point_in_time": chit.point_in_time,
+                    "completed_datetime": chit.completed_datetime,
                     "status": chit.status, "priority": chit.priority, "severity": chit.severity,
                     "checklist": serialize_json_field(chit.checklist), "alarm": chit.alarm,
                     "notification": chit.notification, "recurrence": chit.recurrence,
@@ -734,7 +737,7 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
             cursor.execute(
                 """
                 INSERT INTO chits (
-                    id, title, note, tags, start_datetime, end_datetime, due_datetime,
+                    id, title, note, tags, start_datetime, end_datetime, due_datetime, point_in_time,
                     completed_datetime, status, priority, severity, checklist, alarm, notification,
                     recurrence, recurrence_id, location, color, people, pinned, archived,
                     deleted, created_datetime, modified_datetime, is_project_master, child_chits, all_day, alerts,
@@ -747,7 +750,7 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                     email_subject, email_body_text, email_body_html, email_date, email_folder,
                     email_status, email_read, email_in_reply_to, email_references,
                     attachments, availability, snoozed_until
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     chit_id,
@@ -757,6 +760,7 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                     chit.start_datetime,
                     chit.end_datetime,
                     chit.due_datetime,
+                    chit.point_in_time,
                     chit.completed_datetime,
                     chit.status,
                     chit.priority,

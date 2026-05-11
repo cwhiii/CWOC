@@ -186,8 +186,8 @@ function _clearAllFilters() {
   var hpd = document.getElementById('hide-past-due'); if (hpd) hpd.checked = false;
   var hc = document.getElementById('hide-complete'); if (hc) hc.checked = false;
   var hd = document.getElementById('hide-declined'); if (hd) hd.checked = false;
-  var her = document.getElementById('hide-email-received'); if (her) her.checked = true;
-  var hes = document.getElementById('hide-email-sent'); if (hes) hes.checked = true;
+  var her = document.getElementById('show-email-received'); if (her) her.checked = true;
+  var hes = document.getElementById('show-email-sent'); if (hes) hes.checked = true;
   var hlO = document.getElementById('highlight-overdue'); if (hlO) hlO.checked = true;
   var hlB = document.getElementById('highlight-blocked'); if (hlB) hlB.checked = true;
   var search = document.getElementById('search'); if (search) search.value = '';

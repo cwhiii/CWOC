@@ -123,6 +123,23 @@ function _renderSearchResults(container, viSettings) {
   resultChits = _applyMultiSelectFilters(resultChits);
   resultChits = _applyArchiveFilter(resultChits);
 
+  // Apply show-email filter to search results
+  var _showEmailRecvCb = document.getElementById('show-email-received');
+  var _showEmailSentCb = document.getElementById('show-email-sent');
+  var showRecv = _showEmailRecvCb ? _showEmailRecvCb.checked : true;
+  var showSent = _showEmailSentCb ? _showEmailSentCb.checked : true;
+  if (!showRecv || !showSent) {
+    resultChits = resultChits.filter(function(c) {
+      if (!(c.email_message_id || c.email_status)) return true;
+      var folder = c.email_folder || '';
+      var isSent = (folder === 'sent' || c.email_status === 'sent' || c.email_status === 'draft');
+      var isReceived = !isSent;
+      if (!showRecv && isReceived) return false;
+      if (!showSent && isSent) return false;
+      return true;
+    });
+  }
+
   // Apply sidebar text filter
   var sidebarText = (document.getElementById('search') ? document.getElementById('search').value : '').toLowerCase();
   if (sidebarText) {

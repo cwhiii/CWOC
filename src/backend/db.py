@@ -92,7 +92,7 @@ def deserialize_json_field(data: Optional[str]) -> Any:
 def compute_system_tags(chit) -> List[str]:
     """Compute system tags based on chit properties. Returns merged list of user + system tags."""
     system_tags = []
-    if chit.due_datetime or chit.start_datetime:
+    if chit.due_datetime or chit.start_datetime or getattr(chit, 'point_in_time', None):
         system_tags.append("CWOC_System/Calendar")
     if chit.checklist:
         system_tags.append("CWOC_System/Checklists")
@@ -102,7 +102,7 @@ def compute_system_tags(chit) -> List[str]:
         system_tags.append("CWOC_System/Projects")
     if chit.status in ["ToDo", "In Progress", "Blocked", "Complete"]:
         system_tags.append("CWOC_System/Tasks")
-    if not (chit.due_datetime or chit.start_datetime or chit.end_datetime):
+    if not (chit.due_datetime or chit.start_datetime or chit.end_datetime or getattr(chit, 'point_in_time', None)):
         system_tags.append("CWOC_System/Notes")
     if getattr(chit, 'email_message_id', None) or getattr(chit, 'email_status', None):
         system_tags.append("CWOC_System/Email")

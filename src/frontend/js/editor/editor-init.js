@@ -100,6 +100,8 @@ function resetEditorForNewChit() {
     { id: "end_time", value: formatTime(oneHourLater) },
     { id: "due_datetime", value: "" },
     { id: "due_time", value: "" },
+    { id: "point_in_time_date", value: "" },
+    { id: "point_in_time_time", value: "" },
   ];
 
   dateTimeElements.forEach((item) => {
@@ -602,6 +604,13 @@ async function loadChitData(chitId) {
     if (dueDateInput) dueDateInput.value = dueParts.date;
     if (dueTimeInput) dueTimeInput.value = (chit.all_day || chit.allDay) ? "" : dueParts.time;
 
+    // Point in Time (independent of date mode)
+    const pitDateInput = document.getElementById("point_in_time_date");
+    const pitTimeBtn = document.getElementById("point_in_time_time");
+    const pitParts = splitISODateTime(chit.point_in_time);
+    if (pitDateInput) pitDateInput.value = pitParts.date;
+    if (pitTimeBtn && pitParts.time) pitTimeBtn.textContent = pitParts.time;
+
     // Set date mode radio based on chit data
     _dateModeSuppressUnsaved = true;
     var dateMode = window._chitIsPerpetual ? 'perpetual' : _detectDateMode(chit);
@@ -920,7 +929,7 @@ function _applyViewerReadOnlyMode(chit) {
  */
 function applyZoneStates(chit) {
   const zones = [
-    ["datesSection", "datesContent", () => !!(chit.start_datetime || chit.end_datetime || chit.due_datetime || chit.recurrence)],
+    ["datesSection", "datesContent", () => !!(chit.start_datetime || chit.end_datetime || chit.due_datetime || chit.point_in_time || chit.recurrence)],
     ["taskSection", "taskContent", () => !!(chit.priority || chit.severity || chit.status)],
     ["locationSection", "locationContent", () => !!(chit.location && chit.location.trim())],
     ["tagsSection", "tagsContent", () => false],
@@ -1214,11 +1223,12 @@ document.addEventListener("DOMContentLoaded", function () {
   initializeFlatpickr("#start_datetime", { dateFormat: "Y-M-d", disableMobile: true, onChange: function() { _updateRecurrenceLabels(); } });
   initializeFlatpickr("#end_datetime", { dateFormat: "Y-M-d", disableMobile: true });
   initializeFlatpickr("#due_datetime", { dateFormat: "Y-M-d", disableMobile: true, onChange: function() { _updateRecurrenceLabels(); } });
+  initializeFlatpickr("#point_in_time_date", { dateFormat: "Y-M-d", disableMobile: true });
   initializeFlatpickr("#recurrenceUntil", { dateFormat: "Y-M-d", disableMobile: true });
 
   // Time buttons — define .value property so save/load code works unchanged.
   // The onclick handler is inline in the HTML (onclick="cwocTimePicker.open(this)").
-  ['start_time', 'end_time', 'due_time'].forEach(function(id) {
+  ['start_time', 'end_time', 'due_time', 'point_in_time_time'].forEach(function(id) {
     var el = document.getElementById(id);
     if (!el) return;
     if (el.tagName === 'BUTTON') {

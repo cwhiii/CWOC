@@ -471,6 +471,7 @@ function displayWeekView(chitsToDisplay, opts) {
       const ev = document.createElement("div");
       ev.className = "timed-event";
       ev.dataset.chitId = chit.id;
+      if (info.isPointInTime) ev.classList.add("point-in-time");
       if (chit.status === "Complete") ev.classList.add("completed-task");
       if (typeof _isDeclinedByCurrentUser === 'function' && _isDeclinedByCurrentUser(chit)) ev.classList.add("declined-chit");
       const _wPct = 95 / _localMax;
@@ -481,7 +482,7 @@ function displayWeekView(chitsToDisplay, opts) {
       ev.style.width = `${_wPct - 1}%`;
       ev.style.boxSizing = "border-box";
       ev.title = calendarEventTooltip(chit, info);
-      const timeLabel = info.isDueOnly ? `Due: ${formatTime(info.start)}` : `${formatTime(info.start)} - ${formatTime(info.end)}`;
+      const timeLabel = info.isPointInTime ? `📌 ${formatTime(info.start)}` : info.isDueOnly ? `Due: ${formatTime(info.start)}` : `${formatTime(info.start)} - ${formatTime(info.end)}`;
       ev.innerHTML = `${calendarEventTitle(chit, info.isDueOnly, info, _viSettings, 'calendar-slot')}<br>${timeLabel}`;
       attachCalendarChitEvents(ev, chit);
       col.appendChild(ev);
@@ -586,6 +587,7 @@ function displayMonthView(chitsToDisplay) {
         const chitElement = document.createElement("div");
         chitElement.className = "month-event";
         chitElement.dataset.chitId = chit.id;
+        if (info.isPointInTime) chitElement.classList.add("point-in-time");
         applyChitColors(chitElement, chitColor(chit));
         if (typeof _isDeclinedByCurrentUser === 'function' && _isDeclinedByCurrentUser(chit)) chitElement.classList.add("declined-chit");
         chitElement.title = calendarEventTooltip(chit, info);
@@ -622,6 +624,7 @@ function displayMonthView(chitsToDisplay) {
         chitElement.className = "month-event";
         chitElement.draggable = true;
         chitElement.dataset.chitId = chit.id;
+        if (info.isPointInTime) chitElement.classList.add("point-in-time");
         applyChitColors(chitElement, chitColor(chit));
         chitElement.style.cursor = "pointer";
         if (chit.status === "Complete") chitElement.classList.add("completed-task");
@@ -656,6 +659,7 @@ function displayMonthView(chitsToDisplay) {
         const chitElement = document.createElement("div");
         chitElement.className = "month-event";
         chitElement.dataset.chitId = chit.id;
+        if (info.isPointInTime) chitElement.classList.add("point-in-time");
         applyChitColors(chitElement, chitColor(chit));
         if (typeof _isDeclinedByCurrentUser === 'function' && _isDeclinedByCurrentUser(chit)) chitElement.classList.add("declined-chit");
         chitElement.title = calendarEventTooltip(chit, info);
@@ -699,18 +703,22 @@ function displayItineraryView(chitsToDisplay) {
   const futureChits = chitsToDisplay
     .filter(
       (chit) => {
-        // Include chits with start_datetime or due_datetime in the future
+        // Include chits with start_datetime, due_datetime, or point_in_time in the future
         if (chit.start_datetime_obj && chit.start_datetime_obj >= today) return true;
         if (chit.due_datetime) {
           const due = new Date(chit.due_datetime);
           if (due >= today) return true;
         }
+        if (chit.point_in_time) {
+          const pit = new Date(chit.point_in_time);
+          if (pit >= today) return true;
+        }
         return false;
       },
     )
     .sort((a, b) => {
-      const aDate = a.start_datetime_obj || new Date(a.due_datetime);
-      const bDate = b.start_datetime_obj || new Date(b.due_datetime);
+      const aDate = a.start_datetime_obj || (a.due_datetime ? new Date(a.due_datetime) : null) || (a.point_in_time ? new Date(a.point_in_time) : new Date(0));
+      const bDate = b.start_datetime_obj || (b.due_datetime ? new Date(b.due_datetime) : null) || (b.point_in_time ? new Date(b.point_in_time) : new Date(0));
       return aDate - bDate;
     });
 
@@ -719,7 +727,7 @@ function displayItineraryView(chitsToDisplay) {
   } else {
     let currentDay = null;
     futureChits.forEach((chit) => {
-      const chitDateRaw = chit.start_datetime_obj || new Date(chit.due_datetime);
+      const chitDateRaw = chit.start_datetime_obj || (chit.due_datetime ? new Date(chit.due_datetime) : null) || (chit.point_in_time ? new Date(chit.point_in_time) : new Date());
       const chitDate = new Date(chitDateRaw);
       chitDate.setHours(0, 0, 0, 0);
 
@@ -747,6 +755,7 @@ function displayItineraryView(chitsToDisplay) {
         chitElement.classList.add("completed-task");
       }
       if (typeof _isDeclinedByCurrentUser === 'function' && _isDeclinedByCurrentUser(chit)) chitElement.classList.add("declined-chit");
+      if (chit.point_in_time && !chit.start_datetime && !chit.due_datetime) chitElement.classList.add("point-in-time");
 
       const timeColumn = document.createElement("div");
       timeColumn.className = "time-column";
@@ -758,10 +767,13 @@ function displayItineraryView(chitsToDisplay) {
         const chitEnd =
           chit.end_datetime_obj || new Date(chitStart.getTime() + 60 * 60 * 1000);
         timeColumn.innerHTML = `${formatTime(chitStart)} - ${formatTime(chitEnd)}`;
-      } else {
+      } else if (chit.due_datetime) {
         // Due-date-only chit
         const dueDate = new Date(chit.due_datetime);
         timeColumn.innerHTML = chit.all_day ? '⌚ All Day' : `⌚ ${formatTime(dueDate)}`;
+      } else if (chit.point_in_time) {
+        const pitDate = new Date(chit.point_in_time);
+        timeColumn.innerHTML = `📌 ${formatTime(pitDate)}`;
       }
 
       const detailsColumn = document.createElement("div");
@@ -907,13 +919,14 @@ function displayDayView(chitsToDisplay, opts) {
     const el = document.createElement("div");
     el.className = "day-event";
     el.dataset.chitId = chit.id;
+    if (info.isPointInTime) el.classList.add("point-in-time");
     const widthPct = 95 / localMax;
     el.style.cssText = `top:${startTime}px;height:${height}px;left:${position * widthPct}%;width:${widthPct - 1}%;position:absolute;box-sizing:border-box;`;
     applyChitColors(el, chitColor(chit));
     el.title = calendarEventTooltip(chit, info);
     if (chit.status === "Complete") el.classList.add("completed-task");
     if (typeof _isDeclinedByCurrentUser === 'function' && _isDeclinedByCurrentUser(chit)) el.classList.add("declined-chit");
-    const timeLabel = info.isDueOnly ? `Due: ${formatTime(info.start)}` : `${formatTime(info.start)} - ${formatTime(info.end)}`;
+    const timeLabel = info.isPointInTime ? `📌 ${formatTime(info.start)}` : info.isDueOnly ? `Due: ${formatTime(info.start)}` : `${formatTime(info.start)} - ${formatTime(info.end)}`;
     el.innerHTML = `${calendarEventTitle(chit, info.isDueOnly, info, _viSettings, 'calendar-slot')}<br>${timeLabel}`;
     attachCalendarChitEvents(el, chit);
     eventsContainer.appendChild(el);
@@ -1398,6 +1411,7 @@ function displaySevenDayView(chitsToDisplay, opts) {
       const ev = document.createElement("div");
       ev.className = "timed-event";
       ev.dataset.chitId = chit.id;
+      if (info.isPointInTime) ev.classList.add("point-in-time");
       if (chit.status === "Complete") ev.classList.add("completed-task");
       if (typeof _isDeclinedByCurrentUser === 'function' && _isDeclinedByCurrentUser(chit)) ev.classList.add("declined-chit");
       const _w = 95 / _localMax;
@@ -1408,7 +1422,7 @@ function displaySevenDayView(chitsToDisplay, opts) {
       ev.style.width = `${_w - 1}%`;
       ev.style.boxSizing = "border-box";
       ev.title = calendarEventTooltip(chit, info);
-      const timeLabel = info.isDueOnly ? `Due: ${formatTime(info.start)}` : `${formatTime(info.start)} - ${formatTime(info.end)}`;
+      const timeLabel = info.isPointInTime ? `📌 ${formatTime(info.start)}` : info.isDueOnly ? `Due: ${formatTime(info.start)}` : `${formatTime(info.start)} - ${formatTime(info.end)}`;
       ev.innerHTML = `${calendarEventTitle(chit, info.isDueOnly, info, _viSettings, 'calendar-slot')}<br>${timeLabel}`;
       attachCalendarChitEvents(ev, chit);
       col.appendChild(ev);

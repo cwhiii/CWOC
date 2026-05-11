@@ -1,0 +1,1 @@
+Added "Point in Time" field to chits — an independent reference timestamp (not a deadline, not a calendar event) with date+time picker and a "Now" button that auto-populates to the current moment. Defaults to now on new chits. Displayed on dashboard cards with a 📌 icon.

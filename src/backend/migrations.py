@@ -2262,3 +2262,28 @@ def migrate_add_notification_snoozed_until():
     finally:
         if conn:
             conn.close()
+
+# ── Point in Time: migration ─────────────────────────────────────────────
+
+def migrate_add_point_in_time():
+    """Add point_in_time TEXT column to chits table.
+
+    A reference timestamp — not a deadline, not a scheduled event.
+    Used to record 'when something happened' or 'when this is relevant'
+    without any action semantics (no overdue, no calendar placement).
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(chits)")
+        existing = {row[1] for row in cursor.fetchall()}
+        if "point_in_time" not in existing:
+            cursor.execute("ALTER TABLE chits ADD COLUMN point_in_time TEXT")
+            conn.commit()
+            logger.info("Added point_in_time column to chits table")
+    except Exception as e:
+        logger.error(f"Error adding point_in_time column to chits: {str(e)}")
+    finally:
+        if conn:
+            conn.close()

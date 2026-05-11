@@ -332,10 +332,26 @@ async function buildChitObject() {
     chit.start_datetime = now.toISOString();
     chit.end_datetime = null;
     chit.due_datetime = null;
+  } else if (dateMode === 'pointintime') {
+    // Point in Time: reference timestamp only, no start/end/due
+    chit.start_datetime = null;
+    chit.end_datetime = null;
+    chit.due_datetime = null;
   } else {
     chit.start_datetime = null;
     chit.end_datetime = null;
     chit.due_datetime = null;
+  }
+
+  // Point in Time — saved when pointintime mode is active, cleared otherwise
+  var pitDateInput = document.getElementById('point_in_time_date');
+  var pitTimeBtn = document.getElementById('point_in_time_time');
+  var pitDateVal = pitDateInput ? pitDateInput.value : '';
+  var pitTimeVal = pitTimeBtn ? pitTimeBtn.textContent : '';
+  if (dateMode === 'pointintime' && pitDateVal) {
+    chit.point_in_time = createISODateTimeString(pitDateVal, pitTimeVal, false, false);
+  } else {
+    chit.point_in_time = null;
   }
 
   // Read tags from the live selection state maintained by renderTags
@@ -408,6 +424,7 @@ async function buildChitObject() {
     !chit.note &&
     !chit.start_datetime &&
     !chit.due_datetime &&
+    !chit.point_in_time &&
     chit.tags.length === 0 &&
     chit.checklist.length === 0 &&
     chit.child_chits.length === 0

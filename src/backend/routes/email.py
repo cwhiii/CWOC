@@ -343,16 +343,16 @@ def _parse_email_message(raw_bytes: bytes) -> dict:
     # Parse the Date header into ISO 8601
     date_str = msg.get("Date", "")
     email_date = ""
-    start_datetime = ""
+    point_in_time = ""
     if date_str:
         try:
             parsed_date = email.utils.parsedate_to_datetime(date_str)
             email_date = parsed_date.isoformat()
-            start_datetime = parsed_date.isoformat()
+            point_in_time = parsed_date.isoformat()
         except (ValueError, TypeError):
             # Fall back to storing the raw date string
             email_date = date_str
-            start_datetime = date_str
+            point_in_time = date_str
 
     # Extract body text
     body_text = _extract_text_from_message(msg)
@@ -374,7 +374,7 @@ def _parse_email_message(raw_bytes: bytes) -> dict:
         "email_references": references.strip() if references else "",
         "email_body_text": body_text,
         "email_body_html": body_html,
-        "start_datetime": start_datetime,
+        "point_in_time": point_in_time,
         "extracted_attachments": extracted_attachments,
     }
 
@@ -646,7 +646,8 @@ def _create_email_chit(cursor, parsed: dict, owner_id: str, account_id: str = No
 
     proxy = _ChitProxy()
     proxy.due_datetime = None
-    proxy.start_datetime = parsed.get("start_datetime") or None
+    proxy.start_datetime = None
+    proxy.point_in_time = parsed.get("point_in_time") or None
     proxy.end_datetime = None
     proxy.checklist = None
     proxy.alarm = None
@@ -677,7 +678,7 @@ def _create_email_chit(cursor, parsed: dict, owner_id: str, account_id: str = No
 
     cursor.execute(
         """INSERT INTO chits (
-            id, title, tags, start_datetime,
+            id, title, tags, point_in_time,
             created_datetime, modified_datetime,
             owner_id,
             email_message_id, email_from, email_to, email_cc,
@@ -703,7 +704,7 @@ def _create_email_chit(cursor, parsed: dict, owner_id: str, account_id: str = No
             chit_id,
             parsed.get("email_subject", "(No Subject)"),
             tags_json,
-            parsed.get("start_datetime") or None,
+            parsed.get("point_in_time") or None,
             now,
             now,
             owner_id,

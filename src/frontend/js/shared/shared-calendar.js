@@ -24,19 +24,21 @@
  */
 function getCalendarDateInfo(chit) {
   const DEFAULT_DUE_DURATION_MIN = 30; // due-date-only events — enough height for one line of text
+  const DEFAULT_PIT_DURATION_MIN = 30; // point-in-time events — same minimal height
 
   const hasDue = !!chit.due_datetime;
   const hasStart = !!chit.start_datetime;
+  const hasPointInTime = !!chit.point_in_time;
   const isAllDay = !!(chit.all_day || chit.allDay);
 
   if (hasDue) {
     const dueDate = new Date(chit.due_datetime);
     if (isNaN(dueDate.getTime())) return { hasDate: false };
     if (isAllDay) {
-      return { start: dueDate, end: dueDate, isAllDay: true, isDueOnly: true, hasDate: true };
+      return { start: dueDate, end: dueDate, isAllDay: true, isDueOnly: true, isPointInTime: false, hasDate: true };
     }
     const endDate = new Date(dueDate.getTime() + DEFAULT_DUE_DURATION_MIN * 60 * 1000);
-    return { start: dueDate, end: endDate, isAllDay: false, isDueOnly: true, hasDate: true };
+    return { start: dueDate, end: endDate, isAllDay: false, isDueOnly: true, isPointInTime: false, hasDate: true };
   }
 
   if (hasStart) {
@@ -44,10 +46,20 @@ function getCalendarDateInfo(chit) {
     if (isNaN(startDate.getTime())) return { hasDate: false };
     if (isAllDay) {
       const endDate = chit.end_datetime_obj || (chit.end_datetime ? new Date(chit.end_datetime) : startDate);
-      return { start: startDate, end: endDate, isAllDay: true, isDueOnly: false, hasDate: true };
+      return { start: startDate, end: endDate, isAllDay: true, isDueOnly: false, isPointInTime: false, hasDate: true };
     }
     const endDate = chit.end_datetime_obj || (chit.end_datetime ? new Date(chit.end_datetime) : new Date(startDate.getTime() + 60 * 60 * 1000));
-    return { start: startDate, end: endDate, isAllDay: false, isDueOnly: false, hasDate: true };
+    return { start: startDate, end: endDate, isAllDay: false, isDueOnly: false, isPointInTime: false, hasDate: true };
+  }
+
+  if (hasPointInTime) {
+    const pitDate = new Date(chit.point_in_time);
+    if (isNaN(pitDate.getTime())) return { hasDate: false };
+    if (isAllDay) {
+      return { start: pitDate, end: pitDate, isAllDay: true, isDueOnly: false, isPointInTime: true, hasDate: true };
+    }
+    const endDate = new Date(pitDate.getTime() + DEFAULT_PIT_DURATION_MIN * 60 * 1000);
+    return { start: pitDate, end: endDate, isAllDay: false, isDueOnly: false, isPointInTime: true, hasDate: true };
   }
 
   return { hasDate: false };
@@ -233,12 +245,12 @@ function _hideSnapGrid() {
 function enableCalendarDrag(scrollContainer, dayColumns, days, chitsMap, longPressMap) {
   if (!scrollContainer) return;
 
-  // Add resize handle to each timed event (only for start/end chits, not due-only)
+  // Add resize handle to each timed event (only for start/end chits, not due-only or point-in-time)
   chitsMap.forEach(({ el, chit, info }) => {
     // Skip drag/resize for viewer-role shared chits
     if (chit && typeof _isViewerRole === 'function' && _isViewerRole(chit)) return;
 
-    if (!info.isDueOnly) {
+    if (!info.isDueOnly && !info.isPointInTime) {
       const handle = document.createElement('div');
       handle.className = 'cal-resize-handle';
       handle.style.cssText = 'position:absolute;bottom:0;left:0;width:100%;height:6px;cursor:ns-resize;';
@@ -442,6 +454,9 @@ async function _onCalDragEnd(e) {
       if (info.isDueOnly) {
         const newDue = new Date(d.getFullYear(), d.getMonth(), d.getDate(), newStartH, newStartM);
         newTimes = { due_datetime: newDue.toISOString() };
+      } else if (info.isPointInTime) {
+        const newPit = new Date(d.getFullYear(), d.getMonth(), d.getDate(), newStartH, newStartM);
+        newTimes = { point_in_time: newPit.toISOString() };
       } else if (s.mode === 'move') {
         const duration = info.end.getTime() - info.start.getTime();
         const newStart = new Date(d.getFullYear(), d.getMonth(), d.getDate(), newStartH, newStartM);
@@ -469,6 +484,11 @@ async function _onCalDragEnd(e) {
       const d = newDay || info.start;
       const newDue = new Date(d.getFullYear(), d.getMonth(), d.getDate(), newStartH, newStartM);
       chit.due_datetime = newDue.toISOString();
+    } else if (info.isPointInTime) {
+      // Update point_in_time (move only, no resize)
+      const d = newDay || info.start;
+      const newPit = new Date(d.getFullYear(), d.getMonth(), d.getDate(), newStartH, newStartM);
+      chit.point_in_time = newPit.toISOString();
     } else {
       // Update start/end, preserve duration on move
       const d = newDay || info.start;
@@ -823,6 +843,7 @@ function renderAllDayEventsInCells(dayData, allDayEventsRow, settings, context) 
 
     const ev = document.createElement('div');
     ev.className = 'all-day-event';
+    if (info.isPointInTime) ev.classList.add('point-in-time');
     if (chit._isBirthday) ev.classList.add('birthday-event');
     ev.dataset.chitId = chit.id;
     ev.dataset.allDayRow = String(targetRow);

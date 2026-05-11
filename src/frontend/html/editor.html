@@ -192,6 +192,19 @@
                                     </div>
                                 </div>
 
+                                <!-- Point in Time (radio date mode) -->
+                                <div class="date-mode-row" id="pointInTimeRow">
+                                    <label class="date-mode-label">
+                                        <input type="radio" name="dateMode" value="pointintime" id="dateModePointInTime" onchange="onDateModeChange()" />
+                                        📌 Point in Time
+                                    </label>
+                                    <div class="date-mode-fields" id="pointInTimeFields">
+                                        <input type="text" id="point_in_time_date" class="date-time date-input" placeholder="Date" />
+                                        <button type="button" id="point_in_time_time" class="date-time time-input cwoc-time-btn" onclick="cwocTimePicker.open(this)">HH:MM</button>
+                                        <button type="button" class="zone-button" onclick="setPointInTimeNow()" title="Set to current date and time">Now</button>
+                                    </div>
+                                </div>
+
                                 <!-- Perpetual (only visible for habits — radio option) -->
                                 <div class="date-mode-row" id="perpetualRow" style="display:none;">
                                     <label class="date-mode-label">

@@ -174,6 +174,7 @@ from src.backend.migrations import (
     migrate_add_session_lifetime,
     migrate_add_notification_delivery_target,
     migrate_add_notification_snoozed_until,
+    migrate_add_point_in_time,
 )
 
 # Initialize database and run all migrations (same order as before)
@@ -238,6 +239,7 @@ migrate_add_snoozed_until()
 migrate_add_session_lifetime()
 migrate_add_notification_delivery_target()
 migrate_add_notification_snoozed_until()
+migrate_add_point_in_time()
 seed_version_info()
 
 # One-time cleanup: fix sent emails that still have CWOC_System/Email/Drafts tag

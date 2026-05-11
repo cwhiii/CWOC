@@ -87,6 +87,7 @@ class Chit(BaseModel):
     start_datetime: Optional[str] = None
     end_datetime: Optional[str] = None
     due_datetime: Optional[str] = None
+    point_in_time: Optional[str] = None          # Reference timestamp — not a deadline, not an event
     completed_datetime: Optional[str] = None
     status: Optional[str] = None
     priority: Optional[str] = None

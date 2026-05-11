@@ -17,6 +17,7 @@ function onDateModeChange() {
   const startEndFields = document.getElementById('startEndFields');
   const dueFields = document.getElementById('dueFields');
   const perpetualFields = document.getElementById('perpetualFields');
+  const pointInTimeFields = document.getElementById('pointInTimeFields');
   const recurrenceFields = document.getElementById('recurrenceFields');
   const alldayRow = document.getElementById('alldayRepeatRow');
   const _habitActive = document.getElementById('habitEnabled');
@@ -26,12 +27,13 @@ function onDateModeChange() {
   if (startEndFields) startEndFields.style.display = (mode === 'startend') ? '' : 'none';
   if (dueFields) dueFields.style.display = (mode === 'due') ? '' : 'none';
   if (perpetualFields) perpetualFields.style.display = (mode === 'perpetual') ? '' : 'none';
+  if (pointInTimeFields) pointInTimeFields.style.display = (mode === 'pointintime') ? '' : 'none';
 
   if (recurrenceFields) {
-    recurrenceFields.classList.toggle('greyed-out', mode === 'none');
+    recurrenceFields.classList.toggle('greyed-out', mode === 'none' || mode === 'pointintime');
   }
   if (alldayRow) {
-    alldayRow.style.display = (mode === 'none') ? 'none' : '';
+    alldayRow.style.display = (mode === 'none' || mode === 'pointintime') ? 'none' : '';
   }
 
   // Handle perpetual mode: set start date to today, clear end date
@@ -56,19 +58,27 @@ function onDateModeChange() {
     }
   }
 
+  // Handle Point in Time mode: default to now if empty
+  if (mode === 'pointintime') {
+    var pitDateInput = document.getElementById('point_in_time_date');
+    if (pitDateInput && !pitDateInput.value) {
+      setPointInTimeNow();
+    }
+  }
+
   // Always hide None row when habit is active
   var noneRow = document.getElementById('dateModeNoneRow');
   if (_isHabitOn && noneRow) noneRow.style.display = 'none';
 
-  // Show/hide All Day button based on whether a date mode is active
+  // Show/hide All Day button based on whether a date mode is active (not for Point in Time)
   var allDayBtn = document.getElementById('allDayToggleBtn');
-  if (allDayBtn) allDayBtn.style.display = (mode === 'none') ? 'none' : '';
+  if (allDayBtn) allDayBtn.style.display = (mode === 'none' || mode === 'pointintime') ? 'none' : '';
 
-  // Hide repeat row unless a date mode is active — also keep hidden when habit is active
+  // Hide repeat row unless a date mode is active — also keep hidden when habit is active or Point in Time
   const repeatRow = document.getElementById('repeatCheckboxRow');
   const repeatOptions = document.getElementById('repeatOptionsBlock');
-  if (repeatRow) repeatRow.style.display = (mode === 'none' || _isHabitOn) ? 'none' : '';
-  if ((mode === 'none' || _isHabitOn) && repeatOptions) repeatOptions.style.display = 'none';
+  if (repeatRow) repeatRow.style.display = (mode === 'none' || mode === 'pointintime' || _isHabitOn) ? 'none' : '';
+  if ((mode === 'none' || mode === 'pointintime' || _isHabitOn) && repeatOptions) repeatOptions.style.display = 'none';
 
   // Re-apply all-day visibility for the active mode
   const allDayCheckbox = document.getElementById("allDay");
@@ -128,8 +138,10 @@ function onStatusChange() {
 function _detectDateMode(chit) {
   const hasDue = !!(chit.due_datetime);
   const hasStart = !!(chit.start_datetime);
+  const hasPointInTime = !!(chit.point_in_time);
   if (hasDue) return 'due';
   if (hasStart) return 'startend';
+  if (hasPointInTime) return 'pointintime';
   return 'none';
 }
 
@@ -139,6 +151,7 @@ function _setDateMode(mode) {
   if (mode === 'due') radioId = 'dateModeDue';
   else if (mode === 'startend') radioId = 'dateModeStartEnd';
   else if (mode === 'perpetual') radioId = 'dateModePerpetual';
+  else if (mode === 'pointintime') radioId = 'dateModePointInTime';
   var radio = document.getElementById(radioId);
   if (radio) radio.checked = true;
   onDateModeChange();
@@ -795,4 +808,40 @@ function _fmtPerpetualDate(raw) {
     return raw;
   }
   return raw;
+}
+
+// ── Point in Time ────────────────────────────────────────────────────────────
+
+/** Set the Point in Time fields to the current date and time */
+function setPointInTimeNow() {
+  var now = new Date();
+  var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  var dateStr = now.getFullYear() + '-' + months[now.getMonth()] + '-' + String(now.getDate()).padStart(2, '0');
+  var dateInput = document.getElementById('point_in_time_date');
+  var timeBtn = document.getElementById('point_in_time_time');
+  if (dateInput) dateInput.value = dateStr;
+  if (timeBtn) {
+    var h = now.getHours();
+    var m = now.getMinutes();
+    var timeFormat = (typeof window._editorTimeFormat !== 'undefined') ? window._editorTimeFormat
+                   : (typeof window._globalTimeFormat !== 'undefined') ? window._globalTimeFormat
+                   : '24hour';
+    if (timeFormat === '12hour' || timeFormat === '12houranalog') {
+      var ampm = h >= 12 ? 'PM' : 'AM';
+      var h12 = h % 12 || 12;
+      timeBtn.textContent = h12 + ':' + String(m).padStart(2, '0') + ' ' + ampm;
+    } else {
+      timeBtn.textContent = String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+    }
+  }
+  setSaveButtonUnsaved();
+}
+
+/** Clear the Point in Time fields */
+function clearPointInTime() {
+  var dateInput = document.getElementById('point_in_time_date');
+  var timeBtn = document.getElementById('point_in_time_time');
+  if (dateInput) dateInput.value = '';
+  if (timeBtn) timeBtn.textContent = 'HH:MM';
+  setSaveButtonUnsaved();
 }

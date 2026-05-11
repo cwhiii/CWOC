@@ -2029,6 +2029,8 @@ Date mode system, recurrence picker, time picker dropdown, and date-clearing hel
 | `_fmtPerpetualDate()` | Format a date string for the perpetual description (e.g. "May 2, 2026") |
 | `onHabitResetToggle()` | Handle Reset checkbox toggle — show/hide the number and unit inputs |
 | `_updateResetUnitOptions()` | Update the reset period unit dropdown options based on the habit's cycle frequency — limits units to one level smaller than the cycle (e.g., WEEKLY → Day(s) only, MONTHLY → Day(s)/Week(s), YEARLY → Day(s)/Week(s)/Month(s)) |
+| `setPointInTimeNow()` | Set the Point in Time date and time fields to the current moment |
+| `clearPointInTime()` | Clear the Point in Time date and time fields |
 
 #### editor-habits.js
 
