@@ -1,0 +1,1 @@
+Restored autoGrowNote to size parent/grandparent with textarea at 100% height (capped at viewport). Renamed Notes and Email expand buttons to "Full Editor". Fixed newline loss when closing the full editor — contenteditable div now uses a proper DOM walker to extract text with preserved line breaks.

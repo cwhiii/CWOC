@@ -307,7 +307,7 @@ function closeNotesModal(save) {
       text = lpInput ? lpInput.value : '';
     } else {
       var modalInput = document.getElementById("notes-markdown-input-modal");
-      text = modalInput ? modalInput.innerText : '';
+      text = modalInput ? _getContentEditableText(modalInput) : '';
     }
     const mainNote = document.getElementById("note");
     if (mainNote) {
@@ -326,6 +326,34 @@ function closeNotesModal(save) {
       setSaveButtonUnsaved();
     }
   }
+}
+
+// Extract plain text from a contenteditable div, preserving newlines
+function _getContentEditableText(el) {
+  var result = '';
+  function walk(node) {
+    if (node.nodeType === 3) {
+      // Text node
+      result += node.textContent;
+    } else if (node.nodeType === 1) {
+      var tag = node.tagName;
+      // Block-level elements get a newline before (except the first child)
+      if ((tag === 'DIV' || tag === 'P') && result.length > 0 && !result.endsWith('\n')) {
+        result += '\n';
+      }
+      if (tag === 'BR') {
+        result += '\n';
+      } else {
+        for (var i = 0; i < node.childNodes.length; i++) {
+          walk(node.childNodes[i]);
+        }
+      }
+    }
+  }
+  for (var i = 0; i < el.childNodes.length; i++) {
+    walk(el.childNodes[i]);
+  }
+  return result;
 }
 
 function toggleModalNotesRender() {
