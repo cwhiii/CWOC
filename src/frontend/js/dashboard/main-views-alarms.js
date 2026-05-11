@@ -953,6 +953,13 @@ async function _displayNotificationsView() {
   if (_notifViewRendering) return;
   _notifViewRendering = true;
 
+  // Clear the profile notification badge — user is viewing notifications
+  var _badge = document.getElementById('cwoc-profile-notif-badge');
+  if (_badge) _badge.style.display = 'none';
+  // Also clear the sidebar badge
+  var _sidebarBadge = document.getElementById('notif-badge');
+  if (_sidebarBadge) _sidebarBadge.style.display = 'none';
+
   var chitList = document.getElementById('chit-list');
   chitList.innerHTML = '';
 

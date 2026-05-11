@@ -19,6 +19,7 @@ var _minuteStep = 5;
 var _hourInput = null;
 var _minInput = null;
 var _ampmInput = null;
+var _suppressSync = false;
 
 function _getVal(el) {
   if (el.dataset && el.dataset.time !== undefined) return el.dataset.time;
@@ -177,6 +178,19 @@ function _buildAndShow() {
   // Wire drum scroll → sync inputs
   _overlay.querySelectorAll('.cwoc-tp-scroller').forEach(function(scroller) {
     scroller.addEventListener('scroll', function() { _onScroll(scroller); });
+    // Blur inputs when user touches a drum so scroll sync can update them
+    scroller.addEventListener('touchstart', function() {
+      _suppressSync = false;
+      if (document.activeElement && document.activeElement.classList.contains('cwoc-tp-num-input')) {
+        document.activeElement.blur();
+      }
+    });
+    scroller.addEventListener('mousedown', function() {
+      _suppressSync = false;
+      if (document.activeElement && document.activeElement.classList.contains('cwoc-tp-num-input')) {
+        document.activeElement.blur();
+      }
+    });
   });
 
   // Wire input typing → scroll drums
@@ -290,22 +304,29 @@ function _onScroll(scroller) {
   });
   items.forEach(function(item) { item.classList.toggle('cwoc-tp-selected', item === closest); });
 
-  // Sync to input fields (debounced via the scroll event itself)
+  // Sync to input fields
   _syncInputsFromDrums();
+
+  // Also schedule a delayed sync to catch momentum scroll end
+  clearTimeout(scroller._syncTimer);
+  scroller._syncTimer = setTimeout(function() {
+    _onScroll(scroller);
+  }, 150);
 }
 
 function _syncInputsFromDrums() {
-  if (!_overlay) return;
+  if (!_overlay || _suppressSync) return;
   var allDrums = _overlay.querySelectorAll('.cwoc-tp-drum');
-  if (allDrums[0] && _hourInput && document.activeElement !== _hourInput) {
+  var focused = document.activeElement;
+  if (allDrums[0] && _hourInput && focused !== _hourInput) {
     var sel = allDrums[0].querySelector('.cwoc-tp-selected');
     if (sel) _hourInput.value = _is12Hour ? sel.dataset.value : String(parseInt(sel.dataset.value)).padStart(2, '0');
   }
-  if (allDrums[1] && _minInput && document.activeElement !== _minInput) {
+  if (allDrums[1] && _minInput && focused !== _minInput) {
     var sel2 = allDrums[1].querySelector('.cwoc-tp-selected');
     if (sel2) _minInput.value = String(parseInt(sel2.dataset.value)).padStart(2, '0');
   }
-  if (allDrums[2] && _ampmInput && document.activeElement !== _ampmInput) {
+  if (allDrums[2] && _ampmInput && focused !== _ampmInput) {
     var sel3 = allDrums[2].querySelector('.cwoc-tp-selected');
     if (sel3) _ampmInput.value = sel3.dataset.value;
   }
@@ -333,29 +354,31 @@ function _setFromElement(el) {
   var match = val.match(/^(\d{1,2}):(\d{2})$/);
   if (match) { h = parseInt(match[1]); m = parseInt(match[2]); }
 
-  m = Math.round(m / _minuteStep) * _minuteStep;
-  if (m >= 60) m = 0;
+  // Suppress sync so drum scroll doesn't overwrite the actual minute value
+  _suppressSync = true;
+
+  // Scroll drum to nearest snap value, but show actual value in input
+  var mSnapped = Math.round(m / _minuteStep) * _minuteStep;
+  if (mSnapped >= 60) mSnapped = 0;
 
   if (_is12Hour) {
     var ampm = h >= 12 ? 'PM' : 'AM';
     var h12 = h % 12 || 12;
     _scrollDrumTo(0, h12);
-    _scrollDrumTo(1, m);
+    _scrollDrumTo(1, mSnapped);
     _scrollDrumTo(2, ampm);
     _hourInput.value = String(h12);
     _minInput.value = String(m).padStart(2, '0');
     if (_ampmInput) _ampmInput.value = ampm;
   } else {
     _scrollDrumTo(0, h);
-    _scrollDrumTo(1, m);
+    _scrollDrumTo(1, mSnapped);
     _hourInput.value = String(h).padStart(2, '0');
     _minInput.value = String(m).padStart(2, '0');
   }
 
-  // Update selection highlights after scroll
-  setTimeout(function() {
-    if (_overlay) _overlay.querySelectorAll('.cwoc-tp-scroller').forEach(_onScroll);
-  }, 50);
+  // Keep sync suppressed until user actually interacts with a drum
+  // It will be re-enabled by the touchstart handler on the scrollers
 }
 
 function _setNow() {

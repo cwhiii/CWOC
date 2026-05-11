@@ -567,7 +567,7 @@ function _createMobileZoneList() {
   panel.className = 'mobile-zone-list-panel';
   panel.innerHTML = '<h3 class="mobile-zone-list-title">Zones</h3>' +
     '<div class="mobile-zone-list-items"></div>' +
-    '<button class="mobile-zone-list-close"><span style="font-size:2.2em;font-weight:900;line-height:0;vertical-align:middle;overflow:hidden;">⇤</span> Hide Sidebar</button>';
+    '<button class="mobile-zone-list-close"><span style="font-size:2.2em;font-weight:900;line-height:0;vertical-align:middle;position:relative;top:-0.25em;">⇤</span> Hide Sidebar</button>';
 
   panel.querySelector('.mobile-zone-list-close').addEventListener('click', _closeMobileZoneList);
   document.body.appendChild(panel);
@@ -648,7 +648,7 @@ function _createMobileActionsSidebar() {
   // Panel
   var panel = document.createElement('div');
   panel.className = 'mobile-actions-sidebar';
-  panel.innerHTML = '<button class="mobile-actions-sidebar-close"><span style="font-size:2.2em;font-weight:900;line-height:0;vertical-align:middle;overflow:hidden;">⇤</span> Hide Sidebar</button>' +
+  panel.innerHTML = '<button class="mobile-actions-sidebar-close"><span style="font-size:2.2em;font-weight:900;line-height:0;vertical-align:middle;position:relative;top:-0.25em;">⇤</span> Hide Sidebar</button>' +
     '<div class="mobile-actions-sidebar-spacer"></div>' +
     '<div class="mobile-actions-sidebar-items"></div>';
 

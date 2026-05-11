@@ -81,28 +81,51 @@ if [[ "$RESTART" == true ]]; then
         echo "   ✅ Cache cleared"
 
         echo "   🔄 Issuing systemctl restart..."
-        timeout 15 systemctl restart cwoc.service
+        echo "   ⏳ Stopping old process..."
+        systemctl stop cwoc.service 2>&1 | while read -r line; do echo "      $line"; done
+        STOP_RC=$?
+        if [ $STOP_RC -ne 0 ]; then
+            echo "   ⚠️  Stop returned exit code $STOP_RC"
+            echo "      $(systemctl is-active cwoc.service 2>&1)"
+        else
+            echo "   ✅ Old process stopped"
+        fi
+
+        echo "   ⏳ Starting new process..."
+        systemctl start cwoc.service 2>&1 | while read -r line; do echo "      $line"; done
         RESTART_RC=$?
 
-        if [ $RESTART_RC -eq 124 ]; then
-            echo "   ⚠️  Restart timed out (15s) — forcing kill..."
-            systemctl kill cwoc.service 2>/dev/null
-            sleep 1
-            systemctl start cwoc.service
+        if [ $RESTART_RC -ne 0 ]; then
+            echo "   ❌ Start failed (exit code $RESTART_RC)"
+            echo "   📄 systemctl status:"
+            systemctl status cwoc.service --no-pager -l 2>&1 | sed 's/^/      /'
+            echo "   📄 Last 15 journal lines:"
+            journalctl -u cwoc.service -n 15 --no-hostname --no-pager 2>&1 | sed 's/^/      /'
+            echo ""
+            echo "   🔁 Retrying start in 2s..."
+            sleep 2
+            systemctl start cwoc.service 2>&1 | while read -r line; do echo "      $line"; done
             RESTART_RC=$?
+            if [ $RESTART_RC -ne 0 ]; then
+                echo "   ❌ Retry also failed (exit code $RESTART_RC)"
+                echo "   📄 Last 30 journal lines:"
+                journalctl -u cwoc.service -n 30 --no-hostname --no-pager 2>&1 | sed 's/^/      /'
+                exit 1
+            fi
         fi
 
         if [ $RESTART_RC -eq 0 ]; then
-            # Wait briefly for the service to stabilize
+            echo "   ⏳ Waiting for service to stabilize (2s)..."
             sleep 2
 
             # Check if it actually stayed running
-            if systemctl is-active --quiet cwoc.service; then
-                echo "   ✅ Service restarted and running"
+            SVC_STATE=$(systemctl is-active cwoc.service 2>&1)
+            if [ "$SVC_STATE" = "active" ]; then
+                echo "   ✅ Service running (state: $SVC_STATE)"
             else
-                echo "   ❌ Service restarted but crashed immediately!"
+                echo "   ❌ Service not running! (state: $SVC_STATE)"
                 echo "   📄 Last 20 log lines:"
-                journalctl -u cwoc.service -n 20 --no-hostname --no-pager
+                journalctl -u cwoc.service -n 20 --no-hostname --no-pager 2>&1 | sed 's/^/      /'
                 exit 1
             fi
 
@@ -167,13 +190,6 @@ NTFYEOF
                     fi
                 fi
             fi
-        else
-            echo "   ❌ Restart failed! (exit code $RESTART_RC)"
-            echo "   📄 Service status:"
-            systemctl status cwoc.service --no-pager -l
-            echo ""
-            echo "   📄 Last 30 log lines:"
-            journalctl -u cwoc.service -n 30 --no-hostname --no-pager
         fi
     '
 

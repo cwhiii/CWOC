@@ -216,7 +216,7 @@ input[type="checkbox"] {
 .editor input:disabled,
 .editor select:disabled,
 .editor textarea:disabled,
-button:disabled:not(.status-icon-button) {
+button:disabled:not(.status-icon-button):not(.sidebar-close-btn):not(.mobile-views-close):not(.mobile-actions-close):not(.mobile-zone-list-close):not(.mobile-actions-sidebar-close):not(.ref-close-btn) {
     background-color: var(--parchment-light);
     cursor: not-allowed;
     color: var(--aged-brown-medium);

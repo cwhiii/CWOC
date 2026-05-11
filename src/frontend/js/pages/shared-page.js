@@ -676,7 +676,7 @@ window.cwocInterceptRefresh = cwocInterceptRefresh;
       if (!badge) {
         badge = document.createElement('span');
         badge.id = 'cwoc-profile-notif-badge';
-        badge.style.cssText = 'position:absolute;top:-2px;right:-2px;min-width:16px;height:16px;padding:0 4px;font-size:10px;font-weight:bold;color:#fff8e1;background:#a0522d;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;line-height:1;pointer-events:none;';
+        badge.style.cssText = 'position:absolute;bottom:-4px;left:-4px;min-width:16px;height:16px;padding:0 4px;font-size:10px;font-weight:bold;color:#fff8e1;background:#a0522d;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;line-height:1;pointer-events:none;';
         btn.style.position = 'relative';
         btn.appendChild(badge);
       }

@@ -2377,7 +2377,7 @@ function initMobileSidebar() {
   if (!sidebar.querySelector('.sidebar-close-btn')) {
     const closeBtn = document.createElement('button');
     closeBtn.className = 'sidebar-close-btn';
-    closeBtn.innerHTML = '<span style="font-size:2.2em;font-weight:900;line-height:0;vertical-align:middle;overflow:hidden;">⇤</span> Hide Sidebar';
+    closeBtn.innerHTML = '<span style="font-size:2.2em;font-weight:900;line-height:0;vertical-align:middle;position:relative;top:-0.25em;">⇤</span> Hide Sidebar';
     closeBtn.setAttribute('aria-label', 'Hide sidebar');
     closeBtn.addEventListener('click', function () {
       _onSidebarBackdropClick();
@@ -2489,7 +2489,7 @@ function initMobileActionsModal() {
   modal.innerHTML = '<div class="mobile-actions-modal-content">' +
     '<h3>Actions</h3>' +
     '<div class="mobile-actions-list"></div>' +
-    '<button class="mobile-actions-close"><span style="font-size:2.2em;font-weight:900;line-height:0;vertical-align:middle;overflow:hidden;">⇤</span> Hide Sidebar</button>' +
+    '<button class="mobile-actions-close"><span style="font-size:2.2em;font-weight:900;line-height:0;vertical-align:middle;position:relative;top:-0.25em;">⇤</span> Hide Sidebar</button>' +
     '</div>';
   document.body.appendChild(modal);
 
@@ -2665,7 +2665,7 @@ function initMobileViewsButton() {
 
   var closeBtn = document.createElement('button');
   closeBtn.className = 'mobile-views-close';
-  closeBtn.innerHTML = '<span style="font-size:2.2em;font-weight:900;line-height:0;vertical-align:middle;overflow:hidden;">⇤</span> Hide Sidebar';
+  closeBtn.innerHTML = '<span style="font-size:2.2em;font-weight:900;line-height:0;vertical-align:middle;position:relative;top:-0.25em;">⇤</span> Hide Sidebar';
   closeBtn.addEventListener('click', function () { _closeViewsPanel(); });
   panel.appendChild(closeBtn);
 
@@ -2753,7 +2753,7 @@ function initMobileReferenceClose() {
 
   var btn = document.createElement('button');
   btn.className = 'ref-close-btn';
-  btn.innerHTML = '<span style="font-size:2.2em;font-weight:900;line-height:0;vertical-align:middle;overflow:hidden;">⇤</span> Hide Sidebar';
+  btn.innerHTML = '<span style="font-size:2.2em;font-weight:900;line-height:0;vertical-align:middle;position:relative;top:-0.25em;">⇤</span> Hide Sidebar';
   btn.style.cssText = 'display:block;width:100%;margin-top:12px;padding:10px;' +
     'font-size:1em;font-weight:bold;font-family:Lora, Georgia, serif;' +
     'background:#8b5a2b;color:#fff8e1;border:1px solid #5a3f2a;border-radius:4px;' +
