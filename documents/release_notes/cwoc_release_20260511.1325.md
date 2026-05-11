@@ -1,0 +1,1 @@
+Weather page mobile overhaul: added compact toolbar (logo, hamburger, title, profile) matching the maps pattern, hides desktop header on mobile. Added initMobileSidebar() for hide sidebar button/backdrop/swipe. Fixed bottom content cutoff by allowing body to scroll on mobile (height:auto, overflow-y:auto at ≤768px).

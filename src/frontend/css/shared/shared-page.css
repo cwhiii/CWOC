@@ -1161,8 +1161,10 @@ body[data-page-title="Weather Forecast"] .header-and-buttons h2 {
 }
 body[data-page-title="Weather Forecast"] .weather-page-layout {
     flex: 1;
-    overflow: auto;
+    overflow: hidden;
     min-height: 0;
+    display: flex;
+    flex-direction: column;
 }
 
 /* ── Maps page: style the shared header bar ─────────────────────────────── */

@@ -374,8 +374,57 @@ function _wxUpdateDateDisplay() {
   var container = document.getElementById('weather-content');
   if (!container) return;
 
+  // On mobile, build a compact toolbar and hide the desktop header
+  var isMobile = window.innerWidth <= 768;
+  if (isMobile) {
+    var header = document.querySelector('.header-and-buttons');
+    if (header) header.style.display = 'none';
+
+    var toolbar = document.createElement('div');
+    toolbar.id = 'weather-mobile-toolbar';
+    toolbar.className = 'maps-mobile-toolbar'; // reuse maps toolbar styling
+
+    // Logo
+    var logoLink = document.createElement('a');
+    logoLink.href = '/';
+    logoLink.className = 'maps-mobile-logo';
+    var logoImg = document.createElement('img');
+    logoImg.src = '/static/cwod_logo-favicon.png';
+    logoImg.alt = 'Home';
+    logoLink.appendChild(logoImg);
+    toolbar.appendChild(logoLink);
+
+    // Sidebar hamburger
+    var sidebarBtn = document.createElement('button');
+    sidebarBtn.className = 'maps-mobile-sidebar-btn';
+    sidebarBtn.title = 'Toggle sidebar';
+    sidebarBtn.innerHTML = '<i class="fa-solid fa-bars"></i>';
+    sidebarBtn.addEventListener('click', function() {
+      if (typeof toggleSidebar === 'function') toggleSidebar();
+    });
+    toolbar.appendChild(sidebarBtn);
+
+    // Title
+    var title = document.createElement('span');
+    title.style.cssText = 'flex:1;text-align:center;font-family:Lora,Georgia,serif;font-size:16px;font-weight:bold;color:#4a2c2a;';
+    title.textContent = '🌤️ Weather';
+    toolbar.appendChild(title);
+
+    // Profile button
+    if (header) {
+      var profileMenu = header.querySelector('.cwoc-profile-menu');
+      if (profileMenu) toolbar.appendChild(profileMenu);
+    }
+
+    var panel = document.querySelector('.settings-panel');
+    if (panel) panel.insertBefore(toolbar, panel.firstChild);
+  }
+
   // Initialize shared sidebar (navigation-only mode for weather page)
   _initWeatherSidebarShared();
+
+  // Initialize mobile sidebar overlay (adds Hide Sidebar button, backdrop, swipe)
+  if (typeof initMobileSidebar === 'function') initMobileSidebar();
 
   // Load saved locations
   var locations = [];
@@ -604,7 +653,7 @@ function _wxRenderTable(container, locations, results, weekStartDay, chitsByLocD
 
   // Build date header row — use an invisible row-header for perfect alignment
   var headerHtml = '<div class="weather-date-row">' +
-    '<div class="weather-row-header" style="visibility:hidden;border-color:transparent;background:transparent;padding:0 6px;"></div>';
+    '<div class="weather-row-header" style="visibility:hidden;border-color:transparent;background:#f5e6cc;padding:0 6px;"></div>';
   for (var d = 0; d < dates.length; d++) {
     var fmt = _wxFormatDate(dates[d]);
     headerHtml += '<div class="weather-date-header">' +
@@ -687,6 +736,9 @@ function _wxRenderTable(container, locations, results, weekStartDay, chitsByLocD
 
   // Wire up day block click → navigate to dashboard Day view
   _wxInitBlockClick(container);
+
+  // Wire up city label tap → show full name on mobile
+  _wxInitCityTap(container);
 }
 
 /** Simple HTML escape. */
@@ -710,6 +762,38 @@ function _wxInitBlockClick(container) {
   });
 }
 
+// ── City label tap → show full name on mobile ────────────────────────────────
+
+function _wxInitCityTap(container) {
+  container.addEventListener('click', function(e) {
+    var header = e.target.closest('.weather-row-header');
+    if (!header) return;
+    // Don't trigger on the invisible date-row placeholder
+    if (header.closest('.weather-date-row')) return;
+    // Don't trigger on drag handle
+    if (e.target.closest('.drag-handle')) return;
+
+    var label = header.querySelector('.loc-label');
+    var address = header.querySelector('.loc-address');
+    var fullName = (label ? label.textContent : '') + (address && address.textContent ? ' — ' + address.textContent : '');
+    if (!fullName.trim()) return;
+
+    // Show a brief toast with the full city name
+    var existing = document.getElementById('wx-city-toast');
+    if (existing) existing.remove();
+
+    var toast = document.createElement('div');
+    toast.id = 'wx-city-toast';
+    toast.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#fff8e1;border:2px solid #8b5a2b;border-radius:8px;padding:10px 18px;font-family:Lora,Georgia,serif;font-size:15px;color:#2b1e0f;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.25);text-align:center;max-width:80vw;word-break:break-word;';
+    toast.textContent = fullName;
+    document.body.appendChild(toast);
+
+    setTimeout(function() {
+      if (toast.parentNode) toast.remove();
+    }, 2500);
+  });
+}
+
 // ── Week separator lines (absolute-positioned, full table height) ────────────
 
 function _wxDrawWeekLines(container) {
@@ -723,18 +807,24 @@ function _wxDrawWeekLines(container) {
   var wsBlocks = firstRow.querySelectorAll('.weather-day-block[data-wx-week-start]');
   if (!wsBlocks.length) return;
 
-  var tableRect = table.getBoundingClientRect();
+  // Use scrollHeight to span the full content height (including overflow)
+  var fullHeight = table.scrollHeight;
 
   wsBlocks.forEach(function (block) {
-    var blockRect = block.getBoundingClientRect();
-    // Center the line in the 4px gap before this block
-    var lineX = blockRect.left - tableRect.left - 2;
+    // Calculate block's left position relative to the table by walking offsetParents
+    var leftPos = 0;
+    var el = block;
+    while (el && el !== table) {
+      leftPos += el.offsetLeft;
+      el = el.offsetParent;
+    }
+    // Center the line in the 6px gap before this block
+    var lineX = leftPos - 3;
     var line = document.createElement('div');
     line.className = 'wx-week-line';
     line.style.left = lineX + 'px';
-    // Add a little breathing room top and bottom
-    line.style.top = '4px';
-    line.style.bottom = '4px';
+    line.style.top = '0';
+    line.style.height = fullHeight + 'px';
     table.appendChild(line);
   });
 }
@@ -756,6 +846,119 @@ function _wxInitDragDrop(container) {
     row.addEventListener('drop', _wxOnDrop);
     row.addEventListener('dragend', _wxOnDragEnd);
   });
+
+  // ── Touch drag support (mobile) ──
+  _wxInitTouchDrag(table);
+}
+
+/** Touch-based drag reordering for mobile. Long-press on row header to start. */
+function _wxInitTouchDrag(table) {
+  var dragRow = null;
+  var longPressTimer = null;
+  var startY = 0;
+  var startX = 0;
+  var isDragging = false;
+
+  table.addEventListener('touchstart', function(e) {
+    var header = e.target.closest('.weather-row-header');
+    if (!header) return;
+    // Don't trigger on the invisible date-row placeholder
+    if (header.closest('.weather-date-row')) return;
+
+    var row = header.closest('.weather-row[draggable], .weather-row-error[draggable]');
+    if (!row) return;
+
+    startY = e.touches[0].clientY;
+    startX = e.touches[0].clientX;
+
+    longPressTimer = setTimeout(function() {
+      isDragging = true;
+      dragRow = row;
+      row.classList.add('wx-dragging');
+      row.style.opacity = '0.6';
+      // Haptic feedback if available
+      if (navigator.vibrate) navigator.vibrate(30);
+    }, 500);
+  }, { passive: true });
+
+  table.addEventListener('touchmove', function(e) {
+    // Cancel long-press if finger moves too much before it fires
+    if (longPressTimer && !isDragging) {
+      var dx = Math.abs(e.touches[0].clientX - startX);
+      var dy = Math.abs(e.touches[0].clientY - startY);
+      if (dx > 15 || dy > 15) {
+        clearTimeout(longPressTimer);
+        longPressTimer = null;
+      }
+      return;
+    }
+
+    if (!isDragging || !dragRow) return;
+    e.preventDefault();
+
+    var touchY = e.touches[0].clientY;
+    var rows = Array.from(table.querySelectorAll('.weather-row[draggable], .weather-row-error[draggable]'));
+
+    // Highlight the row the touch is over
+    for (var i = 0; i < rows.length; i++) {
+      var rect = rows[i].getBoundingClientRect();
+      if (touchY >= rect.top && touchY <= rect.bottom && rows[i] !== dragRow) {
+        rows[i].classList.add('wx-drag-over');
+      } else {
+        rows[i].classList.remove('wx-drag-over');
+      }
+    }
+  }, { passive: false });
+
+  table.addEventListener('touchend', function() {
+    clearTimeout(longPressTimer);
+    longPressTimer = null;
+
+    if (!isDragging || !dragRow) {
+      isDragging = false;
+      return;
+    }
+
+    // Find the drop target
+    var rows = Array.from(table.querySelectorAll('.weather-row[draggable], .weather-row-error[draggable]'));
+    var target = null;
+    for (var i = 0; i < rows.length; i++) {
+      if (rows[i].classList.contains('wx-drag-over')) {
+        target = rows[i];
+        rows[i].classList.remove('wx-drag-over');
+      }
+    }
+
+    if (target && target !== dragRow) {
+      var srcIdx = rows.indexOf(dragRow);
+      var tgtIdx = rows.indexOf(target);
+      if (srcIdx < tgtIdx) {
+        table.insertBefore(dragRow, target.nextSibling);
+      } else {
+        table.insertBefore(dragRow, target);
+      }
+      _wxSaveRowOrder(table);
+    }
+
+    dragRow.classList.remove('wx-dragging');
+    dragRow.style.opacity = '';
+    dragRow = null;
+    isDragging = false;
+  }, { passive: true });
+
+  // Cancel on touchcancel
+  table.addEventListener('touchcancel', function() {
+    clearTimeout(longPressTimer);
+    longPressTimer = null;
+    if (dragRow) {
+      dragRow.classList.remove('wx-dragging');
+      dragRow.style.opacity = '';
+    }
+    dragRow = null;
+    isDragging = false;
+    var overs = table.querySelectorAll('.wx-drag-over');
+    for (var i = 0; i < overs.length; i++) overs[i].classList.remove('wx-drag-over');
+  }, { passive: true });
 }
 
 function _wxOnDragStart(e) {
@@ -1002,9 +1205,9 @@ async function _wxAddCityRows(container, allChits, savedLocations, forecastDates
     var rowHtml = '<div class="weather-row weather-city-row" draggable="true" data-wx-idx="city-' + ci + '">';
 
     // Row header — title on both container and label for reliable hover
-    rowHtml += '<div class="weather-row-header" title="' + _wxEsc(cityName) + '">' +
+    rowHtml += '<div class="weather-row-header weather-city-header" title="' + _wxEsc(cityName) + '">' +
       '<span class="drag-handle">☰</span>' +
-      '<span class="loc-label" title="' + _wxEsc(cityName) + '">📍 ' + _wxEsc(cityName) + '</span>' +
+      '<span class="loc-label" title="' + _wxEsc(cityName) + '"><span class="wx-pin-icon">📍 </span>' + _wxEsc(cityName) + '</span>' +
       '<span class="loc-address" title="' + _wxEsc(cityName) + '" style="font-size:11px;opacity:0.6;">from chits</span>' +
     '</div>';
 

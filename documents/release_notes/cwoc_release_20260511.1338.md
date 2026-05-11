@@ -1,0 +1,1 @@
+Weather page: week separator lines now extend from the very top of the table (through the date header) to the bottom, centered in the gap between blocks. Gaps between blocks increased from 4px to 6px for clearer separation. City tap shows full name toast on mobile.

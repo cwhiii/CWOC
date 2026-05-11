@@ -1,0 +1,1 @@
+Weather page: drag handle back in top-left corner on mobile with city name below it. Chit-derived city rows now use theme-matching parchment color (#f0e6cc) instead of green. Added touch-based drag reordering for mobile (long-press drag handle to start, drag to target row). Pin emoji hidden on mobile.

@@ -48,8 +48,16 @@
         /* ── Date header row ── */
         .weather-date-row {
             display: flex;
-            gap: 4px;
+            gap: 6px;
             margin-bottom: 4px;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            background: #f5e6cc;
+            padding-top: 4px;
+            padding-bottom: 4px;
+            min-width: max-content;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
         .weather-date-header {
             min-width: 90px;
@@ -70,17 +78,29 @@
         /* ── Weather table (scrollable container) ── */
         .weather-table {
             overflow-x: auto;
+            overflow-y: auto;
             -webkit-overflow-scrolling: touch;
             padding-bottom: 8px;
             position: relative;
+            flex: 1;
+            min-height: 0;
+        }
+
+        /* ── Weather content container ── */
+        #weather-content {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            min-height: 0;
         }
 
         /* ── Weather row (one per location) ── */
         .weather-row {
             display: flex;
-            gap: 4px;
+            gap: 6px;
             margin-bottom: 8px;
             align-items: stretch;
+            min-width: max-content;
         }
 
         /* ── Row header (location label + address) ── */
@@ -92,10 +112,14 @@
             flex-direction: column;
             justify-content: center;
             padding: 8px 6px;
-            background: var(--header-bg, #e0d4b5);
+            background: #e0d4b5;
             border: 1px solid var(--aged-brown-medium, #8b4513);
             border-radius: 5px;
             flex-shrink: 0;
+            position: -webkit-sticky;
+            position: sticky;
+            left: 0;
+            z-index: 5;
         }
         .weather-row-header .loc-label {
             font-weight: bold;
@@ -179,19 +203,19 @@
         .wx-week-line {
             position: absolute;
             top: 0;
-            bottom: 0;
+            height: 100%;
             width: 2px;
             background: var(--aged-brown-dark, #4a2c2a);
             opacity: 0.7;
             pointer-events: none;
-            z-index: 1;
+            z-index: 11;
             margin-left: -1px;
         }
 
         /* ── Error row ── */
         .weather-row-error {
             display: flex;
-            gap: 4px;
+            gap: 6px;
             margin-bottom: 8px;
             align-items: center;
         }
@@ -231,6 +255,12 @@
             opacity: 1;
         }
 
+        /* ── Chit-derived city row headers: different background ── */
+        .weather-city-header {
+            background: #f0e6cc !important;
+            border-color: #a0522d;
+        }
+
         /* ── Responsive: tablet ── */
         @media (max-width: 768px) {
             .weather-row-header {
@@ -247,14 +277,30 @@
         /* ── Responsive: mobile ── */
         @media (max-width: 480px) {
             .weather-row-header {
-                min-width: 66px;
-                max-width: 66px;
+                min-width: 72px;
+                max-width: 72px;
                 padding: 4px;
+                flex-direction: column;
+                align-items: flex-start;
+                justify-content: flex-start;
+            }
+            .weather-row-header .drag-handle {
+                font-size: 10px;
+                margin-bottom: 2px;
             }
             .weather-row-header .loc-label {
-                font-size: 13px;
+                font-size: 12px;
+                white-space: normal;
+                overflow-wrap: break-word;
+                word-break: break-word;
+                overflow: visible;
+                text-overflow: unset;
             }
             .weather-row-header .loc-address {
+                display: none;
+            }
+            /* Hide pin emoji on mobile for chit-derived rows */
+            .wx-pin-icon {
                 display: none;
             }
             .weather-day-block,
@@ -295,6 +341,10 @@
         @media (max-width: 768px) {
             .sidebar.active ~ .settings-panel .weather-page-layout {
                 margin-left: 0;
+            }
+            .sidebar {
+                top: 70px;
+                height: calc(100% - 70px);
             }
         }
 

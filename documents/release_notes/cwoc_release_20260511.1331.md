@@ -1,0 +1,1 @@
+Weather page: date/day header row is now sticky (stays visible while scrolling down through location rows). Weather table handles both horizontal and vertical scrolling so the bottom row is no longer cut off. Added mobile toolbar with logo, hamburger, title, and profile. Added initMobileSidebar() for hide button and swipe.

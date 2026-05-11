@@ -1,0 +1,1 @@
+Weather page mobile: city names now use overflow-wrap to show full names, pin emoji hidden on mobile, drag handle moved to top-right corner, chit-derived rows have green-tinted background. Fixed sticky city headers disappearing on horizontal scroll by using explicit solid backgrounds, -webkit-sticky prefix, and min-width:max-content on rows.

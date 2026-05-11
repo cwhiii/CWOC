@@ -1,0 +1,1 @@
+Weather page: tapping a city label on mobile shows a toast with the full city name and address for 2.5 seconds. City labels stick to the left when scrolling horizontally, date headers stick to the top when scrolling vertically. Mobile toolbar with logo/hamburger/title/profile. initMobileSidebar for hide button.
