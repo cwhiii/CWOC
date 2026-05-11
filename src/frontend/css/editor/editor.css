@@ -5280,7 +5280,8 @@ input.location {
     margin-top: 8px;
 }
 
-.mobile-actions-sidebar-close {
+.mobile-actions-sidebar-close,
+.mobile-actions-sidebar-close:disabled {
     display: block;
     width: 100%;
     margin-bottom: 0;
@@ -5288,14 +5289,16 @@ input.location {
     text-align: center;
     font-weight: bold;
     font-family: 'Lora', Georgia, serif;
-    background: #a0522d;
-    color: #fff8e1;
-    border: 1px solid #4a2c2a;
+    background: #a0522d !important;
+    color: #fff8e1 !important;
+    border: 1px solid #4a2c2a !important;
     border-radius: 4px;
-    cursor: pointer;
+    cursor: pointer !important;
     min-height: 44px;
     font-size: 1em;
     overflow: hidden;
+    opacity: 1 !important;
+    pointer-events: auto !important;
 }
 
 .mobile-actions-sidebar-close:active {
@@ -5403,7 +5406,8 @@ input.location {
     flex: 1;
 }
 
-.mobile-zone-list-close {
+.mobile-zone-list-close,
+.mobile-zone-list-close:disabled {
     display: block;
     width: 100%;
     margin-top: 8px;
@@ -5411,13 +5415,15 @@ input.location {
     text-align: center;
     font-weight: bold;
     font-family: 'Lora', Georgia, serif;
-    background: #a0522d;
-    color: #fff8e1;
-    border: 1px solid #4a2c2a;
+    background: #a0522d !important;
+    color: #fff8e1 !important;
+    border: 1px solid #4a2c2a !important;
     border-radius: 4px;
-    cursor: pointer;
+    cursor: pointer !important;
     min-height: 44px;
     overflow: hidden;
+    opacity: 1 !important;
+    pointer-events: auto !important;
 }
 
 /* ── Mobile Zone Mode Body Adjustments ────────────────────────────────────── */

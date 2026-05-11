@@ -1,0 +1,1 @@
+Improved mobile layout for the Maps view: sidebar toggle is now a prominent styled hamburger button, Chits/Both/People mode controls are properly positioned in the header bar, the page title/logo is hidden on mobile to save space, and zoom +/- buttons have safe margins to prevent falling off the viewport edge on small screens.

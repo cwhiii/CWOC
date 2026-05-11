@@ -1,0 +1,1 @@
+Fixed mobile Maps view: overrode the global 480px rule that was forcing the header into a vertical column layout. Header now stays as a single horizontal row (logo, sidebar toggle, mode buttons, nav) at all screen sizes. Zoom buttons use fixed positioning to stay visible.

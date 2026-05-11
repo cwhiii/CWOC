@@ -193,30 +193,75 @@ function _buildAndShow() {
     });
   });
 
-  // Wire input typing → scroll drums
-  _hourInput.addEventListener('input', function() {
-    var v = _hourInput.value.replace(/[^0-9]/g, '');
-    _hourInput.value = v;
-    var n = parseInt(v, 10);
-    if (!isNaN(n)) {
-      if (_is12Hour) { n = Math.max(1, Math.min(12, n)); }
-      else { n = Math.min(23, n); }
+  // Wire input typing → overwrite mode (type replaces char at cursor, then advances)
+  _hourInput.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') { e.preventDefault(); _confirm(); return; }
+    if (e.key === 'Backspace' || e.key === 'Delete' || e.key === 'Tab') return;
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') return;
+    var digit = e.key;
+    if (!/^[0-9]$/.test(digit)) { e.preventDefault(); return; }
+    e.preventDefault();
+    _suppressSync = false;
+
+    var val = _hourInput.value.padEnd(2, '0');
+    var pos = _hourInput.selectionStart || 0;
+    // Replace char at pos
+    var newVal = val.substring(0, pos) + digit + val.substring(pos + 1);
+    newVal = newVal.substring(0, 2);
+    var n = parseInt(newVal, 10);
+    var max = _is12Hour ? 12 : 23;
+
+    if (pos === 0) {
+      // First digit: allow if it COULD form a valid number (0-2 for 24h, 0-1 for 12h)
+      var d = parseInt(digit, 10);
+      var maxFirst = _is12Hour ? 1 : 2;
+      if (d > maxFirst) { return; } // reject
+      _hourInput.value = newVal;
+      _hourInput.setSelectionRange(1, 1);
+      if (n <= max) _scrollDrumTo(0, n);
+    } else {
+      // Second digit: validate full number
+      if (n > max || (_is12Hour && n < 1)) { return; }
+      _hourInput.value = newVal;
+      _minInput.focus();
+      _minInput.setSelectionRange(0, 0);
       _scrollDrumTo(0, n);
     }
-    if (v.length >= 2) { _minInput.focus(); _minInput.select(); }
   });
 
-  _minInput.addEventListener('input', function() {
-    var v = _minInput.value.replace(/[^0-9]/g, '');
-    _minInput.value = v;
-    var n = parseInt(v, 10);
-    if (!isNaN(n)) {
-      n = Math.min(59, n);
-      n = Math.round(n / _minuteStep) * _minuteStep;
-      _scrollDrumTo(1, n);
+  _minInput.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') { e.preventDefault(); _confirm(); return; }
+    if (e.key === 'Backspace' || e.key === 'Delete' || e.key === 'Tab') return;
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') return;
+    var digit = e.key;
+    if (!/^[0-9]$/.test(digit)) { e.preventDefault(); return; }
+    e.preventDefault();
+    _suppressSync = false;
+
+    var val = _minInput.value.padEnd(2, '0');
+    var pos = _minInput.selectionStart || 0;
+    var newVal = val.substring(0, pos) + digit + val.substring(pos + 1);
+    newVal = newVal.substring(0, 2);
+    var n = parseInt(newVal, 10);
+    if (n > 59) { newVal = val; }
+    else {
+      _minInput.value = newVal;
+      var newPos = pos + 1;
+      if (newPos >= 2 && _ampmInput) {
+        _ampmInput.focus();
+        _ampmInput.select();
+      } else {
+        _minInput.setSelectionRange(Math.min(newPos, 2), Math.min(newPos, 2));
+      }
+      // Scroll to nearest snap for visual feedback
+      var snapped = Math.round(n / _minuteStep) * _minuteStep;
+      _scrollDrumTo(1, snapped);
     }
-    if (v.length >= 2 && _ampmInput) { _ampmInput.focus(); _ampmInput.select(); }
   });
+
+  // Prevent default input behavior (we handle everything in keydown)
+  _hourInput.addEventListener('input', function(e) { e.preventDefault && e.preventDefault(); });
+  _minInput.addEventListener('input', function(e) { e.preventDefault && e.preventDefault(); });
 
   if (_ampmInput) {
     _ampmInput.addEventListener('keydown', function(e) {
@@ -225,10 +270,7 @@ function _buildAndShow() {
     });
   }
 
-  // Enter to confirm
-  [_hourInput, _minInput].forEach(function(inp) {
-    inp.addEventListener('keydown', function(e) { if (e.key === 'Enter') { e.preventDefault(); _confirm(); } });
-  });
+  // Enter on ampm to confirm
   if (_ampmInput) _ampmInput.addEventListener('keydown', function(e) { if (e.key === 'Enter') { e.preventDefault(); _confirm(); } });
 }
 

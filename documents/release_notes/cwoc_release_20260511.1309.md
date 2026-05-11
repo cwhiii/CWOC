@@ -1,0 +1,1 @@
+Completely rebuilt mobile Maps header: on ≤768px, the desktop header is hidden and replaced with a custom toolbar built in JS. Contains logo, hamburger sidebar toggle, a compact dropdown (Chits/Both/People defaulting to Both), "All" checkbox, and profile button — all in a single 46px horizontal row. Zoom buttons use fixed positioning to stay on-screen.

@@ -1283,9 +1283,11 @@ body[data-page-title="Maps View"] .maps-mode-toggle-header {
 .maps-main {
     flex: 1;
     min-width: 0;
+    min-height: 0;
     position: relative;
     display: flex;
     flex-direction: column;
+    overflow: hidden;
 }
 
 /* ── Map Container (fills main area) ────────────────────────────────────── */
@@ -1294,6 +1296,7 @@ body[data-page-title="Maps View"] .maps-mode-toggle-header {
     height: 100%;
     flex: 1;
     min-height: 0;
+    position: relative;
 }
 
 /* ── Maps "Go to" Search Field ──────────────────────────────────────────── */
@@ -1771,19 +1774,100 @@ body[data-page-title="Maps View"] .maps-mode-toggle-header {
     cursor: pointer;
 }
 
+/* ── Mobile toolbar: hidden on desktop (only created by JS on mobile) ────── */
+.maps-mobile-toolbar {
+    display: none;
+}
+
 /* ── Responsive: ≤768px — compact toggle, sidebar overlay ───────────────── */
 @media (max-width: 768px) {
     .maps-mode-toggle {
         margin: 0;
     }
     .maps-mode-btn {
-        padding: 6px 14px;
-        font-size: 14px;
+        padding: 5px 10px;
+        font-size: 13px;
     }
 
-    body[data-page-title="Maps View"] .header-and-buttons h2 {
+    /* ── Mobile Toolbar (replaces desktop header on ≤768px) ──────────── */
+    .maps-mobile-toolbar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: 70px;
+        padding: 0 10px;
+        background: linear-gradient(to bottom, #e8dcc8, #d8ccb4);
+        border-bottom: 2px solid #8b5a2b;
+        flex-shrink: 0;
+        width: 100%;
+        box-sizing: border-box;
+    }
+    .maps-mobile-logo {
+        flex-shrink: 0;
+        line-height: 0;
+    }
+    .maps-mobile-logo img {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        border: 1px solid #5a3f2a;
+    }
+    .maps-mobile-sidebar-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 34px;
+        height: 34px;
+        background: linear-gradient(to bottom, #d4a373, #c8965a);
+        border: 1.5px solid #5a3f2a;
+        border-radius: 6px;
+        color: #2b1e0f;
         font-size: 16px;
-        letter-spacing: 0.5px;
+        cursor: pointer;
+        flex-shrink: 0;
+    }
+    .maps-mobile-mode-select {
+        width: 80px;
+        padding: 6px 8px;
+        font-family: 'Lora', Georgia, serif;
+        font-size: 14px;
+        border: 1px solid #5a3f2a;
+        border-radius: 4px;
+        background: linear-gradient(to bottom, #f5e6cc, #e8dcc8);
+        color: #2b1e0f;
+        cursor: pointer;
+        flex-shrink: 0;
+        margin: 0 auto;
+    }
+    .maps-mobile-all-people {
+        display: flex;
+        align-items: center;
+        gap: 3px;
+        font-size: 12px;
+        font-family: 'Lora', Georgia, serif;
+        color: #4a2c2a;
+        cursor: pointer;
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+    .maps-mobile-all-people input {
+        margin: 0;
+        cursor: pointer;
+    }
+    /* Push profile to far right, scale to fit bar */
+    .maps-mobile-toolbar .cwoc-profile-menu {
+        margin-left: auto;
+    }
+    .maps-mobile-toolbar .cwoc-profile-btn {
+        width: 48px;
+        height: 48px;
+        padding: 2px;
+        border-width: 2px;
+        box-sizing: border-box;
+    }
+    .maps-mobile-toolbar .cwoc-profile-img {
+        width: 100%;
+        height: 100%;
     }
 
     .maps-filter-group {
@@ -1830,18 +1914,59 @@ body[data-page-title="Maps View"] .maps-mode-toggle-header {
         width: 100%;
     }
 
-    /* ── Header mode toggle: more compact on mobile ──────────────────── */
-    body[data-page-title="Maps View"] .maps-mode-toggle-header {
-        position: static;
-        transform: none;
+    /* ── Leaflet zoom controls: move to top-right on mobile ──────────── */
+    .leaflet-bottom.leaflet-right .leaflet-control-zoom {
+        position: fixed;
+        bottom: 20px;
+        right: 12px;
+        margin: 0 !important;
+        z-index: 1000;
+    }
+    .leaflet-top.leaflet-right .maps-fullscreen-control,
+    .leaflet-top.leaflet-right .maps-default-view-control {
+        margin-right: 10px !important;
+    }
+
+    /* Map container: absolute fill within .maps-main for reliable Leaflet sizing */
+    .maps-main #maps-container {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: auto;
+        max-height: none;
     }
 }
 
 /* ── Responsive: ≤480px — further compaction ────────────────────────────── */
 @media (max-width: 480px) {
-    .maps-mode-btn {
-        padding: 5px 10px;
-        font-size: 13px;
+    /* Mobile toolbar: tighter on small screens */
+    .maps-mobile-toolbar {
+        gap: 6px;
+        padding: 0 6px;
+        height: 60px;
+    }
+    .maps-mobile-logo img {
+        width: 42px;
+        height: 42px;
+    }
+    .maps-mobile-sidebar-btn {
+        width: 36px;
+        height: 36px;
+        font-size: 16px;
+    }
+    .maps-mobile-mode-select {
+        width: 70px;
+        font-size: 12px;
+        padding: 3px 4px;
+    }
+    .maps-mobile-all-people {
+        font-size: 11px;
+    }
+    .maps-mobile-toolbar .cwoc-profile-btn {
+        width: 40px;
+        height: 40px;
     }
 
     .maps-filter-tags,
@@ -1855,12 +1980,26 @@ body[data-page-title="Maps View"] .maps-mode-toggle-header {
         padding: 1px 6px;
     }
 
-    body[data-page-title="Maps View"] .header-and-buttons h2 {
-        font-size: 14px;
+    /* Zoom controls: fixed position, smaller */
+    .leaflet-bottom.leaflet-right .leaflet-control-zoom {
+        bottom: 16px;
+        right: 8px;
+    }
+    .leaflet-bottom.leaflet-right .leaflet-control-zoom a {
+        width: 38px !important;
+        height: 38px !important;
+        line-height: 38px !important;
+        font-size: 16px;
     }
 
-    body[data-page-title="Maps View"] .header-buttons .standard-button {
-        display: none; /* hide nav buttons on small screens, keep profile */
+    /* Fullscreen/home controls: smaller on tiny screens */
+    .maps-fullscreen-btn,
+    .maps-default-view-btn {
+        width: 36px !important;
+        height: 36px !important;
+        min-width: 36px;
+        min-height: 36px;
+        font-size: 15px;
     }
 }
 

@@ -1,0 +1,1 @@
+Improved mobile Maps view layout: header is now a single compact row with logo (for navigation back), prominent sidebar hamburger toggle, and Chits/Both/People mode buttons inline. Zoom +/- buttons fixed to stay within viewport by using absolute positioning for the map container on mobile and increased bottom margins on the Leaflet controls.

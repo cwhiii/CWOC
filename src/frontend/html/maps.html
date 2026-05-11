@@ -87,6 +87,10 @@
 
         /* On mobile (≤768px), sidebar overlays the map — no margin shift */
         @media (max-width: 768px) {
+            .sidebar {
+                top: 70px;
+                height: calc(100% - 70px);
+            }
             .sidebar.active ~ .settings-panel .maps-page-layout {
                 margin-left: 0;
             }
@@ -143,12 +147,13 @@
         @media (max-width: 768px) {
             .maps-fullscreen-control,
             .maps-default-view-control {
-                margin-right: 6px !important;
-                margin-top: 6px !important;
+                margin-right: 10px !important;
+                margin-top: 8px !important;
             }
-            /* Hide permanent tooltips on mobile to reduce clutter */
-            .maps-title-tooltip {
-                display: none !important;
+            /* Ensure zoom +/- buttons stay within viewport */
+            .leaflet-bottom.leaflet-right {
+                bottom: 0;
+                right: 0;
             }
         }
     </style>

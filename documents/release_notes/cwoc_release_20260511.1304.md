@@ -1,0 +1,1 @@
+Fixed mobile Maps header: mode toggle now uses flex:1 with !important to expand and center the Chits/Both/People buttons, header-buttons uses margin-left:auto to push profile to the right edge. Reset all absolute positioning properties (left/top/bottom) on the mode toggle wrapper for mobile.

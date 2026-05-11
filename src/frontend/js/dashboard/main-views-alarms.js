@@ -1044,7 +1044,7 @@ function _buildNotifCard(notif, isUnread) {
   if (notif.notification_type === 'reminder') {
     var reminderTitle = document.createElement('span');
     reminderTitle.style.cssText = 'font-weight:bold;color:#4a2c2a;white-space:nowrap;';
-    reminderTitle.textContent = '📌 ' + (notif.chit_title || 'Reminder');
+    reminderTitle.textContent = notif.chit_title || 'Reminder';
     card.appendChild(reminderTitle);
   } else {
     var titleLink = document.createElement('a');

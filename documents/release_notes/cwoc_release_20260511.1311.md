@@ -1,0 +1,1 @@
+Mobile Maps toolbar: bar is now 70px tall, dropdown is centered via margin:0 auto, profile pushed to far right via margin-left:auto, dropdown options ordered Chits/Both/People with Both in the middle and selected by default.

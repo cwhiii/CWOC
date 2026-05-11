@@ -1,0 +1,1 @@
+Mobile Maps view: header is a single 50px row with logo, sidebar hamburger, Chits/Both/People toggle, and nav buttons all inline. Zoom +/- buttons use fixed positioning on mobile to guarantee they stay visible regardless of map container sizing.

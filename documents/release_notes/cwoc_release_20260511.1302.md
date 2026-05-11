@@ -1,0 +1,1 @@
+Fixed mobile Maps header layout: overrode justify-content from space-between to flex-start so the mode toggle (flex:1) properly fills the center and pushes nav buttons to the right edge. Fixed initial map zoom from level 2 (world repeated) to level 4 (US view). Controls now spread evenly across the header bar.

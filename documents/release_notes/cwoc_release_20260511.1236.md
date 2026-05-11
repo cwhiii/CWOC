@@ -1,0 +1,1 @@
+Desktop-only notifications feature. Profile image sized 64×64px on desktop (20% smaller than logo), 32×32px on mobile (matches mobile logo). Notification badge bottom-left, clears on entering notifications mode. Full notification lifecycle with Unread/Addressed sections, localStorage toast tracking, labeled fields, proper pill toggles, sized buttons.

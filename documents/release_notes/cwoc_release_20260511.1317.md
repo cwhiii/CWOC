@@ -1,0 +1,1 @@
+Fixed editor return navigation: opening a chit from maps now passes `from=/frontend/html/maps.html` so closing the editor returns to the maps page. Increased logo to 42px and sidebar button to 36px at ≤480px. Set minZoom:2 on the map to prevent showing the world twice.

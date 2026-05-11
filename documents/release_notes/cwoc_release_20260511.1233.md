@@ -1,0 +1,1 @@
+Desktop-only notifications feature. Profile image on dashboard sized to 64×64px (20% smaller than 80px logo). Notification badge clears on entering notifications mode. Full notification lifecycle with Unread/Addressed sections, localStorage toast tracking, labeled fields, proper pill toggles, sized buttons.

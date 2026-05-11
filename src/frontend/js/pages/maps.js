@@ -85,88 +85,182 @@ function _mapsHideLoading() {
  * it into the shared header (.header-and-buttons) created by shared-page.js.
  * Also injects a sidebar toggle button that calls the shared sidebar's
  * toggleSidebar() function.
+ *
+ * On mobile (≤768px), builds a dedicated compact toolbar row below the
+ * standard header instead of trying to squeeze everything into the
+ * absolute-positioned desktop header.
  */
 function _injectModeToggle() {
   var header = document.querySelector('.header-and-buttons');
   if (!header) return;
 
-  // Inject sidebar toggle button AFTER the h2 — uses shared sidebar's toggleSidebar()
-  var h2 = header.querySelector('h2');
-  if (h2) {
+  var isMobile = window.innerWidth <= 768;
+
+  if (isMobile) {
+    // ── MOBILE: Build a dedicated toolbar row ──────────────────────────
+    // Hide the default header entirely on mobile
+    header.style.display = 'none';
+
+    // Create a compact mobile toolbar
+    var toolbar = document.createElement('div');
+    toolbar.id = 'maps-mobile-toolbar';
+    toolbar.className = 'maps-mobile-toolbar';
+
+    // 1. Logo (links back to dashboard)
+    var logoLink = document.createElement('a');
+    logoLink.href = '/';
+    logoLink.className = 'maps-mobile-logo';
+    var logoImg = document.createElement('img');
+    logoImg.src = '/static/cwod_logo-favicon.png';
+    logoImg.alt = 'Home';
+    logoLink.appendChild(logoImg);
+    toolbar.appendChild(logoLink);
+
+    // 2. Sidebar hamburger
     var sidebarBtn = document.createElement('button');
     sidebarBtn.id = 'maps-sidebar-toggle';
-    sidebarBtn.className = 'maps-sidebar-toggle-btn';
+    sidebarBtn.className = 'maps-mobile-sidebar-btn';
     sidebarBtn.title = 'Toggle sidebar';
     sidebarBtn.innerHTML = '<i class="fa-solid fa-bars"></i>';
     sidebarBtn.addEventListener('click', function() {
       if (typeof toggleSidebar === 'function') toggleSidebar();
     });
-    h2.insertAdjacentElement('afterend', sidebarBtn);
-  }
+    toolbar.appendChild(sidebarBtn);
 
-  // Create mode toggle wrapper (centered in header via CSS)
-  var toggleWrap = document.createElement('div');
-  toggleWrap.className = 'maps-mode-toggle-header';
-  toggleWrap.id = 'maps-mode-toggle';
+    // 3. Mode dropdown (Chits / Both / People) — defaults to Both
+    var modeSelect = document.createElement('select');
+    modeSelect.id = 'maps-mode-select';
+    modeSelect.className = 'maps-mobile-mode-select';
+    var modes = [
+      { mode: 'chits', label: 'Chits' },
+      { mode: 'both', label: 'Both' },
+      { mode: 'people', label: 'People' }
+    ];
+    modes.forEach(function(m) {
+      var opt = document.createElement('option');
+      opt.value = m.mode;
+      opt.textContent = m.label;
+      if (m.mode === 'both') opt.selected = true;
+      modeSelect.appendChild(opt);
+    });
+    modeSelect.addEventListener('change', function() {
+      _mapsSetMode(this.value);
+    });
+    toolbar.appendChild(modeSelect);
 
-  var toggleInner = document.createElement('div');
-  toggleInner.className = 'maps-mode-toggle';
-
-  var modes = [
-    { mode: 'chits', label: 'Chits' },
-    { mode: 'both', label: 'Both' },
-    { mode: 'people', label: 'People' }
-  ];
-
-  modes.forEach(function(m) {
-    var btn = document.createElement('button');
-    btn.className = 'maps-mode-btn' + (m.mode === 'chits' ? ' active' : '');
-    btn.setAttribute('data-mode', m.mode);
-    btn.textContent = m.label;
-    toggleInner.appendChild(btn);
-  });
-
-  toggleWrap.appendChild(toggleInner);
-
-  // Insert after h2, before the nav buttons div
-  var navButtons = header.querySelector('.header-buttons');
-  if (navButtons) {
-    header.insertBefore(toggleWrap, navButtons);
-  } else {
-    header.appendChild(toggleWrap);
-  }
-
-  // Add "All People" checkbox next to the mode toggle
-  var allWrap = document.createElement('label');
-  allWrap.id = 'maps-all-people-wrap';
-  allWrap.style.cssText = 'display:flex;align-items:center;gap:4px;font-size:13px;font-family:Lora,Georgia,serif;color:#4a2c2a;cursor:pointer;margin-left:12px;white-space:nowrap;';
-  allWrap.title = 'Show all people regardless of date filters';
-  allWrap.innerHTML = '<input type="checkbox" id="maps-people-show-all" style="margin:0;cursor:pointer;" /> All People';
-  allWrap.querySelector('input').addEventListener('change', function() {
-    _mapsShowAllPeople = this.checked;
-    // Grey out people filter section when "All" is checked
-    var peopleGroup = document.getElementById('filter-people');
-    if (peopleGroup) {
-      var body = peopleGroup.querySelector('.filter-group-body');
-      if (body) {
-        body.style.opacity = this.checked ? '0.4' : '';
-        body.style.pointerEvents = this.checked ? 'none' : '';
+    // 4. "All People" checkbox
+    var allWrap = document.createElement('label');
+    allWrap.id = 'maps-all-people-wrap';
+    allWrap.className = 'maps-mobile-all-people';
+    allWrap.title = 'Show all people regardless of date filters';
+    allWrap.innerHTML = '<input type="checkbox" id="maps-people-show-all" /> All';
+    allWrap.querySelector('input').addEventListener('change', function() {
+      _mapsShowAllPeople = this.checked;
+      var peopleGroup = document.getElementById('filter-people');
+      if (peopleGroup) {
+        var body = peopleGroup.querySelector('.filter-group-body');
+        if (body) {
+          body.style.opacity = this.checked ? '0.4' : '';
+          body.style.pointerEvents = this.checked ? 'none' : '';
+        }
       }
-    }
-    if (_mapsCurrentMode === 'people' || _mapsCurrentMode === 'both') {
-      _fetchAndDisplayContacts();
-    }
-  });
+      if (_mapsCurrentMode === 'people' || _mapsCurrentMode === 'both') {
+        _fetchAndDisplayContacts();
+      }
+    });
+    allWrap.style.display = 'none'; // hidden until people/both mode
+    toolbar.appendChild(allWrap);
 
-  // Insert after the mode toggle
-  if (navButtons) {
-    header.insertBefore(allWrap, navButtons);
+    // 5. Profile button (grab from header-buttons if it exists)
+    var profileMenu = header.querySelector('.cwoc-profile-menu');
+    if (profileMenu) {
+      toolbar.appendChild(profileMenu);
+    }
+
+    // Insert toolbar before the maps-page-layout
+    var panel = document.querySelector('.settings-panel');
+    if (panel) {
+      panel.insertBefore(toolbar, panel.firstChild);
+    }
+
   } else {
-    header.appendChild(allWrap);
-  }
+    // ── DESKTOP: Original behavior ─────────────────────────────────────
+    // Inject sidebar toggle button AFTER the h2
+    var h2 = header.querySelector('h2');
+    if (h2) {
+      var sidebarBtn = document.createElement('button');
+      sidebarBtn.id = 'maps-sidebar-toggle';
+      sidebarBtn.className = 'maps-sidebar-toggle-btn';
+      sidebarBtn.title = 'Toggle sidebar';
+      sidebarBtn.innerHTML = '<i class="fa-solid fa-bars"></i>';
+      sidebarBtn.addEventListener('click', function() {
+        if (typeof toggleSidebar === 'function') toggleSidebar();
+      });
+      h2.insertAdjacentElement('afterend', sidebarBtn);
+    }
 
-  // Start hidden — only shown in people or both modes
-  allWrap.style.display = 'none';
+    // Create mode toggle wrapper (centered in header via CSS)
+    var toggleWrap = document.createElement('div');
+    toggleWrap.className = 'maps-mode-toggle-header';
+    toggleWrap.id = 'maps-mode-toggle';
+
+    var toggleInner = document.createElement('div');
+    toggleInner.className = 'maps-mode-toggle';
+
+    var modes = [
+      { mode: 'chits', label: 'Chits' },
+      { mode: 'both', label: 'Both' },
+      { mode: 'people', label: 'People' }
+    ];
+
+    modes.forEach(function(m) {
+      var btn = document.createElement('button');
+      btn.className = 'maps-mode-btn' + (m.mode === 'chits' ? ' active' : '');
+      btn.setAttribute('data-mode', m.mode);
+      btn.textContent = m.label;
+      toggleInner.appendChild(btn);
+    });
+
+    toggleWrap.appendChild(toggleInner);
+
+    // Insert before the nav buttons div
+    var navButtons = header.querySelector('.header-buttons');
+    if (navButtons) {
+      header.insertBefore(toggleWrap, navButtons);
+    } else {
+      header.appendChild(toggleWrap);
+    }
+
+    // Add "All People" checkbox
+    var allWrap = document.createElement('label');
+    allWrap.id = 'maps-all-people-wrap';
+    allWrap.style.cssText = 'display:flex;align-items:center;gap:4px;font-size:13px;font-family:Lora,Georgia,serif;color:#4a2c2a;cursor:pointer;margin-left:12px;white-space:nowrap;';
+    allWrap.title = 'Show all people regardless of date filters';
+    allWrap.innerHTML = '<input type="checkbox" id="maps-people-show-all" style="margin:0;cursor:pointer;" /> All People';
+    allWrap.querySelector('input').addEventListener('change', function() {
+      _mapsShowAllPeople = this.checked;
+      var peopleGroup = document.getElementById('filter-people');
+      if (peopleGroup) {
+        var body = peopleGroup.querySelector('.filter-group-body');
+        if (body) {
+          body.style.opacity = this.checked ? '0.4' : '';
+          body.style.pointerEvents = this.checked ? 'none' : '';
+        }
+      }
+      if (_mapsCurrentMode === 'people' || _mapsCurrentMode === 'both') {
+        _fetchAndDisplayContacts();
+      }
+    });
+
+    if (navButtons) {
+      header.insertBefore(allWrap, navButtons);
+    } else {
+      header.appendChild(allWrap);
+    }
+
+    // Start hidden
+    allWrap.style.display = 'none';
+  }
 }
 
 /* ── Period Date Range Helper ─────────────────────────────────────────────── */
@@ -262,7 +356,7 @@ function _mapsSetMode(mode) {
     console.warn('Could not persist maps mode to localStorage:', e.message);
   }
 
-  // Update toggle button active states
+  // Update toggle button active states (desktop)
   var buttons = document.querySelectorAll('.maps-mode-btn');
   for (var i = 0; i < buttons.length; i++) {
     if (buttons[i].getAttribute('data-mode') === mode) {
@@ -270,6 +364,12 @@ function _mapsSetMode(mode) {
     } else {
       buttons[i].classList.remove('active');
     }
+  }
+
+  // Update mobile dropdown if present
+  var modeSelect = document.getElementById('maps-mode-select');
+  if (modeSelect && modeSelect.value !== mode) {
+    modeSelect.value = mode;
   }
 
   // Trigger the appropriate mode switch
@@ -327,7 +427,7 @@ function _initMapsSidebarShared() {
     page: 'maps',
     currentPage: 'maps',
     onCreateChit: function() {
-      window.location.href = '/frontend/html/editor.html';
+      window.location.href = '/frontend/html/editor.html?from=' + encodeURIComponent('/frontend/html/maps.html');
     },
     onToday: function() {
       _mapsPeriodOffset = 0;
@@ -1062,9 +1162,18 @@ async function _mapsInit() {
       }
     }
 
+    // Sync mobile dropdown to restored mode
+    var modeSelect = document.getElementById('maps-mode-select');
+    if (modeSelect) {
+      modeSelect.value = _mapsCurrentMode;
+    }
+
     _initMapsSidebarShared();
     _initChitsFilters();
     _initPeopleFilters();
+
+    // Initialize mobile sidebar overlay (adds Hide Sidebar button, backdrop, swipe)
+    if (typeof initMobileSidebar === 'function') initMobileSidebar();
 
     // Check for focus query parameter (from "View in Context" buttons)
     var urlParams = new URLSearchParams(window.location.search);
@@ -1093,7 +1202,7 @@ function _initLeafletMap() {
   var container = document.getElementById('maps-container');
   if (!container) return;
 
-  _mapsLeafletMap = L.map('maps-container', { zoomControl: false }).setView([20, 0], 2);
+  _mapsLeafletMap = L.map('maps-container', { zoomControl: false, minZoom: 2 }).setView([39.8283, -98.5795], 4);
 
   // Leaflet's keyboard handler stops propagation on keydown events when the map
   // has focus, which prevents CWOC hotkeys from reaching document-level listeners.
@@ -2085,7 +2194,7 @@ function _buildPopupContent(chit) {
   if (dateStr) {
     html += '<br><span style="font-size:12px;color:#666;">📅 ' + _mapsEsc(dateStr) + '</span>';
   }
-  html += '<br><a href="/editor?id=' + encodeURIComponent(chit.id) + '" style="font-size:12px;color:#2196F3;" onclick="if(event.metaKey||event.ctrlKey){window.open(this.href,\'_blank\');event.preventDefault();}">Open in Editor →</a>';
+  html += '<br><a href="/editor?id=' + encodeURIComponent(chit.id) + '&from=' + encodeURIComponent('/frontend/html/maps.html') + '" style="font-size:12px;color:#2196F3;" onclick="if(event.metaKey||event.ctrlKey){window.open(this.href,\'_blank\');event.preventDefault();}">Open in Editor →</a>';
   html += '</div>';
 
   return html;
@@ -2184,7 +2293,7 @@ function _placeMarkers(geocodedChits) {
     var autoZoom = settings.map_auto_zoom;
     var autoZoomEnabled = (autoZoom === '1' || autoZoom === undefined || autoZoom === null || autoZoom === '');
     if (autoZoomEnabled) {
-      _mapsLeafletMap.fitBounds(bounds, { padding: [40, 40] });
+      _mapsLeafletMap.fitBounds(bounds, { padding: [40, 40], maxZoom: 14 });
     }
   }
 }

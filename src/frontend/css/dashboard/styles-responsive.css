@@ -78,8 +78,17 @@
         min-height: 44px;
         overflow: hidden;
     }
+    .sidebar-close-btn:disabled,
+    .sidebar-close-btn {
+        opacity: 1 !important;
+        background: var(--aged-brown-medium, #8b4513) !important;
+        color: #fff8e1 !important;
+        border: 1px solid var(--btn-border, #5a3f2a) !important;
+        cursor: pointer !important;
+        pointer-events: auto !important;
+    }
     .sidebar-close-btn:hover {
-        background: var(--btn-hover, #6b4e31);
+        background: var(--btn-hover, #6b4e31) !important;
     }
 
     /* ── Sidebar backdrop for overlay mode ─────────────────────────────────── */
@@ -213,6 +222,12 @@
         width: 32px;
         height: 32px;
         margin-right: 0;
+    }
+
+    /* ── Profile image: match mobile logo size ────────────────────────────── */
+    .cwoc-profile-img {
+        width: 32px;
+        height: 32px;
     }
 
     /* ── Mobile hamburger: visible, between logo and title ────────────────── */

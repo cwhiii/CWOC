@@ -1,0 +1,1 @@
+Added "Hide Sidebar" button at the top of the maps page sidebar (uses action-button sidebar-compact-btn styling with fa-angles-left icon, full width). Profile icon border sized to 5% smaller than logo. Editor now returns to maps page after closing a chit opened from maps.

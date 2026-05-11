@@ -544,21 +544,24 @@ button.delete:hover {
 .mobile-view-option img {
     height: 1.8em;
 }
-.mobile-views-close {
+.mobile-views-close,
+.mobile-views-close:disabled {
     display: block;
     width: 100%;
     margin-top: 8px;
     padding: 8px;
     text-align: center;
     font-weight: bold;
-    background: var(--aged-brown-light, #a0522d);
-    color: #fff8e1;
-    border: 1px solid var(--aged-brown-dark, #4a2c2a);
+    background: var(--aged-brown-light, #a0522d) !important;
+    color: #fff8e1 !important;
+    border: 1px solid var(--aged-brown-dark, #4a2c2a) !important;
     border-radius: 4px;
-    cursor: pointer;
+    cursor: pointer !important;
     min-height: 44px;
     font-family: 'Lora', Georgia, serif;
     overflow: hidden;
+    opacity: 1 !important;
+    pointer-events: auto !important;
 }
 
 
@@ -600,8 +603,8 @@ button.delete:hover {
 }
 
 .cwoc-profile-img {
-    width: 72px;
-    height: 72px;
+    width: 64px;
+    height: 64px;
     border-radius: 50%;
     object-fit: cover;
 }
