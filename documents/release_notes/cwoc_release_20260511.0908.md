@@ -1,0 +1,1 @@
+Time inputs in the dates zone are now native `type="time"` inputs, giving a proper time picker on mobile (respects device locale for 12/24 hour display). Removed the "Complete" checkbox from the dates zone on both mobile and desktop — status is managed via the Task zone dropdown only.

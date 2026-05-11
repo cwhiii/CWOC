@@ -1,0 +1,1 @@
+Restored dates zone mobile CSS to the exact committed working state. The layout rules that were working before (flex-direction:column on rows, 22px indent on fields, radio alignment) are back. Only addition is Flatpickr time picker (disableMobile:true, time_24hr:true, dateFormat:"H:i") for proper 24-hour clock input without native mobile interference.

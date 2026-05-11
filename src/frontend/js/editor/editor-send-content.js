@@ -438,27 +438,31 @@ function _showSendContentUndoBar(mode, targetChit, savedTarget, undoData) {
 
   var bar = document.createElement('div');
   bar.id = 'sendContentUndoBar';
-  bar.style.cssText = 'display:flex;align-items:center;gap:0.6em;padding:6px 10px;margin:4px 0;background:#fff5e6;border:2px solid #8b5a2b;border-radius:6px;font-size:0.9em;';
+  bar.className = 'cwoc-send-undo-bar';
 
   var msg = document.createElement('span');
-  msg.style.cssText = 'flex:1;color:#1a1208;';
+  msg.className = 'cwoc-send-undo-msg';
   msg.textContent = '\uD83D\uDCE4 ' + actionLabel + ' ' + contentLabel + ' \u2192 "' + (targetChit.title || 'Untitled') + '"';
   bar.appendChild(msg);
 
   var undoBtn = document.createElement('button');
   undoBtn.textContent = 'Undo';
-  undoBtn.className = 'zone-button';
-  undoBtn.style.cssText = 'padding:3px 10px;font-size:0.85em;cursor:pointer;flex-shrink:0;';
+  undoBtn.className = 'zone-button cwoc-send-undo-btn';
   bar.appendChild(undoBtn);
 
   var timerOuter = document.createElement('div');
-  timerOuter.style.cssText = 'width:60px;height:6px;background:#f5e6cc;border:1px solid #8b4513;border-radius:3px;overflow:hidden;flex-shrink:0;';
+  timerOuter.className = 'cwoc-send-undo-timer';
   var timerFill = document.createElement('div');
-  timerFill.style.cssText = 'height:100%;width:100%;background:linear-gradient(90deg,#d4af37,#8b4513);border-radius:2px;';
+  timerFill.className = 'cwoc-send-undo-timer-fill';
   timerOuter.appendChild(timerFill);
   bar.appendChild(timerOuter);
 
   zoneHeader.insertAdjacentElement('afterend', bar);
+
+  // Scroll the undo bar into view on mobile so it's visible
+  requestAnimationFrame(function() {
+    bar.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  });
 
   var UNDO_DURATION = 8000;
   var start = Date.now();

@@ -28,6 +28,82 @@ from src.backend.rules_engine import dispatch_trigger
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Assignment Notification Helper
+# ═══════════════════════════════════════════════════════════════════════════
+
+def _send_assignment_notifications(assigned_to: str, chit_id: str, chit_title: str,
+                                   assigner_display_name: str):
+    """Send push + ntfy notifications when a user is assigned to a chit.
+
+    Fires both Web Push and ntfy in a background thread so the API response
+    is never blocked. Failures are logged and swallowed.
+
+    Args:
+        assigned_to: User ID of the newly assigned user.
+        chit_id: The chit's UUID.
+        chit_title: Display title for the notification.
+        assigner_display_name: Display name of the person who assigned the chit.
+    """
+    def _do_send():
+        title = chit_title or "(Untitled chit)"
+        body = f"Assigned to you by {assigner_display_name}"
+
+        # --- Web Push ---
+        try:
+            from src.backend.routes.push import send_push_to_user
+            payload = {
+                "title": f"📋 {title}",
+                "body": body,
+                "icon": "/static/cwoc-icon-192.png",
+                "badge": "/static/cwoc-icon-192.png",
+                "data": {
+                    "chit_id": chit_id,
+                    "url": f"/frontend/html/editor.html?id={chit_id}",
+                },
+            }
+            result = send_push_to_user(assigned_to, payload)
+            if result.get("sent", 0) > 0:
+                logger.info(f"Assignment push sent for chit {chit_id} to user {assigned_to}")
+            else:
+                logger.debug(f"Assignment push skipped for chit {chit_id}: {result}")
+        except Exception as e:
+            logger.warning(f"Assignment push failed for chit {chit_id}: {e}")
+
+        # --- Ntfy ---
+        try:
+            from src.backend.routes.ntfy import send_ntfy_notification
+            from src.backend.schedulers import _get_server_base_url
+
+            base = _get_server_base_url()
+            click_url = f"{base}/frontend/html/editor.html?id={chit_id}"
+            icon_url = f"{base}/static/cwoc-icon-192.png"
+
+            # Build simple actions: Open + Dismiss
+            open_action = f"view, Open, {click_url}, clear=true"
+            dismiss_action = f"view, Dismiss, {base}/, clear=true"
+            actions = f"{open_action}; {dismiss_action}"
+
+            result = send_ntfy_notification(
+                user_id=assigned_to,
+                title=f"📋 {title}",
+                body=body,
+                click_url=click_url,
+                tags="clipboard",
+                priority=4,  # high — noticeable but not alarm-level
+                icon_url=icon_url,
+                actions=actions,
+            )
+            if result.get("sent"):
+                logger.info(f"Assignment ntfy sent for chit {chit_id} to user {assigned_to}")
+            else:
+                logger.debug(f"Assignment ntfy skipped for chit {chit_id}: {result.get('reason')}")
+        except Exception as e:
+            logger.warning(f"Assignment ntfy failed for chit {chit_id}: {e}")
+
+    threading.Thread(target=_do_send, daemon=True).start()
+
 # --- Reserved tag namespace enforcement ---
 RESERVED_TAG_PREFIX = "cwoc_system/"
 
@@ -197,6 +273,10 @@ def create_chit(chit: Chit, request: Request):
         chit.tags = _strip_reserved_tags(chit.tags)
         chit_tags = compute_system_tags(chit)
 
+        # Auto-set status to "ToDo" when assigned_to is set and no status exists
+        if chit.assigned_to and not chit.status:
+            chit.status = "ToDo"
+
         # Validate nest_thread_id before saving
         _validate_nest_thread_id(cursor, chit)
 
@@ -296,6 +376,15 @@ def create_chit(chit: Chit, request: Request):
                 )
         except Exception as e:
             logger.error(f"Notification creation failed for new chit (best-effort): {str(e)}")
+
+        # Send push + ntfy notifications if assigned_to is set on new chit
+        try:
+            if chit.assigned_to and chit.assigned_to != user_id:
+                _send_assignment_notifications(
+                    chit.assigned_to, chit_id, chit.title, owner_display_name
+                )
+        except Exception as e:
+            logger.error(f"Assignment notification failed for new chit (best-effort): {str(e)}")
 
         conn.commit()
         chit_data = {
@@ -441,11 +530,23 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                 chit.shares = deserialize_json_field(existing_dict_check.get("shares"))
                 chit.assigned_to = existing_dict_check.get("assigned_to")
 
+            # Auto-set status to "ToDo" when assigned_to is newly set and no status exists
+            if chit.assigned_to and not chit.status:
+                old_assigned = existing_dict_check.get("assigned_to")
+                old_status = existing_dict_check.get("status")
+                if not old_status:
+                    chit.status = "ToDo"
+
             # Capture old state for audit diff
             old_chit_dict = existing_dict_check
 
             # Validate nest_thread_id before saving
             _validate_nest_thread_id(cursor, chit)
+
+            # Preserve existing attachments if not provided in the request
+            # (upload endpoint saves directly to DB; don't overwrite with null)
+            if chit.attachments is None:
+                chit.attachments = existing_dict_check.get("attachments")
 
             # Update existing chit
             cursor.execute(
@@ -606,6 +707,20 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                 )
             except Exception as e:
                 logger.error(f"Notification creation failed for chit update (best-effort): {str(e)}")
+
+            # Send push + ntfy notifications if assigned_to changed to a new user
+            try:
+                old_assigned = old_chit_dict.get("assigned_to")
+                if chit.assigned_to and chit.assigned_to != old_assigned and chit.assigned_to != user_id:
+                    # Look up assigner display name
+                    cursor.execute("SELECT display_name, username FROM users WHERE id = ?", (user_id,))
+                    _assigner_row = cursor.fetchone()
+                    _assigner_name = (_assigner_row[0] or _assigner_row[1]) if _assigner_row else "Someone"
+                    _send_assignment_notifications(
+                        chit.assigned_to, chit_id, chit.title, _assigner_name
+                    )
+            except Exception as e:
+                logger.error(f"Assignment notification failed for chit update (best-effort): {str(e)}")
         else:
             # Create new chit — look up owner info
             cursor.execute("SELECT display_name, username FROM users WHERE id = ?", (user_id,))
@@ -718,6 +833,14 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                     )
             except Exception as e:
                 logger.error(f"Notification creation failed for new chit via PUT (best-effort): {str(e)}")
+            # Send push + ntfy notifications if assigned_to is set on new chit via PUT
+            try:
+                if chit.assigned_to and chit.assigned_to != user_id:
+                    _send_assignment_notifications(
+                        chit.assigned_to, chit_id, chit.title, owner_display_name
+                    )
+            except Exception as e:
+                logger.error(f"Assignment notification failed for new chit via PUT (best-effort): {str(e)}")
         conn.commit()
         chit_data = {**chit.dict(), "id": chit_id, "tags": chit_tags, "modified_datetime": current_time}
         # Fire-and-forget: dispatch rules engine trigger for chit update or creation

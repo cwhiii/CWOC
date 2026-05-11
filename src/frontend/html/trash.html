@@ -81,11 +81,20 @@
             selectedIds.clear(); updateSelectionUI();
             // Detect admin status for owner column
             if (typeof isAdmin === 'function') _trashIsAdmin = isAdmin();
+            // Check for filter query param (e.g. ?filter=email)
+            var urlParams = new URLSearchParams(window.location.search);
+            var filterType = urlParams.get('filter');
             try {
                 const resp = await fetch('/api/trash');
                 if (!resp.ok) { wrap.innerHTML = '<p style="color:#a33;">Failed to load.</p>'; return; }
                 trashData = await resp.json();
-                countEl.textContent = `${trashData.length} deleted chit${trashData.length !== 1 ? 's' : ''}`;
+                // Apply filter if specified
+                if (filterType === 'email') {
+                    trashData = trashData.filter(function(c) { return !!(c.email_message_id || c.email_status); });
+                    countEl.textContent = `${trashData.length} deleted email${trashData.length !== 1 ? 's' : ''}`;
+                } else {
+                    countEl.textContent = `${trashData.length} deleted chit${trashData.length !== 1 ? 's' : ''}`;
+                }
                 if (trashData.length === 0) { wrap.innerHTML = '<div class="cwoc-empty">Trash is empty.</div>'; return; }
                 renderTable(wrap, trashData);
             } catch (e) { wrap.innerHTML = '<p style="color:#a33;">Error loading trash.</p>'; }
@@ -120,7 +129,16 @@
         }
         // Wait for auth to be ready before loading trash
         if (typeof waitForAuth === 'function') {
-            waitForAuth().then(function() { loadTrash(); });
+            waitForAuth().then(function() {
+                // Update page title if filtered to emails
+                var urlParams = new URLSearchParams(window.location.search);
+                if (urlParams.get('filter') === 'email') {
+                    document.title = 'Email Trash — C.W.\'s Omni Chits';
+                    var h2 = document.querySelector('h2');
+                    if (h2) h2.textContent = '🗑️ Deleted Emails';
+                }
+                loadTrash();
+            });
         } else {
             loadTrash();
         }

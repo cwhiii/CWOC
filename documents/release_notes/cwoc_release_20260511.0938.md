@@ -1,0 +1,1 @@
+Fixed time picker: Flatpickr time-only mode now initialized synchronously with hardcoded `time_24hr: true` and `dateFormat: "H:i"` (no seconds, no AM/PM). All time value assignments from loadChitData and URL params use Flatpickr's setDate() to ensure consistent 24-hour display. Removed the broken CSS date/time hiding system entirely.

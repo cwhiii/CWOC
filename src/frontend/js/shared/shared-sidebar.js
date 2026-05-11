@@ -74,6 +74,7 @@ function _cwocInjectSidebar() {
   html += '        <label class="email-folder-opt"><input type="radio" name="emailFolder" value="inbox" checked onchange="_setEmailSubFilter(\'inbox\')"> <i class="fas fa-inbox"></i> Inbox</label>';
   html += '        <label class="email-folder-opt"><input type="radio" name="emailFolder" value="sent" onchange="_setEmailSubFilter(\'sent\')"> <i class="fas fa-paper-plane"></i> Sent</label>';
   html += '        <label class="email-folder-opt"><input type="radio" name="emailFolder" value="drafts" onchange="_setEmailSubFilter(\'drafts\')"> <i class="fas fa-file-alt"></i> Drafts</label>';
+  html += '        <label class="email-folder-opt"><input type="radio" name="emailFolder" value="email-trash" onchange="window.location.href=\'/frontend/html/trash.html?filter=email\'"> <i class="fas fa-trash-alt"></i> Trash</label>';
   html += '      </div>';
   html += '    </div>';
   html += '  </div>';
@@ -145,6 +146,7 @@ function _cwocInjectSidebar() {
   html += '  <div style="display:flex;gap:4px;">';
   html += '    <button class="action-button" id="alarms-mode-list" onclick="_setAlarmsMode(\'list\')" style="flex:1;margin-bottom:0;font-size:0.8em;padding:6px;background:ivory;color:#3b1f0a;">📋 Chits</button>';
   html += '    <button class="action-button" id="alarms-mode-independent" onclick="_setAlarmsMode(\'independent\')" style="flex:1;margin-bottom:0;font-size:0.8em;padding:6px;">🛎️ Independent</button>';
+  html += '    <button class="action-button" id="alarms-mode-notifications" onclick="_setAlarmsMode(\'notifications\')" title="Notifications" style="flex:1;margin-bottom:0;font-size:0.8em;padding:6px;">🔔 Notifs</button>';
   html += '  </div>';
   html += '</div>';
 
@@ -350,17 +352,11 @@ function _cwocInjectSidebar() {
   html += '  </div>';
   html += '</div>';
 
-  /* Notification Inbox & Trash */
+  /* Trash */
   html += '<div class="sidebar-section" id="section-notif-inbox">';
-  html += '  <div style="display:flex;gap:6px;">';
-  html += '    <button class="action-button" id="notif-inbox-btn" title="Sharing notifications" style="flex:1;">';
-  html += '      🔔 Notifications <span class="cwoc-notif-badge" id="notif-badge" style="display:none;">0</span>';
-  html += '    </button>';
-  html += '    <button class="action-button" id="sidebar-trash-btn" title="View deleted chits" style="flex:1;">';
-  html += '      🗑️ Trash';
-  html += '    </button>';
-  html += '  </div>';
-  html += '  <div class="cwoc-notif-inbox-list" id="notif-inbox-list" style="display:none;"></div>';
+  html += '  <button class="action-button" id="sidebar-trash-btn" title="View deleted chits">';
+  html += '    🗑️ Trash';
+  html += '  </button>';
   html += '</div>';
 
   html += '</div>'; /* /sidebar-scroll */
@@ -535,10 +531,6 @@ function _cwocInitSidebar(context) {
   /* Help */
   var helpBtn = document.getElementById('sidebar-help-btn');
   if (helpBtn) helpBtn.onclick = function() { _cb('onHelpClick')(); };
-
-  /* Notifications */
-  var notifBtn = document.getElementById('notif-inbox-btn');
-  if (notifBtn) notifBtn.onclick = function() { _cb('onNotificationToggle')(); };
 
   /* Trash */
   var trashBtn = document.getElementById('sidebar-trash-btn');
@@ -898,7 +890,8 @@ function _toggleNotifInbox() {
 /** Fetch notifications from the API and update the badge + cached list. */
 async function _fetchNotifications() {
   try {
-    var resp = await fetch('/api/notifications');
+    var deviceParam = (typeof _isMobileOverlay === 'function' && _isMobileOverlay()) ? '?device=mobile' : '?device=desktop';
+    var resp = await fetch('/api/notifications' + deviceParam);
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
     var all = await resp.json();
     _notifInboxItems = Array.isArray(all) ? all.filter(function(n) { return n.status === 'pending'; }) : [];
@@ -940,6 +933,33 @@ function _renderNotifInbox() {
     var card = document.createElement('div');
     card.className = 'cwoc-notif-card';
     card.dataset.notifId = notif.id;
+
+    // Reminder-type notifications (self-created, no chit link)
+    if (notif.notification_type === 'reminder') {
+      var reminderText = document.createElement('div');
+      reminderText.className = 'cwoc-notif-title';
+      reminderText.textContent = notif.chit_title || 'Reminder';
+      reminderText.style.cursor = 'default';
+      card.appendChild(reminderText);
+
+      if (notif.delivery_target) {
+        var targetLine = document.createElement('div');
+        targetLine.className = 'cwoc-notif-owner';
+        targetLine.textContent = '📌 ' + notif.delivery_target + '-only reminder';
+        card.appendChild(targetLine);
+      }
+
+      var actions = document.createElement('div');
+      actions.className = 'cwoc-notif-actions';
+      var dismissBtn = document.createElement('button');
+      dismissBtn.className = 'cwoc-notif-decline-btn';
+      dismissBtn.textContent = 'Dismiss';
+      dismissBtn.addEventListener('click', function() { _dismissNotification(notif.id); });
+      actions.appendChild(dismissBtn);
+      card.appendChild(actions);
+      list.appendChild(card);
+      return;
+    }
 
     var titleLink = document.createElement('a');
     titleLink.className = 'cwoc-notif-title';
@@ -994,6 +1014,21 @@ async function _respondNotification(notifId, status) {
     if (typeof fetchChits === 'function') fetchChits();
   } catch (e) {
     console.error('Failed to ' + status + ' notification ' + notifId + ':', e);
+  }
+}
+
+/** Dismiss (delete) a notification via DELETE, then remove from list. */
+async function _dismissNotification(notifId) {
+  try {
+    var resp = await fetch('/api/notifications/' + encodeURIComponent(notifId), {
+      method: 'DELETE'
+    });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    _notifInboxItems = _notifInboxItems.filter(function(n) { return n.id !== notifId; });
+    _updateNotifBadge();
+    _renderNotifInbox();
+  } catch (e) {
+    console.error('Failed to dismiss notification ' + notifId + ':', e);
   }
 }
 

@@ -13,6 +13,36 @@
  */
 
 /**
+ * Create desktop-targeted notifications for any "on_desktop" notification items.
+ * Called after a successful chit save. Fires POST /api/notifications for each
+ * on_desktop notification, then removes them from the chit's alerts array
+ * (they live in the notifications table, not on the chit).
+ */
+async function _createDesktopNotifications(chitId, chitTitle) {
+  const desktopNotifs = (window._alertsData.notifications || []).filter(n => n.unit === 'on_desktop');
+  if (desktopNotifs.length === 0) return;
+
+  for (const n of desktopNotifs) {
+    try {
+      await fetch('/api/notifications', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: chitTitle || '(Untitled chit)',
+          chit_id: chitId,
+          delivery_target: 'desktop'
+        })
+      });
+    } catch (e) {
+      console.error('[desktop-notif] Failed to create desktop notification:', e);
+    }
+  }
+
+  // Remove on_desktop items from the alerts data (they're now in the notifications table)
+  window._alertsData.notifications = window._alertsData.notifications.filter(n => n.unit !== 'on_desktop');
+}
+
+/**
  * Execute any pending project removal (deferred from the "Remove from Project" button).
  * Called after a successful save.
  */
@@ -481,6 +511,24 @@ async function _saveInstanceException(dateStr) {
 
 let _isSaving = false;
 
+/**
+ * Show a toast if the chit was just assigned to a different user.
+ * Compares the saved assigned_to against the original loaded value.
+ */
+function _showAssignmentToast(chit) {
+  var assignedTo = chit.assigned_to || null;
+  var currentUser = (typeof getCurrentUser === 'function') ? getCurrentUser() : null;
+  var currentUserId = currentUser ? currentUser.user_id : null;
+
+  // Only toast if assigned to someone else and it's a new assignment
+  if (assignedTo && assignedTo !== currentUserId && assignedTo !== window._originalAssignedTo) {
+    var name = (typeof _getUserDisplayName === 'function') ? _getUserDisplayName(assignedTo) : 'user';
+    cwocToast('📋 ' + name + ' has been notified of their assignment.', 'success');
+  }
+  // Update the tracked value
+  window._originalAssignedTo = assignedTo;
+}
+
 async function saveChitData() {
   if (_isSaving) return;
   _isSaving = true;
@@ -532,6 +580,11 @@ async function saveChitData() {
 
     window.currentChitId = updatedChit.id;
     markEditorSaved();
+    _showAssignmentToast(updatedChit);
+
+    // Create desktop-targeted notifications (removes them from chit alerts)
+    await _createDesktopNotifications(updatedChit.id, updatedChit.title);
+
     if (typeof syncSend === 'function') syncSend('chits_changed', {});
     _editorSavedBeforeLeave = true;
     window.location.href = _getEditorReturnUrl();
@@ -628,7 +681,11 @@ async function saveChitAndStay() {
     await _executePendingProjectRemoval();
     await _executePendingProjectAddition();
 
+    // Create desktop-targeted notifications (removes them from chit alerts)
+    await _createDesktopNotifications(updatedChit.id, updatedChit.title);
+
     setSaveButtonSaved();
+    _showAssignmentToast(updatedChit);
   } catch (error) {
     console.error("[saveChitAndStay] Error:", error);
     cwocToast("Failed to save chit. Check console for details.", "error");

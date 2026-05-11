@@ -2207,3 +2207,31 @@ def migrate_add_session_lifetime():
     finally:
         if conn:
             conn.close()
+
+
+# ── Notification Delivery Target: migration ──────────────────────────────
+
+def migrate_add_notification_delivery_target():
+    """Add delivery_target column to notifications table.
+
+    Stores 'desktop', 'mobile', or NULL (no restriction — show everywhere).
+    When set, the notification is only surfaced to clients matching that device type.
+    This enables "notify me next time I'm on desktop" style deferred delivery.
+
+    Fully idempotent — checks column existence before adding.
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(notifications)")
+        existing = {row[1] for row in cursor.fetchall()}
+        if "delivery_target" not in existing:
+            cursor.execute("ALTER TABLE notifications ADD COLUMN delivery_target TEXT")
+            conn.commit()
+            logger.info("Added delivery_target column to notifications table")
+    except Exception as e:
+        logger.error(f"Error adding delivery_target column: {str(e)}")
+    finally:
+        if conn:
+            conn.close()

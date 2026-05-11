@@ -135,6 +135,7 @@ async function _loadAllUsersForTree() {
     if (typeof _sharingUserList !== 'undefined' && _sharingUserList && _sharingUserList.length > 0) {
       _allUsersCache = _sharingUserList;
       _renderPeopleTree();
+      _syncAssignedToDropdown();
       return;
     }
     // Otherwise load via the sharing data-layer function
@@ -147,15 +148,18 @@ async function _loadAllUsersForTree() {
         console.error('[People] Failed to load system users:', resp.status);
         _allUsersCache = [];
         _renderPeopleTree();
+        _syncAssignedToDropdown();
         return;
       }
       _allUsersCache = await resp.json();
     }
     _renderPeopleTree();
+    _syncAssignedToDropdown();
   } catch (e) {
     console.error('[People] Error loading system users:', e);
     _allUsersCache = [];
     _renderPeopleTree();
+    _syncAssignedToDropdown();
   }
 }
 
@@ -626,25 +630,16 @@ function _syncAssignedToDropdown() {
   var select = document.getElementById('sharingAssignedTo');
   if (!row || !select) return;
 
-  // Determine if current user can manage (owner or manager)
-  var canManage = (_effectiveRole === 'owner' || _effectiveRole === 'manager' || _effectiveRole === null);
-
   // Get current user to exclude from the dropdown
   var currentUser = (typeof getCurrentUser === 'function') ? getCurrentUser() : null;
   var currentUserId = currentUser ? (currentUser.user_id || currentUser.id) : null;
 
-  // Show the row if there are system users OR if the owner can be assigned
-  var hasAssignableUsers = (_allUsersCache && _allUsersCache.length > 0) || (_chitOwnerId && canManage);
-  if (!hasAssignableUsers) {
-    row.style.display = 'none';
-    if (select.value) {
-      select.value = '';
-      setSaveButtonUnsaved();
-    }
-    return;
-  }
-
+  // Always show the assignee row
   row.style.display = '';
+
+  // Disable for viewers (read-only)
+  var canManage = (_effectiveRole === 'owner' || _effectiveRole === 'manager' || _effectiveRole === null);
+  select.disabled = !canManage;
 
   // Preserve current selection
   var currentVal = select.value;
@@ -660,8 +655,8 @@ function _syncAssignedToDropdown() {
   // Track user IDs already added to avoid duplicates
   var addedUserIds = {};
 
-  // Add the chit owner as an assignable option (only if owner/manager)
-  if (_chitOwnerId && canManage) {
+  // Add the chit owner as an assignable option
+  if (_chitOwnerId) {
     var ownerOpt = document.createElement('option');
     ownerOpt.value = _chitOwnerId;
     var ownerName = _chitOwnerDisplayName || _getUserDisplayName(_chitOwnerId) || '(Owner)';
@@ -677,7 +672,7 @@ function _syncAssignedToDropdown() {
     if (_chitOwnerId === currentVal) currentStillValid = true;
   }
 
-  // Populate with all system users (Requirement 2.5)
+  // Populate with all system users
   (_allUsersCache || []).forEach(function (u) {
     var uid = u.id || u.user_id;
     // Skip owner (already added above) and current user
@@ -765,6 +760,9 @@ function initPeopleSharingControls(chit) {
     assignedSelect.value = chit.assigned_to;
   }
 
+  // Track original assigned_to for toast notification on save
+  window._originalAssignedTo = chit.assigned_to || null;
+
   // Re-render chips now that assigned-to is set (badge needs the dropdown value)
   _renderPeopleChips();
 
@@ -780,6 +778,9 @@ function initPeopleSharingForNewChit() {
   _currentShares = [];
   _effectiveRole = null; // null = owner of new chit
   _chitOwnerDisplayName = null;
+
+  // Track original assigned_to for toast notification on save
+  window._originalAssignedTo = null;
 
   // For new chits, the current user is the owner
   var currentUser = getCurrentUser();

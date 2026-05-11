@@ -1,0 +1,1 @@
+Added desktop-only notification delivery. Notifications in the editor alerts zone now have a "next time on desktop" option in the unit dropdown. When selected, the number input and timing dropdown hide, and the notification is deferred until the next time the app is opened on a non-mobile screen. Backend filters notifications by device type via a new `delivery_target` column.

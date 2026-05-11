@@ -163,8 +163,9 @@ function _openModePanel() {
   } else if (currentTab === 'Alarms') {
     if (title) title.textContent = '🔔 Alarms Mode';
     modes = [
-      { key: 'L', label: 'List',        action: function() { _setAlarmsMode('list'); _exitHotkeyMode(); } },
-      { key: 'I', label: 'Independent', action: function() { _setAlarmsMode('independent'); _exitHotkeyMode(); } },
+      { key: 'L', label: 'List',          action: function() { _setAlarmsMode('list'); _exitHotkeyMode(); } },
+      { key: 'I', label: 'Independent',   action: function() { _setAlarmsMode('independent'); _exitHotkeyMode(); } },
+      { key: 'N', label: 'Notifications', action: function() { _setAlarmsMode('notifications'); _exitHotkeyMode(); } },
     ];
   } else if (currentTab === 'Projects') {
     if (title) title.textContent = '📁 Projects Mode';

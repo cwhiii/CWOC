@@ -1,0 +1,1 @@
+Added smooth edge-scrolling during drag & drop across all views. When dragging chits to the top or bottom edge of the screen, the container now auto-scrolls continuously with speed proportional to how close to the edge the pointer is. Works for Tasks, Notes, Checklists, Alarms, Projects (list and kanban), and Calendar views, on both desktop (mouse) and mobile (touch).

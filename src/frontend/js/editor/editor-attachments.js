@@ -53,8 +53,16 @@ function initAttachmentsZone(chit) {
  * @returns {string|null} JSON string of attachments array, or null if empty
  */
 function getAttachmentsData() {
-  if (_attachmentsData.length === 0) return null;
-  return JSON.stringify(_attachmentsData);
+  var _result;
+  if (_attachmentsData.length === 0) {
+    // If we have pending uploads but empty data, something went wrong —
+    // return undefined (not null) so the save doesn't overwrite server data
+    if (_pendingUploads.length > 0) _result = undefined;
+    else _result = null;
+  } else {
+    _result = JSON.stringify(_attachmentsData);
+  }
+  return _result;
 }
 
 /**
@@ -215,11 +223,66 @@ function _wireAttachmentUpload() {
   if (uploadArea._wired) return;
   uploadArea._wired = true;
 
+  // Android fix: when the page resumes after file picker (tab may have been killed),
+  // re-sync attachments from the server to ensure nothing was lost
+  try {
+    document.addEventListener('visibilitychange', function() {
+      if (document.visibilityState === 'visible' && window.currentChitId && !window.isNewChit) {
+        fetch('/api/chit/' + encodeURIComponent(window.currentChitId))
+          .then(function(r) { return r.ok ? r.json() : null; })
+          .then(function(chit) {
+            if (!chit) return;
+            var serverAtts = chit.attachments;
+            if (typeof serverAtts === 'string') {
+              try { serverAtts = JSON.parse(serverAtts); } catch(e) { serverAtts = []; }
+            }
+            if (!Array.isArray(serverAtts)) serverAtts = [];
+            // Merge: add any server-side attachments not in our local list
+            var localIds = _attachmentsData.map(function(a) { return a.id; });
+            var added = false;
+            serverAtts.forEach(function(att) {
+              if (localIds.indexOf(att.id) === -1) {
+                _attachmentsData.push(att);
+                added = true;
+              }
+            });
+            if (added) {
+              _renderAttachmentsList();
+              _updateAttachmentCount();
+            }
+          })
+          .catch(function() {}); // silent fail
+      }
+    });
+  } catch(e) { /* ignore */ }
+
+  // Debug logging disabled
+  function _attLog(msg) {}
+
+  _attLog('[WIRE] _wireAttachmentUpload called. uploadArea=' + !!uploadArea + ' fileInput=' + !!fileInput);
+
+  // Wire the "Add Files" button with logging
+  var addBtn = uploadArea.querySelector('button.zone-button');
+  if (addBtn) {
+    addBtn.addEventListener('click', function(e) {
+      _attLog('[BTN] Add Files clicked');
+    });
+    _attLog('[WIRE] Button wired OK');
+  } else {
+    _attLog('[WIRE] ERROR: Add Files button not found!');
+  }
+
   // File input change
   fileInput.addEventListener('change', function() {
+    _attLog('[INPUT] change event fired. files=' + (fileInput.files ? fileInput.files.length : 'null'));
     if (fileInput.files && fileInput.files.length > 0) {
+      for (var fi = 0; fi < fileInput.files.length; fi++) {
+        _attLog('[INPUT] file[' + fi + ']: ' + fileInput.files[fi].name + ' size=' + fileInput.files[fi].size + ' type=' + fileInput.files[fi].type);
+      }
       _uploadFiles(fileInput.files);
       fileInput.value = ''; // reset for re-upload of same file
+    } else {
+      _attLog('[INPUT] No files in input (cancelled?)');
     }
   });
 
@@ -286,6 +349,9 @@ function _wireAttachmentUpload() {
  */
 async function _uploadFiles(files) {
   var chitId = window.currentChitId;
+  var _log = []; // Debug log — will be appended to notes field
+  _log.push('[ATTACH DEBUG] Start. chitId=' + chitId + ' isNew=' + window.isNewChit + ' files=' + files.length);
+
   if (!chitId) {
     if (typeof cwocToast === 'function') cwocToast('Save the chit first before uploading attachments.', 'error');
     return;
@@ -301,26 +367,49 @@ async function _uploadFiles(files) {
 
   for (var i = 0; i < files.length; i++) {
     var file = files[i];
+    _log.push('[ATTACH] file[' + i + ']: name=' + file.name + ' size=' + file.size + ' type=' + file.type);
     try {
       if (progressEl) progressEl.textContent = 'Uploading ' + file.name + '...';
 
       var formData = new FormData();
       formData.append('file', file);
 
+      // Android: verify file has content before uploading
+      if (file.size === 0) {
+        _log.push('[ATTACH] SKIP: 0 bytes');
+        console.warn('[Attachments] File has 0 bytes, skipping:', file.name);
+        if (typeof cwocToast === 'function') cwocToast('File appears empty: ' + file.name, 'error');
+        continue;
+      }
+
+      _log.push('[ATTACH] POSTing to /api/chits/' + chitId + '/attachments');
       var resp = await fetch('/api/chits/' + encodeURIComponent(chitId) + '/attachments', {
         method: 'POST',
         body: formData,
       });
 
+      _log.push('[ATTACH] resp.status=' + resp.status + ' ok=' + resp.ok);
+
       if (!resp.ok) {
-        var errData;
-        try { errData = await resp.json(); } catch (e) { errData = { detail: await resp.text() }; }
-        var errMsg = errData.detail || 'Upload failed';
-        if (typeof cwocToast === 'function') cwocToast(errMsg, 'error');
+        var errMsg = 'Upload failed';
+        try {
+          var errText = await resp.text();
+          try { var errObj = JSON.parse(errText); errMsg = errObj.detail || errMsg; } catch(e2) { if (errText) errMsg = errText; }
+        } catch(e3) { /* body already consumed */ }
+        var fileSizeMB = (file.size / (1024 * 1024)).toFixed(1);
+        // Make it friendlier
+        if (resp.status === 413) {
+          errMsg = '📎 "' + file.name + '" is too large (' + fileSizeMB + ' MB). Reduce the file size or increase the limit in Settings.';
+        } else {
+          errMsg = '📎 Could not upload "' + file.name + '" (' + fileSizeMB + ' MB) — ' + errMsg;
+        }
+        _log.push('[ATTACH] ERROR: ' + errMsg);
+        if (typeof cwocToast === 'function') cwocToast(errMsg, 'error', 0);
         continue;
       }
 
       var result = await resp.json();
+      _log.push('[ATTACH] result: id=' + result.id + ' filename=' + result.filename + ' size=' + result.size);
       var newAtt = {
         id: result.id,
         filename: result.filename,
@@ -330,22 +419,45 @@ async function _uploadFiles(files) {
       };
       _attachmentsData.push(newAtt);
       _pendingUploads.push(result.id);
+      _log.push('[ATTACH] pushed. _attachmentsData.length=' + _attachmentsData.length);
 
     } catch (err) {
+      _log.push('[ATTACH] EXCEPTION: ' + err.message);
       console.error('[Attachments] Upload error:', err);
       if (typeof cwocToast === 'function') cwocToast('Failed to upload ' + file.name, 'error');
     }
   }
 
+  _log.push('[ATTACH] Done. _attachmentsData.length=' + _attachmentsData.length + ' _pendingUploads=' + _pendingUploads.length);
+
   _hideUploadProgress();
   _renderAttachmentsList();
   _updateAttachmentCount();
 
-  // Mark editor as having unsaved changes so save buttons appear
-  if (typeof setSaveButtonUnsaved === 'function') setSaveButtonUnsaved();
+  // Auto-expand the attachments zone so the user can see the uploaded file
+  var attContent = document.getElementById('attachmentsContent');
+  if (attContent && attContent.style.display === 'none') {
+    attContent.style.display = '';
+    var attHeader = document.querySelector('#attachmentsSection > .zone-header');
+    if (attHeader) {
+      var toggleIcon = attHeader.querySelector('.zone-toggle-icon');
+      if (toggleIcon) toggleIcon.textContent = '🔼';
+    }
+  }
 
-  if (typeof cwocToast === 'function' && files.length > 0) {
-    cwocToast(files.length + ' file(s) uploaded', 'success');
+  // Mark editor as having unsaved changes so save buttons appear
+  var _successCount = _attachmentsData.length - (_attachmentsData.length - _pendingUploads.length >= 0 ? _attachmentsData.length - _pendingUploads.length : 0);
+  // Simpler: count how many we added this call
+  if (_pendingUploads.length > 0) {
+    if (typeof setSaveButtonUnsaved === 'function') setSaveButtonUnsaved();
+  }
+
+  if (typeof cwocToast === 'function') {
+    // Only toast success if at least one file was actually uploaded in this batch
+    var _uploadedThisBatch = _log.filter(function(l) { return l.indexOf('[ATTACH] pushed') !== -1; }).length;
+    if (_uploadedThisBatch > 0) {
+      cwocToast(_uploadedThisBatch + ' file(s) uploaded', 'success');
+    }
   }
 }
 

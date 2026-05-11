@@ -569,26 +569,45 @@ function renderNotificationsContainer() {
     const row = document.createElement("div");
     row.style.cssText = "display:flex;align-items:center;gap:0.4em;padding:4px 0;border-bottom:1px solid #e0d4b5;flex-wrap:wrap;";
 
+    const isDesktopMode = (n.unit === "on_desktop");
+
     const valInput = document.createElement("input");
     valInput.type = "number"; valInput.min = "1"; valInput.value = n.value || 15;
     valInput.style.cssText = "width:55px;font-size:0.9em;padding:2px 4px;";
+    if (isDesktopMode) valInput.style.display = "none";
     valInput.addEventListener("change", () => { window._alertsData.notifications[idx].value = parseInt(valInput.value) || 1; setSaveButtonUnsaved(); });
 
     const unitSel = document.createElement("select");
     unitSel.style.cssText = "font-size:0.9em;padding:2px 4px;";
-    ["minutes","hours","days","weeks"].forEach((u) => {
+    ["minutes","hours","days","weeks","on_desktop"].forEach((u) => {
       const opt = document.createElement("option");
-      opt.value = u; opt.textContent = u;
+      opt.value = u;
+      opt.textContent = u === "on_desktop" ? "next time on desktop" : u;
       if (n.unit === u) opt.selected = true;
       unitSel.appendChild(opt);
     });
-    unitSel.addEventListener("change", () => { window._alertsData.notifications[idx].unit = unitSel.value; setSaveButtonUnsaved(); });
+    unitSel.addEventListener("change", () => {
+      const newUnit = unitSel.value;
+      window._alertsData.notifications[idx].unit = newUnit;
+      if (newUnit === "on_desktop") {
+        window._alertsData.notifications[idx].delivery_target = "desktop";
+        window._alertsData.notifications[idx].value = 0;
+      } else {
+        delete window._alertsData.notifications[idx].delivery_target;
+        if (!window._alertsData.notifications[idx].value) {
+          window._alertsData.notifications[idx].value = 15;
+        }
+      }
+      setSaveButtonUnsaved();
+      renderNotificationsContainer();
+    });
 
     // Combined timing dropdown — habit-aware
     const timingSel = document.createElement("select");
     timingSel.style.cssText = "font-size:0.85em;padding:2px 4px;";
+    if (isDesktopMode) timingSel.style.display = "none";
 
-    if (isHabit) {
+    if (isHabit && !isDesktopMode) {
       // Habit mode: "before end of [cycle/reset period]"
       const habitFreqSel = document.getElementById('habitFrequency');
       const cycleLabel = _habitPeriodLabel();
@@ -606,7 +625,7 @@ function renderNotificationsContainer() {
         window._alertsData.notifications[idx].targetType = "cycle";
         setSaveButtonUnsaved();
       });
-    } else {
+    } else if (!isDesktopMode) {
       // Normal mode: before/after start/due
       const hasStart = !!document.getElementById("start_datetime")?.value;
       const hasDue = !!document.getElementById("due_datetime")?.value;
@@ -646,7 +665,7 @@ function renderNotificationsContainer() {
     row.appendChild(timingSel);
 
     // Habit mode: "Disable if complete for [period]" checkbox
-    if (isHabit) {
+    if (isHabit && !isDesktopMode) {
       const disableLbl = document.createElement("label");
       disableLbl.style.cssText = "display:flex;align-items:center;gap:3px;font-size:0.8em;cursor:pointer;white-space:nowrap;";
       disableLbl.title = "Skip this notification if the habit goal is already met for the current " + _habitPeriodLabel();

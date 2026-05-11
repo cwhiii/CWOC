@@ -451,6 +451,32 @@
     background: #d4c5a9;
 }
 
+/* ── Pill Toggle (reusable Accept/Decline, Viewer/Manager) ────────────────── */
+.cwoc-pill-toggle {
+    display: inline-flex;
+    border: 1px solid #8b5a2b;
+    border-radius: 4px;
+    overflow: hidden;
+    cursor: pointer;
+    font-size: 0.75em;
+    flex-shrink: 0;
+    user-select: none;
+}
+.cwoc-pill-toggle [data-val] {
+    padding: 3px 6px;
+    white-space: nowrap;
+    transition: background 0.15s, color 0.15s;
+}
+.cwoc-pill-toggle [data-val].pill-active {
+    background: #8b5a2b;
+    color: #fff8e1;
+    font-weight: bold;
+}
+.cwoc-pill-toggle [data-val].pill-inactive {
+    background: #f5e6cc;
+    color: #bbb;
+}
+
 
 /* ── Generic Modal (used by profile switcher, etc.) ──────────────────────── */
 .modal {

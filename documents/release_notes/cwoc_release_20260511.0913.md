@@ -1,0 +1,1 @@
+Reverted time inputs from native `type="time"` (which ignored the app's 24h setting) to text inputs with Flatpickr time-only picker. Flatpickr respects the app's `time_format` setting — shows 24-hour mode when configured for 24-hour. Uses 5-minute increment for quick selection.

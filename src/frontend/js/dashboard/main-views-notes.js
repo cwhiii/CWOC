@@ -22,10 +22,10 @@ function displayNotesView(chitsToDisplay) {
       if (a.pinned && !b.pinned) return -1;
       if (!a.pinned && b.pinned) return 1;
       const dateA = new Date(
-        a.last_edited || a.created_datetime || a.start_datetime || 0,
+        a.modified_datetime || a.created_datetime || a.start_datetime || 0,
       );
       const dateB = new Date(
-        b.last_edited || b.created_datetime || b.start_datetime || 0,
+        b.modified_datetime || b.created_datetime || b.start_datetime || 0,
       );
       return dateB - dateA;
     });

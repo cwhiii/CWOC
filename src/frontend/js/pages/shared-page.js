@@ -428,6 +428,7 @@ window.cwocInterceptRefresh = cwocInterceptRefresh;
     var items = [
       { icon: '🔄', label: 'Switch User', action: function() { dropdown.remove(); _showSwitchUserModal(); } },
       { icon: '👤', label: 'View Profile', action: function() { dropdown.remove(); window.location.href = '/profile'; } },
+      { icon: '🔔', label: 'Notifications', action: function() { dropdown.remove(); if (typeof filterChits === 'function') { _setAlarmsMode('notifications'); filterChits('Alarms'); } else { window.location.href = '/frontend/html/notifications.html'; } } },
       { icon: '🚪', label: 'Logout', action: function() { dropdown.remove(); _logout(); } }
     ];
 
@@ -441,6 +442,21 @@ window.cwocInterceptRefresh = cwocInterceptRefresh;
       };
       dropdown.appendChild(el);
     });
+
+    // Notifications section — only show if not already viewing notifications in the main view
+    var _alreadyInNotifView = (typeof currentTab !== 'undefined' && currentTab === 'Alarms' && typeof _alarmsViewMode !== 'undefined' && _alarmsViewMode === 'notifications');
+    if (_profileNotifItems.length > 0 && !_alreadyInNotifView) {
+      var notifHeader = document.createElement('div');
+      notifHeader.style.cssText = 'padding:6px 14px;font-size:0.85em;font-weight:bold;color:#6b4e31;border-top:1px solid rgba(139,90,43,0.2);background:rgba(139,90,43,0.06);';
+      notifHeader.textContent = '🔔 Notifications (' + _profileNotifItems.length + ')';
+      dropdown.appendChild(notifHeader);
+
+      var notifSection = document.createElement('div');
+      notifSection.id = 'cwoc-profile-notif-section';
+      notifSection.style.cssText = 'max-height:200px;overflow-y:auto;';
+      _renderProfileNotifSection(notifSection);
+      dropdown.appendChild(notifSection);
+    }
 
     menuWrap.appendChild(dropdown);
 
@@ -636,6 +652,111 @@ window.cwocInterceptRefresh = cwocInterceptRefresh;
   // Export globally
   window._cwocToggleProfileMenu = _toggleProfileMenu;
   window._cwocLogout = _logout;
+
+  /* ── Profile Notification Badge ──────────────────────────────────────────── */
+  var _profileNotifItems = [];
+
+  function _updateProfileNotifBadge() {
+    var btn = document.getElementById('cwoc-profile-btn');
+    if (!btn) return;
+    var badge = document.getElementById('cwoc-profile-notif-badge');
+    var count = _profileNotifItems.length;
+    if (count > 0) {
+      if (!badge) {
+        badge = document.createElement('span');
+        badge.id = 'cwoc-profile-notif-badge';
+        badge.style.cssText = 'position:absolute;top:-2px;right:-2px;min-width:16px;height:16px;padding:0 4px;font-size:10px;font-weight:bold;color:#fff8e1;background:#a0522d;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;line-height:1;pointer-events:none;';
+        btn.style.position = 'relative';
+        btn.appendChild(badge);
+      }
+      badge.textContent = count;
+      badge.style.display = '';
+    } else if (badge) {
+      badge.style.display = 'none';
+    }
+  }
+
+  function _fetchProfileNotifications() {
+    fetch('/api/notifications').then(function(r) {
+      if (!r.ok) return;
+      return r.json();
+    }).then(function(all) {
+      if (!all) return;
+      _profileNotifItems = Array.isArray(all) ? all.filter(function(n) { return n.status === 'pending'; }) : [];
+      _updateProfileNotifBadge();
+    }).catch(function() { _profileNotifItems = []; _updateProfileNotifBadge(); });
+  }
+
+  function _respondProfileNotification(notifId, status) {
+    fetch('/api/notifications/' + encodeURIComponent(notifId), {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: status })
+    }).then(function(r) {
+      if (!r.ok) return;
+      _profileNotifItems = _profileNotifItems.filter(function(n) { return n.id !== notifId; });
+      _updateProfileNotifBadge();
+      // Update the dropdown if open
+      var section = document.getElementById('cwoc-profile-notif-section');
+      if (section) _renderProfileNotifSection(section);
+      // Also update sidebar badge if present
+      if (typeof _fetchNotifications === 'function') _fetchNotifications();
+      if (typeof fetchChits === 'function') fetchChits();
+    }).catch(function(e) { console.error('Failed to respond to notification:', e); });
+  }
+
+  function _renderProfileNotifSection(container) {
+    container.innerHTML = '';
+    if (_profileNotifItems.length === 0) {
+      container.innerHTML = '<div style="padding:8px 14px;font-size:0.85em;opacity:0.6;font-style:italic;">No pending notifications</div>';
+      return;
+    }
+    _profileNotifItems.forEach(function(notif) {
+      var card = document.createElement('div');
+      card.style.cssText = 'padding:8px 14px;border-top:1px solid rgba(139,90,43,0.15);';
+
+      var title = document.createElement('a');
+      title.style.cssText = 'font-size:0.9em;font-weight:bold;color:#4a2c2a;text-decoration:none;display:block;';
+      title.textContent = notif.chit_title || '(Untitled)';
+      title.href = '/frontend/html/editor.html?id=' + encodeURIComponent(notif.chit_id);
+      title.onclick = function(e) { e.preventDefault(); window.location.href = this.href; };
+      card.appendChild(title);
+
+      var owner = document.createElement('div');
+      owner.style.cssText = 'font-size:0.8em;opacity:0.7;margin:2px 0 4px;';
+      var typeLabel = notif.notification_type === 'assigned' ? 'assigned by' : 'from';
+      owner.textContent = typeLabel + ' ' + (notif.owner_display_name || 'Unknown');
+      card.appendChild(owner);
+
+      var actions = document.createElement('div');
+      actions.style.cssText = 'display:flex;gap:6px;';
+      var acceptBtn = document.createElement('button');
+      acceptBtn.textContent = 'Accept';
+      acceptBtn.style.cssText = 'padding:3px 10px;font-size:0.8em;font-weight:bold;border:1px solid #2e7d32;border-radius:3px;background:#e8f5e9;color:#2e7d32;cursor:pointer;font-family:inherit;';
+      acceptBtn.onclick = function(e) { e.stopPropagation(); _respondProfileNotification(notif.id, 'accepted'); };
+      actions.appendChild(acceptBtn);
+      var declineBtn = document.createElement('button');
+      declineBtn.textContent = 'Decline';
+      declineBtn.style.cssText = 'padding:3px 10px;font-size:0.8em;font-weight:bold;border:1px solid #c62828;border-radius:3px;background:#ffebee;color:#c62828;cursor:pointer;font-family:inherit;';
+      declineBtn.onclick = function(e) { e.stopPropagation(); _respondProfileNotification(notif.id, 'declined'); };
+      actions.appendChild(declineBtn);
+      card.appendChild(actions);
+
+      container.appendChild(card);
+    });
+  }
+
+  // Fetch on load and periodically
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function() {
+      if (typeof waitForAuth === 'function') waitForAuth().then(_fetchProfileNotifications);
+      else _fetchProfileNotifications();
+    });
+  } else {
+    if (typeof waitForAuth === 'function') waitForAuth().then(_fetchProfileNotifications);
+    else _fetchProfileNotifications();
+  }
+  setInterval(_fetchProfileNotifications, 30000);
 
   // Auto-initialize profile button tooltip and image on any page
   function _initProfileTooltip() {

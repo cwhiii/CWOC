@@ -209,6 +209,20 @@ function _isZoneEmpty(zoneInfo) {
  * Get the starting zone index based on the source tab.
  */
 function _getMobileStartZoneIdx() {
+  // On refresh, restore the zone the user was viewing (existing chits only)
+  var params = new URLSearchParams(window.location.search);
+  if (params.get('id')) {
+    try {
+      var savedZoneId = sessionStorage.getItem('cwoc_mobile_zone_' + params.get('id'));
+      if (savedZoneId) {
+        var visibleZones = _getMobileVisibleZones();
+        for (var i = 0; i < visibleZones.length; i++) {
+          if (visibleZones[i].id === savedZoneId) return i;
+        }
+      }
+    } catch (e) { /* ignore */ }
+  }
+
   var sourceTab = 'Calendar';
   try {
     var saved = localStorage.getItem('cwoc_source_tab');
@@ -216,7 +230,6 @@ function _getMobileStartZoneIdx() {
   } catch (e) { /* ignore */ }
 
   // If URL has start/end params, force Calendar
-  var params = new URLSearchParams(window.location.search);
   if (params.get('start') || params.get('end')) {
     sourceTab = 'Calendar';
   }
@@ -250,6 +263,17 @@ function _mobileShowZone(idx) {
   if (idx < 0) idx = visibleZones.length - 1;
   if (idx >= visibleZones.length) idx = 0;
   _mobileCurrentZoneIdx = idx;
+
+  // Persist current zone so refresh restores it
+  var activeZoneEntry = visibleZones[idx];
+  if (activeZoneEntry) {
+    try {
+      var chitIdParam = new URLSearchParams(window.location.search).get('id');
+      if (chitIdParam) {
+        sessionStorage.setItem('cwoc_mobile_zone_' + chitIdParam, activeZoneEntry.id);
+      }
+    } catch (e) { /* ignore */ }
+  }
 
   var grid = document.querySelector('.main-zones-grid');
   if (!grid) return;

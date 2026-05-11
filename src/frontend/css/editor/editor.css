@@ -3108,8 +3108,8 @@ button.archive-btn.archived-active {
         min-width: 80px;
     }
     .date-mode-fields {
-        display: inline-flex !important;
-        flex-wrap: wrap !important;
+        display: inline-flex;
+        flex-wrap: wrap;
         gap: 4px;
         flex: 1;
         min-width: 0;
@@ -5864,7 +5864,6 @@ input.location {
         flex-grow: 0;
     }
 
-    /* Fields block indented to align with label text (16px radio + 6px gap = 22px) */
     body.mobile-zone-mode #datesContent .date-mode-fields {
         margin-left: 22px;
         width: calc(100% - 22px);
@@ -6117,30 +6116,6 @@ input.location {
     body.mobile-zone-mode .zone-container {
         flex: 1;
         min-height: 0;
-    }
-
-    /* ═══════════════════════════════════════════════════════════════════════
-       MOBILE: Hide date & time inputs unless they have a value
-       On mobile, date and time inputs in the dates zone are hidden by default.
-       They appear when they have a value (via .has-value class set by JS).
-       ═══════════════════════════════════════════════════════════════════════ */
-    body.mobile-zone-mode #datesContent .time-input {
-        display: none !important;
-    }
-    body.mobile-zone-mode #datesContent .time-input.has-value {
-        display: inline-block !important;
-    }
-    body.mobile-zone-mode #datesContent .time-input:focus {
-        display: inline-block !important;
-    }
-    body.mobile-zone-mode #datesContent .date-input {
-        display: none !important;
-    }
-    body.mobile-zone-mode #datesContent .date-input.has-value {
-        display: inline-block !important;
-    }
-    body.mobile-zone-mode #datesContent .date-input:focus {
-        display: inline-block !important;
     }
 
     /* ═══════════════════════════════════════════════════════════════════════

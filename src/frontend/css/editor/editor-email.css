@@ -1016,7 +1016,7 @@
 }
 
 .email-undo-send-toast .email-undo-btn {
-    padding: 4px 12px;
+    padding: 8px 16px;
     cursor: pointer;
     font-weight: bold;
     border: 1px solid #8b5a2b;
@@ -1026,6 +1026,8 @@
     font-family: inherit;
     flex-shrink: 0;
     transition: background 0.15s;
+    min-height: 36px;
+    font-size: 0.9em;
 }
 
 .email-undo-send-toast .email-undo-btn:hover {
@@ -1047,6 +1049,38 @@
     background: linear-gradient(90deg, #d4af37 0%, #c8965a 60%, #8b4513 100%);
     transition: width 0.1s linear;
     border-radius: 3px;
+}
+
+/* ── Undo Send Toast: Mobile ───────────────────────────────────────────── */
+@media (max-width: 768px) {
+    .email-undo-send-toast {
+        bottom: 16px;
+        left: 12px;
+        right: 12px;
+        transform: none;
+        min-width: 0;
+        max-width: none;
+        width: auto;
+    }
+
+    .email-undo-send-toast .email-undo-btn {
+        min-height: 44px;
+        padding: 10px 18px;
+        font-size: 1em;
+    }
+
+    .email-undo-send-toast .email-undo-bar-outer {
+        height: 8px;
+    }
+}
+
+@media (max-width: 480px) {
+    .email-undo-send-toast {
+        bottom: 12px;
+        left: 8px;
+        right: 8px;
+        padding: 0.6em 0.8em 0.4em;
+    }
 }
 
 /* ── Email Chip Container ──────────────────────────────────────────────── */

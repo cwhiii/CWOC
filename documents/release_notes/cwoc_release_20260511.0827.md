@@ -1,3 +1,3 @@
-# Release 20260511.0902
+# Release 20260511.0923
 
-Fixed email sender/subject truncation on mobile — removed the fixed-width flex basis, cleared the subject's extra right margin, and reduced content padding-right to 4.5em so text extends to within ~1em of the thread badge or date.
+Further Android attachment fixes: added 0-byte file check (Android can return empty File objects from content URIs). Made getAttachmentsData() return undefined (not null) when pending uploads exist but data array is empty — prevents save from overwriting server data. Backend preserves existing attachments when the field isn't in the PUT payload.

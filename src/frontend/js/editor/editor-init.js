@@ -290,6 +290,8 @@ function initializeFlatpickr(selector, options) {
   const element = document.querySelector(selector);
   if (element && typeof flatpickr !== "undefined") {
     try {
+      // Always disable mobile mode — native mobile inputs ignore our format settings
+      options.disableMobile = true;
       flatpickr(selector, options);
     } catch (error) {
       console.warn(`Failed to initialize Flatpickr for ${selector}:`, error);
@@ -1217,10 +1219,26 @@ document.addEventListener("DOMContentLoaded", function () {
   loadSavedLocationsDropdown();
   loadCompactLocationDropdown();
 
-  initializeFlatpickr("#start_datetime", { dateFormat: "Y-M-d", onChange: function() { _updateRecurrenceLabels(); } });
-  initializeFlatpickr("#end_datetime", { dateFormat: "Y-M-d" });
-  initializeFlatpickr("#due_datetime", { dateFormat: "Y-M-d", onChange: function() { _updateRecurrenceLabels(); } });
-  initializeFlatpickr("#recurrenceUntil", { dateFormat: "Y-M-d" });
+  initializeFlatpickr("#start_datetime", { dateFormat: "Y-M-d", disableMobile: true, onChange: function() { _updateRecurrenceLabels(); } });
+  initializeFlatpickr("#end_datetime", { dateFormat: "Y-M-d", disableMobile: true });
+  initializeFlatpickr("#due_datetime", { dateFormat: "Y-M-d", disableMobile: true, onChange: function() { _updateRecurrenceLabels(); } });
+  initializeFlatpickr("#recurrenceUntil", { dateFormat: "Y-M-d", disableMobile: true });
+
+  // Time pickers — Flatpickr time-only, 24-hour, no seconds.
+  var _fpTimeOpts = {
+    enableTime: true,
+    noCalendar: true,
+    dateFormat: "H:i",
+    time_24hr: true,
+    enableSeconds: false,
+    minuteIncrement: 5,
+    disableMobile: true
+  };
+  initializeFlatpickr("#start_time", _fpTimeOpts);
+  initializeFlatpickr("#end_time", _fpTimeOpts);
+  initializeFlatpickr("#due_time", _fpTimeOpts);
+
+
 
   // Recurrence freq change shows/hides day checkboxes
   const recFreq = document.getElementById('recurrenceFreq');

@@ -172,6 +172,7 @@ from src.backend.migrations import (
     migrate_add_show_map_thumbnails,
     migrate_add_snoozed_until,
     migrate_add_session_lifetime,
+    migrate_add_notification_delivery_target,
 )
 
 # Initialize database and run all migrations (same order as before)
@@ -234,6 +235,7 @@ migrate_cleanup_audit_junk_fields()
 migrate_add_show_map_thumbnails()
 migrate_add_snoozed_until()
 migrate_add_session_lifetime()
+migrate_add_notification_delivery_target()
 seed_version_info()
 
 # One-time cleanup: fix sent emails that still have CWOC_System/Email/Drafts tag

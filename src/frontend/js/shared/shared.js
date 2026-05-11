@@ -1326,7 +1326,8 @@ function _notesColLeft(colIdx, actualCardWidth) {
 
 /**
  * Assign initial data-col to cards that don't have one yet.
- * New cards go to the column with the fewest cards.
+ * New cards go to column 0 (top-left) so the most recently created/updated
+ * notes appear at the top-left of the masonry grid.
  */
 function _assignMissingCols(cards, colCount) {
   // Count existing assignments
@@ -1340,8 +1341,8 @@ function _assignMissingCols(cards, colCount) {
   cards.forEach(card => {
     let col = parseInt(card.dataset.col, 10);
     if (isNaN(col) || col < 0 || col >= colCount) {
-      // Assign to shortest column
-      col = colCounts.indexOf(Math.min(...colCounts));
+      // Assign to column 0 (leftmost) so new notes appear top-left
+      col = 0;
       card.dataset.col = col;
       colCounts[col]++;
     }
@@ -1788,13 +1789,18 @@ function _onNotesDragKey(e) {
  */
 function _showDeleteUndoToast(chitId, chitTitle, onExpire, onUndo, customMessage) {
   var DURATION = 5000;
+
+  // Remove any existing undo toast
+  var existing = document.querySelector('.cwoc-undo-toast');
+  if (existing) existing.remove();
+
   var toast = document.createElement("div");
-  toast.style.cssText = "position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:9999;background:#fff5e6;border:2px solid #8b5a2b;border-radius:8px;padding:0.75em 1.2em 0.5em;box-shadow:0 4px 16px rgba(0,0,0,0.3);min-width:280px;max-width:420px;font-family:Lora, Georgia, serif;";
+  toast.className = "cwoc-undo-toast";
 
   var msgRow = document.createElement("div");
-  msgRow.style.cssText = "display:flex;align-items:center;justify-content:space-between;gap:0.8em;margin-bottom:0.5em;";
+  msgRow.className = "cwoc-undo-msg-row";
   var msg = document.createElement("span");
-  msg.style.cssText = "font-size:0.9em;color:#1a1208;";
+  msg.className = "cwoc-undo-msg";
   var _msgContent = customMessage || ("🗑️ Deleted: " + (chitTitle || "(Untitled)"));
   if (_msgContent.indexOf('<') !== -1) {
     msg.innerHTML = _msgContent;
@@ -1803,16 +1809,16 @@ function _showDeleteUndoToast(chitId, chitTitle, onExpire, onUndo, customMessage
   }
   var undoBtn = document.createElement("button");
   undoBtn.textContent = "Undo";
-  undoBtn.style.cssText = "padding:4px 12px;cursor:pointer;font-weight:bold;border:1px solid #8b5a2b;border-radius:4px;background:#f5e6cc;color:#1a1208;font-family:inherit;";
+  undoBtn.className = "cwoc-undo-btn";
   msgRow.appendChild(msg);
   msgRow.appendChild(undoBtn);
   toast.appendChild(msgRow);
 
-  // Timer bar (HST-style)
+  // Timer bar
   var barOuter = document.createElement("div");
-  barOuter.style.cssText = "width:100%;height:6px;background:#f5e6cc;border:1px solid #8b4513;border-radius:4px;overflow:hidden;";
+  barOuter.className = "cwoc-undo-bar-outer";
   var barInner = document.createElement("div");
-  barInner.style.cssText = "height:100%;width:100%;background:linear-gradient(90deg,#d4af37 0%,#c8965a 60%,#8b4513 100%);transition:width 0.1s linear;border-radius:3px;";
+  barInner.className = "cwoc-undo-bar-inner";
   barOuter.appendChild(barInner);
   toast.appendChild(barOuter);
 

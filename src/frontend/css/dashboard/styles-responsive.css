@@ -1113,3 +1113,53 @@
         font-size: 1.3em;
     }
 }
+
+/* ── Undo Toasts: Mobile ──────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+    .cwoc-undo-toast,
+    .email-undo-toast,
+    .email-undo-send-toast {
+        bottom: 16px;
+        left: 12px;
+        right: 12px;
+        transform: none;
+        min-width: 0;
+        max-width: none;
+        width: auto;
+    }
+
+    .cwoc-undo-toast .cwoc-undo-btn,
+    .email-undo-btn,
+    .email-undo-send-toast .email-undo-btn {
+        min-height: 44px;
+        padding: 10px 18px;
+        font-size: 1em;
+    }
+
+    .cwoc-undo-toast .cwoc-undo-bar-outer,
+    .email-undo-bar-outer,
+    .email-undo-send-toast .email-undo-bar-outer {
+        height: 8px;
+    }
+}
+
+@media (max-width: 480px) {
+    .cwoc-undo-toast,
+    .email-undo-toast,
+    .email-undo-send-toast {
+        bottom: 12px;
+        left: 8px;
+        right: 8px;
+        padding: 0.6em 0.8em 0.4em;
+    }
+
+    .cwoc-undo-toast .cwoc-undo-msg-row,
+    .email-undo-msg-row {
+        gap: 0.5em;
+    }
+
+    .cwoc-undo-toast .cwoc-undo-msg,
+    .email-undo-msg {
+        font-size: 0.85em;
+    }
+}

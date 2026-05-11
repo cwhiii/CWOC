@@ -1,11 +1,12 @@
 """Notification API routes for the CWOC backend.
 
-Provides endpoints for listing, updating, and dismissing sharing notifications.
+Provides endpoints for listing, creating, updating, and dismissing notifications.
 Also provides the helper function _create_share_notifications() used by
 routes/chits.py and routes/sharing.py to create notifications when shares change.
 
 Routes:
   GET    /api/notifications                — list notifications for authenticated user
+  POST   /api/notifications                — create a custom notification (with optional delivery_target)
   PATCH  /api/notifications/{id}           — accept or decline a notification (syncs RSVP)
   DELETE /api/notifications/{id}           — dismiss a notification
 """
@@ -84,27 +85,97 @@ def _create_share_notifications(cursor, chit_id, chit_title, owner_display_name,
 # ═══════════════════════════════════════════════════════════════════════════
 
 @notifications_router.get("/api/notifications")
-def list_notifications(request: Request):
-    """List all notifications for the authenticated user, newest first."""
+def list_notifications(request: Request, device: str = None):
+    """List all notifications for the authenticated user, newest first.
+
+    Query params:
+        device: "mobile" or "desktop". When provided, notifications with a
+                delivery_target that doesn't match are excluded. E.g. if
+                device=mobile, notifications with delivery_target='desktop'
+                are hidden (they'll appear next time a desktop session fetches).
+    """
     user_id = request.state.user_id
     conn = None
     try:
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         cursor.execute(
-            """SELECT id, user_id, chit_id, chit_title, owner_display_name,
-                      notification_type, status, created_datetime
-               FROM notifications
-               WHERE user_id = ?
-               ORDER BY created_datetime DESC""",
+            """SELECT n.id, n.user_id, n.chit_id, n.chit_title, n.owner_display_name,
+                      n.notification_type, n.status, n.created_datetime,
+                      n.delivery_target,
+                      c.due_datetime, c.start_datetime
+               FROM notifications n
+               LEFT JOIN chits c ON c.id = n.chit_id
+               WHERE n.user_id = ?
+               ORDER BY n.created_datetime DESC""",
             (user_id,),
         )
         rows = cursor.fetchall()
         columns = [col[0] for col in cursor.description]
-        return [dict(zip(columns, row)) for row in rows]
+        results = [dict(zip(columns, row)) for row in rows]
+
+        # Filter by device target: exclude notifications meant for a different device
+        if device:
+            results = [
+                n for n in results
+                if not n.get("delivery_target") or n["delivery_target"] == device
+            ]
+
+        return results
     except Exception as e:
         logger.error(f"Error listing notifications: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to list notifications: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# POST /api/notifications
+# ═══════════════════════════════════════════════════════════════════════════
+
+@notifications_router.post("/api/notifications")
+def create_notification(body: dict, request: Request):
+    """Create a custom notification for the authenticated user.
+
+    Body: {
+        "message": "Reminder text",
+        "chit_id": "optional-chit-id",
+        "delivery_target": "desktop" | "mobile" | null
+    }
+
+    Used for self-reminders like "notify me next time I'm on desktop."
+    """
+    user_id = request.state.user_id
+    message = body.get("message", "").strip()
+    chit_id = body.get("chit_id") or ""
+    delivery_target = body.get("delivery_target")
+
+    if not message:
+        raise HTTPException(status_code=400, detail="message is required")
+
+    if delivery_target and delivery_target not in ("desktop", "mobile"):
+        raise HTTPException(status_code=400, detail="delivery_target must be 'desktop', 'mobile', or null")
+
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        notif_id = str(uuid4())
+        now = datetime.utcnow().isoformat()
+
+        cursor.execute(
+            """INSERT INTO notifications
+               (id, user_id, chit_id, chit_title, owner_display_name,
+                notification_type, status, created_datetime, delivery_target)
+               VALUES (?, ?, ?, ?, ?, 'reminder', 'pending', ?, ?)""",
+            (notif_id, user_id, chit_id, message, "", now, delivery_target),
+        )
+        conn.commit()
+        return {"id": notif_id, "message": "Notification created"}
+    except Exception as e:
+        logger.error(f"Error creating notification: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to create notification: {str(e)}")
     finally:
         if conn:
             conn.close()

@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <link rel="icon" type="image/x-icon" href="/static/cwod_logo-favicon.png" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Notifications — C.W.'s Omni Chits</title>
+    <!-- PWA -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#8b5a2b" />
+    <link rel="apple-touch-icon" href="/static/cwoc-icon-192.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <link rel="stylesheet" href="/frontend/css/shared/shared-page.css" />
+    <link rel="stylesheet" href="/frontend/css/shared/shared-calculator.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" />
+    <style>
+        .col-title { max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: bold; }
+        .col-title a { color: #4a2c2a; text-decoration: none; }
+        .col-title a:hover { text-decoration: underline; }
+        .col-actions { white-space: nowrap; }
+        .action-cell { display: flex; gap: 6px; align-items: center; }
+        .notif-status-pending { color: #8b5a2b; font-weight: bold; }
+        .notif-status-accepted { color: #2e7d32; }
+        .notif-status-declined { color: #c62828; }
+    </style>
+</head>
+<body data-page-title="Notifications" data-page-icon="🔔" data-show-nav="notifications">
+    <div class="settings-panel">
+        <div class="cwoc-toolbar">
+            <div id="notif-count" style="font-size:0.9em;opacity:0.7;"></div>
+        </div>
+        <div id="notif-table-wrap"></div>
+    </div>
+    <script src="/frontend/js/shared/shared-auth.js"></script>
+    <script src="/frontend/js/shared/shared-utils.js"></script>
+    <script src="/frontend/js/shared/shared-touch.js"></script>
+    <script src="/frontend/js/shared/shared-checklist.js"></script>
+    <script src="/frontend/js/shared/shared-sort.js"></script>
+    <script src="/frontend/js/shared/shared-indicators.js"></script>
+    <script src="/frontend/js/shared/shared-calendar.js"></script>
+    <script src="/frontend/js/shared/shared-tags.js"></script>
+    <script src="/frontend/js/shared/shared-recurrence.js"></script>
+    <script src="/frontend/js/shared/shared-geocoding.js"></script>
+    <script src="/frontend/js/shared/shared-qr.js"></script>
+    <script src="/frontend/js/shared/shared-hotkeys.js"></script>
+    <script src="/frontend/js/shared/shared-mobile.js"></script>
+    <script src="/frontend/js/shared/shared-weather.js"></script>
+    <script src="/frontend/js/shared/shared-alarms.js"></script>
+    <script src="/frontend/js/shared/shared-habits.js"></script>
+    <script src="/frontend/js/shared/shared.js"></script>
+    <script src="/frontend/js/shared/shared-calculator.js"></script>
+    <script src="/frontend/js/pages/shared-page.js"></script>
+    <script>
+        const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+        function fmtDateTime(iso) {
+            if (!iso) return '—';
+            var d = new Date(iso);
+            if (isNaN(d.getTime())) return '—';
+            return MONTHS[d.getMonth()] + '-' + String(d.getDate()).padStart(2,'0') + ' ' + String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+        }
+
+        let notifData = [];
+
+        async function respondNotification(notifId, status) {
+            try {
+                var resp = await fetch('/api/notifications/' + encodeURIComponent(notifId), {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: status })
+                });
+                if (resp.ok) loadNotifications();
+            } catch (e) { console.error('Failed to respond:', e); }
+        }
+
+        async function dismissNotification(notifId) {
+            try {
+                var resp = await fetch('/api/notifications/' + encodeURIComponent(notifId), { method: 'DELETE' });
+                if (resp.ok) loadNotifications();
+            } catch (e) { console.error('Failed to dismiss:', e); }
+        }
+
+        async function loadNotifications() {
+            var wrap = document.getElementById('notif-table-wrap');
+            var countEl = document.getElementById('notif-count');
+            try {
+                var resp = await fetch('/api/notifications');
+                if (!resp.ok) { wrap.innerHTML = '<p style="color:#a33;">Failed to load.</p>'; return; }
+                notifData = await resp.json();
+                // Sort: pending first, then by date descending
+                notifData.sort(function(a, b) {
+                    if (a.status === 'pending' && b.status !== 'pending') return -1;
+                    if (b.status === 'pending' && a.status !== 'pending') return 1;
+                    return (b.created_datetime || '').localeCompare(a.created_datetime || '');
+                });
+                var pendingCount = notifData.filter(function(n) { return n.status === 'pending'; }).length;
+                countEl.textContent = notifData.length + ' notification' + (notifData.length !== 1 ? 's' : '') + (pendingCount > 0 ? ' (' + pendingCount + ' pending)' : '');
+                if (notifData.length === 0) { wrap.innerHTML = '<div class="cwoc-empty">No notifications.</div>'; return; }
+                renderTable(wrap, notifData);
+            } catch (e) { wrap.innerHTML = '<p style="color:#a33;">Error loading notifications.</p>'; }
+        }
+
+        function renderTable(wrap, notifications) {
+            var table = document.createElement('table');
+            table.className = 'cwoc-table';
+            var thead = document.createElement('thead');
+            thead.innerHTML = '<tr><th>Chit</th><th>Type</th><th>From</th><th>Status</th><th>Date</th><th class="col-actions">Actions</th></tr>';
+            table.appendChild(thead);
+            var tbody = document.createElement('tbody');
+
+            notifications.forEach(function(notif) {
+                var tr = document.createElement('tr');
+
+                // Chit title (linked)
+                var td = document.createElement('td');
+                td.className = 'col-title';
+                var link = document.createElement('a');
+                link.href = '/frontend/html/editor.html?id=' + encodeURIComponent(notif.chit_id);
+                link.textContent = notif.chit_title || '(Untitled)';
+                link.title = notif.chit_title || '';
+                td.appendChild(link);
+                tr.appendChild(td);
+
+                // Type
+                td = document.createElement('td');
+                td.textContent = notif.notification_type === 'assigned' ? 'Assigned' : 'Shared';
+                tr.appendChild(td);
+
+                // From
+                td = document.createElement('td');
+                td.textContent = notif.owner_display_name || '—';
+                tr.appendChild(td);
+
+                // Status
+                td = document.createElement('td');
+                var statusSpan = document.createElement('span');
+                statusSpan.textContent = notif.status.charAt(0).toUpperCase() + notif.status.slice(1);
+                statusSpan.className = 'notif-status-' + notif.status;
+                td.appendChild(statusSpan);
+                tr.appendChild(td);
+
+                // Date
+                td = document.createElement('td');
+                td.textContent = fmtDateTime(notif.created_datetime);
+                tr.appendChild(td);
+
+                // Actions
+                td = document.createElement('td');
+                td.className = 'col-actions';
+                var ad = document.createElement('div');
+                ad.className = 'action-cell';
+
+                if (notif.status === 'pending') {
+                    var acceptBtn = document.createElement('button');
+                    acceptBtn.className = 'cwoc-btn restore';
+                    acceptBtn.innerHTML = '<i class="fas fa-check"></i> Accept';
+                    acceptBtn.onclick = function() { respondNotification(notif.id, 'accepted'); };
+                    ad.appendChild(acceptBtn);
+
+                    var declineBtn = document.createElement('button');
+                    declineBtn.className = 'cwoc-btn danger';
+                    declineBtn.innerHTML = '<i class="fas fa-times"></i> Decline';
+                    declineBtn.onclick = function() { respondNotification(notif.id, 'declined'); };
+                    ad.appendChild(declineBtn);
+                } else {
+                    var dismissBtn = document.createElement('button');
+                    dismissBtn.className = 'cwoc-btn';
+                    dismissBtn.style.cssText = 'background:#e0d4b5;color:#1a1208;border-color:#8b5a2b;';
+                    dismissBtn.innerHTML = '<i class="fas fa-times"></i> Dismiss';
+                    dismissBtn.onclick = function() { dismissNotification(notif.id); };
+                    ad.appendChild(dismissBtn);
+                }
+
+                td.appendChild(ad);
+                tr.appendChild(td);
+                tbody.appendChild(tr);
+            });
+
+            table.appendChild(tbody);
+            wrap.innerHTML = '';
+            wrap.appendChild(table);
+        }
+
+        // Wait for auth to be ready before loading
+        if (typeof waitForAuth === 'function') {
+            waitForAuth().then(function() { loadNotifications(); });
+        } else {
+            loadNotifications();
+        }
+    </script>
+    <script src="/pwa/pwa-register.js"></script>
+</body>
+</html>

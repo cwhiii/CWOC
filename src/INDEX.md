@@ -141,6 +141,7 @@ All migrations run at startup. Each checks if the column/table already exists be
 | `migrate_add_nest_thread_id()` | Add `nest_thread_id` (TEXT DEFAULT NULL) column to chits table for nesting non-email chits into email threads. Uses column-existence-check pattern (`PRAGMA table_info` → check → `ALTER TABLE`). Fully idempotent |
 | `migrate_add_snoozed_until()` | Add `snoozed_until` (TEXT DEFAULT NULL) column to chits table for chit-level snooze. Fully idempotent |
 | `migrate_add_session_lifetime()` | Add `session_lifetime` (TEXT DEFAULT '24') column to settings table for configurable session duration. Fully idempotent |
+| `migrate_add_notification_delivery_target()` | Add `delivery_target` (TEXT) column to notifications table for device-targeted notification delivery (desktop/mobile). Fully idempotent |
 
 ### 1.6 `src/backend/serializers.py` — vCard & CSV
 
@@ -674,11 +675,12 @@ Property-based tests for network access provider configuration. Uses Python stdl
 
 ### 1.30 `src/backend/routes/notifications.py` — Notification API Routes
 
-Provides endpoints for listing, updating, and dismissing sharing notifications. Also provides the helper function `_create_share_notifications()` used by `routes/chits.py` and `routes/sharing.py` to create notifications when shares change.
+Provides endpoints for listing, creating, updating, and dismissing notifications. Also provides the helper function `_create_share_notifications()` used by `routes/chits.py` and `routes/sharing.py` to create notifications when shares change. Supports device-targeted delivery via `delivery_target` column (desktop/mobile filtering).
 
 | Route | Handler | Description |
 |-------|---------|-------------|
-| `GET /api/notifications` | `list_notifications(request)` | List all notifications for the authenticated user, ordered by `created_datetime` DESC (newest first) |
+| `GET /api/notifications` | `list_notifications(request, device)` | List all notifications for the authenticated user, ordered by `created_datetime` DESC. Optional `?device=mobile\|desktop` query param filters out notifications with a non-matching `delivery_target` |
+| `POST /api/notifications` | `create_notification(body, request)` | Create a custom notification (type "reminder") with optional `delivery_target` ("desktop"/"mobile"). Body: `{message, chit_id?, delivery_target?}` |
 | `PATCH /api/notifications/{id}` | `update_notification(notification_id, body, request)` | Accept or decline a notification (`status: "accepted" \| "declined"`); syncs RSVP on the chit's shares entry; verifies notification belongs to requesting user |
 | `DELETE /api/notifications/{id}` | `delete_notification(notification_id, request)` | Dismiss (delete) a notification; verifies notification belongs to requesting user |
 
@@ -1232,10 +1234,12 @@ Inline checklist interactions for dashboard views — toggle, move, cross-chit m
 
 #### shared-sort.js
 
-Manual sort order persistence, drag-to-reorder for chit cards, and post-drag click suppression.
+Manual sort order persistence, drag-to-reorder for chit cards, edge-scroll during drag, and post-drag click suppression.
 
 | Function | Description |
 |----------|-------------|
+| `_edgeScrollUpdate(container, clientY, opts)` | Start/update rAF-based auto-scrolling when pointer is near container edges during drag; falls back to viewport scroll on mobile |
+| `_edgeScrollStop()` | Stop any active edge-scroll animation loop |
 | `_markDragJustEnded()` | Set `window._dragJustEnded` flag to suppress spurious click/dblclick events after a drag operation; auto-clears after the browser's post-drag click fires |
 | *(capture listeners)* | Document-level capture-phase click/dblclick listeners that swallow events on draggable elements while `_dragJustEnded` is true |
 | `MANUAL_ORDER_KEY` | LocalStorage key for persisted manual sort orders |

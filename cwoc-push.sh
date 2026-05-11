@@ -68,19 +68,43 @@ echo "--------------------------------------------------"
 
 # ── Ensure cryptography package is installed in server venv ───────────────
 echo "📦 Ensuring cryptography package..."
-ssh "$SERVER" "/app/venv/bin/pip install cryptography -q"
+ssh -o ConnectTimeout=5 "$SERVER" "/app/venv/bin/pip install cryptography -q" 2>/dev/null
 echo "   ✅ cryptography"
 
 # ── Restart service ───────────────────────────────────────────────────────
 if [[ "$RESTART" == true ]]; then
     echo "🔄 Restarting cwoc.service..."
-    ssh "$SERVER" '
+    ssh -o ConnectTimeout=5 "$SERVER" '
         # Clear Python bytecode cache so fresh .py files are used
+        echo "   🧹 Clearing __pycache__..."
         find /app/src -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null
+        echo "   ✅ Cache cleared"
 
-        systemctl restart cwoc.service
-        if [ $? -eq 0 ]; then
-            echo "   ✅ Service restarted"
+        echo "   🔄 Issuing systemctl restart..."
+        timeout 15 systemctl restart cwoc.service
+        RESTART_RC=$?
+
+        if [ $RESTART_RC -eq 124 ]; then
+            echo "   ⚠️  Restart timed out (15s) — forcing kill..."
+            systemctl kill cwoc.service 2>/dev/null
+            sleep 1
+            systemctl start cwoc.service
+            RESTART_RC=$?
+        fi
+
+        if [ $RESTART_RC -eq 0 ]; then
+            # Wait briefly for the service to stabilize
+            sleep 2
+
+            # Check if it actually stayed running
+            if systemctl is-active --quiet cwoc.service; then
+                echo "   ✅ Service restarted and running"
+            else
+                echo "   ❌ Service restarted but crashed immediately!"
+                echo "   📄 Last 20 log lines:"
+                journalctl -u cwoc.service -n 20 --no-hostname --no-pager
+                exit 1
+            fi
 
             # If tailscaled is installed and was active, ensure it stays up
             if command -v tailscale &>/dev/null; then
@@ -93,12 +117,12 @@ if [[ "$RESTART" == true ]]; then
                 fi
             fi
 
-            # If ntfy is installed, ensure it stays running
+            # If ntfy is installed, ensure it stays running — install if missing
             if command -v ntfy &>/dev/null || [ -f /usr/bin/ntfy ]; then
                 systemctl start ntfy 2>/dev/null
                 echo "   ✅ Ntfy service running"
             else
-                # Install ntfy if not present
+                echo "   📦 Ntfy not found — installing..."
                 ARCH=$(uname -m)
                 case "$ARCH" in
                     x86_64)  ARCH="amd64" ;;
@@ -111,14 +135,15 @@ if [[ "$RESTART" == true ]]; then
                     NTFY_URL="https://github.com/binwiederhier/ntfy/releases/download/${NTFY_VER}/ntfy_${NTFY_VER#v}_linux_${ARCH}.tar.gz"
                     TMP_TAR="/tmp/ntfy.tar.gz"
                     TMP_DIR="/tmp/ntfy-extract"
-                    if wget -q -O "$TMP_TAR" "$NTFY_URL" 2>/dev/null; then
-                        rm -rf "$TMP_DIR" && mkdir -p "$TMP_DIR"
+                    if timeout 30 wget -q -O "$TMP_TAR" "$NTFY_URL" 2>/dev/null; then
+                        rm -rf "$TMP_DIR"
+                        mkdir -p "$TMP_DIR"
                         tar -xzf "$TMP_TAR" -C "$TMP_DIR" 2>/dev/null
                         NTFY_BIN=$(find "$TMP_DIR" -name "ntfy" -type f | head -1)
                         if [ -n "$NTFY_BIN" ]; then
                             cp "$NTFY_BIN" /usr/bin/ntfy
                             chmod +x /usr/bin/ntfy
-                            cat > /etc/systemd/system/ntfy.service <<NTFYEOF
+                            cat > /etc/systemd/system/ntfy.service << NTFYEOF
 [Unit]
 Description=Ntfy Push Notification Server
 After=network.target
@@ -137,14 +162,18 @@ NTFYEOF
                         fi
                         rm -rf "$TMP_TAR" "$TMP_DIR"
                     else
-                        echo "   ℹ️  Ntfy download failed — skipping"
+                        echo "   ⚠️  Ntfy download timed out (30s) — skipping"
                         rm -f "$TMP_TAR"
                     fi
                 fi
             fi
         else
-            echo "   ❌ Restart failed!"
+            echo "   ❌ Restart failed! (exit code $RESTART_RC)"
+            echo "   📄 Service status:"
             systemctl status cwoc.service --no-pager -l
+            echo ""
+            echo "   📄 Last 30 log lines:"
+            journalctl -u cwoc.service -n 30 --no-hostname --no-pager
         fi
     '
 

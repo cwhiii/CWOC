@@ -24,8 +24,10 @@ function _setAlarmsMode(mode) {
   localStorage.setItem('cwoc_alarmsViewMode', mode);
   const listBtn = document.getElementById('alarms-mode-list');
   const indBtn = document.getElementById('alarms-mode-independent');
+  const notifBtn = document.getElementById('alarms-mode-notifications');
   if (listBtn) { listBtn.style.background = mode === 'list' ? 'ivory' : ''; listBtn.style.color = mode === 'list' ? '#3b1f0a' : ''; }
   if (indBtn) { indBtn.style.background = mode === 'independent' ? 'ivory' : ''; indBtn.style.color = mode === 'independent' ? '#3b1f0a' : ''; }
+  if (notifBtn) { notifBtn.style.background = mode === 'notifications' ? 'ivory' : ''; notifBtn.style.color = mode === 'notifications' ? '#3b1f0a' : ''; }
   if (mode === 'independent') {
     _fetchIndependentAlerts().then(() => displayChits());
   } else {
@@ -109,6 +111,9 @@ async function _deleteIndependentAlert(id) {
 function displayAlarmsView(chitsToDisplay) {
   if (_alarmsViewMode === 'independent') {
     return _displayIndependentAlertsBoard();
+  }
+  if (_alarmsViewMode === 'notifications') {
+    return _displayNotificationsView();
   }
 
   const chitList = document.getElementById("chit-list");
@@ -938,3 +943,232 @@ function _renderSaLaps(container, laps) {
   });
 }
 
+
+/* ── Notifications View (Alarms tab mode) ─────────────────────────────────── */
+
+async function _displayNotificationsView() {
+  var chitList = document.getElementById('chit-list');
+  chitList.innerHTML = '';
+
+  var container = document.createElement('div');
+  container.className = 'notifications-view';
+  container.style.cssText = 'padding:12px;';
+
+  try {
+    var deviceParam = (typeof _isMobileOverlay === 'function' && _isMobileOverlay()) ? '?device=mobile' : '?device=desktop';
+    var resp = await fetch('/api/notifications' + deviceParam);
+    if (!resp.ok) { chitList.innerHTML = '<div class="cwoc-empty">Failed to load notifications.</div>'; return; }
+    var allNotifs = await resp.json();
+
+    // Sort: pending first, then by date descending
+    allNotifs.sort(function(a, b) {
+      if (a.status === 'pending' && b.status !== 'pending') return -1;
+      if (b.status === 'pending' && a.status !== 'pending') return 1;
+      return (b.created_datetime || '').localeCompare(a.created_datetime || '');
+    });
+
+    if (allNotifs.length === 0) {
+      chitList.innerHTML = '<div class="cwoc-empty">No notifications.</div>';
+      return;
+    }
+
+    var pendingCount = allNotifs.filter(function(n) { return n.status === 'pending'; }).length;
+    var header = document.createElement('div');
+    header.style.cssText = 'font-size:0.9em;opacity:0.7;margin-bottom:12px;';
+    header.textContent = allNotifs.length + ' notification' + (allNotifs.length !== 1 ? 's' : '') + (pendingCount > 0 ? ' (' + pendingCount + ' pending)' : '');
+    container.appendChild(header);
+
+    allNotifs.forEach(function(notif) {
+      var card = document.createElement('div');
+      card.className = 'chit-card';
+      card.style.cssText = 'margin-bottom:6px;padding:8px 14px;display:flex;align-items:center;gap:10px;cursor:pointer;';
+
+      // All info on one line, left side
+      var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      function _fmtD(iso) { var d = new Date(iso); if (isNaN(d.getTime())) return ''; return d.getFullYear() + '-' + months[d.getMonth()] + '-' + String(d.getDate()).padStart(2,'0'); }
+
+      // Reminder-type notifications (desktop-deferred, self-created)
+      if (notif.notification_type === 'reminder') {
+        var reminderTitle = document.createElement('span');
+        reminderTitle.style.cssText = 'font-weight:bold;color:#4a2c2a;white-space:nowrap;';
+        reminderTitle.textContent = '📌 ' + (notif.chit_title || 'Reminder');
+        card.appendChild(reminderTitle);
+
+        if (notif.chit_id) {
+          card.addEventListener('dblclick', function() {
+            if (typeof storePreviousState === 'function') storePreviousState();
+            window.location.href = '/editor?id=' + encodeURIComponent(notif.chit_id);
+          });
+        }
+
+        if (notif.delivery_target) {
+          var sep = document.createElement('span');
+          sep.style.cssText = 'opacity:0.4;';
+          sep.textContent = '·';
+          card.appendChild(sep);
+          var targetSpan = document.createElement('span');
+          targetSpan.style.cssText = 'font-size:0.8em;opacity:0.7;white-space:nowrap;';
+          targetSpan.textContent = notif.delivery_target + '-only';
+          card.appendChild(targetSpan);
+        }
+
+        if (notif.created_datetime) {
+          var sentDate = _fmtD(notif.created_datetime);
+          if (sentDate) {
+            var sep2 = document.createElement('span');
+            sep2.style.cssText = 'opacity:0.4;';
+            sep2.textContent = '·';
+            card.appendChild(sep2);
+            var sentSpan = document.createElement('span');
+            sentSpan.style.cssText = 'font-size:0.8em;opacity:0.7;white-space:nowrap;';
+            sentSpan.textContent = sentDate;
+            card.appendChild(sentSpan);
+          }
+        }
+
+        var spacer = document.createElement('div');
+        spacer.style.cssText = 'flex:1;';
+        card.appendChild(spacer);
+
+        var dismissBtn = document.createElement('button');
+        dismissBtn.className = 'action-button';
+        dismissBtn.style.cssText = 'font-size:0.8em;padding:3px 10px;margin:0;';
+        dismissBtn.textContent = 'Dismiss';
+        dismissBtn.onclick = function() { _dismissNotifInView(notif.id); };
+        card.appendChild(dismissBtn);
+
+        container.appendChild(card);
+        return;
+      }
+
+      card.addEventListener('dblclick', function() {
+        if (typeof storePreviousState === 'function') storePreviousState();
+        window.location.href = '/editor?id=' + encodeURIComponent(notif.chit_id);
+      });
+
+      var titleLink = document.createElement('a');
+      titleLink.href = '/editor?id=' + encodeURIComponent(notif.chit_id);
+      titleLink.textContent = notif.chit_title || '(Untitled)';
+      titleLink.style.cssText = 'font-weight:bold;color:#4a2c2a;text-decoration:none;white-space:nowrap;';
+      titleLink.onclick = function(e) { e.preventDefault(); if (typeof storePreviousState === 'function') storePreviousState(); window.location.href = this.href; };
+      card.appendChild(titleLink);
+
+      // Separator
+      var sep1 = document.createElement('span');
+      sep1.style.cssText = 'opacity:0.4;';
+      sep1.textContent = '·';
+      card.appendChild(sep1);
+
+      // Type + from
+      var fromSpan = document.createElement('span');
+      fromSpan.style.cssText = 'font-size:0.8em;opacity:0.7;white-space:nowrap;';
+      var typeWord = notif.notification_type === 'assigned' ? 'Assigned' : 'Invited';
+      fromSpan.textContent = typeWord + ' by ' + (notif.owner_display_name || '?');
+      card.appendChild(fromSpan);
+
+      // Sent date
+      if (notif.created_datetime) {
+        var sentDate = _fmtD(notif.created_datetime);
+        if (sentDate) {
+          var sep2 = document.createElement('span');
+          sep2.style.cssText = 'opacity:0.4;';
+          sep2.textContent = '·';
+          card.appendChild(sep2);
+          var sentSpan = document.createElement('span');
+          sentSpan.style.cssText = 'font-size:0.8em;opacity:0.7;white-space:nowrap;';
+          sentSpan.textContent = 'Sent: ' + sentDate;
+          card.appendChild(sentSpan);
+        }
+      }
+
+      // Chit due/start date
+      if (notif.due_datetime) {
+        var dueStr = _fmtD(notif.due_datetime);
+        if (dueStr) {
+          var sep3 = document.createElement('span');
+          sep3.style.cssText = 'opacity:0.4;';
+          sep3.textContent = '·';
+          card.appendChild(sep3);
+          var dueSpan = document.createElement('span');
+          dueSpan.style.cssText = 'font-size:0.8em;opacity:0.7;white-space:nowrap;';
+          dueSpan.textContent = 'Due: ' + dueStr;
+          card.appendChild(dueSpan);
+        }
+      }
+      if (notif.start_datetime) {
+        var startStr = _fmtD(notif.start_datetime);
+        if (startStr) {
+          var sep4 = document.createElement('span');
+          sep4.style.cssText = 'opacity:0.4;';
+          sep4.textContent = '·';
+          card.appendChild(sep4);
+          var startSpan = document.createElement('span');
+          startSpan.style.cssText = 'font-size:0.8em;opacity:0.7;white-space:nowrap;';
+          startSpan.textContent = 'Starts: ' + startStr;
+          card.appendChild(startSpan);
+        }
+      }
+
+      // Spacer to push toggle right
+      var spacer = document.createElement('div');
+      spacer.style.cssText = 'flex:1;';
+      card.appendChild(spacer);
+
+      // Right side: pill toggle
+      var pill = document.createElement('div');
+      pill.className = 'cwoc-pill-toggle';
+      pill.style.cssText = 'font-size:0.8em;flex-shrink:0;';
+
+      var acceptOpt = document.createElement('span');
+      acceptOpt.dataset.val = 'accepted';
+      acceptOpt.textContent = '✓ Accept';
+      acceptOpt.className = notif.status === 'accepted' ? 'pill-active' : (notif.status === 'pending' ? '' : 'pill-inactive');
+      acceptOpt.onclick = function() { _respondNotifInView(notif.id, 'accepted'); };
+      pill.appendChild(acceptOpt);
+
+      var declineOpt = document.createElement('span');
+      declineOpt.dataset.val = 'declined';
+      declineOpt.textContent = '✕ Decline';
+      declineOpt.className = notif.status === 'declined' ? 'pill-active' : (notif.status === 'pending' ? '' : 'pill-inactive');
+      declineOpt.onclick = function() { _respondNotifInView(notif.id, 'declined'); };
+      pill.appendChild(declineOpt);
+
+      card.appendChild(pill);
+
+      container.appendChild(card);
+    });
+
+    chitList.appendChild(container);
+  } catch (e) {
+    chitList.innerHTML = '<div class="cwoc-empty">Error loading notifications.</div>';
+  }
+}
+
+async function _respondNotifInView(notifId, status) {
+  try {
+    var resp = await fetch('/api/notifications/' + encodeURIComponent(notifId), {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: status })
+    });
+    if (resp.ok) {
+      _displayNotificationsView();
+      // Update sidebar/profile badge
+      if (typeof _fetchNotifications === 'function') _fetchNotifications();
+      if (typeof _fetchProfileNotifications === 'function') _fetchProfileNotifications();
+    }
+  } catch (e) { console.error('Failed to respond to notification:', e); }
+}
+
+async function _dismissNotifInView(notifId) {
+  try {
+    var resp = await fetch('/api/notifications/' + encodeURIComponent(notifId), {
+      method: 'DELETE'
+    });
+    if (resp.ok) {
+      _displayNotificationsView();
+      if (typeof _fetchNotifications === 'function') _fetchNotifications();
+      if (typeof _fetchProfileNotifications === 'function') _fetchProfileNotifications();
+    }
+  } catch (e) { console.error('Failed to dismiss notification:', e); }
+}

@@ -1,0 +1,1 @@
+Reverted all time picker and date/time hiding experiments. Time inputs are back to plain text fields with inputmode="numeric" — values display exactly as stored (HH:MM, 24-hour). No Flatpickr on time inputs, no CSS hiding of date/time fields. The dates zone now shows all relevant inputs for the active mode without any hide/show magic.
