@@ -558,6 +558,7 @@ button.delete:hover {
     cursor: pointer;
     min-height: 44px;
     font-family: 'Lora', Georgia, serif;
+    overflow: hidden;
 }
 
 

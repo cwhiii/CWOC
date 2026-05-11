@@ -13,6 +13,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <link rel="stylesheet" href="/frontend/css/shared/shared-page.css" />
     <link rel="stylesheet" href="/frontend/css/shared/shared-calculator.css" />
+    <link rel="stylesheet" href="/frontend/css/shared/shared-timepicker.css" />
     <link rel="stylesheet" href="/frontend/css/shared/shared-rules.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" />
     <style>
@@ -60,7 +61,7 @@
                 </div>
                 <div style="margin-top:8px;">
                     <label for="schedule-time">Time of Day</label>
-                    <input type="time" id="schedule-time" value="09:00" />
+                    <input type="text" id="schedule-time" value="09:00" readonly style="cursor:pointer;text-align:center;" />
                 </div>
             </div>
             <div class="schedule-config" id="ha-state-change-config">
@@ -131,6 +132,7 @@
     <script src="/frontend/js/shared/shared-recurrence.js"></script>
     <script src="/frontend/js/shared/shared-geocoding.js"></script>
     <script src="/frontend/js/shared/shared-qr.js"></script>
+    <script src="/frontend/js/shared/shared-timepicker.js"></script>
     <script src="/frontend/js/shared/shared-hotkeys.js"></script>
     <script src="/frontend/js/shared/shared-mobile.js"></script>
     <script src="/frontend/js/shared/shared-weather.js"></script>

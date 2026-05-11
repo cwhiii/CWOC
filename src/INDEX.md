@@ -1385,6 +1385,14 @@ QR code display modal — single source of truth for all QR display across the a
 |----------|-------------|
 | `showQRModal(opts)` | Show a QR code in a full-screen modal overlay; accepts title, data, ecl, info, onClose |
 
+#### shared-timepicker.js
+
+iOS-style drum roller time picker. Mobile-friendly scroll-snap time picker that mimics native iOS drum roller UX. Supports 12-hour and 24-hour modes based on CWOC settings. No seconds — hours and minutes only. Opens as a bottom-sheet on mobile, centered modal on desktop.
+
+| Symbol | Description |
+|----------|-------------|
+| `cwocTimePicker.open(inputEl, options)` | Open the drum roller picker for the given input element. Reads current value, lets user scroll to select, writes back "HH:MM" (24h) on confirm. Options: `{ minuteStep }` |
+
 #### shared-hotkeys.js
 
 Universal hotkey dispatch loaded by all pages. Contains the tab map and action key handlers. On the dashboard, tab keys call `filterChits()` directly; on secondary pages, they navigate to `/?tab=X` via `cwoc_jump_tab` localStorage. Change the key mappings here and they apply everywhere.
@@ -2007,7 +2015,6 @@ Date mode system, recurrence picker, time picker dropdown, and date-clearing hel
 | `_buildRecurrenceRule()` | Build a recurrence rule object from the current form state (or null if repeat disabled) |
 | `_loadRecurrenceRule(rule)` | Populate the recurrence UI from a saved recurrence rule object |
 | `_loadSnapSetting()` | Load the time-picker snap interval from user settings |
-| `_showTimeDropdown(inputEl)` | Show a snap-aligned time dropdown below a time input element |
 | `clearStartAndEndDates()` | Clear all start/end date and time input fields |
 | `clearDueDate()` | Clear the due date and time input fields |
 | `onHabitToggle()` | Handle 🎯 Habit button toggle in the Task zone header — when checked: auto-enable Repeat with Daily if not already on, reveal habit controls, lock Repeat, force all-day, hide "None" date option; when unchecked: hide controls, unlock Repeat, restore date options |
@@ -3142,6 +3149,19 @@ Rules-specific styles used by `rules-manager.html` and `rule-editor.html`. Depen
 | KV Editor (`.ha-kv-editor`) | Key-value pair editor for service_data and event_data with add/remove row buttons |
 | JSON Preview (`.ha-json-preview`) | Read-only JSON preview panel with monospace font and parchment background |
 | Entity/Service Picker Modal (`.ha-picker-modal`) | Searchable modal for selecting HA entities or services with filter input, scrollable list, and domain grouping |
+
+#### shared-timepicker.css
+iOS-style drum roller time picker styles. Mobile-first bottom-sheet on phones, centered modal on desktop. Parchment theme with scroll-snap drums, fade masks, highlight bar, and animated open/close transitions.
+
+| Section | Description |
+|---------|-------------|
+| Overlay (`.cwoc-tp-overlay`) | Fixed full-screen backdrop with fade animation |
+| Modal (`.cwoc-tp-modal`) | Bottom-sheet on mobile, centered card on desktop with slide/scale transitions |
+| Drums (`.cwoc-tp-drums`, `.cwoc-tp-drum`) | Flex container for hour/minute/AM-PM scroll columns with fade masks |
+| Scroller (`.cwoc-tp-scroller`) | Scroll-snap container with hidden scrollbars and touch momentum |
+| Items (`.cwoc-tp-item`) | Individual time values with selected state scaling and opacity transitions |
+| Highlight (`.cwoc-tp-highlight`) | Center-aligned selection indicator bar |
+| Buttons (`.cwoc-tp-buttons`) | Cancel / Now / Set button row |
 
 ### 3.2 Dashboard (`src/frontend/css/dashboard/`)
 

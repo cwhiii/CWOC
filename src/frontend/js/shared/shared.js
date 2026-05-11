@@ -2377,8 +2377,8 @@ function initMobileSidebar() {
   if (!sidebar.querySelector('.sidebar-close-btn')) {
     const closeBtn = document.createElement('button');
     closeBtn.className = 'sidebar-close-btn';
-    closeBtn.innerHTML = '✕ Close';
-    closeBtn.setAttribute('aria-label', 'Close sidebar');
+    closeBtn.innerHTML = '<span style="font-size:2.2em;font-weight:900;line-height:0;vertical-align:middle;overflow:hidden;">⇤</span> Hide Sidebar';
+    closeBtn.setAttribute('aria-label', 'Hide sidebar');
     closeBtn.addEventListener('click', function () {
       _onSidebarBackdropClick();
     });
@@ -2489,7 +2489,7 @@ function initMobileActionsModal() {
   modal.innerHTML = '<div class="mobile-actions-modal-content">' +
     '<h3>Actions</h3>' +
     '<div class="mobile-actions-list"></div>' +
-    '<button class="mobile-actions-close">✕ Close</button>' +
+    '<button class="mobile-actions-close"><span style="font-size:2.2em;font-weight:900;line-height:0;vertical-align:middle;overflow:hidden;">⇤</span> Hide Sidebar</button>' +
     '</div>';
   document.body.appendChild(modal);
 
@@ -2665,7 +2665,7 @@ function initMobileViewsButton() {
 
   var closeBtn = document.createElement('button');
   closeBtn.className = 'mobile-views-close';
-  closeBtn.textContent = '✕ Close';
+  closeBtn.innerHTML = '<span style="font-size:2.2em;font-weight:900;line-height:0;vertical-align:middle;overflow:hidden;">⇤</span> Hide Sidebar';
   closeBtn.addEventListener('click', function () { _closeViewsPanel(); });
   panel.appendChild(closeBtn);
 
@@ -2753,7 +2753,7 @@ function initMobileReferenceClose() {
 
   var btn = document.createElement('button');
   btn.className = 'ref-close-btn';
-  btn.textContent = '✕ Close';
+  btn.innerHTML = '<span style="font-size:2.2em;font-weight:900;line-height:0;vertical-align:middle;overflow:hidden;">⇤</span> Hide Sidebar';
   btn.style.cssText = 'display:block;width:100%;margin-top:12px;padding:10px;' +
     'font-size:1em;font-weight:bold;font-family:Lora, Georgia, serif;' +
     'background:#8b5a2b;color:#fff8e1;border:1px solid #5a3f2a;border-radius:4px;' +
@@ -4020,8 +4020,10 @@ function _quickAlertShowEditor(type) {
     var now = new Date(); now.setMinutes(now.getMinutes() + 1);
     var defTime = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
     var timeInput = document.createElement('input');
-    timeInput.type = 'time'; timeInput.value = defTime;
-    timeInput.style.cssText = 'width:100%;padding:6px 8px;font-family:inherit;font-size:1.1em;font-weight:bold;border:1px solid #8b5a2b;border-radius:4px;box-sizing:border-box;background:#f5e6cc;';
+    timeInput.type = 'text'; timeInput.value = defTime; timeInput.readOnly = true;
+    timeInput.style.cssText = 'width:100%;padding:6px 8px;font-family:inherit;font-size:1.1em;font-weight:bold;border:1px solid #8b5a2b;border-radius:4px;box-sizing:border-box;background:#f5e6cc;cursor:pointer;text-align:center;';
+    timeInput.addEventListener('mousedown', function(e) { e.preventDefault(); });
+    timeInput.addEventListener('click', function() { if (typeof cwocTimePicker !== 'undefined') cwocTimePicker.open(timeInput); });
     formDiv.appendChild(timeInput);
     var daysDiv = document.createElement('div');
     daysDiv.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;font-size:0.9em;';
@@ -4038,7 +4040,7 @@ function _quickAlertShowEditor(type) {
       var days = []; daysDiv.querySelectorAll('input:checked').forEach(function(cb) { days.push(cb.value); });
       return { _type: 'alarm', name: nameInput.value.trim(), time: timeInput.value, days: days, enabled: true };
     };
-    setTimeout(function() { timeInput.focus(); timeInput.select(); }, 50);
+    setTimeout(function() { if (typeof cwocTimePicker !== 'undefined') cwocTimePicker.open(timeInput); }, 100);
   } else if (type === 'timer') {
     var nameInput = document.createElement('input');
     nameInput.type = 'text'; nameInput.placeholder = 'Timer name (optional)';

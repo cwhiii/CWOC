@@ -946,7 +946,13 @@ function _renderSaLaps(container, laps) {
 
 /* ── Notifications View (Alarms tab mode) ─────────────────────────────────── */
 
+var _notifViewRendering = false;
+
 async function _displayNotificationsView() {
+  // Prevent duplicate concurrent renders
+  if (_notifViewRendering) return;
+  _notifViewRendering = true;
+
   var chitList = document.getElementById('chit-list');
   chitList.innerHTML = '';
 
@@ -960,188 +966,231 @@ async function _displayNotificationsView() {
     if (!resp.ok) { chitList.innerHTML = '<div class="cwoc-empty">Failed to load notifications.</div>'; return; }
     var allNotifs = await resp.json();
 
-    // Sort: pending first, then by date descending
-    allNotifs.sort(function(a, b) {
-      if (a.status === 'pending' && b.status !== 'pending') return -1;
-      if (b.status === 'pending' && a.status !== 'pending') return 1;
-      return (b.created_datetime || '').localeCompare(a.created_datetime || '');
-    });
-
     if (allNotifs.length === 0) {
       chitList.innerHTML = '<div class="cwoc-empty">No notifications.</div>';
       return;
     }
 
-    var pendingCount = allNotifs.filter(function(n) { return n.status === 'pending'; }).length;
-    var header = document.createElement('div');
-    header.style.cssText = 'font-size:0.9em;opacity:0.7;margin-bottom:12px;';
-    header.textContent = allNotifs.length + ' notification' + (allNotifs.length !== 1 ? 's' : '') + (pendingCount > 0 ? ' (' + pendingCount + ' pending)' : '');
-    container.appendChild(header);
+    // Split into unread (pending) and addressed (everything else)
+    var unread = allNotifs.filter(function(n) { return n.status === 'pending'; });
+    var addressed = allNotifs.filter(function(n) { return n.status !== 'pending'; });
 
-    allNotifs.forEach(function(notif) {
-      var card = document.createElement('div');
-      card.className = 'chit-card';
-      card.style.cssText = 'margin-bottom:6px;padding:8px 14px;display:flex;align-items:center;gap:10px;cursor:pointer;';
+    // Sort both by most recent first
+    var _sortByDate = function(a, b) { return (b.created_datetime || '').localeCompare(a.created_datetime || ''); };
+    unread.sort(_sortByDate);
+    addressed.sort(_sortByDate);
 
-      // All info on one line, left side
-      var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-      function _fmtD(iso) { var d = new Date(iso); if (isNaN(d.getTime())) return ''; return d.getFullYear() + '-' + months[d.getMonth()] + '-' + String(d.getDate()).padStart(2,'0'); }
+    // ── Unread section ──
+    if (unread.length > 0) {
+      var unreadHeader = document.createElement('div');
+      unreadHeader.style.cssText = 'font-size:0.95em;font-weight:bold;color:#4a2c2a;margin-bottom:8px;';
+      unreadHeader.textContent = '📬 Unread (' + unread.length + ')';
+      container.appendChild(unreadHeader);
 
-      // Reminder-type notifications (desktop-deferred, self-created)
-      if (notif.notification_type === 'reminder') {
-        var reminderTitle = document.createElement('span');
-        reminderTitle.style.cssText = 'font-weight:bold;color:#4a2c2a;white-space:nowrap;';
-        reminderTitle.textContent = '📌 ' + (notif.chit_title || 'Reminder');
-        card.appendChild(reminderTitle);
-
-        if (notif.chit_id) {
-          card.addEventListener('dblclick', function() {
-            if (typeof storePreviousState === 'function') storePreviousState();
-            window.location.href = '/editor?id=' + encodeURIComponent(notif.chit_id);
-          });
-        }
-
-        if (notif.delivery_target) {
-          var sep = document.createElement('span');
-          sep.style.cssText = 'opacity:0.4;';
-          sep.textContent = '·';
-          card.appendChild(sep);
-          var targetSpan = document.createElement('span');
-          targetSpan.style.cssText = 'font-size:0.8em;opacity:0.7;white-space:nowrap;';
-          targetSpan.textContent = notif.delivery_target + '-only';
-          card.appendChild(targetSpan);
-        }
-
-        if (notif.created_datetime) {
-          var sentDate = _fmtD(notif.created_datetime);
-          if (sentDate) {
-            var sep2 = document.createElement('span');
-            sep2.style.cssText = 'opacity:0.4;';
-            sep2.textContent = '·';
-            card.appendChild(sep2);
-            var sentSpan = document.createElement('span');
-            sentSpan.style.cssText = 'font-size:0.8em;opacity:0.7;white-space:nowrap;';
-            sentSpan.textContent = sentDate;
-            card.appendChild(sentSpan);
-          }
-        }
-
-        var spacer = document.createElement('div');
-        spacer.style.cssText = 'flex:1;';
-        card.appendChild(spacer);
-
-        var dismissBtn = document.createElement('button');
-        dismissBtn.className = 'action-button';
-        dismissBtn.style.cssText = 'font-size:0.8em;padding:3px 10px;margin:0;';
-        dismissBtn.textContent = 'Dismiss';
-        dismissBtn.onclick = function() { _dismissNotifInView(notif.id); };
-        card.appendChild(dismissBtn);
-
-        container.appendChild(card);
-        return;
-      }
-
-      card.addEventListener('dblclick', function() {
-        if (typeof storePreviousState === 'function') storePreviousState();
-        window.location.href = '/editor?id=' + encodeURIComponent(notif.chit_id);
+      unread.forEach(function(notif) {
+        container.appendChild(_buildNotifCard(notif, true));
       });
+    }
 
-      var titleLink = document.createElement('a');
-      titleLink.href = '/editor?id=' + encodeURIComponent(notif.chit_id);
-      titleLink.textContent = notif.chit_title || '(Untitled)';
-      titleLink.style.cssText = 'font-weight:bold;color:#4a2c2a;text-decoration:none;white-space:nowrap;';
-      titleLink.onclick = function(e) { e.preventDefault(); if (typeof storePreviousState === 'function') storePreviousState(); window.location.href = this.href; };
-      card.appendChild(titleLink);
+    // ── Addressed section ──
+    if (addressed.length > 0) {
+      var addressedHeader = document.createElement('div');
+      addressedHeader.style.cssText = 'font-size:0.95em;font-weight:bold;color:#4a2c2a;margin:16px 0 8px;display:flex;align-items:center;gap:10px;';
 
-      // Separator
-      var sep1 = document.createElement('span');
-      sep1.style.cssText = 'opacity:0.4;';
-      sep1.textContent = '·';
-      card.appendChild(sep1);
+      var addressedLabel = document.createElement('span');
+      addressedLabel.textContent = '📭 Addressed (' + addressed.length + ')';
+      addressedHeader.appendChild(addressedLabel);
 
-      // Type + from
-      var fromSpan = document.createElement('span');
-      fromSpan.style.cssText = 'font-size:0.8em;opacity:0.7;white-space:nowrap;';
-      var typeWord = notif.notification_type === 'assigned' ? 'Assigned' : 'Invited';
-      fromSpan.textContent = typeWord + ' by ' + (notif.owner_display_name || '?');
-      card.appendChild(fromSpan);
+      var clearBtn = document.createElement('button');
+      clearBtn.className = 'action-button';
+      clearBtn.style.cssText = 'font-size:0.85em;padding:5px 14px;margin:0;width:auto;';
+      clearBtn.textContent = 'Clear Addressed';
+      clearBtn.onclick = function(e) { e.stopPropagation(); _clearAddressedNotifsInView(); };
+      addressedHeader.appendChild(clearBtn);
 
-      // Sent date
-      if (notif.created_datetime) {
-        var sentDate = _fmtD(notif.created_datetime);
-        if (sentDate) {
-          var sep2 = document.createElement('span');
-          sep2.style.cssText = 'opacity:0.4;';
-          sep2.textContent = '·';
-          card.appendChild(sep2);
-          var sentSpan = document.createElement('span');
-          sentSpan.style.cssText = 'font-size:0.8em;opacity:0.7;white-space:nowrap;';
-          sentSpan.textContent = 'Sent: ' + sentDate;
-          card.appendChild(sentSpan);
-        }
-      }
+      container.appendChild(addressedHeader);
 
-      // Chit due/start date
-      if (notif.due_datetime) {
-        var dueStr = _fmtD(notif.due_datetime);
-        if (dueStr) {
-          var sep3 = document.createElement('span');
-          sep3.style.cssText = 'opacity:0.4;';
-          sep3.textContent = '·';
-          card.appendChild(sep3);
-          var dueSpan = document.createElement('span');
-          dueSpan.style.cssText = 'font-size:0.8em;opacity:0.7;white-space:nowrap;';
-          dueSpan.textContent = 'Due: ' + dueStr;
-          card.appendChild(dueSpan);
-        }
-      }
-      if (notif.start_datetime) {
-        var startStr = _fmtD(notif.start_datetime);
-        if (startStr) {
-          var sep4 = document.createElement('span');
-          sep4.style.cssText = 'opacity:0.4;';
-          sep4.textContent = '·';
-          card.appendChild(sep4);
-          var startSpan = document.createElement('span');
-          startSpan.style.cssText = 'font-size:0.8em;opacity:0.7;white-space:nowrap;';
-          startSpan.textContent = 'Starts: ' + startStr;
-          card.appendChild(startSpan);
-        }
-      }
-
-      // Spacer to push toggle right
-      var spacer = document.createElement('div');
-      spacer.style.cssText = 'flex:1;';
-      card.appendChild(spacer);
-
-      // Right side: pill toggle
-      var pill = document.createElement('div');
-      pill.className = 'cwoc-pill-toggle';
-      pill.style.cssText = 'font-size:0.8em;flex-shrink:0;';
-
-      var acceptOpt = document.createElement('span');
-      acceptOpt.dataset.val = 'accepted';
-      acceptOpt.textContent = '✓ Accept';
-      acceptOpt.className = notif.status === 'accepted' ? 'pill-active' : (notif.status === 'pending' ? '' : 'pill-inactive');
-      acceptOpt.onclick = function() { _respondNotifInView(notif.id, 'accepted'); };
-      pill.appendChild(acceptOpt);
-
-      var declineOpt = document.createElement('span');
-      declineOpt.dataset.val = 'declined';
-      declineOpt.textContent = '✕ Decline';
-      declineOpt.className = notif.status === 'declined' ? 'pill-active' : (notif.status === 'pending' ? '' : 'pill-inactive');
-      declineOpt.onclick = function() { _respondNotifInView(notif.id, 'declined'); };
-      pill.appendChild(declineOpt);
-
-      card.appendChild(pill);
-
-      container.appendChild(card);
-    });
+      addressed.forEach(function(notif) {
+        container.appendChild(_buildNotifCard(notif, false));
+      });
+    }
 
     chitList.appendChild(container);
   } catch (e) {
     chitList.innerHTML = '<div class="cwoc-empty">Error loading notifications.</div>';
+  } finally {
+    _notifViewRendering = false;
   }
+}
+
+/** Build a notification card for the notifications view. */
+function _buildNotifCard(notif, isUnread) {
+  var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  function _fmtD(iso) { var d = new Date(iso); if (isNaN(d.getTime())) return ''; return d.getFullYear() + '-' + months[d.getMonth()] + '-' + String(d.getDate()).padStart(2,'0'); }
+
+  var card = document.createElement('div');
+  card.className = 'chit-card';
+  card.style.cssText = 'margin-bottom:6px;padding:8px 14px;display:flex;align-items:center;gap:10px;cursor:pointer;';
+  if (!isUnread) card.style.opacity = '0.7';
+
+  // Title
+  if (notif.notification_type === 'reminder') {
+    var reminderTitle = document.createElement('span');
+    reminderTitle.style.cssText = 'font-weight:bold;color:#4a2c2a;white-space:nowrap;';
+    reminderTitle.textContent = '📌 ' + (notif.chit_title || 'Reminder');
+    card.appendChild(reminderTitle);
+  } else {
+    var titleLink = document.createElement('a');
+    titleLink.href = '/editor?id=' + encodeURIComponent(notif.chit_id);
+    titleLink.textContent = notif.chit_title || '(Untitled)';
+    titleLink.style.cssText = 'font-weight:bold;color:#4a2c2a;text-decoration:none;white-space:nowrap;';
+    titleLink.onclick = function(e) { e.preventDefault(); if (typeof storePreviousState === 'function') storePreviousState(); window.location.href = this.href; };
+    card.appendChild(titleLink);
+  }
+
+  // Separator + type info
+  var sep1 = document.createElement('span');
+  sep1.style.cssText = 'opacity:0.4;';
+  sep1.textContent = '·';
+  card.appendChild(sep1);
+
+  var infoSpan = document.createElement('span');
+  infoSpan.style.cssText = 'font-size:0.8em;opacity:0.7;white-space:nowrap;';
+  if (notif.notification_type === 'reminder') {
+    infoSpan.textContent = 'Type: ' + (notif.delivery_target === 'desktop' ? 'Next Time On Desktop' : (notif.delivery_target ? notif.delivery_target : 'Reminder'));
+  } else {
+    var typeWord = notif.notification_type === 'assigned' ? 'Assigned by' : 'From';
+    infoSpan.textContent = typeWord + ': ' + (notif.owner_display_name || '?');
+  }
+  card.appendChild(infoSpan);
+
+  // Sent date
+  if (notif.created_datetime) {
+    var sentDate = _fmtD(notif.created_datetime);
+    if (sentDate) {
+      var sep2 = document.createElement('span');
+      sep2.style.cssText = 'opacity:0.4;';
+      sep2.textContent = '·';
+      card.appendChild(sep2);
+      var sentSpan = document.createElement('span');
+      sentSpan.style.cssText = 'font-size:0.8em;opacity:0.7;white-space:nowrap;';
+      sentSpan.textContent = 'Sent: ' + sentDate;
+      card.appendChild(sentSpan);
+    }
+  }
+
+  // Due date
+  if (notif.due_datetime) {
+    var dueDate = _fmtD(notif.due_datetime);
+    if (dueDate) {
+      var sepDue = document.createElement('span');
+      sepDue.style.cssText = 'opacity:0.4;';
+      sepDue.textContent = '·';
+      card.appendChild(sepDue);
+      var dueSpan = document.createElement('span');
+      dueSpan.style.cssText = 'font-size:0.8em;opacity:0.7;white-space:nowrap;';
+      dueSpan.textContent = 'Due: ' + dueDate;
+      card.appendChild(dueSpan);
+    }
+  }
+
+  // Start date
+  if (notif.start_datetime) {
+    var startDate = _fmtD(notif.start_datetime);
+    if (startDate) {
+      var sepStart = document.createElement('span');
+      sepStart.style.cssText = 'opacity:0.4;';
+      sepStart.textContent = '·';
+      card.appendChild(sepStart);
+      var startSpan = document.createElement('span');
+      startSpan.style.cssText = 'font-size:0.8em;opacity:0.7;white-space:nowrap;';
+      startSpan.textContent = 'Starts: ' + startDate;
+      card.appendChild(startSpan);
+    }
+  }
+
+  // Status badge for addressed items
+  if (!isUnread && notif.status) {
+    var sep3 = document.createElement('span');
+    sep3.style.cssText = 'opacity:0.4;';
+    sep3.textContent = '·';
+    card.appendChild(sep3);
+    var statusSpan = document.createElement('span');
+    statusSpan.style.cssText = 'font-size:0.75em;opacity:0.6;white-space:nowrap;font-style:italic;';
+    statusSpan.textContent = 'State: ' + notif.status;
+    card.appendChild(statusSpan);
+  }
+
+  // Spacer
+  var spacer = document.createElement('div');
+  spacer.style.cssText = 'flex:1;';
+  card.appendChild(spacer);
+
+  // Action buttons
+  var btnWrap = document.createElement('div');
+  btnWrap.style.cssText = 'display:flex;gap:6px;flex-shrink:0;align-items:center;';
+
+  if (notif.notification_type === 'reminder') {
+    // Reminder: Snooze + Dismiss (only if still unread)
+    if (isUnread) {
+      var snoozeLen = window._snoozeLength || window._sharedSnoozeLength || '5 minutes';
+      var snoozeMatch = String(snoozeLen).match(/(\d+)/);
+      var snoozeMins = snoozeMatch ? parseInt(snoozeMatch[1]) : 5;
+
+      var snoozeBtn = document.createElement('button');
+      snoozeBtn.className = 'action-button';
+      snoozeBtn.style.cssText = 'font-size:0.85em;padding:5px 12px;margin:0;width:auto;';
+      snoozeBtn.textContent = 'Snooze ' + snoozeMins + 'm';
+      snoozeBtn.onclick = function(e) { e.stopPropagation(); _snoozeNotifInView(notif.id, snoozeMins); };
+      btnWrap.appendChild(snoozeBtn);
+
+      var dismissBtn = document.createElement('button');
+      dismissBtn.className = 'action-button';
+      dismissBtn.style.cssText = 'font-size:0.85em;padding:5px 12px;margin:0;width:auto;';
+      dismissBtn.textContent = 'Dismiss';
+      dismissBtn.onclick = function(e) { e.stopPropagation(); _dismissNotifInView(notif.id); };
+      btnWrap.appendChild(dismissBtn);
+    }
+  } else {
+    // Sharing notifications: Accept / Decline pill (always visible)
+    var pill = document.createElement('div');
+    pill.className = 'cwoc-pill-toggle';
+    pill.style.cssText = 'font-size:0.8em;flex-shrink:0;';
+    var acceptOpt = document.createElement('span');
+    acceptOpt.dataset.val = 'accepted';
+    acceptOpt.textContent = '✓ Accept';
+    acceptOpt.className = notif.status === 'accepted' ? 'pill-active' : (notif.status === 'pending' ? '' : 'pill-inactive');
+    acceptOpt.onclick = function(e) { e.stopPropagation(); _respondNotifInView(notif.id, 'accepted'); };
+    pill.appendChild(acceptOpt);
+    var declineOpt = document.createElement('span');
+    declineOpt.dataset.val = 'declined';
+    declineOpt.textContent = '✕ Decline';
+    declineOpt.className = notif.status === 'declined' ? 'pill-active' : (notif.status === 'pending' ? '' : 'pill-inactive');
+    declineOpt.onclick = function(e) { e.stopPropagation(); _respondNotifInView(notif.id, 'declined'); };
+    pill.appendChild(declineOpt);
+    btnWrap.appendChild(pill);
+  }
+
+  // Delete button (always present)
+  var delBtn = document.createElement('button');
+  delBtn.className = 'action-button';
+  delBtn.style.cssText = 'font-size:0.85em;padding:5px 8px;margin:0;opacity:0.6;width:auto;';
+  delBtn.textContent = '🗑️';
+  delBtn.title = 'Delete permanently';
+  delBtn.onclick = function(e) { e.stopPropagation(); _deleteNotifInView(notif.id); };
+  btnWrap.appendChild(delBtn);
+
+  card.appendChild(btnWrap);
+
+  // Double-click to open chit
+  if (notif.chit_id) {
+    card.addEventListener('dblclick', function() {
+      if (typeof storePreviousState === 'function') storePreviousState();
+      window.location.href = '/editor?id=' + encodeURIComponent(notif.chit_id);
+    });
+  }
+
+  return card;
 }
 
 async function _respondNotifInView(notifId, status) {
@@ -1163,7 +1212,9 @@ async function _respondNotifInView(notifId, status) {
 async function _dismissNotifInView(notifId) {
   try {
     var resp = await fetch('/api/notifications/' + encodeURIComponent(notifId), {
-      method: 'DELETE'
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'dismissed' })
     });
     if (resp.ok) {
       _displayNotificationsView();
@@ -1171,4 +1222,49 @@ async function _dismissNotifInView(notifId) {
       if (typeof _fetchProfileNotifications === 'function') _fetchProfileNotifications();
     }
   } catch (e) { console.error('Failed to dismiss notification:', e); }
+}
+
+async function _deleteNotifInView(notifId) {
+  try {
+    var resp = await fetch('/api/notifications/' + encodeURIComponent(notifId), {
+      method: 'DELETE'
+    });
+    if (resp.ok) {
+      _displayNotificationsView();
+      if (typeof _fetchNotifications === 'function') _fetchNotifications();
+      if (typeof _fetchProfileNotifications === 'function') _fetchProfileNotifications();
+    }
+  } catch (e) { console.error('Failed to delete notification:', e); }
+}
+
+async function _clearAddressedNotifsInView() {
+  try {
+    var deviceParam = (typeof _isMobileOverlay === 'function' && _isMobileOverlay()) ? '?device=mobile' : '?device=desktop';
+    var resp = await fetch('/api/notifications' + deviceParam);
+    if (!resp.ok) return;
+    var all = await resp.json();
+    var addressed = all.filter(function(n) { return n.status !== 'pending'; });
+    for (var i = 0; i < addressed.length; i++) {
+      await fetch('/api/notifications/' + encodeURIComponent(addressed[i].id), { method: 'DELETE' });
+    }
+    _displayNotificationsView();
+    if (typeof _fetchNotifications === 'function') _fetchNotifications();
+    if (typeof _fetchProfileNotifications === 'function') _fetchProfileNotifications();
+  } catch (e) { console.error('Failed to clear addressed notifications:', e); }
+}
+
+async function _snoozeNotifInView(notifId, minutes) {
+  try {
+    var resp = await fetch('/api/notifications/' + encodeURIComponent(notifId) + '/snooze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ minutes: minutes })
+    });
+    if (resp.ok) {
+      if (typeof cwocToast === 'function') cwocToast('Snoozed for ' + minutes + ' minutes', 'info');
+      _displayNotificationsView();
+      if (typeof _fetchNotifications === 'function') _fetchNotifications();
+      if (typeof _fetchProfileNotifications === 'function') _fetchProfileNotifications();
+    }
+  } catch (e) { console.error('Failed to snooze notification:', e); }
 }

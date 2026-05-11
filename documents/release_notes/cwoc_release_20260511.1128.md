@@ -1,0 +1,1 @@
+Desktop-only notifications feature. Editor alerts zone has "next time on desktop" unit option. Triggered notifications show crossed-out with ✅. Profile menu: Notifications header always visible (navigates to Alarms→Notifications view), shows count when pending, cards shown below when notifications exist. Toast + system notification fires on desktop arrival.

@@ -58,6 +58,12 @@ DO NOT INSTALL THINGS!
 - Comment the "why," not the "what." Code should be self-explanatory; comments explain intent or non-obvious decisions.
 - Handle errors gracefully — return meaningful JSON error responses from API endpoints, and show user-friendly messages in the UI.
 
+## Debugging & Logging
+- When asked to "log" something for debugging, log **every single step** of the process — every event, every state change, every variable value, every branch taken. Not just entry/exit points. Every nanosecond of the interaction.
+- Include all relevant context in each log: coordinates, element info, computed values, conditions evaluated, which branch was taken and why.
+- Never assume which part is working. Log everything so the exact failure point is immediately visible.
+- Use `console.log` with a clear prefix tag (e.g. `[FeatureName]`) so logs are filterable.
+
 ## Frontend Architecture
 - All JS is loaded via `<script>` tags in HTML — no ES modules, no imports. Load order matters: `shared.js` before page-specific scripts.
 - The dashboard (`index.html` + `main.js` + `styles.css`) has its own independent styling. All other pages share `shared-page.css`.

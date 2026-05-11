@@ -93,8 +93,11 @@ def list_notifications(request: Request, device: str = None):
                 delivery_target that doesn't match are excluded. E.g. if
                 device=mobile, notifications with delivery_target='desktop'
                 are hidden (they'll appear next time a desktop session fetches).
+
+    Snoozed notifications (snoozed_until > now) are excluded automatically.
     """
     user_id = request.state.user_id
+    now = datetime.utcnow().isoformat()
     conn = None
     try:
         conn = sqlite3.connect(DB_PATH)
@@ -102,13 +105,14 @@ def list_notifications(request: Request, device: str = None):
         cursor.execute(
             """SELECT n.id, n.user_id, n.chit_id, n.chit_title, n.owner_display_name,
                       n.notification_type, n.status, n.created_datetime,
-                      n.delivery_target,
+                      n.delivery_target, n.snoozed_until,
                       c.due_datetime, c.start_datetime
                FROM notifications n
                LEFT JOIN chits c ON c.id = n.chit_id
                WHERE n.user_id = ?
+                 AND (n.snoozed_until IS NULL OR n.snoozed_until <= ?)
                ORDER BY n.created_datetime DESC""",
-            (user_id,),
+            (user_id, now),
         )
         rows = cursor.fetchall()
         columns = [col[0] for col in cursor.description]
@@ -182,6 +186,56 @@ def create_notification(body: dict, request: Request):
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# POST /api/notifications/{notification_id}/snooze
+# ═══════════════════════════════════════════════════════════════════════════
+
+@notifications_router.post("/api/notifications/{notification_id}/snooze")
+def snooze_notification(notification_id: str, body: dict, request: Request):
+    """Snooze a notification for a given number of minutes.
+
+    Body: { "minutes": 5 }
+
+    Sets snoozed_until to now + minutes. The notification will be hidden
+    from GET results until the snooze expires.
+    """
+    user_id = request.state.user_id
+    minutes = body.get("minutes")
+    if not minutes or not isinstance(minutes, (int, float)) or minutes <= 0:
+        raise HTTPException(status_code=400, detail="minutes must be a positive number")
+
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        # Verify ownership
+        cursor.execute(
+            "SELECT id, user_id FROM notifications WHERE id = ?",
+            (notification_id,),
+        )
+        row = cursor.fetchone()
+        if not row or row[1] != user_id:
+            raise HTTPException(status_code=404, detail="Notification not found")
+
+        from datetime import timedelta
+        snoozed_until = (datetime.utcnow() + timedelta(minutes=int(minutes))).isoformat()
+        cursor.execute(
+            "UPDATE notifications SET snoozed_until = ? WHERE id = ?",
+            (snoozed_until, notification_id),
+        )
+        conn.commit()
+        return {"message": "Notification snoozed", "snoozed_until": snoozed_until}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error snoozing notification {notification_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to snooze notification: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # PATCH /api/notifications/{notification_id}
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -193,8 +247,8 @@ def update_notification(notification_id: str, body: dict, request: Request):
     """
     user_id = request.state.user_id
     new_status = body.get("status")
-    if new_status not in ("accepted", "declined"):
-        raise HTTPException(status_code=400, detail="Status must be 'accepted' or 'declined'")
+    if new_status not in ("accepted", "declined", "dismissed"):
+        raise HTTPException(status_code=400, detail="Status must be 'accepted', 'declined', or 'dismissed'")
 
     conn = None
     try:

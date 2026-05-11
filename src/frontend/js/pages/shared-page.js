@@ -59,7 +59,7 @@ class CwocSaveSystem {
     if (single) single.style.display = 'none';
     if (stay) { stay.style.display = ''; stay.disabled = false; stay.style.opacity = '1'; stay.style.pointerEvents = 'auto'; }
     if (exit) { exit.style.display = ''; exit.disabled = false; exit.style.opacity = '1'; exit.style.pointerEvents = 'auto'; }
-    if (cancel) cancel.textContent = '❌ Cancel';
+    if (cancel) cancel.textContent = '❌ Discard Changes';
   }
 
   cancelOrExit() {
@@ -428,7 +428,6 @@ window.cwocInterceptRefresh = cwocInterceptRefresh;
     var items = [
       { icon: '🔄', label: 'Switch User', action: function() { dropdown.remove(); _showSwitchUserModal(); } },
       { icon: '👤', label: 'View Profile', action: function() { dropdown.remove(); window.location.href = '/profile'; } },
-      { icon: '🔔', label: 'Notifications', action: function() { dropdown.remove(); if (typeof filterChits === 'function') { _setAlarmsMode('notifications'); filterChits('Alarms'); } else { window.location.href = '/frontend/html/notifications.html'; } } },
       { icon: '🚪', label: 'Logout', action: function() { dropdown.remove(); _logout(); } }
     ];
 
@@ -443,14 +442,26 @@ window.cwocInterceptRefresh = cwocInterceptRefresh;
       dropdown.appendChild(el);
     });
 
-    // Notifications section — only show if not already viewing notifications in the main view
+    // Notifications section at the bottom — header is clickable to navigate to notifications view
     var _alreadyInNotifView = (typeof currentTab !== 'undefined' && currentTab === 'Alarms' && typeof _alarmsViewMode !== 'undefined' && _alarmsViewMode === 'notifications');
-    if (_profileNotifItems.length > 0 && !_alreadyInNotifView) {
-      var notifHeader = document.createElement('div');
-      notifHeader.style.cssText = 'padding:6px 14px;font-size:0.85em;font-weight:bold;color:#6b4e31;border-top:1px solid rgba(139,90,43,0.2);background:rgba(139,90,43,0.06);';
-      notifHeader.textContent = '🔔 Notifications (' + _profileNotifItems.length + ')';
-      dropdown.appendChild(notifHeader);
 
+    var notifHeader = document.createElement('div');
+    notifHeader.className = 'cwoc-profile-dropdown-item';
+    notifHeader.textContent = '🔔 Notifications' + (_profileNotifItems.length > 0 ? ' (' + _profileNotifItems.length + ')' : '');
+    notifHeader.title = 'View all notifications';
+    notifHeader.onclick = function(e) {
+      e.stopPropagation();
+      dropdown.remove();
+      if (typeof filterChits === 'function') {
+        _setAlarmsMode('notifications');
+        filterChits('Alarms');
+      } else {
+        window.location.href = '/?tab=Alarms&mode=notifications';
+      }
+    };
+    dropdown.appendChild(notifHeader);
+
+    if (_profileNotifItems.length > 0 && !_alreadyInNotifView) {
       var notifSection = document.createElement('div');
       notifSection.id = 'cwoc-profile-notif-section';
       notifSection.style.cssText = 'max-height:200px;overflow-y:auto;';
@@ -677,7 +688,8 @@ window.cwocInterceptRefresh = cwocInterceptRefresh;
   }
 
   function _fetchProfileNotifications() {
-    fetch('/api/notifications').then(function(r) {
+    var deviceParam = (typeof _isMobileOverlay === 'function' && _isMobileOverlay()) ? '?device=mobile' : '?device=desktop';
+    fetch('/api/notifications' + deviceParam).then(function(r) {
       if (!r.ok) return;
       return r.json();
     }).then(function(all) {
@@ -705,6 +717,37 @@ window.cwocInterceptRefresh = cwocInterceptRefresh;
     }).catch(function(e) { console.error('Failed to respond to notification:', e); });
   }
 
+  function _dismissProfileNotification(notifId) {
+    fetch('/api/notifications/' + encodeURIComponent(notifId), {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'dismissed' })
+    }).then(function(r) {
+      if (!r.ok) return;
+      _profileNotifItems = _profileNotifItems.filter(function(n) { return n.id !== notifId; });
+      _updateProfileNotifBadge();
+      var section = document.getElementById('cwoc-profile-notif-section');
+      if (section) _renderProfileNotifSection(section);
+      if (typeof _fetchNotifications === 'function') _fetchNotifications();
+    }).catch(function(e) { console.error('Failed to dismiss notification:', e); });
+  }
+
+  function _snoozeProfileNotification(notifId, minutes) {
+    fetch('/api/notifications/' + encodeURIComponent(notifId) + '/snooze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ minutes: minutes })
+    }).then(function(r) {
+      if (!r.ok) return;
+      _profileNotifItems = _profileNotifItems.filter(function(n) { return n.id !== notifId; });
+      _updateProfileNotifBadge();
+      var section = document.getElementById('cwoc-profile-notif-section');
+      if (section) _renderProfileNotifSection(section);
+      if (typeof _fetchNotifications === 'function') _fetchNotifications();
+      if (typeof cwocToast === 'function') cwocToast('Snoozed for ' + minutes + ' minutes', 'info');
+    }).catch(function(e) { console.error('Failed to snooze notification:', e); });
+  }
+
   function _renderProfileNotifSection(container) {
     container.innerHTML = '';
     if (_profileNotifItems.length === 0) {
@@ -717,29 +760,65 @@ window.cwocInterceptRefresh = cwocInterceptRefresh;
 
       var title = document.createElement('a');
       title.style.cssText = 'font-size:0.9em;font-weight:bold;color:#4a2c2a;text-decoration:none;display:block;';
-      title.textContent = notif.chit_title || '(Untitled)';
-      title.href = '/frontend/html/editor.html?id=' + encodeURIComponent(notif.chit_id);
-      title.onclick = function(e) { e.preventDefault(); window.location.href = this.href; };
+
+      if (notif.notification_type === 'reminder') {
+        title.textContent = '📌 ' + (notif.chit_title || 'Reminder');
+        if (notif.chit_id) {
+          title.href = '/frontend/html/editor.html?id=' + encodeURIComponent(notif.chit_id);
+          title.onclick = function(e) { e.preventDefault(); window.location.href = this.href; };
+        } else {
+          title.href = '#';
+          title.onclick = function(e) { e.preventDefault(); };
+          title.style.cursor = 'default';
+        }
+      } else {
+        title.textContent = notif.chit_title || '(Untitled)';
+        title.href = '/frontend/html/editor.html?id=' + encodeURIComponent(notif.chit_id);
+        title.onclick = function(e) { e.preventDefault(); window.location.href = this.href; };
+      }
       card.appendChild(title);
 
       var owner = document.createElement('div');
       owner.style.cssText = 'font-size:0.8em;opacity:0.7;margin:2px 0 4px;';
-      var typeLabel = notif.notification_type === 'assigned' ? 'assigned by' : 'from';
-      owner.textContent = typeLabel + ' ' + (notif.owner_display_name || 'Unknown');
+      if (notif.notification_type === 'reminder') {
+        owner.textContent = notif.delivery_target === 'desktop' ? 'Next Time On Desktop' : (notif.delivery_target ? notif.delivery_target + ' reminder' : 'reminder');
+      } else {
+        var typeLabel = notif.notification_type === 'assigned' ? 'assigned by' : 'from';
+        owner.textContent = typeLabel + ' ' + (notif.owner_display_name || 'Unknown');
+      }
       card.appendChild(owner);
 
       var actions = document.createElement('div');
       actions.style.cssText = 'display:flex;gap:6px;';
-      var acceptBtn = document.createElement('button');
-      acceptBtn.textContent = 'Accept';
-      acceptBtn.style.cssText = 'padding:3px 10px;font-size:0.8em;font-weight:bold;border:1px solid #2e7d32;border-radius:3px;background:#e8f5e9;color:#2e7d32;cursor:pointer;font-family:inherit;';
-      acceptBtn.onclick = function(e) { e.stopPropagation(); _respondProfileNotification(notif.id, 'accepted'); };
-      actions.appendChild(acceptBtn);
-      var declineBtn = document.createElement('button');
-      declineBtn.textContent = 'Decline';
-      declineBtn.style.cssText = 'padding:3px 10px;font-size:0.8em;font-weight:bold;border:1px solid #c62828;border-radius:3px;background:#ffebee;color:#c62828;cursor:pointer;font-family:inherit;';
-      declineBtn.onclick = function(e) { e.stopPropagation(); _respondProfileNotification(notif.id, 'declined'); };
-      actions.appendChild(declineBtn);
+
+      if (notif.notification_type === 'reminder') {
+        // Reminder: Snooze + Dismiss
+        var snoozeBtn = document.createElement('button');
+        var snoozeLen = (typeof window !== 'undefined' && (window._snoozeLength || window._sharedSnoozeLength)) || '5 minutes';
+        var snoozeMatch = String(snoozeLen).match(/(\d+)/);
+        var snoozeMins = snoozeMatch ? parseInt(snoozeMatch[1]) : 5;
+        snoozeBtn.textContent = 'Snooze ' + snoozeMins + 'm';
+        snoozeBtn.style.cssText = 'padding:3px 10px;font-size:0.8em;font-weight:bold;border:1px solid #6b4e31;border-radius:3px;background:#fff8e1;color:#6b4e31;cursor:pointer;font-family:inherit;';
+        snoozeBtn.onclick = function(e) { e.stopPropagation(); _snoozeProfileNotification(notif.id, snoozeMins); };
+        actions.appendChild(snoozeBtn);
+        var dismissBtn = document.createElement('button');
+        dismissBtn.textContent = 'Dismiss';
+        dismissBtn.style.cssText = 'padding:3px 10px;font-size:0.8em;font-weight:bold;border:1px solid #6b4e31;border-radius:3px;background:#fff8e1;color:#6b4e31;cursor:pointer;font-family:inherit;';
+        dismissBtn.onclick = function(e) { e.stopPropagation(); _dismissProfileNotification(notif.id); };
+        actions.appendChild(dismissBtn);
+      } else {
+        // Sharing: Accept / Decline
+        var acceptBtn = document.createElement('button');
+        acceptBtn.textContent = 'Accept';
+        acceptBtn.style.cssText = 'padding:3px 10px;font-size:0.8em;font-weight:bold;border:1px solid #2e7d32;border-radius:3px;background:#e8f5e9;color:#2e7d32;cursor:pointer;font-family:inherit;';
+        acceptBtn.onclick = function(e) { e.stopPropagation(); _respondProfileNotification(notif.id, 'accepted'); };
+        actions.appendChild(acceptBtn);
+        var declineBtn = document.createElement('button');
+        declineBtn.textContent = 'Decline';
+        declineBtn.style.cssText = 'padding:3px 10px;font-size:0.8em;font-weight:bold;border:1px solid #c62828;border-radius:3px;background:#ffebee;color:#c62828;cursor:pointer;font-family:inherit;';
+        declineBtn.onclick = function(e) { e.stopPropagation(); _respondProfileNotification(notif.id, 'declined'); };
+        actions.appendChild(declineBtn);
+      }
       card.appendChild(actions);
 
       container.appendChild(card);

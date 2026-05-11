@@ -2235,3 +2235,30 @@ def migrate_add_notification_delivery_target():
     finally:
         if conn:
             conn.close()
+
+
+# ── Notification Snoozed Until: migration ────────────────────────────────
+
+def migrate_add_notification_snoozed_until():
+    """Add snoozed_until column to notifications table.
+
+    Stores an ISO datetime. When set and in the future, the notification
+    is hidden from fetch results until the snooze expires.
+
+    Fully idempotent — checks column existence before adding.
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(notifications)")
+        existing = {row[1] for row in cursor.fetchall()}
+        if "snoozed_until" not in existing:
+            cursor.execute("ALTER TABLE notifications ADD COLUMN snoozed_until TEXT")
+            conn.commit()
+            logger.info("Added snoozed_until column to notifications table")
+    except Exception as e:
+        logger.error(f"Error adding snoozed_until column to notifications: {str(e)}")
+    finally:
+        if conn:
+            conn.close()

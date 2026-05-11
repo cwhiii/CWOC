@@ -567,8 +567,10 @@ function _quickAlertShowEditor(type) {
     var now = new Date(); now.setMinutes(now.getMinutes() + 1);
     var defTime = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
     var timeInput = document.createElement('input');
-    timeInput.type = 'time'; timeInput.value = defTime;
-    timeInput.style.cssText = 'width:100%;padding:6px 8px;font-family:inherit;font-size:1.1em;font-weight:bold;border:1px solid #8b5a2b;border-radius:4px;box-sizing:border-box;background:#f5e6cc;';
+    timeInput.type = 'text'; timeInput.value = defTime; timeInput.readOnly = true;
+    timeInput.style.cssText = 'width:100%;padding:6px 8px;font-family:inherit;font-size:1.1em;font-weight:bold;border:1px solid #8b5a2b;border-radius:4px;box-sizing:border-box;background:#f5e6cc;cursor:pointer;text-align:center;';
+    timeInput.addEventListener('mousedown', function(e) { e.preventDefault(); });
+    timeInput.addEventListener('click', function() { if (typeof cwocTimePicker !== 'undefined') cwocTimePicker.open(timeInput); });
     formDiv.appendChild(timeInput);
     var daysDiv = document.createElement('div');
     daysDiv.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;font-size:0.9em;';
@@ -585,7 +587,7 @@ function _quickAlertShowEditor(type) {
       var days = []; daysDiv.querySelectorAll('input:checked').forEach(function(cb) { days.push(cb.value); });
       return { _type: 'alarm', name: nameInput.value.trim(), time: timeInput.value, days: days, enabled: true };
     };
-    setTimeout(function() { timeInput.focus(); timeInput.select(); }, 50);
+    setTimeout(function() { if (typeof cwocTimePicker !== 'undefined') cwocTimePicker.open(timeInput); }, 100);
   } else if (type === 'timer') {
     var nameInput = document.createElement('input');
     nameInput.type = 'text'; nameInput.placeholder = 'Timer name (optional)';

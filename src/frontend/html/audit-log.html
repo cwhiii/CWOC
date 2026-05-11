@@ -1191,7 +1191,7 @@
         var closeBtn = document.createElement('button');
         closeBtn.className = 'cwoc-btn';
         closeBtn.style.cssText = 'width:100%;margin-top:12px;';
-        closeBtn.textContent = '✕ Close Filters';
+        closeBtn.innerHTML = '<span style="font-size:2.2em;font-weight:900;line-height:0;vertical-align:middle;overflow:hidden;">⇤</span> Hide Sidebar';
         closeBtn.addEventListener('click', function() { _closeAuditFilters(); });
         sidebar.appendChild(closeBtn);
 

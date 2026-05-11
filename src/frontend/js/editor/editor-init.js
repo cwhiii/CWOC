@@ -1177,15 +1177,7 @@ document.addEventListener("DOMContentLoaded", function () {
   _loadSnapSetting();
 
   // Auto-colon mask for time inputs (HH:MM format) + snap dropdown
-  document.querySelectorAll('.time-input').forEach(input => {
-    input.addEventListener('input', () => {
-      let v = input.value.replace(/[^0-9]/g, '');
-      if (v.length >= 3) v = v.slice(0, 2) + ':' + v.slice(2, 4);
-      if (v.length > 5) v = v.slice(0, 5);
-      input.value = v;
-    });
-    input.addEventListener('focus', () => _showTimeDropdown(input));
-  });
+  // Time inputs are now handled by cwocTimePicker drum roller (see above)
 
   // Set default date mode to None for new chits
   _dateModeSuppressUnsaved = true;
@@ -1224,19 +1216,37 @@ document.addEventListener("DOMContentLoaded", function () {
   initializeFlatpickr("#due_datetime", { dateFormat: "Y-M-d", disableMobile: true, onChange: function() { _updateRecurrenceLabels(); } });
   initializeFlatpickr("#recurrenceUntil", { dateFormat: "Y-M-d", disableMobile: true });
 
-  // Time pickers — Flatpickr time-only, 24-hour, no seconds.
-  var _fpTimeOpts = {
-    enableTime: true,
-    noCalendar: true,
-    dateFormat: "H:i",
-    time_24hr: true,
-    enableSeconds: false,
-    minuteIncrement: 5,
-    disableMobile: true
-  };
-  initializeFlatpickr("#start_time", _fpTimeOpts);
-  initializeFlatpickr("#end_time", _fpTimeOpts);
-  initializeFlatpickr("#due_time", _fpTimeOpts);
+  // Time buttons — define .value property so save/load code works unchanged.
+  // The onclick handler is inline in the HTML (onclick="cwocTimePicker.open(this)").
+  ['start_time', 'end_time', 'due_time'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    if (el.tagName === 'BUTTON') {
+      Object.defineProperty(el, 'value', {
+        get: function() { return el.dataset.time || ''; },
+        set: function(v) {
+          el.dataset.time = v || '';
+          el.textContent = v || 'HH:MM';
+          el.classList.toggle('cwoc-time-btn-empty', !v);
+        }
+      });
+      el.value = '';
+    }
+    // If it's still an <input> (shouldn't be), just make it open the picker on click
+    if (el.tagName === 'INPUT') {
+      el.readOnly = true;
+      el.style.cursor = 'pointer';
+      el.onclick = function() { cwocTimePicker.open(el); };
+    }
+  });
+
+  // alarmTime modal input — opens barrel picker on tap
+  var alarmTimeEl = document.getElementById('alarmTime');
+  if (alarmTimeEl) {
+    alarmTimeEl.readOnly = true;
+    alarmTimeEl.style.cursor = 'pointer';
+    alarmTimeEl.onclick = function() { cwocTimePicker.open(alarmTimeEl); };
+  }
 
 
 

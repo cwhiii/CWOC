@@ -15,16 +15,16 @@
 /**
  * Create desktop-targeted notifications for any "on_desktop" notification items.
  * Called after a successful chit save. Fires POST /api/notifications for each
- * on_desktop notification, then removes them from the chit's alerts array
- * (they live in the notifications table, not on the chit).
+ * untriggered on_desktop notification, then marks them as triggered (they stay
+ * on the chit's alerts array with a crossed-out visual state).
  */
 async function _createDesktopNotifications(chitId, chitTitle) {
-  const desktopNotifs = (window._alertsData.notifications || []).filter(n => n.unit === 'on_desktop');
+  const desktopNotifs = (window._alertsData.notifications || []).filter(n => n.unit === 'on_desktop' && !n.triggered);
   if (desktopNotifs.length === 0) return;
 
   for (const n of desktopNotifs) {
     try {
-      await fetch('/api/notifications', {
+      const resp = await fetch('/api/notifications', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -33,13 +33,13 @@ async function _createDesktopNotifications(chitId, chitTitle) {
           delivery_target: 'desktop'
         })
       });
+      if (resp.ok) {
+        n.triggered = true;
+      }
     } catch (e) {
       console.error('[desktop-notif] Failed to create desktop notification:', e);
     }
   }
-
-  // Remove on_desktop items from the alerts data (they're now in the notifications table)
-  window._alertsData.notifications = window._alertsData.notifications.filter(n => n.unit !== 'on_desktop');
 }
 
 /**
@@ -391,6 +391,15 @@ async function buildChitObject() {
       cwocToast('Due time is required (or check All Day).', 'error');
       return null;
     }
+  }
+
+  // Validate: title is required
+  if (!chit.title) {
+    cwocToast("Title is required.", "error");
+    // Focus the title field if possible
+    var _titleEl = document.getElementById('title');
+    if (_titleEl) _titleEl.focus();
+    return null;
   }
 
   // Validate minimum required fields

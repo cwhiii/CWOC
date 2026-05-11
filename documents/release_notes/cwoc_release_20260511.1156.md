@@ -1,0 +1,1 @@
+Desktop-only notifications feature with full notification lifecycle overhaul. Notifications persist forever with Unread/Addressed sections. Accept/Decline pill toggle always visible. Cards show labeled fields (From, Assigned by, Sent, Due, Starts, State). Desktop reminders labeled "Next Time On Desktop". Auto-dismiss after first toast. Delete and Clear Addressed buttons.

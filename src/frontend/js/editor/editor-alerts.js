@@ -351,30 +351,37 @@ function renderAlarmsContainer() {
     timeInput.type = "text";
     timeInput.value = _fmtAlarmTime(alarm.time || "") || "";
     timeInput.placeholder = window._editorTimeFormat === '24hour' ? "HH:MM" : "H:MM AM";
-    timeInput.inputMode = "numeric";
-    timeInput.style.cssText = `font-size:1.1em;padding:3px 6px;font-weight:bold;width:7em;${!alarm.enabled ? "opacity:0.45;" : ""}`;
+    timeInput.readOnly = true;
+    timeInput.style.cssText = `font-size:1.1em;padding:3px 6px;font-weight:bold;width:7em;cursor:pointer;text-align:center;${!alarm.enabled ? "opacity:0.45;" : ""}`;
 
-    timeInput.addEventListener("change", () => {
-      var str = timeInput.value.trim().toUpperCase();
-      var match = str.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/);
-      if (match) {
-        var h = parseInt(match[1]), m = parseInt(match[2]), ampm = match[3];
-        if (ampm === 'PM' && h < 12) h += 12;
-        if (ampm === 'AM' && h === 12) h = 0;
-        if (h >= 0 && h <= 23 && m >= 0 && m <= 59) {
-          var parsed = String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0');
-          window._alertsData.alarms[idx].time = parsed;
-          timeInput.value = _fmtAlarmTime(parsed);
-          if (!window._alertsData.alarms[idx].days || window._alertsData.alarms[idx].days.length === 0) {
-            window._alertsData.alarms[idx].days = [_dayAbbr(new Date())];
-            renderAlarmsContainer();
+    timeInput.addEventListener("mousedown", (e) => { e.preventDefault(); });
+    timeInput.addEventListener("click", () => {
+      // Set value to 24h for the picker to read
+      var raw24 = alarm.time || "12:00";
+      var origVal = timeInput.value;
+      timeInput.value = raw24;
+      cwocTimePicker.open(timeInput);
+      // After picker closes, the value will be in 24h format — convert for display
+      timeInput.addEventListener("change", function _onPickerDone() {
+        timeInput.removeEventListener("change", _onPickerDone);
+        var newVal = timeInput.value.trim();
+        var match24 = newVal.match(/^(\d{1,2}):(\d{2})$/);
+        if (match24) {
+          var h = parseInt(match24[1]), m = parseInt(match24[2]);
+          if (h >= 0 && h <= 23 && m >= 0 && m <= 59) {
+            var parsed = String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0');
+            window._alertsData.alarms[idx].time = parsed;
+            timeInput.value = _fmtAlarmTime(parsed);
+            if (!window._alertsData.alarms[idx].days || window._alertsData.alarms[idx].days.length === 0) {
+              window._alertsData.alarms[idx].days = [_dayAbbr(new Date())];
+              renderAlarmsContainer();
+            }
+            setSaveButtonUnsaved();
+            return;
           }
-          setSaveButtonUnsaved();
-          return;
         }
-      }
-      // Invalid — revert
-      timeInput.value = _fmtAlarmTime(alarm.time || "") || "";
+        timeInput.value = origVal;
+      }, { once: true });
     });
 
     const toggleBtn = document.createElement("button");
@@ -570,15 +577,24 @@ function renderNotificationsContainer() {
     row.style.cssText = "display:flex;align-items:center;gap:0.4em;padding:4px 0;border-bottom:1px solid #e0d4b5;flex-wrap:wrap;";
 
     const isDesktopMode = (n.unit === "on_desktop");
+    const isTriggered = isDesktopMode && n.triggered;
+
+    // If triggered, cross out the whole row
+    if (isTriggered) {
+      row.style.textDecoration = "line-through";
+      row.style.opacity = "0.6";
+    }
 
     const valInput = document.createElement("input");
     valInput.type = "number"; valInput.min = "1"; valInput.value = n.value || 15;
     valInput.style.cssText = "width:55px;font-size:0.9em;padding:2px 4px;";
     if (isDesktopMode) valInput.style.display = "none";
+    if (isTriggered) valInput.disabled = true;
     valInput.addEventListener("change", () => { window._alertsData.notifications[idx].value = parseInt(valInput.value) || 1; setSaveButtonUnsaved(); });
 
     const unitSel = document.createElement("select");
     unitSel.style.cssText = "font-size:0.9em;padding:2px 4px;";
+    if (isTriggered) unitSel.disabled = true;
     ["minutes","hours","days","weeks","on_desktop"].forEach((u) => {
       const opt = document.createElement("option");
       opt.value = u;
@@ -594,6 +610,7 @@ function renderNotificationsContainer() {
         window._alertsData.notifications[idx].value = 0;
       } else {
         delete window._alertsData.notifications[idx].delivery_target;
+        delete window._alertsData.notifications[idx].triggered;
         if (!window._alertsData.notifications[idx].value) {
           window._alertsData.notifications[idx].value = 15;
         }
@@ -656,7 +673,10 @@ function renderNotificationsContainer() {
     }
 
     const delBtn = document.createElement("button");
-    delBtn.type = "button"; delBtn.textContent = "❌"; delBtn.style.cssText = "padding:1px 5px;";
+    delBtn.type = "button";
+    delBtn.textContent = isTriggered ? "✅" : "❌";
+    delBtn.style.cssText = "padding:1px 5px;";
+    delBtn.title = isTriggered ? "Clear triggered notification" : "Remove notification";
     delBtn.onclick = () => deleteNotificationItem(idx);
 
     row.appendChild(document.createTextNode("Notify "));

@@ -487,7 +487,9 @@ function _applyMobileNavBarColor() {
 }
 
 /**
- * Inject header action controls (Save, Exit, Delete, etc.) into the title zone.
+ * Inject header action controls into the title zone on mobile.
+ * Only shows: QR, Log, Nest.
+ * Save/Exit/Delete/Archive/Snooze buttons are in the side menu only.
  * Only creates them once; subsequent calls just ensure they're visible.
  */
 function _injectTitleZoneControls(titleContainer) {
@@ -508,14 +510,21 @@ function _injectTitleZoneControls(titleContainer) {
     controlsDiv.appendChild(nestClone);
   }
 
-  // Grab buttons from the header .buttons container
+  // Grab buttons from the header .buttons container — only show QR and Log
+  // (Save, Save & Stay, Save & Exit, Cancel/Exit, Delete, Archive, Snooze go in the side menu only)
   var buttonsDiv = document.querySelector('.header-row .buttons');
   if (!buttonsDiv) return;
+
+  // IDs/identifiers for buttons that belong in the title zone (QR and Log only)
+  var titleZoneIds = ['qrButton', 'headerAuditBtn'];
 
   var buttons = buttonsDiv.querySelectorAll('button');
   buttons.forEach(function(btn) {
     if (btn.disabled && btn.style.pointerEvents === 'none') return;
     if (btn.style.display === 'none') return;
+
+    // Only include buttons that belong in the title zone
+    if (titleZoneIds.indexOf(btn.id) === -1) return;
 
     var clone = document.createElement('button');
     clone.className = 'mobile-title-zone-btn';
@@ -558,7 +567,7 @@ function _createMobileZoneList() {
   panel.className = 'mobile-zone-list-panel';
   panel.innerHTML = '<h3 class="mobile-zone-list-title">Zones</h3>' +
     '<div class="mobile-zone-list-items"></div>' +
-    '<button class="mobile-zone-list-close">✕ Close</button>';
+    '<button class="mobile-zone-list-close"><span style="font-size:2.2em;font-weight:900;line-height:0;vertical-align:middle;overflow:hidden;">⇤</span> Hide Sidebar</button>';
 
   panel.querySelector('.mobile-zone-list-close').addEventListener('click', _closeMobileZoneList);
   document.body.appendChild(panel);
@@ -639,9 +648,9 @@ function _createMobileActionsSidebar() {
   // Panel
   var panel = document.createElement('div');
   panel.className = 'mobile-actions-sidebar';
-  panel.innerHTML = '<h3 class="mobile-actions-sidebar-title">Actions</h3>' +
-    '<div class="mobile-actions-sidebar-items"></div>' +
-    '<button class="mobile-actions-sidebar-close">✕ Close</button>';
+  panel.innerHTML = '<button class="mobile-actions-sidebar-close"><span style="font-size:2.2em;font-weight:900;line-height:0;vertical-align:middle;overflow:hidden;">⇤</span> Hide Sidebar</button>' +
+    '<div class="mobile-actions-sidebar-spacer"></div>' +
+    '<div class="mobile-actions-sidebar-items"></div>';
 
   panel.querySelector('.mobile-actions-sidebar-close').addEventListener('click', _closeMobileActionsSidebar);
   document.body.appendChild(panel);
@@ -650,6 +659,8 @@ function _createMobileActionsSidebar() {
 
 /**
  * Open the left actions sidebar, populating with current header buttons.
+ * Excludes QR and Log buttons (those are in the title zone only).
+ * Layout: Save/Exit section at top | Snooze in its own section | Archive + Delete at bottom.
  */
 function _openMobileActionsSidebar() {
   if (!_mobileActionsSidebarEl) _createMobileActionsSidebar();
@@ -661,13 +672,37 @@ function _openMobileActionsSidebar() {
   var buttonsDiv = document.querySelector('.header-row .buttons');
   if (!buttonsDiv) return;
 
+  // IDs for buttons excluded from the side menu (they live in the title zone)
+  var excludeFromSidebar = ['qrButton', 'headerAuditBtn'];
+  // IDs for buttons that go at the very bottom
+  var bottomIds = ['archivedButton', 'deleteButton'];
+  // Snooze gets its own section
+  var snoozeId = 'snoozeButton';
+
+  var normalBtns = [];
+  var snoozeBtn = null;
+  var bottomBtns = [];
+
   var buttons = buttonsDiv.querySelectorAll('button');
   buttons.forEach(function(btn) {
     // Skip disabled "Saved" indicator buttons
     if (btn.disabled && btn.style.pointerEvents === 'none') return;
     // Skip buttons hidden by save-state logic
     if (btn.style.display === 'none') return;
+    // Skip buttons that belong in the title zone only
+    if (excludeFromSidebar.indexOf(btn.id) !== -1) return;
 
+    if (bottomIds.indexOf(btn.id) !== -1) {
+      bottomBtns.push(btn);
+    } else if (btn.id === snoozeId) {
+      snoozeBtn = btn;
+    } else {
+      normalBtns.push(btn);
+    }
+  });
+
+  // Helper to create a sidebar button from an original button
+  function _makeSidebarBtn(btn) {
     var item = document.createElement('button');
     item.className = 'mobile-actions-sidebar-btn';
     item.innerHTML = btn.innerHTML;
@@ -682,8 +717,31 @@ function _openMobileActionsSidebar() {
         btn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       }
     });
-    list.appendChild(item);
-  });
+    return item;
+  }
+
+  // Section 1: Save & Exit buttons at the top
+  normalBtns.forEach(function(btn) { list.appendChild(_makeSidebarBtn(btn)); });
+
+  // Spacer between save/exit and snooze
+  if (snoozeBtn) {
+    var spacer1 = document.createElement('div');
+    spacer1.className = 'mobile-actions-sidebar-spacer';
+    list.appendChild(spacer1);
+  }
+
+  // Section 2: Snooze in its own section
+  if (snoozeBtn) list.appendChild(_makeSidebarBtn(snoozeBtn));
+
+  // Spacer between snooze and archive/delete
+  if (bottomBtns.length > 0) {
+    var spacer2 = document.createElement('div');
+    spacer2.className = 'mobile-actions-sidebar-spacer';
+    list.appendChild(spacer2);
+  }
+
+  // Section 3: Archive and Delete at the bottom
+  bottomBtns.forEach(function(btn) { list.appendChild(_makeSidebarBtn(btn)); });
 
   _mobileActionsSidebarBackdrop.classList.add('active');
   _mobileActionsSidebarEl.classList.add('active');
@@ -804,6 +862,9 @@ function _activateMobileZoneMode() {
   _createMobileZoneHeader();
   _createMobileZoneList();
   _createMobileActionsSidebar();
+
+  // Clear any inline display:none left from deactivation so CSS rules take over
+  if (_mobileZoneHeaderEl) _mobileZoneHeaderEl.style.display = '';
 
   // Determine starting zone
   _mobileCurrentZoneIdx = _getMobileStartZoneIdx();

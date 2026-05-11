@@ -2769,12 +2769,26 @@ button.archive-btn.archived-active {
 .date-mode-fields .time-input {
     width: 80px;
     font-size: 0.85em;
-    padding: 3px 4px;
+    padding: 3px 6px;
     font-family: 'Lora', Georgia, serif;
     border: 1px solid var(--border-color);
     border-radius: 3px;
     background: var(--parchment-light, #fff8e1);
     margin-right: 4px;
+    cursor: pointer;
+    text-align: center;
+    display: inline-block;
+    line-height: 22px;
+    color: var(--text-dark, #1a1208);
+    -webkit-appearance: none;
+    appearance: none;
+    -webkit-tap-highlight-color: rgba(139, 90, 43, 0.2);
+}
+.date-mode-fields .time-input:active {
+    background: rgba(139, 90, 43, 0.15);
+}
+.cwoc-time-btn-empty {
+    color: #8b7355;
 }
 
 
@@ -5260,10 +5274,16 @@ input.location {
     cursor: default;
 }
 
+.mobile-actions-sidebar-spacer {
+    height: 16px;
+    border-top: 1px solid rgba(139, 69, 19, 0.25);
+    margin-top: 8px;
+}
+
 .mobile-actions-sidebar-close {
     display: block;
     width: 100%;
-    margin-top: 8px;
+    margin-bottom: 0;
     padding: 8px;
     text-align: center;
     font-weight: bold;
@@ -5275,6 +5295,7 @@ input.location {
     cursor: pointer;
     min-height: 44px;
     font-size: 1em;
+    overflow: hidden;
 }
 
 .mobile-actions-sidebar-close:active {
@@ -5396,6 +5417,7 @@ input.location {
     border-radius: 4px;
     cursor: pointer;
     min-height: 44px;
+    overflow: hidden;
 }
 
 /* ── Mobile Zone Mode Body Adjustments ────────────────────────────────────── */

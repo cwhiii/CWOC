@@ -1,0 +1,1 @@
+Fixed mobile editor rotation bug where headers and zone navigation controls disappeared after rotating from portrait to landscape and back to portrait. The inline `display:none` set during deactivation was overriding the CSS rule on reactivation.

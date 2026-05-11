@@ -1,0 +1,1 @@
+Desktop-only notifications feature. Editor alerts "next time on desktop" defers delivery. Snooze + Dismiss on all notification surfaces. Fixed double-render bug in Notifications mode (concurrent displayChits calls caused duplicate entries). Profile menu Notifications item styled like other items, always visible.

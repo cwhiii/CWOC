@@ -1583,6 +1583,12 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('rule-trigger').addEventListener('change', _onTriggerChange);
     document.getElementById('schedule-frequency').addEventListener('change', _onScheduleFrequencyChange);
 
+    // Wire up schedule-time to open drum roller picker on click
+    var schedTimeEl = document.getElementById('schedule-time');
+    if (schedTimeEl) {
+        schedTimeEl.addEventListener('click', function() { if (typeof cwocTimePicker !== 'undefined') cwocTimePicker.open(schedTimeEl); });
+    }
+
     // Bind HA trigger entity_id dirty tracking
     document.getElementById('ha-entity-id-input').addEventListener('input', _markDirty);
 

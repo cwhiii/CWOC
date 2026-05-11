@@ -893,4 +893,5 @@ input:checked + .slider:before {
     border: 1px solid var(--aged-brown-dark, #4a2c2a);
     border-radius: 4px;
     cursor: pointer;
+    overflow: hidden;
 }

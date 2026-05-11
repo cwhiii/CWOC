@@ -30,6 +30,13 @@
 
 var _cwocSidebarContext = null;
 var _notifInboxItems = [];
+var _notifToastedIds = new Set(); // Track which notifications have already fired a toast
+
+// Load previously toasted IDs from localStorage so we don't re-toast across page loads
+try {
+  var _storedToasted = JSON.parse(localStorage.getItem('cwoc_notif_toasted') || '[]');
+  if (Array.isArray(_storedToasted)) _storedToasted.forEach(function(id) { _notifToastedIds.add(id); });
+} catch (e) { /* ignore */ }
 
 /* ── Sidebar HTML Injection (IIFE) ───────────────────────────────────────── */
 
@@ -894,7 +901,33 @@ async function _fetchNotifications() {
     var resp = await fetch('/api/notifications' + deviceParam);
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
     var all = await resp.json();
-    _notifInboxItems = Array.isArray(all) ? all.filter(function(n) { return n.status === 'pending'; }) : [];
+    var pending = Array.isArray(all) ? all.filter(function(n) { return n.status === 'pending'; }) : [];
+
+    // Fire toast + system notification for any new notifications we haven't seen yet
+    pending.forEach(function(n) {
+      if (_notifToastedIds.has(n.id)) return;
+      _notifToastedIds.add(n.id);
+
+      // Persist to localStorage so we don't re-toast across page loads
+      try {
+        localStorage.setItem('cwoc_notif_toasted', JSON.stringify(Array.from(_notifToastedIds)));
+      } catch (e) { /* ignore */ }
+
+      // Build display message
+      var msg = n.notification_type === 'reminder'
+        ? '📌 ' + (n.chit_title || 'Reminder')
+        : '🔔 ' + (n.chit_title || '(Untitled)') + ' — ' + (n.notification_type === 'assigned' ? 'assigned by' : 'from') + ' ' + (n.owner_display_name || '?');
+
+      // In-app toast
+      if (typeof cwocToast === 'function') cwocToast(msg, 'info');
+
+      // Browser system notification
+      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+        try { new Notification('CWOC', { body: msg, icon: '/static/cwoc-icon-192.png' }); } catch (e) { /* ignore */ }
+      }
+    });
+
+    _notifInboxItems = pending;
     _updateNotifBadge();
     var list = document.getElementById('notif-inbox-list');
     if (list && list.style.display !== 'none') _renderNotifInbox();
@@ -945,12 +978,20 @@ function _renderNotifInbox() {
       if (notif.delivery_target) {
         var targetLine = document.createElement('div');
         targetLine.className = 'cwoc-notif-owner';
-        targetLine.textContent = '📌 ' + notif.delivery_target + '-only reminder';
+        targetLine.textContent = '📌 ' + (notif.delivery_target === 'desktop' ? 'Next Time On Desktop' : notif.delivery_target + ' reminder');
         card.appendChild(targetLine);
       }
 
       var actions = document.createElement('div');
       actions.className = 'cwoc-notif-actions';
+      var snoozeBtn = document.createElement('button');
+      snoozeBtn.className = 'cwoc-notif-accept-btn';
+      var snoozeLen = window._snoozeLength || window._sharedSnoozeLength || '5 minutes';
+      var snoozeMatch = String(snoozeLen).match(/(\d+)/);
+      var snoozeMins = snoozeMatch ? parseInt(snoozeMatch[1]) : 5;
+      snoozeBtn.textContent = 'Snooze ' + snoozeMins + 'm';
+      snoozeBtn.addEventListener('click', function() { _snoozeNotification(notif.id, snoozeMins); });
+      actions.appendChild(snoozeBtn);
       var dismissBtn = document.createElement('button');
       dismissBtn.className = 'cwoc-notif-decline-btn';
       dismissBtn.textContent = 'Dismiss';
@@ -1017,11 +1058,13 @@ async function _respondNotification(notifId, status) {
   }
 }
 
-/** Dismiss (delete) a notification via DELETE, then remove from list. */
+/** Dismiss a notification (mark as addressed, not delete). */
 async function _dismissNotification(notifId) {
   try {
     var resp = await fetch('/api/notifications/' + encodeURIComponent(notifId), {
-      method: 'DELETE'
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'dismissed' })
     });
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
     _notifInboxItems = _notifInboxItems.filter(function(n) { return n.id !== notifId; });
@@ -1029,6 +1072,24 @@ async function _dismissNotification(notifId) {
     _renderNotifInbox();
   } catch (e) {
     console.error('Failed to dismiss notification ' + notifId + ':', e);
+  }
+}
+
+/** Snooze a notification for the given number of minutes. */
+async function _snoozeNotification(notifId, minutes) {
+  try {
+    var resp = await fetch('/api/notifications/' + encodeURIComponent(notifId) + '/snooze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ minutes: minutes })
+    });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    _notifInboxItems = _notifInboxItems.filter(function(n) { return n.id !== notifId; });
+    _updateNotifBadge();
+    _renderNotifInbox();
+    if (typeof cwocToast === 'function') cwocToast('Snoozed for ' + minutes + ' minutes', 'info');
+  } catch (e) {
+    console.error('Failed to snooze notification ' + notifId + ':', e);
   }
 }
 

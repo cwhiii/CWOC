@@ -1,0 +1,294 @@
+/**
+ * shared-timepicker.css — iOS-style drum roller time picker
+ *
+ * Mobile-first scroll-snap time picker with parchment theme.
+ */
+
+/* ── Overlay ──────────────────────────────────────────────────────────────── */
+.cwoc-tp-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 9999;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+.cwoc-tp-overlay.cwoc-tp-visible {
+  opacity: 1;
+}
+.cwoc-tp-overlay.cwoc-tp-closing {
+  opacity: 0;
+}
+
+/* ── Modal ────────────────────────────────────────────────────────────────── */
+.cwoc-tp-modal {
+  background: #fffaf0;
+  border-bottom: 3px solid #6b4e31;
+  border-radius: 0 0 16px 16px;
+  width: 100%;
+  max-width: 400px;
+  padding: 16px 12px 24px;
+  transform: translateY(-100%);
+  transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+  font-family: 'Lora', Georgia, serif;
+}
+.cwoc-tp-visible .cwoc-tp-modal {
+  transform: translateY(0);
+}
+.cwoc-tp-closing .cwoc-tp-modal {
+  transform: translateY(-100%);
+}
+
+/* Desktop: center the modal */
+@media (min-width: 600px) {
+  .cwoc-tp-overlay {
+    align-items: center;
+  }
+  .cwoc-tp-modal {
+    border-radius: 12px;
+    border: 2px solid #6b4e31;
+    border-bottom: 2px solid #6b4e31;
+    max-width: 340px;
+    padding: 20px 16px 20px;
+    transform: scale(0.9);
+    opacity: 0;
+    transition: transform 0.2s ease, opacity 0.2s ease;
+  }
+  .cwoc-tp-visible .cwoc-tp-modal {
+    transform: scale(1);
+    opacity: 1;
+  }
+  .cwoc-tp-closing .cwoc-tp-modal {
+    transform: scale(0.9);
+    opacity: 0;
+  }
+}
+
+/* ── Header ───────────────────────────────────────────────────────────────── */
+.cwoc-tp-header {
+  text-align: center;
+  font-size: 1.1em;
+  font-weight: 600;
+  color: #3a2a14;
+  margin-bottom: 12px;
+}
+
+/* ── Drum container ───────────────────────────────────────────────────────── */
+.cwoc-tp-drums {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  position: relative;
+  height: 200px;
+  margin: 0 auto;
+  max-width: 300px;
+}
+
+/* ── Highlight bar (selected row indicator) ───────────────────────────────── */
+.cwoc-tp-highlight {
+  position: absolute;
+  top: 50%;
+  left: 8px;
+  right: 8px;
+  height: 40px;
+  transform: translateY(-50%);
+  background: rgba(139, 90, 43, 0.1);
+  border-top: 1.5px solid rgba(139, 90, 43, 0.3);
+  border-bottom: 1.5px solid rgba(139, 90, 43, 0.3);
+  border-radius: 6px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* ── Editable input overlay on the highlight bar ──────────────────────────── */
+.cwoc-tp-input-overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  z-index: 10;
+  pointer-events: auto;
+}
+.cwoc-tp-num-input {
+  width: 2.2em;
+  font-size: 1.5em;
+  font-weight: 700;
+  font-family: 'Lora', Georgia, serif;
+  text-align: center;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: #1a1208;
+  padding: 2px 0;
+  outline: none;
+  caret-color: #6b4e31;
+  transition: border-color 0.15s;
+}
+.cwoc-tp-num-input:focus {
+  border-bottom-color: #6b4e31;
+  background: rgba(255, 250, 240, 0.8);
+  border-radius: 4px 4px 0 0;
+}
+.cwoc-tp-ampm-input {
+  width: 2.4em;
+  font-size: 1.2em;
+  margin-left: 4px;
+}
+.cwoc-tp-input-sep {
+  font-size: 1.5em;
+  font-weight: 700;
+  color: #1a1208;
+  user-select: none;
+}
+
+/* ── Separator (colon) ────────────────────────────────────────────────────── */
+.cwoc-tp-separator {
+  font-size: 1.8em;
+  font-weight: bold;
+  color: #3a2a14;
+  padding: 0 2px;
+  user-select: none;
+  line-height: 200px;
+}
+
+/* ── Individual drum column ───────────────────────────────────────────────── */
+.cwoc-tp-drum {
+  flex: 1;
+  max-width: 80px;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Fade masks at top and bottom */
+.cwoc-tp-drum::before,
+.cwoc-tp-drum::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 60px;
+  pointer-events: none;
+  z-index: 2;
+}
+.cwoc-tp-drum::before {
+  top: 0;
+  background: linear-gradient(to bottom, #fffaf0 0%, transparent 100%);
+}
+.cwoc-tp-drum::after {
+  bottom: 0;
+  background: linear-gradient(to top, #fffaf0 0%, transparent 100%);
+}
+
+/* ── Scroller (the scrollable area) ───────────────────────────────────────── */
+.cwoc-tp-scroller {
+  height: 100%;
+  overflow-y: scroll;
+  scroll-snap-type: y mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.cwoc-tp-scroller::-webkit-scrollbar {
+  display: none;
+}
+
+/* ── Individual items ─────────────────────────────────────────────────────── */
+.cwoc-tp-item {
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4em;
+  color: #6b4e31;
+  opacity: 0.4;
+  scroll-snap-align: center;
+  user-select: none;
+  transition: opacity 0.15s, transform 0.15s, font-size 0.15s;
+  cursor: pointer;
+}
+.cwoc-tp-item.cwoc-tp-pad {
+  opacity: 0;
+  pointer-events: none;
+}
+.cwoc-tp-item.cwoc-tp-selected {
+  opacity: 1;
+  font-size: 1.6em;
+  font-weight: 700;
+  color: transparent; /* hidden behind the input overlay */
+  transform: scale(1.05);
+}
+
+/* ── Buttons ──────────────────────────────────────────────────────────────── */
+.cwoc-tp-buttons {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+  padding: 0 8px;
+}
+.cwoc-tp-btn {
+  flex: 1;
+  padding: 10px 12px;
+  border: 1.5px solid #6b4e31;
+  border-radius: 8px;
+  font-family: 'Lora', Georgia, serif;
+  font-size: 0.95em;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+  text-align: center;
+}
+.cwoc-tp-btn:active {
+  transform: scale(0.96);
+}
+.cwoc-tp-btn-cancel {
+  background: #f5e6cc;
+  color: #6b4e31;
+}
+.cwoc-tp-btn-cancel:hover {
+  background: #ecdcc0;
+}
+.cwoc-tp-btn-now {
+  background: #e8dcc8;
+  color: #3a2a14;
+}
+.cwoc-tp-btn-now:hover {
+  background: #ddd0b8;
+}
+.cwoc-tp-btn-confirm {
+  background: #6b4e31;
+  color: #fff8e1;
+  border-color: #4a3520;
+}
+.cwoc-tp-btn-confirm:hover {
+  background: #5a4028;
+}
+
+/* ── Responsive tweaks ────────────────────────────────────────────────────── */
+@media (max-width: 380px) {
+  .cwoc-tp-drums {
+    height: 180px;
+  }
+  .cwoc-tp-item {
+    height: 36px;
+    font-size: 1.2em;
+  }
+  .cwoc-tp-item.cwoc-tp-selected {
+    font-size: 1.4em;
+  }
+  .cwoc-tp-highlight {
+    height: 36px;
+  }
+  .cwoc-tp-separator {
+    line-height: 180px;
+  }
+}

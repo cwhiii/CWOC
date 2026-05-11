@@ -76,6 +76,7 @@
         cursor: pointer;
         z-index: 10;
         min-height: 44px;
+        overflow: hidden;
     }
     .sidebar-close-btn:hover {
         background: var(--btn-hover, #6b4e31);

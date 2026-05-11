@@ -1,0 +1,1 @@
+Desktop-only notifications feature. Toasted notification IDs now persisted in localStorage to prevent re-toasting across page loads without auto-dismissing. Notifications stay pending (unread) until manually dismissed. Removed auto-dismiss behavior for desktop reminders.
