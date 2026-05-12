@@ -698,9 +698,19 @@ class Checklist {
     ta.addEventListener("keydown", function(e) {
       e.stopPropagation();
       if ((e.metaKey || e.ctrlKey) && e.key === "z" && !e.shiftKey) {
-        e.preventDefault(); finishEditing(false); self.undo(); return;
+        e.preventDefault();
+        var before = ta.value;
+        document.execCommand('undo');
+        if (ta.value === before) {
+          // Browser had nothing to undo — do checklist-level undo
+          finishEditing(false);
+          self.undo();
+        }
+        return;
       } else if ((e.metaKey || e.ctrlKey) && e.key === "z" && e.shiftKey) {
-        e.preventDefault(); finishEditing(false); self.redo(); return;
+        e.preventDefault();
+        document.execCommand('redo');
+        return;
       }
       if (e.key === "Enter" && e.shiftKey) {
         // Shift+Enter: insert newline (default textarea behavior — do nothing)
