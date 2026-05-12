@@ -32,7 +32,7 @@
     </head>
     <body>
         <div class="header-row">
-            <a href="#" id="editor-logo-link" title="Go to Dashboard" style="display:inline-block;flex-shrink:0;" onclick="window.location.href = _getEditorReturnUrl(); return false;"><img src="/static/create_new.png" alt="Logo" class="header-image" /></a>
+            <a href="#" id="editor-logo-link" title="Go to Dashboard" style="display:inline-block;flex-shrink:0;" onclick="cancelOrExit(); return false;"><img src="/static/create_new.png" alt="Logo" class="header-image" /></a>
             <h1>Chit Editor</h1>
             <div class="buttons">
                 <div class="left-buttons">
@@ -57,6 +57,8 @@
                     <button id="saveButton" onclick="saveChit()" disabled>
                         <i class="fas fa-save"></i> Save
                     </button>
+                    <!-- Auto-save indicator (hidden by default; shown by CwocAutoSave when enabled) -->
+                    <span id="autosave-indicator" class="autosave-indicator autosave-saved" style="display:none;">✅ Saved</span>
                     <button onclick="cancelOrExit()" class="cancel">
                         <i class="fas fa-times"></i> Exit
                     </button>
@@ -65,7 +67,7 @@
                     <button id="qrButton" onclick="_showQRCode(event)" title="📦 Data QR (Shift+click for 🔗 Link QR)" style="font-size:0.9em;">
                         📱 QR
                     </button>
-                    <button class="standard-button" id="headerAuditBtn" onclick="window.location.href='/frontend/html/audit-log.html?entity_type=chit&entity_id=' + encodeURIComponent(new URLSearchParams(window.location.search).get('id') || '')" style="font-size:0.85em;" title="View audit history for this chit">
+                    <button class="standard-button" id="headerAuditBtn" onclick="_navigateWithSaveCheck('/frontend/html/audit-log.html?entity_type=chit&entity_id=' + encodeURIComponent(new URLSearchParams(window.location.search).get('id') || ''))" style="font-size:0.85em;" title="View audit history for this chit">
                         📜 Log
                     </button>
                     <button id="archivedButton" class="delete archive-btn" onclick="toggleArchived()" title="Toggle Archived State">
@@ -869,6 +871,15 @@
                             <div class="zone-actions people-zone-actions">
                                 <button
                                     type="button"
+                                    onclick="_addNewContactFromEditor(event)"
+                                    class="zone-button"
+                                    title="Create a new contact"
+                                >
+                                    <i class="fas fa-user-plus"></i>
+                                    <span class="hideWhenNarrow">Add</span>
+                                </button>
+                                <button
+                                    type="button"
                                     onclick="openPeopleExpandModal(event)"
                                     id="open-people-modal-button"
                                     class="zone-button"
@@ -1656,6 +1667,7 @@
         <script src="/frontend/js/editor/editor-snooze.js"></script>
         <script src="/frontend/js/editor/editor-prerequisites.js"></script>
         <script src="/frontend/js/editor/editor-save.js"></script>
+        <script src="/frontend/js/editor/editor-autosave.js"></script>
         <script src="/frontend/js/editor/editor-init.js?v=20260511"></script>
         <script src="/frontend/js/editor/editor-mobile-zones.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>

@@ -874,6 +874,17 @@ function _updatePeopleExpandCollapseBtn() {
   });
 }
 
+// ── Add new contact from editor ──────────────────────────────────────────────
+
+/**
+ * Navigate to the contact editor to create a new contact.
+ * Uses save check so unsaved chit changes aren't lost.
+ */
+function _addNewContactFromEditor(event) {
+  if (event) { event.stopPropagation(); event.preventDefault(); }
+  _navigateWithSaveCheck('/frontend/html/contact-editor.html');
+}
+
 // ── Contact chip management (existing, unchanged) ────────────────────────────
 
 function _addPeopleChip(data) {

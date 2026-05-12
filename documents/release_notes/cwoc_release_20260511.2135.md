@@ -1,0 +1,1 @@
+Contacts now use soft-delete instead of permanent deletion. A new "Deleted Contacts" trash page (accessible via the Trash button on the People page) lets you restore or permanently purge deleted contacts.

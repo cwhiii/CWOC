@@ -2287,6 +2287,16 @@ mark {
     line-height: 1;
 }
 
+.checklist-item:has(.trash-icon:hover),
+.checklist-item:has(.checklist-send-icon:hover),
+.completed-checklist-item:has(.trash-icon:hover),
+.completed-checklist-item:has(.checklist-send-icon:hover),
+.ghost-checklist-item:has(.trash-icon:hover),
+.ghost-checklist-item:has(.checklist-send-icon:hover) {
+    background: rgba(107, 78, 49, 0.04);
+    border-radius: 4px;
+}
+
 .checklist-item:hover .trash-icon,
 .completed-checklist-item:hover .trash-icon,
 .ghost-checklist-item:hover .trash-icon {
@@ -6344,5 +6354,51 @@ input.location {
 @media (max-width: 600px) {
     .prereq-list-container {
         margin-left: 0;
+    }
+}
+
+/* ── Auto-Save Indicator ─────────────────────────────────────────────────── */
+
+.autosave-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.8em;
+    padding: 4px 10px;
+    border-radius: 4px;
+    border: 1px solid var(--aged-brown-light);
+    white-space: nowrap;
+    transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+
+.autosave-saved {
+    background-color: #e8f5e9;
+    color: #2e7d32;
+    border-color: #4a7c59;
+}
+
+.autosave-pending {
+    background-color: #fff8e1;
+    color: #8d6e00;
+    border-color: #d4af37;
+}
+
+.autosave-saving {
+    background-color: #e3f2fd;
+    color: #37648b;
+    border-color: #4682b4;
+}
+
+.autosave-error {
+    background-color: #fdecea;
+    color: #b22222;
+    border-color: #b22222;
+}
+
+@media (max-width: 480px) {
+    .autosave-indicator {
+        font-size: 0.7em;
+        padding: 3px 6px;
     }
 }

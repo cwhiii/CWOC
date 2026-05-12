@@ -1,238 +1,331 @@
 /**
- * editor-autosave.js — Auto-save system for the chit editor.
+ * editor-autosave.js — Auto-save system for the chit editor
  *
- * Automatically persists edits after a 2-second debounce period when enabled.
+ * Provides automatic persistence of chit edits after a debounce period.
  * Controlled by per-platform (mobile/desktop) toggles in user settings.
- * Uses the existing saveChitAndStay() function for persistence.
- * Provides visual feedback via a save status indicator.
+ * Uses the existing saveChitAndStay() function for persistence and
+ * buildChitObject() for validation gating.
+ *
+ * Depends on: editor-save.js (saveChitAndStay, buildChitObject, _isSaving),
+ *             shared-utils.js (getCachedSettings)
+ * Loaded after: editor-save.js
+ * Loaded before: editor-init.js
  */
 
-// ── CwocAutoSave Class ──────────────────────────────────────────────────────
+/**
+ * CwocAutoSave — manages debounced auto-saving with platform-aware settings.
+ *
+ * @param {Object} settings — the user settings object (from getCachedSettings)
+ *   Expected fields: autosave_desktop ("1"|"0"), autosave_mobile ("1"|"0")
+ */
+function CwocAutoSave(settings) {
+  this._settings = settings || {};
+  this._debounceMs = 2000;
+  this._timerId = null;
+  this._enabled = false;
+  this._state = 'saved'; // 'saved' | 'pending' | 'saving' | 'error'
+  this._retryAfterSave = false;
+  this._boundResizeHandler = this._onResize.bind(this);
+  this._lastPlatform = this._detectPlatform();
 
-class CwocAutoSave {
-  constructor(settings) {
-    this._settings = settings || {};
-    this._debounceMs = 2000;
-    this._timer = null;
-    this._isSaving = false;
-    this._pendingAfterSave = false;
-    this._state = 'saved'; // 'saved' | 'pending' | 'saving' | 'error'
-    this._enabled = this._computeEnabled();
-    this._indicatorEl = document.getElementById('autosave-indicator');
+  // Evaluate initial enabled state from settings
+  this._enabled = this._readSettingForPlatform();
 
-    // Listen for viewport resize to re-evaluate platform
-    this._resizeHandler = this._onResize.bind(this);
-    window.addEventListener('resize', this._resizeHandler);
+  // Listen for viewport resize to re-evaluate platform
+  window.addEventListener('resize', this._boundResizeHandler);
 
-    // Apply initial UI state
-    this._applyUIMode();
-    this._updateIndicator();
-  }
-
-  // ── Public API ──────────────────────────────────────────────────────────
-
-  isEnabled() {
-    return this._enabled;
-  }
-
-  getState() {
-    return this._state;
-  }
-
-  enable() {
-    this._enabled = true;
-    this._applyUIMode();
-    this._updateIndicator();
-  }
-
-  disable() {
-    this._enabled = false;
-    this.cancelPending();
-    this._applyUIMode();
-    this._updateIndicator();
-  }
-
-  /**
-   * Called when the editor detects a change. Starts/resets the debounce timer.
-   */
-  scheduleAutoSave() {
-    if (!this._enabled) return;
-    this.cancelPending();
-    this._state = 'pending';
-    this._updateIndicator();
-    this._timer = setTimeout(() => this._triggerSave(), this._debounceMs);
-  }
-
-  /**
-   * Cancel any pending debounce timer.
-   */
-  cancelPending() {
-    if (this._timer) {
-      clearTimeout(this._timer);
-      this._timer = null;
-    }
-  }
-
-  /**
-   * Notify auto-save that a save completed successfully (called from setSaveButtonSaved).
-   */
-  notifySaveComplete() {
-    this._isSaving = false;
-    if (this._pendingAfterSave) {
-      this._pendingAfterSave = false;
-      this.scheduleAutoSave();
-    } else {
-      this._state = 'saved';
-      this._updateIndicator();
-    }
-  }
-
-  /**
-   * Notify auto-save that a save failed.
-   */
-  notifySaveError() {
-    this._isSaving = false;
-    this._state = 'error';
-    this._updateIndicator();
-  }
-
-  /**
-   * Perform an immediate save (used on exit). Returns a promise.
-   */
-  async saveImmediately() {
-    this.cancelPending();
-    if (this._isSaving) {
-      // Wait for current save to finish
-      return new Promise((resolve) => {
-        const check = setInterval(() => {
-          if (!this._isSaving) {
-            clearInterval(check);
-            resolve();
-          }
-        }, 100);
-      });
-    }
-    await this._executeSave();
-  }
-
-  /**
-   * Whether there are unsaved changes (pending or error state).
-   */
-  hasUnsavedChanges() {
-    return this._state === 'pending' || this._state === 'error';
-  }
-
-  destroy() {
-    this.cancelPending();
-    window.removeEventListener('resize', this._resizeHandler);
-  }
-
-  // ── Private Methods ─────────────────────────────────────────────────────
-
-  _computeEnabled() {
-    var isMobile = window.innerWidth <= 768;
-    if (isMobile) {
-      return this._settings.autosave_mobile === '1';
-    }
-    return this._settings.autosave_desktop === '1';
-  }
-
-  _onResize() {
-    var wasEnabled = this._enabled;
-    this._enabled = this._computeEnabled();
-    if (wasEnabled !== this._enabled) {
-      if (!this._enabled) {
-        this.cancelPending();
-      }
-      this._applyUIMode();
-      this._updateIndicator();
-    }
-  }
-
-  async _triggerSave() {
-    if (this._isSaving) {
-      // A save is already in progress — schedule retry after it completes
-      this._pendingAfterSave = true;
-      return;
-    }
-    await this._executeSave();
-  }
-
-  async _executeSave() {
-    // Validation gate: check if chit can be built
-    try {
-      var chit = await buildChitObject();
-      if (!chit) {
-        // Validation failed — skip save silently, will retry on next change
-        this._state = 'pending';
-        this._updateIndicator();
-        return;
-      }
-    } catch (e) {
-      // buildChitObject threw — skip save
-      this._state = 'pending';
-      this._updateIndicator();
-      return;
-    }
-
-    this._isSaving = true;
-    this._state = 'saving';
-    this._updateIndicator();
-
-    try {
-      await saveChitAndStay();
-      // notifySaveComplete will be called via setSaveButtonSaved hook
-    } catch (e) {
-      console.error('[CwocAutoSave] Save failed:', e);
-      this.notifySaveError();
-    }
-  }
-
-  _applyUIMode() {
-    var saveStayBtn = document.getElementById('saveStayButton');
-    var saveExitBtn = document.getElementById('saveExitButton');
-    var saveBtn = document.getElementById('saveButton');
-    var cancelBtn = document.querySelector('.header-row .buttons .cancel');
-
-    if (this._enabled) {
-      // Hide manual save buttons, show only indicator + exit
-      if (saveStayBtn) saveStayBtn.style.display = 'none';
-      if (saveExitBtn) saveExitBtn.style.display = 'none';
-      if (saveBtn) saveBtn.style.display = 'none';
-      if (this._indicatorEl) this._indicatorEl.style.display = 'inline-flex';
-    } else {
-      // Restore normal button behavior (let CwocSaveSystem manage visibility)
-      if (saveBtn) saveBtn.style.display = '';
-      if (this._indicatorEl) this._indicatorEl.style.display = 'none';
-    }
-  }
-
-  _updateIndicator() {
-    if (!this._indicatorEl) return;
-    if (!this._enabled) {
-      this._indicatorEl.style.display = 'none';
-      return;
-    }
-
-    this._indicatorEl.style.display = 'inline-flex';
-    this._indicatorEl.className = 'autosave-indicator autosave-' + this._state;
-
-    switch (this._state) {
-      case 'saved':
-        this._indicatorEl.textContent = '✅ Saved';
-        break;
-      case 'pending':
-        this._indicatorEl.textContent = '⏳ Saving soon...';
-        break;
-      case 'saving':
-        this._indicatorEl.textContent = '💾 Saving...';
-        break;
-      case 'error':
-        this._indicatorEl.textContent = '⚠️ Save failed';
-        break;
-    }
+  // Apply initial UI state
+  if (this._enabled) {
+    this._showIndicator();
+    this._hideSaveButtons();
   }
 }
 
-// Global auto-save instance (initialized in editor-init.js)
-var _cwocAutoSave = null;
+/**
+ * Detect current platform based on viewport width.
+ * @returns {'mobile'|'desktop'}
+ */
+CwocAutoSave.prototype._detectPlatform = function () {
+  return window.innerWidth <= 768 ? 'mobile' : 'desktop';
+};
+
+/**
+ * Read the appropriate auto-save setting for the current platform.
+ * @returns {boolean}
+ */
+CwocAutoSave.prototype._readSettingForPlatform = function () {
+  var platform = this._detectPlatform();
+  if (platform === 'mobile') {
+    return this._settings.autosave_mobile === '1';
+  }
+  return this._settings.autosave_desktop === '1';
+};
+
+/**
+ * Handle viewport resize — re-evaluate platform setting when crossing 768px.
+ */
+CwocAutoSave.prototype._onResize = function () {
+  var newPlatform = this._detectPlatform();
+  if (newPlatform === this._lastPlatform) return;
+
+  this._lastPlatform = newPlatform;
+  var wasEnabled = this._enabled;
+  this._enabled = this._readSettingForPlatform();
+
+  if (wasEnabled && !this._enabled) {
+    // Transitioning from enabled to disabled
+    this.cancelPending();
+    this._hideIndicator();
+    this._showSaveButtons();
+  } else if (!wasEnabled && this._enabled) {
+    // Transitioning from disabled to enabled
+    this._showIndicator();
+    this._hideSaveButtons();
+  }
+};
+
+/**
+ * Enable auto-save manually (overrides setting).
+ */
+CwocAutoSave.prototype.enable = function () {
+  this._enabled = true;
+  this._showIndicator();
+  this._hideSaveButtons();
+};
+
+/**
+ * Disable auto-save manually (overrides setting).
+ */
+CwocAutoSave.prototype.disable = function () {
+  this._enabled = false;
+  this.cancelPending();
+  this._hideIndicator();
+  this._showSaveButtons();
+};
+
+/**
+ * Schedule an auto-save after the debounce period.
+ * Resets the timer on each call (debounce behavior).
+ */
+CwocAutoSave.prototype.scheduleAutoSave = function () {
+  if (!this._enabled) return;
+
+  // Reset existing timer
+  this.cancelPending();
+
+  this._state = 'pending';
+  this._updateIndicator();
+
+  var self = this;
+  this._timerId = setTimeout(function () {
+    self._timerId = null;
+    self._performSave();
+  }, this._debounceMs);
+};
+
+/**
+ * Cancel any pending auto-save timer.
+ */
+CwocAutoSave.prototype.cancelPending = function () {
+  if (this._timerId !== null) {
+    clearTimeout(this._timerId);
+    this._timerId = null;
+  }
+};
+
+/**
+ * Check if auto-save is currently enabled.
+ * @returns {boolean}
+ */
+CwocAutoSave.prototype.isEnabled = function () {
+  return this._enabled;
+};
+
+/**
+ * Get the current auto-save state.
+ * @returns {'saved'|'pending'|'saving'|'error'}
+ */
+CwocAutoSave.prototype.getState = function () {
+  return this._state;
+};
+
+/**
+ * Perform the actual save operation with validation and in-flight guard.
+ */
+CwocAutoSave.prototype._performSave = async function () {
+  // In-flight guard: if a save is already in progress, schedule retry
+  if (typeof _isSaving !== 'undefined' && _isSaving) {
+    this._retryAfterSave = true;
+    return;
+  }
+
+  // Validation gate: build the chit object, skip if invalid
+  var chit = null;
+  try {
+    chit = await buildChitObject();
+  } catch (e) {
+    // Validation error — skip silently
+    this._state = 'pending';
+    this._updateIndicator();
+    return;
+  }
+
+  if (!chit) {
+    // Validation failed (buildChitObject returned null) — skip silently
+    // State stays as 'pending' so next change will retry
+    this._state = 'pending';
+    this._updateIndicator();
+    return;
+  }
+
+  // Perform the save
+  this._state = 'saving';
+  this._updateIndicator();
+
+  try {
+    await saveChitAndStay();
+    this._state = 'saved';
+    this._updateIndicator();
+
+    // If changes occurred during save, schedule another save
+    if (this._retryAfterSave) {
+      this._retryAfterSave = false;
+      this.scheduleAutoSave();
+    }
+  } catch (e) {
+    console.error('[CwocAutoSave] Save failed:', e);
+    this._state = 'error';
+    this._updateIndicator();
+  }
+};
+
+/**
+ * Notify auto-save that a manual or external save completed.
+ * Used to clear retry flag and update state.
+ */
+CwocAutoSave.prototype.notifySaveComplete = function () {
+  if (this._retryAfterSave) {
+    this._retryAfterSave = false;
+    this.scheduleAutoSave();
+  } else if (this._state === 'saving') {
+    this._state = 'saved';
+    this._updateIndicator();
+  }
+};
+
+/**
+ * Notify auto-save that a save failed externally.
+ */
+CwocAutoSave.prototype.notifySaveError = function () {
+  this._state = 'error';
+  this._updateIndicator();
+};
+
+// ── UI Management ────────────────────────────────────────────────────────────
+
+/**
+ * Update the auto-save indicator element based on current state.
+ */
+CwocAutoSave.prototype._updateIndicator = function () {
+  var el = document.getElementById('autosave-indicator');
+  if (!el) return;
+
+  switch (this._state) {
+    case 'saved':
+      el.textContent = '✅ Saved';
+      el.className = 'autosave-indicator autosave-saved';
+      break;
+    case 'pending':
+      el.textContent = '⏳ Saving soon...';
+      el.className = 'autosave-indicator autosave-pending';
+      break;
+    case 'saving':
+      el.textContent = '💾 Saving...';
+      el.className = 'autosave-indicator autosave-saving';
+      break;
+    case 'error':
+      el.textContent = '⚠️ Save failed';
+      el.className = 'autosave-indicator autosave-error';
+      break;
+  }
+};
+
+/**
+ * Show the auto-save indicator element.
+ */
+CwocAutoSave.prototype._showIndicator = function () {
+  var el = document.getElementById('autosave-indicator');
+  if (el) {
+    el.style.display = '';
+    this._updateIndicator();
+  }
+};
+
+/**
+ * Hide the auto-save indicator element.
+ */
+CwocAutoSave.prototype._hideIndicator = function () {
+  var el = document.getElementById('autosave-indicator');
+  if (el) el.style.display = 'none';
+};
+
+/**
+ * Hide manual save buttons when auto-save is enabled.
+ * Keeps the Exit button visible.
+ */
+CwocAutoSave.prototype._hideSaveButtons = function () {
+  var saveStay = document.getElementById('saveStayButton');
+  var saveExit = document.getElementById('saveExitButton');
+  var saveBtn = document.getElementById('saveButton');
+  if (saveStay) saveStay.style.display = 'none';
+  if (saveExit) saveExit.style.display = 'none';
+  if (saveBtn) saveBtn.style.display = 'none';
+};
+
+/**
+ * Show manual save buttons when auto-save is disabled.
+ */
+CwocAutoSave.prototype._showSaveButtons = function () {
+  var saveBtn = document.getElementById('saveButton');
+  if (saveBtn) saveBtn.style.display = '';
+  // saveStayButton and saveExitButton are managed by CwocSaveSystem
+  // so we just restore the default save button
+};
+
+/**
+ * Perform an immediate save (used for exit-with-pending-changes).
+ * Returns a promise that resolves when save completes or rejects on failure.
+ */
+CwocAutoSave.prototype.saveImmediately = async function () {
+  this.cancelPending();
+
+  // Validation gate
+  var chit = await buildChitObject();
+  if (!chit) {
+    throw new Error('Validation failed');
+  }
+
+  this._state = 'saving';
+  this._updateIndicator();
+
+  try {
+    await saveChitAndStay();
+    this._state = 'saved';
+    this._updateIndicator();
+  } catch (e) {
+    this._state = 'error';
+    this._updateIndicator();
+    throw e;
+  }
+};
+
+/**
+ * Clean up event listeners (call when leaving the editor).
+ */
+CwocAutoSave.prototype.destroy = function () {
+  this.cancelPending();
+  window.removeEventListener('resize', this._boundResizeHandler);
+};
+
+// Expose globally for other scripts
+window.CwocAutoSave = CwocAutoSave;

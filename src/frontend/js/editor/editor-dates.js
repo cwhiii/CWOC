@@ -101,6 +101,11 @@ function onDateModeChange() {
     _applyDefaultNotifications(mode);
   }
 
+  // Re-render notifications so direction options update based on new date mode
+  if (!_dateModeSuppressUnsaved && typeof renderNotificationsContainer === 'function') {
+    renderNotificationsContainer();
+  }
+
   if (!_dateModeSuppressUnsaved) setSaveButtonUnsaved();
 }
 
@@ -836,6 +841,11 @@ function setPointInTimeNow() {
   if (timeBtn) {
     var h = now.getHours();
     var m = now.getMinutes();
+    // Store 24-hour value in dataset.time so the time picker reads it correctly
+    var raw24 = String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+    timeBtn.dataset.time = raw24;
+    timeBtn.classList.toggle('cwoc-time-btn-empty', false);
+    // Display formatted for user's time preference
     var timeFormat = (typeof window._editorTimeFormat !== 'undefined') ? window._editorTimeFormat
                    : (typeof window._globalTimeFormat !== 'undefined') ? window._globalTimeFormat
                    : '24hour';
@@ -844,7 +854,7 @@ function setPointInTimeNow() {
       var h12 = h % 12 || 12;
       timeBtn.textContent = h12 + ':' + String(m).padStart(2, '0') + ' ' + ampm;
     } else {
-      timeBtn.textContent = String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+      timeBtn.textContent = raw24;
     }
   }
   setSaveButtonUnsaved();
@@ -855,6 +865,10 @@ function clearPointInTime() {
   var dateInput = document.getElementById('point_in_time_date');
   var timeBtn = document.getElementById('point_in_time_time');
   if (dateInput) dateInput.value = '';
-  if (timeBtn) timeBtn.textContent = 'HH:MM';
+  if (timeBtn) {
+    timeBtn.dataset.time = '';
+    timeBtn.textContent = 'HH:MM';
+    timeBtn.classList.toggle('cwoc-time-btn-empty', true);
+  }
   setSaveButtonUnsaved();
 }

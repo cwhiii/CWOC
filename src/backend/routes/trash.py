@@ -166,3 +166,143 @@ def purge_chit(chit_id: str, request: Request):
     finally:
         if conn:
             conn.close()
+
+
+# ── Contact Trash Endpoints ──────────────────────────────────────────────
+
+@router.get("/api/trash/contacts")
+def get_contact_trash(request: Request):
+    """Get soft-deleted contacts, sorted by most recently deleted.
+
+    Regular users see only their own deleted contacts.
+    Admins see all deleted contacts.
+    Vault contacts (shared_to_vault=1) are visible to all users.
+    """
+    user_id = request.state.user_id
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        if _is_admin(conn, user_id):
+            cursor.execute(
+                "SELECT * FROM contacts WHERE deleted = 1 ORDER BY deleted_datetime DESC"
+            )
+        else:
+            cursor.execute(
+                """SELECT * FROM contacts
+                   WHERE deleted = 1 AND (owner_id = ? OR shared_to_vault = 1)
+                   ORDER BY deleted_datetime DESC""",
+                (user_id,),
+            )
+
+        contacts = []
+        for row in cursor.fetchall():
+            contact = dict(row)
+            contact["tags"] = deserialize_json_field(contact.get("tags"))
+            contact["shared_to_vault"] = bool(contact.get("shared_to_vault"))
+            contacts.append(contact)
+        return contacts
+    except Exception as e:
+        logger.error(f"Error fetching contact trash: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
+
+
+@router.post("/api/trash/contacts/{contact_id}/restore")
+def restore_contact(contact_id: str, request: Request):
+    """Restore a soft-deleted contact.
+
+    Regular users can only restore their own contacts (or vault contacts).
+    Admins can restore any contact.
+    """
+    user_id = request.state.user_id
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        row = cursor.execute(
+            "SELECT id, owner_id, shared_to_vault FROM contacts WHERE id = ? AND deleted = 1", (contact_id,)
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Contact not found in trash")
+
+        # Non-admins can only restore their own or vault contacts
+        is_owner = not row["owner_id"] or row["owner_id"] == user_id
+        is_vault = bool(row["shared_to_vault"])
+        if not is_owner and not is_vault and not _is_admin(conn, user_id):
+            raise HTTPException(status_code=403, detail="Not authorized")
+
+        current_time = datetime.utcnow().isoformat()
+        cursor.execute(
+            "UPDATE contacts SET deleted = 0, deleted_datetime = NULL, modified_datetime = ? WHERE id = ?",
+            (current_time, contact_id),
+        )
+        conn.commit()
+        return {"message": "Contact restored"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error restoring contact: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
+
+
+@router.delete("/api/trash/contacts/{contact_id}/purge")
+def purge_contact(contact_id: str, request: Request):
+    """Permanently delete a contact from the database.
+
+    Regular users can only purge their own contacts (or vault contacts).
+    Admins can purge any contact.
+    """
+    import os
+    user_id = request.state.user_id
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        row = cursor.execute(
+            "SELECT id, owner_id, shared_to_vault FROM contacts WHERE id = ? AND deleted = 1", (contact_id,)
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Contact not found in trash")
+
+        # Non-admins can only purge their own or vault contacts
+        is_owner = not row["owner_id"] or row["owner_id"] == user_id
+        is_vault = bool(row["shared_to_vault"])
+        if not is_owner and not is_vault and not _is_admin(conn, user_id):
+            raise HTTPException(status_code=403, detail="Not authorized")
+
+        # Remove vcf file if it exists
+        contacts_dir = "/app/data/contacts/"
+        vcf_path = os.path.join(contacts_dir, f"{contact_id}.vcf")
+        if os.path.exists(vcf_path):
+            os.remove(vcf_path)
+
+        # Remove profile image if it exists
+        images_dir = "/app/data/contacts/profile_pictures/"
+        for ext in (".jpg", ".png", ".gif", ".webp"):
+            img_path = os.path.join(images_dir, f"{contact_id}{ext}")
+            if os.path.exists(img_path):
+                os.remove(img_path)
+
+        cursor.execute("DELETE FROM contacts WHERE id = ? AND deleted = 1", (contact_id,))
+        conn.commit()
+        return {"message": "Contact permanently deleted"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error purging contact: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()

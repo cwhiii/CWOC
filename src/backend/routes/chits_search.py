@@ -891,7 +891,8 @@ def search_chits(request: Request, q: Optional[str] = Query(None)):
             cursor.execute(
                 """SELECT id, given_name, surname, display_name, dates, color, image_url
                    FROM contacts
-                   WHERE (owner_id = ? OR shared_to_vault = 1)""",
+                   WHERE (owner_id = ? OR shared_to_vault = 1)
+                     AND (deleted = 0 OR deleted IS NULL)""",
                 (user_id,),
             )
             contact_cols = [col[0] for col in cursor.description]

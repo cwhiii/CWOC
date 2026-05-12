@@ -245,6 +245,7 @@ function _collapseAllZonesForNewChit() {
     'Tasks':      [['taskSection', 'taskContent']],
     'Notes':      [['notesSection', 'notesContent']],
     'Email':      [['emailSection', 'emailContent']],
+    'Indicators': [['healthIndicatorsSection', 'healthIndicatorsContent'], ['datesSection', 'datesContent']],
   };
 
   const params = new URLSearchParams(window.location.search);
@@ -616,7 +617,7 @@ async function loadChitData(chitId) {
     const pitTimeBtn = document.getElementById("point_in_time_time");
     const pitParts = splitISODateTime(chit.point_in_time);
     if (pitDateInput) pitDateInput.value = pitParts.date;
-    if (pitTimeBtn && pitParts.time) pitTimeBtn.textContent = pitParts.time;
+    if (pitTimeBtn && pitParts.time) pitTimeBtn.value = pitParts.time;
 
     // Set date mode radio based on chit data
     _dateModeSuppressUnsaved = true;
@@ -1363,6 +1364,20 @@ document.addEventListener("DOMContentLoaded", function () {
       }
     } catch (e) { /* ignore */ }
 
+    // Auto-populate Point in Time + Complete when creating from Indicators tab
+    try {
+      var _srcTabForInd = localStorage.getItem('cwoc_source_tab');
+      if (_srcTabForInd === 'Indicators' && window.isNewChit) {
+        // Set date mode to Point in Time (onDateModeChange auto-populates current time)
+        _dateModeSuppressUnsaved = true;
+        _setDateMode('pointintime');
+        _dateModeSuppressUnsaved = false;
+        // Mark as Complete
+        var _indStatusSel = document.getElementById('status');
+        if (_indStatusSel) _indStatusSel.value = 'Complete';
+      }
+    } catch (e) { /* ignore */ }
+
     // Handle ?new=email — create a new email draft chit with email zone expanded
     if (params.get('new') === 'email') {
       // Set email draft defaults on the new chit
@@ -1642,6 +1657,31 @@ document.addEventListener("DOMContentLoaded", function () {
     '8': ['peopleSection', 'peopleContent'],
     '9': ['colorSection', 'colorContent'],
     '0': ['projectsSection', 'projectsContent'],
+  });
+
+  // ── Auto-Save Initialization ──────────────────────────────────────────────
+  // Instantiate CwocAutoSave after settings are loaded, then hook into
+  // setSaveButtonUnsaved/setSaveButtonSaved to trigger auto-save scheduling.
+  getCachedSettings().then(function (settings) {
+    if (typeof CwocAutoSave !== 'function') return;
+
+    window._autoSave = new CwocAutoSave(settings);
+
+    // Wrap setSaveButtonUnsaved to also schedule auto-save on changes
+    var _origSetUnsaved = window.setSaveButtonUnsaved;
+    window.setSaveButtonUnsaved = setSaveButtonUnsaved = function () {
+      if (_origSetUnsaved) _origSetUnsaved();
+      if (window._autoSave) window._autoSave.scheduleAutoSave();
+    };
+
+    // Wrap setSaveButtonSaved to notify auto-save that a save completed
+    var _origSetSaved = window.setSaveButtonSaved;
+    window.setSaveButtonSaved = setSaveButtonSaved = function () {
+      if (_origSetSaved) _origSetSaved();
+      if (window._autoSave) window._autoSave.notifySaveComplete();
+    };
+  }).catch(function (err) {
+    console.warn('[AutoSave] Failed to initialize auto-save:', err);
   });
 
   // Fetch version for footer copyright tooltip

@@ -1203,6 +1203,11 @@ class SettingsManager {
     var clAutoEl = document.getElementById("checklist-autosave-toggle");
     if (clAutoEl) clAutoEl.checked = this.settings.checklist_autosave !== '0';
 
+    var asDesktopEl = document.getElementById("autosave-desktop-toggle");
+    if (asDesktopEl) asDesktopEl.checked = this.settings.autosave_desktop === '1';
+    var asMobileEl = document.getElementById("autosave-mobile-toggle");
+    if (asMobileEl) asMobileEl.checked = this.settings.autosave_mobile === '1';
+
     var emailPaginateEl = document.getElementById("emailPaginate");
     if (emailPaginateEl) emailPaginateEl.checked = this.settings.paginate_email === '1';
 
@@ -1473,6 +1478,8 @@ class SettingsManager {
         prefer_google_maps: document.getElementById("prefer-google-maps").checked,
       },
       checklist_autosave: document.getElementById("checklist-autosave-toggle")?.checked ? '1' : '0',
+      autosave_desktop: document.getElementById("autosave-desktop-toggle")?.checked ? '1' : '0',
+      autosave_mobile: document.getElementById("autosave-mobile-toggle")?.checked ? '1' : '0',
       paginate_email: document.getElementById("emailPaginate")?.checked ? '1' : '0',
       bundles_multi_placement: document.getElementById("bundlesMultiPlacement")?.checked ? '1' : '0',
       bundles_enabled: document.getElementById("bundlesEnabled")?.checked ? '1' : '0',

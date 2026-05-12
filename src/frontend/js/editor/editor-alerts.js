@@ -165,7 +165,11 @@ function _stopNotificationChecker() {
 
 function _checkNotificationAlerts() {
   const startVal = document.getElementById("start_datetime")?.value;
+  const endVal = document.getElementById("end_datetime")?.value;
   const dueVal = document.getElementById("due_datetime")?.value;
+  const pitBtn = document.getElementById("point_in_time_time");
+  const pitDateVal = document.getElementById("point_in_time_date")?.value;
+  const pitTimeVal = pitBtn ? (pitBtn.dataset.time || '') : '';
   const title = document.getElementById("title")?.value || "Chit";
 
   // Habit state for cycle-based notifications
@@ -183,9 +187,9 @@ function _checkNotificationAlerts() {
       if (success >= goal) return;
     }
 
-    // Convert to milliseconds
+    // Convert to milliseconds — "at" mode uses 0 offset
     const unitMs = { minutes: 60000, hours: 3600000, days: 86400000, weeks: 604800000 };
-    const offsetMs = n.value * (unitMs[n.unit] || 60000);
+    const offsetMs = n.atTarget ? 0 : (n.value * (unitMs[n.unit] || 60000));
 
     let targetDate = null;
 
@@ -193,17 +197,34 @@ function _checkNotificationAlerts() {
       // Calculate end of current habit cycle period
       targetDate = _getHabitCycleEnd();
     } else {
-      // Normal: use start or due datetime
+      // Resolve target datetime based on targetType
       const targetType = n.targetType || (dueVal && !startVal ? "due" : "start");
-      const targetStr = targetType === "due" ? (dueVal || startVal) : (startVal || dueVal);
+      let targetStr = null;
+      if (targetType === "end") {
+        targetStr = endVal || startVal;
+      } else if (targetType === "point") {
+        // Build point-in-time datetime from date + time fields
+        if (pitDateVal) {
+          var pitIso = pitDateVal;
+          if (pitTimeVal) pitIso += 'T' + pitTimeVal + ':00';
+          else pitIso += 'T00:00:00';
+          targetStr = pitIso;
+        }
+      } else if (targetType === "due") {
+        targetStr = dueVal || startVal;
+      } else {
+        targetStr = startVal || dueVal;
+      }
       if (!targetStr) return;
       targetDate = new Date(targetStr);
     }
 
     if (!targetDate || isNaN(targetDate.getTime())) return;
 
-    // before = target - offset, after = target + offset
-    const fireAt = n.afterTarget
+    // at = exactly at target, before = target - offset, after = target + offset
+    const fireAt = n.atTarget
+      ? targetDate
+      : n.afterTarget
       ? new Date(targetDate.getTime() + offsetMs)
       : new Date(targetDate.getTime() - offsetMs);
     const now = new Date();
@@ -268,6 +289,7 @@ function _notifTimingLabel(n) {
   const hasStart = !!document.getElementById("start_datetime")?.value;
   const hasDue = !!document.getElementById("due_datetime")?.value;
   const targetType = n.targetType || (hasDue && !hasStart ? "due" : "start");
+  if (n.atTarget) return "at " + targetType;
   const dir = n.afterTarget ? "after" : "before";
   return `${dir} ${targetType}`;
 }
@@ -585,33 +607,72 @@ function renderNotificationsContainer() {
       row.style.opacity = "0.6";
     }
 
-    const valInput = document.createElement("input");
-    valInput.type = "number"; valInput.min = "1"; valInput.value = n.value || 15;
-    valInput.style.cssText = "width:55px;font-size:0.9em;padding:2px 4px;";
-    if (isDesktopMode) valInput.style.display = "none";
-    if (isTriggered) valInput.disabled = true;
-    valInput.addEventListener("change", () => { window._alertsData.notifications[idx].value = parseInt(valInput.value) || 1; setSaveButtonUnsaved(); });
+    // ── Direction dropdown (first control) ──────────────────────────────
+    const dirSel = document.createElement("select");
+    dirSel.style.cssText = "font-size:0.9em;padding:2px 4px;";
+    if (isTriggered) dirSel.disabled = true;
 
-    const unitSel = document.createElement("select");
-    unitSel.style.cssText = "font-size:0.9em;padding:2px 4px;";
-    if (isTriggered) unitSel.disabled = true;
-    ["minutes","hours","days","weeks","on_desktop"].forEach((u) => {
-      const opt = document.createElement("option");
-      opt.value = u;
-      opt.textContent = u === "on_desktop" ? "next time on desktop" : u;
-      if (n.unit === u) opt.selected = true;
-      unitSel.appendChild(opt);
-    });
-    unitSel.addEventListener("change", () => {
-      const newUnit = unitSel.value;
-      window._alertsData.notifications[idx].unit = newUnit;
-      if (newUnit === "on_desktop") {
+    // Determine current direction
+    let curDir = "before";
+    if (isDesktopMode) curDir = "desktop";
+    else if (n.atTarget) curDir = "at";
+    else if (n.afterTarget) curDir = "after";
+
+    // Build direction options — depends on date mode and habit state
+    const dateMode = document.querySelector('input[name="dateMode"]:checked')?.value || 'none';
+    const hasTimeMode = (dateMode !== 'none' && dateMode !== 'perpetual');
+
+    let dirOptions;
+    if (!hasTimeMode && !isHabit) {
+      // No date mode — only desktop allowed
+      dirOptions = [{ value: "desktop", label: "Next Time on Desktop" }];
+      // Force to desktop if currently set to a time-based direction
+      if (curDir !== "desktop") {
+        curDir = "desktop";
+        window._alertsData.notifications[idx].unit = "on_desktop";
         window._alertsData.notifications[idx].delivery_target = "desktop";
         window._alertsData.notifications[idx].value = 0;
+        window._alertsData.notifications[idx].atTarget = false;
+        window._alertsData.notifications[idx].afterTarget = false;
+      }
+    } else if (isHabit) {
+      dirOptions = [{ value: "before", label: "Before" }, { value: "desktop", label: "Next Time on Desktop" }];
+    } else {
+      dirOptions = [
+        { value: "at",      label: "At" },
+        { value: "before",  label: "Before" },
+        { value: "after",   label: "After" },
+        { value: "desktop", label: "Next Time on Desktop" }
+      ];
+    }
+
+    dirOptions.forEach((d) => {
+      const opt = document.createElement("option");
+      opt.value = d.value; opt.textContent = d.label;
+      if (d.value === curDir) opt.selected = true;
+      dirSel.appendChild(opt);
+    });
+
+    dirSel.addEventListener("change", () => {
+      const dir = dirSel.value;
+      if (dir === "desktop") {
+        window._alertsData.notifications[idx].unit = "on_desktop";
+        window._alertsData.notifications[idx].delivery_target = "desktop";
+        window._alertsData.notifications[idx].value = 0;
+        window._alertsData.notifications[idx].atTarget = false;
+        window._alertsData.notifications[idx].afterTarget = false;
       } else {
-        delete window._alertsData.notifications[idx].delivery_target;
-        delete window._alertsData.notifications[idx].triggered;
-        if (!window._alertsData.notifications[idx].value) {
+        // Restore from desktop mode if needed
+        if (window._alertsData.notifications[idx].unit === "on_desktop") {
+          window._alertsData.notifications[idx].unit = "minutes";
+          delete window._alertsData.notifications[idx].delivery_target;
+          delete window._alertsData.notifications[idx].triggered;
+        }
+        window._alertsData.notifications[idx].atTarget = (dir === "at");
+        window._alertsData.notifications[idx].afterTarget = (dir === "after");
+        if (dir === "at") {
+          window._alertsData.notifications[idx].value = 0;
+        } else if (!window._alertsData.notifications[idx].value) {
           window._alertsData.notifications[idx].value = 15;
         }
       }
@@ -619,59 +680,73 @@ function renderNotificationsContainer() {
       renderNotificationsContainer();
     });
 
-    // Combined timing dropdown — habit-aware
-    const timingSel = document.createElement("select");
-    timingSel.style.cssText = "font-size:0.85em;padding:2px 4px;";
-    if (isDesktopMode) timingSel.style.display = "none";
+    // ── Value input (number) ────────────────────────────────────────────
+    const valInput = document.createElement("input");
+    valInput.type = "number"; valInput.min = "1"; valInput.value = n.value || 15;
+    valInput.style.cssText = "width:55px;font-size:0.9em;padding:2px 4px;";
+    if (isTriggered) valInput.disabled = true;
+    valInput.addEventListener("change", () => { window._alertsData.notifications[idx].value = parseInt(valInput.value) || 1; setSaveButtonUnsaved(); });
+
+    // ── Unit dropdown ───────────────────────────────────────────────────
+    const unitSel = document.createElement("select");
+    unitSel.style.cssText = "font-size:0.9em;padding:2px 4px;";
+    if (isTriggered) unitSel.disabled = true;
+    ["minutes","hours","days","weeks"].forEach((u) => {
+      const opt = document.createElement("option");
+      opt.value = u; opt.textContent = u;
+      if (n.unit === u) opt.selected = true;
+      unitSel.appendChild(opt);
+    });
+    unitSel.addEventListener("change", () => {
+      window._alertsData.notifications[idx].unit = unitSel.value;
+      setSaveButtonUnsaved();
+    });
+
+    // ── Target dropdown (start/end/due/point) ───────────────────────────
+    const targetSel = document.createElement("select");
+    targetSel.style.cssText = "font-size:0.85em;padding:2px 4px;";
 
     if (isHabit && !isDesktopMode) {
-      // Habit mode: "before end of [cycle/reset period]"
-      const habitFreqSel = document.getElementById('habitFrequency');
+      // Habit mode: only "end of [cycle]"
       const cycleLabel = _habitPeriodLabel();
-      const timingOptions = [
-        { value: "before-cycle", label: "before end of " + cycleLabel }
-      ];
-      timingOptions.forEach((t) => {
-        const opt = document.createElement("option");
-        opt.value = t.value; opt.textContent = t.label;
-        if (n.targetType === "cycle" || !n.targetType) opt.selected = true;
-        timingSel.appendChild(opt);
-      });
-      timingSel.addEventListener("change", () => {
-        window._alertsData.notifications[idx].afterTarget = false;
+      const opt = document.createElement("option");
+      opt.value = "cycle"; opt.textContent = "end of " + cycleLabel;
+      opt.selected = true;
+      targetSel.appendChild(opt);
+      targetSel.addEventListener("change", () => {
         window._alertsData.notifications[idx].targetType = "cycle";
         setSaveButtonUnsaved();
       });
     } else if (!isDesktopMode) {
-      // Normal mode: before/after start/due
-      const hasStart = !!document.getElementById("start_datetime")?.value;
-      const hasDue = !!document.getElementById("due_datetime")?.value;
-      const timingOptions = [];
-      if (hasStart || (!hasStart && !hasDue)) {
-        timingOptions.push({ value: "before-start", label: "before start" });
-        timingOptions.push({ value: "after-start",  label: "after start" });
+      // Normal mode: target options depend on active date mode
+      const dateMode = document.querySelector('input[name="dateMode"]:checked')?.value || 'none';
+      const targetOptions = [];
+
+      if (dateMode === 'startend') {
+        targetOptions.push({ value: "start", label: "start" });
+        targetOptions.push({ value: "end",   label: "end" });
+      } else if (dateMode === 'due') {
+        targetOptions.push({ value: "due", label: "due" });
+      } else if (dateMode === 'pointintime') {
+        targetOptions.push({ value: "point", label: "point" });
+      } else {
+        targetOptions.push({ value: "start", label: "start" });
       }
-      if (hasDue) {
-        timingOptions.push({ value: "before-due", label: "before due" });
-        timingOptions.push({ value: "after-due",  label: "after due" });
-      }
-      const curDir = n.afterTarget ? "after" : "before";
-      const curTarget = n.targetType || (hasDue && !hasStart ? "due" : "start");
-      const curVal = curDir + "-" + curTarget;
-      timingOptions.forEach((t) => {
+
+      const curTarget = n.targetType || _defaultTargetForMode(dateMode);
+      targetOptions.forEach((t) => {
         const opt = document.createElement("option");
         opt.value = t.value; opt.textContent = t.label;
-        if (t.value === curVal) opt.selected = true;
-        timingSel.appendChild(opt);
+        if (t.value === curTarget) opt.selected = true;
+        targetSel.appendChild(opt);
       });
-      timingSel.addEventListener("change", () => {
-        const parts = timingSel.value.split("-");
-        window._alertsData.notifications[idx].afterTarget = (parts[0] === "after");
-        window._alertsData.notifications[idx].targetType = parts[1];
+      targetSel.addEventListener("change", () => {
+        window._alertsData.notifications[idx].targetType = targetSel.value;
         setSaveButtonUnsaved();
       });
     }
 
+    // ── Delete button ───────────────────────────────────────────────────
     const delBtn = document.createElement("button");
     delBtn.type = "button";
     delBtn.textContent = isTriggered ? "✅" : "❌";
@@ -679,10 +754,30 @@ function renderNotificationsContainer() {
     delBtn.title = isTriggered ? "Clear triggered notification" : "Remove notification";
     delBtn.onclick = () => deleteNotificationItem(idx);
 
+    // ── Assemble row based on direction ─────────────────────────────────
+    // Order: "Notify [15] [minutes] [before] [start]" or "Notify [at] [start]" or "Notify [Next Time on Desktop]"
     row.appendChild(document.createTextNode("Notify "));
-    row.appendChild(valInput);
-    row.appendChild(unitSel);
-    row.appendChild(timingSel);
+
+    if (!isDesktopMode && !n.atTarget) {
+      // "before" or "after" — show value, unit, direction, target
+      row.appendChild(valInput);
+      row.appendChild(unitSel);
+      row.appendChild(dirSel);
+      row.appendChild(targetSel);
+    } else if (!isDesktopMode && n.atTarget) {
+      // "at" — show direction, target
+      row.appendChild(dirSel);
+      row.appendChild(targetSel);
+    } else {
+      // desktop — just the direction dropdown + hint if no time mode
+      row.appendChild(dirSel);
+      if (!hasTimeMode && !isHabit) {
+        var hint = document.createElement("span");
+        hint.style.cssText = "font-size:0.8em;opacity:0.65;font-style:italic;";
+        hint.textContent = "(add a time for additional notification options)";
+        row.appendChild(hint);
+      }
+    }
 
     // Habit mode: "Disable if complete for [period]" checkbox
     if (isHabit && !isDesktopMode) {
@@ -691,7 +786,7 @@ function renderNotificationsContainer() {
       disableLbl.title = "Skip this notification if the habit goal is already met for the current " + _habitPeriodLabel();
       const disableCb = document.createElement("input");
       disableCb.type = "checkbox";
-      disableCb.checked = n.only_if_undone !== false; // default true for habits
+      disableCb.checked = n.only_if_undone !== false;
       disableCb.addEventListener("change", () => {
         window._alertsData.notifications[idx].only_if_undone = disableCb.checked;
         setSaveButtonUnsaved();
@@ -729,6 +824,16 @@ function _notifTargetLabel() {
   if (hasStart && hasDue) return "start/due";
   if (hasDue) return "due";
   return "start";
+}
+
+/** Returns the default target type for a given date mode */
+function _defaultTargetForMode(dateMode) {
+  switch (dateMode) {
+    case 'startend': return 'start';
+    case 'due': return 'due';
+    case 'pointintime': return 'point';
+    default: return 'start';
+  }
 }
 
 // ── Alarm CRUD ───────────────────────────────────────────────────────────────
@@ -1290,12 +1395,22 @@ function deleteTimerItem(idx) {
 
 // ── Notification CRUD ────────────────────────────────────────────────────────
 
-// Notification add button is always visible (no date-mode filtering)
+// Notification add button — only allows time-based notifications when a date mode is active
 
 function openNotificationModal(event) {
   if (event) event.stopPropagation();
-  // Add a new notification inline
-  window._alertsData.notifications.push({ _type: "notification", value: 15, unit: "minutes", afterTarget: false });
+  // Check if a time-based date mode is active
+  const dateMode = document.querySelector('input[name="dateMode"]:checked')?.value || 'none';
+  const hasTimeMode = (dateMode !== 'none' && dateMode !== 'perpetual');
+
+  if (hasTimeMode) {
+    // Default to "before" with the appropriate target
+    const target = _defaultTargetForMode(dateMode);
+    window._alertsData.notifications.push({ _type: "notification", value: 15, unit: "minutes", afterTarget: false, atTarget: false, targetType: target });
+  } else {
+    // No date mode — only desktop notifications allowed
+    window._alertsData.notifications.push({ _type: "notification", value: 0, unit: "on_desktop", delivery_target: "desktop", afterTarget: false, atTarget: false });
+  }
   renderNotificationsContainer();
   setSaveButtonUnsaved();
 }

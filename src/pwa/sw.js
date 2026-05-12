@@ -23,6 +23,7 @@ const APP_SHELL_URLS = [
     '/frontend/html/contact-editor.html',
     '/frontend/html/weather.html',
     '/frontend/html/trash.html',
+    '/frontend/html/contact-trash.html',
     '/frontend/html/audit-log.html',
     '/frontend/html/help.html',
     '/frontend/html/offline.html',

@@ -67,6 +67,8 @@ class Settings(BaseModel):
     attachment_max_storage_mb: Optional[str] = "500"  # Max total attachment storage per user in MB (0 = unlimited)
     default_share_contacts: Optional[str] = "0"  # "1" = new contacts default to shared vault, "0" = private
     checklist_autosave: Optional[str] = "1"      # "1" = auto-save checklist changes, "0" = require manual save
+    autosave_desktop: Optional[str] = "0"        # "1" = auto-save chit edits on desktop, "0" = manual save
+    autosave_mobile: Optional[str] = "0"         # "1" = auto-save chit edits on mobile, "0" = manual save
     view_order: Optional[str] = None             # JSON array of tab names in user's preferred order
     recent_tags: Optional[List[str]] = None      # Recently used tag paths (persisted across sessions)
     paginate_email: Optional[str] = "0"          # "1" = paginate email view (50 per page), "0" = show all

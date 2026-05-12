@@ -805,10 +805,15 @@ class Checklist {
   /* ── Check / Delete ─────────────────────────────────────────────────────── */
 
   toggleCheck(item, checked) {
+    this._pushUndoState();
     item.checked = checked;
     this.updateCheckedStateForSubtree(item, checked);
     this.render();
-    this._notifyChange();
+    this._updateCount();
+    if (typeof this.onChangeCallback === "function") this.onChangeCallback(this.getChecklistData());
+    this._updateUndoRedoButtons();
+    // Auto-complete: if all items are checked and auto-complete is enabled
+    _checkAutoCompleteChecklist(this);
   }
 
   updateCheckedStateForSubtree(item, checked) {
@@ -828,7 +833,9 @@ class Checklist {
       var subtreeIds = subtree.map(function(i) { return i.id; });
       self.items = self.items.filter(function(i) { return subtreeIds.indexOf(i.id) === -1; });
       self.render();
-      self._notifyChange();
+      self._updateCount();
+      if (typeof self.onChangeCallback === "function") self.onChangeCallback(self.getChecklistData());
+      self._updateUndoRedoButtons();
     }, 300);
   }
 

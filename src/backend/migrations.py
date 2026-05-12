@@ -1558,6 +1558,42 @@ def migrate_add_contact_vault():
             conn.close()
 
 
+# ── Contact Soft-Delete: migration ────────────────────────────────────────
+
+def migrate_add_contact_soft_delete():
+    """Add deleted and deleted_datetime columns to contacts table.
+
+    deleted (BOOLEAN DEFAULT 0): soft-delete flag.
+    deleted_datetime (TEXT): ISO timestamp of when the contact was deleted.
+
+    Fully idempotent — checks column existence before adding.
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        cursor.execute("PRAGMA table_info(contacts)")
+        contact_cols = {row[1] for row in cursor.fetchall()}
+
+        if "deleted" not in contact_cols:
+            cursor.execute("ALTER TABLE contacts ADD COLUMN deleted BOOLEAN DEFAULT 0")
+            logger.info("Added deleted column to contacts table")
+
+        if "deleted_datetime" not in contact_cols:
+            cursor.execute("ALTER TABLE contacts ADD COLUMN deleted_datetime TEXT")
+            logger.info("Added deleted_datetime column to contacts table")
+
+        conn.commit()
+        logger.info("Contact soft-delete migration complete")
+    except Exception as e:
+        logger.error(f"Error in migrate_add_contact_soft_delete: {str(e)}")
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+
 # ── Rules Engine: migration ──────────────────────────────────────────────
 
 def migrate_create_rules_tables():
@@ -2339,6 +2375,35 @@ def migrate_add_prerequisites():
             logger.info("Added prerequisites column to chits table")
     except Exception as e:
         logger.error(f"Error adding prerequisites column to chits: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
+# ── Auto-Save Settings: migration ────────────────────────────────────────
+
+def migrate_add_autosave_settings():
+    """Add autosave_desktop and autosave_mobile columns to settings table.
+
+    Both columns store '0' (disabled) or '1' (enabled), defaulting to '0'.
+    Fully idempotent — checks column existence before adding.
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(settings)")
+        existing = {row[1] for row in cursor.fetchall()}
+        if "autosave_desktop" not in existing:
+            cursor.execute("ALTER TABLE settings ADD COLUMN autosave_desktop TEXT DEFAULT '0'")
+            logger.info("Added autosave_desktop column to settings table")
+        if "autosave_mobile" not in existing:
+            cursor.execute("ALTER TABLE settings ADD COLUMN autosave_mobile TEXT DEFAULT '0'")
+            logger.info("Added autosave_mobile column to settings table")
+        conn.commit()
+    except Exception as e:
+        logger.error(f"Error adding autosave settings columns: {str(e)}")
+        raise
     finally:
         if conn:
             conn.close()

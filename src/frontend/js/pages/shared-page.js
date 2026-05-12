@@ -90,6 +90,7 @@ class CwocSaveSystem {
       document.getElementById('cwoc-confirm-exit').onclick = () => {
         if (typeof _cancelServerTimersForChit === 'function') _cancelServerTimersForChit();
         if (typeof rollbackAttachmentChanges === 'function') rollbackAttachmentChanges();
+        window._cwocSkipBeforeUnload = true;
         window.location.href = url;
       };
       document.getElementById('cwoc-stay-here').onclick = () => { modal.remove(); };
@@ -106,16 +107,18 @@ class CwocSaveSystem {
           modal.remove();
           if (typeof saveChitAndStay === 'function') {
             saveChitAndStay().then(function() {
+              window._cwocSkipBeforeUnload = true;
               window.location.href = url;
             });
           }
         };
       }
-      // ESC closes the modal
-      const onKey = (e) => { if (e.key === 'Escape') { modal.remove(); document.removeEventListener('keydown', onKey); } };
-      document.addEventListener('keydown', onKey);
+      // ESC closes the modal (capture phase to prevent page-level ESC from firing)
+      const onKey = (e) => { if (e.key === 'Escape') { e.stopImmediatePropagation(); e.preventDefault(); modal.remove(); document.removeEventListener('keydown', onKey, true); } };
+      document.addEventListener('keydown', onKey, true);
     } else {
       if (typeof _cancelServerTimersForChit === 'function') _cancelServerTimersForChit();
+      window._cwocSkipBeforeUnload = true;
       window.location.href = url;
     }
   }

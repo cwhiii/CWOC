@@ -226,6 +226,7 @@ def get_contacts(request: Request, q: Optional[str] = Query(None)):
                 """
                 SELECT * FROM contacts
                 WHERE (owner_id = ? OR shared_to_vault = 1)
+                  AND (deleted = 0 OR deleted IS NULL)
                   AND (display_name LIKE ? COLLATE NOCASE
                    OR given_name LIKE ? COLLATE NOCASE
                    OR surname LIKE ? COLLATE NOCASE
@@ -251,7 +252,8 @@ def get_contacts(request: Request, q: Optional[str] = Query(None)):
         else:
             cursor.execute(
                 """SELECT * FROM contacts
-                   WHERE owner_id = ? OR shared_to_vault = 1
+                   WHERE (owner_id = ? OR shared_to_vault = 1)
+                     AND (deleted = 0 OR deleted IS NULL)
                    ORDER BY favorite DESC, display_name COLLATE NOCASE ASC""",
                 (user_id,),
             )
@@ -337,7 +339,8 @@ def get_contact_birthdays(request: Request):
         cursor.execute(
             """SELECT id, given_name, surname, display_name, dates, color, image_url
                FROM contacts
-               WHERE (owner_id = ? OR shared_to_vault = 1)""",
+               WHERE (owner_id = ? OR shared_to_vault = 1)
+                 AND (deleted = 0 OR deleted IS NULL)""",
             (user_id,),
         )
         columns = [col[0] for col in cursor.description]
@@ -526,8 +529,10 @@ def update_contact(contact_id: str, contact: Contact, request: Request):
 
         columns = [col[0] for col in cursor.description]
         existing_row = dict(zip(columns, existing))
-        # Verify ownership
-        if existing_row.get("owner_id") and existing_row["owner_id"] != user_id:
+        # Verify ownership OR vault access
+        is_owner = not existing_row.get("owner_id") or existing_row["owner_id"] == user_id
+        is_vault = bool(existing_row.get("shared_to_vault"))
+        if not is_owner and not is_vault:
             raise HTTPException(status_code=404, detail=f"Contact {contact_id} not found")
 
         current_time = datetime.now().isoformat()
@@ -606,25 +611,28 @@ def update_contact(contact_id: str, contact: Contact, request: Request):
 
 @router.delete("/api/contacts/{contact_id}")
 def delete_contact(contact_id: str, request: Request):
+    """Soft-delete a contact (sets deleted flag, preserves data for restore)."""
     conn = None
     try:
         user_id = request.state.user_id
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
-        cursor.execute("SELECT id, display_name, owner_id FROM contacts WHERE id = ?", (contact_id,))
+        cursor.execute("SELECT id, display_name, owner_id, shared_to_vault FROM contacts WHERE id = ? AND (deleted = 0 OR deleted IS NULL)", (contact_id,))
         existing = cursor.fetchone()
         if not existing:
             raise HTTPException(status_code=404, detail=f"Contact {contact_id} not found")
-        # Verify ownership
-        if existing[2] and existing[2] != user_id:
+        # Verify ownership OR vault access
+        is_owner = not existing[2] or existing[2] == user_id
+        is_vault = bool(existing[3])
+        if not is_owner and not is_vault:
             raise HTTPException(status_code=404, detail=f"Contact {contact_id} not found")
         contact_display_name = existing[1]
 
-        vcf_path = os.path.join(CONTACTS_DIR, f"{contact_id}.vcf")
-        if os.path.exists(vcf_path):
-            os.remove(vcf_path)
-
-        cursor.execute("DELETE FROM contacts WHERE id = ?", (contact_id,))
+        current_time = datetime.now().isoformat()
+        cursor.execute(
+            "UPDATE contacts SET deleted = 1, deleted_datetime = ?, modified_datetime = ? WHERE id = ?",
+            (current_time, current_time, contact_id),
+        )
         try:
             actor = get_actor_from_request(request)
             insert_audit_entry(conn, "contact", contact_id, "deleted", actor, entity_summary=contact_display_name)
@@ -650,12 +658,14 @@ async def upload_contact_image(contact_id: str, request: Request, file: UploadFi
         user_id = request.state.user_id
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
-        cursor.execute("SELECT id, owner_id FROM contacts WHERE id = ?", (contact_id,))
+        cursor.execute("SELECT id, owner_id, shared_to_vault FROM contacts WHERE id = ?", (contact_id,))
         row = cursor.fetchone()
         if not row:
             raise HTTPException(status_code=404, detail=f"Contact {contact_id} not found")
-        # Verify ownership
-        if row[1] and row[1] != user_id:
+        # Verify ownership OR vault access
+        is_owner = not row[1] or row[1] == user_id
+        is_vault = bool(row[2])
+        if not is_owner and not is_vault:
             raise HTTPException(status_code=404, detail=f"Contact {contact_id} not found")
 
         allowed = {"image/jpeg", "image/png", "image/gif", "image/webp"}
@@ -700,12 +710,14 @@ def delete_contact_image(contact_id: str, request: Request):
         user_id = request.state.user_id
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
-        cursor.execute("SELECT image_url, owner_id FROM contacts WHERE id = ?", (contact_id,))
+        cursor.execute("SELECT image_url, owner_id, shared_to_vault FROM contacts WHERE id = ?", (contact_id,))
         row = cursor.fetchone()
         if not row:
             raise HTTPException(status_code=404, detail=f"Contact {contact_id} not found")
-        # Verify ownership
-        if row[1] and row[1] != user_id:
+        # Verify ownership OR vault access
+        is_owner = not row[1] or row[1] == user_id
+        is_vault = bool(row[2])
+        if not is_owner and not is_vault:
             raise HTTPException(status_code=404, detail=f"Contact {contact_id} not found")
 
         image_url = row[0]

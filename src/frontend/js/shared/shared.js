@@ -4093,6 +4093,14 @@ function _quickAlertShowEditor(type) {
   saveBtn.onclick = function() { _quickAlertSave(type, formDiv._getData(), false); };
   btnRow.appendChild(saveBtn);
 
+  // Add "Create & Start" button for timers
+  if (type === 'timer') {
+    var startBtn = document.createElement('button');
+    startBtn.textContent = '▶ Create & Start'; startBtn.title = 'Ctrl+Enter'; startBtn.style.cssText = _qaBtnPrimary + 'background:#2e7d32;border-color:#1b5e20;';
+    startBtn.onclick = function() { _quickAlertSave(type, formDiv._getData(), false, true); };
+    btnRow.appendChild(startBtn);
+  }
+
   var saveViewBtn = document.createElement('button');
   saveViewBtn.textContent = '✓ Create & View'; saveViewBtn.title = 'Shift+Enter'; saveViewBtn.style.cssText = _qaBtnSecondary + 'font-weight:bold;';
   saveViewBtn.onclick = function() { _quickAlertSave(type, formDiv._getData(), true); };
@@ -4109,7 +4117,11 @@ function _quickAlertShowEditor(type) {
       var tag = (document.activeElement?.tagName || '').toLowerCase();
       if (tag !== 'textarea') {
         e.preventDefault(); e.stopPropagation();
-        _quickAlertSave(type, formDiv._getData(), e.shiftKey);
+        if (type === 'timer' && (e.ctrlKey || e.metaKey)) {
+          _quickAlertSave(type, formDiv._getData(), false, true);
+        } else {
+          _quickAlertSave(type, formDiv._getData(), e.shiftKey);
+        }
       }
     }
   }
@@ -4122,7 +4134,7 @@ function _quickAlertAddIndependent() { /* deprecated */ }
 function _quickAlertAddIndependentDashboard() { /* deprecated */ }
 
 /** Save the alert from the quick alert editor — context-aware */
-function _quickAlertSave(type, data, andView) {
+function _quickAlertSave(type, data, andView, autoStart) {
   var isEditor = !!document.getElementById('mainEditor');
   if (isEditor) {
     if (!window._alertsData) window._alertsData = { alarms: [], timers: [], stopwatches: [], notifications: [] };
@@ -4144,6 +4156,13 @@ function _quickAlertSave(type, data, andView) {
       if (!window._timerRuntime) window._timerRuntime = {};
       window._timerRuntime[tIdx] = { remaining: data.totalSeconds, intervalId: null, running: false };
       if (typeof renderTimersContainer === 'function') renderTimersContainer();
+      // Auto-start the timer if requested
+      if (autoStart && data.totalSeconds > 0) {
+        setTimeout(function() {
+          var startBtn = document.getElementById('timer-startstop-' + tIdx);
+          if (startBtn) startBtn.click();
+        }, 100);
+      }
     } else if (type === 'stopwatch') {
       var swIdx = window._alertsData.stopwatches.length;
       window._alertsData.stopwatches.push(data);
@@ -4166,6 +4185,13 @@ function _quickAlertSave(type, data, andView) {
         saRt.intervalId = setInterval(function() { saRt.elapsed = Date.now() - saMs; var saD = document.getElementById('sa-sw-display-' + created.id); if (saD) saD.textContent = _saSwFmt(saRt.elapsed); }, 50);
         saRt.running = true;
       }
+      // Auto-start timer if requested
+      if (type === 'timer' && autoStart && created && created.id) {
+        setTimeout(function() {
+          var startBtn = document.getElementById('sa-timer-startstop-' + created.id);
+          if (startBtn) startBtn.click();
+        }, 200);
+      }
       if (andView) {
         _quickAlertJumpToIndependent();
       } else {
@@ -4177,7 +4203,7 @@ function _quickAlertSave(type, data, andView) {
     .then(function(r) { if (!r.ok) throw new Error('Failed'); return r.json(); })
     .then(function() {
       _closeQuickAlertModal();
-      if (andView) {
+      if (andView || (type === 'timer' && autoStart)) {
         // Store desired tab in localStorage so dashboard picks it up on load
         try { localStorage.setItem('cwoc_jump_tab', 'Alarms'); localStorage.setItem('cwoc_jump_alarms_mode', 'independent'); } catch(e) {}
         window.location.href = '/';

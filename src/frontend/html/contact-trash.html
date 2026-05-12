@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <link rel="icon" type="image/x-icon" href="/static/cwod_logo-favicon.png" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Deleted Contacts — C.W.'s Omni Chits</title>
+    <!-- PWA -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#8b5a2b" />
+    <link rel="apple-touch-icon" href="/static/cwoc-icon-192.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <link rel="stylesheet" href="/frontend/css/shared/shared-page.css" />
+    <link rel="stylesheet" href="/frontend/css/shared/shared-calculator.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" />
+    <style>
+        /* Page-specific only — everything else comes from shared-page.css */
+        .col-check { width: 30px; text-align: center; }
+        .col-check input[type="checkbox"] { cursor: pointer; }
+        .col-name { max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: bold; }
+        .col-org { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: 0.7; font-size: 0.9em; }
+        .col-email { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.9em; }
+        .col-phone { max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.9em; }
+        .col-actions { white-space: nowrap; }
+        .action-cell { display: flex; gap: 6px; align-items: center; }
+        .bulk-actions { display: flex; gap: 8px; margin-left: auto; }
+        .selected-count { font-size: 0.85em; opacity: 0.8; }
+        .vault-badge { font-size: 0.8em; margin-left: 4px; }
+    </style>
+</head>
+<body data-page-title="Deleted Contacts" data-page-icon="🗑️" data-show-nav="contact-trash">
+    <div class="settings-panel">
+        <div class="cwoc-toolbar">
+            <div id="trash-count" style="font-size:0.9em;opacity:0.7;"></div>
+            <span class="selected-count" id="selected-count"></span>
+            <div class="bulk-actions" id="bulk-actions" style="display:none;">
+                <button class="cwoc-btn restore" onclick="bulkRestore()"><i class="fas fa-undo"></i> Restore Selected</button>
+                <button class="cwoc-btn danger" onclick="bulkPurge()"><i class="fas fa-trash-alt"></i> Delete Selected</button>
+            </div>
+        </div>
+        <div id="trash-table-wrap"></div>
+    </div>
+    <script src="/frontend/js/shared/shared-auth.js"></script>
+    <script src="/frontend/js/shared/shared-utils.js"></script>
+    <script src="/frontend/js/shared/shared-touch.js"></script>
+    <script src="/frontend/js/shared/shared-checklist.js"></script>
+    <script src="/frontend/js/shared/shared-sort.js"></script>
+    <script src="/frontend/js/shared/shared-indicators.js"></script>
+    <script src="/frontend/js/shared/shared-calendar.js"></script>
+    <script src="/frontend/js/shared/shared-tags.js"></script>
+    <script src="/frontend/js/shared/shared-recurrence.js"></script>
+    <script src="/frontend/js/shared/shared-geocoding.js"></script>
+    <script src="/frontend/js/shared/shared-qr.js"></script>
+    <script src="/frontend/js/shared/shared-hotkeys.js"></script>
+    <script src="/frontend/js/shared/shared-mobile.js"></script>
+    <script src="/frontend/js/shared/shared-weather.js"></script>
+    <script src="/frontend/js/shared/shared-alarms.js"></script>
+    <script src="/frontend/js/shared/shared-habits.js"></script>
+    <script src="/frontend/js/shared/shared.js"></script>
+    <script src="/frontend/js/shared/shared-calculator.js"></script>
+    <script src="/frontend/js/pages/shared-page.js"></script>
+    <script>
+        const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+        let trashData = [], selectedIds = new Set();
+
+        function fmtDateTime(iso) {
+            if (!iso) return '—';
+            const d = new Date(iso);
+            if (isNaN(d.getTime())) return '—';
+            return `${MONTHS[d.getMonth()]}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+        }
+
+        function getFirstEmail(contact) {
+            if (!contact.emails) return '';
+            try {
+                var emails = typeof contact.emails === 'string' ? JSON.parse(contact.emails) : contact.emails;
+                if (Array.isArray(emails) && emails.length > 0) {
+                    return emails[0].value || emails[0] || '';
+                }
+            } catch(e) {}
+            return '';
+        }
+
+        function getFirstPhone(contact) {
+            if (!contact.phones) return '';
+            try {
+                var phones = typeof contact.phones === 'string' ? JSON.parse(contact.phones) : contact.phones;
+                if (Array.isArray(phones) && phones.length > 0) {
+                    return phones[0].value || phones[0] || '';
+                }
+            } catch(e) {}
+            return '';
+        }
+
+        function updateSelectionUI() {
+            const count = selectedIds.size;
+            document.getElementById('bulk-actions').style.display = count > 0 ? 'flex' : 'none';
+            document.getElementById('selected-count').textContent = count > 0 ? `${count} selected` : '';
+            const sa = document.getElementById('select-all');
+            if (sa && trashData.length > 0) {
+                sa.checked = selectedIds.size === trashData.length;
+                sa.indeterminate = selectedIds.size > 0 && selectedIds.size < trashData.length;
+            }
+        }
+
+        function toggleSelectAll() {
+            const sa = document.getElementById('select-all');
+            if (sa.checked) trashData.forEach(c => selectedIds.add(c.id));
+            else selectedIds.clear();
+            document.querySelectorAll('.row-check').forEach(cb => { cb.checked = sa.checked; });
+            updateSelectionUI();
+        }
+
+        function toggleRow(id) {
+            if (selectedIds.has(id)) selectedIds.delete(id);
+            else selectedIds.add(id);
+            updateSelectionUI();
+        }
+
+        async function bulkRestore() {
+            for (const id of [...selectedIds]) {
+                await fetch(`/api/trash/contacts/${id}/restore`, {method: 'POST'});
+            }
+            selectedIds.clear();
+            loadTrash();
+        }
+
+        async function bulkPurge() {
+            if (!await cwocConfirm(`Permanently delete ${selectedIds.size} contact(s)? This cannot be undone.`)) return;
+            for (const id of [...selectedIds]) {
+                await fetch(`/api/trash/contacts/${id}/purge`, {method: 'DELETE'});
+            }
+            selectedIds.clear();
+            loadTrash();
+        }
+
+        async function loadTrash() {
+            const wrap = document.getElementById('trash-table-wrap');
+            const countEl = document.getElementById('trash-count');
+            selectedIds.clear();
+            updateSelectionUI();
+            try {
+                const resp = await fetch('/api/trash/contacts');
+                if (!resp.ok) { wrap.innerHTML = '<p style="color:#a33;">Failed to load.</p>'; return; }
+                trashData = await resp.json();
+                countEl.textContent = `${trashData.length} deleted contact${trashData.length !== 1 ? 's' : ''}`;
+                if (trashData.length === 0) {
+                    wrap.innerHTML = '<div class="cwoc-empty">No deleted contacts.</div>';
+                    return;
+                }
+                renderTable(wrap, trashData);
+            } catch (e) {
+                wrap.innerHTML = '<p style="color:#a33;">Error loading deleted contacts.</p>';
+            }
+        }
+
+        function renderTable(wrap, contacts) {
+            const table = document.createElement('table');
+            table.className = 'cwoc-table';
+            const thead = document.createElement('thead');
+            thead.innerHTML = '<tr>' +
+                '<th class="col-check"><input type="checkbox" id="select-all" onchange="toggleSelectAll()" title="Select All" /></th>' +
+                '<th>Name</th>' +
+                '<th>Organization</th>' +
+                '<th>Email</th>' +
+                '<th>Phone</th>' +
+                '<th>Deleted</th>' +
+                '<th class="col-actions">Actions</th>' +
+                '</tr>';
+            table.appendChild(thead);
+
+            const tbody = document.createElement('tbody');
+            contacts.forEach(function(contact) {
+                const tr = document.createElement('tr');
+
+                // Checkbox
+                let td = document.createElement('td');
+                td.className = 'col-check';
+                const cb = document.createElement('input');
+                cb.type = 'checkbox';
+                cb.className = 'row-check';
+                cb.checked = selectedIds.has(contact.id);
+                cb.onchange = () => toggleRow(contact.id);
+                td.appendChild(cb);
+                tr.appendChild(td);
+
+                // Name
+                td = document.createElement('td');
+                td.className = 'col-name';
+                td.textContent = contact.display_name || '(Unnamed)';
+                if (contact.shared_to_vault) {
+                    const badge = document.createElement('span');
+                    badge.className = 'vault-badge';
+                    badge.textContent = '🏛️';
+                    badge.title = 'Vault contact';
+                    td.appendChild(badge);
+                }
+                tr.appendChild(td);
+
+                // Organization
+                td = document.createElement('td');
+                td.className = 'col-org';
+                td.textContent = contact.organization || '—';
+                tr.appendChild(td);
+
+                // Email
+                td = document.createElement('td');
+                td.className = 'col-email';
+                td.textContent = getFirstEmail(contact) || '—';
+                tr.appendChild(td);
+
+                // Phone
+                td = document.createElement('td');
+                td.className = 'col-phone';
+                td.textContent = getFirstPhone(contact) || '—';
+                tr.appendChild(td);
+
+                // Deleted timestamp
+                td = document.createElement('td');
+                td.textContent = fmtDateTime(contact.deleted_datetime || contact.modified_datetime);
+                tr.appendChild(td);
+
+                // Actions
+                td = document.createElement('td');
+                td.className = 'col-actions';
+                const ad = document.createElement('div');
+                ad.className = 'action-cell';
+
+                const rb = document.createElement('button');
+                rb.className = 'cwoc-btn restore';
+                rb.innerHTML = '<i class="fas fa-undo"></i> Restore';
+                rb.onclick = async function() {
+                    await fetch(`/api/trash/contacts/${contact.id}/restore`, {method: 'POST'});
+                    loadTrash();
+                };
+
+                const pb = document.createElement('button');
+                pb.className = 'cwoc-btn danger';
+                pb.innerHTML = '<i class="fas fa-trash-alt"></i> Delete';
+                pb.onclick = async function() {
+                    if (!await cwocConfirm('Permanently delete this contact? This cannot be undone.')) return;
+                    await fetch(`/api/trash/contacts/${contact.id}/purge`, {method: 'DELETE'});
+                    loadTrash();
+                };
+
+                ad.appendChild(rb);
+                ad.appendChild(pb);
+                td.appendChild(ad);
+                tr.appendChild(td);
+                tbody.appendChild(tr);
+            });
+            table.appendChild(tbody);
+            wrap.innerHTML = '';
+            wrap.appendChild(table);
+        }
+
+        // Wait for auth to be ready before loading
+        if (typeof waitForAuth === 'function') {
+            waitForAuth().then(function() { loadTrash(); });
+        } else {
+            loadTrash();
+        }
+    </script>
+    <script src="/pwa/pwa-register.js"></script>
+</body>
+</html>

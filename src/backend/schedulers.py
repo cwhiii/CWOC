@@ -575,7 +575,8 @@ async def _alert_push_loop():
                 cursor = conn.cursor()
                 # Fetch all non-deleted chits with owner_id
                 cursor.execute(
-                    "SELECT id, title, start_datetime, due_datetime, owner_id, alerts, "
+                    "SELECT id, title, start_datetime, end_datetime, due_datetime, "
+                    "       point_in_time, owner_id, alerts, "
                     "       status, habit, habit_goal, habit_success "
                     "FROM chits "
                     "WHERE (deleted = 0 OR deleted IS NULL) "
@@ -606,7 +607,9 @@ async def _alert_push_loop():
                 chit_title = chit.get("title") or "CWOC Reminder"
                 owner_id = chit.get("owner_id")
                 start_dt = chit.get("start_datetime")
+                end_dt = chit.get("end_datetime")
                 due_dt = chit.get("due_datetime")
+                point_in_time_dt = chit.get("point_in_time")
 
                 if not owner_id:
                     continue
@@ -711,17 +714,22 @@ async def _alert_push_loop():
                             elif chit.get("status") == "Complete":
                                 continue
 
-                        # Compute offset
+                        # Compute offset — "at" mode uses 0
                         unit_seconds = {
                             "minutes": 60, "hours": 3600,
                             "days": 86400, "weeks": 604800
                         }
-                        offset_secs = int(value) * unit_seconds.get(unit, 60)
+                        at_target = alert.get("atTarget", False)
+                        offset_secs = 0 if at_target else int(value) * unit_seconds.get(unit, 60)
 
                         # Determine target datetime
                         target_type = alert.get("targetType", "start")
                         if target_type == "due":
                             target_str = due_dt or start_dt
+                        elif target_type == "end":
+                            target_str = end_dt or start_dt
+                        elif target_type == "point":
+                            target_str = point_in_time_dt
                         else:
                             target_str = start_dt or due_dt
                         if not target_str:
@@ -732,9 +740,11 @@ async def _alert_push_loop():
                         except (ValueError, TypeError):
                             continue
 
-                        # before = target - offset, after = target + offset
+                        # at = exactly at target, before = target - offset, after = target + offset
                         after_target = alert.get("afterTarget", False)
-                        if after_target:
+                        if at_target:
+                            fire_dt = target_dt
+                        elif after_target:
                             fire_dt = target_dt + timedelta(seconds=offset_secs)
                         else:
                             fire_dt = target_dt - timedelta(seconds=offset_secs)
@@ -745,8 +755,11 @@ async def _alert_push_loop():
                             if key in _fired_keys:
                                 continue
                             _fired_keys.add(key)
-                            direction = "after" if after_target else "before"
-                            body = f"{value} {unit} {direction} {target_type}"
+                            if at_target:
+                                body = f"at {target_type}"
+                            else:
+                                direction = "after" if after_target else "before"
+                                body = f"{value} {unit} {direction} {target_type}"
                             _send_chit_push(owner_id, chit_id, chit_title, "Reminder:", body)
                             try:
                                 _send_chit_ntfy(owner_id, chit_id, chit_title, "Reminder:", body)

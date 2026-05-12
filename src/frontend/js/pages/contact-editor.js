@@ -933,29 +933,13 @@
             _updatePillToggle('vault-pill', vaultHidden.value);
         }
 
-        // If this is a vault contact from another user, show read-only info
+        // If this is a vault contact from another user, show info badge (but allow editing)
         var vaultPill = document.getElementById('vault-pill');
         var vaultOwnerInfo = document.getElementById('vaultOwnerInfo');
         var vaultOwnerText = document.getElementById('vaultOwnerText');
         if (contact.is_vault_contact) {
-            // Read-only: vault contact from another user
-            if (vaultPill) { vaultPill.style.pointerEvents = 'none'; vaultPill.style.opacity = '0.6'; }
             if (vaultOwnerInfo) vaultOwnerInfo.style.display = '';
-            if (vaultOwnerText) vaultOwnerText.textContent = 'Shared by another user (read-only)';
-            // Disable all form inputs for vault contacts
-            document.querySelectorAll('#mainEditor input, #mainEditor textarea, #mainEditor select').forEach(function(el) {
-                el.disabled = true;
-                el.style.opacity = '0.7';
-            });
-            // Hide save/delete buttons
-            var saveBtn = document.getElementById('saveButton');
-            var saveStayBtn = document.getElementById('saveStayButton');
-            var saveExitBtn = document.getElementById('saveExitButton');
-            var deleteBtn = document.getElementById('deleteButton');
-            if (saveBtn) saveBtn.style.display = 'none';
-            if (saveStayBtn) saveStayBtn.style.display = 'none';
-            if (saveExitBtn) saveExitBtn.style.display = 'none';
-            if (deleteBtn) deleteBtn.style.display = 'none';
+            if (vaultOwnerText) vaultOwnerText.textContent = 'Shared from another user\'s vault';
         }
 
         // Update display name header
