@@ -1,0 +1,1 @@
+Added auto-save feature for the chit editor — automatically persists edits after a 2-second debounce period, controlled by per-platform (desktop/mobile) toggles in user settings, with a visual save status indicator and graceful exit handling.
