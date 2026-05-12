@@ -88,13 +88,21 @@ class Checklist {
     this._moreMenu.style.display = "none";
 
     var menuClear = document.createElement("button");
-    menuClear.innerHTML = '<i class="fas fa-broom"></i> Clear checked items';
+    menuClear.innerHTML = '<i class="fas fa-check-square"></i> Delete checked items';
     menuClear.addEventListener("click", function(e) {
       e.stopPropagation(); e.preventDefault();
       self._moreMenu.style.display = 'none';
       self.clearCheckedItems();
     });
     this._menuClearBtn = menuClear;
+
+    var menuDeleteUnchecked = document.createElement("button");
+    menuDeleteUnchecked.innerHTML = '<i class="fas fa-square"></i> Delete unchecked items';
+    menuDeleteUnchecked.addEventListener("click", function(e) {
+      e.stopPropagation(); e.preventDefault();
+      self._moreMenu.style.display = 'none';
+      self.deleteUncheckedItems();
+    });
 
     var menuToNote = document.createElement("button");
     menuToNote.innerHTML = '<i class="fas fa-arrow-right"></i> Move to note';
@@ -130,6 +138,7 @@ class Checklist {
     });
 
     this._moreMenu.appendChild(menuClear);
+    this._moreMenu.appendChild(menuDeleteUnchecked);
     this._moreMenu.appendChild(menuToNote);
     this._moreMenu.appendChild(menuSend);
     this._moreMenu.appendChild(menuPrint);
@@ -359,6 +368,22 @@ class Checklist {
     this._pushUndoState();
     var removed = this.items.filter(i => i.checked);
     this.items = this.items.filter(i => !i.checked);
+    this.render();
+    this._notifyChange();
+  }
+
+  async deleteUncheckedItems() {
+    var uncheckedCount = this.items.filter(i => !i.checked).length;
+    if (uncheckedCount === 0) return;
+    var confirmed = false;
+    if (typeof cwocConfirm === 'function') {
+      confirmed = await cwocConfirm("Delete " + uncheckedCount + " unchecked item" + (uncheckedCount > 1 ? "s" : "") + "?", { title: "Delete Unchecked", danger: true, confirmLabel: "Delete" });
+    } else {
+      confirmed = false;
+    }
+    if (!confirmed) return;
+    this._pushUndoState();
+    this.items = this.items.filter(i => i.checked);
     this.render();
     this._notifyChange();
   }
@@ -607,26 +632,49 @@ class Checklist {
     };
 
     var addNewItemBelow = function() {
-      if (ta.value.trim() !== "") { item.text = ta.value.trim(); self._notifyChange(); }
+      // Cancel any pending edit debounce so it doesn't push a separate undo state
+      if (editDebounceTimer) { clearTimeout(editDebounceTimer); editDebounceTimer = null; }
+      // Snapshot with the full textarea content as the item text (what user sees now)
+      var originalText = item.text;
+      item.text = ta.value;
+      self._pushUndoState();
+      var cursorPos = ta.selectionStart;
+      var textBefore = ta.value.substring(0, cursorPos);
+      var textAfter = ta.value.substring(cursorPos);
+      // Current item keeps text before cursor
+      item.text = textBefore.trim();
       var idx = self.items.findIndex(i => i.id === item.id);
-      var newItem = { id: self.generateId(), text: "", level: item.level, checked: false, parent: item.parent };
+      // New item gets text after cursor (same level, same parent, inserted after children)
+      var newItem = { id: self.generateId(), text: textAfter.trim(), level: item.level, checked: false, parent: item.parent };
       var insertIdx = idx + 1;
       while (insertIdx < self.items.length && self.items[insertIdx].level > item.level) insertIdx++;
       self.items.splice(insertIdx, 0, newItem);
       ta.remove(); textSpan.style.display = ""; renderChecklistItemMarkdown(textSpan, item.text); self.editingItem = null;
+      self._updateCount();
+      if (typeof self.onChangeCallback === "function") self.onChangeCallback(self.getChecklistData());
       self.render();
       setTimeout(function() {
         var newEl = self.container.querySelector('[data-id="' + newItem.id + '"]');
-        if (newEl) { var ns = newEl.querySelector(".checklist-text"); self.startEditing(newItem, ns); }
+        if (newEl) {
+          var ns = newEl.querySelector(".checklist-text");
+          self.startEditing(newItem, ns);
+          setTimeout(function() {
+            var inp = newEl.querySelector("textarea.checklist-edit-input");
+            if (inp) { inp.setSelectionRange(0, 0); }
+          }, 0);
+        }
       }, 0);
     };
 
     var navigateToItem = function(direction) {
       var idx = self.items.findIndex(i => i.id === item.id);
       var target = null;
-      if (direction === "previous" && idx > 0) target = self.items[idx - 1];
-      else if (direction === "next" && idx < self.items.length - 1) target = self.items[idx + 1];
-      if (target && !target.checked) {
+      if (direction === "previous") {
+        for (var i = idx - 1; i >= 0; i--) { if (!self.items[i].checked) { target = self.items[i]; break; } }
+      } else if (direction === "next") {
+        for (var i = idx + 1; i < self.items.length; i++) { if (!self.items[i].checked) { target = self.items[i]; break; } }
+      }
+      if (target) {
         if (ta.value.trim() !== "") { item.text = ta.value.trim(); self._notifyChange(); }
         ta.remove(); textSpan.style.display = ""; renderChecklistItemMarkdown(textSpan, item.text); self.editingItem = null;
         self.render();
@@ -649,6 +697,11 @@ class Checklist {
 
     ta.addEventListener("keydown", function(e) {
       e.stopPropagation();
+      if ((e.metaKey || e.ctrlKey) && e.key === "z" && !e.shiftKey) {
+        e.preventDefault(); finishEditing(false); self.undo(); return;
+      } else if ((e.metaKey || e.ctrlKey) && e.key === "z" && e.shiftKey) {
+        e.preventDefault(); finishEditing(false); self.redo(); return;
+      }
       if (e.key === "Enter" && e.shiftKey) {
         // Shift+Enter: insert newline (default textarea behavior — do nothing)
         setTimeout(autoSize, 0);
@@ -659,8 +712,35 @@ class Checklist {
         addNewItemBelow();
       } else if (e.key === "Escape") {
         finishEditing(false);
+      } else if ((e.key === "(" || e.key === "9" || e.key === ")" || e.key === "0") && (e.metaKey || e.ctrlKey) && e.shiftKey) {
+        // Cmd/Ctrl+Shift+( = unindent item + all descendants
+        // Cmd/Ctrl+Shift+) = indent item + all descendants
+        e.preventDefault();
+        var isUnindent = (e.key === "(" || e.key === "9");
+        var idx = self.items.indexOf(item);
+        var subtree = self.getSubtree(item);
+        if (isUnindent) {
+          if (item.level > 0) {
+            subtree.forEach(function(si) { si.level = Math.max(0, si.level - 1); });
+            item.parent = null;
+            for (var i = idx - 1; i >= 0; i--) { if (self.items[i].level === item.level - 1) { item.parent = self.items[i].id; break; } }
+            self.getChildren(item).forEach(function(child) { child.parent = item.id; });
+            finishEditing(true); self.render(); self._notifyChange();
+            setTimeout(function() { var el = self.container.querySelector('[data-id="' + item.id + '"] .checklist-text'); if (el) el.click(); }, 0);
+          }
+        } else {
+          var prevLevel = idx > 0 ? self.items[idx - 1].level : -1;
+          if (idx > 0 && item.level < MAX_INDENT_LEVEL && item.level <= prevLevel) {
+            subtree.forEach(function(si) { si.level = Math.min(si.level + 1, MAX_INDENT_LEVEL); });
+            item.parent = null;
+            for (var i = idx - 1; i >= 0; i--) { if (self.items[i].level === item.level - 1) { item.parent = self.items[i].id; break; } }
+            self.getChildren(item).forEach(function(child) { child.parent = item.id; });
+            finishEditing(true); self.render(); self._notifyChange();
+            setTimeout(function() { var el = self.container.querySelector('[data-id="' + item.id + '"] .checklist-text'); if (el) el.click(); }, 0);
+          }
+        }
       } else if ((e.key === "[" || e.key === "]") && (e.metaKey || e.ctrlKey)) {
-        // Cmd+[ = unindent, Cmd+] = indent (prevent browser back/forward)
+        // Cmd+[ = unindent, Cmd+] = indent (single item only)
         e.preventDefault();
         var idx = self.items.indexOf(item);
         if (e.key === "[") {
@@ -730,24 +810,13 @@ class Checklist {
 
   deleteItem(item, element) {
     var self = this;
-    var children = this.getChildren(item);
+    var subtree = this.getSubtree(item);
     element.classList.add("deleting");
     setTimeout(function() {
       self._pushUndoState();
-      if (children.length > 0) {
-        // Promote children: re-parent to deleted item's parent, reduce level by 1 for entire subtree
-        children.forEach(function(child) {
-          child.parent = item.parent || null;
-          child.level = Math.max(0, child.level - 1);
-          // Also promote all descendants of this child
-          var descendants = self._getDescendants(child);
-          descendants.forEach(function(d) {
-            d.level = Math.max(0, d.level - 1);
-          });
-        });
-      }
-      // Remove only the deleted item (not its children)
-      self.items = self.items.filter(function(i) { return i.id !== item.id; });
+      // Remove the item and all its descendants
+      var subtreeIds = subtree.map(function(i) { return i.id; });
+      self.items = self.items.filter(function(i) { return subtreeIds.indexOf(i.id) === -1; });
       self.render();
       self._notifyChange();
     }, 300);

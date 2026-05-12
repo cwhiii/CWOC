@@ -655,6 +655,8 @@ function _persistHabitUpdate(chit) {
       body: JSON.stringify(pendingChit)
     }).then(function(resp) {
       if (resp.ok && typeof fetchChits === 'function') {
+        // Don't trigger full re-render on itinerary view — optimistic update is enough
+        if (typeof currentView !== 'undefined' && currentView === 'Itinerary') return;
         fetchChits();
       } else if (!resp.ok) {
         console.error('[_persistHabitUpdate] Failed:', resp.status);

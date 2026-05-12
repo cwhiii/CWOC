@@ -123,6 +123,11 @@ function displayTasksView(chitsToDisplay) {
         body: JSON.stringify({ ...chit, status: statusDropdown.value || null }),
       }).then(r => { if (r.ok) fetchChits(); });
     });
+    // Add chain to Blocked option text if chit has incomplete prerequisites
+    if (chit._hasIncompletePrereqs) {
+      var _bOpt = statusDropdown.querySelector('option[value="Blocked"]');
+      if (_bOpt) _bOpt.textContent = 'Blocked ⛓️';
+    }
     statusWrap.appendChild(statusDropdown);
     controls.appendChild(statusWrap);
 
@@ -268,6 +273,11 @@ function displayAssignedToMeView(chitsToDisplay) {
         body: JSON.stringify(Object.assign({}, chit, { status: statusDropdown.value || null })),
       }).then(function(r) { if (r.ok) fetchChits(); });
     });
+    // Add chain to Blocked option text if chit has incomplete prerequisites
+    if (chit._hasIncompletePrereqs) {
+      var _bOpt2 = statusDropdown.querySelector('option[value="Blocked"]');
+      if (_bOpt2) _bOpt2.textContent = 'Blocked ⛓️';
+    }
     statusWrap.appendChild(statusDropdown);
     controls.appendChild(statusWrap);
 

@@ -409,3 +409,4 @@ def _deserialize_chit_fields(chit):
     chit["pinned"] = bool(chit.get("pinned"))
     chit["archived"] = bool(chit.get("archived"))
     chit["stealth"] = bool(chit.get("stealth"))
+    chit["prerequisites"] = deserialize_json_field(chit.get("prerequisites")) if isinstance(chit.get("prerequisites"), str) else chit.get("prerequisites")

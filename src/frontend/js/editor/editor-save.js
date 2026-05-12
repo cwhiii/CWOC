@@ -483,6 +483,11 @@ async function buildChitObject() {
   // Include snoozed_until (preserved from loaded chit, or set via snooze modal)
   chit.snoozed_until = window._currentSnoozedUntil || null;
 
+  // Include prerequisites
+  if (typeof getPrerequisitesData === 'function') {
+    chit.prerequisites = getPrerequisitesData();
+  }
+
   return chit;
 }
 

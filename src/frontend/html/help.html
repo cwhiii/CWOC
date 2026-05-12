@@ -429,6 +429,16 @@
             <p>Status (ToDo, In Progress, Blocked, Complete), Priority (High, Medium, Low), Severity (Critical, Major, Normal, Minor), and <strong>Availability</strong> (Busy, Free, or unset). The <strong>🎯 Habit</strong> button is always visible in the Task zone header (even when collapsed) — click it to toggle habit mode on/off. When a chit is shared with other users, an <strong>Assignee</strong> dropdown appears after Severity, listing only the users the chit is currently shared with. Removing a shared user from the People zone automatically updates the Assignee options.</p>
             <p>The Availability field maps to the iCal TRANSP property for calendar exports: Busy = OPAQUE, Free = TRANSPARENT.</p>
             <p>In the Tasks view, status is shown with matching icons: ● ToDo, ⟳ In Progress, ⊘ Blocked, ✓ Complete.</p>
+            <h4>Prerequisites</h4>
+            <p>Below the Assignee field in the Task zone, a <strong>Prerequisites</strong> section lets you select other chits that must be completed before this chit can proceed. Click <strong>+ Add</strong> to open a searchable picker showing all chits (those without a status are greyed out with a warning). Selected prerequisites appear as a colored list showing each prerequisite's title and current status.</p>
+            <ul>
+                <li><strong>Auto-blocking</strong> — When any prerequisite is not "Complete", the chit's status is automatically set to "Blocked"</li>
+                <li><strong>Auto-unblocking</strong> — When the last incomplete prerequisite is marked Complete (or removed), the chit's status resets to "ToDo"</li>
+                <li><strong>Manual override</strong> — You can manually change status away from Blocked, but a warning confirms the override</li>
+                <li><strong>Circular dependency protection</strong> — The system prevents adding a prerequisite that would create a circular chain (A→B→A)</li>
+                <li><strong>⛓️ indicator</strong> — Chits with incomplete prerequisites show a ⛓️ chain icon on their cards in all views</li>
+                <li><strong>Cascade</strong> — When a chit is marked Complete, any chits that had it as their last incomplete prerequisite are automatically unblocked</li>
+            </ul>
             <h4>Checklist Zone</h4>
             <p>The checklist zone header includes two utility buttons:</p>
             <ul>

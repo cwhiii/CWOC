@@ -569,6 +569,13 @@ async function loadChitData(chitId) {
     const dueCompleteCb = document.getElementById('dueComplete');
     if (dueCompleteCb) dueCompleteCb.checked = (chit.status === 'Complete');
 
+    // Initialize prerequisites
+    if (typeof initPrerequisites === 'function') {
+      initPrerequisites(chit);
+      // Track if auto-blocked by prerequisites
+      window._prereqAutoBlocked = (chit.status === 'Blocked' && Array.isArray(chit.prerequisites) && chit.prerequisites.length > 0);
+    }
+
     function splitISODateTime(isoString) {
       if (!isoString) return { date: "", time: "" };
       const dateObj = new Date(isoString);
@@ -930,7 +937,7 @@ function _applyViewerReadOnlyMode(chit) {
 function applyZoneStates(chit) {
   const zones = [
     ["datesSection", "datesContent", () => !!(chit.start_datetime || chit.end_datetime || chit.due_datetime || chit.point_in_time || chit.recurrence)],
-    ["taskSection", "taskContent", () => !!(chit.priority || chit.severity || chit.status)],
+    ["taskSection", "taskContent", () => !!(chit.priority || chit.severity || chit.status || (Array.isArray(chit.prerequisites) && chit.prerequisites.length > 0))],
     ["locationSection", "locationContent", () => !!(chit.location && chit.location.trim())],
     ["tagsSection", "tagsContent", () => false],
     ["peopleSection", "peopleContent", () => false],

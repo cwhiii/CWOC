@@ -1194,6 +1194,7 @@ Core utility functions shared across all CWOC pages. Must load after `shared-aut
 | `_tempBarRange()` | Return `{ barMin, barMax }` for temperature bar visuals (metric: -10–40°C, imperial: -14–104°F) |
 | `cwocConfirm(message, opts)` | Show a parchment-styled confirm modal; returns a Promise resolving to boolean |
 | `cwocPromptModal(title, placeholder, onConfirm, opts)` | Show a parchment-styled input modal (replaces browser `prompt()`); calls `onConfirm(value)` when user submits |
+| `cwocChitPickerModal(options)` | Shared chit picker modal (table with search, status/priority filters, multi-select checkboxes). Options: `title`, `confirmLabel`, `onConfirm(selectedChits)`, `filterChits(chit)→bool`, `disabledIds`, `preSelectedIds`, `beforeSelect(id)→Promise<bool>`, `onItemDblClick(chit)` |
 | `generateUniqueId()` | Create a unique ID string from timestamp + random base-36 |
 | `formatDate(date)` | Format a Date as `YYYY-Mon-DD` string |
 | `formatTime(date)` | Format a Date as `HH:MM` (24-hour locale string) |
@@ -1263,6 +1264,7 @@ Visual indicator helpers for chit cards and calendar events — alert type detec
 | `_getAllIndicators(chit, settings, context)` | Return all visual indicator icons (alerts + people + health + recurrence + attachments) for a chit; attachment 📎 is last/lowest priority |
 | `_shouldShow(mode, context)` | Return true if a display mode ("always"/"never"/"space") permits showing in a given context |
 | `_chitAlertTypesPresent(chit)` | Return an object mapping each alert type to true/false for presence on a chit |
+| `_computePrerequisiteFlags(allChits)` | Compute `_hasIncompletePrereqs` flag on each chit for the ⛓️ chain indicator |
 
 #### shared-calendar.js
 
@@ -2415,6 +2417,25 @@ Snooze zone: hide a chit from views until a specified time. Provides the snooze 
 | `_doSnooze(minutes)` | Snooze for a given number of minutes (preset) |
 | `_doSnoozeCustom()` | Snooze until a custom date/time from the modal inputs |
 | `_doUnsnooze()` | Remove snooze (wake up now) |
+
+#### editor-prerequisites.js
+
+Prerequisites picker for the Task zone. Uses the shared `cwocChitPickerModal()` (same table/search/filter UI as "Add Child Chits" in Projects) with multi-select checkboxes. Shows selected prerequisites as full-color items with inline-editable status. Handles circular dependency detection via `beforeSelect`, auto-block/unblock logic, and manual override warnings. Depends on: `shared-utils.js` (`cwocToast`, `cwocConfirm`, `cwocChitPickerModal`), `editor-save.js` (`setSaveButtonUnsaved`). Loaded before: `editor-save.js`, `editor-init.js`.
+
+| Symbol | Description |
+|--------|-------------|
+| `_prereqSelectedIds` | Global: array of currently selected prerequisite chit IDs |
+| `_prereqChitCache` | Global: cached chit data for rendering the list |
+| `initPrerequisites(chit)` | Load prerequisites from chit data into the UI |
+| `getPrerequisitesData()` | Return current prerequisites array for save payload |
+| `openPrereqPicker()` | Open the shared chit picker modal for selecting prerequisites |
+| `_renderPrereqList()` | Render the selected prerequisites list (full-color items with inline status) |
+| `_onPrereqStatusChange(selectEl)` | Handle inline status change — patches via PATCH /api/chits/{id}/fields |
+| `_removePrereq(id)` | Remove a prerequisite from the selected list |
+| `_checkPrereqAutoBlock()` | Auto-block/unblock based on prerequisite completion status |
+| `checkPrereqStatusOverride(newStatus)` | Warn when manually overriding a prereq-blocked status |
+| `_prereqEsc(str)` | HTML escape helper |
+| `_prereqContrastColor(hex)` | Return black or white text color based on background luminance |
 
 #### editor-save.js
 
@@ -3620,6 +3641,7 @@ All HTML pages include the following PWA `<head>` tags: `<link rel="manifest" hr
 <script src="/frontend/js/editor/editor-attachments.js"></script>
 <script src="/frontend/js/editor/editor-nest.js"></script>
 <script src="/frontend/js/editor/editor-snooze.js"></script>
+<script src="/frontend/js/editor/editor-prerequisites.js"></script>
 <script src="/frontend/js/editor/editor-save.js"></script>
 <script src="/frontend/js/editor/editor-sharing.js"></script>
 <script src="/frontend/js/editor/editor-people.js"></script>
@@ -3906,6 +3928,7 @@ shared-auth.js            ← MUST load first (getCurrentUser, isAdmin, waitForA
                     editor-attachments.js (attachments zone — depends on shared-utils, editor-save)
                     editor-nest.js        (nest button + thread picker — depends on shared-utils, editor-save)
                     editor-snooze.js      (snooze modal + state — depends on shared.js; provides _initSnooze, _currentSnoozedUntil for editor-save)
+                    editor-prerequisites.js (prerequisites picker — depends on shared-utils, editor-save; provides initPrerequisites, getPrerequisitesData)
                     editor-save.js        (save/exit logic)
                     editor-sharing.js     (sharing data-layer — uses shared-auth; provides _sharingUserList, getSharingData, hasSharingData for editor-people.js and editor-init.js)
                     editor-init.js        (entry point — calls init functions)

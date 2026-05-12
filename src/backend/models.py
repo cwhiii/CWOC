@@ -147,6 +147,7 @@ class Chit(BaseModel):
     checklist_autosave: Optional[bool] = None     # Per-chit override: None=use global, True/False=override
     nest_thread_id: Optional[str] = None          # ID of an email chit in the target thread
     snoozed_until: Optional[str] = None           # ISO 8601 datetime — chit hidden from views until this time
+    prerequisites: Optional[List[str]] = None      # JSON array of chit IDs that must be Complete before this chit is unblocked
 
 class MultiValueEntry(BaseModel):
     label: Optional[str] = None    # "Work", "Home", "Mobile", custom

@@ -2287,3 +2287,58 @@ def migrate_add_point_in_time():
     finally:
         if conn:
             conn.close()
+
+# ── Email start_datetime → point_in_time migration ───────────────────────
+
+def migrate_email_start_to_point_in_time():
+    """Move start_datetime to point_in_time for all email chits.
+
+    Emails should only have point_in_time (reference timestamp), not
+    start_datetime (which causes them to appear as calendar events).
+    Copies start_datetime → point_in_time where point_in_time is null,
+    then clears start_datetime on those rows.
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        # Only act on email chits that have start_datetime but no point_in_time
+        cursor.execute(
+            """UPDATE chits
+               SET point_in_time = start_datetime,
+                   start_datetime = NULL,
+                   end_datetime = NULL
+               WHERE email_message_id IS NOT NULL
+                 AND start_datetime IS NOT NULL
+                 AND (point_in_time IS NULL OR point_in_time = '')"""
+        )
+        affected = cursor.rowcount
+        conn.commit()
+        if affected > 0:
+            logger.info(f"Migrated {affected} email chits: start_datetime → point_in_time")
+    except Exception as e:
+        logger.error(f"Error in migrate_email_start_to_point_in_time: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
+# ── Prerequisites column migration ───────────────────────────────────────
+
+def migrate_add_prerequisites():
+    """Add prerequisites column (JSON array of chit IDs) to chits table."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(chits)")
+        existing = {row[1] for row in cursor.fetchall()}
+        if "prerequisites" not in existing:
+            cursor.execute("ALTER TABLE chits ADD COLUMN prerequisites TEXT")
+            conn.commit()
+            logger.info("Added prerequisites column to chits table")
+    except Exception as e:
+        logger.error(f"Error adding prerequisites column to chits: {str(e)}")
+    finally:
+        if conn:
+            conn.close()

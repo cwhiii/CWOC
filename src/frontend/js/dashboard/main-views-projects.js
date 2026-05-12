@@ -456,7 +456,9 @@ function displayProjectsView(chitsToDisplay) {
         const childTitle = document.createElement("span");
         childTitle.className = "projects-child-title";
         childTitle.style.cssText = "font-weight:bold;";
-        childTitle.textContent = child ? (child.title || "(Untitled)") : `[${childId.slice(0,8)}…]`;
+        var _childTitleText = child ? (child.title || "(Untitled)") : `[${childId.slice(0,8)}…]`;
+        if (child && child._hasIncompletePrereqs) _childTitleText = '⛓️ ' + _childTitleText;
+        childTitle.textContent = _childTitleText;
         titleRow.appendChild(childTitle);
 
         // Checklist progress count on child chits
@@ -1200,7 +1202,9 @@ function _renderKanbanBoard(chitList, projects, chitMap, _viSettings) {
         titleEl.className = "kanban-card-title";
         titleEl.style.cssText = "font-weight:bold;margin-bottom:3px;";
         const titleTextSpan = document.createElement("span");
-        titleTextSpan.textContent = child.title || "(Untitled)";
+        var _kanbanChildTitle = child.title || "(Untitled)";
+        if (child._hasIncompletePrereqs) _kanbanChildTitle = '⛓️ ' + _kanbanChildTitle;
+        titleTextSpan.textContent = _kanbanChildTitle;
         if (child.status === "Complete") titleTextSpan.style.textDecoration = "line-through";
         titleEl.appendChild(titleTextSpan);
         // Checklist progress count on child chits

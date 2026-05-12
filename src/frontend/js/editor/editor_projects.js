@@ -809,6 +809,7 @@ async function openAddChitModal() {
               <option value="High">High</option>
               <option value="Critical">Critical</option>
             </select>
+            <label style="display:flex;align-items:center;gap:4px;font-size:0.85em;white-space:nowrap;cursor:pointer;"><input type="checkbox" id="chitFilterEmail"> Email</label>
             <input type="text" id="chitSearchNew" class="chit-search-input-new" placeholder="Search chits..." autofocus style="flex:1;">
           </div>
           <table class="chit-table-new">
@@ -965,20 +966,26 @@ async function openAddChitModal() {
       });
     }
 
-    modal._filteredChits = availableChits;
-    renderChits(availableChits);
+    // Initial render — exclude email chits by default
+    modal._filteredChits = availableChits.filter(function(c) {
+      return !(c.email_message_id || c.email_status);
+    });
+    renderChits(modal._filteredChits);
 
     // Update header with count
     var headerH2 = modal.querySelector('.modal-header-new h2');
-    if (headerH2) headerH2.textContent = 'Add Child Chits (' + availableChits.length + ' available)';
+    if (headerH2) headerH2.textContent = 'Add Child Chits (' + modal._filteredChits.length + ' available)';
 
-    // Shared filter function — applies text search + status + priority dropdowns
+    // Shared filter function — applies text search + status + priority dropdowns + email toggle
     function _applyModalFilters() {
       var searchTerm = (document.getElementById("chitSearchNew")?.value || "").toLowerCase().trim();
       var statusFilter = (document.getElementById("chitFilterStatus")?.value || "").toLowerCase();
       var priorityFilter = (document.getElementById("chitFilterPriority")?.value || "").toLowerCase();
+      var includeEmail = document.getElementById("chitFilterEmail")?.checked || false;
 
       modal._filteredChits = (modal._availableChits || []).filter(function(chit) {
+        // Exclude email chits unless checkbox is checked
+        if (!includeEmail && (chit.email_message_id || chit.email_status)) return false;
         // Status dropdown filter (case-insensitive)
         if (statusFilter && (chit.status || "").toLowerCase() !== statusFilter) return false;
         // Priority dropdown filter (case-insensitive)
@@ -998,6 +1005,7 @@ async function openAddChitModal() {
       document.getElementById("chitSearchNew").addEventListener("input", _applyModalFilters);
       document.getElementById("chitFilterStatus").addEventListener("change", _applyModalFilters);
       document.getElementById("chitFilterPriority").addEventListener("change", _applyModalFilters);
+      document.getElementById("chitFilterEmail").addEventListener("change", _applyModalFilters);
 
       addBtn.addEventListener("click", function() {
         if (modal._selectedIds.size === 0) return;

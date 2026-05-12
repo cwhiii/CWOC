@@ -690,16 +690,24 @@ function displayMonthView(chitsToDisplay) {
   });
 }
 
-function _buildItineraryEvent(chit, _viSettings) {
+function _buildItineraryEvent(chit, _viSettings, opts) {
+  var isPast = opts && opts.isPast;
+  const isTask = !!(chit.status && chit.status !== '');
+
   const chitElement = document.createElement("div");
   chitElement.className = "itinerary-event";
-  chitElement.style.display = "flex";
-  chitElement.style.justifyContent = "flex-start";
-  chitElement.style.padding = "10px";
-  applyChitColors(chitElement, chitColor(chit));
-  chitElement.style.marginBottom = "5px";
-  chitElement.style.borderRadius = "5px";
-  chitElement.style.marginLeft = "100px";
+  chitElement.style.cssText = "display:flex;align-items:center;padding:8px 10px;border-radius:5px;margin:4px 20px;";
+  // Ensure a visible background — default to parchment if no color
+  var bgColor = (typeof chitColor === 'function') ? chitColor(chit) : '';
+  if (!bgColor || bgColor === 'transparent' || bgColor === 'rgba(0,0,0,0)') {
+    bgColor = '#fdf6e3';
+  }
+  applyChitColors(chitElement, bgColor);
+  // Past-due tasks: highlight with overdue border
+  if (isPast && isTask) {
+    var overdueColor = (window._cwocSettings && window._cwocSettings.overdue_border_color) || '#b22222';
+    chitElement.style.border = '2px solid ' + overdueColor;
+  }
 
   if ((chit.due_datetime || chit.status) && chit.status === "Complete") {
     chitElement.classList.add("completed-task");
@@ -707,10 +715,52 @@ function _buildItineraryEvent(chit, _viSettings) {
   if (typeof _isDeclinedByCurrentUser === 'function' && _isDeclinedByCurrentUser(chit)) chitElement.classList.add("declined-chit");
   if (chit.point_in_time && !chit.start_datetime && !chit.due_datetime) chitElement.classList.add("point-in-time");
 
+  // Type icon INSIDE the card, leftmost
+  var iconEl = document.createElement("span");
+  iconEl.style.cssText = "font-size:1em;flex-shrink:0;margin-right:6px;";
+  iconEl.textContent = isTask ? '☑️' : '🗓️';
+  chitElement.appendChild(iconEl);
+
+  // Status dropdown for tasks (between icon and time), or spacer for alignment
+  if (isTask) {
+    var statusSelect = document.createElement("select");
+    statusSelect.style.cssText = "font-size:0.8em;padding:2px 4px;border:1px solid #c4a97d;border-radius:3px;background:#fffaf0;color:#4a2c2a;margin-right:8px;flex-shrink:0;width:90px;";
+    var statuses = ['ToDo', 'In Progress', 'Blocked', 'Complete'];
+    statuses.forEach(function(s) {
+      var opt = document.createElement("option");
+      opt.value = s;
+      opt.textContent = s;
+      if (chit.status === s) opt.selected = true;
+      statusSelect.appendChild(opt);
+    });
+    statusSelect.addEventListener("change", function(e) {
+      e.stopPropagation();
+      var newStatus = statusSelect.value;
+      var chitId = chit._isVirtual ? chit._parentId : chit.id;
+      fetch('/api/chits/' + chitId + '/fields', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      }).then(function(resp) {
+        if (!resp.ok) { console.error('Status update failed:', resp.status); return; }
+        chit.status = newStatus;
+        if (newStatus === 'Complete') {
+          chitElement.style.opacity = '0.4';
+          setTimeout(function() { if (typeof displayChits === 'function') displayChits(); }, 600);
+        }
+      }).catch(function(err) { console.error('Status update failed:', err); });
+    });
+    chitElement.appendChild(statusSelect);
+  } else {
+    // Spacer to align time columns with task rows
+    var spacer = document.createElement("span");
+    spacer.style.cssText = "display:inline-block;width:90px;margin-right:8px;flex-shrink:0;";
+    chitElement.appendChild(spacer);
+  }
+  // Time column
   const timeColumn = document.createElement("div");
   timeColumn.className = "time-column";
-  timeColumn.style.width = "100px";
-  timeColumn.style.marginRight = "15px";
+  timeColumn.style.cssText = "width:90px;margin-right:10px;flex-shrink:0;font-size:0.85em;";
 
   if (chit.all_day || chit.allDay) {
     timeColumn.innerHTML = '';
@@ -720,23 +770,30 @@ function _buildItineraryEvent(chit, _viSettings) {
     timeColumn.innerHTML = `${formatTime(chitStart)} - ${formatTime(chitEnd)}`;
   } else if (chit.due_datetime) {
     const dueDate = new Date(chit.due_datetime);
-    timeColumn.innerHTML = `⌚ ${formatTime(dueDate)}`;
+    timeColumn.innerHTML = `${formatTime(dueDate)}`;
   } else if (chit.point_in_time) {
     const pitDate = new Date(chit.point_in_time);
     timeColumn.innerHTML = `📌 ${formatTime(pitDate)}`;
   }
+  chitElement.appendChild(timeColumn);
 
+  // Title (left-justified, no pinned icon)
   const detailsColumn = document.createElement("div");
   detailsColumn.className = "details-column";
-  detailsColumn.style.textAlign = "center";
-  detailsColumn.style.flex = "1";
+  detailsColumn.style.cssText = "text-align:left;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;";
 
-  const indicators = typeof _getAllIndicators === 'function' ? _getAllIndicators(chit, _viSettings, 'card') : '';
-  const pinnedIcon = chit.pinned ? '<i class="fas fa-bookmark" style="font-size:0.85em;"></i> ' : '';
-  detailsColumn.innerHTML = `<span style="font-weight: bold; font-size: 1.1em;">${indicators}${pinnedIcon}${chit.title || '(Untitled)'}</span>`;
-
-  chitElement.appendChild(timeColumn);
+  var pastLabel = '';
+  detailsColumn.innerHTML = `<span style="font-weight:bold;font-size:1.05em;">${pastLabel}${chit.title || '(Untitled)'}</span>`;
   chitElement.appendChild(detailsColumn);
+
+  // Extra info indicators (recurrence only) — far right
+  var extraInfo = document.createElement("span");
+  extraInfo.style.cssText = "margin-left:auto;flex-shrink:0;font-size:0.8em;opacity:0.6;padding-left:8px;";
+  var extras = [];
+  if (chit.recurrence_rule && chit.recurrence_rule.freq) extras.push('🔁');
+  if (extras.length > 0) extraInfo.innerHTML = extras.join(' ');
+  if (extras.length > 0) chitElement.appendChild(extraInfo);
+
   attachCalendarChitEvents(chitElement, chit);
   return chitElement;
 }
@@ -746,94 +803,365 @@ function displayItineraryView(chitsToDisplay) {
   chitList.innerHTML = "";
   const itineraryView = document.createElement("div");
   itineraryView.className = "itinerary-view";
+  itineraryView.style.cssText = "background:url('/static/parchment.jpg') center/cover;background-color:#fdf6e3;";
   const _viSettings = (window._cwocSettings || {}).visual_indicators || {};
 
-  const today = new Date();
+  const now = new Date();
+  const today = new Date(now);
   today.setHours(0, 0, 0, 0);
+  const todayEnd = new Date(today);
+  todayEnd.setHours(23, 59, 59, 999);
+  const nowMin = now.getHours() * 60 + now.getMinutes();
 
-  const futureChits = chitsToDisplay
-    .filter(
-      (chit) => {
-        // Include chits with start_datetime, due_datetime, or point_in_time in the future
-        if (chit.start_datetime_obj && chit.start_datetime_obj >= today) return true;
-        if (chit.due_datetime) {
-          const due = new Date(chit.due_datetime);
-          if (due >= today) return true;
-        }
-        if (chit.point_in_time) {
-          const pit = new Date(chit.point_in_time);
-          if (pit >= today) return true;
-        }
-        return false;
-      },
-    )
-    .sort((a, b) => {
-      const aDate = a.start_datetime_obj || (a.due_datetime ? new Date(a.due_datetime) : null) || (a.point_in_time ? new Date(a.point_in_time) : new Date(0));
-      const bDate = b.start_datetime_obj || (b.due_datetime ? new Date(b.due_datetime) : null) || (b.point_in_time ? new Date(b.point_in_time) : new Date(0));
-      return aDate - bDate;
-    });
+  // End of week (7 days from today start)
+  const weekEnd = new Date(today);
+  weekEnd.setDate(weekEnd.getDate() + 7);
 
-  if (futureChits.length === 0) {
-    itineraryView.innerHTML = _emptyState("No upcoming events found.");
-  } else {
-    // Group chits by day
-    const dayGroups = [];
-    let currentDay = null;
-    let currentGroup = null;
-    futureChits.forEach((chit) => {
-      const chitDateRaw = chit.start_datetime_obj || (chit.due_datetime ? new Date(chit.due_datetime) : null) || (chit.point_in_time ? new Date(chit.point_in_time) : new Date());
-      const chitDate = new Date(chitDateRaw);
-      chitDate.setHours(0, 0, 0, 0);
+  // ── Categorize chits into On Deck, Timed, Soon ──────────────────────────
+  var onDeckItems = [];   // All-day events today + tasks due today (no time) + habits due today
+  var timedItems = [];    // Timed events today that haven't ended yet
+  var soonItems = [];     // Tasks due this week (not today) + habits due this week (not today)
 
-      if (!currentDay || chitDate.getTime() !== currentDay.getTime()) {
-        currentDay = chitDate;
-        currentGroup = { date: chitDate, allDay: [], timed: [] };
-        dayGroups.push(currentGroup);
+  // ── Process habits from the global chits array (pre-expansion, original data) ──
+  var _originalChits = (typeof chits !== 'undefined') ? chits : chitsToDisplay;
+  var habitChits = _originalChits.filter(function(c) {
+    return c.habit === true && c.status !== 'Complete';
+  });
+  var settings = window._cwocSettings || {};
+  var windowDays = settings.habits_success_window || '30';
+
+  habitChits.forEach(function(chit) {
+    // Evaluate rollover
+    if (typeof _evaluateHabitRollover === 'function') {
+      var rolledOver = _evaluateHabitRollover(chit);
+      if (rolledOver && typeof _persistHabitRollover === 'function') {
+        _persistHabitRollover(chit);
       }
-      if (chit.all_day || chit.allDay) {
-        currentGroup.allDay.push(chit);
+    }
+    var goal = chit.habit_goal || 1;
+    var success = chit.habit_success || 0;
+    // Skip completed habits
+    if (success >= goal) return;
+
+    // Calculate days left in cycle
+    var rule = chit.recurrence_rule;
+    var freq = (rule && rule.freq) ? rule.freq : 'DAILY';
+    var interval = (rule && rule.interval) ? rule.interval : 1;
+    var daysInCycle = 1;
+    if (freq === 'DAILY') daysInCycle = 1 * interval;
+    else if (freq === 'WEEKLY') daysInCycle = 7 * interval;
+    else if (freq === 'MONTHLY') daysInCycle = 30 * interval;
+    else if (freq === 'YEARLY') daysInCycle = 365 * interval;
+
+    var currentPeriod = (typeof getCurrentPeriodDate === 'function') ? getCurrentPeriodDate(chit) : null;
+    var daysLeft = daysInCycle;
+    if (currentPeriod) {
+      var periodStart = new Date(currentPeriod + 'T00:00:00');
+      var elapsed = Math.floor((today - periodStart) / 86400000);
+      // Skip habits that haven't started yet (period is in the future)
+      if (elapsed < 0) return;
+      daysLeft = Math.max(0, daysInCycle - elapsed);
+    }
+
+    console.log('[Itinerary Habit]', chit.title || chit.id, 'freq=' + freq, 'interval=' + interval, 'daysInCycle=' + daysInCycle, 'period=' + currentPeriod, 'elapsed=' + (currentPeriod ? Math.floor((today - new Date(currentPeriod + 'T00:00:00')) / 86400000) : '?'), 'daysLeft=' + daysLeft, 'success=' + success + '/' + goal);
+
+    if (daysLeft <= 1) {
+      // Due today — On Deck
+      onDeckItems.push({ type: 'habit', chit: chit, goal: goal, success: success, daysLeft: daysLeft });
+    } else {
+      // Active but not due today — Soon (within current cycle)
+      var dueDate = new Date(today);
+      dueDate.setDate(dueDate.getDate() + daysLeft);
+      soonItems.push({ type: 'habit', chit: chit, goal: goal, success: success, daysLeft: daysLeft, dueDate: dueDate });
+    }
+  });
+
+  // ── Process non-habit chits (deduplicate: skip virtual recurrence instances, use originals) ──
+  var _seenChitIds = new Set();
+  // Pre-seed with habit IDs so they don't get double-processed
+  habitChits.forEach(function(c) { _seenChitIds.add(c.id); });
+  chitsToDisplay.forEach(function(chit) {
+    // Skip habits (handled above), completed, point-in-time-only, and email chits
+    if (chit.habit) return;
+    if (chit.status === 'Complete') return;
+    if (chit.point_in_time && !chit.start_datetime && !chit.due_datetime) return;
+    if (chit.email_message_id || chit.email_status) return;
+    // Skip virtual recurrence instances — only process the one matching today
+    if (chit._isVirtual) {
+      // Only include virtual instances that fall on today
+      var vDate = chit._virtualDate;
+      var todayStr = today.toISOString().slice(0, 10);
+      if (vDate !== todayStr) return;
+    }
+    // Skip non-recurring chits whose dates are entirely outside today/this week
+    if (!chit._isVirtual && !chit.recurrence_rule) {
+      var hasStart = !!chit.start_datetime;
+      var hasDue = !!chit.due_datetime;
+      if (hasStart && !hasDue) {
+        var sd = chit.start_datetime_obj || new Date(chit.start_datetime);
+        var ed = chit.end_datetime_obj || (chit.end_datetime ? new Date(chit.end_datetime) : new Date(sd.getTime() + 3600000));
+        // If the event ended before today, skip it entirely
+        if (ed < today) return;
+      }
+      if (hasDue && !hasStart) {
+        var dd = new Date(chit.due_datetime);
+        // If due date is before today, skip (past due from other days)
+        if (dd < today) return;
+      }
+      if (hasStart && hasDue) {
+        var sd = chit.start_datetime_obj || new Date(chit.start_datetime);
+        var dd = new Date(chit.due_datetime);
+        // If both are before today, skip
+        if (sd < today && dd < today) return;
+      }
+    }
+    // Deduplicate by chit ID (or parent ID for virtuals)
+    var dedupId = chit._isVirtual ? (chit._parentId + '_' + chit._virtualDate) : chit.id;
+    if (_seenChitIds.has(dedupId)) return;
+    _seenChitIds.add(dedupId);
+
+    var isAllDay = !!(chit.all_day || chit.allDay);
+    var hasStart = !!chit.start_datetime;
+    var hasDue = !!chit.due_datetime;
+    var isTask = !!(chit.status && chit.status !== '');
+
+    // All-day events today → On Deck
+    if (isAllDay && hasStart) {
+      var startDate = chit.start_datetime_obj || new Date(chit.start_datetime);
+      var endDate = chit.end_datetime_obj || (chit.end_datetime ? new Date(chit.end_datetime) : startDate);
+      if (startDate <= todayEnd && endDate >= today) {
+        onDeckItems.push({ type: 'event', chit: chit });
+        return;
+      }
+    }
+
+    // Timed events today → Chrono Anchored (skip passed non-task events entirely)
+    if (hasStart && !isAllDay) {
+      var startDate = chit.start_datetime_obj || new Date(chit.start_datetime);
+      var endDate = chit.end_datetime_obj || (chit.end_datetime ? new Date(chit.end_datetime) : new Date(startDate.getTime() + 3600000));
+      // Must be today
+      if (startDate <= todayEnd && endDate >= today) {
+        var eventIsPast = endDate <= now;
+        // Passed non-task events don't display at all
+        if (eventIsPast && !isTask) return;
+        timedItems.push({ type: 'event', chit: chit, start: startDate, end: endDate, isPast: eventIsPast });
+        return;
+      }
+    }
+
+    // Due today with a specific time → Chrono Anchored
+    if (hasDue) {
+      var dueDate = new Date(chit.due_datetime);
+      var dueHour = dueDate.getHours();
+      var dueMin = dueDate.getMinutes();
+      // Has a meaningful time (not midnight) and is today
+      if ((dueHour > 0 || dueMin > 0) && dueDate >= today && dueDate <= todayEnd) {
+        var dueIsPast = dueDate <= now;
+        // Passed non-task events don't display at all
+        if (dueIsPast && !isTask) return;
+        timedItems.push({ type: 'event', chit: chit, start: dueDate, end: new Date(dueDate.getTime() + 1800000), isPast: dueIsPast });
+        return;
+      }
+    }
+
+    // Due today (no specific time or timed but treated as deadline) → On Deck
+    if (hasDue) {
+      var dueDate = new Date(chit.due_datetime);
+      if (dueDate >= today && dueDate <= todayEnd) {
+        onDeckItems.push({ type: 'task', chit: chit });
+        return;
+      }
+      // Due this week (not today) → Soon
+      if (dueDate > todayEnd && dueDate <= weekEnd) {
+        soonItems.push({ type: 'task', chit: chit, dueDate: dueDate });
+        return;
+      }
+    }
+
+    // Active tasks with no date but due today via virtual instance → already handled above
+  });
+
+  // Sort timed items chronologically
+  timedItems.sort(function(a, b) { return a.start - b.start; });
+  // Sort soon items by due date
+  soonItems.sort(function(a, b) {
+    var aDate = a.dueDate || new Date(9999, 0);
+    var bDate = b.dueDate || new Date(9999, 0);
+    return aDate - bDate;
+  });
+
+  // ── Check if everything is empty ──────────────────────────────────────
+  if (onDeckItems.length === 0 && timedItems.length === 0 && soonItems.length === 0) {
+    itineraryView.innerHTML = '<div class="cwoc-empty" style="text-align:center;padding:2em 1em;opacity:0.7;"><p style="font-size:1.1em;">Nothing on your plate today. 🎉</p></div>';
+    chitList.appendChild(itineraryView);
+    return;
+  }
+
+  // ── Day header (date only, no border) ───────────────────────────────────
+  var dayHeader = document.createElement("div");
+  dayHeader.style.cssText = "text-align:center;font-size:1.6em;font-weight:bold;color:#5a3618;padding:12px 0 8px 0;";
+  dayHeader.textContent = formatDate(today);
+  itineraryView.appendChild(dayHeader);
+
+  // ── ON DECK section ────────────────────────────────────────────────────
+  if (onDeckItems.length > 0) {
+    var onDeckSection = document.createElement("div");
+    onDeckSection.style.cssText = "border-radius:6px;padding:8px;margin:12px 0;padding-bottom:16px;";
+    var onDeckLabel = document.createElement("div");
+    onDeckLabel.style.cssText = "padding:4px 10px;font-size:1.3em;font-weight:bold;color:#5a3618;padding-top:8px;margin-bottom:6px;display:flex;align-items:center;justify-content:center;gap:6px;";
+    onDeckLabel.innerHTML = '<span class="habit-section-icon">🔜</span> On Deck';
+    onDeckSection.appendChild(onDeckLabel);
+
+    onDeckItems.forEach(function(item) {
+      if (item.type === 'habit') {
+        var hCard = _buildItineraryHabitCard(item, _viSettings, windowDays);
+        hCard.style.margin = "4px 20px";
+        onDeckSection.appendChild(hCard);
       } else {
-        currentGroup.timed.push(chit);
+        var el = _buildItineraryEvent(item.chit, _viSettings);
+        if (el) onDeckSection.appendChild(el);
       }
     });
+    itineraryView.appendChild(onDeckSection);
+  }
 
-    dayGroups.forEach((group) => {
-      // Day separator header
-      const daySeparator = document.createElement("div");
-      daySeparator.className = "day-separator";
-      if (group.date.toDateString() === new Date().toDateString()) daySeparator.classList.add("today");
-      daySeparator.innerHTML = `<hr><h3>${formatDate(group.date)}</h3>`;
-      itineraryView.appendChild(daySeparator);
+  // ── TIMED section ──────────────────────────────────────────────────────
+  if (timedItems.length > 0) {
+    var timedSection = document.createElement("div");
+    timedSection.style.cssText = "background:rgba(140,90,30,0.2);border-radius:6px;padding:8px;margin:12px 0;padding-bottom:16px;";
+    var timedLabel = document.createElement("div");
+    timedLabel.style.cssText = "padding:4px 10px;font-size:1.3em;font-weight:bold;color:#5a3618;border-top:4px solid #5a3618;padding-top:8px;margin-bottom:6px;display:flex;align-items:center;justify-content:center;gap:6px;";
+    timedLabel.innerHTML = '<span class="habit-section-icon">⏰</span> Chrono Anchored';
+    timedSection.appendChild(timedLabel);
 
-      // All-day section
-      if (group.allDay.length > 0) {
-        const allDayLabel = document.createElement("div");
-        allDayLabel.style.cssText = "margin-left:100px;padding:4px 10px;font-size:0.85em;font-weight:bold;color:#6b4e31;opacity:0.8;border-bottom:1px dashed #c4a97d;margin-bottom:4px;";
-        allDayLabel.textContent = "🗓️ All Day";
-        itineraryView.appendChild(allDayLabel);
-
-        group.allDay.forEach((chit) => {
-          itineraryView.appendChild(_buildItineraryEvent(chit, _viSettings));
-        });
-      }
-
-      // Timed section
-      if (group.timed.length > 0 && group.allDay.length > 0) {
-        const timedLabel = document.createElement("div");
-        timedLabel.style.cssText = "margin-left:100px;padding:4px 10px;font-size:0.85em;font-weight:bold;color:#6b4e31;opacity:0.8;border-bottom:1px dashed #c4a97d;margin-bottom:4px;margin-top:6px;";
-        timedLabel.textContent = "⏰ Timed";
-        itineraryView.appendChild(timedLabel);
-      }
-
-      group.timed.forEach((chit) => {
-        itineraryView.appendChild(_buildItineraryEvent(chit, _viSettings));
-      });
+    timedItems.forEach(function(item) {
+      var el = _buildItineraryEvent(item.chit, _viSettings, { isPast: item.isPast });
+      if (el) timedSection.appendChild(el);
     });
+    itineraryView.appendChild(timedSection);
+  }
+
+  // ── SOON section ───────────────────────────────────────────────────────
+  if (soonItems.length > 0) {
+    var soonSection = document.createElement("div");
+    soonSection.style.cssText = "border-radius:6px;padding:8px;margin:12px 0;padding-bottom:16px;";
+    var soonLabel = document.createElement("div");
+    soonLabel.style.cssText = "padding:4px 10px;font-size:1.3em;font-weight:bold;color:#5a3618;border-top:4px solid #5a3618;padding-top:8px;margin-bottom:6px;display:flex;align-items:center;justify-content:center;gap:6px;";
+    soonLabel.innerHTML = '<span class="habit-section-icon">🗓️</span> Soon (Sometime this week)';
+    soonSection.appendChild(soonLabel);
+
+    soonItems.forEach(function(item) {
+      if (item.type === 'habit') {
+        var hCard = _buildItineraryHabitCard(item, _viSettings, windowDays);
+        hCard.style.margin = "4px 20px";
+        soonSection.appendChild(hCard);
+      } else {
+        var el = _buildItineraryEvent(item.chit, _viSettings);
+        if (el) {
+          // Add due date label
+          if (item.dueDate) {
+            var dueBadge = document.createElement("span");
+            dueBadge.style.cssText = "font-size:0.8em;color:#6b4e31;opacity:0.8;margin-left:8px;";
+            dueBadge.textContent = "Due: " + formatDate(item.dueDate);
+            var details = el.querySelector('.details-column');
+            if (details) details.appendChild(dueBadge);
+          }
+          soonSection.appendChild(el);
+        }
+      }
+    });
+    itineraryView.appendChild(soonSection);
   }
 
   chitList.appendChild(itineraryView);
+}
 
-  renderTimeBar("Itinerary");
+/**
+ * Build a habit card for the itinerary view — reuses the same rendering
+ * logic as the Tasks/Habits view (_renderHabitCards).
+ */
+function _buildItineraryHabitCard(item, _viSettings, windowDays) {
+  var chit = item.chit;
+  // Ensure we have a clean chit object (strip any virtual instance fields)
+  if (chit._isVirtual) {
+    chit = JSON.parse(JSON.stringify(chit));
+    delete chit._isVirtual;
+    delete chit._parentId;
+    delete chit._virtualDate;
+    delete chit._isCompleted;
+    delete chit._instanceNum;
+  }
+  var goal = item.goal;
+  var success = item.success;
+  var isCompleted = success >= goal;
+
+  // Build habit data object matching what _renderHabitCards expects
+  var exceptions = chit.recurrence_exceptions || [];
+  var periodEntries = [];
+  for (var ei = 0; ei < exceptions.length; ei++) {
+    var ex = exceptions[ei];
+    if (!ex.date || ex.broken_off) continue;
+    if (ex.habit_success !== undefined && ex.habit_goal !== undefined) {
+      periodEntries.push(ex);
+    }
+  }
+  if (isCompleted) {
+    periodEntries.push({ habit_success: success, habit_goal: goal, _current: true });
+  }
+  var windowCount = (windowDays === 'all') ? periodEntries.length : parseInt(windowDays, 10) || 30;
+  var windowEntries = periodEntries.slice(-windowCount);
+  var metCount = 0;
+  for (var wi = 0; wi < windowEntries.length; wi++) {
+    if (windowEntries[wi].habit_success >= windowEntries[wi].habit_goal) metCount++;
+  }
+  var successRate = windowEntries.length > 0 ? Math.round((metCount / windowEntries.length) * 100) : 0;
+  var streak = 0;
+  for (var si = periodEntries.length - 1; si >= 0; si--) {
+    if (periodEntries[si].habit_success >= periodEntries[si].habit_goal) streak++;
+    else break;
+  }
+
+  var habitData = [{
+    chit: chit,
+    goal: goal,
+    success: success,
+    isCompleted: isCompleted,
+    successRate: successRate,
+    metCount: metCount,
+    totalPeriods: windowEntries.length,
+    streak: streak
+  }];
+
+  // Render into a temporary container using the existing habit card renderer
+  var tempContainer = document.createElement('div');
+  tempContainer.className = 'checklist-view';
+  if (typeof _renderHabitCards === 'function') {
+    _renderHabitCards(tempContainer, habitData, windowDays);
+  }
+
+  // Extract the rendered card (skip section headers)
+  var card = tempContainer.querySelector('.habit-card');
+  if (card) {
+    // Add habit icon to the header
+    var header = card.querySelector('.habit-header');
+    if (header) {
+      var habitIcon = document.createElement("span");
+      habitIcon.style.cssText = "font-size:0.9em;margin-right:4px;";
+      habitIcon.textContent = "🎯";
+      header.insertBefore(habitIcon, header.firstChild);
+    }
+    // Add due-date context for Soon items
+    if (item.daysLeft > 1) {
+      var urgencyBadge = document.createElement("span");
+      urgencyBadge.style.cssText = "font-size:0.75em;color:#6b4e31;opacity:0.8;margin-left:8px;";
+      urgencyBadge.textContent = "(" + item.daysLeft + " days left)";
+      if (header) header.appendChild(urgencyBadge);
+    }
+    return card;
+  }
+
+  // Fallback: render as a simple event
+  return _buildItineraryEvent(chit, _viSettings);
 }
 
 function displayDayView(chitsToDisplay, opts) {

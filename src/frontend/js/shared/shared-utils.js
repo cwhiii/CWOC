@@ -731,3 +731,282 @@ document.addEventListener('click', function(e) {
     targetSpan.onclick(e);
   }
 });
+
+// ── Shared Chit Picker Modal ──────────────────────────────────────────────────
+
+/**
+ * Open a reusable chit picker modal (same UI as "Add Child Chits" in Projects).
+ * Supports multi-select with checkboxes, search, status/priority filters.
+ *
+ * @param {object} options
+ * @param {string} options.title - Modal title (e.g. "Add Child Chits", "Select Prerequisites")
+ * @param {string} options.confirmLabel - Confirm button label (e.g. "Add Selected")
+ * @param {function} options.onConfirm - Called with array of selected chit objects
+ * @param {function} [options.filterChits] - Optional filter function(chit) → boolean to exclude chits
+ * @param {Set} [options.disabledIds] - IDs shown as already-selected/greyed (with ✓)
+ * @param {Set} [options.preSelectedIds] - IDs that start checked
+ * @param {function} [options.onItemDblClick] - Optional double-click handler(chit) for immediate action
+ * @param {function} [options.beforeSelect] - Optional async function(chitId) → boolean; return false to block selection
+ */
+async function cwocChitPickerModal(options) {
+  var title = options.title || 'Select Chits';
+  var confirmLabel = options.confirmLabel || 'Add Selected';
+  var onConfirm = options.onConfirm;
+  var filterChits = options.filterChits;
+  var disabledIds = options.disabledIds || new Set();
+  var preSelectedIds = options.preSelectedIds || new Set();
+  var onItemDblClick = options.onItemDblClick;
+  var beforeSelect = options.beforeSelect;
+
+  // Create modal
+  var modal = document.createElement('div');
+  modal.className = 'modal-overlay-new';
+  modal.style.display = 'flex';
+  document.body.appendChild(modal);
+
+  modal.innerHTML =
+    '<div class="modal-content-new">' +
+      '<div class="modal-header-new">' +
+        '<h2>' + (title.replace(/</g, '&lt;')) + '</h2>' +
+        '<div class="modal-buttons"></div>' +
+      '</div>' +
+      '<div class="modal-body-new">' +
+        '<div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;">' +
+          '<select class="cwoc-picker-filter-status" style="padding:4px 8px;border:1px solid #a0522d;border-radius:4px;font-family:Lora,Georgia,serif;font-size:0.85em;background:#fff8f0;">' +
+            '<option value="">All Statuses</option>' +
+            '<option value="ToDo">ToDo</option>' +
+            '<option value="In Progress">In Progress</option>' +
+            '<option value="Blocked">Blocked</option>' +
+            '<option value="Complete">Complete</option>' +
+          '</select>' +
+          '<select class="cwoc-picker-filter-priority" style="padding:4px 8px;border:1px solid #a0522d;border-radius:4px;font-family:Lora,Georgia,serif;font-size:0.85em;background:#fff8f0;">' +
+            '<option value="">All Priorities</option>' +
+            '<option value="Low">Low</option>' +
+            '<option value="Medium">Medium</option>' +
+            '<option value="High">High</option>' +
+            '<option value="Critical">Critical</option>' +
+          '</select>' +
+          '<label style="display:flex;align-items:center;gap:4px;font-size:0.85em;white-space:nowrap;cursor:pointer;"><input type="checkbox" class="cwoc-picker-include-email"> Email</label>' +
+          '<input type="text" class="cwoc-picker-search chit-search-input-new" placeholder="Search chits..." autofocus style="flex:1;">' +
+        '</div>' +
+        '<table class="chit-table-new">' +
+          '<thead><tr><th style="width:30px;"></th><th>Title</th><th>Due</th><th>Status</th></tr></thead>' +
+          '<tbody class="cwoc-picker-list"></tbody>' +
+        '</table>' +
+      '</div>' +
+      '<div class="modal-footer-new">' +
+        '<span class="cwoc-picker-count" style="font-size:0.85em;opacity:0.7;"></span>' +
+        '<button class="modal-button-new cancel cwoc-picker-cancel">Cancel</button>' +
+        '<button class="modal-button-new cwoc-picker-confirm" disabled>' + (confirmLabel.replace(/</g, '&lt;')) + '</button>' +
+      '</div>' +
+    '</div>';
+
+  var searchInput = modal.querySelector('.cwoc-picker-search');
+  var statusFilter = modal.querySelector('.cwoc-picker-filter-status');
+  var priorityFilter = modal.querySelector('.cwoc-picker-filter-priority');
+  var emailCheckbox = modal.querySelector('.cwoc-picker-include-email');
+  var listEl = modal.querySelector('.cwoc-picker-list');
+  var confirmBtn = modal.querySelector('.cwoc-picker-confirm');
+  var cancelBtn = modal.querySelector('.cwoc-picker-cancel');
+  var countSpan = modal.querySelector('.cwoc-picker-count');
+  var headerH2 = modal.querySelector('.modal-header-new h2');
+
+  var selectedIds = new Set(preSelectedIds);
+  var availableChits = [];
+  var filteredChits = [];
+
+  function _updateBtn() {
+    var count = selectedIds.size;
+    confirmBtn.disabled = count === 0;
+    countSpan.textContent = count > 0 ? count + ' selected' : '';
+  }
+
+  function _highlightText(text, term) {
+    if (!text) return '';
+    var escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    if (!term) return escaped;
+    var safeTerm = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return escaped.replace(new RegExp('(' + safeTerm + ')', 'gi'), '<mark>$1</mark>');
+  }
+
+  function _renderList(chitsToRender) {
+    var searchTerm = (searchInput.value || '').toLowerCase().trim();
+    var highlightTerm = searchTerm.startsWith('#') ? '' : searchTerm;
+    var tagHighlight = searchTerm.startsWith('#') ? searchTerm.slice(1) : searchTerm;
+
+    listEl.innerHTML = '';
+    chitsToRender.forEach(function(chit) {
+      var isDisabled = disabledIds.has(chit.id);
+      var row = document.createElement('tr');
+      row.dataset.chitId = chit.id;
+      if (isDisabled) {
+        row.style.cssText = 'opacity:0.6;background:#e8dcc8;';
+        row.title = 'Already selected';
+      }
+
+      // Checkbox cell
+      var cbCell = document.createElement('td');
+      cbCell.style.textAlign = 'center';
+      if (isDisabled) {
+        var icon = document.createElement('span');
+        icon.textContent = '✓';
+        icon.style.cssText = 'color:#4a7c59;font-weight:bold;';
+        cbCell.appendChild(icon);
+      } else {
+        var cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = selectedIds.has(chit.id);
+        cb.dataset.chitId = chit.id;
+        cb.addEventListener('change', async function() {
+          if (this.checked) {
+            if (beforeSelect) {
+              var allowed = await beforeSelect(chit.id);
+              if (!allowed) { this.checked = false; return; }
+            }
+            selectedIds.add(chit.id);
+          } else {
+            selectedIds.delete(chit.id);
+          }
+          _updateBtn();
+        });
+        cbCell.appendChild(cb);
+      }
+      row.appendChild(cbCell);
+
+      // Title + Tags cell
+      var titleCell = document.createElement('td');
+      var titleSpan = document.createElement('span');
+      titleSpan.innerHTML = highlightTerm ? _highlightText(chit.title || '(No Title)', highlightTerm) : (chit.title || '(No Title)').replace(/&/g, '&amp;').replace(/</g, '&lt;');
+      if (isDisabled) titleSpan.style.fontStyle = 'italic';
+      titleCell.appendChild(titleSpan);
+
+      var userTags = (chit.tags || []).filter(function(t) { return !t.startsWith('CWOC_System/'); });
+      if (userTags.length > 0) {
+        var tagsSpan = document.createElement('span');
+        tagsSpan.style.cssText = 'margin-left:6px;font-size:0.8em;opacity:0.7;';
+        tagsSpan.innerHTML = userTags.map(function(t) {
+          var tagHtml = tagHighlight ? _highlightText(t, tagHighlight) : t.replace(/&/g, '&amp;');
+          return '<span style="background:#f0e6d0;padding:1px 5px;border-radius:3px;margin-right:3px;white-space:nowrap;">' + tagHtml + '</span>';
+        }).join('');
+        titleCell.appendChild(tagsSpan);
+      }
+      row.appendChild(titleCell);
+
+      // Due date cell
+      var dueCell = document.createElement('td');
+      dueCell.textContent = chit.due_datetime ? new Date(chit.due_datetime).toISOString().slice(0, 10) : '';
+      row.appendChild(dueCell);
+
+      // Status cell
+      var statusCell = document.createElement('td');
+      statusCell.innerHTML = highlightTerm ? _highlightText(chit.status || '', highlightTerm) : (chit.status || '');
+      row.appendChild(statusCell);
+
+      // Click row to toggle checkbox
+      if (!isDisabled) {
+        row.style.cursor = 'pointer';
+        row.addEventListener('click', function(e) {
+          if (e.target.tagName === 'INPUT') return;
+          var checkbox = row.querySelector('input[type="checkbox"]');
+          if (checkbox) {
+            checkbox.checked = !checkbox.checked;
+            checkbox.dispatchEvent(new Event('change'));
+          }
+        });
+        if (onItemDblClick) {
+          row.addEventListener('dblclick', function() {
+            onItemDblClick(chit);
+            disabledIds.add(chit.id);
+            selectedIds.delete(chit.id);
+            _renderList(filteredChits);
+            _updateBtn();
+          });
+        }
+      }
+
+      listEl.appendChild(row);
+    });
+  }
+
+  function _applyFilters() {
+    var searchTerm = (searchInput.value || '').toLowerCase().trim();
+    var statusVal = (statusFilter.value || '').toLowerCase();
+    var priorityVal = (priorityFilter.value || '').toLowerCase();
+    var includeEmail = emailCheckbox.checked;
+
+    filteredChits = availableChits.filter(function(chit) {
+      // Exclude email chits unless checkbox is checked
+      if (!includeEmail && (chit.email_message_id || chit.email_status)) return false;
+      if (statusVal && (chit.status || '').toLowerCase() !== statusVal) return false;
+      if (priorityVal && (chit.priority || '').toLowerCase() !== priorityVal) return false;
+      if (searchTerm && !chitMatchesSearch(chit, searchTerm)) return false;
+      return true;
+    });
+
+    _renderList(filteredChits);
+    if (headerH2) headerH2.textContent = title + ' (' + filteredChits.length + ' shown)';
+  }
+
+  // Close helper
+  function _close() {
+    modal.remove();
+    document.removeEventListener('keydown', _escHandler, true);
+  }
+
+  // ESC handler
+  function _escHandler(e) {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      if (searchInput && searchInput.value.trim()) {
+        searchInput.value = '';
+        searchInput.dispatchEvent(new Event('input'));
+        searchInput.focus();
+      } else {
+        _close();
+      }
+    }
+  }
+
+  // Attach listeners
+  searchInput.addEventListener('input', _applyFilters);
+  statusFilter.addEventListener('change', _applyFilters);
+  priorityFilter.addEventListener('change', _applyFilters);
+  emailCheckbox.addEventListener('change', _applyFilters);
+  confirmBtn.addEventListener('click', function() {
+    var selected = [];
+    selectedIds.forEach(function(id) {
+      var chit = availableChits.find(function(c) { return c.id === id; });
+      if (chit) selected.push(chit);
+    });
+    _close();
+    if (onConfirm) onConfirm(selected);
+  });
+  cancelBtn.addEventListener('click', _close);
+  modal.addEventListener('click', function(e) { if (e.target === modal) _close(); });
+  document.addEventListener('keydown', _escHandler, true);
+
+  // Fetch chits
+  try {
+    var resp = await fetch('/api/chits');
+    if (!resp.ok) throw new Error('Failed to fetch chits');
+    var allChits = await resp.json();
+
+    availableChits = allChits
+      .filter(function(c) { return !c.deleted && (!filterChits || filterChits(c)); })
+      .sort(function(a, b) { return (a.title || '').localeCompare(b.title || ''); });
+
+    // Apply initial filter (excludes email chits by default)
+    filteredChits = availableChits.filter(function(c) {
+      return !(c.email_message_id || c.email_status);
+    });
+    _renderList(filteredChits);
+    if (headerH2) headerH2.textContent = title + ' (' + filteredChits.length + ' available)';
+    _updateBtn();
+    setTimeout(function() { searchInput.focus(); }, 50);
+  } catch (e) {
+    console.error('[cwocChitPickerModal] Failed to fetch chits:', e);
+    cwocToast('Failed to load chits.', 'error');
+    _close();
+  }
+}

@@ -197,6 +197,43 @@ def _enrich_assigned_to_display_names(cursor, chits):
         aid = chit.get("assigned_to")
         chit["assigned_to_display_name"] = name_map.get(aid) if aid else None
 
+
+def _cascade_prerequisite_unblock(cursor, conn, completed_chit_id):
+    """When a chit is marked Complete, find all chits that have it as a prerequisite.
+    If ALL their prerequisites are now Complete, set their status to 'ToDo'."""
+    # Find all chits that reference this chit in their prerequisites
+    cursor.execute(
+        "SELECT id, prerequisites, status FROM chits WHERE prerequisites LIKE ? AND (deleted = 0 OR deleted IS NULL)",
+        (f'%{completed_chit_id}%',)
+    )
+    dependents = cursor.fetchall()
+    for dep_id, dep_prereqs_raw, dep_status in dependents:
+        dep_prereqs = deserialize_json_field(dep_prereqs_raw)
+        if not dep_prereqs or completed_chit_id not in dep_prereqs:
+            continue
+        # Only auto-unblock if currently Blocked
+        if dep_status != "Blocked":
+            continue
+        # Check if ALL prerequisites of this dependent are now Complete
+        placeholders = ",".join("?" * len(dep_prereqs))
+        cursor.execute(
+            f"SELECT id, status FROM chits WHERE id IN ({placeholders})",
+            dep_prereqs
+        )
+        all_complete = True
+        for _, prereq_status in cursor.fetchall():
+            if prereq_status != "Complete":
+                all_complete = False
+                break
+        if all_complete:
+            cursor.execute(
+                "UPDATE chits SET status = 'ToDo', modified_datetime = ? WHERE id = ?",
+                (datetime.utcnow().isoformat(), dep_id)
+            )
+            conn.commit()
+            logger.info(f"Prerequisites cascade: unblocked chit {dep_id} (all prereqs complete)")
+
+
 @router.get("/api/chits")
 def get_all_chits(request: Request):
     conn = None
@@ -238,6 +275,7 @@ def get_all_chits(request: Request):
             chit["email_bcc"] = deserialize_json_field(chit.get("email_bcc"))
             chit["email_read"] = bool(chit.get("email_read")) if chit.get("email_read") is not None else None
             chit["snoozed_until"] = chit.get("snoozed_until")
+            chit["prerequisites"] = deserialize_json_field(chit.get("prerequisites"))
             chits.append(chit)
 
         # Enrich chits with assigned_to_display_name (batch lookup)
@@ -295,8 +333,8 @@ def create_chit(chit: Chit, request: Request):
                 email_message_id, email_from, email_to, email_cc, email_bcc,
                 email_subject, email_body_text, email_body_html, email_date, email_folder,
                 email_status, email_read, email_in_reply_to, email_references,
-                attachments, availability, snoozed_until
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                attachments, availability, snoozed_until, prerequisites
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 chit_id,
@@ -363,6 +401,7 @@ def create_chit(chit: Chit, request: Request):
                 serialize_json_field(chit.attachments) if chit.attachments else None,
                 chit.availability,
                 chit.snoozed_until,
+                serialize_json_field(chit.prerequisites),
             )
         )
         # Create notifications for shared users on new chit creation
@@ -470,6 +509,7 @@ def get_chit(chit_id: str, request: Request):
         chit["email_bcc"] = deserialize_json_field(chit.get("email_bcc"))
         chit["email_read"] = bool(chit.get("email_read")) if chit.get("email_read") is not None else None
         chit["snoozed_until"] = chit.get("snoozed_until")
+        chit["prerequisites"] = deserialize_json_field(chit.get("prerequisites"))
         chit["effective_role"] = effective_role
 
         # Enrich with assigned_to_display_name
@@ -564,7 +604,8 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                     email_message_id = ?, email_from = ?, email_to = ?, email_cc = ?, email_bcc = ?,
                     email_subject = ?, email_body_text = ?, email_body_html = ?, email_date = ?, email_folder = ?,
                     email_status = ?, email_read = ?, email_in_reply_to = ?, email_references = ?,
-                    attachments = ?, availability = ?, nest_thread_id = ?, snoozed_until = ?
+                    attachments = ?, availability = ?, nest_thread_id = ?, snoozed_until = ?,
+                    prerequisites = ?
                 WHERE id = ?
                 """,
                 (
@@ -628,6 +669,7 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                     chit.availability,
                     chit.nest_thread_id,
                     chit.snoozed_until,
+                    serialize_json_field(chit.prerequisites),
                     chit_id,
                 )
             )
@@ -749,8 +791,8 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                     email_message_id, email_from, email_to, email_cc, email_bcc,
                     email_subject, email_body_text, email_body_html, email_date, email_folder,
                     email_status, email_read, email_in_reply_to, email_references,
-                    attachments, availability, snoozed_until
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    attachments, availability, snoozed_until, prerequisites
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     chit_id,
@@ -817,6 +859,7 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                     serialize_json_field(chit.attachments) if chit.attachments else None,
                     chit.availability,
                     chit.snoozed_until,
+                    serialize_json_field(chit.prerequisites),
                 )
             )
             # Audit logging for chit creation
@@ -846,6 +889,14 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
             except Exception as e:
                 logger.error(f"Assignment notification failed for new chit via PUT (best-effort): {str(e)}")
         conn.commit()
+
+        # ── Prerequisite cascade: when a chit is marked Complete, unblock dependents ──
+        try:
+            if chit.status == "Complete":
+                _cascade_prerequisite_unblock(cursor, conn, chit_id)
+        except Exception as e:
+            logger.error(f"Prerequisite cascade failed (best-effort): {str(e)}")
+
         chit_data = {**chit.dict(), "id": chit_id, "tags": chit_tags, "modified_datetime": current_time}
         # Fire-and-forget: dispatch rules engine trigger for chit update or creation
         try:
@@ -982,11 +1033,119 @@ def patch_chit_fields(chit_id: str, body: dict, request: Request):
         sql = f"UPDATE chits SET {', '.join(set_clauses)} WHERE id = ?"
         cursor.execute(sql, values)
         conn.commit()
+
+        # Prerequisite cascade when status is patched to Complete
+        if fields_to_update.get("status") == "Complete":
+            try:
+                conn.row_factory = None  # Reset row_factory for the cascade helper
+                _cascade_prerequisite_unblock(cursor, conn, chit_id)
+            except Exception as e:
+                logger.error(f"Prerequisite cascade failed in patch (best-effort): {str(e)}")
+
         return {"message": "Updated", "fields": list(fields_to_update.keys())}
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error patching chit fields: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
+
+
+# ── Prerequisites: circular dependency check ──────────────────────────────────
+
+@router.post("/api/chits/check-prerequisites")
+def check_prerequisites_circular(body: dict, request: Request):
+    """Check if adding a prerequisite would create a circular dependency.
+    Body: { "chit_id": "...", "prerequisite_id": "..." }
+    Returns: { "circular": true/false, "chain": [...] }
+    """
+    user_id = request.state.user_id
+    chit_id = body.get("chit_id")
+    prereq_id = body.get("prerequisite_id")
+    if not chit_id or not prereq_id:
+        raise HTTPException(status_code=400, detail="chit_id and prerequisite_id required")
+    if chit_id == prereq_id:
+        return {"circular": True, "chain": [chit_id]}
+
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        # BFS: starting from prereq_id, follow its prerequisites to see if we reach chit_id
+        visited = set()
+        queue = [prereq_id]
+        chain = [prereq_id]
+        while queue:
+            current = queue.pop(0)
+            if current in visited:
+                continue
+            visited.add(current)
+            cursor.execute("SELECT prerequisites FROM chits WHERE id = ? AND (deleted = 0 OR deleted IS NULL)", (current,))
+            row = cursor.fetchone()
+            if not row or not row[0]:
+                continue
+            prereqs = deserialize_json_field(row[0])
+            if not prereqs:
+                continue
+            for pid in prereqs:
+                if pid == chit_id:
+                    chain.append(pid)
+                    return {"circular": True, "chain": chain}
+                if pid not in visited:
+                    queue.append(pid)
+                    chain.append(pid)
+
+        return {"circular": False, "chain": []}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error checking prerequisites circular: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
+
+
+# ── Prerequisites: status check (are all prereqs complete?) ───────────────────
+
+@router.get("/api/chits/{chit_id}/prerequisites-status")
+def get_prerequisites_status(chit_id: str, request: Request):
+    """Return the status of all prerequisites for a chit.
+    Returns: { "all_complete": true/false, "prerequisites": [{id, title, status, color}] }
+    """
+    user_id = request.state.user_id
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("SELECT prerequisites FROM chits WHERE id = ? AND (deleted = 0 OR deleted IS NULL)", (chit_id,))
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Chit not found")
+        prereq_ids = deserialize_json_field(row[0]) or []
+        if not prereq_ids:
+            return {"all_complete": True, "prerequisites": []}
+
+        placeholders = ",".join("?" * len(prereq_ids))
+        cursor.execute(
+            f"SELECT id, title, status, color FROM chits WHERE id IN ({placeholders}) AND (deleted = 0 OR deleted IS NULL)",
+            prereq_ids
+        )
+        results = []
+        all_complete = True
+        for r in cursor.fetchall():
+            status = r[2]
+            if status != "Complete":
+                all_complete = False
+            results.append({"id": r[0], "title": r[1], "status": r[2], "color": r[3]})
+        return {"all_complete": all_complete, "prerequisites": results}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching prerequisites status: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         if conn:

@@ -543,6 +543,10 @@ function fetchChits() {
         if (chit.end_datetime)
           chit.end_datetime_obj = new Date(chit.end_datetime);
       });
+
+      // Compute _hasIncompletePrereqs flag for prerequisite chain indicator
+      _computePrerequisiteFlags(chits);
+
       console.debug("Fetched chits:", chits.length, "(including", sharedChits.length, "shared)");
       if (!currentWeekStart) currentWeekStart = getWeekStart(new Date());
       updateDateRange();

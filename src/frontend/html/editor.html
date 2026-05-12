@@ -329,6 +329,13 @@
                                         <option value="">— None —</option>
                                     </select>
                                 </div>
+                                <div class="field prereq-field" id="prereqRow">
+                                    <label>Prerequisites</label>
+                                    <button type="button" class="zone-button prereq-add-btn" id="prereqAddBtn" onclick="openPrereqPicker()">
+                                        <i class="fas fa-plus"></i> Add
+                                    </button>
+                                    <div id="prereqListContainer" class="prereq-list-container"></div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1647,6 +1654,7 @@
         <script src="/frontend/js/editor/editor-attachments.js?v=20260511g"></script>
         <script src="/frontend/js/editor/editor-nest.js"></script>
         <script src="/frontend/js/editor/editor-snooze.js"></script>
+        <script src="/frontend/js/editor/editor-prerequisites.js"></script>
         <script src="/frontend/js/editor/editor-save.js"></script>
         <script src="/frontend/js/editor/editor-init.js?v=20260511"></script>
         <script src="/frontend/js/editor/editor-mobile-zones.js"></script>

@@ -289,6 +289,9 @@ function _buildChitHeader(chit, titleHtml, settings, opts) {
       var blockedCol = (window._cwocSettings && window._cwocSettings.blocked_border_color) || '#DAA520';
       var blockedTextCol = contrastColorForBg(blockedCol);
       statusSpan.style.cssText = 'background:' + blockedCol + ';color:' + blockedTextCol + ';font-weight:bold;padding:1px 6px;border-radius:3px;';
+      if (chit._hasIncompletePrereqs) {
+        statusSpan.textContent = 'Blocked ⛓️';
+      }
     }
     if (currentSortField === 'status') {
       statusSpan.style.fontWeight = 'bold';

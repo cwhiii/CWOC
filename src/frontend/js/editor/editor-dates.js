@@ -132,6 +132,19 @@ function onStatusChange() {
     return;
   }
 
+  // Check prerequisite override warning
+  if (typeof checkPrereqStatusOverride === 'function' && statusSel && statusSel.value !== 'Blocked') {
+    var newVal = statusSel.value;
+    checkPrereqStatusOverride(newVal).then(function(ok) {
+      if (!ok) {
+        statusSel.value = 'Blocked';
+      } else {
+        setSaveButtonUnsaved();
+      }
+    });
+    return;
+  }
+
   setSaveButtonUnsaved();
 }
 

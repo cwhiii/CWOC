@@ -186,3 +186,36 @@ function _chitAlertTypesPresent(chit) {
   if (chit.notification === true) present.notification = true;
   return present;
 }
+
+
+// ── Prerequisites Indicator Helpers ───────────────────────────────────────────
+
+/**
+ * Compute _hasIncompletePrereqs flag on each chit in the array.
+ * A chit has incomplete prerequisites if it has a prerequisites array
+ * and at least one of those prerequisite chits is NOT status "Complete".
+ * @param {Array} allChits - The full array of chits
+ */
+function _computePrerequisiteFlags(allChits) {
+  if (!Array.isArray(allChits)) return;
+
+  // Build a lookup map: id → status
+  var statusMap = {};
+  allChits.forEach(function(c) {
+    if (c && c.id) statusMap[c.id] = c.status;
+  });
+
+  allChits.forEach(function(chit) {
+    chit._hasIncompletePrereqs = false;
+    var prereqs = chit.prerequisites;
+    if (typeof prereqs === 'string') { try { prereqs = JSON.parse(prereqs); } catch(e) { prereqs = null; } }
+    if (!Array.isArray(prereqs) || prereqs.length === 0) return;
+    for (var i = 0; i < prereqs.length; i++) {
+      var prereqStatus = statusMap[prereqs[i]];
+      if (prereqStatus !== 'Complete') {
+        chit._hasIncompletePrereqs = true;
+        return;
+      }
+    }
+  });
+}
