@@ -505,6 +505,7 @@ async function _onCalDragEnd(e) {
       }
     }
 
+    ['health_data', 'weather_data'].forEach(function(f) { if (chit[f] && typeof chit[f] === 'object') chit[f] = JSON.stringify(chit[f]); });
     const putResp = await fetch(`/api/chits/${chit.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -566,6 +567,7 @@ function _showRecurringDragModal(parentId, dateStr, newTimes, virtualChit) {
       newChit.created_datetime = new Date().toISOString();
       newChit.modified_datetime = new Date().toISOString();
       Object.assign(newChit, newTimes);
+      ['health_data', 'weather_data'].forEach(function(f) { if (newChit[f] && typeof newChit[f] === 'object') newChit[f] = JSON.stringify(newChit[f]); });
       await fetch('/api/chits', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newChit) });
       await _recurrenceAddException(parentId, { date: dateStr, broken_off: true });
     } catch (e) { console.error('Drag break-off failed:', e); }
@@ -576,12 +578,55 @@ function _showRecurringDragModal(parentId, dateStr, newTimes, virtualChit) {
     const resp = await fetch(`/api/chit/${parentId}`);
     if (!resp.ok) { console.error('Failed to fetch chit for drag save'); return; }
     const chit = await resp.json();
-    Object.assign(chit, newTimes);
+
+    // Compute the time shift from the virtual instance's original to new times
+    var _shiftMs = 0;
+    if (newTimes.start_datetime && virtualChit.start_datetime) {
+      _shiftMs = new Date(newTimes.start_datetime).getTime() - new Date(virtualChit.start_datetime).getTime();
+    } else if (newTimes.due_datetime && virtualChit.due_datetime) {
+      _shiftMs = new Date(newTimes.due_datetime).getTime() - new Date(virtualChit.due_datetime).getTime();
+    }
+
+    // Google-style: if recurrence has byDay, replace the dragged day with the target day
+    var rule = chit.recurrence_rule;
+    if (rule && rule.byDay && rule.byDay.length > 0 && rule.freq === 'WEEKLY') {
+      var _numToDay = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
+      var oldDayOfWeek = new Date(virtualChit.start_datetime || virtualChit.due_datetime).getDay();
+      var newTargetDate = new Date((newTimes.start_datetime || newTimes.due_datetime));
+      var newDayOfWeek = newTargetDate.getDay();
+      var oldDayStr = _numToDay[oldDayOfWeek];
+      var newDayStr = _numToDay[newDayOfWeek];
+
+      if (oldDayStr !== newDayStr) {
+        // Replace the dragged day with the target day in byDay
+        var updatedByDay = rule.byDay.map(function(d) { return d === oldDayStr ? newDayStr : d; });
+        chit.recurrence_rule = Object.assign({}, rule, { byDay: updatedByDay });
+      }
+      // Also shift the parent start to match the new day pattern
+      if (_shiftMs && chit.start_datetime) chit.start_datetime = new Date(new Date(chit.start_datetime).getTime() + _shiftMs).toISOString();
+      if (_shiftMs && chit.end_datetime) chit.end_datetime = new Date(new Date(chit.end_datetime).getTime() + _shiftMs).toISOString();
+      if (_shiftMs && chit.due_datetime) chit.due_datetime = new Date(new Date(chit.due_datetime).getTime() + _shiftMs).toISOString();
+    } else {
+      // No byDay — just shift the parent dates
+      if (_shiftMs && chit.start_datetime) chit.start_datetime = new Date(new Date(chit.start_datetime).getTime() + _shiftMs).toISOString();
+      if (_shiftMs && chit.end_datetime) chit.end_datetime = new Date(new Date(chit.end_datetime).getTime() + _shiftMs).toISOString();
+      if (_shiftMs && chit.due_datetime) chit.due_datetime = new Date(new Date(chit.due_datetime).getTime() + _shiftMs).toISOString();
+    }
+
+    ['health_data', 'weather_data'].forEach(function(f) { if (chit[f] && typeof chit[f] === 'object') chit[f] = JSON.stringify(chit[f]); });
     await fetch(`/api/chits/${parentId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(chit)
     });
+    // Show feedback about what changed
+    if (rule && rule.byDay && rule.byDay.length > 0 && rule.freq === 'WEEKLY' && oldDayStr !== newDayStr) {
+      var _dayNames = { SU:'Sunday', MO:'Monday', TU:'Tuesday', WE:'Wednesday', TH:'Thursday', FR:'Friday', SA:'Saturday' };
+      if (typeof cwocToast === 'function') cwocToast('Series moved: ' + _dayNames[oldDayStr] + ' → ' + _dayNames[newDayStr], 'info');
+    } else if (_shiftMs) {
+      var _days = Math.round(_shiftMs / 86400000);
+      if (typeof cwocToast === 'function') cwocToast('Series shifted ' + (_days > 0 ? '+' : '') + _days + ' day' + (Math.abs(_days) !== 1 ? 's' : ''), 'info');
+    }
     if (typeof fetchChits === 'function') fetchChits();
     else if (typeof displayChits === 'function') displayChits();
   });
@@ -590,7 +635,39 @@ function _showRecurringDragModal(parentId, dateStr, newTimes, virtualChit) {
     const resp = await fetch(`/api/chit/${parentId}`);
     if (!resp.ok) { console.error('Failed to fetch chit for drag save'); return; }
     const chit = await resp.json();
-    Object.assign(chit, newTimes);
+
+    // Compute the time shift
+    var _shiftMs = 0;
+    if (newTimes.start_datetime && virtualChit.start_datetime) {
+      _shiftMs = new Date(newTimes.start_datetime).getTime() - new Date(virtualChit.start_datetime).getTime();
+    } else if (newTimes.due_datetime && virtualChit.due_datetime) {
+      _shiftMs = new Date(newTimes.due_datetime).getTime() - new Date(virtualChit.due_datetime).getTime();
+    }
+
+    // Google-style: if recurrence has byDay, replace the dragged day with the target day
+    var rule = chit.recurrence_rule;
+    if (rule && rule.byDay && rule.byDay.length > 0 && rule.freq === 'WEEKLY') {
+      var _numToDay = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
+      var oldDayOfWeek = new Date(virtualChit.start_datetime || virtualChit.due_datetime).getDay();
+      var newTargetDate = new Date((newTimes.start_datetime || newTimes.due_datetime));
+      var newDayOfWeek = newTargetDate.getDay();
+      var oldDayStr = _numToDay[oldDayOfWeek];
+      var newDayStr = _numToDay[newDayOfWeek];
+
+      if (oldDayStr !== newDayStr) {
+        var updatedByDay = rule.byDay.map(function(d) { return d === oldDayStr ? newDayStr : d; });
+        chit.recurrence_rule = Object.assign({}, rule, { byDay: updatedByDay });
+      }
+      if (_shiftMs && chit.start_datetime) chit.start_datetime = new Date(new Date(chit.start_datetime).getTime() + _shiftMs).toISOString();
+      if (_shiftMs && chit.end_datetime) chit.end_datetime = new Date(new Date(chit.end_datetime).getTime() + _shiftMs).toISOString();
+      if (_shiftMs && chit.due_datetime) chit.due_datetime = new Date(new Date(chit.due_datetime).getTime() + _shiftMs).toISOString();
+    } else {
+      if (_shiftMs && chit.start_datetime) chit.start_datetime = new Date(new Date(chit.start_datetime).getTime() + _shiftMs).toISOString();
+      if (_shiftMs && chit.end_datetime) chit.end_datetime = new Date(new Date(chit.end_datetime).getTime() + _shiftMs).toISOString();
+      if (_shiftMs && chit.due_datetime) chit.due_datetime = new Date(new Date(chit.due_datetime).getTime() + _shiftMs).toISOString();
+    }
+
+    ['health_data', 'weather_data'].forEach(function(f) { if (chit[f] && typeof chit[f] === 'object') chit[f] = JSON.stringify(chit[f]); });
     await fetch(`/api/chits/${parentId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -624,118 +701,128 @@ function _showRecurringDragModal(parentId, dateStr, newTimes, virtualChit) {
  */
 function enableMonthDrag(monthGrid, onDrop) {
   let draggedChitId = null;
+  let draggedChitObj = null;
+  let draggedFromDate = null;
 
   console.log('[MonthDrag] enableMonthDrag called, monthGrid:', monthGrid, 'children:', monthGrid.children.length);
   console.log('[MonthDrag] Draggable events found:', monthGrid.querySelectorAll('.month-event[draggable="true"]').length);
 
   monthGrid.addEventListener('dragstart', (e) => {
-    console.log('[MonthDrag] dragstart fired, e.target:', e.target, 'tagName:', e.target.tagName, 'classes:', e.target.className);
     const ev = e.target.closest('.month-event');
-    console.log('[MonthDrag] closest .month-event:', ev, 'chitId:', ev ? ev.dataset.chitId : 'N/A');
-    if (!ev || !ev.dataset.chitId) { console.log('[MonthDrag] dragstart ABORTED — no event element or chitId'); return; }
+    if (!ev || !ev.dataset.chitId) return;
     // Prevent drag for viewer-role shared chits
     var _mdChit = (typeof chits !== 'undefined') ? chits.find(function(c) { return c.id === ev.dataset.chitId; }) : null;
-    if (_mdChit && typeof _isViewerRole === 'function' && _isViewerRole(_mdChit)) { console.log('[MonthDrag] dragstart BLOCKED — viewer role'); e.preventDefault(); return; }
+    if (_mdChit && typeof _isViewerRole === 'function' && _isViewerRole(_mdChit)) { e.preventDefault(); return; }
+
+    // Find the source day cell date
+    var srcDayCell = ev.closest('.month-day');
+    draggedFromDate = srcDayCell ? srcDayCell.dataset.date : null;
+
+    // Find the matching chit object — for virtual instances, match by ID + virtualDate
+    var _allChits = window._cwocDisplayedChits || (typeof chits !== 'undefined' ? chits : []);
+    draggedChitObj = null;
+    if (draggedFromDate) {
+      // Try to find a virtual instance for this date
+      draggedChitObj = _allChits.find(function(c) {
+        return c._isVirtual && c._parentId === ev.dataset.chitId && c._virtualDate === draggedFromDate;
+      });
+    }
+    if (!draggedChitObj) {
+      draggedChitObj = _allChits.find(function(c) { return c.id === ev.dataset.chitId && !c._isVirtual; });
+    }
+
     draggedChitId = ev.dataset.chitId;
     e.dataTransfer.setData('text/plain', draggedChitId);
     e.dataTransfer.effectAllowed = 'move';
     ev.style.opacity = '0.4';
-    console.log('[MonthDrag] dragstart SUCCESS — dragging chitId:', draggedChitId, 'element:', ev.textContent.substring(0, 40));
   });
 
   monthGrid.addEventListener('dragend', (e) => {
-    console.log('[MonthDrag] dragend fired, draggedChitId was:', draggedChitId);
     const ev = e.target.closest('.month-event');
     if (ev) ev.style.opacity = '';
     draggedChitId = null;
+    draggedChitObj = null;
+    draggedFromDate = null;
     if (typeof _markDragJustEnded === 'function') _markDragJustEnded();
   });
 
   var _dragOverCount = 0;
   monthGrid.addEventListener('dragover', (e) => {
     if (!draggedChitId) return;
-    _dragOverCount++;
-    if (_dragOverCount % 50 === 1) {
-      console.log('[MonthDrag] dragover #' + _dragOverCount + ', target:', e.target.tagName, e.target.className, 'closest .month-day:', e.target.closest('.month-day') ? e.target.closest('.month-day').dataset.date : 'NONE');
-    }
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
   });
 
   monthGrid.addEventListener('drop', async (e) => {
-    console.log('[MonthDrag] DROP fired! draggedChitId:', draggedChitId, 'e.target:', e.target.tagName, e.target.className);
-    if (!draggedChitId) { console.log('[MonthDrag] drop ABORTED — no draggedChitId'); return; }
+    if (!draggedChitId) { return; }
     e.preventDefault();
     const dayCell = e.target.closest('.month-day');
-    console.log('[MonthDrag] drop dayCell:', dayCell, 'date:', dayCell ? dayCell.dataset.date : 'N/A');
-    if (!dayCell || !dayCell.dataset.date) { console.log('[MonthDrag] drop ABORTED — no dayCell or date'); return; }
-    // Parse as local date (not UTC) to match how oldDay is computed
+    if (!dayCell || !dayCell.dataset.date) return;
+    // Parse as local date (not UTC)
     var _dateParts = dayCell.dataset.date.split('-');
     const newDate = new Date(parseInt(_dateParts[0]), parseInt(_dateParts[1]) - 1, parseInt(_dateParts[2]));
-    if (isNaN(newDate.getTime())) { console.log('[MonthDrag] drop ABORTED — invalid date'); return; }
+    if (isNaN(newDate.getTime())) return;
 
-    console.log('[MonthDrag] Fetching chit data for:', draggedChitId);
-    try {
-      const resp = await fetch(`/api/chit/${draggedChitId}`);
-      console.log('[MonthDrag] fetch response status:', resp.status);
-      if (!resp.ok) { console.log('[MonthDrag] drop ABORTED — fetch failed'); return; }
-      const chit = await resp.json();
-      console.log('[MonthDrag] chit loaded:', chit.id, chit.title, 'start:', chit.start_datetime, 'due:', chit.due_datetime);
-      const info = getCalendarDateInfo(chit);
-      console.log('[MonthDrag] dateInfo:', JSON.stringify(info));
-      if (!info.hasDate) { console.log('[MonthDrag] drop ABORTED — chit has no date'); return; }
+    // If this is a virtual recurring instance, use _showRecurringDragModal (same as week view)
+    if (draggedChitObj && draggedChitObj._isVirtual && draggedChitObj._parentId) {
+      var parentId = draggedChitObj._parentId;
+      var dateStr = draggedChitObj._virtualDate;
+      var info = getCalendarDateInfo(draggedChitObj);
+      if (!info.hasDate) return;
 
-      // Shift dates by the day difference, preserving times
-      const oldDay = new Date(info.start.getFullYear(), info.start.getMonth(), info.start.getDate());
-      const dayDiff = (newDate.getTime() - oldDay.getTime());
-      console.log('[MonthDrag] oldDay:', oldDay.toISOString(), 'newDate:', newDate.toISOString(), 'dayDiff ms:', dayDiff, 'days:', dayDiff / 86400000);
-
-      // Update dates on the chit object
+      // Compute new times by shifting by day difference
+      var oldDay = new Date(info.start.getFullYear(), info.start.getMonth(), info.start.getDate());
+      var dayDiff = newDate.getTime() - oldDay.getTime();
+      var newTimes = {};
       if (info.isDueOnly) {
-        const d = new Date(new Date(chit.due_datetime).getTime() + dayDiff);
-        console.log('[MonthDrag] Updating due_datetime:', chit.due_datetime, '->', d.toISOString());
-        chit.due_datetime = d.toISOString();
+        newTimes.due_datetime = new Date(new Date(draggedChitObj.due_datetime).getTime() + dayDiff).toISOString();
       } else {
-        if (chit.start_datetime) {
-          const d = new Date(new Date(chit.start_datetime).getTime() + dayDiff);
-          console.log('[MonthDrag] Updating start_datetime:', chit.start_datetime, '->', d.toISOString());
-          chit.start_datetime = d.toISOString();
-        }
-        if (chit.end_datetime) {
-          const d = new Date(new Date(chit.end_datetime).getTime() + dayDiff);
-          console.log('[MonthDrag] Updating end_datetime:', chit.end_datetime, '->', d.toISOString());
-          chit.end_datetime = d.toISOString();
-        }
+        if (draggedChitObj.start_datetime) newTimes.start_datetime = new Date(new Date(draggedChitObj.start_datetime).getTime() + dayDiff).toISOString();
+        if (draggedChitObj.end_datetime) newTimes.end_datetime = new Date(new Date(draggedChitObj.end_datetime).getTime() + dayDiff).toISOString();
       }
 
-      // Re-serialize fields that come back as objects from GET but need to be strings for PUT
-      var _stringifyFields = ['health_data', 'recurrence_rule', 'recurrence_exceptions'];
-      _stringifyFields.forEach(function(f) {
-        if (chit[f] && typeof chit[f] === 'object') {
-          chit[f] = JSON.stringify(chit[f]);
-        }
+      _showRecurringDragModal(parentId, dateStr, newTimes, draggedChitObj);
+      draggedChitId = null;
+      draggedChitObj = null;
+      draggedFromDate = null;
+      return;
+    }
+
+    // Non-recurring: fetch, update dates, save via PUT
+    try {
+      const resp = await fetch(`/api/chit/${draggedChitId}`);
+      if (!resp.ok) return;
+      const chit = await resp.json();
+      const info = getCalendarDateInfo(chit);
+      if (!info.hasDate) return;
+
+      const oldDay = new Date(info.start.getFullYear(), info.start.getMonth(), info.start.getDate());
+      const dayDiff = (newDate.getTime() - oldDay.getTime());
+
+      if (info.isDueOnly) {
+        chit.due_datetime = new Date(new Date(chit.due_datetime).getTime() + dayDiff).toISOString();
+      } else {
+        if (chit.start_datetime) chit.start_datetime = new Date(new Date(chit.start_datetime).getTime() + dayDiff).toISOString();
+        if (chit.end_datetime) chit.end_datetime = new Date(new Date(chit.end_datetime).getTime() + dayDiff).toISOString();
+      }
+
+      // Re-serialize fields that need to be strings for PUT
+      ['health_data', 'weather_data'].forEach(function(f) {
+        if (chit[f] && typeof chit[f] === 'object') chit[f] = JSON.stringify(chit[f]);
       });
 
-      console.log('[MonthDrag] Saving via PUT /api/chits/' + chit.id);
-      const saveResp = await fetch(`/api/chits/${chit.id}`, {
+      await fetch(`/api/chits/${chit.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(chit),
       });
-      console.log('[MonthDrag] Save response status:', saveResp.status);
-      if (!saveResp.ok) {
-        var errText = await saveResp.text();
-        console.error('[MonthDrag] Save FAILED, response body:', errText);
-      }
-      if (typeof fetchChits === 'function') {
-        console.log('[MonthDrag] Calling fetchChits() to refresh view');
-        fetchChits();
-      }
+      if (typeof fetchChits === 'function') fetchChits();
     } catch (err) {
-      console.error('[MonthDrag] Month drag save FAILED:', err);
+      console.error('[MonthDrag] Save failed:', err);
     }
     draggedChitId = null;
-    _dragOverCount = 0;
+    draggedChitObj = null;
+    draggedFromDate = null;
   });
 }
 

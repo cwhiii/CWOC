@@ -698,6 +698,9 @@ function displayChits() {
     filteredChits = expanded;
   }
 
+  // Store expanded chits globally so month drag can find virtual instances
+  window._cwocDisplayedChits = filteredChits;
+
   // Tag the container with the current view for CSS scoping
   listContainer.dataset.view = currentTab.toLowerCase();
 
