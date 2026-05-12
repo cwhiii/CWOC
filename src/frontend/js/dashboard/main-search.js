@@ -126,8 +126,8 @@ function _renderSearchResults(container, viSettings) {
   // Apply show-email filter to search results
   var _showEmailRecvCb = document.getElementById('show-email-received');
   var _showEmailSentCb = document.getElementById('show-email-sent');
-  var showRecv = _showEmailRecvCb ? _showEmailRecvCb.checked : true;
-  var showSent = _showEmailSentCb ? _showEmailSentCb.checked : true;
+  var showRecv = _showEmailRecvCb ? _showEmailRecvCb.checked : false;
+  var showSent = _showEmailSentCb ? _showEmailSentCb.checked : false;
   if (!showRecv || !showSent) {
     resultChits = resultChits.filter(function(c) {
       if (!(c.email_message_id || c.email_status)) return true;

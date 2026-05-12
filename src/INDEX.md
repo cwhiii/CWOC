@@ -142,6 +142,8 @@ All migrations run at startup. Each checks if the column/table already exists be
 | `migrate_add_snoozed_until()` | Add `snoozed_until` (TEXT DEFAULT NULL) column to chits table for chit-level snooze. Fully idempotent |
 | `migrate_add_session_lifetime()` | Add `session_lifetime` (TEXT DEFAULT '24') column to settings table for configurable session duration. Fully idempotent |
 | `migrate_add_notification_delivery_target()` | Add `delivery_target` (TEXT) column to notifications table for device-targeted notification delivery (desktop/mobile). Fully idempotent |
+| `migrate_add_autosave_settings()` | Add `autosave_desktop` (TEXT DEFAULT '0') and `autosave_mobile` (TEXT DEFAULT '0') columns to settings table for per-platform auto-save toggles. Fully idempotent |
+| `migrate_fix_double_encoded_attachments()` | Fix attachments fields that were double-encoded by serialize_json_field — detects and unwraps double-encoded JSON strings. Fully idempotent |
 
 ### 1.6 `src/backend/serializers.py` — vCard & CSV
 
@@ -2461,12 +2463,41 @@ Save system: build chit object, save, delete, pin, archive, QR.
 | `_getEditorReturnUrl()` | Get the URL to navigate to when exiting the editor; uses 'from' query param if present (e.g. kiosk), otherwise '/' |
 | `performDeleteChit()` | Execute the chit deletion with undo toast |
 | `setSaveButtonSaved()` | Mark the save button as saved (delegates to CwocSaveSystem) |
-| `cancelOrExit()` | Cancel or exit the editor (delegates to CwocSaveSystem or navigates home) |
+| `cancelOrExit()` | Cancel or exit the editor; delegates to auto-save exit handler when auto-save is enabled, otherwise to CwocSaveSystem |
+| `_handleAutoSaveExit()` | Handle exit when auto-save is enabled — immediate navigate if saved, wait if saving, trigger save if pending, show modal on failure |
+| `_showAutoSaveExitFailModal()` | Show Discard/Retry modal when auto-save exit fails |
 | `markEditorUnsaved()` | Mark the editor as having unsaved changes |
 | `markEditorSaved()` | Mark the editor as saved |
 | `togglePinned()` | Toggle the chit's pinned state and update the pin button UI |
 | `toggleArchived()` | Toggle the chit's archived state and update the archive button UI |
 | `_showQRCode(e)` | Show a QR code modal with data/link mode toggle for the current chit |
+
+#### editor-autosave.js
+
+Auto-save system for the chit editor. Provides automatic persistence of chit edits after a 2-second debounce period. Controlled by per-platform (mobile/desktop) toggles in user settings. Uses the existing `saveChitAndStay()` function for persistence and `buildChitObject()` for validation gating. Depends on: `editor-save.js` (`saveChitAndStay`, `buildChitObject`, `_isSaving`), `shared-utils.js` (`getCachedSettings`). Loaded after: `editor-save.js`. Loaded before: `editor-init.js`.
+
+| Symbol | Description |
+|--------|-------------|
+| `CwocAutoSave(settings)` | Constructor — initializes auto-save with user settings object; evaluates platform, reads setting, sets up resize listener |
+| `CwocAutoSave.prototype._detectPlatform()` | Detect current platform based on viewport width (≤768px = mobile) |
+| `CwocAutoSave.prototype._readSettingForPlatform()` | Read the appropriate auto-save setting (`autosave_mobile` or `autosave_desktop`) for the current platform |
+| `CwocAutoSave.prototype._onResize()` | Handle viewport resize — re-evaluate platform setting when crossing 768px boundary |
+| `CwocAutoSave.prototype.enable()` | Enable auto-save manually (overrides setting) |
+| `CwocAutoSave.prototype.disable()` | Disable auto-save manually (overrides setting) |
+| `CwocAutoSave.prototype.scheduleAutoSave()` | Schedule an auto-save after the 2000ms debounce period; resets timer on each call |
+| `CwocAutoSave.prototype.cancelPending()` | Cancel any pending auto-save timer |
+| `CwocAutoSave.prototype.isEnabled()` | Check if auto-save is currently enabled |
+| `CwocAutoSave.prototype.getState()` | Get the current auto-save state ('saved'\|'pending'\|'saving'\|'error') |
+| `CwocAutoSave.prototype._performSave()` | Perform the actual save with validation gate and in-flight guard |
+| `CwocAutoSave.prototype.notifySaveComplete()` | Notify auto-save that a save completed (clears retry flag, updates state) |
+| `CwocAutoSave.prototype.notifySaveError()` | Notify auto-save that a save failed externally |
+| `CwocAutoSave.prototype._updateIndicator()` | Update the auto-save indicator element based on current state |
+| `CwocAutoSave.prototype._showIndicator()` | Show the auto-save indicator element |
+| `CwocAutoSave.prototype._hideIndicator()` | Hide the auto-save indicator element |
+| `CwocAutoSave.prototype._hideSaveButtons()` | Hide manual save buttons when auto-save is enabled |
+| `CwocAutoSave.prototype._showSaveButtons()` | Show manual save buttons when auto-save is disabled |
+| `CwocAutoSave.prototype.saveImmediately()` | Perform an immediate save (used for exit-with-pending-changes); returns a promise |
+| `CwocAutoSave.prototype.destroy()` | Clean up event listeners |
 
 #### editor-sharing.js
 
@@ -2617,7 +2648,7 @@ Reusable editor patterns: zone collapse, editor save system, Alt+N hotkeys.
 | `CwocEditorSaveSystem.hasChanges()` | Returns true if there are unsaved changes |
 | `CwocEditorSaveSystem.cancelOrExit()` | Handle cancel/exit with unsaved-changes confirmation |
 | `CwocEditorSaveSystem._attachInputListeners()` | Attach change listeners to all inputs, textareas, and selects on the page |
-| `cwocInitEditorHotkeys(zoneMap)` | Initialize Alt+N hotkeys for zone focus/expand; zoneMap maps key chars to `[sectionId, contentId]` pairs |
+| `cwocInitEditorHotkeys(zoneMap, saveFns)` | Initialize Alt+N hotkeys for zone focus/expand and F7 save hotkeys; zoneMap maps key chars to `[sectionId, contentId]` pairs; saveFns = `{ saveAndStay, saveAndExit }` |
 
 #### settings.js
 
@@ -3255,6 +3286,7 @@ All calendar view styles: week, day, month, year, itinerary, timed/all-day event
 | Drag Resize Handles | Bottom-edge resize cursor for events |
 | Time-now Bar | Red line indicating current time |
 | Weather Flash | Animation for weather data loading |
+| Birthday Events | Concave-notch clip-path shape (`.birthday-event`), birthday chip (`.birthday-chip`), and chip thumbnail (`.birthday-chip-img`) |
 
 #### styles-cards.css
 Chit card styling, notes masonry layout, markdown, people chips, view-specific layouts.
@@ -3643,6 +3675,7 @@ All HTML pages include the following PWA `<head>` tags: `<link rel="manifest" hr
 <script src="/frontend/js/editor/editor-snooze.js"></script>
 <script src="/frontend/js/editor/editor-prerequisites.js"></script>
 <script src="/frontend/js/editor/editor-save.js"></script>
+<script src="/frontend/js/editor/editor-autosave.js"></script>
 <script src="/frontend/js/editor/editor-sharing.js"></script>
 <script src="/frontend/js/editor/editor-people.js"></script>
 <script src="/frontend/js/editor/editor-init.js"></script>
@@ -3930,6 +3963,7 @@ shared-auth.js            ← MUST load first (getCurrentUser, isAdmin, waitForA
                     editor-snooze.js      (snooze modal + state — depends on shared.js; provides _initSnooze, _currentSnoozedUntil for editor-save)
                     editor-prerequisites.js (prerequisites picker — depends on shared-utils, editor-save; provides initPrerequisites, getPrerequisitesData)
                     editor-save.js        (save/exit logic)
+                    editor-autosave.js    (auto-save system — depends on editor-save.js; provides CwocAutoSave class)
                     editor-sharing.js     (sharing data-layer — uses shared-auth; provides _sharingUserList, getSharingData, hasSharingData for editor-people.js and editor-init.js)
                     editor-init.js        (entry point — calls init functions)
                     editor-mobile-zones.js (mobile swipe zone navigation — depends on editor-init.js, shared-mobile.js)

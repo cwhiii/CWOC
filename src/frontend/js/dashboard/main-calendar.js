@@ -28,6 +28,43 @@ let _allViewEndHour = 24;
 let _dayScrollToHour = 5;
 let _timeBarInterval = null;
 
+/* ── Month view mode: 'compress' (default) or 'scroll' ──────────────────── */
+var _monthViewMode = localStorage.getItem('cwoc_month_view_mode') || 'compress';
+
+/** Initialize the month mode pill toggle (settings-style click handler) */
+function _initMonthModePill() {
+  var pill = document.getElementById('month-mode-pill');
+  if (!pill) return;
+  pill.addEventListener('click', function() {
+    var hidden = document.getElementById('month-mode-toggle');
+    var spans = pill.querySelectorAll('span[data-val]');
+    if (!hidden || spans.length < 2) return;
+    var current = hidden.value;
+    var next = (spans[0].dataset.val === current) ? spans[1].dataset.val : spans[0].dataset.val;
+    hidden.value = next;
+    _monthViewMode = next;
+    localStorage.setItem('cwoc_month_view_mode', next);
+    _updateMonthModeToggle();
+    displayChits();
+  });
+}
+
+/** Update the pill toggle UI to reflect current mode */
+function _updateMonthModeToggle() {
+  var pill = document.getElementById('month-mode-pill');
+  if (!pill) return;
+  var hidden = document.getElementById('month-mode-toggle');
+  if (hidden) hidden.value = _monthViewMode;
+  pill.querySelectorAll('span[data-val]').forEach(function(span) {
+    span.classList.toggle('active', span.dataset.val === _monthViewMode);
+  });
+}
+
+/** Restore the month mode toggle state from stored preference */
+function _restoreMonthScrollToggle() {
+  _updateMonthModeToggle();
+}
+
 /* ── Weather nav intent state ────────────────────────────────────────────── */
 var _wxNavPending = null;
 
@@ -83,6 +120,9 @@ function changePeriod() {
   _weekViewDayOffset = 0;
   currentView = sel.value;
   if (currentView === 'SevenDay') currentWeekStart = new Date();
+  // Show/hide calendar options (compress/scroll toggle) for Month view
+  var calOpts = document.getElementById('section-cal-options');
+  if (calOpts) calOpts.style.display = (currentView === 'Month') ? '' : 'none';
   updateDateRange();
   displayChits();
 }
@@ -532,10 +572,14 @@ function displayMonthView(chitsToDisplay) {
   const chitList = document.getElementById("chit-list");
   chitList.innerHTML = "";
 
+  // Restore toggle state
+  _restoreMonthScrollToggle();
+
   const _viSettings = (window._cwocSettings || {}).visual_indicators || {};
+  const isCompress = (_monthViewMode === 'compress');
 
   const monthView = document.createElement("div");
-  monthView.className = "month-view";
+  monthView.className = "month-view" + (isCompress ? " month-compress" : "");
 
   const currentMonth = getMonthStart(new Date(currentWeekStart));
   const monthStart = new Date(currentMonth);
@@ -567,36 +611,75 @@ function displayMonthView(chitsToDisplay) {
   const monthGrid = document.createElement("div");
   monthGrid.className = "month-grid";
 
+  // Calculate total rows for compress mode height distribution
+  const totalCells = firstDay + daysInMonth;
+  const totalRows = Math.ceil(totalCells / 7);
+
   // Batch all month-day cells into a fragment before appending to monthGrid
   const monthGridFrag = document.createDocumentFragment();
 
-  // Previous month's trailing days (faded)
-  const prevMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 0); // last day of prev month
-  for (let i = firstDay - 1; i >= 0; i--) {
-    const prevDay = new Date(prevMonth.getFullYear(), prevMonth.getMonth(), prevMonth.getDate() - i);
-    const monthDay = document.createElement("div");
-    monthDay.className = "month-day other-month prev-month";
-    monthDay.dataset.date = prevDay.toISOString().slice(0, 10);
-    monthDay.innerHTML = `<div class="day-number">${prevDay.getDate()}</div>`;
-    const dayChits = chitsToDisplay.filter((chit) => chitMatchesDay(chit, prevDay));
-    if (dayChits.length > 0) {
-      const eventsContainer = document.createElement("div");
-      eventsContainer.className = "day-events";
+  // Helper: build events for a day cell (shared by prev/current/next month)
+  function _buildDayEvents(dayDate, monthDay, isDraggable) {
+    const dayChits = chitsToDisplay.filter((chit) => chitMatchesDay(chit, dayDate));
+    if (dayChits.length === 0) return;
+
+    const eventsContainer = document.createElement("div");
+    eventsContainer.className = "day-events";
+
+    if (isCompress) {
+      // In compress mode, we'll limit visible events after layout
       dayChits.forEach((chit) => {
         const info = getCalendarDateInfo(chit);
         const chitElement = document.createElement("div");
-        chitElement.className = "month-event";
+        chitElement.className = "month-event month-event-compressed";
+        if (isDraggable) chitElement.draggable = true;
         chitElement.dataset.chitId = chit.id;
         if (info.isPointInTime) chitElement.classList.add("point-in-time");
         applyChitColors(chitElement, chitColor(chit));
+        if (isDraggable) chitElement.style.cursor = "pointer";
+        if (chit.status === "Complete") chitElement.classList.add("completed-task");
+        if (chit._isBirthday) { chitElement.classList.add("birthday-event"); chitElement.draggable = false; }
         if (typeof _isDeclinedByCurrentUser === 'function' && _isDeclinedByCurrentUser(chit)) chitElement.classList.add("declined-chit");
         chitElement.title = calendarEventTooltip(chit, info);
         chitElement.innerHTML = calendarEventTitle(chit, info.isDueOnly, info, _viSettings, 'calendar-month');
         attachCalendarChitEvents(chitElement, chit);
         eventsContainer.appendChild(chitElement);
       });
-      monthDay.appendChild(eventsContainer);
+      // Store all chits on the container for the overflow handler
+      eventsContainer._allDayChits = dayChits;
+      eventsContainer._dayDate = dayDate;
+    } else {
+      // Scroll mode: original behavior
+      dayChits.forEach((chit) => {
+        const info = getCalendarDateInfo(chit);
+        const chitElement = document.createElement("div");
+        chitElement.className = "month-event";
+        if (isDraggable) chitElement.draggable = true;
+        chitElement.dataset.chitId = chit.id;
+        if (info.isPointInTime) chitElement.classList.add("point-in-time");
+        applyChitColors(chitElement, chitColor(chit));
+        if (isDraggable) chitElement.style.cursor = "pointer";
+        if (chit.status === "Complete") chitElement.classList.add("completed-task");
+        if (chit._isBirthday) { chitElement.classList.add("birthday-event"); chitElement.draggable = false; }
+        if (typeof _isDeclinedByCurrentUser === 'function' && _isDeclinedByCurrentUser(chit)) chitElement.classList.add("declined-chit");
+        chitElement.title = calendarEventTooltip(chit, info);
+        chitElement.innerHTML = calendarEventTitle(chit, info.isDueOnly, info, _viSettings, 'calendar-month');
+        attachCalendarChitEvents(chitElement, chit);
+        eventsContainer.appendChild(chitElement);
+      });
     }
+    monthDay.appendChild(eventsContainer);
+  }
+
+  // Previous month's trailing days (faded)
+  const prevMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 0);
+  for (let i = firstDay - 1; i >= 0; i--) {
+    const prevDay = new Date(prevMonth.getFullYear(), prevMonth.getMonth(), prevMonth.getDate() - i);
+    const monthDay = document.createElement("div");
+    monthDay.className = "month-day other-month prev-month";
+    monthDay.dataset.date = prevDay.toISOString().slice(0, 10);
+    monthDay.innerHTML = `<div class="day-number">${prevDay.getDate()}</div>`;
+    _buildDayEvents(prevDay, monthDay, false);
     monthGridFrag.appendChild(monthDay);
   }
 
@@ -612,37 +695,11 @@ function displayMonthView(chitsToDisplay) {
     if (dayDate.toDateString() === new Date().toDateString()) monthDay.classList.add("today");
     monthDay.dataset.date = dayDate.toISOString().slice(0, 10);
     monthDay.innerHTML = `<div class="day-number">${day}</div>`;
-
-    const dayChits = chitsToDisplay.filter((chit) => chitMatchesDay(chit, dayDate));
-
-    if (dayChits.length > 0) {
-      const eventsContainer = document.createElement("div");
-      eventsContainer.className = "day-events";
-      dayChits.forEach((chit) => {
-        const info = getCalendarDateInfo(chit);
-        const chitElement = document.createElement("div");
-        chitElement.className = "month-event";
-        chitElement.draggable = true;
-        chitElement.dataset.chitId = chit.id;
-        if (info.isPointInTime) chitElement.classList.add("point-in-time");
-        applyChitColors(chitElement, chitColor(chit));
-        chitElement.style.cursor = "pointer";
-        if (chit.status === "Complete") chitElement.classList.add("completed-task");
-        if (chit._isBirthday) { chitElement.classList.add("birthday-event"); chitElement.draggable = false; }
-        if (typeof _isDeclinedByCurrentUser === 'function' && _isDeclinedByCurrentUser(chit)) chitElement.classList.add("declined-chit");
-        chitElement.title = calendarEventTooltip(chit, info);
-        chitElement.innerHTML = calendarEventTitle(chit, info.isDueOnly, info, _viSettings, 'calendar-month');
-        attachCalendarChitEvents(chitElement, chit);
-        eventsContainer.appendChild(chitElement);
-      });
-      monthDay.appendChild(eventsContainer);
-    }
-
+    _buildDayEvents(dayDate, monthDay, true);
     monthGridFrag.appendChild(monthDay);
   }
 
-  // Next month's leading days (whitewashed) — fill to complete the grid row
-  const totalCells = firstDay + daysInMonth;
+  // Next month's leading days — fill to complete the grid row
   const trailingDays = (7 - (totalCells % 7)) % 7;
   for (let i = 1; i <= trailingDays; i++) {
     const nextDay = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, i);
@@ -650,25 +707,7 @@ function displayMonthView(chitsToDisplay) {
     monthDay.className = "month-day other-month next-month";
     monthDay.dataset.date = nextDay.toISOString().slice(0, 10);
     monthDay.innerHTML = `<div class="day-number">${nextDay.getDate()}</div>`;
-    const dayChits = chitsToDisplay.filter((chit) => chitMatchesDay(chit, nextDay));
-    if (dayChits.length > 0) {
-      const eventsContainer = document.createElement("div");
-      eventsContainer.className = "day-events";
-      dayChits.forEach((chit) => {
-        const info = getCalendarDateInfo(chit);
-        const chitElement = document.createElement("div");
-        chitElement.className = "month-event";
-        chitElement.dataset.chitId = chit.id;
-        if (info.isPointInTime) chitElement.classList.add("point-in-time");
-        applyChitColors(chitElement, chitColor(chit));
-        if (typeof _isDeclinedByCurrentUser === 'function' && _isDeclinedByCurrentUser(chit)) chitElement.classList.add("declined-chit");
-        chitElement.title = calendarEventTooltip(chit, info);
-        chitElement.innerHTML = calendarEventTitle(chit, info.isDueOnly, info, _viSettings, 'calendar-month');
-        attachCalendarChitEvents(chitElement, chit);
-        eventsContainer.appendChild(chitElement);
-      });
-      monthDay.appendChild(eventsContainer);
-    }
+    _buildDayEvents(nextDay, monthDay, false);
     monthGridFrag.appendChild(monthDay);
   }
 
@@ -676,11 +715,17 @@ function displayMonthView(chitsToDisplay) {
   monthView.appendChild(monthGrid);
   chitList.appendChild(monthView);
 
+  // In compress mode, apply overflow truncation after layout is complete (double-rAF)
+  if (isCompress) {
+    requestAnimationFrame(function() {
+      requestAnimationFrame(function() { _applyMonthCompressOverflow(monthGrid); });
+    });
+  }
+
   enableMonthDrag(monthGrid);
 
   // Double-click on empty day cell creates a new all-day chit for that date
   monthGrid.addEventListener('dblclick', (e) => {
-    // Only fire if clicking on the day cell itself or the day-number, not on an event
     if (e.target.closest('.month-event')) return;
     const dayCell = e.target.closest('.month-day');
     if (!dayCell || !dayCell.dataset.date) return;
@@ -688,6 +733,147 @@ function displayMonthView(chitsToDisplay) {
     storePreviousState();
     window.location.href = `/editor?start=${encodeURIComponent(dateStr + 'T00:00:00')}&end=${encodeURIComponent(dateStr + 'T23:59:59')}&allday=1`;
   });
+}
+
+/**
+ * Apply overflow truncation in compress mode.
+ * For each day cell, if events overflow the available space, hide excess
+ * events and show a "...More..." link that opens a popup with all events.
+ */
+function _applyMonthCompressOverflow(monthGrid) {
+  var dayCells = monthGrid.querySelectorAll('.month-day');
+  dayCells.forEach(function(cell) {
+    var eventsContainer = cell.querySelector('.day-events');
+    if (!eventsContainer) return;
+    var events = eventsContainer.querySelectorAll('.month-event');
+    if (events.length === 0) return;
+
+    // Available height for events = the events container's actual height after flex layout
+    var containerHeight = eventsContainer.clientHeight;
+    if (containerHeight < 1) return; // not laid out yet
+
+    // Measure a single event's height (they're all single-line compressed)
+    var eventHeight = events[0].offsetHeight + 1; // 1px gap
+    if (eventHeight < 1) eventHeight = 16; // fallback
+
+    // Reserve space for the "...more..." link (appended to cell, not events container)
+    var moreHeight = 16;
+
+    // How many events fit without the more link?
+    var fitsWithoutMore = Math.floor(containerHeight / eventHeight);
+
+    // If all events fit, no truncation needed
+    if (events.length <= fitsWithoutMore) return;
+
+    // Need truncation — how many fit WITH the more link?
+    var maxVisible = Math.floor((containerHeight - moreHeight) / eventHeight);
+    if (maxVisible < 1) maxVisible = 1;
+
+    // Hide overflow events
+    for (var i = maxVisible; i < events.length; i++) {
+      events[i].style.display = 'none';
+    }
+
+    // Add "...More..." link — append to the cell (not events container) so it's never clipped
+    var moreLink = document.createElement('div');
+    moreLink.className = 'month-more-link';
+    var hiddenCount = events.length - maxVisible;
+    moreLink.textContent = '...' + hiddenCount + ' more...';
+    moreLink.addEventListener('click', function(e) {
+      e.stopPropagation();
+      _showMonthDayOverflow(e, eventsContainer._allDayChits, eventsContainer._dayDate);
+    });
+    cell.appendChild(moreLink);
+  });
+}
+
+/**
+ * Show a popup with all chits for a given day (triggered by "...More..." click).
+ * Uses the same overlay pattern as the context menu.
+ */
+function _showMonthDayOverflow(e, dayChits, dayDate) {
+  // Remove any existing overflow popup
+  document.querySelectorAll('.cwoc-month-overflow-overlay').forEach(function(el) { el.remove(); });
+
+  var _viSettings = (window._cwocSettings || {}).visual_indicators || {};
+
+  var overlay = document.createElement('div');
+  overlay.className = 'cwoc-month-overflow-overlay';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:9999;';
+
+  var popup = document.createElement('div');
+  popup.className = 'cwoc-month-overflow-popup';
+  popup.style.cssText = 'position:fixed;background:url("/static/parchment.jpg") center/cover;background-color:#fffaf0;border:2px solid #6b4e31;border-radius:8px;padding:10px;min-width:220px;max-width:300px;max-height:60vh;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,0.3);font-family:Lora,Georgia,serif;';
+
+  // Header with date
+  var header = document.createElement('div');
+  header.style.cssText = 'font-weight:bold;font-size:0.9em;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid rgba(139,90,43,0.3);color:#4a2c2a;';
+  var monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  header.textContent = monthNames[dayDate.getMonth()] + ' ' + dayDate.getDate() + ', ' + dayDate.getFullYear();
+  popup.appendChild(header);
+
+  // Render all chits for this day
+  dayChits.forEach(function(chit) {
+    var info = getCalendarDateInfo(chit);
+    var item = document.createElement('div');
+    item.className = 'month-event';
+    item.dataset.chitId = chit.id;
+    item.style.cssText = 'margin-bottom:3px;padding:3px 5px;cursor:pointer;border-radius:3px;';
+    if (info.isPointInTime) item.classList.add("point-in-time");
+    applyChitColors(item, chitColor(chit));
+    if (chit.status === "Complete") item.classList.add("completed-task");
+    if (chit._isBirthday) item.classList.add("birthday-event");
+    if (typeof _isDeclinedByCurrentUser === 'function' && _isDeclinedByCurrentUser(chit)) item.classList.add("declined-chit");
+    item.title = calendarEventTooltip(chit, info);
+    item.innerHTML = calendarEventTitle(chit, info.isDueOnly, info, _viSettings, 'calendar-month');
+    attachCalendarChitEvents(item, chit);
+    popup.appendChild(item);
+  });
+
+  function _close() {
+    overlay.remove();
+    document.removeEventListener('keydown', _escHandler, true);
+  }
+
+  function _escHandler(ev) {
+    if (ev.key === 'Escape') {
+      ev.stopImmediatePropagation();
+      ev.preventDefault();
+      _close();
+    }
+  }
+
+  overlay.addEventListener('click', function(ev) {
+    if (!popup.contains(ev.target)) _close();
+  });
+  document.addEventListener('keydown', _escHandler, true);
+
+  overlay.appendChild(popup);
+  document.body.appendChild(overlay);
+
+  // Position after appending so we can measure actual size
+  var popRect = popup.getBoundingClientRect();
+  var vw = window.innerWidth;
+  var vh = window.innerHeight;
+  var margin = 8;
+
+  var popX = e.clientX;
+  var popY = e.clientY;
+
+  // Clamp horizontally
+  if (popX + popRect.width > vw - margin) {
+    popX = vw - popRect.width - margin;
+  }
+  if (popX < margin) popX = margin;
+
+  // Clamp vertically — if it would overflow bottom, show above the click instead
+  if (popY + popRect.height > vh - margin) {
+    popY = vh - popRect.height - margin;
+  }
+  if (popY < margin) popY = margin;
+
+  popup.style.left = popX + 'px';
+  popup.style.top = popY + 'px';
 }
 
 function _buildItineraryEvent(chit, _viSettings, opts) {
@@ -714,6 +900,7 @@ function _buildItineraryEvent(chit, _viSettings, opts) {
   }
   if (typeof _isDeclinedByCurrentUser === 'function' && _isDeclinedByCurrentUser(chit)) chitElement.classList.add("declined-chit");
   if (chit.point_in_time && !chit.start_datetime && !chit.due_datetime) chitElement.classList.add("point-in-time");
+  if (chit._isBirthday) { chitElement.classList.add("birthday-event"); chitElement.draggable = false; }
 
   // Type icon INSIDE the card, leftmost
   var iconEl = document.createElement("span");

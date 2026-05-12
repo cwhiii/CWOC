@@ -99,7 +99,7 @@ Implement an auto-save feature for the chit editor that automatically persists e
   - Test in-flight guard (no double-saves)
   - _Requirements: 3.1, 3.2, 3.3, 7.1, 7.3_
 
-- [-] 11. Final checkpoint - Ensure all tests pass
+- [x] 11. Final checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
 ## Notes

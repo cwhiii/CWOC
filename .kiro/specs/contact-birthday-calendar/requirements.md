@@ -44,14 +44,16 @@ This feature enables birthday and anniversary dates stored on contacts to automa
 
 ### Requirement 3: Calendar Display Integration
 
-**User Story:** As a user, I want birthday and anniversary entries to appear seamlessly alongside my regular calendar events, so that I have a unified view of my schedule and important dates.
+**User Story:** As a user, I want birthday and anniversary entries to appear seamlessly alongside my regular calendar events with a distinctive shape, so that I can instantly recognize them among my schedule.
 
 #### Acceptance Criteria
 
 1. WHEN the Calendar_Engine renders a day, week, month, or year view, THE Calendar_Engine SHALL fetch Virtual_Calendar_Entries from the Birthday_API and display them alongside regular chits.
 2. THE Calendar_Engine SHALL visually distinguish Virtual_Calendar_Entries from regular chits by displaying the 🎂 emoji prefix in the title.
-3. WHEN a user clicks a Virtual_Calendar_Entry on the calendar, THE Calendar_Engine SHALL navigate to the associated contact in the Contact_Editor.
-4. THE Calendar_Engine SHALL display the contact's profile image on the Virtual_Calendar_Entry when an image URL is available.
+3. THE Calendar_Engine SHALL render Virtual_Calendar_Entries with a distinctive "concave notch" shape: a rectangle with concave (inward-pointing) triangular cutouts on the left and right edges, visually the inverse of the pointed/arrow shape used for point-in-time chits.
+4. THE Calendar_Engine SHALL pad the text content of Virtual_Calendar_Entries inward so that text does not extend into the concave triangular areas on either end.
+5. WHEN a user clicks a Virtual_Calendar_Entry on the calendar, THE Calendar_Engine SHALL navigate to the associated contact in the Contact_Editor.
+6. THE Calendar_Engine SHALL display the contact's profile image on the Virtual_Calendar_Entry when an image URL is available.
 
 ### Requirement 4: Search Across Years
 

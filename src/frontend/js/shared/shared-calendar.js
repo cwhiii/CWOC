@@ -625,74 +625,117 @@ function _showRecurringDragModal(parentId, dateStr, newTimes, virtualChit) {
 function enableMonthDrag(monthGrid, onDrop) {
   let draggedChitId = null;
 
+  console.log('[MonthDrag] enableMonthDrag called, monthGrid:', monthGrid, 'children:', monthGrid.children.length);
+  console.log('[MonthDrag] Draggable events found:', monthGrid.querySelectorAll('.month-event[draggable="true"]').length);
+
   monthGrid.addEventListener('dragstart', (e) => {
+    console.log('[MonthDrag] dragstart fired, e.target:', e.target, 'tagName:', e.target.tagName, 'classes:', e.target.className);
     const ev = e.target.closest('.month-event');
-    if (!ev || !ev.dataset.chitId) return;
+    console.log('[MonthDrag] closest .month-event:', ev, 'chitId:', ev ? ev.dataset.chitId : 'N/A');
+    if (!ev || !ev.dataset.chitId) { console.log('[MonthDrag] dragstart ABORTED — no event element or chitId'); return; }
     // Prevent drag for viewer-role shared chits
     var _mdChit = (typeof chits !== 'undefined') ? chits.find(function(c) { return c.id === ev.dataset.chitId; }) : null;
-    if (_mdChit && typeof _isViewerRole === 'function' && _isViewerRole(_mdChit)) { e.preventDefault(); return; }
+    if (_mdChit && typeof _isViewerRole === 'function' && _isViewerRole(_mdChit)) { console.log('[MonthDrag] dragstart BLOCKED — viewer role'); e.preventDefault(); return; }
     draggedChitId = ev.dataset.chitId;
     e.dataTransfer.setData('text/plain', draggedChitId);
     e.dataTransfer.effectAllowed = 'move';
     ev.style.opacity = '0.4';
+    console.log('[MonthDrag] dragstart SUCCESS — dragging chitId:', draggedChitId, 'element:', ev.textContent.substring(0, 40));
   });
 
   monthGrid.addEventListener('dragend', (e) => {
+    console.log('[MonthDrag] dragend fired, draggedChitId was:', draggedChitId);
     const ev = e.target.closest('.month-event');
     if (ev) ev.style.opacity = '';
     draggedChitId = null;
     if (typeof _markDragJustEnded === 'function') _markDragJustEnded();
   });
 
+  var _dragOverCount = 0;
   monthGrid.addEventListener('dragover', (e) => {
     if (!draggedChitId) return;
+    _dragOverCount++;
+    if (_dragOverCount % 50 === 1) {
+      console.log('[MonthDrag] dragover #' + _dragOverCount + ', target:', e.target.tagName, e.target.className, 'closest .month-day:', e.target.closest('.month-day') ? e.target.closest('.month-day').dataset.date : 'NONE');
+    }
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
   });
 
   monthGrid.addEventListener('drop', async (e) => {
-    if (!draggedChitId) return;
+    console.log('[MonthDrag] DROP fired! draggedChitId:', draggedChitId, 'e.target:', e.target.tagName, e.target.className);
+    if (!draggedChitId) { console.log('[MonthDrag] drop ABORTED — no draggedChitId'); return; }
     e.preventDefault();
     const dayCell = e.target.closest('.month-day');
-    if (!dayCell || !dayCell.dataset.date) return;
-    const newDate = new Date(dayCell.dataset.date);
-    if (isNaN(newDate.getTime())) return;
+    console.log('[MonthDrag] drop dayCell:', dayCell, 'date:', dayCell ? dayCell.dataset.date : 'N/A');
+    if (!dayCell || !dayCell.dataset.date) { console.log('[MonthDrag] drop ABORTED — no dayCell or date'); return; }
+    // Parse as local date (not UTC) to match how oldDay is computed
+    var _dateParts = dayCell.dataset.date.split('-');
+    const newDate = new Date(parseInt(_dateParts[0]), parseInt(_dateParts[1]) - 1, parseInt(_dateParts[2]));
+    if (isNaN(newDate.getTime())) { console.log('[MonthDrag] drop ABORTED — invalid date'); return; }
 
+    console.log('[MonthDrag] Fetching chit data for:', draggedChitId);
     try {
       const resp = await fetch(`/api/chit/${draggedChitId}`);
-      if (!resp.ok) return;
+      console.log('[MonthDrag] fetch response status:', resp.status);
+      if (!resp.ok) { console.log('[MonthDrag] drop ABORTED — fetch failed'); return; }
       const chit = await resp.json();
+      console.log('[MonthDrag] chit loaded:', chit.id, chit.title, 'start:', chit.start_datetime, 'due:', chit.due_datetime);
       const info = getCalendarDateInfo(chit);
-      if (!info.hasDate) return;
+      console.log('[MonthDrag] dateInfo:', JSON.stringify(info));
+      if (!info.hasDate) { console.log('[MonthDrag] drop ABORTED — chit has no date'); return; }
 
       // Shift dates by the day difference, preserving times
       const oldDay = new Date(info.start.getFullYear(), info.start.getMonth(), info.start.getDate());
       const dayDiff = (newDate.getTime() - oldDay.getTime());
+      console.log('[MonthDrag] oldDay:', oldDay.toISOString(), 'newDate:', newDate.toISOString(), 'dayDiff ms:', dayDiff, 'days:', dayDiff / 86400000);
 
+      // Update dates on the chit object
       if (info.isDueOnly) {
         const d = new Date(new Date(chit.due_datetime).getTime() + dayDiff);
+        console.log('[MonthDrag] Updating due_datetime:', chit.due_datetime, '->', d.toISOString());
         chit.due_datetime = d.toISOString();
       } else {
         if (chit.start_datetime) {
           const d = new Date(new Date(chit.start_datetime).getTime() + dayDiff);
+          console.log('[MonthDrag] Updating start_datetime:', chit.start_datetime, '->', d.toISOString());
           chit.start_datetime = d.toISOString();
         }
         if (chit.end_datetime) {
           const d = new Date(new Date(chit.end_datetime).getTime() + dayDiff);
+          console.log('[MonthDrag] Updating end_datetime:', chit.end_datetime, '->', d.toISOString());
           chit.end_datetime = d.toISOString();
         }
       }
 
-      await fetch(`/api/chits/${chit.id}`, {
+      // Re-serialize fields that come back as objects from GET but need to be strings for PUT
+      var _stringifyFields = ['health_data', 'recurrence_rule', 'recurrence_exceptions'];
+      _stringifyFields.forEach(function(f) {
+        if (chit[f] && typeof chit[f] === 'object') {
+          chit[f] = JSON.stringify(chit[f]);
+        }
+      });
+
+      console.log('[MonthDrag] Saving via PUT /api/chits/' + chit.id);
+      const saveResp = await fetch(`/api/chits/${chit.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(chit),
       });
-      if (typeof fetchChits === 'function') fetchChits();
+      console.log('[MonthDrag] Save response status:', saveResp.status);
+      if (!saveResp.ok) {
+        var errText = await saveResp.text();
+        console.error('[MonthDrag] Save FAILED, response body:', errText);
+      }
+      if (typeof fetchChits === 'function') {
+        console.log('[MonthDrag] Calling fetchChits() to refresh view');
+        fetchChits();
+      }
     } catch (err) {
-      console.error('Month drag save failed:', err);
+      console.error('[MonthDrag] Month drag save FAILED:', err);
     }
     draggedChitId = null;
+    _dragOverCount = 0;
   });
 }
 

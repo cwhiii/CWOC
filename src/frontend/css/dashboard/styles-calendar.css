@@ -103,12 +103,24 @@
     background-color: #ffe4b5;
 }
 
-/* Birthday/anniversary calendar entries */
+/* Birthday/anniversary calendar entries — concave notch shape */
+.all-day-event.birthday-event,
+.month-event.birthday-event,
+.itinerary-event.birthday-event {
+    clip-path: polygon(
+        0% 0%, 8px 50%, 0% 100%,
+        100% 100%, calc(100% - 8px) 50%, 100% 0%
+    );
+    border: none;
+    padding-left: 12px;
+    padding-right: 12px;
+}
+
 .all-day-event.birthday-event {
     background: transparent !important;
     border: none;
     border-left: none;
-    padding: 1px 2px;
+    padding: 1px 12px;
 }
 
 .birthday-chip {
@@ -237,6 +249,71 @@
 .day-number {
     font-weight: bold;
     margin-bottom: 5px;
+}
+
+/* ── Month Compress Mode ────────────────────────────────────────────────── */
+.month-view.month-compress {
+    overflow: hidden;
+}
+
+.month-compress .month-grid {
+    grid-auto-rows: 1fr;
+    height: 0;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.month-compress .month-day {
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.month-compress .month-day .day-number {
+    margin-bottom: 1px;
+    flex-shrink: 0;
+}
+
+.month-compress .month-day .day-events {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.month-event-compressed {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.2;
+    padding: 1px 3px;
+    font-size: 0.75em;
+    flex-shrink: 0;
+    cursor: grab;
+    -webkit-user-drag: element;
+}
+
+.month-event-compressed[draggable="true"]:active {
+    cursor: grabbing;
+}
+
+.month-more-link {
+    font-size: 0.72em;
+    color: #6b4e31;
+    cursor: pointer;
+    text-align: center;
+    padding: 1px 0;
+    font-style: italic;
+    opacity: 0.85;
+    flex-shrink: 0;
+}
+
+.month-more-link:hover {
+    opacity: 1;
+    text-decoration: underline;
 }
 
 /* ── Chit items in calendar ─────────────────────────────────────────────── */

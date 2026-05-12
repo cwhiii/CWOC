@@ -118,7 +118,7 @@ class CwocEditorSaveSystem {
 }
 
 /**
- * Initialize Alt+N hotkeys for zone focus/expand.
+ * Initialize Alt+N hotkeys for zone focus/expand, and F7 save hotkeys.
  *
  * @param {Object} zoneMap — maps key characters to [sectionId, contentId] pairs.
  *   Example:
@@ -128,11 +128,27 @@ class CwocEditorSaveSystem {
  *       '3': ['tagsSection',    'tagsContent'],
  *     }
  *
+ * @param {Object} [saveFns] — optional save function callbacks for F7 hotkeys.
+ *   { saveAndStay: Function, saveAndExit: Function }
+ *
  * When the user presses Alt+<key>, the corresponding zone is expanded (if
  * collapsed) and scrolled into view.
+ *
+ * F7 = save & stay, Shift+F7 = save & exit.
  */
-function cwocInitEditorHotkeys(zoneMap) {
+function cwocInitEditorHotkeys(zoneMap, saveFns) {
   document.addEventListener('keydown', function (e) {
+    // F7 save hotkeys
+    if (e.key === 'F7') {
+      e.preventDefault();
+      if (e.shiftKey && saveFns && saveFns.saveAndExit) {
+        saveFns.saveAndExit();
+      } else if (!e.shiftKey && saveFns && saveFns.saveAndStay) {
+        saveFns.saveAndStay();
+      }
+      return;
+    }
+
     if (!e.altKey || e.ctrlKey || e.metaKey) return;
 
     var zone = zoneMap[e.key];

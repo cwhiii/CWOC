@@ -138,6 +138,23 @@ function _cwocInjectSidebar() {
   html += '  </select>';
   html += '</div>';
 
+  /* 3a-options. Calendar Options — visible only on Calendar tab + Month view */
+  html += '<div class="sidebar-section" id="section-cal-options" style="display:none;">';
+  html += '  <label class="filter-group-label" onclick="var b=document.getElementById(\'cal-options-body\');b.style.display=b.style.display===\'none\'?\'\':\'none\';this.querySelector(\'.filter-arrow\').textContent=b.style.display===\'none\'?\'▶\':\'▼\';">';
+  html += '    <span class="filter-arrow">▶</span> <i class="fas fa-sliders" style="font-size:0.85em;"></i> Options';
+  html += '  </label>';
+  html += '  <div id="cal-options-body" style="display:none;">';
+  html += '    <div style="display:flex;align-items:center;gap:8px;margin-top:6px;">';
+  html += '      <label style="font-size:0.85em;white-space:nowrap;">Month</label>';
+  html += '      <div class="cwoc-2val-toggle" id="month-mode-pill" style="font-size:0.85em;">';
+  html += '        <input type="hidden" id="month-mode-toggle" value="compress" />';
+  html += '        <span data-val="compress" class="active">Compress</span>';
+  html += '        <span data-val="scroll">Scroll</span>';
+  html += '      </div>';
+  html += '    </div>';
+  html += '  </div>';
+  html += '</div>';
+
   /* 3b. Kanban toggle (only visible on Projects tab) */
   html += '<div class="sidebar-section" id="section-kanban" style="display:none;">';
   html += '  <label class="sidebar-section-label">View Mode</label>';
@@ -315,8 +332,8 @@ function _cwocInjectSidebar() {
   html += '        <label><input type="checkbox" id="hide-complete" /> ✅ Hide Complete</label>';
   html += '        <label><input type="checkbox" id="hide-declined" /> 🚫 Hide Declined</label>';
   html += '        <label><input type="checkbox" id="hide-habits" /> 🎯 Hide Habits</label>';
-  html += '        <label><input type="checkbox" id="show-email-received" checked /> 📨 Show Email (Received)</label>';
-  html += '        <label><input type="checkbox" id="show-email-sent" checked /> 📤 Show Email (Sent)</label>';
+  html += '        <label><input type="checkbox" id="show-email-received" /> 📨 Show Email (Received)</label>';
+  html += '        <label><input type="checkbox" id="show-email-sent" /> 📤 Show Email (Sent)</label>';
   html += '        <hr style="border:0;border-top:1px dashed #c4a882;margin:4px 0;" />';
   html += '        <label><input type="checkbox" id="filter-shared-with-me" /> 🔗 Shared with me</label>';
   html += '        <label><input type="checkbox" id="filter-shared-by-me" /> 📤 Shared by me</label>';
@@ -716,8 +733,8 @@ function _updateClearAllButton() {
     || (hideComplete && hideComplete.checked)
     || (hideDeclined && hideDeclined.checked)
     || (hideHabits && hideHabits.checked)
-    || (showEmailReceived && !showEmailReceived.checked)
-    || (showEmailSent && !showEmailSent.checked);
+    || (showEmailReceived && showEmailReceived.checked)
+    || (showEmailSent && showEmailSent.checked);
 
   /* Sharing filters (now part of Display group) */
   var hasSharingFilter = (document.getElementById('filter-shared-with-me') || {}).checked

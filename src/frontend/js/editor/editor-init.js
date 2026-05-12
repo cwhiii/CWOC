@@ -1657,6 +1657,9 @@ document.addEventListener("DOMContentLoaded", function () {
     '8': ['peopleSection', 'peopleContent'],
     '9': ['colorSection', 'colorContent'],
     '0': ['projectsSection', 'projectsContent'],
+  }, {
+    saveAndStay: function () { saveChitAndStay(); },
+    saveAndExit: function () { saveChit(); }
   });
 
   // ── Auto-Save Initialization ──────────────────────────────────────────────

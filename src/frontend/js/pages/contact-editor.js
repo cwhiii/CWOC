@@ -292,6 +292,9 @@
             '6': ['colorSection', 'colorContent'],
             '7': ['notesSection', 'notesContent'],
             '8': ['tagsSection', 'tagsContent']
+        }, {
+            saveAndStay: function () { saveContactAndStay(); },
+            saveAndExit: function () { saveContactAndExit(); }
         });
     }
 
@@ -619,11 +622,16 @@
         valueInput.value = defaultValue || '';
 
         // Initialize Flatpickr for date fields (same format as chit editor: YYYY-Mon-DD)
+        // allowInput lets users type dates directly in addition to using the picker
         if (fieldName === 'dates' && typeof flatpickr !== 'undefined') {
             valueInput.type = 'text';
             valueInput.placeholder = 'YYYY-Mon-DD';
             setTimeout(function() {
-                flatpickr(valueInput, { dateFormat: 'Y-M-d', defaultDate: defaultValue || null });
+                flatpickr(valueInput, {
+                    dateFormat: 'Y-M-d',
+                    allowInput: true,
+                    defaultDate: defaultValue || null
+                });
             }, 0);
         }
 

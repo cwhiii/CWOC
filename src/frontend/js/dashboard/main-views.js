@@ -749,6 +749,12 @@ function filterChits(tab) {
     kanbanSection.style.display = (tab === 'Projects') ? '' : 'none';
   }
 
+  // Show/hide Calendar Options (compress/scroll) for Calendar + Month
+  const calOptsSection = document.getElementById('section-cal-options');
+  if (calOptsSection) {
+    calOptsSection.style.display = (tab === 'Calendar' && currentView === 'Month') ? '' : 'none';
+  }
+
   // Show/hide Alarms view mode toggle
   const alarmsSection = document.getElementById('section-alarms-mode');
   if (alarmsSection) {

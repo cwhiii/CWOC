@@ -318,8 +318,8 @@ function storePreviousState() {
     hidePastDue: document.getElementById('hide-past-due')?.checked ?? false,
     hideComplete: document.getElementById('hide-complete')?.checked ?? false,
     hideDeclined: document.getElementById('hide-declined')?.checked ?? false,
-    hideEmailReceived: document.getElementById('show-email-received')?.checked ?? true,
-    hideEmailSent: document.getElementById('show-email-sent')?.checked ?? true,
+    hideEmailReceived: document.getElementById('show-email-received')?.checked ?? false,
+    hideEmailSent: document.getElementById('show-email-sent')?.checked ?? false,
     highlightOverdue: document.getElementById('highlight-overdue')?.checked ?? true,
     highlightBlocked: document.getElementById('highlight-blocked')?.checked ?? true,
   };
@@ -410,9 +410,9 @@ function _restoreUIState() {
       const hd = document.getElementById('hide-declined');
       if (hd) hd.checked = state.hideDeclined ?? false;
       const her = document.getElementById('show-email-received');
-      if (her) her.checked = state.hideEmailReceived ?? true;
+      if (her) her.checked = state.hideEmailReceived ?? false;
       const hes = document.getElementById('show-email-sent');
-      if (hes) hes.checked = state.hideEmailSent ?? true;
+      if (hes) hes.checked = state.hideEmailSent ?? false;
       const hlO = document.getElementById('highlight-overdue');
       if (hlO && state.highlightOverdue !== undefined) hlO.checked = state.highlightOverdue;
       const hlB = document.getElementById('highlight-blocked');
@@ -447,6 +447,8 @@ function _restoreUIState() {
     if (orderSection) orderSection.style.display = (currentTab === 'Calendar' || currentTab === 'Indicators' || currentTab === 'Email') ? 'none' : '';
     const kanbanSectionRestore = document.getElementById('section-kanban');
     if (kanbanSectionRestore) kanbanSectionRestore.style.display = (currentTab === 'Projects') ? '' : 'none';
+    const calOptsRestore2 = document.getElementById('section-cal-options');
+    if (calOptsRestore2) calOptsRestore2.style.display = (currentTab === 'Calendar' && currentView === 'Month') ? '' : 'none';
     const indSectionRestore = document.getElementById('section-indicators');
     if (indSectionRestore) indSectionRestore.style.display = (currentTab === 'Indicators') ? '' : 'none';
     const filtersSectionRestore = document.getElementById('section-filters');
@@ -649,8 +651,8 @@ function displayChits() {
   if (currentTab !== 'Email') {
     var _showEmailRecvCb = document.getElementById('show-email-received');
     var _showEmailSentCb = document.getElementById('show-email-sent');
-    var showRecv = _showEmailRecvCb ? _showEmailRecvCb.checked : true;
-    var showSent = _showEmailSentCb ? _showEmailSentCb.checked : true;
+    var showRecv = _showEmailRecvCb ? _showEmailRecvCb.checked : false;
+    var showSent = _showEmailSentCb ? _showEmailSentCb.checked : false;
     if (!showRecv || !showSent) {
       filteredChits = filteredChits.filter(function(c) {
         if (!(c.email_message_id || c.email_status)) return true;
@@ -940,6 +942,10 @@ document.addEventListener("DOMContentLoaded", function () {
   if (yearWeekContainer) yearWeekContainer.style.display = (currentTab === 'Calendar') ? '' : 'none';
   const kanbanSection = document.getElementById('section-kanban');
   if (kanbanSection) kanbanSection.style.display = (currentTab === 'Projects') ? '' : 'none';
+  const calOptsRestore = document.getElementById('section-cal-options');
+  if (calOptsRestore) calOptsRestore.style.display = (currentTab === 'Calendar' && currentView === 'Month') ? '' : 'none';
+  // Initialize the month mode pill toggle
+  if (typeof _initMonthModePill === 'function') _initMonthModePill();
   const alarmsSection = document.getElementById('section-alarms-mode');
   if (alarmsSection) alarmsSection.style.display = (currentTab === 'Alarms') ? '' : 'none';
   const tasksSection = document.getElementById('section-tasks-mode');

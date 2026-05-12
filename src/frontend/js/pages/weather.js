@@ -127,7 +127,7 @@ function _initWeatherSidebarShared() {
   if (orderSection) orderSection.style.display = 'none';
 
   // Hide tab-specific sections
-  var tabSections = ['section-kanban', 'section-alarms-mode', 'section-tasks-mode', 'section-indicators'];
+  var tabSections = ['section-kanban', 'section-alarms-mode', 'section-tasks-mode', 'section-indicators', 'section-cal-options'];
   tabSections.forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.style.display = 'none';

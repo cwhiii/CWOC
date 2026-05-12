@@ -1,0 +1,1 @@
+Collapsed zone headers now maintain readable text contrast when a chit has an extreme background color. Replaced opacity-based collapse indicator with filter-based dimming, and added dynamic contrast coloring (via contrastColorForBg) to zone titles, icons, and persist buttons when collapsed over a colored background.

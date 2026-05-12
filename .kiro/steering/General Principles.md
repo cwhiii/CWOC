@@ -71,6 +71,40 @@ DO NOT INSTALL THINGS!
 - `CwocSaveSystem` (in `shared-page.js`) provides the standard save/cancel button pattern — use it for any page with editable state.
 - External CDN libraries (Flatpickr, Font Awesome 6, marked.js) are loaded via `<link>` / `<script>` tags in HTML. Do not add npm dependencies.
 - **NEVER use browser system prompts/alerts (`prompt()`, `alert()`, `confirm()`).** Always use a custom styled modal following the parchment theme. Use the existing modal overlay pattern (fixed overlay + centered modal with `#fffaf0` background, `#6b4e31` border, Lora font). Input modals should have a text field, Cancel and Confirm buttons styled as `.zone-button` or `.action-button`.
+- **Toggles:** When adding a toggle (binary choice between two options), always use the standard CWOC 2-value pill toggle. Never use a switch/slider or checkbox for a binary mode toggle unless explicitly requested.
+
+  **HTML structure:**
+  ```html
+  <label>Month</label>
+  <div class="cwoc-2val-toggle" id="my-pill">
+      <input type="hidden" id="my-toggle" value="compress" />
+      <span data-val="compress" class="active">Compress</span>
+      <span data-val="scroll">Scroll</span>
+  </div>
+  ```
+
+  **JS wiring (click anywhere on pill to switch):**
+  ```js
+  var pill = document.getElementById('my-pill');
+  pill.addEventListener('click', function() {
+      var hidden = document.getElementById('my-toggle');
+      var spans = pill.querySelectorAll('span[data-val]');
+      var current = hidden.value;
+      var next = (spans[0].dataset.val === current) ? spans[1].dataset.val : spans[0].dataset.val;
+      hidden.value = next;
+      // Update active class
+      spans.forEach(function(s) { s.classList.toggle('active', s.dataset.val === next); });
+      // Do something with the new value
+  });
+  ```
+
+  **Key rules:**
+  - CSS lives in `shared-editor.css` (class `cwoc-2val-toggle`). Any page using this toggle MUST load `shared-editor.css`.
+  - The dashboard (`index.html`) loads it explicitly — verify it's there if the toggle renders unstyled.
+  - Do NOT put `onclick` attributes on the `<span>` elements. Use a single click listener on the pill container.
+  - The hidden `<input>` holds the current value — read it to get state, set it to change state.
+  - The `class="active"` on a span controls which side appears highlighted (brown background, light text).
+  - Reference implementation: Sex toggle in `settings.html` + `settings.js` (`_initPillToggle`).
 
 ## Incremental Template & Custom Element Adoption
 

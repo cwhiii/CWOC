@@ -245,6 +245,16 @@ button:disabled:not(.status-icon-button):not(.sidebar-close-btn):not(.mobile-vie
     opacity: 0.85;
 }
 
+.zone-container.collapsed .zone-header .zone-title,
+.zone-container.collapsed .zone-header .zone-toggle-icon {
+    opacity: calc(1 / 0.55);
+}
+
+.zone-container.collapsed:hover .zone-header .zone-title,
+.zone-container.collapsed:hover .zone-header .zone-toggle-icon {
+    opacity: calc(1 / 0.85);
+}
+
 .zone-header {
     display: flex;
     justify-content: space-between;
