@@ -214,6 +214,18 @@
     background-color: var(--header-bg);
 }
 
+/* Month day-of-week headers (inside the grid, first row) */
+.month-day-header {
+    text-align: center;
+    font-weight: bold;
+    padding: 6px 5px;
+    background-color: var(--header-bg);
+    border: 1px solid #6b4e31;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+}
+
 .month-grid {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
@@ -257,6 +269,7 @@
 }
 
 .month-compress .month-grid {
+    grid-template-rows: auto;
     grid-auto-rows: 1fr;
     height: 0;
     min-height: 0;

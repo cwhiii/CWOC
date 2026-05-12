@@ -593,23 +593,19 @@ function displayMonthView(chitsToDisplay) {
 
   // Month/year now shown in sidebar — no header bar needed
 
-  const dayHeaders = document.createElement("div");
-  dayHeaders.className = "day-headers";
+  const monthGrid = document.createElement("div");
+  monthGrid.className = "month-grid";
+
+  // Day-of-week headers as the first row of the grid (always aligned with columns)
   const allDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const daysOfWeek = [];
   for (let i = 0; i < 7; i++) daysOfWeek.push(allDays[(_weekStartDay + i) % 7]);
-  const dayHeaderFrag = document.createDocumentFragment();
   daysOfWeek.forEach((day) => {
     const dayHeader = document.createElement("div");
-    dayHeader.className = "day-header";
+    dayHeader.className = "month-day-header";
     dayHeader.textContent = day;
-    dayHeaderFrag.appendChild(dayHeader);
+    monthGrid.appendChild(dayHeader);
   });
-  dayHeaders.appendChild(dayHeaderFrag);
-  monthView.appendChild(dayHeaders);
-
-  const monthGrid = document.createElement("div");
-  monthGrid.className = "month-grid";
 
   // Calculate total rows for compress mode height distribution
   const totalCells = firstDay + daysInMonth;
