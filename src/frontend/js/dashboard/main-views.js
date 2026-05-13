@@ -739,9 +739,17 @@ function filterChits(tab) {
   document
     .querySelectorAll(".tab")
     .forEach((t) => t.classList.remove("active"));
-  document
-    .querySelector(`.tab[onclick="filterChits('${tab}')"]`)
-    ?.classList.add("active");
+  if (tab === 'Omni') {
+    _omniViewActive = true;
+  } else {
+    _omniViewActive = false;
+    _omniFiltersApplied = false;
+    if (typeof _showOmniLockedIndicator === 'function') _showOmniLockedIndicator(false);
+    if (typeof _hideOmniLockBtn === 'function') _hideOmniLockBtn();
+    document
+      .querySelector(`.tab[onclick="filterChits('${tab}')"]`)
+      ?.classList.add("active");
+  }
 
   // Show/hide period selector and date nav based on Calendar tab
   const periodSection = document.getElementById('section-period');

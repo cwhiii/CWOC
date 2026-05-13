@@ -24,6 +24,7 @@
                         <em class="index-label">Views</em>
                         <ul>
                             <li><a href="#views">Views</a></li>
+                            <li><a href="#omni-view">Omni View</a></li>
                             <li><a href="#calendar">Calendar</a></li>
                             <li><a href="#notes-view">Notes</a></li>
                             <li><a href="#habits-view">Habits</a></li>
@@ -71,7 +72,7 @@
             </div>
             <!-- ═══ VIEWS ═══════════════════════════════════════════════════════ -->
             <h3 id="views">Views</h3>
-            <p>The top bar switches between six views: Calendar, Checklists, Alerts, Projects, Tasks, Notes, plus a Global Search view (magnifying glass icon). The <strong>sidebar</strong> (toggle by clicking the logo or the ☰ hamburger on mobile) provides date navigation, sorting, period selection, and filters.</p>
+            <p>The top bar switches between six views: Calendar, Checklists, Alerts, Projects, Tasks, Notes, plus a Global Search view (magnifying glass icon). The <strong>Omni View</strong> (click "Omni" in the header or press <kbd>O</kbd>) provides a command-center dashboard fusing today's itinerary, pinned chits, and unread email. The <strong>sidebar</strong> (toggle by clicking the logo or the ☰ hamburger on mobile) provides date navigation, sorting, period selection, and filters.</p>
             <h4>Sidebar Layout</h4>
             <p>The sidebar is organized top-to-bottom:</p>
             <ul>
@@ -84,6 +85,53 @@
                 <li><strong>Clock, Weather, Reference, Help</strong> — Four compact buttons at the bottom. Clock opens a modal. Weather navigates to the full page (Shift+click for quick modal). Reference and Help open their respective overlays/pages</li>
             </ul>
             <p>The Alerts and Projects views have a <strong>View Mode</strong> toggle in the sidebar. Projects switches between List and Kanban; Alerts switches between Chits (showing chits that have alerts) and Independent (a 3-column board for quick alarms, timers, and stopwatches not tied to any chit).</p>
+            <h3 id="omni-view">Omni View</h3>
+            <p>The Omni View is a command-center dashboard that fuses today's itinerary, pinned chits, and unread email into a single actionable view. It shows what's relevant <em>right now</em> without switching between tabs.</p>
+            <h4>Activating</h4>
+            <ul>
+                <li><strong>Click "Omni"</strong> — The word "Omni" in the header (<em>Omni Chits</em>) is a clickable button. Click it to switch to the Omni View</li>
+                <li><kbd>O</kbd> — Press the <kbd>O</kbd> hotkey from the dashboard to activate the Omni View</li>
+                <li><strong>Exit</strong> — Click any C CAPTN tab to leave the Omni View and return to that tab's content</li>
+            </ul>
+            <h4>Sections</h4>
+            <p>The Omni View displays up to 8 configurable sections in a two-column layout (single column on mobile):</p>
+            <ul>
+                <li><strong>HST Bar</strong> — A horizontal strip timeline of today. Shows a progress fill up to the current time, with chit icons at their scheduled positions and weather forecast icons at their predicted hours. Click a chit icon for quick-edit; click a weather icon for the weather modal</li>
+                <li><strong>Weather Bar</strong> — Today's weather summary for your default location</li>
+                <li><strong>⏰ Chrono Anchored</strong> — Timed events happening today, with time-until badges (e.g., "in 45 min"). Renders identically to the itinerary view</li>
+                <li><strong>🔜 On Deck</strong> — All-day events today, untimed tasks due today, and habits due today. Habits show a 🔥 streak counter</li>
+                <li><strong>🗓️ Soon</strong> — Items due this week (not today)</li>
+                <li><strong>📧 Email</strong> — Unread emails from Omni-enabled bundles, 3 at a time with pagination. Email cards support all standard actions (swipe, mark read, reply)</li>
+                <li><strong>📝 Pinned Notes</strong> — Pinned chits that are notes, rendered as compact cards</li>
+                <li><strong>☑️ Pinned Checklists</strong> — Pinned chits with checklist items, with inline check/uncheck</li>
+            </ul>
+            <p>Empty sections are automatically hidden. Each chit appears in exactly one section (deduplication by priority: timed → due today → due this week → pinned).</p>
+            <h4>Layout Configuration</h4>
+            <p>Configure the Omni View layout in <strong>Settings → 🔮 Omni View</strong>:</p>
+            <ul>
+                <li><strong>Drag to reorder</strong> — Drag section cards to change their display order</li>
+                <li><strong>Width toggle</strong> — Set each section to half-width (one column) or full-width (spans both columns)</li>
+                <li><strong>Visibility toggle</strong> — Show or hide individual sections</li>
+            </ul>
+            <h4>Filter Locking</h4>
+            <p>The Omni View starts with a base filter (today's itinerary + pinned + unread Omni-enabled email) that cannot be removed. Standard sidebar filters (status, tags, priority, people, text) narrow results further on top of this base.</p>
+            <ul>
+                <li><strong>🔒 Lock Filters</strong> — When the Omni View is active, a 🔒 button appears in the sidebar filter section. Click it to save the current filters as Omni View defaults. Next time you open the Omni View, these filters are pre-applied</li>
+                <li><strong>Clear Defaults</strong> — Remove locked filter defaults from Settings → Omni View</li>
+            </ul>
+            <h4>Bundle Omni View Toggles</h4>
+            <p>Control which email bundles appear in the Omni View email section:</p>
+            <ul>
+                <li><strong>Bundle editor modal</strong> — Each bundle has an "Include in Omni View" checkbox in its create/edit modal</li>
+                <li><strong>Settings → Omni View</strong> — Lists all bundles with Omni View checkboxes for quick toggling</li>
+            </ul>
+            <h4>Hotkey Changes</h4>
+            <p>The Omni View introduced the following hotkey reassignments:</p>
+            <ul>
+                <li><kbd>O</kbd> — Omni View (previously Sort/Order)</li>
+                <li><kbd>S</kbd> — Sort/Order submenu (previously Settings)</li>
+                <li><kbd>F9</kbd> — Settings (previously unused)</li>
+            </ul>
             <h3 id="calendar">Calendar View</h3>
             <p>Periods: Itinerary, Day, Week, Work Hours, X Days, Month, Year. Switch with the Period dropdown or <kbd>.</kbd> hotkey.</p>
             <ul>
@@ -594,13 +642,14 @@
             <h4>Tab Switching</h4>
             <ul>
                 <li><kbd>C</kbd> Calendar · <kbd>H</kbd> Checklists · <kbd>A</kbd> Alerts · <kbd>P</kbd> Projects · <kbd>T</kbd> Tasks · <kbd>N</kbd> Notes</li>
+                <li><kbd>O</kbd> — Omni View</li>
                 <li><kbd>G</kbd> — Global Search</li>
             </ul>
             <h4>Actions</h4>
             <ul>
                 <li><kbd>K</kbd> — Create chit (middle-click → new tab)</li>
                 <li><kbd>W</kbd> — Weather page (full forecast) · <kbd>Shift+W</kbd> — Weather modal (default location forecast)</li>
-                <li><kbd>L</kbd> — Clock modal · <kbd>S</kbd> — Settings · <kbd>V</kbd> — Navigate menu</li>
+                <li><kbd>L</kbd> — Clock modal · <kbd>F9</kbd> — Settings · <kbd>V</kbd> — Navigate menu</li>
                 <li><kbd>R</kbd> — Reference overlay · <kbd>Shift+R</kbd> — Help page</li>
                 <li><kbd>!</kbd> — Quick Alert menu (add Alarm, Timer, or Stopwatch). On the dashboard, creates an independent alert and shows Done/View buttons. In the editor, adds to the current chit and expands the alerts zone. On other pages, creates an independent alert</li>
                 <li><kbd>`</kbd> — Toggle sidebar visibility (setting is retained)</li>
@@ -613,7 +662,7 @@
                 <li><kbd>.</kbd> — Period: <kbd>I</kbd>tinerary <kbd>D</kbd>ay <kbd>W</kbd>eek <kbd>K</kbd> Work <kbd>X</kbd> X-Day <kbd>M</kbd>onth <kbd>Y</kbd>ear</li>
                 <li><kbd>M</kbd> — Mode (per tab): Calendar periods · Tasks: <kbd>T</kbd>asks <kbd>H</kbd>abits <kbd>A</kbd>ssigned · Alarms: <kbd>L</kbd>ist <kbd>I</kbd>ndependent · Projects: <kbd>L</kbd>ist <kbd>K</kbd>anban</li>
                 <li><kbd>F</kbd> — Filter: <kbd>S</kbd>tatus <kbd>T</kbd>ags <kbd>P</kbd>riority <kbd>E</kbd> People <kbd>A</kbd> Archived <kbd>I</kbd> Pinned <kbd>D</kbd> Filter Text</li>
-                <li><kbd>O</kbd> — Order: <kbd>T</kbd>itle <kbd>S</kbd>tart <kbd>D</kbd>ue <kbd>U</kbd>pdated <kbd>C</kbd>reated <kbd>X</kbd> Status <kbd>M</kbd>anual <kbd>R</kbd>andom <kbd>G</kbd> Upcoming · <kbd>↑↓</kbd> Asc/Desc</li>
+                <li><kbd>S</kbd> — Sort: <kbd>T</kbd>itle <kbd>S</kbd>tart <kbd>D</kbd>ue <kbd>U</kbd>pdated <kbd>C</kbd>reated <kbd>X</kbd> Status <kbd>M</kbd>anual <kbd>R</kbd>andom <kbd>G</kbd> Upcoming · <kbd>↑↓</kbd> Asc/Desc</li>
             </ul>
             <h4>Editor Hotkeys</h4>
             <ul>

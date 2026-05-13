@@ -2050,6 +2050,10 @@ function _executeWeatherFlash() {
   document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
   var calTab = document.querySelector(".tab[onclick=\"filterChits('Calendar')\"]");
   if (calTab) calTab.classList.add('active');
+  _omniViewActive = false;
+  _omniFiltersApplied = false;
+  if (typeof _showOmniLockedIndicator === 'function') _showOmniLockedIndicator(false);
+  if (typeof _hideOmniLockBtn === 'function') _hideOmniLockBtn();
   var sel = document.getElementById('period-select');
   if (sel) sel.value = 'Day';
   var orderSection = document.getElementById('section-order');

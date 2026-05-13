@@ -357,6 +357,332 @@ function handleDropOnInactive(e) {
   setSaveButtonUnsaved();
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   Omni View Layout Configurator
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+var _omniLayoutAreas = [
+  { id: 'hst', label: '📊 HST Bar', width: 'full', visible: true },
+  { id: 'weather', label: '🌤️ Weather Bar', width: 'full', visible: true },
+  { id: 'chrono', label: '⏰ Chrono Anchored', width: 'half', visible: true },
+  { id: 'ondeck', label: '🔜 On Deck', width: 'half', visible: true },
+  { id: 'soon', label: '🗓️ Soon', width: 'half', visible: true },
+  { id: 'email', label: '📧 Unread Email', width: 'half', visible: true },
+  { id: 'pinned_notes', label: '📝 Pinned Notes', width: 'half', visible: true },
+  { id: 'pinned_checklists', label: '☑️ Pinned Checklists', width: 'half', visible: true }
+];
+
+var _omniLayoutState = null;
+
+function _getDefaultOmniLayout() {
+  return _omniLayoutAreas.map(function(area, i) {
+    return { id: area.id, label: area.label, width: area.width, visible: area.visible, position: i };
+  });
+}
+
+function _renderOmniLayoutGrid() {
+  var container = document.getElementById('omni-layout-grid');
+  if (!container) return;
+  container.innerHTML = '';
+
+  if (!_omniLayoutState) {
+    _omniLayoutState = _getDefaultOmniLayout();
+  }
+
+  // Sort by position
+  var sorted = _omniLayoutState.slice().sort(function(a, b) { return a.position - b.position; });
+
+  sorted.forEach(function(area) {
+    var card = document.createElement('div');
+    card.className = 'omni-layout-card' + (area.visible ? '' : ' hidden-area');
+    card.draggable = true;
+    card.dataset.areaId = area.id;
+
+    var handle = document.createElement('span');
+    handle.className = 'omni-drag-handle';
+    handle.textContent = '☰';
+
+    var label = document.createElement('span');
+    label.className = 'omni-card-label';
+    label.textContent = area.label;
+
+    var controls = document.createElement('span');
+    controls.className = 'omni-card-controls';
+
+    // Width toggle buttons
+    var halfBtn = document.createElement('button');
+    halfBtn.textContent = '½';
+    halfBtn.title = 'Half width';
+    halfBtn.className = area.width === 'half' ? 'active-width' : '';
+    halfBtn.onclick = function(e) {
+      e.stopPropagation();
+      area.width = 'half';
+      _renderOmniLayoutGrid();
+      setSaveButtonUnsaved();
+    };
+
+    var fullBtn = document.createElement('button');
+    fullBtn.textContent = 'Full';
+    fullBtn.title = 'Full width';
+    fullBtn.className = area.width === 'full' ? 'active-width' : '';
+    fullBtn.onclick = function(e) {
+      e.stopPropagation();
+      area.width = 'full';
+      _renderOmniLayoutGrid();
+      setSaveButtonUnsaved();
+    };
+
+    // Visibility toggle
+    var visBtn = document.createElement('button');
+    visBtn.className = 'omni-vis-btn' + (area.visible ? '' : ' hidden-state');
+    visBtn.textContent = area.visible ? '👁️' : '🚫';
+    visBtn.title = area.visible ? 'Visible (click to hide)' : 'Hidden (click to show)';
+    visBtn.onclick = function(e) {
+      e.stopPropagation();
+      area.visible = !area.visible;
+      _renderOmniLayoutGrid();
+      setSaveButtonUnsaved();
+    };
+
+    controls.appendChild(halfBtn);
+    controls.appendChild(fullBtn);
+    controls.appendChild(visBtn);
+
+    card.appendChild(handle);
+    card.appendChild(label);
+    card.appendChild(controls);
+    container.appendChild(card);
+  });
+
+  _setupOmniDragListeners();
+}
+
+function _setupOmniDragListeners() {
+  var container = document.getElementById('omni-layout-grid');
+  if (!container) return;
+
+  var cards = container.querySelectorAll('.omni-layout-card');
+  var draggedCard = null;
+
+  cards.forEach(function(card) {
+    card.addEventListener('dragstart', function(e) {
+      draggedCard = card;
+      card.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', card.dataset.areaId);
+    });
+
+    card.addEventListener('dragend', function() {
+      card.classList.remove('dragging');
+      draggedCard = null;
+      // Remove any drag-over indicators
+      container.querySelectorAll('.omni-layout-card').forEach(function(c) {
+        c.style.borderTop = '';
+        c.style.borderBottom = '';
+      });
+    });
+
+    card.addEventListener('dragover', function(e) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      if (!draggedCard || draggedCard === card) return;
+
+      // Visual indicator
+      var rect = card.getBoundingClientRect();
+      var midY = rect.top + rect.height / 2;
+      container.querySelectorAll('.omni-layout-card').forEach(function(c) {
+        c.style.borderTop = '';
+        c.style.borderBottom = '';
+      });
+      if (e.clientY < midY) {
+        card.style.borderTop = '2px solid #8b5a2b';
+      } else {
+        card.style.borderBottom = '2px solid #8b5a2b';
+      }
+    });
+
+    card.addEventListener('drop', function(e) {
+      e.preventDefault();
+      if (!draggedCard || draggedCard === card) return;
+
+      var draggedId = draggedCard.dataset.areaId;
+      var targetId = card.dataset.areaId;
+
+      // Determine insertion position
+      var rect = card.getBoundingClientRect();
+      var midY = rect.top + rect.height / 2;
+      var insertBefore = e.clientY < midY;
+
+      // Reorder the state
+      var sorted = _omniLayoutState.slice().sort(function(a, b) { return a.position - b.position; });
+      var draggedIdx = sorted.findIndex(function(a) { return a.id === draggedId; });
+      var targetIdx = sorted.findIndex(function(a) { return a.id === targetId; });
+
+      if (draggedIdx === -1 || targetIdx === -1) return;
+
+      // Remove dragged item
+      var draggedItem = sorted.splice(draggedIdx, 1)[0];
+
+      // Find new target index after removal
+      var newTargetIdx = sorted.findIndex(function(a) { return a.id === targetId; });
+      if (!insertBefore) newTargetIdx++;
+
+      sorted.splice(newTargetIdx, 0, draggedItem);
+
+      // Update positions
+      sorted.forEach(function(area, i) { area.position = i; });
+
+      _renderOmniLayoutGrid();
+      setSaveButtonUnsaved();
+    });
+  });
+
+  // Touch support — reuse shared-touch pattern
+  if (typeof enableTouchDrag === 'function') {
+    cards.forEach(function(card) {
+      enableTouchDrag(card);
+    });
+  }
+}
+
+function _loadOmniLayout(settings) {
+  if (settings.omni_layout) {
+    try {
+      var saved = typeof settings.omni_layout === 'string' ? JSON.parse(settings.omni_layout) : settings.omni_layout;
+      if (Array.isArray(saved) && saved.length > 0) {
+        // Merge saved state with defaults (in case new areas were added)
+        var defaults = _getDefaultOmniLayout();
+        _omniLayoutState = defaults.map(function(def) {
+          var found = saved.find(function(s) { return s.id === def.id; });
+          if (found) {
+            return { id: def.id, label: def.label, width: found.width || def.width, visible: found.visible !== false, position: found.position != null ? found.position : def.position };
+          }
+          return def;
+        });
+        return;
+      }
+    } catch (e) { /* use defaults */ }
+  }
+  _omniLayoutState = _getDefaultOmniLayout();
+}
+
+function _collectOmniLayout() {
+  if (!_omniLayoutState) return JSON.stringify(_getDefaultOmniLayout());
+  return JSON.stringify(_omniLayoutState.map(function(area) {
+    return { id: area.id, width: area.width, visible: area.visible, position: area.position };
+  }));
+}
+
+/* ── Bundle Omni View Toggles ── */
+
+var _omniBundles = [];
+
+async function _loadOmniBundleToggles() {
+  var container = document.getElementById('omni-bundle-toggles');
+  if (!container) return;
+
+  try {
+    var resp = await fetch('/api/bundles');
+    if (!resp.ok) throw new Error('Failed to fetch bundles');
+    var bundles = await resp.json();
+    _omniBundles = bundles;
+
+    if (!bundles || bundles.length === 0) {
+      container.innerHTML = '<p class="setting-hint" style="font-style:italic;">No email bundles configured.</p>';
+      return;
+    }
+
+    container.innerHTML = '';
+    bundles.forEach(function(bundle) {
+      var label = document.createElement('label');
+      label.className = 'cwoc-checkbox-label';
+      var cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.className = 'omni-bundle-cb';
+      cb.dataset.bundleId = bundle.id;
+      cb.checked = !!bundle.omni_view;
+      cb.onchange = function() { setSaveButtonUnsaved(); };
+      label.appendChild(cb);
+      label.appendChild(document.createTextNode(' ' + (bundle.name || 'Unnamed Bundle')));
+      container.appendChild(label);
+    });
+  } catch (e) {
+    container.innerHTML = '<p class="setting-hint" style="color:#a0522d;">Failed to load bundles.</p>';
+  }
+}
+
+async function _saveOmniBundleToggles() {
+  var checkboxes = document.querySelectorAll('.omni-bundle-cb');
+  for (var i = 0; i < checkboxes.length; i++) {
+    var cb = checkboxes[i];
+    var bundleId = cb.dataset.bundleId;
+    var omniView = cb.checked ? 1 : 0;
+
+    // Find the bundle to check if value changed
+    var bundle = _omniBundles.find(function(b) { return String(b.id) === String(bundleId); });
+    if (bundle && (!!bundle.omni_view) !== (!!omniView)) {
+      try {
+        await fetch('/api/bundles/' + bundleId, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ omni_view: omniView })
+        });
+        bundle.omni_view = omniView;
+      } catch (e) {
+        console.error('[OmniSettings] Failed to update bundle omni_view:', e);
+      }
+    }
+  }
+}
+
+/* ── Locked Filter Defaults ── */
+
+function _renderOmniLockedFilters(settings) {
+  var display = document.getElementById('omni-locked-filters-display');
+  if (!display) return;
+
+  var filters = null;
+  if (settings.omni_locked_filters) {
+    try {
+      filters = typeof settings.omni_locked_filters === 'string' ? JSON.parse(settings.omni_locked_filters) : settings.omni_locked_filters;
+    } catch (e) { filters = null; }
+  }
+
+  if (!filters || Object.keys(filters).length === 0) {
+    display.textContent = 'No locked filters set.';
+    display.style.fontStyle = 'italic';
+    return;
+  }
+
+  var parts = [];
+  if (filters.statuses && filters.statuses.length) parts.push('Status: ' + filters.statuses.join(', '));
+  if (filters.tags && filters.tags.length) parts.push('Tags: ' + filters.tags.join(', '));
+  if (filters.priorities && filters.priorities.length) parts.push('Priority: ' + filters.priorities.join(', '));
+  if (filters.people && filters.people.length) parts.push('People: ' + filters.people.join(', '));
+  if (filters.text) parts.push('Text: "' + filters.text + '"');
+
+  if (parts.length === 0) {
+    display.textContent = 'No locked filters set.';
+    display.style.fontStyle = 'italic';
+  } else {
+    display.textContent = parts.join('; ');
+    display.style.fontStyle = 'normal';
+  }
+}
+
+function _clearOmniLockedFilters() {
+  var display = document.getElementById('omni-locked-filters-display');
+  if (display) {
+    display.textContent = 'No locked filters set.';
+    display.style.fontStyle = 'italic';
+  }
+  // Mark as cleared — will be saved as empty on next save
+  _omniLockedFiltersCleared = true;
+  setSaveButtonUnsaved();
+}
+
+var _omniLockedFiltersCleared = false;
+
 /** Toggle visibility of combined vs individual alert rows based on Combine Alerts checkbox */
 function _toggleCombineAlerts() {
   var cb = document.getElementById('combine-alerts-toggle');
@@ -1415,6 +1741,13 @@ class SettingsManager {
         });
       }
     }
+
+    // ── Omni View settings ──
+    _loadOmniLayout(this.settings);
+    _renderOmniLayoutGrid();
+    _loadOmniBundleToggles();
+    _renderOmniLockedFilters(this.settings);
+    _omniLockedFiltersCleared = false;
   }
 
   gatherSettings() {
@@ -1507,6 +1840,8 @@ class SettingsManager {
       show_map_thumbnails: (document.getElementById('show-map-thumbnails') && document.getElementById('show-map-thumbnails').checked) ? '1' : '0',
       view_order: _collectViewOrder(),
       session_lifetime: (document.getElementById('session-lifetime-select') || {}).value || '24',
+      omni_layout: _collectOmniLayout(),
+      omni_locked_filters: _omniLockedFiltersCleared ? '' : undefined,
     };
   }
 
@@ -1514,7 +1849,14 @@ class SettingsManager {
     document.getElementById("loader").style.display = "block";
     try {
       const settingsToSave = this.gatherSettings();
+      // Remove undefined values (e.g., omni_locked_filters when not cleared)
+      Object.keys(settingsToSave).forEach(function(k) {
+        if (settingsToSave[k] === undefined) delete settingsToSave[k];
+      });
       await SettingsService.saveAll(settingsToSave);
+
+      // Save bundle omni_view flags
+      await _saveOmniBundleToggles();
 
       var loginMsgInput = document.getElementById('login-message-input');
       var instanceNameInput = document.getElementById('instance-name-input');

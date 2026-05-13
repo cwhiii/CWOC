@@ -28,6 +28,7 @@
         <link rel="stylesheet" href="/frontend/css/dashboard/styles-hotkeys.css" />
         <link rel="stylesheet" href="/frontend/css/dashboard/styles-modals.css" />
         <link rel="stylesheet" href="/frontend/css/dashboard/styles-responsive.css" />
+        <link rel="stylesheet" href="/frontend/css/dashboard/styles-omni.css" />
         <link rel="stylesheet" href="/frontend/css/dashboard/styles.css" />
         <link rel="stylesheet" href="/frontend/css/dashboard/styles-email-bundles.css" />
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" />
@@ -151,11 +152,12 @@
                                 <div class="ref-item"><span class="ref-key">E</span> Email</div>
                                 <div class="ref-item"><span class="ref-key">I</span> Indicators</div>
                                 <div class="ref-item"><span class="ref-key">G</span> Global Search</div>
+                                <div class="ref-item"><span class="ref-key">O</span> Omni View</div>
                             </div>
                             <div class="ref-tree-group">
                                 <div class="ref-tree-label">Actions</div>
                                 <div class="ref-item"><span class="ref-key">K</span> Create Chit</div>
-                                <div class="ref-item"><span class="ref-key">S</span> <a href="/frontend/html/settings.html" class="ref-link">Settings</a></div>
+                                <div class="ref-item"><span class="ref-key">F9</span> <a href="/frontend/html/settings.html" class="ref-link">Settings</a></div>
                                 <div class="ref-item"><span class="ref-key">W</span> <a href="/frontend/html/weather.html" class="ref-link">Weather Page</a></div>
                                 <div class="ref-item"><span class="ref-key">Shift+W</span> Weather Modal</div>
                                 <div class="ref-item"><span class="ref-key">M</span> <a href="/maps" class="ref-link">Map Page</a></div>
@@ -245,7 +247,7 @@
                                 </div>
 
                                 <div class="ref-submenu">
-                                    <div class="ref-tree-root"><span class="ref-key">O</span> Order ▸</div>
+                                    <div class="ref-tree-root"><span class="ref-key">S</span> Sort ▸</div>
                                     <div class="ref-tree-children">
                                         <div class="ref-item"><span class="ref-key">T</span> Title</div>
                                         <div class="ref-item"><span class="ref-key">S</span> Start</div>
@@ -312,7 +314,7 @@
                     class="logo"
                     onclick="toggleSidebar()"
                 />
-                <h1 title="C.W.'s Omni Chits">Omni Chits</h1>
+                <h1 title="C.W.'s Omni Chits"><span id="omni-trigger" class="omni-header-btn">Omni</span> Chits</h1>
 
                 <div class="tabs" id="cwoc-tabs">
                     <div class="tab" onclick="filterChits('Calendar')" title="Calendar">
@@ -374,6 +376,12 @@
                         <div class="bundle-color-picker" id="bundleColorPicker"></div>
                         <input type="hidden" id="bundleColorInput" value="">
                     </div>
+                    <div class="bundle-modal-field bundle-modal-checkbox-row">
+                        <label for="bundleOmniViewCheck" class="bundle-omni-check-label">
+                            <input type="checkbox" id="bundleOmniViewCheck" />
+                            Include in Omni View
+                        </label>
+                    </div>
                     <div class="bundle-modal-actions">
                         <button class="zone-button" id="bundleCancelBtn">Cancel</button>
                         <button class="zone-button bundle-define-rule-btn" id="bundleDefineRuleBtn">Define Rule</button>
@@ -420,6 +428,7 @@
         <script src="/frontend/js/dashboard/main-alerts.js"></script>
         <script src="/frontend/js/dashboard/main-search.js"></script>
         <script src="/frontend/js/dashboard/main-modals.js"></script>
+        <script src="/frontend/js/dashboard/main-omni.js"></script>
         <script src="/frontend/js/dashboard/main-init.js"></script>
         <script src="/frontend/js/dashboard/main-email.js"></script>
         <script src="/frontend/js/dashboard/main-email-bundles.js"></script>

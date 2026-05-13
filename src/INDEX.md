@@ -38,7 +38,7 @@ Package marker. No public exports.
 | `serve_icon_192()` | `GET /static/cwoc-icon-192.png` — Serve 192×192 PWA icon from `src/pwa/` |
 | `serve_icon_512()` | `GET /static/cwoc-icon-512.png` — Serve 512×512 PWA icon from `src/pwa/` |
 
-Registers all route modules (including `auth_router`, `users_router`, `sharing_router`, `notifications_router`, `network_access_router`, `push_router`, `ntfy_router`, `email_router`, `attachments_router`, `rules_router`, `bundles_router`, `custom_objects_router`, `custom_zones_router`, and `ha_router`), runs all migrations (including `migrate_add_multi_user()`, `migrate_add_sharing()`, `migrate_add_kiosk_users()`, `migrate_add_network_access()`, `migrate_add_notifications()`, `migrate_habits_overhaul()`, `migrate_habits_phase2()`, `migrate_add_push_subscriptions()`, `migrate_add_vapid_keys()`, `migrate_add_map_settings()`, `migrate_add_contact_dates()`, `migrate_add_email_fields()`, `migrate_add_attachments()`, `migrate_add_email_body_html()`, `migrate_add_fts5()`, `migrate_add_contact_vault()`, `migrate_create_rules_tables()`, `migrate_create_ha_config()`, `migrate_create_bundles_tables()`, `migrate_add_nest_thread_id()`, `migrate_create_custom_objects_tables()`, and `migrate_create_custom_zones_table()`) and `init_db()` at import time, mounts `StaticFiles` for frontend, static, data, and PWA directories.
+Registers all route modules (including `auth_router`, `users_router`, `sharing_router`, `notifications_router`, `network_access_router`, `push_router`, `ntfy_router`, `email_router`, `attachments_router`, `rules_router`, `bundles_router`, `custom_objects_router`, `custom_zones_router`, and `ha_router`), runs all migrations (including `migrate_add_multi_user()`, `migrate_add_sharing()`, `migrate_add_kiosk_users()`, `migrate_add_network_access()`, `migrate_add_notifications()`, `migrate_habits_overhaul()`, `migrate_habits_phase2()`, `migrate_add_push_subscriptions()`, `migrate_add_vapid_keys()`, `migrate_add_map_settings()`, `migrate_add_contact_dates()`, `migrate_add_email_fields()`, `migrate_add_attachments()`, `migrate_add_email_body_html()`, `migrate_add_fts5()`, `migrate_add_contact_vault()`, `migrate_create_rules_tables()`, `migrate_create_ha_config()`, `migrate_create_bundles_tables()`, `migrate_add_nest_thread_id()`, `migrate_create_custom_objects_tables()`, and `migrate_create_custom_zones_table()`, `migrate_bundles_omni_view()`, and `migrate_omni_view_settings()`) and `init_db()` at import time, mounts `StaticFiles` for frontend, static, data, and PWA directories.
 
 ### 1.3 `src/backend/models.py` — Pydantic Models
 
@@ -47,7 +47,7 @@ Registers all route modules (including `auth_router`, `users_router`, `sharing_r
 | `ShareEntry` | Share entry with `user_id: str` and `role: str` (manager or viewer) |
 | `SharedTagEntry` | Tag-level share entry with `tag: str` and `shares: List[ShareEntry]` |
 | `Tag` | Tag with name, color, fontColor, favorite |
-| `Settings` | User settings — time format, tags, colors, indicators, calendar config, audit limits, habits success window, shared_tags, hide_declined, map settings (map_default_lat, map_default_lon, map_default_zoom, map_auto_zoom), email_account (JSON string containing email config), default_share_contacts, etc. |
+| `Settings` | User settings — time format, tags, colors, indicators, calendar config, audit limits, habits success window, shared_tags, hide_declined, map settings (map_default_lat, map_default_lon, map_default_zoom, map_auto_zoom), email_account (JSON string containing email config), default_share_contacts, omni_layout (JSON string — Omni View section layout config), omni_locked_filters (JSON string — locked filter defaults for Omni View), etc. |
 | `Chit` | Core chit model — title, note, dates, status, checklist, alerts, recurrence, location, color, people, habit, habit_goal, habit_success, show_on_calendar, habit_reset_period, habit_last_action_date, habit_hide_overall, perpetual, shares, stealth, assigned_to, email fields (email_message_id, email_from, email_to, email_cc, email_bcc, email_subject, email_body_text, email_date, email_folder, email_status, email_read, email_in_reply_to, email_references), nest_thread_id (Optional[str] — ID of an email chit in the target thread for nesting non-email chits into email threads), etc. |
 | `MultiValueEntry` | Label/value pair for contact multi-value fields (phone, email, etc.) |
 | `Contact` | Contact model — name fields, phones, emails, addresses, dates, social, security, notes, tags, color, shared_to_vault |
@@ -64,7 +64,7 @@ Registers all route modules (including `auth_router`, `users_router`, `sharing_r
 | `HAConfigUpdate` | HA config update request — `ha_base_url` (Optional[str]), `ha_access_token` (Optional[str]), `ha_poll_interval` (Optional[int], default 30) |
 | `HAWebhookPayload` | HA webhook payload — `action` (str), `user_id` (Optional[str]), `chit_id` (Optional[str]), `chit_title` (Optional[str]), `title` (Optional[str]), `note` (Optional[str]), `tags` (Optional[List[str]]), `status` (Optional[str]), `priority` (Optional[str]), `due_datetime` (Optional[str]), `checklist` (Optional[List[Dict]]), `item_text` (Optional[str]), `fields` (Optional[Dict]), `payload` (Optional[Dict]) |
 | `BundleCreate` | Create bundle request — `name` (str), `description` (Optional[str]) |
-| `BundleUpdate` | Update bundle request — `name` (Optional[str]), `description` (Optional[str]) |
+| `BundleUpdate` | Update bundle request — `name` (Optional[str]), `description` (Optional[str]), `omni_view` (Optional[bool]) |
 | `BundleReorder` | Reorder bundles request — `bundle_ids` (List[str]) — ordered list of bundle IDs |
 | `BundleRuleAssociate` | Associate rule with bundle request — `rule_id` (str) |
 | `CustomObjectCreate` | Create custom object request — `type` (str), `sub_type` (Optional[str]), `category` (Optional[str]), `name` (str), `value_type` (str — one of integer/decimal/boolean/string), `units` (Optional[str]), `metric_units` (Optional[str]), `range_min` (Optional[float]), `range_max` (Optional[float]), `conditional_display` (Optional[Dict[str, Any]]) |
@@ -156,6 +156,8 @@ All migrations run at startup. Each checks if the column/table already exists be
 | `migrate_create_custom_zones_table()` | Create `custom_zones` table (id TEXT PK, zone_id TEXT, name TEXT, sort_order INTEGER DEFAULT 0, owner_id TEXT, created_datetime TEXT) with UNIQUE constraint on (zone_id, owner_id). Fully idempotent |
 | `migrate_create_sort_orders_table()` | Create `sort_orders` table (owner_id, view_tab, order_data, modified_datetime) with composite PRIMARY KEY (owner_id, view_tab) for persisting manual chit ordering across devices |
 | `migrate_create_sort_preferences_table()` | Create `sort_preferences` table (owner_id, view_tab, sort_field, sort_dir, modified_datetime) with composite PRIMARY KEY (owner_id, view_tab) for persisting sort field/direction per view tab |
+| `migrate_bundles_omni_view()` | Add `omni_view` (BOOLEAN DEFAULT 0) column to bundles table. Fully idempotent |
+| `migrate_omni_view_settings()` | Add `omni_layout` (TEXT) and `omni_locked_filters` (TEXT) columns to settings table for Omni View layout configuration and locked filter defaults. Fully idempotent |
 
 ### 1.6 `src/backend/serializers.py` — vCard & CSV
 
@@ -1987,6 +1989,42 @@ Email bundle toolbar, tabs, filtering, creation modal, context menu, and drag-to
 | `_bundleReorderFinishOnClick(e)` | Click-outside handler to finish reorder mode |
 | `_disableBundleReorder()` | Disable reorder mode and remove drag listeners |
 
+#### main-omni.js
+
+Omni View rendering, HST bar, section orchestration, email pagination, and filter lock. Loaded by `index.html` after `main-email-bundles.js`.
+
+| Function | Description |
+|----------|-------------|
+| `displayOmniView(filteredChits)` | Main entry point — builds two-column layout with configurable sections |
+| `_buildOmniSection(sectionConfig, widthClass)` | Builds a section wrapper element with header |
+| `_populateOmniSections(filteredChits, visibleSections)` | Routes chits to section renderers |
+| `_omniDeduplicateChits(filteredChits)` | Categorizes chits into sections with strict deduplication |
+| `_renderOmniChrono(contentEl, chronoItems, viSettings)` | Chrono Anchored section renderer |
+| `_buildTimeUntilBadge(startTime, now)` | Creates time-until badge element |
+| `_formatTimeUntil(minutes)` | Formats minutes into readable badge string |
+| `_updateOmniTimeUntilBadges(contentEl)` | Periodic badge updater |
+| `_renderOmniOnDeck(contentEl, ondeckItems, viSettings)` | On Deck section renderer |
+| `_calculateHabitStreak(chit)` | Calculates consecutive successful habit periods |
+| `_renderOmniSoon(contentEl, soonItems, viSettings)` | Soon section renderer |
+| `_buildDueDateBadge(dueDate, now)` | Creates due-date badge element |
+| `_renderOmniHST(contentEl, chronoItems)` | HST bar renderer |
+| `_placeOmniHSTWeather(iconsLayer)` | Fetches and places weather icons on HST bar |
+| `_renderHSTWeatherIcons(iconsLayer, codes)` | Renders weather icons at hour positions |
+| `_renderOmniWeather(contentEl)` | Weather bar renderer |
+| `_populateOmniWeatherBar(bar)` | Populates weather bar with data |
+| `_buildWeatherBarContent(bar, daily, locationLabel)` | Builds weather bar content |
+| `_escOmniHtml(str)` | HTML escape helper |
+| `_renderOmniPinnedNotes(contentEl, pinnedNotes, viSettings)` | Pinned Notes section renderer |
+| `_renderOmniPinnedChecklists(contentEl, pinnedChecklists, viSettings)` | Pinned Checklists section renderer |
+| `_renderOmniEmail(contentEl, allEmailChits)` | Email section renderer with pagination |
+| `_getOmniEnabledBundles()` | Returns Omni-enabled bundles |
+| `_applyOmniEntryFilters()` | Applies locked filter defaults on Omni View entry |
+| `_applyLockedFiltersToSidebar(locked)` | Programmatically sets sidebar filter UI |
+| `_showOmniLockedIndicator(show)` | Shows/hides locked-filters indicator |
+| `_lockOmniFilters()` | Saves current filters as Omni View defaults |
+| `_showOmniLockBtn()` | Shows the Lock Filters button in sidebar |
+| `_hideOmniLockBtn()` | Hides the Lock Filters button |
+
 #### main-modals.js
 
 | Function | Description |
@@ -3635,6 +3673,26 @@ Email bundle toolbar, tabs, modal, and context menu styles. Loaded after `styles
 | Modal Hint (`.bundle-modal-hint`) | Validation error/hint message display |
 | Modal Mobile Responsive | Full-width modal at ≤600px |
 
+#### styles-omni.css
+Omni View layout, HST bar styling, section cards, and responsive rules. Loaded after `styles-email-bundles.css` in `index.html`.
+
+| Section | Description |
+|---------|-------------|
+| Omni Layout | Two-column responsive grid for Omni View sections |
+| Section Cards | Section wrapper styling with headers and content areas |
+| HST Bar | Holeman Simplified Time progress bar with weather icon overlay |
+| Chrono Anchored | Time-until badges and chronological item styling |
+| On Deck | Habit streak display and on-deck item cards |
+| Soon | Due-date badges and upcoming item styling |
+| Weather Bar | Horizontal weather forecast bar |
+| Pinned Notes | Pinned notes section layout |
+| Pinned Checklists | Pinned checklists section layout |
+| Email Section | Email cards with pagination controls |
+| Locked Filters Indicator | Visual indicator for active locked filters |
+| Lock Filters Button | Sidebar lock/unlock button styling |
+| Responsive (≤768px) | Single-column layout, compact sections |
+| Responsive (≤480px) | Mobile-optimized spacing and font sizes |
+
 | Section | Description |
 |---------|-------------|
 | (coordinator) | Loads after all sub-stylesheets; currently empty — reserved for overrides |
@@ -3873,6 +3931,7 @@ All HTML pages include the following PWA `<head>` tags: `<link rel="manifest" hr
 <script src="/frontend/js/dashboard/main-search.js"></script>
 <script src="/frontend/js/dashboard/main-email.js"></script>
 <script src="/frontend/js/dashboard/main-email-bundles.js"></script>
+<script src="/frontend/js/dashboard/main-omni.js"></script>
 <script src="/frontend/js/dashboard/main-modals.js"></script>
 <script src="/frontend/js/dashboard/main-init.js"></script>
 <script src="/frontend/js/dashboard/main.js"></script>
@@ -4216,6 +4275,7 @@ shared-auth.js            ← MUST load first (getCurrentUser, isAdmin, waitForA
               │     main-search.js
               │     main-email.js      (email tab view — displayEmailView, _checkMail, _composeEmail, _updateEmailBadge, _emailQuickArchive, _emailQuickDelete, _emailHasReply, _emailDetectTracking, _emailGetContactImage, _toggleEmailUnreadTop, _emailShowErrorWithSettingsLink, _emailInjectNests, _buildNestedChitCard, _nestGetContentPreview)
               │     main-email-bundles.js (bundle toolbar, tabs, filtering, modal, context menu, reorder — _fetchBundles, _filterByBundle, _renderBundleToolbar, _openBundleModal, _showBundleContextMenu)
+              │     main-omni.js       (Omni View — displayOmniView, HST bar, section orchestration, email pagination, filter lock)
               │     main-modals.js
               │     main-init.js       (calls init functions from all above)
               │     main.js            (entry point — calls main-init)

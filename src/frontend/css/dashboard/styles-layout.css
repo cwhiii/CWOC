@@ -30,6 +30,19 @@ h1 {
     height: 75px;
 }
 
+/* ── Omni Header Button ─────────────────────────────────────────────────── */
+.omni-header-btn {
+    cursor: pointer;
+    text-decoration: none;
+    color: inherit;
+    transition: color 0.2s ease, text-decoration 0.2s ease;
+}
+
+.omni-header-btn:hover {
+    color: var(--aged-brown-medium, #8b4513);
+    text-decoration: underline;
+}
+
 /* ── Header ─────────────────────────────────────────────────────────────── */
 .header {
     position: fixed;

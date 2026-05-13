@@ -294,6 +294,8 @@ def save_settings(settings: Settings, request: Request):
             "session_lifetime": settings.session_lifetime or "24",
             "autosave_desktop": settings.autosave_desktop or "0",
             "autosave_mobile": settings.autosave_mobile or "0",
+            "omni_layout": settings.omni_layout,
+            "omni_locked_filters": settings.omni_locked_filters,
         }
 
         cursor.execute(
@@ -311,8 +313,9 @@ def save_settings(settings: Settings, request: Request):
                 attachment_max_size_mb, attachment_max_storage_mb,
                 default_share_contacts, checklist_autosave, view_order, recent_tags, paginate_email,
                 bundles_multi_placement, bundles_enabled, bundles_show_count, session_lifetime,
-                autosave_desktop, autosave_mobile
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                autosave_desktop, autosave_mobile,
+                omni_layout, omni_locked_filters
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 new_settings_dict["user_id"],
@@ -368,6 +371,8 @@ def save_settings(settings: Settings, request: Request):
                 new_settings_dict["session_lifetime"],
                 new_settings_dict["autosave_desktop"],
                 new_settings_dict["autosave_mobile"],
+                new_settings_dict["omni_layout"],
+                new_settings_dict["omni_locked_filters"],
             )
         )
 

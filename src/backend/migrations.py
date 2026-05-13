@@ -2942,3 +2942,57 @@ def migrate_create_custom_zones_table():
     finally:
         if conn:
             conn.close()
+
+
+# ── Omni View: bundles omni_view column ──────────────────────────────────
+
+def migrate_bundles_omni_view():
+    """Add omni_view column to bundles table.
+
+    Stores 0 (not included in Omni View) or 1 (included).
+    Fully idempotent — checks column existence before adding.
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(bundles)")
+        columns = [row[1] for row in cursor.fetchall()]
+        if "omni_view" not in columns:
+            cursor.execute("ALTER TABLE bundles ADD COLUMN omni_view INTEGER DEFAULT 0")
+            conn.commit()
+            logger.info("Added omni_view column to bundles table")
+    except Exception as e:
+        logger.error(f"Error adding omni_view column to bundles: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
+# ── Omni View: settings columns ──────────────────────────────────────────
+
+def migrate_omni_view_settings():
+    """Add omni_layout and omni_locked_filters columns to settings table.
+
+    omni_layout — TEXT, default NULL — stores JSON layout config for Omni View sections.
+    omni_locked_filters — TEXT, default NULL — stores JSON filter defaults for Omni View.
+    Fully idempotent — checks column existence before adding.
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(settings)")
+        columns = [row[1] for row in cursor.fetchall()]
+        if "omni_layout" not in columns:
+            cursor.execute("ALTER TABLE settings ADD COLUMN omni_layout TEXT")
+            logger.info("Added omni_layout column to settings table")
+        if "omni_locked_filters" not in columns:
+            cursor.execute("ALTER TABLE settings ADD COLUMN omni_locked_filters TEXT")
+            logger.info("Added omni_locked_filters column to settings table")
+        conn.commit()
+    except Exception as e:
+        logger.error(f"Error adding Omni View settings columns: {str(e)}")
+    finally:
+        if conn:
+            conn.close()

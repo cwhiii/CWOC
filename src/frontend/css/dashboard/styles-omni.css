@@ -1,0 +1,435 @@
+/* ── Omni View Styles ─────────────────────────────────────────────────────── */
+/* Created for Omni View sections. Additional styles added in task 12. */
+
+/* ── Two-Column Grid Layout ──────────────────────────────────────────────── */
+
+.omni-view {
+    width: 100%;
+    padding: 8px 0;
+}
+
+.omni-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    width: 100%;
+}
+
+.omni-col {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.omni-col-left,
+.omni-col-right {
+    min-width: 0; /* prevent grid blowout */
+}
+
+.omni-section {
+    margin-bottom: 0;
+}
+
+.omni-section-full {
+    width: 100%;
+    margin-bottom: 16px;
+}
+
+.omni-section-half {
+    width: 100%;
+}
+
+/* ── Section Headers (itinerary-matching style) ──────────────────────────── */
+
+.omni-section-header {
+    padding: 4px 10px;
+    font-size: 1.3em;
+    font-weight: bold;
+    color: #5a3618;
+    border-top: 4px solid #5a3618;
+    padding-top: 8px;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    font-family: 'Lora', Georgia, serif;
+}
+
+.omni-section-icon {
+    font-style: normal;
+    line-height: 1;
+}
+
+.omni-section-content {
+    padding: 4px 0;
+}
+
+/* ── HST Bar ─────────────────────────────────────────────────────────────── */
+
+.omni-hst-bar {
+    position: relative;
+    width: 100%;
+    height: 2.4em;
+    background: #f5e6cc;
+    border: 2px solid #8b4513;
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.15);
+}
+
+.omni-hst-fill {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    bottom: 2px;
+    width: 0%;
+    background: linear-gradient(90deg, #d4af37 0%, #c8965a 60%, #8b4513 100%);
+    border-radius: 4px;
+    transition: width 1s linear;
+}
+
+.omni-hst-icons {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1;
+    pointer-events: none;
+}
+
+.omni-hst-chit-icon {
+    position: absolute;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 1em;
+    pointer-events: auto;
+    cursor: pointer;
+    z-index: 2;
+    text-shadow: 0 0 3px #fff8e1, 0 0 6px #fff8e1;
+}
+
+.omni-hst-chit-icon:hover {
+    transform: translate(-50%, -50%) scale(1.3);
+}
+
+.omni-hst-line {
+    position: absolute;
+    top: 4px;
+    bottom: 4px;
+    width: 2px;
+    background: #4a2c2a;
+    transform: translateX(-50%);
+    pointer-events: auto;
+    cursor: pointer;
+    z-index: 2;
+    opacity: 0.8;
+}
+
+.omni-hst-line:hover {
+    width: 3px;
+    background: #1a1208;
+    opacity: 1;
+}
+
+.omni-hst-weather-icon {
+    position: absolute;
+    bottom: 2px;
+    transform: translateX(-50%);
+    font-size: 0.75em;
+    pointer-events: auto;
+    cursor: pointer;
+    z-index: 3;
+    opacity: 0.85;
+}
+
+.omni-hst-weather-icon:hover {
+    transform: translateX(-50%) scale(1.3);
+    opacity: 1;
+}
+
+/* ── HST Bar Responsive ──────────────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+    .omni-hst-bar {
+        height: 2em;
+    }
+
+    .omni-hst-chit-icon {
+        font-size: 0.85em;
+    }
+
+    .omni-hst-weather-icon {
+        font-size: 0.65em;
+    }
+}
+
+/* ── Time-Until Badge ────────────────────────────────────────────────────── */
+
+.omni-time-badge {
+    display: inline-block;
+    margin-left: 8px;
+    padding: 2px 8px;
+    font-size: 0.75em;
+    font-weight: bold;
+    color: #4a2c2a;
+    background: #f5e6cc;
+    border: 1px solid #c4a97d;
+    border-radius: 10px;
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+/* ── Habit Streak Badge ──────────────────────────────────────────────────── */
+
+.omni-streak-badge {
+    display: inline-block;
+    margin-left: 8px;
+    padding: 2px 8px;
+    font-size: 0.75em;
+    font-weight: bold;
+    color: #8b4513;
+    background: linear-gradient(135deg, #fff3e0, #ffe0b2);
+    border: 1px solid #d4a574;
+    border-radius: 10px;
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+/* ── Weather Bar ──────────────────────────────────────────────────────────── */
+
+.omni-weather-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 10px 16px;
+    background: linear-gradient(135deg, #fff8e1, #f5e6cc);
+    border: 2px solid #8b4513;
+    border-radius: 6px;
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.08);
+    font-family: 'Lora', Georgia, serif;
+    transition: background 0.2s ease;
+}
+
+.omni-weather-bar:hover {
+    background: linear-gradient(135deg, #fff3e0, #ede0cc);
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.08), 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+.omni-weather-icon {
+    font-size: 1.6em;
+    line-height: 1;
+    flex-shrink: 0;
+}
+
+.omni-weather-temps {
+    font-size: 1.1em;
+    font-weight: bold;
+    color: #4a2c2a;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.omni-weather-high {
+    color: #8b4513;
+}
+
+.omni-weather-sep {
+    color: #a08060;
+    margin: 0 2px;
+}
+
+.omni-weather-low {
+    color: #6b4e31;
+    opacity: 0.8;
+}
+
+.omni-weather-unit {
+    font-size: 0.8em;
+    color: #6b4e31;
+    margin-left: 2px;
+    opacity: 0.7;
+}
+
+.omni-weather-location {
+    font-size: 0.9em;
+    color: #6b4e31;
+    margin-left: auto;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 200px;
+    opacity: 0.85;
+}
+
+.omni-weather-loading {
+    font-size: 0.9em;
+    color: #6b4e31;
+    opacity: 0.6;
+}
+
+.omni-weather-empty {
+    font-size: 0.9em;
+    color: #6b4e31;
+    opacity: 0.5;
+    font-style: italic;
+}
+
+/* ── Weather Bar Responsive ──────────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+    .omni-weather-bar {
+        padding: 8px 12px;
+        gap: 8px;
+    }
+
+    .omni-weather-icon {
+        font-size: 1.3em;
+    }
+
+    .omni-weather-temps {
+        font-size: 1em;
+    }
+
+    .omni-weather-location {
+        font-size: 0.8em;
+        max-width: 120px;
+    }
+}
+
+/* ── Due-Date Badge ──────────────────────────────────────────────────────── */
+
+.omni-due-badge {
+    display: inline-block;
+    margin-left: 8px;
+    padding: 2px 8px;
+    font-size: 0.75em;
+    font-weight: bold;
+    color: #2e5a3a;
+    background: linear-gradient(135deg, #e8f5e9, #c8e6c9);
+    border: 1px solid #81c784;
+    border-radius: 10px;
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+/* ── Email Pagination ────────────────────────────────────────────────────── */
+
+.omni-email-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.omni-email-pagination {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    margin-top: 12px;
+    padding: 8px 0;
+}
+
+.omni-email-page-btn {
+    padding: 6px 16px;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.85em;
+    font-weight: bold;
+    color: #4a2c2a;
+    background: linear-gradient(135deg, #fff8e1, #f5e6cc);
+    border: 1.5px solid #8b4513;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.2s ease, box-shadow 0.2s ease;
+}
+
+.omni-email-page-btn:hover {
+    background: linear-gradient(135deg, #fff3e0, #ede0cc);
+    box-shadow: 0 2px 6px rgba(139, 69, 19, 0.2);
+}
+
+.omni-email-page-btn:active {
+    background: #ede0cc;
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+.omni-email-count {
+    text-align: center;
+    font-size: 0.75em;
+    color: #6b4e31;
+    opacity: 0.7;
+    margin-top: 6px;
+    font-family: 'Lora', Georgia, serif;
+}
+
+/* ── Email Pagination Responsive ─────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+    .omni-email-pagination {
+        gap: 8px;
+    }
+
+    .omni-email-page-btn {
+        padding: 8px 14px;
+        font-size: 0.9em;
+    }
+}
+
+/* ── Locked Filters Indicator ────────────────────────────────────────────── */
+
+.omni-locked-indicator {
+    display: inline-block;
+    margin-left: 8px;
+    font-size: 0.9em;
+    vertical-align: middle;
+    opacity: 0.85;
+    cursor: help;
+}
+
+/* ── Lock Filters Button ─────────────────────────────────────────────────── */
+
+.omni-lock-btn {
+    background: #f5e6cc;
+    border: 1px solid #8b4513;
+    color: #6b4e31;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: 'Lora', serif;
+    transition: background 0.2s, color 0.2s;
+}
+
+.omni-lock-btn:hover {
+    background: #8b4513;
+    color: #fffaf0;
+}
+
+/* ── Responsive: Single-Column Below 768px ───────────────────────────────── */
+
+@media (max-width: 768px) {
+    .omni-grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+
+    .omni-section-full {
+        margin-bottom: 12px;
+    }
+
+    .omni-section-header {
+        font-size: 1.1em;
+        padding: 3px 8px;
+        padding-top: 6px;
+    }
+}
+
+/* ── Omni Header Button: Mobile Tap Target ───────────────────────────────── */
+
+@media (max-width: 480px) {
+    .omni-header-btn {
+        display: inline-flex;
+        align-items: center;
+        min-height: 44px;
+        padding: 8px 4px;
+    }
+}

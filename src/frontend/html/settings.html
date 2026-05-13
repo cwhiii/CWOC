@@ -840,6 +840,99 @@
                     font-size: 1.3em;
                     color: #6b4e31;
                 }
+
+                /* ── Omni View Layout Configurator ── */
+                .omni-layout-grid {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 8px;
+                    background: #fff8e1;
+                    border: 1px solid #8b5a2b;
+                    border-radius: 5px;
+                    padding: 10px;
+                    min-height: 80px;
+                }
+                .omni-layout-card {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    padding: 8px 12px;
+                    background: #f5e6cc;
+                    border: 1px solid #8b5a2b;
+                    border-radius: 5px;
+                    cursor: move;
+                    user-select: none;
+                    transition: opacity 0.15s, transform 0.1s;
+                }
+                .omni-layout-card:active {
+                    opacity: 0.7;
+                    transform: scale(0.98);
+                }
+                .omni-layout-card.dragging {
+                    opacity: 0.4;
+                }
+                .omni-layout-card.hidden-area {
+                    opacity: 0.5;
+                    border-style: dashed;
+                }
+                .omni-layout-card .omni-card-label {
+                    flex: 1;
+                    font-size: 0.9em;
+                    font-weight: bold;
+                    color: #4a2c2a;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                }
+                .omni-layout-card .omni-card-controls {
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                    flex-shrink: 0;
+                }
+                .omni-layout-card .omni-card-controls button {
+                    background: #8b5a2b;
+                    color: #fff8e1;
+                    border: 1px solid #5c4033;
+                    border-radius: 4px;
+                    padding: 3px 8px;
+                    cursor: pointer;
+                    font-size: 0.8em;
+                    font-family: inherit;
+                    transition: background 0.15s;
+                }
+                .omni-layout-card .omni-card-controls button:hover {
+                    background: #5c4033;
+                }
+                .omni-layout-card .omni-card-controls button.active-width {
+                    background: #5c4033;
+                    font-weight: bold;
+                }
+                .omni-layout-card .omni-card-controls .omni-vis-btn {
+                    font-size: 1em;
+                    padding: 2px 6px;
+                    background: transparent;
+                    border: 1px solid #8b5a2b;
+                    color: #4a2c2a;
+                }
+                .omni-layout-card .omni-card-controls .omni-vis-btn.hidden-state {
+                    opacity: 0.4;
+                }
+                .omni-layout-card .omni-drag-handle {
+                    color: #8b5a2b;
+                    font-size: 1em;
+                    cursor: grab;
+                    flex-shrink: 0;
+                }
+                @media (max-width: 480px) {
+                    .omni-layout-card {
+                        flex-wrap: wrap;
+                    }
+                    .omni-layout-card .omni-card-controls {
+                        width: 100%;
+                        justify-content: flex-end;
+                    }
+                }
             </style>
         </head>
         <body data-page-title="Settings" data-page-icon="⚙️" data-hide-nav="settings">
@@ -1074,6 +1167,22 @@
                         <label class="setting-subheader">Sort Order</label>
                         <button type="button" class="standard-button" style="width:100%;" onclick="_resetSortOrders()">🔄 Reset All Sort Orders</button>
                         <p class="setting-hint">Clears saved sort preferences and manual item ordering for all views.</p>
+                    </div>
+                    <div class="setting-group" id="omni-view-settings">
+                        <h3>🔮 Omni View</h3>
+
+                        <label class="setting-subheader">📐 Layout</label>
+                        <p class="setting-hint">Drag cards to reorder. Toggle width (half/full) and visibility for each area.</p>
+                        <div id="omni-layout-grid" class="omni-layout-grid"></div>
+
+                        <label class="setting-subheader">📧 Bundle Omni View Toggles</label>
+                        <p class="setting-hint">Select which email bundles appear in the Omni View email section.</p>
+                        <div id="omni-bundle-toggles" class="checkbox-list"></div>
+
+                        <label class="setting-subheader">🔒 Locked Filter Defaults</label>
+                        <p class="setting-hint">Filters that auto-apply when opening Omni View.</p>
+                        <div id="omni-locked-filters-display" style="margin-bottom:8px;font-size:0.9em;color:#4a2c2a;font-style:italic;">No locked filters set.</div>
+                        <button type="button" class="standard-button" style="width:100%;" onclick="_clearOmniLockedFilters()">🗑️ Clear Defaults</button>
                     </div>
                     <div class="setting-group">
                         <h3>🔁 Habits</h3>

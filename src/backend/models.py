@@ -77,6 +77,8 @@ class Settings(BaseModel):
     bundles_show_count: Optional[str] = "both"   # "both", "unread", "total", "none"
     show_map_thumbnails: Optional[str] = "1"     # "1" = show map thumbnails on cards, "0" = hide
     session_lifetime: Optional[str] = "24"       # Session lifetime in hours: "1", "12", "24", "168" (1 week), "720" (1 month), "0" (never expire)
+    omni_layout: Optional[str] = None            # JSON string: layout config for Omni View sections
+    omni_locked_filters: Optional[str] = None    # JSON string: locked filter defaults for Omni View
 
 class Chit(BaseModel):
     class Config:
@@ -334,6 +336,7 @@ class BundleUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     color: Optional[str] = None
+    omni_view: Optional[int] = None
 
 class BundleReorder(BaseModel):
     bundle_ids: List[str]  # Ordered list of bundle IDs

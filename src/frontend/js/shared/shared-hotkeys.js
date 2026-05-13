@@ -23,7 +23,8 @@ var _cwocHotkeyTabMap = {
   n: 'Notes',
   e: 'Email',
   i: 'Indicators',
-  g: 'Search'
+  g: 'Search',
+  o: 'Omni'
 };
 
 /**
@@ -70,8 +71,8 @@ function _cwocHandleActionHotkey(keyLower, e) {
     return true;
   }
 
-  // S — Settings
-  if (keyLower === 's') {
+  // F9 — Settings
+  if (e.key === 'F9') {
     e.preventDefault();
     if (isDash && typeof storePreviousState === 'function') storePreviousState();
     localStorage.setItem('cwoc_settings_return', isDash ? '/' : window.location.pathname);

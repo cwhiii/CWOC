@@ -743,6 +743,12 @@ function _openBundleModal(editBundle) {
         descInput.value = _bundleModalEditBundle.description || '';
         defineBtn.textContent = 'Save';
 
+        // Set Omni View checkbox state from bundle data
+        var omniCheck = document.getElementById('bundleOmniViewCheck');
+        if (omniCheck) {
+            omniCheck.checked = !!_bundleModalEditBundle.omni_view;
+        }
+
         // Add "Change Rules" button for editing
         var actionsDiv = overlay.querySelector('.bundle-modal-actions');
         if (actionsDiv) {
@@ -884,6 +890,8 @@ function _bundleModalSubmit() {
     var name = (nameInput.value || '').trim();
     var description = (descInput.value || '').trim() || null;
     var color = (colorInput && colorInput.value) || null;
+    var omniCheck = document.getElementById('bundleOmniViewCheck');
+    var omniView = omniCheck ? (omniCheck.checked ? 1 : 0) : 0;
 
     // Validate: name is non-empty
     if (!name) {
@@ -916,20 +924,21 @@ function _bundleModalSubmit() {
 
     if (_bundleModalEditBundle) {
         // Edit mode: PUT /api/bundles/{id}
-        _bundleModalUpdate(name, description, color);
+        _bundleModalUpdate(name, description, color, omniView);
     } else {
         // Create mode: POST /api/bundles
-        _bundleModalCreate(name, description, color);
+        _bundleModalCreate(name, description, color, omniView);
     }
 }
 
 /**
  * Create a new bundle via POST /api/bundles, then navigate to Rule Editor.
  */
-function _bundleModalCreate(name, description, color) {
+function _bundleModalCreate(name, description, color, omniView) {
     var payload = { name: name };
     if (description) payload.description = description;
     if (color) payload.color = color;
+    payload.omni_view = omniView;
 
     fetch('/api/bundles', {
         method: 'POST',
@@ -973,12 +982,13 @@ function _bundleModalCreate(name, description, color) {
 /**
  * Update an existing bundle via PUT /api/bundles/{id}.
  */
-function _bundleModalUpdate(name, description, color) {
+function _bundleModalUpdate(name, description, color, omniView) {
     var bundleId = _bundleModalEditBundle.id;
     var payload = { name: name };
     if (description !== null) payload.description = description;
     else payload.description = '';
     payload.color = color || '';
+    payload.omni_view = omniView;
 
     fetch('/api/bundles/' + encodeURIComponent(bundleId), {
         method: 'PUT',

@@ -402,6 +402,10 @@ def update_bundle(bundle_id: str, bundle: BundleUpdate, request: Request):
             updates.append("color = ?")
             params.append(bundle.color if bundle.color else None)
 
+        if bundle.omni_view is not None:
+            updates.append("omni_view = ?")
+            params.append(bundle.omni_view)
+
         updates.append("modified_datetime = ?")
         params.append(current_time)
 

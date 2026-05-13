@@ -20,6 +20,9 @@
  * Depends on all other main-*.js sub-scripts for view rendering and sidebar/hotkey functions.
  */
 
+/* ── Omni View state ─────────────────────────────────────────────────────── */
+var _omniViewActive = false;
+
 /* ── Breakpoint state ────────────────────────────────────────────────────── */
 let _lastBreakpointCategory = null;
 let _resizeDebounceTimer = null;
@@ -366,8 +369,12 @@ function _restoreUIState() {
 
     // Update tab highlight
     document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
-    var activeTab = document.querySelector(".tab[onclick=\"filterChits('" + currentTab + "')\"]");
-    if (activeTab) activeTab.classList.add('active');
+    if (currentTab === 'Omni') {
+      _omniViewActive = true;
+    } else {
+      var activeTab = document.querySelector(".tab[onclick=\"filterChits('" + currentTab + "')\"]");
+      if (activeTab) activeTab.classList.add('active');
+    }
 
     // Restore period select
     var periodSel = document.getElementById('period-select');
@@ -751,6 +758,9 @@ function displayChits() {
     case "Email":
       displayEmailView(filteredChits);
       break;
+    case "Omni":
+      displayOmniView(filteredChits);
+      break;
     case "Search":
       displaySearchView();
       return; // Search view manages its own rendering; skip post-render steps
@@ -1073,8 +1083,12 @@ document.addEventListener("DOMContentLoaded", function () {
         }
         // Update tab highlight
         document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
-        var activeTab = document.querySelector(".tab[onclick=\"filterChits('" + currentTab + "')\"]");
-        if (activeTab) activeTab.classList.add('active');
+        if (currentTab === 'Omni') {
+          _omniViewActive = true;
+        } else {
+          var activeTab = document.querySelector(".tab[onclick=\"filterChits('" + currentTab + "')\"]");
+          if (activeTab) activeTab.classList.add('active');
+        }
         // Clean URL without reloading
         history.replaceState(null, '', '/');
       }
@@ -1116,6 +1130,18 @@ document.addEventListener("DOMContentLoaded", function () {
   restoreSidebarState();
   _checkTabOverflow();
   _startGlobalAlertSystem();
+
+  // ── Omni View trigger click handler ────────────────────────────────────
+  var omniTrigger = document.getElementById('omni-trigger');
+  if (omniTrigger) {
+    omniTrigger.addEventListener('click', function() {
+      _omniViewActive = true;
+      currentTab = 'Omni';
+      // Remove .active from all C CAPTN tabs — Omni View has no tab highlight
+      document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
+      displayChits();
+    });
+  }
 
   // ── Delegated click handler for chit title links ──────────────────────
   // Ensures storePreviousState() is called before navigating to the editor
@@ -1582,7 +1608,7 @@ document.addEventListener("DOMContentLoaded", function () {
       return;
     }
 
-    // ── ORDER submenu (after 'O') ──
+    // ── ORDER submenu (after 'S') ──
     if (_hotkeyMode === 'ORDER') {
       e.preventDefault();
       const orderMap = { t: 'title', s: 'start', d: 'due', u: 'updated', c: 'created', x: 'status', m: 'manual', r: 'random', g: 'upcoming' };
@@ -1641,13 +1667,14 @@ document.addEventListener("DOMContentLoaded", function () {
       return;
     }
 
-    if (keyLower === 'o') {
+    if (keyLower === 's' && !_hotkeyMode) {
       e.preventDefault();
       _hotkeyMode = 'ORDER';
       expandSidebarSection('section-order');
       _showPanel('panel-order');
       return;
     }
+    // 'o' is now handled by tab map → 'Omni' (in shared-hotkeys.js)
 
     if (keyLower === 'v' && !_hotkeyMode) {
       e.preventDefault();
