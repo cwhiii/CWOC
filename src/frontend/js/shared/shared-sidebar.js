@@ -210,16 +210,15 @@ function _cwocInjectSidebar() {
   html += '    <input type="date" id="ind-end" style="width:100%;padding:4px;font-family:inherit;font-size:0.8em;border:1px solid #6b4e31;border-radius:3px;box-sizing:border-box;background:#f5e6cc;" />';
   html += '    <button class="action-button" onclick="_indicatorsLoadCustomRange()" style="margin-bottom:0;font-size:0.8em;padding:5px;">Go</button>';
   html += '  </div>';
-  html += '  <label class="sidebar-section-label">Show Indicators</label>';
+  html += '  <label class="sidebar-section-label">Show Graphs</label>';
   html += '  <div class="multi-select" id="ind-select" style="max-height:200px;">';
-  html += '    <label><input type="checkbox" data-ind="heart_rate" onchange="_indSaveSelection();_indicatorsLoad()" checked /> ❤️ Heart Rate</label>';
-  html += '    <label><input type="checkbox" data-ind="bp_systolic" onchange="_indSaveSelection();_indicatorsLoad()" checked /> 🩸 Blood Pressure</label>';
-  html += '    <label><input type="checkbox" data-ind="spo2" onchange="_indSaveSelection();_indicatorsLoad()" checked /> 🫁 Oxygen Sat.</label>';
-  html += '    <label><input type="checkbox" data-ind="temperature" onchange="_indSaveSelection();_indicatorsLoad()" checked /> 🌡️ Temperature</label>';
-  html += '    <label><input type="checkbox" data-ind="weight" onchange="_indSaveSelection();_indicatorsLoad()" checked /> ⚖️ Weight</label>';
-  html += '    <label><input type="checkbox" data-ind="height" onchange="_indSaveSelection();_indicatorsLoad()" /> 📐 Height</label>';
-  html += '    <label><input type="checkbox" data-ind="glucose" onchange="_indSaveSelection();_indicatorsLoad()" checked /> 🍬 Glucose</label>';
-  html += '    <label><input type="checkbox" data-ind="distance" onchange="_indSaveSelection();_indicatorsLoad()" /> 🏃 Distance</label>';
+  html += '    <div style="text-align:center;opacity:0.5;font-size:0.8em;padding:6px;">Loading…</div>';
+  html += '  </div>';
+  html += '  <label class="sidebar-section-label" id="ind-add-graph-toggle" style="cursor:pointer;user-select:none;" onclick="_indToggleAddGraphSection()">';
+  html += '    <span class="filter-arrow" id="ind-add-graph-arrow">▶</span> + Add Graph';
+  html += '  </label>';
+  html += '  <div id="ind-add-graph-section" style="display:none;max-height:250px;overflow-y:auto;border:1px solid #d4b896;border-radius:4px;background:#fdf6e8;padding:4px 0;">';
+  html += '    <div style="text-align:center;opacity:0.5;font-size:0.8em;padding:6px;">Loading…</div>';
   html += '  </div>';
   html += '</div>';
 

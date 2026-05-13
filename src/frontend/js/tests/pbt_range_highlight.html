@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>PBT: Range Highlight Classification</title>
+    <style>
+        body { font-family: monospace; padding: 20px; background: #1a1a1a; color: #e0e0e0; }
+        .pass { color: #4caf50; }
+        .fail { color: #f44336; }
+        .info { color: #90caf9; }
+        pre { white-space: pre-wrap; }
+    </style>
+</head>
+<body>
+<h2>Property-Based Test: Range Highlight Classification</h2>
+<pre id="output"></pre>
+<script>
+/**
+ * Feature: indicators_zone, Property 8: Range Highlight Classification
+ *
+ * For any numeric value and any acceptable range (min, max — either or both may be null),
+ * the range classification function SHALL return "high" if value > max, "low" if value < min,
+ * and "none" if value is within range (inclusive) or if both min and max are null.
+ *
+ * Validates: Requirements 3.1, 3.2, 3.3, 3.4
+ */
+
+// ── Function Under Test (inlined from editor-health.js) ──────────────────────
+function _getRangeHighlightClass(value, rangeMin, rangeMax) {
+    if (rangeMin == null && rangeMax == null) return '';
+    if (value == null || value === '') return '';
+    var numVal = parseFloat(value);
+    if (isNaN(numVal)) return '';
+    if (rangeMax != null && numVal > rangeMax) return 'indicator-range-high';
+    if (rangeMin != null && numVal < rangeMin) return 'indicator-range-low';
+    return '';
+}
+
+// ── Simple PRNG (Mulberry32) for reproducible randomness ─────────────────────
+function mulberry32(seed) {
+    return function() {
+        var t = seed += 0x6D2B79F5;
+        t = Math.imul(t ^ (t >>> 15), t | 1);
+        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+}
+
+// ── Random generators ────────────────────────────────────────────────────────
+function randomFloat(rng, min, max) {
+    return min + rng() * (max - min);
+}
+
+function randomInt(rng, min, max) {
+    return Math.floor(min + rng() * (max - min + 1));
+}
+
+function generateRange(rng) {
+    // Generate a range with various null combinations
+    var r = rng();
+    if (r < 0.15) {
+        // Both null — no range defined
+        return { min: null, max: null };
+    } else if (r < 0.30) {
+        // Only min defined
+        return { min: randomFloat(rng, -500, 500), max: null };
+    } else if (r < 0.45) {
+        // Only max defined
+        return { min: null, max: randomFloat(rng, -500, 500) };
+    } else {
+        // Both defined — ensure min <= max
+        var a = randomFloat(rng, -500, 500);
+        var b = randomFloat(rng, -500, 500);
+        return { min: Math.min(a, b), max: Math.max(a, b) };
+    }
+}
+
+function generateValue(rng, range) {
+    var r = rng();
+    if (r < 0.08) {
+        // null value
+        return null;
+    } else if (r < 0.16) {
+        // empty string
+        return '';
+    } else if (r < 0.22) {
+        // non-numeric string
+        return 'abc';
+    } else if (r < 0.28) {
+        // string representation of a number (should still parse)
+        return String(randomFloat(rng, -1000, 1000));
+    } else {
+        // Numeric value — bias toward interesting positions relative to range
+        var subR = rng();
+        if (range.min != null && range.max != null && subR < 0.3) {
+            // Value exactly at min boundary
+            return range.min;
+        } else if (range.min != null && range.max != null && subR < 0.5) {
+            // Value exactly at max boundary
+            return range.max;
+        } else if (range.min != null && range.max != null && subR < 0.65) {
+            // Value within range
+            return randomFloat(rng, range.min, range.max);
+        } else if (range.max != null && subR < 0.8) {
+            // Value above max
+            return range.max + randomFloat(rng, 0.001, 200);
+        } else if (range.min != null && subR < 0.9) {
+            // Value below min
+            return range.min - randomFloat(rng, 0.001, 200);
+        } else {
+            // Random numeric value
+            return randomFloat(rng, -1000, 1000);
+        }
+    }
+}
+
+// ── Expected result computation ──────────────────────────────────────────────
+function computeExpected(value, rangeMin, rangeMax) {
+    // Both null → no highlight
+    if (rangeMin == null && rangeMax == null) return '';
+    // Null/empty value → no highlight
+    if (value == null || value === '') return '';
+    var numVal = parseFloat(value);
+    // Non-numeric → no highlight
+    if (isNaN(numVal)) return '';
+    // Value > max → high
+    if (rangeMax != null && numVal > rangeMax) return 'indicator-range-high';
+    // Value < min → low
+    if (rangeMin != null && numVal < rangeMin) return 'indicator-range-low';
+    // Within range (inclusive) → no highlight
+    return '';
+}
+
+// ── Test runner ──────────────────────────────────────────────────────────────
+var output = document.getElementById('output');
+function log(msg, cls) {
+    var span = document.createElement('span');
+    span.className = cls || '';
+    span.textContent = msg + '\n';
+    output.appendChild(span);
+}
+
+var ITERATIONS = 200;
+var seed = Date.now();
+var rng = mulberry32(seed);
+var passed = 0;
+var failed = 0;
+var failures = [];
+
+log('Feature: indicators_zone, Property 8: Range Highlight Classification', 'info');
+log('Validates: Requirements 3.1, 3.2, 3.3, 3.4', 'info');
+log('Iterations: ' + ITERATIONS + ', Seed: ' + seed, 'info');
+log('─'.repeat(70), 'info');
+
+for (var i = 0; i < ITERATIONS; i++) {
+    var range = generateRange(rng);
+    var value = generateValue(rng, range);
+
+    var result = _getRangeHighlightClass(value, range.min, range.max);
+    var expected = computeExpected(value, range.min, range.max);
+
+    if (result === expected) {
+        passed++;
+    } else {
+        failed++;
+        if (failures.length < 5) {
+            failures.push({
+                iteration: i,
+                value: JSON.stringify(value),
+                rangeMin: range.min,
+                rangeMax: range.max,
+                expected: expected || '(empty string)',
+                got: result || '(empty string)'
+            });
+        }
+    }
+}
+
+log('─'.repeat(70), 'info');
+
+if (failed === 0) {
+    log('PASSED: All ' + passed + '/' + ITERATIONS + ' iterations passed.', 'pass');
+} else {
+    log('FAILED: ' + failed + '/' + ITERATIONS + ' iterations failed.', 'fail');
+    log('', '');
+    log('First failing examples:', 'fail');
+    for (var j = 0; j < failures.length; j++) {
+        var f = failures[j];
+        log('  Iteration ' + f.iteration + ':', 'fail');
+        log('    Value:    ' + f.value, 'fail');
+        log('    RangeMin: ' + f.rangeMin, 'fail');
+        log('    RangeMax: ' + f.rangeMax, 'fail');
+        log('    Expected: ' + f.expected, 'fail');
+        log('    Got:      ' + f.got, 'fail');
+    }
+}
+
+// Also log to console for headless verification
+console.log('[PBT] Feature: indicators_zone, Property 8: Range Highlight Classification');
+console.log('[PBT] Iterations: ' + ITERATIONS + ', Passed: ' + passed + ', Failed: ' + failed);
+if (failed === 0) {
+    console.log('[PBT] RESULT: PASSED');
+} else {
+    console.log('[PBT] RESULT: FAILED');
+    console.log('[PBT] Failures:', JSON.stringify(failures));
+}
+</script>
+</body>
+</html>

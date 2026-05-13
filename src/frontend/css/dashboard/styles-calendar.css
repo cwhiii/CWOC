@@ -107,31 +107,22 @@
 .all-day-event.birthday-event,
 .month-event.birthday-event,
 .itinerary-event.birthday-event {
-    clip-path: polygon(
-        0% 0%, 8px 50%, 0% 100%,
-        100% 100%, calc(100% - 8px) 50%, 100% 0%
-    );
-    border: none;
-    padding-left: 12px;
-    padding-right: 12px;
-}
-
-.all-day-event.birthday-event {
+    border: none !important;
+    border-radius: 0 !important;
+    padding: 1px 0 !important;
     background: transparent !important;
-    border: none;
-    border-left: none;
-    padding: 1px 12px;
+    overflow: hidden;
 }
 
 .birthday-chip {
     display: inline-flex;
     align-items: center;
-    padding: 2px 8px 2px 2px;
+    padding: 2px 12px 2px 12px;
     font-size: 0.78em;
     font-family: 'Lora', Georgia, serif;
     color: #4a2c2a;
-    border: 1px solid #c4a882;
-    border-radius: 12px;
+    border: none;
+    border-radius: 0;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -139,6 +130,10 @@
     user-select: none;
     gap: 3px;
     max-width: 100%;
+    clip-path: polygon(
+        0% 0%, 8px 50%, 0% 100%,
+        100% 100%, calc(100% - 8px) 50%, 100% 0%
+    );
 }
 
 .birthday-chip-img {

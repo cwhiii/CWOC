@@ -480,6 +480,11 @@ async function buildChitObject() {
     chit.checklist_autosave = null;
   }
 
+  // Auto-complete checklist flag
+  if (typeof _autoCompleteChecklistEnabled !== 'undefined') {
+    chit.auto_complete_checklist = _autoCompleteChecklistEnabled || null;
+  }
+
   // Include snoozed_until (preserved from loaded chit, or set via snooze modal)
   chit.snoozed_until = window._currentSnoozedUntil || null;
 
@@ -780,6 +785,18 @@ function setSaveButtonSaved() {
 }
 
 function cancelOrExit() {
+  // If there's text in the checklist input box or active editing, commit it
+  if (window.checklist && window.checklist.hasPendingContent()) {
+    window.checklist.commitPendingContent();
+  }
+
+  // If checklist autosave is active, force an immediate save before leaving
+  if (_isChecklistAutosaveActive() && window.currentChitId && !window.isNewChit) {
+    // Cancel any pending debounced autosave and do it immediately
+    if (_checklistAutosaveTimer) { clearTimeout(_checklistAutosaveTimer); _checklistAutosaveTimer = null; }
+    _doChecklistAutosave();
+  }
+
   // Auto-save exit handling — takes precedence when auto-save is enabled
   if (window._autoSave && window._autoSave.isEnabled()) {
     _handleAutoSaveExit();
@@ -901,6 +918,17 @@ async function _showAutoSaveExitFailModal(url) {
  * Otherwise navigates directly.
  */
 function _navigateWithSaveCheck(url) {
+  // Commit any pending checklist content before leaving
+  if (window.checklist && window.checklist.hasPendingContent()) {
+    window.checklist.commitPendingContent();
+  }
+
+  // Force immediate checklist autosave if active
+  if (typeof _isChecklistAutosaveActive === 'function' && _isChecklistAutosaveActive() && window.currentChitId && !window.isNewChit) {
+    if (_checklistAutosaveTimer) { clearTimeout(_checklistAutosaveTimer); _checklistAutosaveTimer = null; }
+    _doChecklistAutosave();
+  }
+
   if (window._cwocSave && window._cwocSave.hasChanges()) {
     var existing = document.getElementById('cwoc-unsaved-modal');
     if (existing) existing.remove();
@@ -982,7 +1010,15 @@ var _editorSavedBeforeLeave = false;
 
 window.addEventListener('beforeunload', function(e) {
   if (window._cwocSkipBeforeUnload) return;
-  // Prompt the user if there are unsaved changes
+  // Commit any pending checklist content and force-save
+  if (window.checklist && window.checklist.hasPendingContent()) {
+    window.checklist.commitPendingContent();
+  }
+  if (typeof _isChecklistAutosaveActive === 'function' && _isChecklistAutosaveActive() && window.currentChitId && !window.isNewChit) {
+    if (_checklistAutosaveTimer) { clearTimeout(_checklistAutosaveTimer); _checklistAutosaveTimer = null; }
+    _doChecklistAutosave();
+  }
+  // Prompt the user only if there are non-checklist unsaved changes
   if (window._cwocSave && window._cwocSave.hasChanges()) {
     e.preventDefault();
     e.returnValue = '';

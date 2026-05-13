@@ -1,0 +1,1 @@
+Restored per-keystroke debounced auto-save for checklist items (2s after last keystroke). On exit, any text in the "Add new item" input box or active inline edit is silently committed as a checklist item — no confirmation modal needed since autosave handles persistence.

@@ -1,0 +1,658 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <link rel="icon" type="image/x-icon" href="/static/cwod_logo-favicon.png" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Custom Objects — C.W.'s Omni Chits</title>
+    <!-- PWA -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#8b5a2b" />
+    <link rel="apple-touch-icon" href="/static/cwoc-icon-192.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <link rel="stylesheet" href="/frontend/css/shared/shared-page.css" />
+    <link rel="stylesheet" href="/frontend/css/shared/shared-calculator.css" />
+    <link rel="stylesheet" href="/frontend/css/shared/shared-editor.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" />
+    <style>
+        /* ══ Custom Objects Editor — Page-Specific Styles ══ */
+
+        /* Filter bar */
+        .co-toolbar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+        .co-toolbar select,
+        .co-toolbar input {
+            padding: 8px 12px;
+            border: 1px solid #8b5a2b;
+            border-radius: 5px;
+            font-size: 16px;
+            font-family: 'Lora', Georgia, serif;
+            background: #f5e6cc;
+            color: #2b1e0f;
+        }
+        .co-toolbar select:focus,
+        .co-toolbar input:focus {
+            outline: none;
+            border-color: #008080;
+            box-shadow: 0 0 0 2px rgba(0, 128, 128, 0.25);
+        }
+        .co-search {
+            flex: 1;
+            min-width: 180px;
+        }
+        .co-type-filter {
+            min-width: 140px;
+        }
+
+        /* Create button */
+        .co-create-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 10px 18px;
+            background: linear-gradient(to bottom, #d4a373, #c8965a);
+            border: 1px outset #8b5a2b;
+            border-radius: 5px;
+            font-family: 'Lora', Georgia, serif;
+            font-size: 1em;
+            color: #2b1e0f;
+            cursor: pointer;
+            margin-bottom: 15px;
+            transition: background 0.15s;
+        }
+        .co-create-btn:hover {
+            background: linear-gradient(to bottom, #c8965a, #a86b3e);
+        }
+
+        /* Object list container */
+        .co-list-container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        /* Type group */
+        .co-type-group {
+            border: 1px solid #8b5a2b;
+            border-radius: 8px;
+            background: #fffaf0;
+            overflow: hidden;
+        }
+        .co-type-group-header {
+            background: #e8dcc8;
+            padding: 10px 14px;
+            font-weight: 600;
+            font-size: 1.05em;
+            color: #4a2c2a;
+            border-bottom: 1px solid #d4c5a9;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .co-type-group-header .co-type-count {
+            font-size: 0.8em;
+            font-weight: 400;
+            color: #8b5a2b;
+        }
+
+        /* Object row */
+        .co-object-row {
+            display: flex;
+            align-items: center;
+            padding: 10px 14px;
+            border-bottom: 1px solid #d4c5a9;
+            gap: 10px;
+            transition: background 0.15s;
+        }
+        .co-object-row:last-child {
+            border-bottom: none;
+        }
+        .co-object-row:hover {
+            background: rgba(212, 196, 160, 0.2);
+        }
+        .co-object-name {
+            flex: 1;
+            font-size: 1em;
+            color: #2b1e0f;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .co-object-name.inactive {
+            opacity: 0.5;
+            text-decoration: line-through;
+        }
+        .co-object-category {
+            font-size: 0.8em;
+            color: #8b5a2b;
+            margin-left: 4px;
+        }
+
+        /* Zone badges */
+        .co-zone-badges {
+            display: flex;
+            gap: 4px;
+            flex-wrap: wrap;
+            flex-shrink: 0;
+        }
+        .co-zone-badge {
+            font-size: 0.7em;
+            padding: 2px 6px;
+            border-radius: 3px;
+            background: rgba(0, 128, 128, 0.15);
+            color: #006060;
+            border: 1px solid rgba(0, 128, 128, 0.3);
+            white-space: nowrap;
+        }
+
+        /* Row action buttons */
+        .co-row-actions {
+            display: flex;
+            gap: 6px;
+            flex-shrink: 0;
+            align-items: center;
+        }
+        .co-row-actions button {
+            padding: 5px 8px;
+            font-size: 0.85em;
+            border: 1px solid #8b5a2b;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: 'Lora', Georgia, serif;
+            background: #f5e6cc;
+            color: #4a2c2a;
+            transition: background 0.15s;
+        }
+        .co-row-actions button:hover {
+            background: #e8dcc8;
+        }
+        .co-row-actions button.co-delete-btn {
+            background: #f5e6cc;
+            color: #b22222;
+            border-color: #b22222;
+        }
+        .co-row-actions button.co-delete-btn:hover {
+            background: rgba(178, 34, 34, 0.1);
+        }
+
+        /* Active toggle (switch style) */
+        .co-active-toggle {
+            position: relative;
+            width: 36px;
+            height: 20px;
+            flex-shrink: 0;
+        }
+        .co-active-toggle input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .co-active-toggle .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: #f5e6cc;
+            border: 1px solid #c4a484;
+            border-radius: 20px;
+            transition: 0.3s;
+        }
+        .co-active-toggle .slider::before {
+            content: "";
+            position: absolute;
+            height: 14px;
+            width: 14px;
+            left: 2px;
+            bottom: 2px;
+            background-color: #c4a484;
+            border-radius: 50%;
+            transition: 0.3s;
+        }
+        .co-active-toggle input:checked + .slider {
+            background-color: #8b5a2b;
+            border-color: #8b5a2b;
+        }
+        .co-active-toggle input:checked + .slider::before {
+            transform: translateX(16px);
+            background-color: #fdf5e6;
+        }
+
+        /* Empty state */
+        .co-empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #8b5a2b;
+            font-style: italic;
+        }
+
+        /* ── Modal Overlay (shared pattern) ──────────────────────────────── */
+        .co-modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .co-modal-overlay.active {
+            display: flex;
+        }
+        .co-modal {
+            background: #fffaf0;
+            border: 2px solid #6b4e31;
+            border-radius: 10px;
+            padding: 24px;
+            width: 90%;
+            max-width: 520px;
+            max-height: 85vh;
+            overflow-y: auto;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            font-family: 'Lora', Georgia, serif;
+        }
+        .co-modal h3 {
+            margin: 0 0 16px 0;
+            color: #4a2c2a;
+            font-size: 1.2em;
+            border-bottom: 1px solid #d4c5a9;
+            padding-bottom: 10px;
+        }
+        .co-modal .field {
+            margin-bottom: 12px;
+        }
+        .co-modal .field label {
+            display: block;
+            font-size: 0.85em;
+            font-weight: 600;
+            color: #4a2c2a;
+            margin-bottom: 4px;
+        }
+        .co-modal .field input,
+        .co-modal .field select,
+        .co-modal .field textarea {
+            width: 100%;
+            padding: 8px 10px;
+            border: 1px solid #8b5a2b;
+            border-radius: 5px;
+            font-family: 'Lora', Georgia, serif;
+            font-size: 0.95em;
+            background: #f5e6cc;
+            color: #2b1e0f;
+            box-sizing: border-box;
+        }
+        .co-modal .field input:focus,
+        .co-modal .field select:focus,
+        .co-modal .field textarea:focus {
+            outline: none;
+            border-color: #008080;
+            box-shadow: 0 0 0 2px rgba(0, 128, 128, 0.25);
+        }
+        .co-modal .field-row {
+            display: flex;
+            gap: 10px;
+        }
+        .co-modal .field-row .field {
+            flex: 1;
+        }
+        .co-modal .field-hint {
+            font-size: 0.75em;
+            color: #8b5a2b;
+            margin-top: 2px;
+        }
+        .co-modal-buttons {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 18px;
+            padding-top: 12px;
+            border-top: 1px solid #d4c5a9;
+        }
+        .co-modal-buttons button {
+            padding: 8px 18px;
+            border-radius: 5px;
+            font-family: 'Lora', Georgia, serif;
+            font-size: 0.95em;
+            cursor: pointer;
+            border: 1px solid #8b5a2b;
+        }
+        .co-modal-buttons .co-btn-cancel {
+            background: #f5e6cc;
+            color: #4a2c2a;
+        }
+        .co-modal-buttons .co-btn-cancel:hover {
+            background: #e8dcc8;
+        }
+        .co-modal-buttons .co-btn-save {
+            background: linear-gradient(to bottom, #d4a373, #c8965a);
+            color: #2b1e0f;
+            border-color: #8b5a2b;
+        }
+        .co-modal-buttons .co-btn-save:hover {
+            background: linear-gradient(to bottom, #c8965a, #a86b3e);
+        }
+
+        /* ── Zone Management Modal specifics ─────────────────────────────── */
+        .co-zone-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+        .co-zone-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 10px;
+            border: 1px solid #d4c5a9;
+            border-radius: 5px;
+            background: #fdf5e6;
+        }
+        .co-zone-item-name {
+            flex: 1;
+            font-size: 0.95em;
+            color: #4a2c2a;
+            font-weight: 500;
+        }
+        .co-zone-item .co-zone-sort {
+            width: 60px;
+            padding: 4px 6px;
+            font-size: 0.85em;
+            border: 1px solid #8b5a2b;
+            border-radius: 4px;
+            background: #f5e6cc;
+            text-align: center;
+        }
+        .co-zone-config-section {
+            margin-top: 8px;
+            padding: 8px;
+            background: #f5e6cc;
+            border: 1px solid #d4c5a9;
+            border-radius: 4px;
+        }
+        .co-zone-config-section label {
+            font-size: 0.8em;
+            color: #8b5a2b;
+        }
+        .co-zone-config-section textarea {
+            width: 100%;
+            min-height: 60px;
+            padding: 6px;
+            border: 1px solid #8b5a2b;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 0.85em;
+            background: #fffaf0;
+            color: #2b1e0f;
+            resize: vertical;
+            box-sizing: border-box;
+        }
+
+        /* ── Conditional display section (advanced) ──────────────────────── */
+        .co-advanced-section {
+            border-top: 1px dashed #d4c5a9;
+            margin-top: 12px;
+            padding-top: 12px;
+        }
+        .co-advanced-toggle {
+            font-size: 0.85em;
+            color: #8b5a2b;
+            cursor: pointer;
+            user-select: none;
+        }
+        .co-advanced-toggle:hover {
+            color: #4a2c2a;
+        }
+        .co-advanced-body {
+            display: none;
+            margin-top: 10px;
+        }
+        .co-advanced-body.visible {
+            display: block;
+        }
+
+        /* ── Responsive ──────────────────────────────────────────────────── */
+        @media (max-width: 600px) {
+            .co-toolbar {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .co-type-filter {
+                width: 100%;
+            }
+            .co-search {
+                width: 100%;
+            }
+            .co-object-row {
+                flex-wrap: wrap;
+                gap: 6px;
+            }
+            .co-zone-badges {
+                width: 100%;
+                order: 3;
+            }
+            .co-row-actions {
+                order: 2;
+            }
+            .co-modal {
+                width: 95%;
+                padding: 16px;
+                max-height: 90vh;
+            }
+            .co-modal .field-row {
+                flex-direction: column;
+                gap: 0;
+            }
+        }
+    </style>
+</head>
+<!--
+    ═══════════════════════════════════════════════════════════════════════════
+    Custom Objects Editor
+    ═══════════════════════════════════════════════════════════════════════════
+    Browse, create, edit, and manage Custom Objects and their zone assignments.
+    Uses shared-page.js for header/footer injection via data-page-title.
+-->
+<body data-page-title="Custom Objects" data-page-icon="fas fa-cubes">
+
+    <div class="settings-panel">
+
+        <!-- ═══ Filter Bar ═══ -->
+        <div class="co-toolbar">
+            <select id="coTypeFilter" class="co-type-filter" title="Filter by type">
+                <option value="">All Types</option>
+            </select>
+            <input type="text" id="coSearchInput" class="co-search" placeholder="Search by name..." title="Search custom objects" />
+        </div>
+
+        <!-- ═══ Action Buttons ═══ -->
+        <div class="co-toolbar" style="margin-bottom:15px;gap:10px;">
+            <button type="button" class="co-create-btn" id="coCreateBtn" title="Create a new custom object" style="margin-bottom:0;">
+                <i class="fas fa-plus"></i> Create Custom Object
+            </button>
+            <button type="button" class="co-create-btn" id="coQuickLogBtn" title="Create a Quick Log chit and open the editor" style="margin-bottom:0;">
+                ⚡ Quick Log
+            </button>
+        </div>
+
+        <!-- ═══ Object List (grouped by type, populated by JS) ═══ -->
+        <div id="coListContainer" class="co-list-container">
+            <div class="co-empty-state">Loading custom objects...</div>
+        </div>
+
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!-- TEMPLATES (cloned by JS)                                          -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+
+    <!-- ── Create/Edit Custom Object Modal ───────────────────────────────── -->
+    <template id="tmpl-co-edit-modal">
+        <div class="co-modal-overlay" id="coEditModalOverlay">
+            <div class="co-modal" role="dialog" aria-labelledby="coEditModalTitle">
+                <h3 id="coEditModalTitle">Create Custom Object</h3>
+
+                <div class="field">
+                    <label for="coEditName">Name <span style="color:#b22222;">*</span></label>
+                    <input type="text" id="coEditName" placeholder="e.g. Heart Rate, Cough, Weight" required />
+                </div>
+
+                <div class="field-row">
+                    <div class="field">
+                        <label for="coEditType">Type <span style="color:#b22222;">*</span></label>
+                        <input type="text" id="coEditType" placeholder="e.g. Vital, Symptom, Measurement" list="coTypeDatalist" />
+                        <datalist id="coTypeDatalist"></datalist>
+                        <div class="field-hint">Free-text — use existing or create new</div>
+                    </div>
+                    <div class="field">
+                        <label for="coEditCategory">Sub-Type</label>
+                        <input type="text" id="coEditCategory" placeholder="e.g. Vitals, Illnesses, Body" list="coCategoryDatalist" />
+                        <datalist id="coCategoryDatalist"></datalist>
+                        <div class="field-hint">Free-text — use existing or create new</div>
+                    </div>
+                </div>
+
+                <div class="field">
+                    <label for="coEditValueType">Value Type <span style="color:#b22222;">*</span></label>
+                    <select id="coEditValueType">
+                        <option value="boolean">Boolean (true/false)</option>
+                        <option value="integer">Integer (whole number)</option>
+                        <option value="decimal">Decimal (fractional number)</option>
+                        <option value="string">String (free text)</option>
+                    </select>
+                </div>
+
+                <!-- Units & Range (shown only for integer/decimal) -->
+                <div id="coEditNumericFields" style="display:none;">
+                    <div class="field-row">
+                        <div class="field">
+                            <label for="coEditUnits">Units</label>
+                            <input type="text" id="coEditUnits" placeholder="e.g. bpm, lbs, °F" />
+                        </div>
+                        <div class="field">
+                            <label for="coEditMetricUnits">Metric Units</label>
+                            <input type="text" id="coEditMetricUnits" placeholder="e.g. bpm, kg, °C" />
+                        </div>
+                    </div>
+                    <div class="field-row">
+                        <div class="field">
+                            <label for="coEditRangeMin">Range Min</label>
+                            <input type="number" id="coEditRangeMin" placeholder="Optional" step="any" />
+                        </div>
+                        <div class="field">
+                            <label for="coEditRangeMax">Range Max</label>
+                            <input type="number" id="coEditRangeMax" placeholder="Optional" step="any" />
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Conditional Display (advanced) -->
+                <div class="co-advanced-section">
+                    <span class="co-advanced-toggle" id="coAdvancedToggle">
+                        <i class="fas fa-caret-right"></i> Advanced: Conditional Display
+                    </span>
+                    <div class="co-advanced-body" id="coAdvancedBody">
+                        <div class="field">
+                            <label for="coEditConditionalDisplay">Conditional Display Rule (JSON)</label>
+                            <textarea id="coEditConditionalDisplay" rows="3" placeholder='e.g. {"setting": "sex", "equals": "Woman"}'></textarea>
+                            <div class="field-hint">Optional JSON rule — consumers evaluate this to show/hide the object</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="co-modal-buttons">
+                    <button type="button" class="co-btn-cancel" id="coEditCancelBtn">Cancel</button>
+                    <button type="button" class="co-btn-save" id="coEditSaveBtn">Create</button>
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <!-- ── Zone Management Modal ─────────────────────────────────────────── -->
+    <template id="tmpl-co-zone-modal">
+        <div class="co-modal-overlay" id="coZoneModalOverlay">
+            <div class="co-modal" role="dialog" aria-labelledby="coZoneModalTitle">
+                <h3 id="coZoneModalTitle">Zone Assignments</h3>
+                <p style="font-size:0.85em;color:#8b5a2b;margin:0 0 12px 0;">
+                    Assign this object to zones and configure per-zone settings.
+                </p>
+
+                <!-- Zone list with toggles (populated by JS) -->
+                <div id="coZoneList" class="co-zone-list">
+                    <div class="co-empty-state" style="padding:20px;">No zones found.</div>
+                </div>
+
+                <!-- Add new zone assignment -->
+                <div class="field" style="margin-top:12px;">
+                    <label for="coZoneNewId">Add to Zone</label>
+                    <div style="display:flex;gap:8px;">
+                        <input type="text" id="coZoneNewId" placeholder="Zone identifier..." style="flex:1;padding:8px 10px;border:1px solid #8b5a2b;border-radius:5px;font-family:'Lora',Georgia,serif;font-size:0.95em;background:#f5e6cc;color:#2b1e0f;" />
+                        <button type="button" id="coZoneAddBtn" style="padding:8px 14px;background:linear-gradient(to bottom,#d4a373,#c8965a);border:1px solid #8b5a2b;border-radius:5px;font-family:'Lora',Georgia,serif;cursor:pointer;">
+                            <i class="fas fa-plus"></i> Add
+                        </button>
+                    </div>
+                </div>
+
+                <div class="co-modal-buttons">
+                    <button type="button" class="co-btn-cancel" id="coZoneCloseBtn">Close</button>
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <!-- ── Delete Confirmation Modal ─────────────────────────────────────── -->
+    <template id="tmpl-co-delete-modal">
+        <div class="co-modal-overlay" id="coDeleteModalOverlay">
+            <div class="co-modal" role="dialog" aria-labelledby="coDeleteModalTitle" style="max-width:400px;">
+                <h3 id="coDeleteModalTitle">Confirm Delete</h3>
+                <p id="coDeleteMessage" style="color:#4a2c2a;margin:0 0 12px 0;">
+                    Are you sure you want to remove this object?
+                </p>
+                <p style="font-size:0.8em;color:#8b5a2b;margin:0 0 12px 0;">
+                    Standard objects can be restored later. Custom objects will be soft-deleted.
+                </p>
+                <div class="co-modal-buttons">
+                    <button type="button" class="co-btn-cancel" id="coDeleteCancelBtn">Cancel</button>
+                    <button type="button" class="co-btn-save" id="coDeleteConfirmBtn" style="background:linear-gradient(to bottom,#d46a6a,#b22222);color:#fff;">Delete</button>
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <!-- ── 1. Shared sub-scripts (utils first, coordinator last) ─────────── -->
+    <script src="/frontend/js/shared/shared-auth.js"></script>
+    <script src="/frontend/js/shared/shared-utils.js"></script>
+    <script src="/frontend/js/shared/shared-touch.js"></script>
+    <script src="/frontend/js/shared/shared-checklist.js"></script>
+    <script src="/frontend/js/shared/shared-sort.js"></script>
+    <script src="/frontend/js/shared/shared-indicators.js"></script>
+    <script src="/frontend/js/shared/shared-calendar.js"></script>
+    <script src="/frontend/js/shared/shared-tags.js"></script>
+    <script src="/frontend/js/shared/shared-recurrence.js"></script>
+    <script src="/frontend/js/shared/shared-geocoding.js"></script>
+    <script src="/frontend/js/shared/shared-qr.js"></script>
+    <script src="/frontend/js/shared/shared-hotkeys.js"></script>
+    <script src="/frontend/js/shared/shared-mobile.js"></script>
+    <script src="/frontend/js/shared/shared-weather.js"></script>
+    <script src="/frontend/js/shared/shared-alarms.js"></script>
+    <script src="/frontend/js/shared/shared-habits.js"></script>
+    <script src="/frontend/js/shared/shared.js"></script>
+    <script src="/frontend/js/shared/shared-calculator.js"></script>
+
+    <!-- ── 2. Shared page components ─────────────────────────────────────── -->
+    <script src="/frontend/js/pages/shared-page.js"></script>
+
+    <!-- ── 3. Shared editor (zone toggle, dirty tracking) ────────────────── -->
+    <script src="/frontend/js/pages/shared-editor.js"></script>
+
+    <!-- ── 4. Page-specific script ───────────────────────────────────────── -->
+    <script src="/frontend/js/pages/custom-objects-editor.js"></script>
+
+    <!-- ── PWA ───────────────────────────────────────────────────────────── -->
+    <script src="/pwa/pwa-register.js"></script>
+</body>
+</html>

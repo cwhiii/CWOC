@@ -198,9 +198,17 @@ def _enrich_assigned_to_display_names(cursor, chits):
         chit["assigned_to_display_name"] = name_map.get(aid) if aid else None
 
 
-def _cascade_prerequisite_unblock(cursor, conn, completed_chit_id):
+def _cascade_prerequisite_unblock(cursor, conn, completed_chit_id, _visited=None):
     """When a chit is marked Complete, find all chits that have it as a prerequisite.
-    If ALL their prerequisites are now Complete, set their status to 'ToDo'."""
+    If ALL their prerequisites are now Complete, set their status to 'ToDo'.
+    Also: if a dependent has auto_complete_checklist enabled, check if it can auto-complete.
+    Recursive: if auto-complete sets a dependent to Complete, cascades further up."""
+    if _visited is None:
+        _visited = set()
+    if completed_chit_id in _visited:
+        return
+    _visited.add(completed_chit_id)
+
     # Find all chits that reference this chit in their prerequisites
     cursor.execute(
         "SELECT id, prerequisites, status FROM chits WHERE prerequisites LIKE ? AND (deleted = 0 OR deleted IS NULL)",
@@ -211,27 +219,105 @@ def _cascade_prerequisite_unblock(cursor, conn, completed_chit_id):
         dep_prereqs = deserialize_json_field(dep_prereqs_raw)
         if not dep_prereqs or completed_chit_id not in dep_prereqs:
             continue
-        # Only auto-unblock if currently Blocked
-        if dep_status != "Blocked":
-            continue
         # Check if ALL prerequisites of this dependent are now Complete
         placeholders = ",".join("?" * len(dep_prereqs))
         cursor.execute(
             f"SELECT id, status FROM chits WHERE id IN ({placeholders})",
             dep_prereqs
         )
-        all_complete = True
+        all_prereqs_complete = True
         for _, prereq_status in cursor.fetchall():
             if prereq_status != "Complete":
-                all_complete = False
+                all_prereqs_complete = False
                 break
-        if all_complete:
+        # Standard unblock: if currently Blocked and all prereqs done, set to ToDo
+        if all_prereqs_complete and dep_status == "Blocked":
             cursor.execute(
                 "UPDATE chits SET status = 'ToDo', modified_datetime = ? WHERE id = ?",
                 (datetime.utcnow().isoformat(), dep_id)
             )
             conn.commit()
             logger.info(f"Prerequisites cascade: unblocked chit {dep_id} (all prereqs complete)")
+        # Auto-complete cascade: if all prereqs complete and auto_complete_checklist enabled, try to complete
+        if all_prereqs_complete:
+            _try_auto_complete(cursor, conn, dep_id, _visited)
+
+
+def _try_auto_complete(cursor, conn, chit_id, _visited=None):
+    """Attempt to auto-complete a chit if auto_complete_checklist is enabled and conditions are met.
+    Conditions: all non-blank checklist items checked AND all prerequisites Complete.
+    If no checklist items exist, only prerequisites need to be Complete.
+    Recursive: if this chit becomes Complete, cascades to its dependents."""
+    cursor.execute(
+        "SELECT auto_complete_checklist, status, checklist, prerequisites FROM chits WHERE id = ?",
+        (chit_id,)
+    )
+    row = cursor.fetchone()
+    if not row or not row[0]:  # auto_complete_checklist not enabled
+        return
+    current_status = row[1] or ""
+    checklist_data = deserialize_json_field(row[2]) or []
+    prereq_ids = deserialize_json_field(row[3]) or []
+
+    # Check prerequisites
+    if prereq_ids:
+        placeholders = ",".join("?" * len(prereq_ids))
+        cursor.execute(f"SELECT status FROM chits WHERE id IN ({placeholders})", prereq_ids)
+        for (prereq_status,) in cursor.fetchall():
+            if prereq_status != "Complete":
+                return  # Can't auto-complete — prereq not done
+
+    # Check checklist
+    non_blank = [item for item in checklist_data if isinstance(item, dict) and (item.get("text") or "").strip()]
+    if non_blank:
+        all_checked = all(item.get("checked") for item in non_blank)
+        if not all_checked:
+            return  # Can't auto-complete — unchecked items remain
+    elif not prereq_ids:
+        return  # No checklist and no prereqs — nothing to auto-complete on
+
+    # All conditions met — set to Complete
+    if current_status != "Complete":
+        cursor.execute(
+            "UPDATE chits SET status = 'Complete', modified_datetime = ? WHERE id = ?",
+            (datetime.utcnow().isoformat(), chit_id)
+        )
+        conn.commit()
+        logger.info(f"Auto-complete: chit {chit_id} set to Complete (all checklist + prereqs done)")
+        # Recurse: this chit is now Complete, cascade to its dependents
+        _cascade_prerequisite_unblock(cursor, conn, chit_id, _visited)
+
+
+def _cascade_auto_complete_revert(cursor, conn, reverted_chit_id, _visited=None):
+    """When a chit's status changes AWAY from Complete, find all chits with
+    auto_complete_checklist enabled that have this chit as a prerequisite,
+    and revert them to ToDo. Recursive: reverted dependents cascade further up."""
+    if _visited is None:
+        _visited = set()
+    if reverted_chit_id in _visited:
+        return
+    _visited.add(reverted_chit_id)
+
+    cursor.execute(
+        "SELECT id, prerequisites, status, auto_complete_checklist FROM chits "
+        "WHERE auto_complete_checklist = 1 AND prerequisites LIKE ? AND (deleted = 0 OR deleted IS NULL)",
+        (f'%{reverted_chit_id}%',)
+    )
+    dependents = cursor.fetchall()
+    for dep_id, dep_prereqs_raw, dep_status, _ in dependents:
+        dep_prereqs = deserialize_json_field(dep_prereqs_raw)
+        if not dep_prereqs or reverted_chit_id not in dep_prereqs:
+            continue
+        # If the dependent is currently Complete, revert to ToDo and recurse
+        if dep_status == "Complete":
+            cursor.execute(
+                "UPDATE chits SET status = 'ToDo', modified_datetime = ? WHERE id = ?",
+                (datetime.utcnow().isoformat(), dep_id)
+            )
+            conn.commit()
+            logger.info(f"Auto-complete revert: chit {dep_id} set to ToDo (prereq {reverted_chit_id} no longer Complete)")
+            # Recurse: dep_id is no longer Complete, cascade to its dependents
+            _cascade_auto_complete_revert(cursor, conn, dep_id, _visited)
 
 
 @router.get("/api/chits")
@@ -261,7 +347,7 @@ def get_all_chits(request: Request):
             chit["habit"] = bool(chit.get("habit"))
             chit["habit_goal"] = int(chit.get("habit_goal") or 1)
             chit["habit_success"] = int(chit.get("habit_success") or 0)
-            chit["show_on_calendar"] = bool(chit.get("show_on_calendar", 1))
+            chit["show_on_calendar"] = chit.get("show_on_calendar", 1) not in (0, False)
             chit["habit_reset_period"] = chit.get("habit_reset_period")
             chit["habit_last_action_date"] = chit.get("habit_last_action_date")
             chit["habit_hide_overall"] = bool(chit.get("habit_hide_overall"))
@@ -276,6 +362,8 @@ def get_all_chits(request: Request):
             chit["email_read"] = bool(chit.get("email_read")) if chit.get("email_read") is not None else None
             chit["snoozed_until"] = chit.get("snoozed_until")
             chit["prerequisites"] = deserialize_json_field(chit.get("prerequisites"))
+            chit["checklist_autosave"] = bool(chit.get("checklist_autosave")) if chit.get("checklist_autosave") is not None else None
+            chit["auto_complete_checklist"] = bool(chit.get("auto_complete_checklist")) if chit.get("auto_complete_checklist") is not None else None
             chits.append(chit)
 
         # Enrich chits with assigned_to_display_name (batch lookup)
@@ -333,8 +421,9 @@ def create_chit(chit: Chit, request: Request):
                 email_message_id, email_from, email_to, email_cc, email_bcc,
                 email_subject, email_body_text, email_body_html, email_date, email_folder,
                 email_status, email_read, email_in_reply_to, email_references,
-                attachments, availability, snoozed_until, prerequisites
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                attachments, availability, snoozed_until, prerequisites,
+                checklist_autosave, auto_complete_checklist
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 chit_id,
@@ -402,6 +491,8 @@ def create_chit(chit: Chit, request: Request):
                 chit.availability,
                 chit.snoozed_until,
                 serialize_json_field(chit.prerequisites),
+                1 if chit.checklist_autosave else 0 if chit.checklist_autosave is not None else None,
+                1 if chit.auto_complete_checklist else 0 if chit.auto_complete_checklist is not None else None,
             )
         )
         # Create notifications for shared users on new chit creation
@@ -495,7 +586,7 @@ def get_chit(chit_id: str, request: Request):
         chit["habit"] = bool(chit.get("habit"))
         chit["habit_goal"] = int(chit.get("habit_goal") or 1)
         chit["habit_success"] = int(chit.get("habit_success") or 0)
-        chit["show_on_calendar"] = bool(chit.get("show_on_calendar", 1))
+        chit["show_on_calendar"] = chit.get("show_on_calendar", 1) not in (0, False)
         chit["habit_reset_period"] = chit.get("habit_reset_period")
         chit["habit_last_action_date"] = chit.get("habit_last_action_date")
         chit["habit_hide_overall"] = bool(chit.get("habit_hide_overall"))
@@ -510,6 +601,8 @@ def get_chit(chit_id: str, request: Request):
         chit["email_read"] = bool(chit.get("email_read")) if chit.get("email_read") is not None else None
         chit["snoozed_until"] = chit.get("snoozed_until")
         chit["prerequisites"] = deserialize_json_field(chit.get("prerequisites"))
+        chit["checklist_autosave"] = bool(chit.get("checklist_autosave")) if chit.get("checklist_autosave") is not None else None
+        chit["auto_complete_checklist"] = bool(chit.get("auto_complete_checklist")) if chit.get("auto_complete_checklist") is not None else None
         chit["effective_role"] = effective_role
 
         # Enrich with assigned_to_display_name
@@ -589,6 +682,25 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
             if chit.attachments is None:
                 chit.attachments = existing_dict_check.get("attachments")
 
+            # Auto-complete checklist: enforce status based on checklist + prerequisites
+            if chit.auto_complete_checklist:
+                prereq_ids = deserialize_json_field(serialize_json_field(chit.prerequisites)) if chit.prerequisites else []
+                prereqs_ok = True
+                if prereq_ids:
+                    placeholders = ",".join("?" * len(prereq_ids))
+                    cursor.execute(f"SELECT status FROM chits WHERE id IN ({placeholders})", prereq_ids)
+                    for (ps,) in cursor.fetchall():
+                        if ps != "Complete":
+                            prereqs_ok = False
+                            break
+                non_blank = [item for item in (chit.checklist or []) if isinstance(item, dict) and (item.get("text") or "").strip()]
+                checklist_ok = all(item.get("checked") for item in non_blank) if non_blank else True
+                has_something = bool(non_blank) or bool(prereq_ids)
+                if has_something and checklist_ok and prereqs_ok and chit.status != "Complete":
+                    chit.status = "Complete"
+                elif has_something and (not checklist_ok or not prereqs_ok) and chit.status == "Complete":
+                    chit.status = "ToDo"
+
             # Update existing chit
             cursor.execute(
                 """
@@ -605,7 +717,7 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                     email_subject = ?, email_body_text = ?, email_body_html = ?, email_date = ?, email_folder = ?,
                     email_status = ?, email_read = ?, email_in_reply_to = ?, email_references = ?,
                     attachments = ?, availability = ?, nest_thread_id = ?, snoozed_until = ?,
-                    prerequisites = ?
+                    prerequisites = ?, checklist_autosave = ?, auto_complete_checklist = ?
                 WHERE id = ?
                 """,
                 (
@@ -670,6 +782,8 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                     chit.nest_thread_id,
                     chit.snoozed_until,
                     serialize_json_field(chit.prerequisites),
+                    1 if chit.checklist_autosave else 0 if chit.checklist_autosave is not None else None,
+                    1 if chit.auto_complete_checklist else 0 if chit.auto_complete_checklist is not None else None,
                     chit_id,
                 )
             )
@@ -791,8 +905,9 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                     email_message_id, email_from, email_to, email_cc, email_bcc,
                     email_subject, email_body_text, email_body_html, email_date, email_folder,
                     email_status, email_read, email_in_reply_to, email_references,
-                    attachments, availability, snoozed_until, prerequisites
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    attachments, availability, snoozed_until, prerequisites,
+                    checklist_autosave, auto_complete_checklist
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     chit_id,
@@ -860,6 +975,8 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                     chit.availability,
                     chit.snoozed_until,
                     serialize_json_field(chit.prerequisites),
+                    1 if chit.checklist_autosave else 0 if chit.checklist_autosave is not None else None,
+                    1 if chit.auto_complete_checklist else 0 if chit.auto_complete_checklist is not None else None,
                 )
             )
             # Audit logging for chit creation
@@ -896,6 +1013,14 @@ def update_chit(chit_id: str, chit: Chit, request: Request):
                 _cascade_prerequisite_unblock(cursor, conn, chit_id)
         except Exception as e:
             logger.error(f"Prerequisite cascade failed (best-effort): {str(e)}")
+
+        # ── Reverse cascade: when a chit moves AWAY from Complete, revert auto-complete dependents ──
+        try:
+            old_status = old_chit_dict.get("status") if old_chit_dict else None
+            if old_status == "Complete" and chit.status != "Complete":
+                _cascade_auto_complete_revert(cursor, conn, chit_id)
+        except Exception as e:
+            logger.error(f"Auto-complete revert cascade failed (best-effort): {str(e)}")
 
         chit_data = {**chit.dict(), "id": chit_id, "tags": chit_tags, "modified_datetime": current_time}
         # Fire-and-forget: dispatch rules engine trigger for chit update or creation
@@ -1017,6 +1142,13 @@ def patch_chit_fields(chit_id: str, body: dict, request: Request):
         if not fields_to_update:
             raise HTTPException(status_code=400, detail="No valid fields to update")
 
+        # Capture old status for reverse cascade check
+        old_status = None
+        if "status" in fields_to_update:
+            cursor.execute("SELECT status FROM chits WHERE id = ?", (chit_id,))
+            status_row = cursor.fetchone()
+            old_status = status_row["status"] if status_row else None
+
         set_clauses = []
         values = []
         for field, value in fields_to_update.items():
@@ -1041,6 +1173,14 @@ def patch_chit_fields(chit_id: str, body: dict, request: Request):
                 _cascade_prerequisite_unblock(cursor, conn, chit_id)
             except Exception as e:
                 logger.error(f"Prerequisite cascade failed in patch (best-effort): {str(e)}")
+
+        # Reverse cascade: when status moves away from Complete, revert auto-complete dependents
+        if old_status == "Complete" and fields_to_update.get("status") != "Complete":
+            try:
+                conn.row_factory = None
+                _cascade_auto_complete_revert(cursor, conn, chit_id)
+            except Exception as e:
+                logger.error(f"Auto-complete revert cascade failed in patch (best-effort): {str(e)}")
 
         return {"message": "Updated", "fields": list(fields_to_update.keys())}
     except HTTPException:
@@ -1184,6 +1324,35 @@ def patch_chit_checklist(chit_id: str, body: dict, request: Request):
             "UPDATE chits SET checklist = ? WHERE id = ?",
             (serialize_json_field(checklist_data), chit_id)
         )
+
+        # Auto-complete: if enabled, evaluate checklist + prerequisites and update status
+        cursor.execute("SELECT auto_complete_checklist, status, prerequisites FROM chits WHERE id = ?", (chit_id,))
+        ac_row = cursor.fetchone()
+        if ac_row and ac_row["auto_complete_checklist"]:
+            non_blank = [item for item in checklist_data if isinstance(item, dict) and (item.get("text") or "").strip()]
+            prereq_ids = deserialize_json_field(ac_row["prerequisites"]) or []
+            prereqs_ok = True
+            if prereq_ids:
+                placeholders = ",".join("?" * len(prereq_ids))
+                cursor.execute(f"SELECT status FROM chits WHERE id IN ({placeholders})", prereq_ids)
+                for (ps,) in cursor.fetchall():
+                    if ps != "Complete":
+                        prereqs_ok = False
+                        break
+            checklist_ok = all(item.get("checked") for item in non_blank) if non_blank else True
+            has_something = bool(non_blank) or bool(prereq_ids)
+            current_status = ac_row["status"] or ""
+            if has_something and checklist_ok and prereqs_ok and current_status != "Complete":
+                cursor.execute(
+                    "UPDATE chits SET status = ?, modified_datetime = ? WHERE id = ?",
+                    ("Complete", datetime.utcnow().isoformat(), chit_id)
+                )
+            elif has_something and (not checklist_ok or not prereqs_ok) and current_status == "Complete":
+                cursor.execute(
+                    "UPDATE chits SET status = ?, modified_datetime = ? WHERE id = ?",
+                    ("ToDo", datetime.utcnow().isoformat(), chit_id)
+                )
+
         conn.commit()
         return {"message": "Checklist saved"}
     except HTTPException:

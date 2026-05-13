@@ -1,0 +1,1 @@
+Added "Auto-Complete" toggle button to the Projects zone header for chits that are children of a project. When enabled, the chit's status automatically changes to Complete when all non-blank checklist items are checked, and reverts to ToDo if any item becomes unchecked or a new unchecked item is added.

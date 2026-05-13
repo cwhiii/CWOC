@@ -223,6 +223,17 @@ button:disabled:not(.status-icon-button):not(.sidebar-close-btn):not(.mobile-vie
     border: 1px dotted var(--aged-brown-light);
 }
 
+/* ── Indicator Range Highlighting (shared across editor + dashboard) ───── */
+.indicator-range-high {
+    border-color: #b22222 !important;
+    background-color: rgba(178, 34, 34, 0.08);
+}
+
+.indicator-range-low {
+    border-color: #2a5db0 !important;
+    background-color: rgba(42, 93, 176, 0.08);
+}
+
 /* ── Zone Container Pattern (collapsible sections) ─────────────────────── */
 .zone-container {
     border: 1px solid var(--border-color);
@@ -302,6 +313,18 @@ button:disabled:not(.status-icon-button):not(.sidebar-close-btn):not(.mobile-vie
     margin-right: 0;
 }
 
+.zone-header-link {
+    text-decoration: none;
+    font-size: 1.1em;
+    opacity: 0.6;
+    margin-left: auto;
+    margin-right: 8px;
+    transition: opacity 0.15s;
+}
+.zone-header-link:hover {
+    opacity: 1;
+}
+
 .zone-button {
     padding: 5px 10px;
     font-size: 12px;
@@ -322,6 +345,15 @@ button:disabled:not(.status-icon-button):not(.sidebar-close-btn):not(.mobile-vie
 
 .zone-button-danger:hover {
     background-color: #a52a2a;
+}
+
+.zone-button-active {
+    background-color: #2e7d32;
+    border-color: #1b5e20;
+}
+
+.zone-button-active:hover {
+    background-color: #388e3c;
 }
 
 .zone-body {
@@ -472,7 +504,7 @@ input:checked + .slider:before {
     font-weight: bold;
 }
 
-.cwoc-2val-toggle span:first-child {
+.cwoc-2val-toggle span:not(:last-child) {
     border-right: 1px solid var(--aged-brown-medium, #8b5a2b);
 }
 

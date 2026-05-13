@@ -669,6 +669,11 @@ async function loadChitData(chitId) {
       _updateChecklistAutosaveToggle();
     }
 
+    // Auto-complete checklist initialization
+    if (typeof _initAutoCompleteChecklist === 'function') {
+      _initAutoCompleteChecklist(chit);
+    }
+
     _alertsFromChit(chit);
     _loadHealthData(chit);
 
@@ -1093,6 +1098,8 @@ document.addEventListener("DOMContentLoaded", function () {
         _highlightSelected();
         if (removeBtn) removeBtn.style.display = '';
       }
+      // Show auto-complete button for child chits
+      if (typeof _showAutoCompleteBtnIfChild === 'function') _showAutoCompleteBtnIfChild();
     }
 
     // Move menu to body so it's not clipped by zone-container overflow:hidden
@@ -1149,6 +1156,8 @@ document.addEventListener("DOMContentLoaded", function () {
       label.textContent = targetTitle;
       _highlightSelected();
       if (removeBtn) removeBtn.style.display = '';
+      // Show auto-complete button now that chit is a project child
+      if (typeof _showAutoCompleteBtnIfChild === 'function') _showAutoCompleteBtnIfChild();
 
       // Auto-set status to ToDo if empty
       var statusNote = '';
@@ -1184,6 +1193,8 @@ document.addEventListener("DOMContentLoaded", function () {
         label.textContent = 'Add to Project…';
         _highlightSelected();
         removeBtn.style.display = 'none';
+        // Hide auto-complete button since no longer a project child
+        if (typeof _showAutoCompleteBtnIfChild === 'function') _showAutoCompleteBtnIfChild();
         if (typeof setSaveButtonUnsaved === 'function') setSaveButtonUnsaved();
         cwocToast('Removal pending — save to confirm.', 'info');
       });
@@ -1505,21 +1516,7 @@ document.addEventListener("DOMContentLoaded", function () {
     if (saveBtn) saveBtn.onclick = () => closeNotesModal(true);
   }
 
-  const healthIndicators = [
-    "weightEntry",
-    "distanceEntry",
-    "heartRateEntry",
-    "bpEntry",
-    "spo2Entry",
-    "glucoseEntry",
-    "temperatureEntry",
-    "intercourseEntry",
-    "cycleEntry",
-  ];
-
-  healthIndicators.forEach(renderHealthIndicator);
-
-  // Initialize health data for new chits
+  // Initialize health data for new chits (dynamically renders indicator fields)
   _loadHealthData({});
 
   setSaveButtonSaved();

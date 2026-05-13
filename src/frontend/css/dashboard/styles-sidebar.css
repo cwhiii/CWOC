@@ -275,6 +275,7 @@
     flex-direction: column;
     gap: 1px;
     font-size: 0.85em;
+    overflow-y: auto;
 }
 
 .multi-select label {

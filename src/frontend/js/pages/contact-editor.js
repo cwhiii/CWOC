@@ -626,13 +626,30 @@
         if (fieldName === 'dates' && typeof flatpickr !== 'undefined') {
             valueInput.type = 'text';
             valueInput.placeholder = 'YYYY-Mon-DD';
-            setTimeout(function() {
-                flatpickr(valueInput, {
-                    dateFormat: 'Y-M-d',
-                    allowInput: true,
-                    defaultDate: defaultValue || null
-                });
-            }, 0);
+            valueInput.value = ''; // Clear — let Flatpickr set the display value via defaultDate
+            var _fpDefaultValue = defaultValue || null;
+            (function(input, dateVal) {
+                setTimeout(function() {
+                    flatpickr(input, {
+                        dateFormat: 'Y-M-d',
+                        allowInput: true,
+                        parseDate: function(dateStr, format) {
+                            // Handle both ISO (YYYY-MM-DD) and display (YYYY-Mon-DD) formats
+                            var isoMatch = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+                            if (isoMatch) {
+                                return new Date(parseInt(isoMatch[1]), parseInt(isoMatch[2]) - 1, parseInt(isoMatch[3]));
+                            }
+                            var months = { Jan:0, Feb:1, Mar:2, Apr:3, May:4, Jun:5, Jul:6, Aug:7, Sep:8, Oct:9, Nov:10, Dec:11 };
+                            var monMatch = dateStr.match(/^(\d{4})-([A-Za-z]{3})-(\d{2})$/);
+                            if (monMatch && months[monMatch[2]] !== undefined) {
+                                return new Date(parseInt(monMatch[1]), months[monMatch[2]], parseInt(monMatch[3]));
+                            }
+                            return new Date(dateStr);
+                        },
+                        defaultDate: dateVal
+                    });
+                }, 0);
+            })(valueInput, _fpDefaultValue);
         }
 
         // Clickable link for URL fields

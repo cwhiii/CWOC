@@ -1,0 +1,1 @@
+Replaced the "Add Graph" modal with a collapsible sidebar section grouped by category. Each category is its own collapsible sub-section with items listed underneath. Clicking an item adds it as a one-off graph and removes it from the available list. Also added help documentation for Custom Objects, Health Indicators Zone, and Indicators Dashboard View.

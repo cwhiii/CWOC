@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
+  <rect width="48" height="48" rx="6" fill="#232F3E"/>
+  <path d="M12 28c0 0 6 4 12 4s12-4 12-4" stroke="#FF9900" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  <path d="M34 27l2 1.5-2 1.5" stroke="#FF9900" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="24" y="24" font-family="Arial,sans-serif" font-size="8" font-weight="bold" fill="#FFFFFF" text-anchor="middle">amzn</text>
+</svg>

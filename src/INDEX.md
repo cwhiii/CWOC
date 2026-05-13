@@ -38,7 +38,7 @@ Package marker. No public exports.
 | `serve_icon_192()` | `GET /static/cwoc-icon-192.png` — Serve 192×192 PWA icon from `src/pwa/` |
 | `serve_icon_512()` | `GET /static/cwoc-icon-512.png` — Serve 512×512 PWA icon from `src/pwa/` |
 
-Registers all route modules (including `auth_router`, `users_router`, `sharing_router`, `notifications_router`, `network_access_router`, `push_router`, `ntfy_router`, `email_router`, `attachments_router`, `rules_router`, `bundles_router`, and `ha_router`), runs all migrations (including `migrate_add_multi_user()`, `migrate_add_sharing()`, `migrate_add_kiosk_users()`, `migrate_add_network_access()`, `migrate_add_notifications()`, `migrate_habits_overhaul()`, `migrate_habits_phase2()`, `migrate_add_push_subscriptions()`, `migrate_add_vapid_keys()`, `migrate_add_map_settings()`, `migrate_add_contact_dates()`, `migrate_add_email_fields()`, `migrate_add_attachments()`, `migrate_add_email_body_html()`, `migrate_add_fts5()`, `migrate_add_contact_vault()`, `migrate_create_rules_tables()`, `migrate_create_ha_config()`, `migrate_create_bundles_tables()`, and `migrate_add_nest_thread_id()`) and `init_db()` at import time, mounts `StaticFiles` for frontend, static, data, and PWA directories.
+Registers all route modules (including `auth_router`, `users_router`, `sharing_router`, `notifications_router`, `network_access_router`, `push_router`, `ntfy_router`, `email_router`, `attachments_router`, `rules_router`, `bundles_router`, `custom_objects_router`, and `ha_router`), runs all migrations (including `migrate_add_multi_user()`, `migrate_add_sharing()`, `migrate_add_kiosk_users()`, `migrate_add_network_access()`, `migrate_add_notifications()`, `migrate_habits_overhaul()`, `migrate_habits_phase2()`, `migrate_add_push_subscriptions()`, `migrate_add_vapid_keys()`, `migrate_add_map_settings()`, `migrate_add_contact_dates()`, `migrate_add_email_fields()`, `migrate_add_attachments()`, `migrate_add_email_body_html()`, `migrate_add_fts5()`, `migrate_add_contact_vault()`, `migrate_create_rules_tables()`, `migrate_create_ha_config()`, `migrate_create_bundles_tables()`, `migrate_add_nest_thread_id()`, and `migrate_create_custom_objects_tables()`) and `init_db()` at import time, mounts `StaticFiles` for frontend, static, data, and PWA directories.
 
 ### 1.3 `src/backend/models.py` — Pydantic Models
 
@@ -67,6 +67,10 @@ Registers all route modules (including `auth_router`, `users_router`, `sharing_r
 | `BundleUpdate` | Update bundle request — `name` (Optional[str]), `description` (Optional[str]) |
 | `BundleReorder` | Reorder bundles request — `bundle_ids` (List[str]) — ordered list of bundle IDs |
 | `BundleRuleAssociate` | Associate rule with bundle request — `rule_id` (str) |
+| `CustomObjectCreate` | Create custom object request — `type` (str), `sub_type` (Optional[str]), `category` (Optional[str]), `name` (str), `value_type` (str — one of integer/decimal/boolean/string), `units` (Optional[str]), `metric_units` (Optional[str]), `range_min` (Optional[float]), `range_max` (Optional[float]), `conditional_display` (Optional[Dict[str, Any]]) |
+| `CustomObjectUpdate` | Update custom object request — all Optional: `name`, `sub_type`, `category`, `units`, `metric_units`, `range_min`, `range_max`, `active` (bool), `sort_order` (int), `conditional_display` (Dict[str, Any]) |
+| `ZoneAssignmentCreate` | Create zone assignment request — `zone_id` (str), `config` (Optional[Dict[str, Any]]), `sort_order` (Optional[int], default 0) |
+| `ZoneAssignmentUpdate` | Update zone assignment request — `config` (Optional[Dict[str, Any]]), `sort_order` (Optional[int]) |
 
 ### 1.4 `src/backend/db.py` — Database Helpers & Shared State
 
@@ -144,6 +148,8 @@ All migrations run at startup. Each checks if the column/table already exists be
 | `migrate_add_notification_delivery_target()` | Add `delivery_target` (TEXT) column to notifications table for device-targeted notification delivery (desktop/mobile). Fully idempotent |
 | `migrate_add_autosave_settings()` | Add `autosave_desktop` (TEXT DEFAULT '0') and `autosave_mobile` (TEXT DEFAULT '0') columns to settings table for per-platform auto-save toggles. Fully idempotent |
 | `migrate_fix_double_encoded_attachments()` | Fix attachments fields that were double-encoded by serialize_json_field — detects and unwraps double-encoded JSON strings. Fully idempotent |
+| `migrate_create_custom_objects_tables()` | Create `custom_objects` table (id, type, sub_type, category, name, value_type, units, metric_units, range_min, range_max, active, deleted, sort_order, is_standard, conditional_display, owner_id, created_datetime, modified_datetime) and `zone_assignments` table (id, custom_object_id, zone_id, config, sort_order, owner_id) with UNIQUE constraints. Fully idempotent |
+| `seed_custom_objects(owner_id)` | Seed the standard library of Custom Objects for a user if none exist yet. Seeds Illnesses (10), Injuries (10), Allergies (10), Vitals (6), Body (3), Activity (2) — all with `is_standard=1`. Does NOT create zone assignments |
 
 ### 1.6 `src/backend/serializers.py` — vCard & CSV
 
@@ -1159,6 +1165,30 @@ Property-based tests for the Email Thread Nests feature. Uses hypothesis for pro
 | `TestProperty10NestThreadIdApiRoundTrip` | Saving a valid nest_thread_id and retrieving returns the same value; setting to null results in null on retrieval. **Validates: Requirements 7.1, 7.2** |
 | `TestProperty11ThreadEndpointIncludesNests` | Thread endpoint response includes all non-deleted chits whose nest_thread_id references any thread member, each with is_nest=true. **Validates: Requirements 7.3** |
 
+### 1.47 `src/backend/routes/custom_objects.py` — Custom Objects Registry CRUD & Zone Assignments
+
+Provides CRUD endpoints for managing Custom Objects in the generic registry, including listing, creating, updating, soft-deleting, restoring, and zone assignment management. All endpoints scoped by `owner_id` from authenticated user.
+
+| Route | Handler | Description |
+|-------|---------|-------------|
+| `GET /api/custom-objects` | `list_custom_objects(request, type, category)` | List all non-deleted custom objects for the user, optional `?type=` and `?category=` filters. Returns zone_assignments as nested array |
+| `POST /api/custom-objects` | `create_custom_object(request, obj)` | Create a new custom object. Validates value_type, enforces unique constraint (409 on duplicate), generates UUID, sets timestamps |
+| `PUT /api/custom-objects/{id}` | `update_custom_object(request, id, updates)` | Update mutable fields on an existing custom object. Updates modified_datetime |
+| `DELETE /api/custom-objects/{id}` | `delete_custom_object(request, id)` | Soft-delete a custom object (sets active=0, deleted=1) |
+| `POST /api/custom-objects/{id}/restore` | `restore_custom_object(request, id)` | Restore a soft-deleted standard object. Returns 400 if not standard |
+| `GET /api/custom-objects/zone/{zone_id}` | `get_objects_by_zone(request, zone_id)` | Return all active custom objects assigned to a zone. Joins with zone_assignments, excludes inactive/deleted |
+| `POST /api/custom-objects/{id}/assign` | `create_zone_assignment(request, id, assignment)` | Create a zone assignment. Returns 409 if already assigned |
+| `PUT /api/custom-objects/{id}/assign/{zone_id}` | `update_zone_assignment(request, id, zone_id, updates)` | Update zone assignment config and/or sort_order |
+| `DELETE /api/custom-objects/{id}/assign/{zone_id}` | `delete_zone_assignment(request, id, zone_id)` | Remove a zone assignment |
+
+**Internal helpers:**
+
+| Function | Description |
+|----------|-------------|
+| `_row_to_dict(row, cursor)` | Convert a sqlite3 Row to a plain dict using cursor.description |
+| `_format_object(obj)` | Format a custom_objects row dict for API response — converts integer flags to booleans, parses conditional_display JSON |
+| `_get_zone_assignments(conn, custom_object_id, owner_id)` | Fetch zone assignments for a custom object, parsing config JSON |
+
 ---
 
 ## 2. Frontend JavaScript
@@ -1768,10 +1798,17 @@ Depends on: `shared-sidebar.js` (`_cwocInitSidebar`, `toggleSidebar`, `restoreSi
 
 | Function | Description |
 |----------|-------------|
+| `_indInitViewMode()` | Initialize `_indViewMode` from localStorage (calendar/log/charts) |
+| `_indBuildModeToggleHtml(activeMode)` | Build HTML for the 3-value pill toggle (Calendar \| Log \| Charts) |
+| `_indAttachModeToggleListener()` | Attach click listener to the mode pill toggle |
 | `displayIndicatorsView()` | Render the Indicators tab — health trend charts with responsive SVG |
 | `_indicatorsLoad()` | Fetch health data from API and render SVG trend charts |
 | `_indSaveSelection()` | Persist selected indicator checkboxes to localStorage |
 | `_indRestoreSelection()` | Restore indicator checkbox selection from localStorage |
+| `_indPopulateGraphFilter()` | Fetch objects from graphs zone and populate sidebar filter checkboxes |
+| `_indRestoreOneOffGraphs()` | Restore one-off graph entries from localStorage that aren't in the graphs zone |
+| `_indShowAddGraphPicker()` | Show modal picker to add a one-off graph for any Custom Object not in the filter |
+| `_indAddOneOffGraph(obj)` | Add a one-off graph checkbox, check it, save selection, and reload charts |
 | `_indFmtDate(d)` | Format a Date as YYYY-MM-DD string |
 | `_indicatorsSetRange(range)` | Set the indicator time range and reload |
 | `_indicatorsHighlightBtn(range)` | Highlight the active time range button |
@@ -1779,6 +1816,12 @@ Depends on: `shared-sidebar.js` (`_cwocInitSidebar`, `toggleSidebar`, `restoreSi
 | `_indToggleExpand(key)` | Expand/collapse a single indicator chart |
 | `_enableIndicatorsDragReorder(container)` | Enable drag-to-reorder on indicator chart divs |
 | `_restoreIndicatorsOrder(container)` | Restore saved indicator chart order from localStorage |
+| `_classifyDayColor(dayReadings, objects)` | Classify a day's color for calendar mode — returns "green", "amber", or "none" |
+| `_indicatorsRenderCalendar(data, objects)` | Render Calendar Mode — year-view grid with color-coded day cells |
+| `_findObjectByLegacyKey(legacyKey, objects)` | Find a Custom Object by legacy key name using the legacy-to-name mapping |
+| `_buildLogSummary(healthData, objects)` | Build readable summary string from health_data, resolving UUID keys to display names |
+| `_indicatorsRenderLog(data, objects)` | Render Log Mode — reverse-chronological list of chits with health readings |
+| `_escapeHtml(str)` | Escape HTML special characters for safe insertion |
 
 #### main-alerts.js
 
@@ -1846,6 +1889,7 @@ Email tab view — renders the Email dashboard tab with inbox-style list view. L
 | `_emailRepliedToCache` | Cached Set of message IDs that have been replied to (rebuilt each render) |
 | `_emailBuildRepliedCache()` | Build the replied-to cache by scanning all chits for `email_in_reply_to` |
 | `_emailHasReply(messageId)` | Check if a given message ID has been replied to |
+| `_emailDetectTracking(chit)` | Detect tracking numbers (UPS, USPS, FedEx, UniUni) and flight numbers in email subject + body; returns `{ carrier, number, url, logo }` or null |
 | `_emailQuickArchive(chit, card)` | Quick-archive a single email with undo countdown toast; hides card immediately, archives on expiry, restores on undo |
 | `_emailQuickDelete(chit, card)` | Quick-delete (soft delete) a single email with undo countdown toast; hides card immediately, deletes on expiry, restores on undo |
 | `_emailRestoreCard(card)` | Restore a hidden email card back to visible state (used by undo) |
@@ -1991,7 +2035,12 @@ Minimal coordinator that loads AFTER all editor sub-scripts. Holds shared editor
 | `weatherIcons` | Const map of WMO weather codes → emoji icons |
 | `defaultColors` | Const array of default color palette objects (`{hex, name}`) |
 | `checklistContainer` | Reference to the `#checklist-container` DOM element |
-| `_onChecklistChange()` | Mark save button unsaved when checklist changes |
+| `_onChecklistChange()` | Mark save button unsaved when checklist changes; evaluates auto-complete status |
+| `_autoCompleteChecklistEnabled` | Per-chit flag for auto-complete checklist feature |
+| `_initAutoCompleteChecklist(chit)` | Initialize the auto-complete checklist button from chit data |
+| `_showAutoCompleteBtnIfChild()` | Show/hide the auto-complete button based on project membership |
+| `_updateAutoCompleteBtn()` | Update the auto-complete button visual state (active/inactive) |
+| `_evaluateAutoCompleteChecklist()` | Evaluate checklist state and auto-set status if auto-complete is enabled |
 | `dragIndicator` | Drag indicator element reference (used by drag-drop systems) |
 | `healthIndicatorWarningsShown` | Set tracking which health indicator warnings have been shown |
 | `userTimezoneOffset` | Current user's timezone offset in minutes |
@@ -2306,15 +2355,26 @@ Color zone: swatches, custom colors, background tinting.
 
 #### editor-health.js
 
-Health indicators zone: vitals, body metrics, activity, and cycle tracking.
+Health indicators zone (data-driven): dynamically renders health indicator input fields by querying the Custom Objects registry. Supports conditional_display rules, imperial/metric unit switching, range highlighting, default vs per-chit indicators, and an "Add Indicator" picker modal.
 
 | Symbol | Description |
 |--------|-------------|
-| `window._healthData` | Global object holding current health indicator values |
-| `_healthFields` | Array of health field definitions (id, key, label, unit, metricUnit, flags) |
-| `renderHealthIndicator(indicatorId)` | Render a single health indicator input field (number, checkbox, or blood pressure pair) |
-| `_loadHealthData(chit)` | Load health data from a chit into `_healthData` and render all indicators with correct units |
-| `_gatherHealthData()` | Collect all non-null health data values into an object for saving (or null if empty) |
+| `window._healthData` | Global object holding current health indicator values (UUID-keyed) |
+| `window._indicatorObjects` | Cached zone query result (all Custom Objects assigned to indicators_zone) |
+| `window._perChitIndicators` | Array of UUIDs of per-chit indicators on current chit |
+| `window._healthUnitSystem` | Current unit system ('imperial' or 'metric') |
+| `_evaluateConditionalDisplay(rule, settings)` | Evaluate a conditional_display rule against user settings; returns boolean |
+| `_getUnitLabel(obj, unitSystem)` | Get the appropriate unit label based on the user's unit system |
+| `_getRangeHighlightClass(value, rangeMin, rangeMax)` | Determine the CSS class for range highlighting (high/low/none) |
+| `_fetchIndicatorObjects()` | Fetch indicator objects from zone API, caches in window._indicatorObjects |
+| `_renderIndicatorField(obj, value)` | Render a single indicator field (numeric, checkbox, or text based on value_type) |
+| `_showAddIndicatorPicker()` | Open modal listing non-default indicators available to add to current chit |
+| `_addPerChitIndicator(obj)` | Add a per-chit indicator: render field, update state, mark dirty |
+| `_getDefaultIndicators(objects)` | Filter objects to those with config.is_default === true |
+| `_getNonDefaultIndicators(objects)` | Filter objects to those without config.is_default === true |
+| `_identifyPerChitIndicators(healthData, defaultObjects, allObjects)` | Identify per-chit indicator UUIDs from health_data not in the default set |
+| `_loadHealthData(chit)` | Orchestrate: parse health_data, fetch objects, evaluate conditional display, render default + per-chit fields, add "Add Indicator" button |
+| `_gatherHealthData()` | Collect all non-null health data values into a UUID-keyed object for saving (or null if empty) |
 
 #### editor-email.js
 
@@ -2585,6 +2645,8 @@ Checklist class: nested items, drag-drop, inline editing, undo.
 | `Checklist.getSubtree(item)` | Get an item and all its descendants recursively |
 | `Checklist._updateCount()` | Update the count display (x / y) in the zone header and toggle Clear Checked button visibility |
 | `Checklist.clearCheckedItems()` | Async — delete all checked items after cwocConfirm, show inline undo countdown |
+| `Checklist.deleteUncheckedItems()` | Async — delete all unchecked items after cwocConfirm |
+| `Checklist.cleanUpEmptyItems()` | Remove all items with empty or whitespace-only text |
 | `Checklist._showUndoCountdown(removedItems, label)` | Show an inline undo countdown bar (8s) with Undo button; restores items if clicked |
 | `Checklist._notifyChange()` | Call the external change callback with current checklist data |
 
@@ -3114,6 +3176,47 @@ Rule Editor page logic — handles creating and editing rules with condition tre
 | `_showEntityPickerModal(entities, onSelect)` | Show searchable entity picker modal with filtering |
 | `_showServicePickerModal(services, onSelect)` | Show searchable service picker modal with domain grouping |
 
+#### custom-objects-editor.js
+
+Custom Objects Editor page: browse, create, edit, toggle, soft-delete, restore, and manage zone assignments for Custom Objects.
+
+| Symbol | Description |
+|--------|-------------|
+| `_coAllObjects` | Array — full list of custom objects from API |
+| `_coFilteredObjects` | Array — objects after type/search filter applied |
+| `_coEditingId` | String or null — ID of object being edited (null = create mode) |
+| `_coDeleteTargetId` | String or null — ID of object pending deletion |
+| `_coZoneModalObjectId` | String or null — ID of object currently in zone modal |
+| `_coCloneTemplates()` | Clone modal templates from `<template>` elements and append to body |
+| `_coFetchAll()` | Fetch all custom objects from `GET /api/custom-objects` and re-render |
+| `_coPopulateTypeFilter()` | Populate the type filter dropdown from unique types in data |
+| `_coApplyFilters()` | Apply type and search filters to the object list |
+| `_coRenderList()` | Render the filtered object list grouped by type |
+| `_coCreateRow(obj)` | Create a single object row element with name, zone badges, and action buttons |
+| `_coInitEditModal()` | Wire up edit modal cancel/save buttons |
+| `_coOpenEditModal(obj)` | Open the create/edit modal, populate fields from object or clear for create |
+| `_coCloseEditModal()` | Close the edit modal |
+| `_coToggleNumericFields()` | Show/hide units and range fields based on value_type selection |
+| `_coPopulateDatalist(datalistId, field)` | Populate a datalist with unique values from all objects for autocomplete |
+| `_coSaveObject()` | Save (create or update) a custom object via POST/PUT |
+| `_coToggleActive(objectId, newActive)` | Toggle active status via PUT |
+| `_coInitDeleteModal()` | Wire up delete modal cancel/confirm buttons |
+| `_coOpenDeleteModal(obj)` | Open the delete confirmation modal |
+| `_coCloseDeleteModal()` | Close the delete modal |
+| `_coConfirmDelete()` | Confirm soft-delete via DELETE endpoint |
+| `_coRestoreObject(objectId)` | Restore a soft-deleted standard object via POST restore |
+| `_coQuickLog()` | Create a Quick Log chit (point_in_time = now, status = "Complete") and navigate to editor |
+| `_coOpenZoneModal(obj)` | Open the zone management modal for an object — renders all known zones with toggles |
+| `_coGetAllKnownZones()` | Gather all unique zone identifiers from all objects' zone_assignments |
+| `_coRenderZoneList(obj)` | Render the zone list inside the zone modal with toggles, sort_order, and config editors |
+| `_coCreateZoneItem(objectId, zoneId, isAssigned, za)` | Create a single zone item element with checkbox toggle, sort input, and config textarea |
+| `_coAssignZone(objectId, zoneId)` | Assign object to a zone via POST `/api/custom-objects/{id}/assign` |
+| `_coUnassignZone(objectId, zoneId)` | Unassign object from a zone via DELETE `/api/custom-objects/{id}/assign/{zone_id}` |
+| `_coUpdateZoneAssignment(objectId, zoneId, config, sortOrder)` | Update zone assignment config/sort_order via PUT |
+| `_coRefreshAfterZoneChange(objectId)` | Refresh data and re-render zone modal after any zone change |
+| `_coHandleEsc(e)` | ESC key handler — closes modals from innermost to outermost |
+| `_coEscape(str)` | HTML-escape a string for safe insertion |
+
 
 ## 3. Frontend CSS
 
@@ -3313,6 +3416,7 @@ Chit card styling, notes masonry layout, markdown, people chips, view-specific l
 | RSVP Action Buttons (`.cwoc-rsvp-actions`, `.cwoc-rsvp-btn`) | Accept/decline action buttons on shared chit cards — `.cwoc-rsvp-accept-btn.cwoc-rsvp-btn-active` (green tint), `.cwoc-rsvp-decline-btn.cwoc-rsvp-btn-active` (red tint) |
 | Map Thumbnail (`.chit-map-thumbnail`) | Small OSM map tile on chit cards (Tasks, Checklists, Notes) for non-default locations — 120×80px, bottom-right, with pin overlay |
 | Map Pin Icon (`.chit-location-icon`) | Compact map-marker-alt icon for Alarms/Projects/Calendar views |
+| Tracking Button (`.email-track-btn`) | Inline carrier logo + "Track" link button on email cards with detected tracking numbers (UPS, USPS, FedEx, UniUni) or flight numbers |
 
 #### styles-hotkeys.css
 Hotkey overlay, panels, reference overlay, and sidebar dimming.
@@ -3820,6 +3924,10 @@ src/backend/routes/email.py
 src/backend/routes/attachments.py
   └── src.backend.db           (DB_PATH, serialize_json_field, deserialize_json_field)
 
+src/backend/routes/custom_objects.py
+  ├── src.backend.db           (DB_PATH)
+  └── src.backend.models       (CustomObjectCreate, CustomObjectUpdate, ZoneAssignmentCreate, ZoneAssignmentUpdate)
+
 src/backend/rules_engine.py
   ├── src.backend.db           (DB_PATH, serialize_json_field, deserialize_json_field, compute_system_tags)
   ├── src.backend.routes.audit (insert_audit_entry, compute_audit_diff)
@@ -3937,7 +4045,7 @@ shared-auth.js            ← MUST load first (getCurrentUser, isAdmin, waitForA
               │     main-views.js      (coordinator — uses shared-tags, shared-sort, shared-indicators)
               │     main-alerts.js     (uses shared alarm system from shared.js)
               │     main-search.js
-              │     main-email.js      (email tab view — displayEmailView, _checkMail, _composeEmail, _updateEmailBadge, _emailQuickArchive, _emailQuickDelete, _emailHasReply, _emailGetContactImage, _toggleEmailUnreadTop, _emailShowErrorWithSettingsLink, _emailInjectNests, _buildNestedChitCard, _nestGetContentPreview)
+              │     main-email.js      (email tab view — displayEmailView, _checkMail, _composeEmail, _updateEmailBadge, _emailQuickArchive, _emailQuickDelete, _emailHasReply, _emailDetectTracking, _emailGetContactImage, _toggleEmailUnreadTop, _emailShowErrorWithSettingsLink, _emailInjectNests, _buildNestedChitCard, _nestGetContentPreview)
               │     main-email-bundles.js (bundle toolbar, tabs, filtering, modal, context menu, reorder — _fetchBundles, _filterByBundle, _renderBundleToolbar, _openBundleModal, _showBundleContextMenu)
               │     main-modals.js
               │     main-init.js       (calls init functions from all above)

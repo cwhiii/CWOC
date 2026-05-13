@@ -1,0 +1,1 @@
+Auto-complete cascades are now fully recursive. If C→B→A (A depends on B depends on C), completing C cascades up through B to A. Reverting C cascades the revert all the way up. Visited-set prevents infinite loops in circular edge cases.

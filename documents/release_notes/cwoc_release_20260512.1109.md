@@ -1,0 +1,1 @@
+Fixed checklist drag-and-drop: dragging a parent item now correctly moves its children along with it, preserving the subtree hierarchy. The bug was that `_updateSubLevels` was called after the root item's level was already modified, resulting in a zero delta — children's levels weren't adjusted and they appeared as siblings instead of descendants.

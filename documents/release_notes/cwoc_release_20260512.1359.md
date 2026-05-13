@@ -1,0 +1,1 @@
+Auto-complete checklist now triggers when checking items from the dashboard (outside the editor). Added server-side enforcement in both the PUT and PATCH checklist endpoints, plus client-side logic in the shared toggleChecklistItem function. Dashboard view refreshes when status changes due to auto-complete.

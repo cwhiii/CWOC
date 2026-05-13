@@ -27,6 +27,7 @@
                             <li><a href="#calendar">Calendar</a></li>
                             <li><a href="#notes-view">Notes</a></li>
                             <li><a href="#habits-view">Habits</a></li>
+                            <li><a href="#indicators-view">Indicators</a></li>
                             <li><a href="#maps-view">Maps</a></li>
                             <li><a href="#email">Email</a></li>
                             <li><a href="#global-search">Global Search</a></li>
@@ -53,6 +54,7 @@
                             <li><a href="#weather">Weather</a></li>
                             <li><a href="#saved-locations">Saved Locations</a></li>
                             <li><a href="#alert-indicators">Visual Indicators</a></li>
+                            <li><a href="#custom-objects">Custom Objects</a></li>
                             <li><a href="#calculator">Calculator</a></li>
                             <li><a href="#settings">Settings</a></li>
                             <li><a href="#data-management">Data Management</a></li>
@@ -191,6 +193,14 @@
                 </li>
                 <li><strong>Default: show habits on calendar</strong> — Toggle controlling the default value of "Show on calendar" for newly created habits</li>
             </ul>
+            <h3 id="indicators-view">Indicators View</h3>
+            <p>The Indicators view displays health and activity data tracked via the <a href="#custom-objects">Custom Objects</a> system. Access it from the dashboard tab bar. Three display modes are available via a pill toggle at the top:</p>
+            <ul>
+                <li><strong>Calendar</strong> — Year-view grid (12 rows × 31 columns). Each cell represents a day: green = all readings in range, amber = at least one out of range, empty = no data. Click a day cell to navigate to the chit(s) for that date</li>
+                <li><strong>Log</strong> — Reverse-chronological list of all chits with health data. Each entry shows the date and a summary of readings (resolved to display names). Click an entry to open the chit in the editor</li>
+                <li><strong>Charts</strong> — SVG line charts for selected indicators over a configurable date range (week, month, 3 months, year, or custom). Use the filter dropdown to select which indicators to display. "Add Graph" lets you include any Custom Object not already in the graphs zone</li>
+            </ul>
+            <p>The selected mode and graph filter selections persist in localStorage between visits. A ⚙️ Objects link in the header navigates to the Custom Objects Editor for managing indicator definitions.</p>
             <h3 id="maps-view">Maps View</h3>
             <p>The Maps View displays an interactive map with two modes: <strong>Chits</strong> and <strong>People</strong>. Access it from the navigation menu (🗺️ Maps) or by navigating to <code>/maps</code>. The map fills all available viewport space for maximum visibility.</p>
             <h4>Mode Toggle</h4>
@@ -507,6 +517,31 @@
                 <li><strong>Add Chit</strong> — Opens a modal to browse and select existing chits as children</li>
                 <li><strong>Create New</strong> — Prompts for a title, creates a brand new chit with status "ToDo", and immediately adds it as a child of the project</li>
             </ul>
+            <p>For chits that are children of a project, an <strong>Auto-Complete</strong> button appears in the Projects zone header:</p>
+            <ul>
+                <li><strong>Auto-Complete</strong> — When enabled, the chit's status automatically changes to "Complete" when all non-blank checklist items are checked. If any item is unchecked or a new unchecked item is added, the status reverts to "ToDo". This is a per-chit toggle that persists across sessions.</li>
+            </ul>
+            <h4>Health Indicators Zone</h4>
+            <p>The Health Indicators zone tracks vitals, measurements, and activity data on a per-chit basis. It is powered by the <a href="#custom-objects">Custom Objects</a> registry — indicators are dynamically loaded from objects assigned to the <code>indicators_zone</code>.</p>
+            <ul>
+                <li><strong>Default indicators</strong> — Objects marked as defaults in the zone (Heart Rate, Blood Pressure, O₂ Sat, Temperature, Weight, Height, Glucose, Distance, Calories) render automatically on every chit</li>
+                <li><strong>Per-chit indicators</strong> — Click "+ Add Indicator" to add non-default objects to a specific chit. These appear below a divider and persist across saves</li>
+                <li><strong>Input types</strong> — Numeric fields for integer/decimal objects, checkboxes for boolean (e.g., Period Active), text inputs for string objects</li>
+                <li><strong>Range highlighting</strong> — Numeric inputs turn red-tinted when above the acceptable range and blue-tinted when below. Highlighting updates in real time as you type</li>
+                <li><strong>Unit switching</strong> — Labels show imperial or metric units based on your unit system setting (Settings → Unit System). Values are stored raw without conversion</li>
+                <li><strong>Conditional display</strong> — Some indicators (e.g., Period Active) only appear when a user setting matches a rule (e.g., sex = "Woman")</li>
+            </ul>
+            <p>Manage which indicators appear by default in the <a href="#custom-objects">Custom Objects Editor</a> → zone assignments.</p>
+            <h4>Indicators Dashboard View</h4>
+            <p>The Indicators view on the dashboard has three modes, toggled via a pill at the top:</p>
+            <ul>
+                <li><strong>Calendar</strong> — A year-view grid with one cell per day. Green cells mean all readings were in range; amber cells mean at least one reading was out of range. Click a day to view its chit(s)</li>
+                <li><strong>Log</strong> — A reverse-chronological list of chits with health data, showing date and a summary of readings (indicator names and values). Click an entry to open the chit</li>
+                <li><strong>Charts</strong> — SVG line charts for selected indicators over a configurable date range. Use the filter dropdown to choose which indicators to graph. Click "Add Graph" to include additional objects not in the default graphs zone</li>
+            </ul>
+            <p>The selected mode persists in localStorage. Graph filter selections also persist between visits.</p>
+            <h4>Quick Log</h4>
+            <p>The ⚡ Quick Log button on the Custom Objects Editor page creates a new chit with Point in Time set to now and status Complete, then opens it in the editor with the Health Indicators zone ready for data entry.</p>
             <h4>Owner Chip</h4>
             <p>The chit owner's display name is shown as a chip in the title zone header, inline with the "Title" label and the pinned icon. The chip uses the same visual style as people chips (background color, thumbnail image or placeholder). The owner chip is always displayed, even when the current user is the owner.</p>
             <h4>Snooze</h4>
@@ -718,6 +753,31 @@
             <p>Checklists, Tasks, Notes, Alarms, and Projects views respect the Combine Alerts toggle — showing either one combined 🛎️ icon or individual per-type icons depending on the setting.</p>
             <h4>"If Space" Behavior</h4>
             <p>When a visibility dropdown is set to "If Space," indicators always appear on card views and calendar day/week slots (sufficient room). On month cells, indicators may be hidden when the title would be truncated.</p>
+            <h3 id="custom-objects">Custom Objects</h3>
+            <p>The Custom Objects registry is a generic system for defining trackable data entities. Objects have a type, category, name, value type (integer, decimal, boolean, or string), optional units, and optional acceptable ranges. They can be assigned to one or more zones (like the Health Indicators zone or the Graphs zone) to control where they appear.</p>
+            <h4>Custom Objects Editor</h4>
+            <p>Access via the navigation menu (🧊 Objects). The editor page lets you browse, create, edit, and manage all custom objects.</p>
+            <ul>
+                <li><strong>Filter bar</strong> — Filter by type (dropdown) or search by name</li>
+                <li><strong>Object list</strong> — Grouped by type, each row shows the object name, zone assignment badges, and action buttons</li>
+                <li><strong>Create</strong> — Click "+ Create Custom Object" to open the create modal. Fill in name, type, category, value type, units, metric units, range min/max, and optional conditional display rule</li>
+                <li><strong>Edit</strong> — Click the edit button on any row to modify its properties</li>
+                <li><strong>Active toggle</strong> — Toggle an object active/inactive. Inactive objects are hidden from zone queries</li>
+                <li><strong>Delete / Restore</strong> — Soft-delete objects (they can be restored if they are standard/seeded objects)</li>
+                <li><strong>Zone management</strong> — Click the zone button to assign or unassign the object to zones, set per-zone config (like <code>is_default</code>), and adjust sort order</li>
+                <li><strong>⚡ Quick Log</strong> — Creates a new chit with Point in Time = now and status = Complete, then opens it in the editor for quick health data entry</li>
+            </ul>
+            <h4>Standard Objects</h4>
+            <p>CWOC seeds a standard library of objects for each user:</p>
+            <ul>
+                <li><strong>Vitals</strong> — Heart Rate, Blood Pressure (Systolic/Diastolic), Oxygen Saturation, Temperature, Period Active</li>
+                <li><strong>Body</strong> — Weight, Height, Glucose</li>
+                <li><strong>Activity</strong> — Distance, Calories</li>
+                <li><strong>Symptoms</strong> — 10 Illness symptoms, 10 Injury symptoms, 10 Allergy symptoms (all boolean)</li>
+            </ul>
+            <p>Standard objects can be soft-deleted and restored. User-created objects use the same system but cannot be restored after deletion.</p>
+            <h4>Zone Assignments</h4>
+            <p>Each object can be assigned to multiple zones. Zones are free-text identifiers — any string works. Built-in zones include <code>indicators_zone</code> (Health Indicators in the editor) and <code>graphs</code> (Charts mode on the dashboard). Each assignment can carry zone-specific config (e.g., <code>{"is_default": true}</code> for the indicators zone) and a sort order.</p>
             <h3 id="calculator">Calculator</h3>
             <p>Press <kbd>F4</kbd> on any page to open a floating calculator popover. Press the same hotkey again (or <kbd>ESC</kbd>) to close it. The calculator provides basic arithmetic with correct operator precedence and can insert results directly into editor fields.</p>
             <h4>Arithmetic</h4>

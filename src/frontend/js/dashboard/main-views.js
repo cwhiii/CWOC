@@ -618,7 +618,6 @@ function displayChecklistView(chitsToDisplay) {
       chitElement.draggable = true;
       chitElement.dataset.chitId = chit.id;
       applyChitColors(chitElement, chitColor(chit));
-      if (chit.status === "Complete") chitElement.classList.add("completed-task");
       if (chit.archived) chitElement.classList.add("archived-chit");
       if (_isDeclinedByCurrentUser(chit)) chitElement.classList.add("declined-chit");
 

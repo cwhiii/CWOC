@@ -104,6 +104,14 @@ class Checklist {
       self.deleteUncheckedItems();
     });
 
+    var menuCleanEmpty = document.createElement("button");
+    menuCleanEmpty.innerHTML = '<i class="fas fa-broom"></i> Clean up empty items';
+    menuCleanEmpty.addEventListener("click", function(e) {
+      e.stopPropagation(); e.preventDefault();
+      self._moreMenu.style.display = 'none';
+      self.cleanUpEmptyItems();
+    });
+
     var menuToNote = document.createElement("button");
     menuToNote.innerHTML = '<i class="fas fa-arrow-right"></i> Move to note';
     menuToNote.addEventListener("click", function(e) {
@@ -139,6 +147,7 @@ class Checklist {
 
     this._moreMenu.appendChild(menuClear);
     this._moreMenu.appendChild(menuDeleteUnchecked);
+    this._moreMenu.appendChild(menuCleanEmpty);
     this._moreMenu.appendChild(menuToNote);
     this._moreMenu.appendChild(menuSend);
     this._moreMenu.appendChild(menuPrint);
@@ -191,31 +200,49 @@ class Checklist {
     return this.items.map(({ id, text, level, checked, parent }) => ({ id, text, level, checked, parent }));
   }
 
+  /**
+   * Check if there's pending content that hasn't been committed yet:
+   * text in the "add new item" input, or an item currently being edited.
+   */
+  hasPendingContent() {
+    if (this.input && this.input.value.trim() !== "") return true;
+    if (this.editingItem) return true;
+    return false;
+  }
+
+  /**
+   * Commit any pending content (input box text, active editing) before exit.
+   * Returns true if something was committed.
+   */
+  commitPendingContent() {
+    var committed = false;
+    // Commit input box text as a new item
+    if (this.input && this.input.value.trim() !== "") {
+      this.addNewItem(this.input.value.trim());
+      this.input.value = "";
+      committed = true;
+    }
+    // Commit active inline editing
+    if (this.editingItem) {
+      var ta = this.container.querySelector("textarea.checklist-edit-input");
+      if (ta && ta.value.trim() !== "") {
+        this.editingItem.text = ta.value.trim();
+        committed = true;
+      }
+      // Clear editingItem before blur to prevent double-fire
+      this.editingItem = null;
+      if (ta) ta.remove();
+    }
+    if (committed) this._notifyChange();
+    return committed;
+  }
+
   createInput() {
     this.input = document.createElement("input");
     this.input.type = "text";
-    this.input.placeholder = "Add new item (auto-saves after 2s)";
+    this.input.placeholder = "Add new item (Enter to add)";
     this.input.className = "checklist-input";
-    this._inputDebounceTimer = null;
     var self = this;
-
-    // Debounced auto-add: if user stops typing for 2s, auto-add the item
-    this.input.addEventListener("input", function() {
-      if (self._inputDebounceTimer) clearTimeout(self._inputDebounceTimer);
-      if (self.input.value.trim() !== "") {
-        self.input.classList.add("debounce-pending");
-        self._inputDebounceTimer = setTimeout(function() {
-          if (self.input.value.trim() !== "") {
-            self.addNewItem(self.input.value.trim());
-            self.input.value = "";
-            self.input.classList.remove("debounce-pending");
-            if (typeof _flashChecklistAddArrow === 'function') _flashChecklistAddArrow();
-          }
-        }, 2000);
-      } else {
-        self.input.classList.remove("debounce-pending");
-      }
-    });
 
     this.input.addEventListener("keydown", (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "z" && !e.shiftKey) {
@@ -223,26 +250,11 @@ class Checklist {
       } else if ((e.metaKey || e.ctrlKey) && e.key === "z" && e.shiftKey) {
         e.preventDefault(); self.redo();
       } else if (e.key === "Enter" && this.input.value.trim() !== "") {
-        // Instant save on Enter — cancel any pending debounce
-        if (self._inputDebounceTimer) { clearTimeout(self._inputDebounceTimer); self._inputDebounceTimer = null; }
-        self.input.classList.remove("debounce-pending");
         this.addNewItem(this.input.value.trim());
         this.input.value = "";
         if (typeof _flashChecklistAddArrow === 'function') _flashChecklistAddArrow();
       } else if (e.key === "Escape") {
-        // Cancel pending debounce on Escape
-        if (self._inputDebounceTimer) { clearTimeout(self._inputDebounceTimer); self._inputDebounceTimer = null; }
-        self.input.classList.remove("debounce-pending");
         if (typeof cancelOrExit === "function") cancelOrExit();
-      }
-    });
-
-    // Also save on blur if there's text (existing behavior #1)
-    this.input.addEventListener("blur", function() {
-      if (self._inputDebounceTimer) { clearTimeout(self._inputDebounceTimer); self._inputDebounceTimer = null; }
-      if (self.input.value.trim() !== "") {
-        self.addNewItem(self.input.value.trim());
-        self.input.value = "";
       }
     });
 
@@ -388,6 +400,18 @@ class Checklist {
     this._notifyChange();
   }
 
+  /**
+   * Remove all items with empty or whitespace-only text.
+   */
+  cleanUpEmptyItems() {
+    var emptyCount = this.items.filter(function(i) { return !i.text || !i.text.trim(); }).length;
+    if (emptyCount === 0) return;
+    this._pushUndoState();
+    this.items = this.items.filter(function(i) { return i.text && i.text.trim(); });
+    this.render();
+    this._notifyChange();
+  }
+
   /* ── Item Element ───────────────────────────────────────────────────────── */
 
   createItemElement(item, isCompleted, isGhost) {
@@ -487,16 +511,56 @@ class Checklist {
       el.addEventListener("dragleave", (e) => this.onDragLeave(e, item));
       el.addEventListener("drop", (e) => this.onDrop(e, item));
 
-      // Touch drag support for mobile
+      // Touch drag support for mobile (reorder + swipe indent/unindent)
       var self = this;
       if (typeof enableTouchDrag === 'function') {
         enableTouchDrag(el, {
-          onStart: function() {
+          onStart: function(data) {
             self.draggedItem = item;
             self.draggedSubtree = self.getSubtree(item);
+            self._touchStartX = data.clientX;
+            self._touchStartY = data.clientY;
+            self._touchSwipeHandled = false;
             el.classList.add('dragging');
           },
           onMove: function(data) {
+            // Detect horizontal swipe for indent/unindent
+            var dx = data.clientX - self._touchStartX;
+            var dy = data.clientY - self._touchStartY;
+            // If horizontal movement dominates and exceeds threshold, treat as swipe
+            if (!self._touchSwipeHandled && Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 2) {
+              self._touchSwipeHandled = true;
+              el.classList.remove('dragging');
+              self.clearDropIndicator();
+              var idx = self.items.indexOf(item);
+              var subtree = self.getSubtree(item);
+              if (dx > 0) {
+                // Swipe right = indent
+                var prevLevel = idx > 0 ? self.items[idx - 1].level : -1;
+                if (idx > 0 && item.level < MAX_INDENT_LEVEL && item.level <= prevLevel) {
+                  self._pushUndoState();
+                  subtree.forEach(function(si) { si.level = Math.min(si.level + 1, MAX_INDENT_LEVEL); });
+                  item.parent = null;
+                  for (var i = idx - 1; i >= 0; i--) { if (self.items[i].level === item.level - 1) { item.parent = self.items[i].id; break; } }
+                  self.getChildren(item).forEach(function(child) { child.parent = item.id; });
+                  self.render(); self._notifyChange();
+                }
+              } else {
+                // Swipe left = unindent
+                if (item.level > 0) {
+                  self._pushUndoState();
+                  subtree.forEach(function(si) { si.level = Math.max(0, si.level - 1); });
+                  item.parent = null;
+                  for (var i = idx - 1; i >= 0; i--) { if (self.items[i].level === item.level - 1) { item.parent = self.items[i].id; break; } }
+                  self.getChildren(item).forEach(function(child) { child.parent = item.id; });
+                  self.render(); self._notifyChange();
+                }
+              }
+              return;
+            }
+            // If swipe was already handled, don't do drag logic
+            if (self._touchSwipeHandled) return;
+            // Vertical drag — reorder logic
             self.clearDropIndicator();
             var target = document.elementFromPoint(data.clientX, data.clientY);
             if (!target) return;
@@ -515,27 +579,35 @@ class Checklist {
           },
           onEnd: function(data) {
             el.classList.remove('dragging');
+            // If swipe was handled, don't do drop logic
+            if (self._touchSwipeHandled) {
+              self.draggedItem = null; self.draggedSubtree = []; self.dragOverItem = null;
+              self.clearDropIndicator();
+              return;
+            }
             if (!self.draggedItem || !self.dragOverItem) {
               self.draggedItem = null; self.draggedSubtree = []; self.dragOverItem = null;
               self.clearDropIndicator();
               return;
             }
             // Reuse the same drop logic as onDrop
+            self._pushUndoState();
             var targetItem = self.dragOverItem;
             self.items = self.items.filter(function(i) { return !self.draggedSubtree.some(function(s) { return s.id === i.id; }); });
             var ti = self.items.findIndex(function(i) { return i.id === targetItem.id; });
             if (self.dragOverPosition === 'on') {
-              self.draggedItem.parent = targetItem.id; self.draggedItem.level = targetItem.level + 1;
-              self._updateSubLevels(self.draggedSubtree, self.draggedItem.level);
+              var newRootLevel = targetItem.level + 1;
+              self._updateSubLevels(self.draggedSubtree, newRootLevel);
+              self.draggedItem.parent = targetItem.id;
               var ii = ti + 1; while (ii < self.items.length && self._isDesc(self.items[ii], targetItem)) ii++;
               self.items.splice(ii, 0, ...self.draggedSubtree);
             } else if (self.dragOverPosition === 'above') {
-              self.draggedItem.parent = targetItem.parent; self.draggedItem.level = targetItem.level;
-              self._updateSubLevels(self.draggedSubtree, self.draggedItem.level);
+              self._updateSubLevels(self.draggedSubtree, targetItem.level);
+              self.draggedItem.parent = targetItem.parent;
               self.items.splice(ti, 0, ...self.draggedSubtree);
             } else if (self.dragOverPosition === 'below') {
-              self.draggedItem.parent = targetItem.parent; self.draggedItem.level = targetItem.level;
-              self._updateSubLevels(self.draggedSubtree, self.draggedItem.level);
+              self._updateSubLevels(self.draggedSubtree, targetItem.level);
+              self.draggedItem.parent = targetItem.parent;
               var ii = ti + 1; while (ii < self.items.length && self.items[ii].level > targetItem.level) ii++;
               self.items.splice(ii, 0, ...self.draggedSubtree);
             }
@@ -576,18 +648,13 @@ class Checklist {
     };
     ta.addEventListener('input', autoSize);
 
-    // Debounced auto-save while editing: save after 2s of no typing
-    var editDebounceTimer = null;
+    // Per-keystroke auto-save: update item text on every input event
+    var self = this;
     ta.addEventListener('input', function() {
-      if (editDebounceTimer) clearTimeout(editDebounceTimer);
       if (ta.value.trim() !== "") {
-        editDebounceTimer = setTimeout(function() {
-          if (self.editingItem && ta.value.trim() !== "") {
-            item.text = ta.value.trim();
-            self._notifyChange();
-          }
-        }, 2000);
+        item.text = ta.value.trim();
       }
+      self._notifyChangeQuiet();
     });
 
     ta.focus();
@@ -615,13 +682,17 @@ class Checklist {
       ta.setSelectionRange(ta.value.length, ta.value.length);
     }
 
-    var self = this;
-
     var finishEditing = function(save) {
       if (!self.editingItem) return;
-      if (save && ta.value.trim() !== "") {
-        item.text = ta.value.trim();
-        self._notifyChange();
+      if (save) {
+        if (ta.value.trim() !== "") {
+          item.text = ta.value.trim();
+          self._notifyChange();
+        } else {
+          // Empty text on save — remove the item silently (no undo push for empty cleanup)
+          var idx = self.items.findIndex(function(i) { return i.id === item.id; });
+          if (idx !== -1) self.items.splice(idx, 1);
+        }
       }
       // Re-enable draggable
       if (itemEl) itemEl.setAttribute("draggable", "true");
@@ -629,18 +700,16 @@ class Checklist {
       textSpan.style.display = "";
       renderChecklistItemMarkdown(textSpan, item.text);
       self.editingItem = null;
+      self.render();
     };
 
     var addNewItemBelow = function() {
-      // Cancel any pending edit debounce so it doesn't push a separate undo state
-      if (editDebounceTimer) { clearTimeout(editDebounceTimer); editDebounceTimer = null; }
-      // Snapshot with the full textarea content as the item text (what user sees now)
-      var originalText = item.text;
-      item.text = ta.value;
-      self._pushUndoState();
       var cursorPos = ta.selectionStart;
       var textBefore = ta.value.substring(0, cursorPos);
       var textAfter = ta.value.substring(cursorPos);
+      // Snapshot with the full textarea content as the item text (what user sees now)
+      item.text = ta.value;
+      self._pushUndoState();
       // Current item keeps text before cursor
       item.text = textBefore.trim();
       var idx = self.items.findIndex(i => i.id === item.id);
@@ -649,7 +718,9 @@ class Checklist {
       var insertIdx = idx + 1;
       while (insertIdx < self.items.length && self.items[insertIdx].level > item.level) insertIdx++;
       self.items.splice(insertIdx, 0, newItem);
-      ta.remove(); textSpan.style.display = ""; renderChecklistItemMarkdown(textSpan, item.text); self.editingItem = null;
+      // Clear editingItem BEFORE removing textarea to prevent blur handler from firing finishEditing
+      self.editingItem = null;
+      ta.remove(); textSpan.style.display = ""; renderChecklistItemMarkdown(textSpan, item.text);
       self._updateCount();
       if (typeof self.onChangeCallback === "function") self.onChangeCallback(self.getChecklistData());
       self.render();
@@ -675,8 +746,17 @@ class Checklist {
         for (var i = idx + 1; i < self.items.length; i++) { if (!self.items[i].checked) { target = self.items[i]; break; } }
       }
       if (target) {
-        if (ta.value.trim() !== "") { item.text = ta.value.trim(); self._notifyChange(); }
-        ta.remove(); textSpan.style.display = ""; renderChecklistItemMarkdown(textSpan, item.text); self.editingItem = null;
+        if (ta.value.trim() !== "") {
+          item.text = ta.value.trim();
+          self._notifyChange();
+        } else {
+          // Empty item — remove it
+          var removeIdx = self.items.findIndex(function(i) { return i.id === item.id; });
+          if (removeIdx !== -1) self.items.splice(removeIdx, 1);
+        }
+        // Clear editingItem BEFORE removing textarea to prevent blur handler from firing
+        self.editingItem = null;
+        ta.remove(); textSpan.style.display = ""; renderChecklistItemMarkdown(textSpan, item.text);
         self.render();
         setTimeout(function() {
           var el = self.container.querySelector('[data-id="' + target.id + '"]');
@@ -878,20 +958,22 @@ class Checklist {
     e.preventDefault(); this.clearDropIndicator();
     if (!this.draggedItem) return;
     if (this.draggedSubtree.some(s => s.id === item.id)) { this.draggedItem = null; this.draggedSubtree = []; return; }
+    this._pushUndoState();
     this.items = this.items.filter(i => !this.draggedSubtree.some(s => s.id === i.id));
     var ti = this.items.findIndex(i => i.id === item.id);
     if (this.dragOverPosition === "on") {
-      this.draggedItem.parent = item.id; this.draggedItem.level = item.level + 1;
-      this._updateSubLevels(this.draggedSubtree, this.draggedItem.level);
+      var newRootLevel = item.level + 1;
+      this._updateSubLevels(this.draggedSubtree, newRootLevel);
+      this.draggedItem.parent = item.id;
       var ii = ti + 1; while (ii < this.items.length && this._isDesc(this.items[ii], item)) ii++;
       this.items.splice(ii, 0, ...this.draggedSubtree);
     } else if (this.dragOverPosition === "above") {
-      this.draggedItem.parent = item.parent; this.draggedItem.level = item.level;
-      this._updateSubLevels(this.draggedSubtree, this.draggedItem.level);
+      this._updateSubLevels(this.draggedSubtree, item.level);
+      this.draggedItem.parent = item.parent;
       this.items.splice(ti, 0, ...this.draggedSubtree);
     } else if (this.dragOverPosition === "below") {
-      this.draggedItem.parent = item.parent; this.draggedItem.level = item.level;
-      this._updateSubLevels(this.draggedSubtree, this.draggedItem.level);
+      this._updateSubLevels(this.draggedSubtree, item.level);
+      this.draggedItem.parent = item.parent;
       var ii = ti + 1; while (ii < this.items.length && this.items[ii].level > item.level) ii++;
       this.items.splice(ii, 0, ...this.draggedSubtree);
     }
@@ -903,7 +985,16 @@ class Checklist {
       el.classList.remove("drag-over-above", "drag-over-below", "drag-over-on", "dragging");
     });
   }
-  _updateSubLevels(sub, rootLvl) { var d = rootLvl - sub[0].level; sub.forEach(i => { i.level += d; }); }
+  _updateSubLevels(sub, newRootLevel) {
+    // Calculate delta from the CURRENT root level (before any modification)
+    // and apply it to all items in the subtree uniformly.
+    // This preserves the relative hierarchy: if root was level 0 with a child at level 1,
+    // moving root to level 1 makes the child level 2.
+    // Parent references within the subtree are unchanged — they still point to the same IDs.
+    // The caller sets the root item's .parent separately after this call.
+    var d = newRootLevel - sub[0].level;
+    sub.forEach(i => { i.level += d; });
+  }
   _isDesc(item, ancestor) { var p = this.getParent(item); while (p) { if (p.id === ancestor.id) return true; p = this.getParent(p); } return false; }
 
   _pushUndoState() {
@@ -955,6 +1046,12 @@ class Checklist {
     if (typeof this.onChangeCallback === "function") this.onChangeCallback(this.getChecklistData());
     // Auto-complete: if all items are checked and auto-complete is enabled
     _checkAutoCompleteChecklist(this);
+  }
+
+  /** Notify change without pushing to undo stack (for per-keystroke saves) */
+  _notifyChangeQuiet() {
+    this._updateCount();
+    if (typeof this.onChangeCallback === "function") this.onChangeCallback(this.getChecklistData());
   }
 }
 

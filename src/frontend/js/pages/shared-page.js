@@ -296,6 +296,7 @@ window.cwocInterceptRefresh = cwocInterceptRefresh;
 
   var buttons = [
     { id: 'home', label: '🏠 Chits', href: '/' },
+    { id: 'custom-objects', label: '🧊 Objects', href: '/frontend/html/custom-objects-editor.html' },
     { id: 'help', label: '❓ Help', href: '/frontend/html/help.html' },
   ];
 
@@ -882,6 +883,7 @@ window.cwocInterceptRefresh = cwocInterceptRefresh;
     { key: '7', icon: '🗑️', label: 'Trash',       href: '/frontend/html/trash.html' },
     { key: '8', icon: '👤', label: 'Profile',     href: '/profile' },
     { key: '9', icon: '🗺️', label: 'Maps',        href: '/maps' },
+    { key: '',  icon: '🧊', label: 'Custom Objects', href: '/frontend/html/custom-objects-editor.html' },
   ];
 
   // Conditionally add User Admin for admin users

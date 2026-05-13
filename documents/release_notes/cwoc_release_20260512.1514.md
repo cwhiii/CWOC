@@ -1,0 +1,1 @@
+Implemented full zone management UI in the Custom Objects Editor — zone modal now shows all known zones with assign/unassign toggles, per-zone config JSON editor, sort order fields, and an "Add to Zone" input for new assignments.

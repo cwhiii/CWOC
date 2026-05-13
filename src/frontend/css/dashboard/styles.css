@@ -17,3 +17,243 @@
    This coordinator file contains only rules that don't fit cleanly into
    any single sub-stylesheet, or future overrides that must load last.
    ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Indicators Calendar Mode — Year-view grid
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.ind-cal-container {
+  padding: 1em;
+  overflow-y: auto;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+.ind-cal-header {
+  font-size: 1.3em;
+  font-weight: bold;
+  color: #2b1e0f;
+  text-align: center;
+  margin-bottom: 12px;
+}
+
+.ind-cal-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.ind-cal-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ind-cal-month {
+  width: 32px;
+  flex-shrink: 0;
+  font-size: 0.75em;
+  font-weight: bold;
+  color: #6b4e31;
+  text-align: right;
+}
+
+.ind-cal-days {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 1px;
+}
+
+.ind-cal-cell {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.ind-cal-green {
+  background-color: #4caf50;
+}
+
+.ind-cal-amber {
+  background-color: #ff9800;
+}
+
+.ind-cal-none {
+  background-color: #e0d4b5;
+}
+
+.ind-cal-clickable {
+  cursor: pointer;
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
+
+.ind-cal-clickable:hover {
+  transform: scale(1.5);
+  box-shadow: 0 0 3px rgba(0, 0, 0, 0.3);
+  z-index: 1;
+}
+
+.ind-cal-today {
+  outline: 2px solid #2b1e0f;
+  outline-offset: -1px;
+}
+
+.ind-cal-legend {
+  display: flex;
+  gap: 16px;
+  margin-top: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.ind-cal-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.75em;
+  color: #6b4e31;
+}
+
+.ind-cal-legend-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+}
+
+/* Mobile: smaller cells on narrow screens */
+@media (max-width: 768px) {
+  .ind-cal-cell {
+    width: 8px;
+    height: 8px;
+  }
+  .ind-cal-month {
+    width: 28px;
+    font-size: 0.65em;
+  }
+  .ind-cal-container {
+    padding: 0.5em;
+  }
+}
+
+@media (max-width: 480px) {
+  .ind-cal-cell {
+    width: 6px;
+    height: 6px;
+    border-radius: 1px;
+  }
+  .ind-cal-month {
+    width: 24px;
+    font-size: 0.6em;
+  }
+  .ind-cal-days {
+    gap: 0px;
+  }
+  .ind-cal-row {
+    gap: 3px;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Indicators Log Mode — Reverse-chronological health entry list
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.ind-log-container {
+  padding: 1em;
+  overflow-y: auto;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+.ind-log-header {
+  font-size: 1.3em;
+  font-weight: bold;
+  color: #2b1e0f;
+  text-align: center;
+  margin-bottom: 12px;
+}
+
+.ind-log-empty {
+  text-align: center;
+  padding: 2em;
+  opacity: 0.5;
+  font-size: 0.95em;
+  color: #6b4e31;
+}
+
+.ind-log-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ind-log-entry {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: #fff8e1;
+  border: 1px solid #d4b896;
+  border-radius: 6px;
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.ind-log-entry:hover {
+  background: #fff3d0;
+  border-color: #8b5a2b;
+}
+
+.ind-log-entry:active {
+  background: #ffe8b0;
+}
+
+.ind-log-entry-date {
+  flex-shrink: 0;
+  font-size: 0.8em;
+  font-weight: bold;
+  color: #6b4e31;
+  min-width: 72px;
+  padding-top: 2px;
+}
+
+.ind-log-entry-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.ind-log-entry-title {
+  font-size: 0.85em;
+  font-weight: bold;
+  color: #2b1e0f;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 2px;
+}
+
+.ind-log-entry-summary {
+  font-size: 0.8em;
+  color: #5a4228;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+/* Mobile: stack date above body on narrow screens */
+@media (max-width: 480px) {
+  .ind-log-entry {
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px 10px;
+  }
+  .ind-log-entry-date {
+    min-width: unset;
+    font-size: 0.75em;
+  }
+  .ind-log-container {
+    padding: 0.5em;
+  }
+  .ind-log-list {
+    gap: 6px;
+  }
+}

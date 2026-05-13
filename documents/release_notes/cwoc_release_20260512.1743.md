@@ -1,0 +1,1 @@
+Added a 3-value pill toggle (Calendar | Log | Charts) to the Dashboard Indicators View. The selected mode persists to localStorage and switches between the calendar year-view, reverse-chronological log, and existing charts view.

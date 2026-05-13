@@ -1002,6 +1002,15 @@
                                 >
                                     ✕
                                 </button>
+                                <button
+                                    type="button"
+                                    id="autoCompleteChecklistBtn"
+                                    class="zone-button zone-button-conditional"
+                                    style="display: none"
+                                    title="When enabled, status automatically changes to Complete when all checklist items are checked, and reverts to ToDo if any item becomes unchecked or a new unchecked item is added."
+                                >
+                                    <i class="fas fa-check-double"></i> <span class="hideWhenNarrow">Auto-Complete</span>
+                                </button>
                             </div>
                             <span class="zone-toggle-icon">🔽</span>
                         </div>
@@ -1036,40 +1045,15 @@
                             onclick="toggleZone(event, 'healthIndicatorsSection', 'healthIndicatorsContent')"
                         >
                             <h2 class="zone-title">❤️ Health Indicators</h2>
+                            <a href="/frontend/html/custom-objects-editor.html" class="zone-header-link" title="Manage Custom Objects" onclick="event.stopPropagation();">⚙️</a>
                             <span class="zone-toggle-icon">🔽</span>
                         </div>
                         <div
                             id="healthIndicatorsContent"
                             class="zone-body"
-                            style="display:flex;flex-direction:column;gap:2px;padding:10px 14px;"
+                            style="display:flex;flex-direction:column;gap:4px;padding:10px 14px;"
                         >
-                            <!-- Vital Signs -->
-                            <div class="health-section-label">Vital Signs</div>
-                            <div class="health-grid">
-                                <div class="healthInput" id="heartRateEntry"></div>
-                                <div class="healthInput" id="bpEntry"></div>
-                                <div class="healthInput" id="spo2Entry"></div>
-                                <div class="healthInput" id="temperatureEntry"></div>
-                            </div>
-                            <!-- Body Measurements -->
-                            <div class="health-section-label">Body</div>
-                            <div class="health-grid">
-                                <div class="healthInput" id="weightEntry"></div>
-                                <div class="healthInput" id="heightEntry"></div>
-                                <div class="healthInput" id="glucoseEntry"></div>
-                            </div>
-                            <!-- Activity -->
-                            <div class="health-section-label">Activity</div>
-                            <div class="health-grid">
-                                <div class="healthInput" id="distanceEntry"></div>
-                            </div>
-                            <!-- Reproductive (conditional) -->
-                            <div id="reproductionSection" style="display:none;">
-                                <div class="health-section-label">Reproductive</div>
-                                <div class="health-grid">
-                                    <div class="healthInput" id="cycleEntry"></div>
-                                </div>
-                            </div>
+                            <!-- Dynamically populated by editor-health.js -->
                         </div>
                     </div>
 

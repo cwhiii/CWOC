@@ -1104,6 +1104,27 @@ function _buildEmailCard(chit, viSettings) {
         content.appendChild(attRow);
     }
 
+    // Smart link buttons — detect tracking numbers, flights, hotels, etc.
+    var smartLinks = (typeof detectSmartLinks === 'function') ? detectSmartLinks(chit) : [];
+    if (smartLinks.length > 0) {
+        var slWrap = document.createElement('div');
+        slWrap.className = 'email-smart-links';
+        smartLinks.forEach(function(link) {
+            var btn = document.createElement('a');
+            btn.className = 'email-track-btn';
+            btn.href = link.url;
+            btn.target = '_blank';
+            btn.rel = 'noopener noreferrer';
+            btn.title = link.name + (link.code ? ': ' + link.code : '');
+            btn.addEventListener('click', function(e) { e.stopPropagation(); });
+            btn.addEventListener('dblclick', function(e) { e.stopPropagation(); });
+            btn.innerHTML = '<img src="' + link.icon + '" alt="' + link.name + '" class="email-track-logo">' +
+                '<span class="email-track-label">' + link.label + '</span>';
+            slWrap.appendChild(btn);
+        });
+        content.appendChild(slWrap);
+    }
+
     content.appendChild(actions);
     content.appendChild(dateEl);
 
@@ -1304,6 +1325,23 @@ function _emailFormatDateSmart(emailDate) {
     } catch (e) {
         return emailDate;
     }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Tracking number & flight detection (legacy — now in shared-smart-links.js)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Legacy wrapper — delegates to shared detectSmartLinkFirst().
+ * Kept for backward compatibility with any code referencing this function.
+ * @param {Object} chit - The email chit object
+ * @returns {Object|null} { carrier, number, url, logo } or null
+ */
+function _emailDetectTracking(chit) {
+    if (typeof detectSmartLinkFirst === 'function') {
+        return detectSmartLinkFirst(chit);
+    }
+    return null;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

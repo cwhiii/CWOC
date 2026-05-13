@@ -150,10 +150,12 @@ class Chit(BaseModel):
     nest_thread_id: Optional[str] = None          # ID of an email chit in the target thread
     snoozed_until: Optional[str] = None           # ISO 8601 datetime — chit hidden from views until this time
     prerequisites: Optional[List[str]] = None      # JSON array of chit IDs that must be Complete before this chit is unblocked
+    auto_complete_checklist: Optional[bool] = None   # When true, status auto-toggles based on checklist completion
 
 class MultiValueEntry(BaseModel):
     label: Optional[str] = None    # "Work", "Home", "Mobile", custom
     value: Optional[str] = None
+    show_on_calendar: Optional[bool] = None  # For date entries: show as calendar event
 
 class Contact(BaseModel):
     id: Optional[str] = None
@@ -334,3 +336,37 @@ class BundleReorder(BaseModel):
 
 class BundleRuleAssociate(BaseModel):
     rule_id: str
+
+
+# ── Custom Objects Models ────────────────────────────────────────────────
+
+class CustomObjectCreate(BaseModel):
+    type: str
+    sub_type: Optional[str] = None
+    name: str
+    value_type: str  # "integer", "decimal", "boolean", "string"
+    units: Optional[str] = None
+    metric_units: Optional[str] = None
+    range_min: Optional[float] = None
+    range_max: Optional[float] = None
+    conditional_display: Optional[Dict[str, Any]] = None
+
+class CustomObjectUpdate(BaseModel):
+    name: Optional[str] = None
+    sub_type: Optional[str] = None
+    units: Optional[str] = None
+    metric_units: Optional[str] = None
+    range_min: Optional[float] = None
+    range_max: Optional[float] = None
+    active: Optional[bool] = None
+    sort_order: Optional[int] = None
+    conditional_display: Optional[Dict[str, Any]] = None
+
+class ZoneAssignmentCreate(BaseModel):
+    zone_id: str
+    config: Optional[Dict[str, Any]] = None
+    sort_order: Optional[int] = 0
+
+class ZoneAssignmentUpdate(BaseModel):
+    config: Optional[Dict[str, Any]] = None
+    sort_order: Optional[int] = None

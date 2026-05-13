@@ -1,0 +1,1 @@
+Fix show_on_calendar checkbox not filtering chits/contact dates from calendar views. Made the frontend filter catch both `false` and `0` values, broadened the backend birthday endpoint filter to handle integer `0` in addition to boolean `False`, and fixed the chit deserialization to properly distinguish between "explicitly disabled" (0/false) and "not set" (NULL/missing).

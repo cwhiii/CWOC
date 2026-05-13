@@ -1,137 +1,719 @@
 /**
- * editor-health.js — Health indicators zone
+ * editor-health.js — Health indicators zone (data-driven)
  *
- * Renders health indicator input fields (heart rate, blood pressure, weight,
- * etc.), loads health data from a chit, and gathers health data for saving.
- * Supports imperial/metric unit switching and sex-specific fields.
+ * Dynamically renders health indicator input fields by querying the Custom Objects
+ * registry (GET /api/custom-objects/zone/indicators_zone). Replaces the old hardcoded
+ * _healthFields array with a fully data-driven approach.
  *
- * Depends on: shared.js (getCachedSettings, setSaveButtonUnsaved)
+ * Each Custom Object's value_type determines the input type:
+ *   - "integer" / "decimal" → numeric input
+ *   - "boolean" → checkbox
+ *   - "string" → text input
+ *
+ * Supports conditional_display rules, imperial/metric unit switching, range
+ * highlighting, default vs per-chit indicator separation, and the "Add Indicator"
+ * picker for adding non-default indicators to specific chits.
+ *
+ * Depends on: shared-utils.js (getCachedSettings, setSaveButtonUnsaved, cwocToast)
  * Loaded before: editor-init.js, editor.js
  */
 
-window._healthData = {};
+// ── State ────────────────────────────────────────────────────────────────────
+window._healthData = {};              // UUID-keyed readings for current chit
+window._indicatorObjects = [];        // Cached zone query result
+window._perChitIndicators = [];       // UUIDs of per-chit indicators on current chit
+window._healthUnitSystem = 'imperial';
 
-var _healthFields = [
-  // Vitals
-  { id: 'heartRateEntry', key: 'heart_rate', label: '❤️ Heart Rate', unit: 'bpm', metricUnit: 'bpm' },
-  { id: 'bpEntry', key: 'bp', label: '🩸 Blood Pressure', unit: 'mmHg', metricUnit: 'mmHg', isBP: true },
-  { id: 'spo2Entry', key: 'spo2', label: '🫁 Oxygen Saturation', unit: '%', metricUnit: '%' },
-  { id: 'temperatureEntry', key: 'temperature', label: '🌡️ Temperature', unit: '°F', metricUnit: '°C' },
-  // Body
-  { id: 'weightEntry', key: 'weight', label: '⚖️ Weight', unit: 'lbs', metricUnit: 'kg' },
-  { id: 'heightEntry', key: 'height', label: '📐 Height', unit: 'in', metricUnit: 'cm' },
-  { id: 'glucoseEntry', key: 'glucose', label: '🍬 Glucose', unit: 'mg/dL', metricUnit: 'mmol/L' },
-  // Activity
-  { id: 'distanceEntry', key: 'distance', label: '🏃 Distance', unit: 'mi', metricUnit: 'km' },
-  // Cycle (female only)
-  { id: 'cycleEntry', key: 'period_active', label: '🔴 Period Active', unit: '', metricUnit: '', isCheckbox: true },
-];
+// ── Pure Logic Functions ─────────────────────────────────────────────────────
 
-function renderHealthIndicator(indicatorId) {
-  var element = document.getElementById(indicatorId);
-  if (!element) return;
+/**
+ * Evaluate a conditional_display rule against user settings.
+ * Returns true if the field should be shown.
+ * @param {object|null} rule - e.g. {"setting": "sex", "equals": "Woman"}
+ * @param {object} settings - cached user settings object
+ * @returns {boolean}
+ */
+function _evaluateConditionalDisplay(rule, settings) {
+  if (!rule) return true;
+  return settings[rule.setting] === rule.equals;
+}
 
-  var field = _healthFields.find(function(f) { return f.id === indicatorId; });
-  if (!field) return;
+/**
+ * Get the appropriate unit label based on the user's unit system.
+ * @param {object} obj - Custom Object with units and metric_units fields
+ * @param {string} unitSystem - 'imperial' or 'metric'
+ * @returns {string}
+ */
+function _getUnitLabel(obj, unitSystem) {
+  if (unitSystem === 'metric' && obj.metric_units) return obj.metric_units;
+  return obj.units || '';
+}
 
-  element.innerHTML = '';
-  element.style.cssText = 'display:flex;align-items:center;gap:6px;padding:4px 0;min-width:0;';
+/**
+ * Determine the CSS class for range highlighting.
+ * @param {*} value - current input value
+ * @param {number|null} rangeMin - acceptable range minimum
+ * @param {number|null} rangeMax - acceptable range maximum
+ * @returns {string} CSS class name or empty string
+ */
+function _getRangeHighlightClass(value, rangeMin, rangeMax) {
+  if (rangeMin == null && rangeMax == null) return '';
+  if (value == null || value === '') return '';
+  var numVal = parseFloat(value);
+  if (isNaN(numVal)) return '';
+  if (rangeMax != null && numVal > rangeMax) return 'indicator-range-high';
+  if (rangeMin != null && numVal < rangeMin) return 'indicator-range-low';
+  return '';
+}
 
-  var label = document.createElement('label');
-  label.textContent = field.label;
-  label.style.cssText = 'width:140px;flex-shrink:0;font-size:0.85em;font-weight:bold;color:#1a1208;margin:0;white-space:nowrap;text-align:left;';
-  element.appendChild(label);
+// ── Data Fetching ────────────────────────────────────────────────────────────
 
-  if (field.isCheckbox) {
-    var cb = document.createElement('input');
-    cb.type = 'checkbox';
-    cb.checked = !!window._healthData[field.key];
-    cb.style.cssText = 'width:20px;height:20px;accent-color:#8b5a2b;cursor:pointer;flex-shrink:0;';
-    cb.addEventListener('change', function() { window._healthData[field.key] = cb.checked; setSaveButtonUnsaved(); });
-    element.appendChild(cb);
-    // Spacer to match input+unit width
-    var spacer = document.createElement('span');
-    spacer.style.cssText = 'width:40px;flex-shrink:0;';
-    element.appendChild(spacer);
-  } else if (field.isBP) {
-    var bpWrap = document.createElement('div');
-    bpWrap.style.cssText = 'display:flex;align-items:center;gap:2px;width:70px;flex-shrink:0;';
-
-    var sysInput = document.createElement('input');
-    sysInput.type = 'number';
-    sysInput.placeholder = 'sys';
-    sysInput.style.cssText = 'flex:1;min-width:0;padding:4px 2px;border:1px solid #8b5a2b;border-radius:4px;font-family:inherit;font-size:0.9em;text-align:center;box-sizing:border-box;';
-    sysInput.value = (window._healthData.bp_systolic != null) ? window._healthData.bp_systolic : '';
-    sysInput.addEventListener('input', function() { window._healthData.bp_systolic = sysInput.value ? parseInt(sysInput.value) : null; setSaveButtonUnsaved(); });
-    bpWrap.appendChild(sysInput);
-
-    var slash = document.createElement('span');
-    slash.textContent = '/';
-    slash.style.cssText = 'font-size:0.9em;flex-shrink:0;';
-    bpWrap.appendChild(slash);
-
-    var diaInput = document.createElement('input');
-    diaInput.type = 'number';
-    diaInput.placeholder = 'dia';
-    diaInput.style.cssText = 'flex:1;min-width:0;padding:4px 2px;border:1px solid #8b5a2b;border-radius:4px;font-family:inherit;font-size:0.9em;text-align:center;box-sizing:border-box;';
-    diaInput.value = (window._healthData.bp_diastolic != null) ? window._healthData.bp_diastolic : '';
-    diaInput.addEventListener('input', function() { window._healthData.bp_diastolic = diaInput.value ? parseInt(diaInput.value) : null; setSaveButtonUnsaved(); });
-    bpWrap.appendChild(diaInput);
-
-    element.appendChild(bpWrap);
-  } else {
-    var input = document.createElement('input');
-    input.type = 'number';
-    input.step = 'any';
-    input.placeholder = '—';
-    input.style.cssText = 'width:70px;padding:4px 2px;border:1px solid #8b5a2b;border-radius:4px;font-family:inherit;font-size:0.9em;text-align:center;box-sizing:border-box;flex-shrink:0;';
-    input.value = (window._healthData[field.key] != null) ? window._healthData[field.key] : '';
-    input.addEventListener('input', function() { window._healthData[field.key] = input.value ? parseFloat(input.value) : null; setSaveButtonUnsaved(); });
-    element.appendChild(input);
+/**
+ * Fetch indicator objects assigned to the indicators_zone.
+ * Caches result in window._indicatorObjects to avoid repeated network calls.
+ * @returns {Promise<Array>} array of indicator objects
+ */
+async function _fetchIndicatorObjects() {
+  if (window._indicatorObjects && window._indicatorObjects.length > 0) {
+    return window._indicatorObjects;
   }
-
-  if (field.unit) {
-    var unitSpan = document.createElement('span');
-    var isMetric = window._healthUnitSystem === 'metric';
-    unitSpan.textContent = isMetric ? field.metricUnit : field.unit;
-    unitSpan.style.cssText = 'font-size:0.8em;color:#6b4e31;flex-shrink:0;';
-    element.appendChild(unitSpan);
+  try {
+    var resp = await fetch('/api/custom-objects/zone/indicators_zone');
+    if (!resp.ok) throw new Error('Zone query failed: ' + resp.status);
+    var objects = await resp.json();
+    window._indicatorObjects = objects;
+    return objects;
+  } catch (err) {
+    console.error('[editor-health] _fetchIndicatorObjects error:', err);
+    cwocToast('Failed to load indicators', 'error');
+    window._indicatorObjects = [];
+    return [];
   }
 }
 
-function _loadHealthData(chit) {
-  window._healthData = {};
-  if (chit.health_data) {
-    try {
-      var parsed = typeof chit.health_data === 'string' ? JSON.parse(chit.health_data) : chit.health_data;
-      window._healthData = parsed || {};
-    } catch (e) { window._healthData = {}; }
+// ── Rendering ────────────────────────────────────────────────────────────────
+
+/**
+ * Render a single indicator field into the container.
+ * Creates the appropriate input type based on value_type.
+ * @param {object} obj - Custom Object from zone query
+ * @param {*} value - current value from health_data (or null)
+ * @returns {HTMLElement} the rendered field row element
+ */
+function _renderIndicatorField(obj, value) {
+  var row = document.createElement('div');
+  row.className = 'indicator-field';
+  row.dataset.objectId = obj.id;
+
+  // Label
+  var label = document.createElement('label');
+  label.className = 'indicator-label';
+  label.textContent = obj.name;
+  row.appendChild(label);
+
+  var unitLabel = _getUnitLabel(obj, window._healthUnitSystem);
+
+  if (obj.value_type === 'boolean') {
+    // Checkbox input
+    var cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.className = 'indicator-checkbox';
+    cb.checked = !!value;
+    cb.dataset.objectId = obj.id;
+    cb.addEventListener('change', function() {
+      window._healthData[obj.id] = cb.checked;
+      setSaveButtonUnsaved();
+    });
+    row.appendChild(cb);
+  } else if (obj.value_type === 'string') {
+    // Text input
+    var textInput = document.createElement('input');
+    textInput.type = 'text';
+    textInput.className = 'indicator-input indicator-text';
+    textInput.placeholder = '—';
+    textInput.value = (value != null) ? value : '';
+    textInput.dataset.objectId = obj.id;
+    textInput.addEventListener('input', function() {
+      window._healthData[obj.id] = textInput.value || null;
+      setSaveButtonUnsaved();
+    });
+    row.appendChild(textInput);
+  } else {
+    // Numeric input (integer or decimal)
+    var numInput = document.createElement('input');
+    numInput.type = 'number';
+    numInput.className = 'indicator-input indicator-numeric';
+    numInput.step = (obj.value_type === 'integer') ? '1' : 'any';
+    numInput.placeholder = '—';
+    numInput.value = (value != null) ? value : '';
+    numInput.dataset.objectId = obj.id;
+
+    // Apply initial range highlight
+    var rangeClass = _getRangeHighlightClass(value, obj.range_min, obj.range_max);
+    if (rangeClass) numInput.classList.add(rangeClass);
+
+    numInput.addEventListener('input', function() {
+      var val = numInput.value;
+      // Update health data
+      if (val === '' || val == null) {
+        window._healthData[obj.id] = null;
+      } else {
+        window._healthData[obj.id] = (obj.value_type === 'integer')
+          ? parseInt(val) : parseFloat(val);
+      }
+      // Update range highlight in real time
+      numInput.classList.remove('indicator-range-high', 'indicator-range-low');
+      var cls = _getRangeHighlightClass(val, obj.range_min, obj.range_max);
+      if (cls) numInput.classList.add(cls);
+      setSaveButtonUnsaved();
+    });
+    row.appendChild(numInput);
   }
 
-  // Read unit system and sex from settings
-  getCachedSettings().then(function(s) {
-    window._healthUnitSystem = s.unit_system || 'imperial';
-    var isFemale = (s.sex === 'Woman');
-    var repSection = document.getElementById('reproductionSection');
-    if (repSection) {
-      repSection.style.display = isFemale ? '' : 'none';
+  // Unit label (if any, and not boolean)
+  if (unitLabel && obj.value_type !== 'boolean') {
+    var unitSpan = document.createElement('span');
+    unitSpan.className = 'indicator-unit';
+    unitSpan.textContent = unitLabel;
+    row.appendChild(unitSpan);
+  }
+
+  return row;
+}
+
+// ── Add Indicator Picker ──────────────────────────────────────────────────────
+
+/**
+ * Show the "Add Indicator" picker modal.
+ * Lists all non-default Custom Objects assigned to indicators_zone,
+ * excluding those already added as per-chit indicators on the current chit.
+ */
+function _showAddIndicatorPicker() {
+  // Remove any existing picker modal
+  document.querySelectorAll('.indicator-picker-overlay').forEach(function(el) { el.remove(); });
+
+  // Show loading overlay immediately, then fetch all objects
+  var overlay = document.createElement('div');
+  overlay.className = 'indicator-picker-overlay';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;';
+
+  var modal = document.createElement('div');
+  modal.style.cssText = 'background:#fffaf0;border:2px solid #6b4e31;border-radius:8px;padding:24px;min-width:280px;max-width:400px;width:90%;font-family:Lora,Georgia,serif;box-shadow:0 8px 32px rgba(0,0,0,0.3);max-height:70vh;display:flex;flex-direction:column;';
+  modal.innerHTML = '<div style="text-align:center;padding:1em;opacity:0.5;">Loading…</div>';
+  overlay.appendChild(modal);
+  overlay.addEventListener('click', function(e) { if (e.target === overlay) close(); });
+  document.body.appendChild(overlay);
+
+  function close() {
+    document.removeEventListener('keydown', onEsc, true);
+    overlay.remove();
+  }
+  function onEsc(e) {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      close();
     }
-    // Render all indicators with correct units
-    _healthFields.forEach(function(f) {
-      // Skip cycle field if not female
-      if (f.id === 'cycleEntry' && !isFemale) return;
-      renderHealthIndicator(f.id);
+  }
+  document.addEventListener('keydown', onEsc, true);
+
+  // Fetch ALL custom objects (not just zone-assigned ones)
+  fetch('/api/custom-objects').then(function(resp) {
+    if (!resp.ok) throw new Error('API error');
+    return resp.json();
+  }).then(function(allObjects) {
+    // Build set of IDs already shown as defaults in the zone
+    var defaultIds = {};
+    var zoneObjects = window._indicatorObjects || [];
+    for (var z = 0; z < zoneObjects.length; z++) {
+      var cfg = zoneObjects[z].zone_config || zoneObjects[z].config;
+      if (cfg && cfg.is_default === true) {
+        defaultIds[zoneObjects[z].id] = true;
+      }
+    }
+
+    // Filter: exclude defaults, already-added per-chit indicators, and inactive/deleted
+    var available = allObjects.filter(function(obj) {
+      if (defaultIds[obj.id]) return false;
+      if (window._perChitIndicators.indexOf(obj.id) !== -1) return false;
+      if (!obj.active) return false;
+      return true;
     });
-  }).catch(function() {
-    window._healthUnitSystem = 'imperial';
-    _healthFields.forEach(function(f) { renderHealthIndicator(f.id); });
+
+    _renderAddIndicatorModal(modal, available, close);
+  }).catch(function(err) {
+    console.error('[editor-health] Failed to fetch objects for picker:', err);
+    modal.innerHTML = '<h3 style="margin:0 0 12px 0;color:#4a2c2a;font-size:1.1em;">Add Indicator</h3>' +
+      '<p style="color:#b22222;">Failed to load objects.</p>' +
+      '<div style="display:flex;justify-content:flex-end;margin-top:16px;"><button onclick="this.closest(\'.indicator-picker-overlay\').remove()" style="padding:6px 14px;font-family:Lora,Georgia,serif;font-size:0.9em;background:#e8dcc8;color:#4a2c2a;border:1px solid #a0522d;border-radius:4px;cursor:pointer;">Close</button></div>';
   });
 }
 
+/**
+ * Render the Add Indicator modal content with objects grouped by category.
+ */
+function _renderAddIndicatorModal(modal, available, closeFn) {
+  modal.innerHTML = '';
+
+  // Title
+  var titleEl = document.createElement('h3');
+  titleEl.style.cssText = 'margin:0 0 12px 0;color:#4a2c2a;font-size:1.1em;';
+  titleEl.textContent = 'Add Indicator';
+  modal.appendChild(titleEl);
+
+  // List of available indicators grouped by category
+  if (available.length === 0) {
+    var emptyMsg = document.createElement('p');
+    emptyMsg.style.cssText = 'color:#6b4e31;font-size:0.95em;margin:8px 0;';
+    emptyMsg.textContent = 'No additional indicators available.';
+    modal.appendChild(emptyMsg);
+  } else {
+    // Group by category
+    var groups = {};
+    var groupOrder = [];
+    for (var i = 0; i < available.length; i++) {
+      var catKey = available[i].sub_type || available[i].type || 'Other';
+      if (!groups[catKey]) { groups[catKey] = []; groupOrder.push(catKey); }
+      groups[catKey].push(available[i]);
+    }
+
+    var list = document.createElement('div');
+    list.style.cssText = 'overflow-y:auto;flex:1;';
+
+    for (var g = 0; g < groupOrder.length; g++) {
+      var catName = groupOrder[g];
+      var catItems = groups[catName];
+
+      // Category header
+      var catHeader = document.createElement('div');
+      catHeader.style.cssText = 'padding:8px 12px 4px;font-size:0.8em;font-weight:bold;color:#4a2c2a;background:#f0e6d3;border-bottom:1px solid #e8dcc8;cursor:pointer;user-select:none;';
+      catHeader.innerHTML = '<span style="font-size:0.9em;">▼</span> ' + catName + ' <span style="opacity:0.5;font-weight:normal;">(' + catItems.length + ')</span>';
+      list.appendChild(catHeader);
+
+      var catBody = document.createElement('div');
+      list.appendChild(catBody);
+
+      // Wire collapse
+      (function(header, body) {
+        header.addEventListener('click', function() {
+          var arrow = header.querySelector('span');
+          if (body.style.display === 'none') {
+            body.style.display = '';
+            arrow.textContent = '▼';
+          } else {
+            body.style.display = 'none';
+            arrow.textContent = '▶';
+          }
+        });
+      })(catHeader, catBody);
+
+      for (var j = 0; j < catItems.length; j++) {
+        (function(obj) {
+          var item = document.createElement('div');
+          item.className = 'indicator-picker-item';
+          item.style.cssText = 'padding:8px 12px 8px 20px;cursor:pointer;border-bottom:1px solid #e8dcc8;color:#1a1208;font-size:0.9em;';
+          item.textContent = obj.name;
+          item.addEventListener('mouseenter', function() { item.style.background = '#f0e6d3'; });
+          item.addEventListener('mouseleave', function() { item.style.background = 'transparent'; });
+          item.addEventListener('click', function() {
+            _addPerChitIndicator(obj);
+            closeFn();
+          });
+          catBody.appendChild(item);
+        })(catItems[j]);
+      }
+    }
+    modal.appendChild(list);
+  }
+
+  // Cancel button
+  var btnRow = document.createElement('div');
+  btnRow.style.cssText = 'display:flex;justify-content:flex-end;margin-top:16px;';
+  var cancelBtn = document.createElement('button');
+  cancelBtn.textContent = 'Cancel';
+  cancelBtn.style.cssText = 'padding:6px 14px;font-family:Lora,Georgia,serif;font-size:0.9em;background:#e8dcc8;color:#4a2c2a;border:1px solid #a0522d;border-radius:4px;cursor:pointer;';
+  cancelBtn.addEventListener('mouseenter', function() { cancelBtn.style.background = '#d4c5a9'; });
+  cancelBtn.addEventListener('mouseleave', function() { cancelBtn.style.background = '#e8dcc8'; });
+  cancelBtn.addEventListener('click', function() { closeFn(); });
+  btnRow.appendChild(cancelBtn);
+  modal.appendChild(btnRow);
+}
+}
+
+/**
+ * Add a per-chit indicator to the current chit.
+ * Renders the field into the appropriate category section, and marks dirty.
+ * @param {object} obj - Custom Object to add
+ */
+function _addPerChitIndicator(obj) {
+  window._perChitIndicators.push(obj.id);
+
+  var container = document.getElementById('healthIndicatorsContent');
+  if (!container) return;
+
+  // Add divider if this is the first per-chit indicator
+  if (!container.querySelector('.indicator-per-chit-divider')) {
+    var divider = document.createElement('div');
+    divider.className = 'indicator-per-chit-divider';
+    var addBtn = container.querySelector('.indicator-add-btn');
+    if (addBtn) {
+      container.insertBefore(divider, addBtn);
+    } else {
+      container.appendChild(divider);
+    }
+  }
+
+  // Find or create the category section for this per-chit indicator
+  var catKey = obj.sub_type || obj.type || 'Other';
+  var sectionId = 'indicator-pc-section-' + catKey.replace(/[^a-zA-Z0-9]/g, '_');
+  var sectionBody = document.getElementById(sectionId);
+
+  if (!sectionBody) {
+    // Create a new section header + body for this category
+    var sectionHeader = document.createElement('div');
+    sectionHeader.className = 'indicator-section-header';
+    sectionHeader.innerHTML = '<span class="indicator-section-arrow">▼</span> ' + catKey;
+    sectionHeader.style.cssText = 'cursor:pointer;user-select:none;padding:6px 0 4px 0;font-size:0.85em;font-weight:bold;color:#4a2c2a;border-bottom:1px solid #e8dcc8;margin-bottom:4px;';
+
+    sectionBody = document.createElement('div');
+    sectionBody.className = 'indicator-section-body';
+    sectionBody.id = sectionId;
+
+    (function(header, body) {
+      header.addEventListener('click', function() {
+        var arrow = header.querySelector('.indicator-section-arrow');
+        if (body.style.display === 'none') {
+          body.style.display = '';
+          if (arrow) arrow.textContent = '▼';
+        } else {
+          body.style.display = 'none';
+          if (arrow) arrow.textContent = '▶';
+        }
+      });
+    })(sectionHeader, sectionBody);
+
+    // Insert before the Add button
+    var addBtn = container.querySelector('.indicator-add-btn');
+    if (addBtn) {
+      container.insertBefore(sectionHeader, addBtn);
+      container.insertBefore(sectionBody, addBtn);
+    } else {
+      container.appendChild(sectionHeader);
+      container.appendChild(sectionBody);
+    }
+  }
+
+  // Render the field into the section body
+  var fieldEl = _renderIndicatorField(obj, null);
+  sectionBody.appendChild(fieldEl);
+
+  // Mark chit dirty
+  setSaveButtonUnsaved();
+}
+
+// ── Orchestration ────────────────────────────────────────────────────────────
+
+/**
+ * Get default indicators (zone_config.is_default === true).
+ * @param {Array} objects - all indicator objects from zone query
+ * @returns {Array}
+ */
+function _getDefaultIndicators(objects) {
+  return objects.filter(function(obj) {
+    var cfg = obj.zone_config || obj.config;
+    return cfg && cfg.is_default === true;
+  });
+}
+
+/**
+ * Get non-default indicators (zone_config.is_default is false or absent).
+ * @param {Array} objects - all indicator objects from zone query
+ * @returns {Array}
+ */
+function _getNonDefaultIndicators(objects) {
+  return objects.filter(function(obj) {
+    var cfg = obj.zone_config || obj.config;
+    return !cfg || cfg.is_default !== true;
+  });
+}
+
+/**
+ * Identify per-chit indicator UUIDs from health_data that are not in the default set.
+ * These are non-default objects whose UUID appears as a key in health_data.
+ * @param {object} healthData - UUID-keyed health data from chit
+ * @param {Array} defaultObjects - default indicator objects
+ * @param {Array} allObjects - all indicator objects from zone query
+ * @returns {Array} UUIDs of per-chit indicators found in health_data
+ */
+function _identifyPerChitIndicators(healthData, defaultObjects, allObjects) {
+  if (!healthData || typeof healthData !== 'object') return [];
+
+  var defaultIds = {};
+  for (var i = 0; i < defaultObjects.length; i++) {
+    defaultIds[defaultObjects[i].id] = true;
+  }
+
+  // Build a lookup of all known object IDs in the zone
+  var allObjectIds = {};
+  for (var j = 0; j < allObjects.length; j++) {
+    allObjectIds[allObjects[j].id] = true;
+  }
+
+  var perChitIds = [];
+  var keys = Object.keys(healthData);
+  for (var k = 0; k < keys.length; k++) {
+    var key = keys[k];
+    // Only consider keys that are known object UUIDs and NOT in the default set
+    if (allObjectIds[key] && !defaultIds[key]) {
+      perChitIds.push(key);
+    }
+  }
+  return perChitIds;
+}
+
+/**
+ * Load health data for a chit. Orchestrates: parse health_data, fetch objects,
+ * evaluate conditional display, render default indicators, then per-chit indicators
+ * with a visual divider between them.
+ * @param {object} chit - the chit object (may have health_data as string or object)
+ */
+async function _loadHealthData(chit) {
+  // Parse health_data from chit
+  window._healthData = {};
+  if (chit.health_data) {
+    try {
+      var parsed = (typeof chit.health_data === 'string')
+        ? JSON.parse(chit.health_data) : chit.health_data;
+      window._healthData = parsed || {};
+    } catch (e) {
+      console.warn('[editor-health] Failed to parse health_data:', e);
+      window._healthData = {};
+    }
+  }
+
+  // Reset per-chit indicators
+  window._perChitIndicators = [];
+
+  // Get user settings for unit system and conditional display
+  var settings = {};
+  try {
+    settings = await getCachedSettings();
+  } catch (e) {
+    settings = {};
+  }
+  window._healthUnitSystem = settings.unit_system || 'imperial';
+
+  // Fetch indicator objects from zone
+  var objects = await _fetchIndicatorObjects();
+
+  // Get the container and clear it
+  var container = document.getElementById('healthIndicatorsContent');
+  if (!container) return;
+  container.innerHTML = '';
+
+  // If no objects, show a message
+  if (!objects || objects.length === 0) {
+    var emptyMsg = document.createElement('div');
+    emptyMsg.className = 'indicator-empty-msg';
+    emptyMsg.textContent = 'No indicators configured — visit Custom Objects Editor to set up.';
+    container.appendChild(emptyMsg);
+    return;
+  }
+
+  // Sort by zone_sort_order (should already be sorted from API, but ensure)
+  var sorted = objects.slice().sort(function(a, b) {
+    return (a.zone_sort_order || 0) - (b.zone_sort_order || 0);
+  });
+
+  // Split into default and non-default sets
+  var defaultObjects = _getDefaultIndicators(sorted);
+  var nonDefaultObjects = _getNonDefaultIndicators(sorted);
+
+  // Identify per-chit indicators from health_data (non-default UUIDs with values)
+  var perChitIds = _identifyPerChitIndicators(window._healthData, defaultObjects, sorted);
+  window._perChitIndicators = perChitIds.slice();
+
+  // ── Render default indicators grouped by category ────────────────────────
+  var renderedDefault = 0;
+
+  // Group default objects by category (fallback to type if no category)
+  var groups = {};
+  var groupOrder = [];
+  for (var i = 0; i < defaultObjects.length; i++) {
+    var obj = defaultObjects[i];
+
+    // Evaluate conditional display rule
+    if (!_evaluateConditionalDisplay(obj.conditional_display, settings)) {
+      continue;
+    }
+
+    var groupKey = obj.sub_type || obj.type || 'Other';
+    if (!groups[groupKey]) {
+      groups[groupKey] = [];
+      groupOrder.push(groupKey);
+    }
+    groups[groupKey].push(obj);
+  }
+
+  // Render each group as a collapsible section
+  for (var g = 0; g < groupOrder.length; g++) {
+    var groupName = groupOrder[g];
+    var groupItems = groups[groupName];
+
+    // Section header (collapsible)
+    var sectionHeader = document.createElement('div');
+    sectionHeader.className = 'indicator-section-header';
+    sectionHeader.innerHTML = '<span class="indicator-section-arrow">▼</span> ' + groupName;
+    sectionHeader.style.cssText = 'cursor:pointer;user-select:none;padding:6px 0 4px 0;font-size:0.85em;font-weight:bold;color:#4a2c2a;border-bottom:1px solid #e8dcc8;margin-bottom:4px;';
+    container.appendChild(sectionHeader);
+
+    // Section body
+    var sectionBody = document.createElement('div');
+    sectionBody.className = 'indicator-section-body';
+    container.appendChild(sectionBody);
+
+    // Wire collapse toggle
+    (function(header, body) {
+      header.addEventListener('click', function() {
+        var arrow = header.querySelector('.indicator-section-arrow');
+        if (body.style.display === 'none') {
+          body.style.display = '';
+          if (arrow) arrow.textContent = '▼';
+        } else {
+          body.style.display = 'none';
+          if (arrow) arrow.textContent = '▶';
+        }
+      });
+    })(sectionHeader, sectionBody);
+
+    // Render fields in this group
+    for (var fi = 0; fi < groupItems.length; fi++) {
+      var gObj = groupItems[fi];
+      var value = window._healthData[gObj.id];
+      if (value === undefined) value = null;
+      var fieldEl = _renderIndicatorField(gObj, value);
+      sectionBody.appendChild(fieldEl);
+      renderedDefault++;
+    }
+  }
+
+  // ── Render per-chit indicators (with divider), grouped by category ────────
+  if (perChitIds.length > 0) {
+    // Add visual divider between default and per-chit indicators
+    var divider = document.createElement('div');
+    divider.className = 'indicator-per-chit-divider';
+    container.appendChild(divider);
+
+    // Group per-chit indicators by category
+    var pcGroups = {};
+    var pcGroupOrder = [];
+    for (var p = 0; p < perChitIds.length; p++) {
+      var pcId = perChitIds[p];
+      var pcObj = null;
+      for (var n = 0; n < nonDefaultObjects.length; n++) {
+        if (nonDefaultObjects[n].id === pcId) {
+          pcObj = nonDefaultObjects[n];
+          break;
+        }
+      }
+      if (!pcObj) continue;
+      if (!_evaluateConditionalDisplay(pcObj.conditional_display, settings)) continue;
+
+      var pcGroupKey = pcObj.sub_type || pcObj.type || 'Other';
+      if (!pcGroups[pcGroupKey]) {
+        pcGroups[pcGroupKey] = [];
+        pcGroupOrder.push(pcGroupKey);
+      }
+      pcGroups[pcGroupKey].push(pcObj);
+    }
+
+    for (var pg = 0; pg < pcGroupOrder.length; pg++) {
+      var pcGroupName = pcGroupOrder[pg];
+      var pcGroupItems = pcGroups[pcGroupName];
+
+      // Section header
+      var pcSectionHeader = document.createElement('div');
+      pcSectionHeader.className = 'indicator-section-header';
+      pcSectionHeader.innerHTML = '<span class="indicator-section-arrow">▼</span> ' + pcGroupName;
+      pcSectionHeader.style.cssText = 'cursor:pointer;user-select:none;padding:6px 0 4px 0;font-size:0.85em;font-weight:bold;color:#4a2c2a;border-bottom:1px solid #e8dcc8;margin-bottom:4px;';
+      container.appendChild(pcSectionHeader);
+
+      var pcSectionBody = document.createElement('div');
+      pcSectionBody.className = 'indicator-section-body';
+      container.appendChild(pcSectionBody);
+
+      (function(header, body) {
+        header.addEventListener('click', function() {
+          var arrow = header.querySelector('.indicator-section-arrow');
+          if (body.style.display === 'none') {
+            body.style.display = '';
+            if (arrow) arrow.textContent = '▼';
+          } else {
+            body.style.display = 'none';
+            if (arrow) arrow.textContent = '▶';
+          }
+        });
+      })(pcSectionHeader, pcSectionBody);
+
+      for (var pfi = 0; pfi < pcGroupItems.length; pfi++) {
+        var pcFieldObj = pcGroupItems[pfi];
+        var pcValue = window._healthData[pcFieldObj.id];
+        if (pcValue === undefined) pcValue = null;
+        var pcFieldEl = _renderIndicatorField(pcFieldObj, pcValue);
+        pcSectionBody.appendChild(pcFieldEl);
+      }
+    }
+  }
+
+  if (renderedDefault === 0 && perChitIds.length === 0) {
+    var noVisibleMsg = document.createElement('div');
+    noVisibleMsg.className = 'indicator-empty-msg';
+    noVisibleMsg.textContent = 'No indicators visible with current settings.';
+    container.appendChild(noVisibleMsg);
+  }
+
+  // ── "+ Add Indicator" button ─────────────────────────────────────────────────
+  var addBtn = document.createElement('button');
+  addBtn.className = 'zone-button indicator-add-btn';
+  addBtn.textContent = '+ Add Indicator';
+  addBtn.style.cssText = 'margin-top:10px;align-self:flex-start;';
+  addBtn.addEventListener('click', function() {
+    _showAddIndicatorPicker();
+  });
+  container.appendChild(addBtn);
+}
+
+/**
+ * Gather current health data values into a UUID-keyed object for saving.
+ * Includes both default and per-chit indicator values.
+ * Per-chit indicator UUIDs are persisted in health_data so they reappear on reload.
+ * Returns null if no readings have values.
+ * @returns {object|null}
+ */
 function _gatherHealthData() {
   var result = {};
+
+  // Collect all values from _healthData (includes both default and per-chit)
   for (var key in window._healthData) {
-    if (window._healthData[key] != null) result[key] = window._healthData[key];
+    if (window._healthData[key] != null && window._healthData[key] !== '') {
+      result[key] = window._healthData[key];
+    }
   }
+
+  // Ensure per-chit indicator UUIDs are persisted even if their value is currently
+  // null/empty — this preserves the "added" state so they reappear on reload.
+  // We store them with their current value (which may be null if user cleared it).
+  // If the value is null/empty, we still include the key so the per-chit indicator
+  // reappears on next load. We use a sentinel: if value is truly empty, store null
+  // to signal "this indicator was added but has no reading."
+  for (var i = 0; i < window._perChitIndicators.length; i++) {
+    var pcId = window._perChitIndicators[i];
+    if (!(pcId in result)) {
+      // Per-chit indicator was added but has no value — persist with null
+      // so it reappears on reload
+      result[pcId] = null;
+    }
+  }
+
   return Object.keys(result).length > 0 ? result : null;
 }

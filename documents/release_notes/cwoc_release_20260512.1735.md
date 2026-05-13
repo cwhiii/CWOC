@@ -1,0 +1,1 @@
+Added "⚡ Quick Log" button to the Custom Objects Editor page — creates a new chit with point_in_time set to now and status "Complete", then navigates to the editor for immediate health indicator data entry.

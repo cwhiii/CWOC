@@ -1,0 +1,1 @@
+Auto-complete now considers prerequisites: a chit won't auto-complete unless all prerequisite chits are also Complete. If a prerequisite loses its Complete status, dependent chits with auto-complete enabled are reverted to ToDo (cascade). When all prereqs complete and checklist is done (or empty), the chit auto-completes. Works both in-editor and server-side.

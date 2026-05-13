@@ -3,8 +3,9 @@
   "name": "C.W.'s Omni Chits",
   "version": "1.0.0",
   "config_flow": true,
-  "documentation": "http://192.168.1.111:3333/frontend/html/help.html",
+  "documentation": "https://github.com/cwhiii/cwoc-ha-integration",
   "requirements": [],
-  "codeowners": [],
-  "iot_class": "local_polling"
+  "codeowners": ["@cwhiii"],
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/cwhiii/cwoc-ha-integration/issues"
 }

@@ -39,6 +39,19 @@ function getPrerequisitesData() {
   return _prereqSelectedIds.length > 0 ? [..._prereqSelectedIds] : null;
 }
 
+/**
+ * Check if all prerequisites are Complete.
+ * Returns true if there are no prerequisites or all are Complete.
+ */
+function _prereqAllComplete() {
+  if (_prereqSelectedIds.length === 0) return true;
+  for (var i = 0; i < _prereqSelectedIds.length; i++) {
+    var chit = _prereqChitCache[_prereqSelectedIds[i]];
+    if (!chit || chit.status !== 'Complete') return false;
+  }
+  return true;
+}
+
 // ── Render Selected List ──────────────────────────────────────────────────────
 
 /**
@@ -148,6 +161,8 @@ function openPrereqPicker() {
       setSaveButtonUnsaved();
       _renderPrereqList();
       _checkPrereqAutoBlock();
+      // Re-evaluate auto-complete since prereqs were added
+      if (typeof _evaluateAutoCompleteChecklist === 'function') _evaluateAutoCompleteChecklist();
     }
   });
 }
@@ -175,6 +190,8 @@ async function _onPrereqStatusChange(selectEl) {
 
     cwocToast('Prerequisite status updated.', 'info');
     _checkPrereqAutoBlock();
+    // Re-evaluate auto-complete since prereq status changed
+    if (typeof _evaluateAutoCompleteChecklist === 'function') _evaluateAutoCompleteChecklist();
   } catch (e) {
     console.error('[Prerequisites] Status update failed:', e);
     cwocToast('Failed to update prerequisite status.', 'error');
@@ -188,6 +205,8 @@ function _removePrereq(id) {
   setSaveButtonUnsaved();
   _renderPrereqList();
   _checkPrereqAutoBlock();
+  // Re-evaluate auto-complete since prereq was removed
+  if (typeof _evaluateAutoCompleteChecklist === 'function') _evaluateAutoCompleteChecklist();
 }
 
 // ── Auto-block Logic ──────────────────────────────────────────────────────────

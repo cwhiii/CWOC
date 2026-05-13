@@ -130,6 +130,108 @@
     font-weight: bold;
 }
 
+/* ── Data-driven indicator fields (new architecture) ──────────────────────── */
+
+.indicator-field {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    padding: 6px 8px;
+    min-width: 0;
+    background: rgba(139, 90, 43, 0.03);
+    border-radius: 4px;
+    border: 1px solid rgba(139, 90, 43, 0.1);
+}
+
+.indicator-label {
+    font-size: 0.78em;
+    font-weight: bold;
+    color: #4a2c2a;
+    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-align: left;
+    max-width: 100%;
+}
+
+.indicator-input {
+    width: 100%;
+    padding: 4px 6px;
+    border: 1px solid #8b5a2b;
+    border-radius: 4px;
+    font-family: inherit;
+    font-size: 0.9em;
+    text-align: center;
+    box-sizing: border-box;
+}
+
+.indicator-text {
+    text-align: left;
+}
+
+.indicator-checkbox {
+    width: 20px;
+    height: 20px;
+    accent-color: #8b5a2b;
+    cursor: pointer;
+}
+
+.indicator-unit {
+    font-size: 0.72em;
+    color: #6b4e31;
+    white-space: nowrap;
+    align-self: center;
+}
+
+.indicator-empty-msg {
+    font-size: 0.9em;
+    color: #6b4e31;
+    font-style: italic;
+    padding: 8px 0;
+}
+
+/* Section body — grid layout for indicator fields */
+.indicator-section-body {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+    margin-bottom: 10px;
+}
+
+/* Per-chit indicator divider — separates default from per-chit indicators */
+.indicator-per-chit-divider {
+    border: none;
+    border-top: 1px dashed rgba(139, 90, 43, 0.4);
+    margin: 8px 0;
+    height: 0;
+}
+
+/* Range highlighting */
+.indicator-range-high {
+    border-color: #b22222 !important;
+    background-color: rgba(178, 34, 34, 0.08);
+}
+
+.indicator-range-low {
+    border-color: #2a5db0 !important;
+    background-color: rgba(42, 93, 176, 0.08);
+}
+
+@media (max-width: 600px) {
+    .indicator-section-body {
+        grid-template-columns: 1fr;
+    }
+    .indicator-label {
+        font-size: 0.8em;
+    }
+    .indicator-input {
+        width: 100%;
+    }
+}
+}
+
 .zone-box {
     min-height: 100px;
     padding: 10px;

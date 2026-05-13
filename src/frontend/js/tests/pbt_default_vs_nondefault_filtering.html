@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>PBT: Default vs Non-Default Indicator Filtering</title>
+    <style>
+        body { font-family: monospace; padding: 20px; background: #1a1a2e; color: #e0e0e0; }
+        .pass { color: #4caf50; }
+        .fail { color: #f44336; }
+        .info { color: #90caf9; }
+        pre { white-space: pre-wrap; }
+    </style>
+</head>
+<body>
+<h1>Property-Based Test: Default vs Non-Default Indicator Filtering</h1>
+<p class="info">Feature: indicators_zone, Property 6: Default vs Non-Default Indicator Filtering</p>
+<p class="info">Validates: Requirements 2.1, 2.2, 2.3</p>
+<pre id="output"></pre>
+<script>
+(function() {
+    var output = document.getElementById('output');
+    function log(msg) { output.textContent += msg + '\n'; }
+
+    // ─── Functions Under Test (inlined from editor-health.js) ───────────────────
+
+    function _getDefaultIndicators(objects) {
+        return objects.filter(function(obj) {
+            return obj.config && obj.config.is_default === true;
+        });
+    }
+
+    function _getNonDefaultIndicators(objects) {
+        return objects.filter(function(obj) {
+            return !obj.config || obj.config.is_default !== true;
+        });
+    }
+
+    // ─── Random Generators ──────────────────────────────────────────────────────
+
+    function randomInt(min, max) {
+        return Math.floor(Math.random() * (max - min + 1)) + min;
+    }
+
+    function randomUUID() {
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+            var r = Math.random() * 16 | 0;
+            var v = c === 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
+        });
+    }
+
+    function randomString(len) {
+        var chars = 'abcdefghijklmnopqrstuvwxyz';
+        var s = '';
+        for (var i = 0; i < len; i++) s += chars[Math.floor(Math.random() * chars.length)];
+        return s;
+    }
+
+    /**
+     * Generate a random config object with mixed is_default values.
+     * Possible shapes:
+     *   - null/undefined (no config)
+     *   - {} (config exists but no is_default key)
+     *   - { is_default: true }
+     *   - { is_default: false }
+     *   - { is_default: "true" } (string, not boolean — should NOT count as default)
+     *   - { is_default: 1 } (number, not boolean — should NOT count as default)
+     *   - { is_default: null }
+     */
+    function randomConfig() {
+        var choice = randomInt(0, 7);
+        switch (choice) {
+            case 0: return null;
+            case 1: return undefined;
+            case 2: return {};
+            case 3: return { is_default: true };
+            case 4: return { is_default: false };
+            case 5: return { is_default: "true" };  // truthy string, but !== true
+            case 6: return { is_default: 1 };       // truthy number, but !== true
+            case 7: return { is_default: null };
+            default: return { is_default: true };
+        }
+    }
+
+    function generateObjects() {
+        var count = randomInt(0, 20);
+        var objects = [];
+        for (var i = 0; i < count; i++) {
+            objects.push({
+                id: randomUUID(),
+                name: randomString(randomInt(3, 12)),
+                type: ['Vital', 'Measurement', 'Activity'][randomInt(0, 2)],
+                value_type: ['integer', 'decimal', 'boolean', 'string'][randomInt(0, 3)],
+                config: randomConfig()
+            });
+        }
+        return objects;
+    }
+
+    // ─── Property Verification ──────────────────────────────────────────────────
+
+    var ITERATIONS = 20;
+    var passed = 0;
+    var failed = 0;
+    var failures = [];
+
+    log('Running ' + ITERATIONS + ' iterations...\n');
+
+    for (var iter = 0; iter < ITERATIONS; iter++) {
+        var objects = generateObjects();
+        var defaults = _getDefaultIndicators(objects);
+        var nonDefaults = _getNonDefaultIndicators(objects);
+
+        // Property 6a: Default filter returns exactly those with config.is_default === true
+        var expectedDefaults = objects.filter(function(obj) {
+            return obj.config && obj.config.is_default === true;
+        });
+
+        // Property 6b: Non-default filter returns exactly those where is_default is false or absent
+        var expectedNonDefaults = objects.filter(function(obj) {
+            return !obj.config || obj.config.is_default !== true;
+        });
+
+        // Property 6c: Union of both sets equals the full set
+        var unionSize = defaults.length + nonDefaults.length;
+        var unionEqualsFullSet = (unionSize === objects.length);
+
+        // Property 6d: No overlap — no object appears in both sets
+        var defaultIds = {};
+        var hasOverlap = false;
+        for (var d = 0; d < defaults.length; d++) {
+            defaultIds[defaults[d].id] = true;
+        }
+        for (var n = 0; n < nonDefaults.length; n++) {
+            if (defaultIds[nonDefaults[n].id]) {
+                hasOverlap = true;
+                break;
+            }
+        }
+
+        // Property 6e: Correct classification — defaults match expected, non-defaults match expected
+        var defaultsCorrect = (defaults.length === expectedDefaults.length);
+        var nonDefaultsCorrect = (nonDefaults.length === expectedNonDefaults.length);
+
+        // Verify element-by-element if lengths match
+        if (defaultsCorrect) {
+            for (var i = 0; i < defaults.length; i++) {
+                if (defaults[i] !== expectedDefaults[i]) {
+                    defaultsCorrect = false;
+                    break;
+                }
+            }
+        }
+        if (nonDefaultsCorrect) {
+            for (var j = 0; j < nonDefaults.length; j++) {
+                if (nonDefaults[j] !== expectedNonDefaults[j]) {
+                    nonDefaultsCorrect = false;
+                    break;
+                }
+            }
+        }
+
+        var allPass = unionEqualsFullSet && !hasOverlap && defaultsCorrect && nonDefaultsCorrect;
+
+        if (allPass) {
+            passed++;
+        } else {
+            failed++;
+            if (failures.length < 5) {
+                failures.push({
+                    iteration: iter,
+                    objectCount: objects.length,
+                    defaultCount: defaults.length,
+                    nonDefaultCount: nonDefaults.length,
+                    unionEqualsFullSet: unionEqualsFullSet,
+                    hasOverlap: hasOverlap,
+                    defaultsCorrect: defaultsCorrect,
+                    nonDefaultsCorrect: nonDefaultsCorrect,
+                    sampleConfigs: objects.slice(0, 5).map(function(o) {
+                        return { id: o.id, config: o.config };
+                    })
+                });
+            }
+        }
+    }
+
+    // ─── Summary ────────────────────────────────────────────────────────────────
+
+    log('═══════════════════════════════════════════════════');
+    log('RESULTS: ' + passed + ' passed, ' + failed + ' failed out of ' + ITERATIONS + ' iterations');
+    log('═══════════════════════════════════════════════════\n');
+
+    if (failed === 0) {
+        log('✅ PASS — Property 6: Default vs Non-Default Indicator Filtering holds for all inputs.');
+        log('   • Default filter returns exactly objects with config.is_default === true');
+        log('   • Non-default filter returns exactly objects where is_default is false/absent');
+        log('   • Union of both sets equals the full input set');
+        log('   • No overlap between the two sets');
+    } else {
+        log('❌ FAIL — Property violated in ' + failed + ' iteration(s).\n');
+        log('First failures:');
+        for (var f = 0; f < failures.length; f++) {
+            log(JSON.stringify(failures[f], null, 2));
+        }
+    }
+
+    // Set document title for easy pass/fail detection
+    document.title = (failed === 0) ? 'PASS' : 'FAIL';
+
+    // Also log to console for headless runners
+    if (failed === 0) {
+        console.log('PASS — Property 6: Default vs Non-Default Indicator Filtering (' + ITERATIONS + ' iterations)');
+    } else {
+        console.log('FAIL — Property 6: Default vs Non-Default Indicator Filtering');
+        console.log(JSON.stringify(failures, null, 2));
+    }
+})();
+</script>
+</body>
+</html>

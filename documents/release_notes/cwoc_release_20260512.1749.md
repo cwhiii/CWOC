@@ -1,0 +1,1 @@
+Wired graph filter dropdown into the Indicators charts mode — sidebar now populates from the "graphs" zone via `GET /api/custom-objects/zone/graphs`, charts render using UUID-keyed data from Custom Objects, "Add Graph" picker allows one-off graphs for objects not in the zone, and filter selections persist/restore via localStorage.

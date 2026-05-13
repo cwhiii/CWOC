@@ -1,0 +1,1 @@
+Fixed sidebar indicator checkboxes overflowing instead of scrolling. Added visible "Custom Objects" navigation link to secondary page headers and a ⚙️ gear link in the Indicators zone header and dashboard Indicators view for quick access to the Custom Objects Editor.

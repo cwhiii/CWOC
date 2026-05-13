@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>PBT — Property 3: Unit Label Selection</title>
+    <style>
+        body { font-family: monospace; padding: 20px; background: #1a1a1a; color: #e0e0e0; }
+        .pass { color: #4caf50; }
+        .fail { color: #f44336; }
+        .info { color: #90caf9; }
+        pre { white-space: pre-wrap; }
+    </style>
+</head>
+<body>
+<h2>Property 3: Unit Label Selection</h2>
+<p class="info">Feature: indicators_zone, Property 3: Unit Label Selection</p>
+<p class="info">Validates: Requirements 1.6, 9.2, 9.3, 9.4</p>
+<pre id="output"></pre>
+<script>
+/**
+ * PBT — Property 3: Unit Label Selection
+ *
+ * For any Custom Object with units and metric_units fields, and any unit_system
+ * setting ("imperial" or "metric"), the unit label function SHALL return
+ * `metric_units` when unit_system is "metric" and `units` when unit_system is
+ * "imperial". When both fields are identical, the same value is returned
+ * regardless of setting.
+ *
+ * Feature: indicators_zone, Property 3: Unit Label Selection
+ * Validates: Requirements 1.6, 9.2, 9.3, 9.4
+ *
+ * NO npm, NO pip, NO installs required. Open this file in a browser to run.
+ */
+
+// ─── Function Under Test (inlined from editor-health.js) ─────────────────────
+
+function _getUnitLabel(obj, unitSystem) {
+    if (unitSystem === 'metric' && obj.metric_units) return obj.metric_units;
+    return obj.units || '';
+}
+
+// ─── Random Generators ───────────────────────────────────────────────────────
+
+function randomString(maxLen) {
+    var len = Math.floor(Math.random() * maxLen) + 1;
+    var chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789°/%';
+    var s = '';
+    for (var i = 0; i < len; i++) {
+        s += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return s;
+}
+
+function randomUnitSystem() {
+    return Math.random() < 0.5 ? 'imperial' : 'metric';
+}
+
+// Generate a random Custom Object with units and metric_units fields.
+// Covers cases: both present, only units, only metric_units, both identical,
+// both empty/null/undefined.
+function randomObj() {
+    var roll = Math.random();
+    var units, metric_units;
+
+    if (roll < 0.25) {
+        // Both fields present and different
+        units = randomString(8);
+        metric_units = randomString(8);
+        // Ensure they're actually different
+        if (units === metric_units) metric_units += 'x';
+    } else if (roll < 0.4) {
+        // Both fields identical
+        var same = randomString(8);
+        units = same;
+        metric_units = same;
+    } else if (roll < 0.55) {
+        // Only units present, metric_units empty string
+        units = randomString(8);
+        metric_units = '';
+    } else if (roll < 0.7) {
+        // Only units present, metric_units null
+        units = randomString(8);
+        metric_units = null;
+    } else if (roll < 0.8) {
+        // Only units present, metric_units undefined
+        units = randomString(8);
+        metric_units = undefined;
+    } else if (roll < 0.9) {
+        // Both empty
+        units = '';
+        metric_units = '';
+    } else {
+        // units is empty/null, metric_units has a value
+        units = Math.random() < 0.5 ? '' : null;
+        metric_units = randomString(8);
+    }
+
+    return { units: units, metric_units: metric_units };
+}
+
+// ─── Property Checks ─────────────────────────────────────────────────────────
+
+function checkProperty(obj, unitSystem) {
+    var result = _getUnitLabel(obj, unitSystem);
+
+    // Property: when unit_system is "metric" and metric_units is truthy,
+    // return metric_units
+    if (unitSystem === 'metric' && obj.metric_units) {
+        if (result !== obj.metric_units) {
+            return 'FAIL: metric system with metric_units="' + obj.metric_units +
+                '" should return metric_units, got "' + result + '"';
+        }
+    }
+    // Property: when unit_system is "imperial", return units (or '' if falsy)
+    else if (unitSystem === 'imperial') {
+        var expected = obj.units || '';
+        if (result !== expected) {
+            return 'FAIL: imperial system with units="' + obj.units +
+                '" should return "' + expected + '", got "' + result + '"';
+        }
+    }
+    // Property: when unit_system is "metric" but metric_units is falsy,
+    // fall back to units (or '')
+    else if (unitSystem === 'metric' && !obj.metric_units) {
+        var expected = obj.units || '';
+        if (result !== expected) {
+            return 'FAIL: metric system with falsy metric_units, units="' + obj.units +
+                '" should return "' + expected + '", got "' + result + '"';
+        }
+    }
+
+    // Property: when both fields are identical, same value regardless of setting
+    if (obj.units === obj.metric_units && obj.units) {
+        var imperialResult = _getUnitLabel(obj, 'imperial');
+        var metricResult = _getUnitLabel(obj, 'metric');
+        if (imperialResult !== metricResult) {
+            return 'FAIL: identical units="' + obj.units + '" should return same value ' +
+                'for both systems, got imperial="' + imperialResult +
+                '" vs metric="' + metricResult + '"';
+        }
+    }
+
+    return null; // pass
+}
+
+// ─── Test Runner ─────────────────────────────────────────────────────────────
+
+(function runTests() {
+    var output = document.getElementById('output');
+    var iterations = 200;
+    var failures = [];
+    var passed = 0;
+
+    for (var i = 0; i < iterations; i++) {
+        var obj = randomObj();
+        var unitSystem = randomUnitSystem();
+        var error = checkProperty(obj, unitSystem);
+
+        if (error) {
+            failures.push({
+                iteration: i,
+                obj: JSON.stringify(obj),
+                unitSystem: unitSystem,
+                error: error
+            });
+        } else {
+            passed++;
+        }
+    }
+
+    // Output results
+    var lines = [];
+    lines.push('Feature: indicators_zone, Property 3: Unit Label Selection');
+    lines.push('Validates: Requirements 1.6, 9.2, 9.3, 9.4');
+    lines.push('─'.repeat(60));
+    lines.push('Iterations: ' + iterations);
+    lines.push('Passed: ' + passed);
+    lines.push('Failed: ' + failures.length);
+    lines.push('─'.repeat(60));
+
+    if (failures.length === 0) {
+        lines.push('✓ ALL TESTS PASSED');
+        output.className = 'pass';
+    } else {
+        lines.push('✗ FAILURES:');
+        for (var j = 0; j < Math.min(failures.length, 10); j++) {
+            var f = failures[j];
+            lines.push('  [' + f.iteration + '] obj=' + f.obj +
+                ' unitSystem=' + f.unitSystem);
+            lines.push('       ' + f.error);
+        }
+        if (failures.length > 10) {
+            lines.push('  ... and ' + (failures.length - 10) + ' more failures');
+        }
+        output.className = 'fail';
+    }
+
+    var text = lines.join('\n');
+    output.textContent = text;
+    console.log(text);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,1 @@
+Added Log Mode to the Dashboard Indicators View — displays health readings in a reverse-chronological list with UUID-to-name resolution, clickable entries that open the chit editor, and mobile-friendly responsive layout.

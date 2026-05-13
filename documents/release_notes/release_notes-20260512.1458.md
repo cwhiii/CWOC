@@ -1,0 +1,1 @@
+Added tracking number and flight detection to the email view. Emails containing UPS, FedEx, or UniUni tracking numbers (or flight numbers with airline keywords) now show a carrier logo + "Track" button that opens the carrier's tracking page in a new tab.

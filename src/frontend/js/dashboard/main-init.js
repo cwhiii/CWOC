@@ -678,9 +678,10 @@ function displayChits() {
 
   // Expand recurring chits for Calendar tab
   if (currentTab === "Calendar") {
-    // Exclude habits hidden from calendar (habit=true && show_on_calendar=false)
+    // Exclude chits hidden from calendar (show_on_calendar explicitly false/0)
     filteredChits = filteredChits.filter(function(c) {
-      return !(c.habit === true && c.show_on_calendar === false);
+      if (c.show_on_calendar === false || c.show_on_calendar === 0) return false;
+      return true;
     });
 
     const rangeStart = new Date(currentWeekStart || new Date());

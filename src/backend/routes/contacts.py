@@ -367,7 +367,7 @@ def get_contact_birthdays(request: Request):
                 if not isinstance(date_entry, dict):
                     continue
                 # Skip if explicitly disabled
-                if date_entry.get("show_on_calendar") is False:
+                if date_entry.get("show_on_calendar") in (False, 0):
                     continue
 
                 label = date_entry.get("label", "")
@@ -401,9 +401,25 @@ def get_contact_birthdays(request: Request):
                         age = year - orig_year
                         age_str = f" ({age} yrs)"
 
+                    # Choose emoji based on date label
+                    label_lower = label.lower() if label else ""
+                    if "birthday" in label_lower or "birth" in label_lower:
+                        emoji = "🎂"
+                    elif "anniversary" in label_lower:
+                        emoji = "💍"
+                    else:
+                        emoji = ""
+
                     # Build a virtual chit-like object
                     event_id = f"birthday_{contact_id}_{label}_{event_date.isoformat()}"
-                    title = f"🎂 {display_name} — {label}{age_str}" if label else f"🎂 {display_name}{age_str}"
+                    if emoji and label:
+                        title = f"{emoji} {display_name} — {label}{age_str}"
+                    elif emoji:
+                        title = f"{emoji} {display_name}{age_str}"
+                    elif label:
+                        title = f"{display_name}: {label}{age_str}"
+                    else:
+                        title = f"{display_name}{age_str}"
 
                     entries.append({
                         "id": event_id,

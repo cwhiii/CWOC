@@ -913,7 +913,7 @@ def search_chits(request: Request, q: Optional[str] = Query(None)):
                 for date_entry in dates_raw:
                     if not isinstance(date_entry, dict):
                         continue
-                    if date_entry.get("show_on_calendar") is False:
+                    if date_entry.get("show_on_calendar") in (False, 0):
                         continue
                     label = date_entry.get("label", "")
                     value = date_entry.get("value", "")

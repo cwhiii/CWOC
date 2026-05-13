@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+  <rect width="24" height="24" rx="3" fill="#351C15"/>
+  <path d="M12 3C8.5 3 6 5.5 6 9v4c0 3.5 2.5 8 6 8s6-4.5 6-8V9c0-3.5-2.5-6-6-6z" fill="#FFB500" stroke="#351C15" stroke-width="0.5"/>
+  <path d="M12 5c-2.5 0-4 2-4 4.5v3c0 2.5 1.5 6 4 6s4-3.5 4-6v-3C16 7 14.5 5 12 5z" fill="#351C15"/>
+  <text x="12" y="15" text-anchor="middle" font-size="6" font-weight="bold" fill="#FFB500" font-family="Arial">UPS</text>
+</svg>

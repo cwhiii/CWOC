@@ -421,6 +421,58 @@ li.cwoc-dragging {
     margin-bottom: 12px;
 }
 
+/* ── Indicators Log Mode ───────────────────────────────────────────────────── */
+.ind-log-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.ind-log-entry {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    padding: 8px 12px;
+    background: #fff8e1;
+    border: 1px solid #8b5a2b;
+    border-radius: 6px;
+    cursor: pointer;
+    font-family: 'Lora', Georgia, serif;
+    color: #2b1e0f;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.ind-log-entry:hover {
+    border-color: #a0522d;
+    box-shadow: 0 2px 8px rgba(107, 66, 38, 0.15);
+}
+
+.ind-log-date {
+    flex-shrink: 0;
+    font-weight: bold;
+    font-size: 0.9em;
+    color: #6b4e31;
+    white-space: nowrap;
+    min-width: 90px;
+}
+
+.ind-log-summary {
+    font-size: 0.9em;
+    color: #2b1e0f;
+    line-height: 1.4;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ind-log-empty {
+    text-align: center;
+    padding: 2em;
+    opacity: 0.5;
+    font-family: 'Lora', Georgia, serif;
+    color: #4a2c2a;
+}
+
 /* ── Global Search View ────────────────────────────────────────────────────── */
 .global-search-bar {
     display: flex;
@@ -1739,6 +1791,49 @@ li.cwoc-dragging {
     color: #8b5a2b;
     opacity: 0.7;
     white-space: nowrap;
+}
+
+/* ── Tracking button (carrier logo + "Track") ─────────────────────────────── */
+.email-track-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: rgba(44, 120, 180, 0.1);
+    border: 1px solid rgba(44, 120, 180, 0.3);
+    color: #1a5276;
+    text-decoration: none;
+    font-size: 0.75em;
+    font-weight: 600;
+    font-family: 'Lora', Georgia, serif;
+    white-space: nowrap;
+    transition: background 0.15s, border-color 0.15s;
+    cursor: pointer;
+    margin-right: 6px;
+}
+.email-track-btn:hover {
+    background: rgba(44, 120, 180, 0.2);
+    border-color: rgba(44, 120, 180, 0.5);
+}
+.email-track-logo {
+    width: 16px;
+    height: 16px;
+    object-fit: contain;
+}
+.email-track-label {
+    line-height: 1;
+}
+
+/* Hide tracking button on very small screens to save space */
+@media (max-width: 480px) {
+    .email-track-btn .email-track-label {
+        display: none;
+    }
+    .email-track-btn {
+        padding: 3px 5px;
+    }
 }
 
 /* ── Bulk actions bar ─────────────────────────────────────────────────────── */

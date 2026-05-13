@@ -1,0 +1,1 @@
+Implemented Dashboard Indicators View Log Mode — a reverse-chronological list of chits with health readings, showing date, chit title, and a summary of indicator names and values for each entry. Clicking an entry navigates to the chit editor. Mobile-friendly layout with responsive stacking on narrow screens.

@@ -11,7 +11,7 @@ import sqlite3
 
 from uuid import uuid4
 
-from src.backend.db import DB_PATH, serialize_json_field
+from src.backend.db import DB_PATH, serialize_json_field, deserialize_json_field
 
 
 logger = logging.getLogger(__name__)
@@ -2407,3 +2407,431 @@ def migrate_add_autosave_settings():
     finally:
         if conn:
             conn.close()
+
+
+# ── Auto-Complete Checklist: migration ────────────────────────────────────
+
+def migrate_add_auto_complete_checklist():
+    """Add auto_complete_checklist column to chits table.
+
+    Stores NULL (not set), 1 (enabled), or 0 (disabled).
+    Fully idempotent — checks column existence before adding.
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(chits)")
+        existing = {row[1] for row in cursor.fetchall()}
+        if "auto_complete_checklist" not in existing:
+            cursor.execute("ALTER TABLE chits ADD COLUMN auto_complete_checklist BOOLEAN DEFAULT NULL")
+            conn.commit()
+            logger.info("Added auto_complete_checklist column to chits table")
+    except Exception as e:
+        logger.error(f"Error adding auto_complete_checklist column: {str(e)}")
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+
+# ── Custom Objects: migration ─────────────────────────────────────────────
+
+def seed_custom_objects(owner_id):
+    """Seed the standard library of Custom Objects for a user if none exist yet.
+
+    Only seeds if no custom_objects rows exist for the given owner_id.
+    All seeded entries have is_standard=1. No zone_assignments are created.
+    """
+    import json
+    from datetime import datetime
+
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        # Check if any custom_objects already exist for this owner
+        cursor.execute(
+            "SELECT COUNT(*) FROM custom_objects WHERE owner_id = ?", (owner_id,)
+        )
+        count = cursor.fetchone()[0]
+        if count > 0:
+            logger.info(f"Custom objects already exist for owner {owner_id}, skipping seed")
+            return
+
+        now = datetime.utcnow().isoformat() + "Z"
+        sort_order = 0
+
+        def _insert(obj_type, sub_type, name, value_type, units=None,
+                    metric_units=None, range_min=None, range_max=None,
+                    conditional_display=None):
+            nonlocal sort_order
+            sort_order += 1
+            cond_json = json.dumps(conditional_display) if conditional_display else None
+            cursor.execute(
+                """INSERT INTO custom_objects
+                   (id, type, sub_type, category, name, value_type, units,
+                    metric_units, range_min, range_max, active, deleted,
+                    sort_order, is_standard, conditional_display, owner_id,
+                    created_datetime, modified_datetime)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, ?, 1, ?, ?, ?, ?)""",
+                (str(uuid4()), obj_type, sub_type, None, name, value_type,
+                 units, metric_units, range_min, range_max, sort_order,
+                 cond_json, owner_id, now, now)
+            )
+
+        # ── Illnesses (10 items) — type="Symptom", category="Illnesses", boolean
+        for name in [
+            "Cough", "Fatigue/Tiredness", "Fever/Chills", "Headache",
+            "Runny or Stuffy Nose", "Sore Throat", "Sneezing",
+            "Muscle/Body Aches", "Nausea/Vomiting/Diarrhea", "Shortness of Breath"
+        ]:
+            _insert("Symptom", "Illnesses", name, "boolean")
+
+        # ── Injuries (10 items) — type="Symptom", category="Injuries", boolean
+        for name in [
+            "Pain (localized)", "Swelling", "Bruising/Redness",
+            "Limited Movement/Stiffness", "Bleeding", "Tenderness",
+            "Headache (head injuries)", "Nausea/Dizziness (concussion)",
+            "Numbness/Tingling", "Fatigue (trauma/blood loss)"
+        ]:
+            _insert("Symptom", "Injuries", name, "boolean")
+
+        # ── Allergies (10 items) — type="Symptom", category="Allergies", boolean
+        for name in [
+            "Sneezing", "Runny or Stuffy Nose", "Itchy/Watery Eyes",
+            "Itching/Rash/Hives", "Cough/Post-nasal Drip", "Fatigue",
+            "Headache/Sinus Pressure", "Swelling (lips, face, throat)",
+            "Shortness of Breath/Wheezing", "Redness/Skin Irritation"
+        ]:
+            _insert("Symptom", "Allergies", name, "boolean")
+
+        # ── Vitals (6 items) — type="Vital", category="Vitals"
+        _insert("Vital", "Vitals", "Heart Rate", "integer",
+                units="bpm", metric_units="bpm", range_min=60, range_max=100)
+        _insert("Vital", "Vitals", "Blood Pressure Systolic", "integer",
+                units="mmHg", metric_units="mmHg", range_min=90, range_max=120)
+        _insert("Vital", "Vitals", "Blood Pressure Diastolic", "integer",
+                units="mmHg", metric_units="mmHg", range_min=60, range_max=80)
+        _insert("Vital", "Vitals", "Oxygen Saturation", "integer",
+                units="%", metric_units="%", range_min=95, range_max=100)
+        _insert("Vital", "Vitals", "Temperature", "decimal",
+                units="°F", metric_units="°C", range_min=97.0, range_max=99.0)
+        _insert("Vital", "Vitals", "Period Active", "boolean",
+                conditional_display={"setting": "sex", "equals": "Woman"})
+
+        # ── Body (3 items) — type="Measurement", category="Body"
+        _insert("Measurement", "Body", "Weight", "decimal",
+                units="lbs", metric_units="kg")
+        _insert("Measurement", "Body", "Height", "decimal",
+                units="in", metric_units="cm")
+        _insert("Measurement", "Body", "Glucose", "integer",
+                units="mg/dL", metric_units="mmol/L")
+
+        # ── Activity (2 items) — type="Activity", category="Activity"
+        _insert("Activity", "Activity", "Distance", "decimal",
+                units="mi", metric_units="km")
+        _insert("Activity", "Activity", "Calories", "integer",
+                units="kcal", metric_units="kcal")
+
+        conn.commit()
+        logger.info(f"Seeded {sort_order} standard custom objects for owner {owner_id}")
+    except Exception as e:
+        logger.error(f"Error seeding custom objects: {str(e)}")
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+
+def migrate_create_custom_objects_tables():
+    """Create custom_objects and zone_assignments tables if they don't exist.
+
+    custom_objects: stores generic object definitions (type, name, value_type, etc.)
+    zone_assignments: maps objects to consumer zones with per-zone config.
+
+    Fully idempotent — uses CREATE TABLE IF NOT EXISTS.
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        # ── custom_objects table ─────────────────────────────────────────
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS custom_objects (
+                id TEXT PRIMARY KEY,
+                type TEXT NOT NULL,
+                sub_type TEXT,
+                category TEXT,
+                name TEXT NOT NULL,
+                value_type TEXT NOT NULL,
+                units TEXT,
+                metric_units TEXT,
+                range_min REAL,
+                range_max REAL,
+                active INTEGER DEFAULT 1,
+                deleted INTEGER DEFAULT 0,
+                sort_order INTEGER DEFAULT 0,
+                is_standard INTEGER DEFAULT 0,
+                conditional_display TEXT,
+                owner_id TEXT,
+                created_datetime TEXT,
+                modified_datetime TEXT
+            )
+        """)
+
+        # Unique constraint: name must be unique within type+category per owner
+        cursor.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_custom_objects_unique_name
+            ON custom_objects (type, category, name, owner_id)
+        """)
+
+        # ── zone_assignments table ───────────────────────────────────────
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS zone_assignments (
+                id TEXT PRIMARY KEY,
+                custom_object_id TEXT NOT NULL,
+                zone_id TEXT NOT NULL,
+                config TEXT,
+                sort_order INTEGER DEFAULT 0,
+                owner_id TEXT
+            )
+        """)
+
+        # Unique constraint: one assignment per object+zone per owner
+        cursor.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_zone_assignments_unique
+            ON zone_assignments (custom_object_id, zone_id, owner_id)
+        """)
+
+        conn.commit()
+        logger.info("custom_objects and zone_assignments tables ready")
+    except Exception as e:
+        logger.error(f"Error creating custom_objects tables: {str(e)}")
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+
+def migrate_custom_objects_remove_category():
+    """Migrate category data into sub_type and update the unique index.
+
+    Moves category values into sub_type (where sub_type is currently null),
+    then drops the old unique index on (type, category, name, owner_id) and
+    creates a new one on (type, sub_type, name, owner_id).
+
+    Fully idempotent — checks if migration is needed before running.
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        # Check if category column exists (if table doesn't exist, skip)
+        cursor.execute("PRAGMA table_info(custom_objects)")
+        columns = [row[1] for row in cursor.fetchall()]
+        if 'category' not in columns:
+            return  # Already migrated or table doesn't exist
+
+        # Copy category → sub_type where sub_type is null and category is not null
+        cursor.execute("""
+            UPDATE custom_objects
+            SET sub_type = category
+            WHERE sub_type IS NULL AND category IS NOT NULL
+        """)
+
+        # Drop old unique index and create new one
+        cursor.execute("DROP INDEX IF EXISTS idx_custom_objects_unique_name")
+        cursor.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_custom_objects_unique_name
+            ON custom_objects (type, sub_type, name, owner_id)
+        """)
+
+        conn.commit()
+        logger.info("Migrated custom_objects: category → sub_type, updated unique index")
+    except Exception as e:
+        logger.error(f"Error in migrate_custom_objects_remove_category: {str(e)}")
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+
+# ── Indicators Zone: initialization migration ─────────────────────────────
+
+def migrate_indicators_zone_init(owner_id):
+    """Create default indicators_zone assignments for seeded Vital, Measurement,
+    and Activity objects.
+
+    Idempotent — only runs if no indicators_zone assignments exist for this owner.
+    Called at startup after seed_custom_objects().
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        # Check if already initialized
+        cursor.execute(
+            "SELECT COUNT(*) FROM zone_assignments WHERE zone_id = 'indicators_zone' AND owner_id = ?",
+            (owner_id,)
+        )
+        if cursor.fetchone()[0] > 0:
+            return
+
+        # Get all seeded Vital, Measurement, Activity objects for this owner
+        cursor.execute("""
+            SELECT id FROM custom_objects
+            WHERE owner_id = ? AND is_standard = 1 AND deleted = 0
+              AND type IN ('Vital', 'Measurement', 'Activity')
+            ORDER BY sort_order ASC
+        """, (owner_id,))
+        objects = cursor.fetchall()
+
+        if not objects:
+            logger.warning(f"No seeded Vital/Measurement/Activity objects found for owner {owner_id}, skipping zone init")
+            return
+
+        config = serialize_json_field({"is_default": True})
+        sort_order = 0
+        for (obj_id,) in objects:
+            sort_order += 1
+            cursor.execute("""
+                INSERT INTO zone_assignments (id, custom_object_id, zone_id, config, sort_order, owner_id)
+                VALUES (?, ?, 'indicators_zone', ?, ?, ?)
+            """, (str(uuid4()), obj_id, config, sort_order, owner_id))
+
+        # Also create "graphs" zone assignments for numeric objects (integer/decimal)
+        # so the charts view filter is populated out of the box
+        cursor.execute(
+            "SELECT COUNT(*) FROM zone_assignments WHERE zone_id = 'graphs' AND owner_id = ?",
+            (owner_id,)
+        )
+        if cursor.fetchone()[0] == 0:
+            cursor.execute("""
+                SELECT id FROM custom_objects
+                WHERE owner_id = ? AND is_standard = 1 AND deleted = 0
+                  AND type IN ('Vital', 'Measurement', 'Activity')
+                  AND value_type IN ('integer', 'decimal')
+                ORDER BY sort_order ASC
+            """, (owner_id,))
+            numeric_objects = cursor.fetchall()
+            graphs_config = serialize_json_field({})
+            graphs_sort = 0
+            for (obj_id,) in numeric_objects:
+                graphs_sort += 1
+                cursor.execute("""
+                    INSERT INTO zone_assignments (id, custom_object_id, zone_id, config, sort_order, owner_id)
+                    VALUES (?, ?, 'graphs', ?, ?, ?)
+                """, (str(uuid4()), obj_id, graphs_config, graphs_sort, owner_id))
+            logger.info(f"Initialized graphs zone with {graphs_sort} assignments for owner {owner_id}")
+
+        conn.commit()
+        logger.info(f"Initialized indicators_zone with {sort_order} assignments for owner {owner_id}")
+    except Exception as e:
+        logger.error(f"Error in migrate_indicators_zone_init: {str(e)}")
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+
+# ── Indicators Zone: legacy health_data migration ─────────────────────────
+
+LEGACY_KEY_MAP = {
+    "heart_rate": "Heart Rate",
+    "bp_systolic": "Blood Pressure Systolic",
+    "bp_diastolic": "Blood Pressure Diastolic",
+    "spo2": "Oxygen Saturation",
+    "temperature": "Temperature",
+    "weight": "Weight",
+    "height": "Height",
+    "glucose": "Glucose",
+    "distance": "Distance",
+    "period_active": "Period Active",
+}
+
+
+def migrate_health_data_to_uuids(owner_id):
+    """Migrate legacy string keys in chit health_data to Custom Object UUIDs.
+
+    For each chit with health_data containing legacy keys (e.g. "heart_rate"),
+    adds a new entry keyed by the corresponding Custom Object UUID with the same
+    value. Original legacy key entries are preserved (non-destructive).
+
+    Idempotent — skips if UUID key already exists in that chit's health_data.
+    Logs a warning for unknown legacy keys.
+    Called at startup after migrate_indicators_zone_init().
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        # Build runtime mapping: legacy key → Custom Object UUID
+        legacy_to_uuid = {}
+        for legacy_key, obj_name in LEGACY_KEY_MAP.items():
+            cursor.execute(
+                "SELECT id FROM custom_objects WHERE name = ? AND owner_id = ? AND is_standard = 1 AND deleted = 0",
+                (obj_name, owner_id)
+            )
+            row = cursor.fetchone()
+            if row:
+                legacy_to_uuid[legacy_key] = row[0]
+            else:
+                logger.warning(f"migrate_health_data_to_uuids: no Custom Object found for '{obj_name}' (owner {owner_id})")
+
+        if not legacy_to_uuid:
+            logger.warning(f"migrate_health_data_to_uuids: no legacy→UUID mappings built for owner {owner_id}, skipping")
+            return
+
+        # Scan all chits with non-null health_data for this owner
+        cursor.execute(
+            "SELECT id, health_data FROM chits WHERE owner_id = ? AND health_data IS NOT NULL AND health_data != ''",
+            (owner_id,)
+        )
+        chits = cursor.fetchall()
+
+        updated_count = 0
+        for chit_id, health_data_raw in chits:
+            health_data = deserialize_json_field(health_data_raw)
+            if not health_data or not isinstance(health_data, dict):
+                continue
+
+            modified = False
+            for legacy_key, uuid_key in legacy_to_uuid.items():
+                if legacy_key in health_data:
+                    # Idempotent: skip if UUID key already exists
+                    if uuid_key not in health_data:
+                        health_data[uuid_key] = health_data[legacy_key]
+                        modified = True
+
+            # Warn about unknown legacy keys (keys that aren't UUIDs and aren't in LEGACY_KEY_MAP)
+            for key in health_data:
+                if key not in LEGACY_KEY_MAP and not _looks_like_uuid(key):
+                    logger.warning(f"migrate_health_data_to_uuids: unknown legacy key '{key}' in chit {chit_id}")
+
+            if modified:
+                cursor.execute(
+                    "UPDATE chits SET health_data = ? WHERE id = ?",
+                    (serialize_json_field(health_data), chit_id)
+                )
+                updated_count += 1
+
+        conn.commit()
+        if updated_count > 0:
+            logger.info(f"migrate_health_data_to_uuids: migrated {updated_count} chits for owner {owner_id}")
+    except Exception as e:
+        logger.error(f"Error in migrate_health_data_to_uuids: {str(e)}")
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+
+def _looks_like_uuid(s):
+    """Quick check if a string looks like a UUID (contains dashes and is ~36 chars)."""
+    return isinstance(s, str) and len(s) == 36 and s.count('-') == 4

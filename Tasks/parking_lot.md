@@ -6,9 +6,6 @@
 
 - **Month view: limit events per cell** with "+N more" expand (like all-day row)
 - **Customizable alarm sounds** — dropdown present but sounds aren't loaded/played
-- **Health Indicators zone** — `renderHealthIndicator()` is defined twice and both are empty stubs
-- **Health: Unit toggle** (Imperial/Metric) — checkbox present, not wired
-- **Health: Sex toggle** (Female/Male) — checkbox present, not wired
 - **Calendar: color-code by tag** option (vs chit color)
 - **Duration field** on chits
 - **Progress % field** on chits (auto-calculate from checklist/children, or manual — needs design decision)

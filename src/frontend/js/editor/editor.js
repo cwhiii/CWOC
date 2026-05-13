@@ -74,12 +74,14 @@ const checklistContainer = document.getElementById("checklist-container");
 
 function _onChecklistChange() {
   if (_isChecklistAutosaveActive() && window.currentChitId && !window.isNewChit) {
-    // Auto-save handles it — don't mark the editor as unsaved for checklist-only changes
+    // Auto-save handles it
     _checklistAutosave();
   } else {
-    // No autosave — use normal unsaved flow
+    // No autosave — use normal unsaved flow so save/discard/cancel works
     setSaveButtonUnsaved();
   }
+  // Evaluate auto-complete status toggle
+  _evaluateAutoCompleteChecklist();
 }
 
 /* ── Checklist Auto-Save ──────────────────────────────────────────────────── */
@@ -208,6 +210,113 @@ function _updateChecklistAutosaveToggle() {
 
 var dragIndicator = null;
 var healthIndicatorWarningsShown = new Set();
+
+/* ── Auto-Complete Checklist ──────────────────────────────────────────────── */
+
+var _autoCompleteChecklistEnabled = false; // per-chit flag
+
+/**
+ * Initialize the auto-complete checklist button.
+ * Shows only when the chit is a child of a project.
+ */
+function _initAutoCompleteChecklist(chit) {
+  var btn = document.getElementById('autoCompleteChecklistBtn');
+  if (!btn) return;
+
+  // Determine if enabled from chit data
+  if (chit && (chit.auto_complete_checklist === true || chit.auto_complete_checklist === 'true' || chit.auto_complete_checklist === '1' || chit.auto_complete_checklist === 1)) {
+    _autoCompleteChecklistEnabled = true;
+  } else {
+    _autoCompleteChecklistEnabled = false;
+  }
+
+  _updateAutoCompleteBtn();
+
+  // Wire up click handler (only once)
+  if (!btn._acWired) {
+    btn._acWired = true;
+    btn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      e.preventDefault();
+      _autoCompleteChecklistEnabled = !_autoCompleteChecklistEnabled;
+      _updateAutoCompleteBtn();
+      if (typeof setSaveButtonUnsaved === 'function') setSaveButtonUnsaved();
+      // If just enabled, run the check immediately
+      if (_autoCompleteChecklistEnabled) {
+        _evaluateAutoCompleteChecklist();
+      }
+    });
+  }
+}
+
+/**
+ * Show/hide the auto-complete button based on project membership.
+ */
+function _showAutoCompleteBtnIfChild() {
+  var btn = document.getElementById('autoCompleteChecklistBtn');
+  if (!btn) return;
+  var isChild = !!(window._cwocParentProjectId);
+  btn.style.display = isChild ? 'inline-flex' : 'none';
+}
+
+/**
+ * Update the auto-complete button visual state.
+ */
+function _updateAutoCompleteBtn() {
+  var btn = document.getElementById('autoCompleteChecklistBtn');
+  if (!btn) return;
+  if (_autoCompleteChecklistEnabled) {
+    btn.classList.add('zone-button-active');
+    btn.style.opacity = '';
+    btn.innerHTML = '<i class="fas fa-check-double"></i> <span class="hideWhenNarrow">Auto-Complete:</span> On';
+  } else {
+    btn.classList.remove('zone-button-active');
+    btn.style.opacity = '0.6';
+    btn.innerHTML = '<i class="fas fa-check-double"></i> <span class="hideWhenNarrow">Auto-Complete</span>';
+  }
+}
+
+/**
+ * Evaluate checklist state and auto-set status if auto-complete is enabled.
+ * Called on every checklist change. Also checks prerequisites.
+ */
+function _evaluateAutoCompleteChecklist() {
+  if (!_autoCompleteChecklistEnabled) return;
+  if (!window.checklist) return;
+
+  var items = window.checklist.getChecklistData();
+  // Only consider non-blank items (items with text)
+  var nonBlank = items.filter(function(item) { return item.text && item.text.trim() !== ''; });
+
+  // Check prerequisites
+  var prereqsOk = true;
+  if (typeof getPrerequisitesData === 'function') {
+    var prereqIds = getPrerequisitesData() || [];
+    if (prereqIds.length > 0 && typeof _prereqAllComplete === 'function') {
+      prereqsOk = _prereqAllComplete();
+    }
+  }
+
+  var checklistOk = nonBlank.length === 0 || nonBlank.every(function(item) { return item.checked; });
+  var hasSomething = nonBlank.length > 0 || (typeof getPrerequisitesData === 'function' && (getPrerequisitesData() || []).length > 0);
+
+  if (!hasSomething) return; // Nothing to evaluate
+
+  var statusEl = document.getElementById('status');
+  if (!statusEl) return;
+
+  var currentStatus = statusEl.value;
+
+  if (checklistOk && prereqsOk && currentStatus !== 'Complete') {
+    statusEl.value = 'Complete';
+    if (typeof setSaveButtonUnsaved === 'function') setSaveButtonUnsaved();
+    if (typeof cwocToast === 'function') cwocToast('All conditions met — status set to Complete', 'success');
+  } else if ((!checklistOk || !prereqsOk) && currentStatus === 'Complete') {
+    statusEl.value = 'ToDo';
+    if (typeof setSaveButtonUnsaved === 'function') setSaveButtonUnsaved();
+    if (typeof cwocToast === 'function') cwocToast('Conditions no longer met — status reverted to ToDo', 'info');
+  }
+}
 
 // formatDate() and formatTime() are in shared.js
 

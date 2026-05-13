@@ -1,0 +1,1 @@
+Checklist inline editing now saves per keystroke (every input event updates the item text immediately). The server PATCH is still debounced at 2s, but the in-memory state is always current — leaving mid-edit can never lose text.

@@ -1,0 +1,1 @@
+Fixed auto-complete checklist to properly refresh dashboard views when status changes. Calls fetchChits() (with displayChits fallback) after a status transition triggered by checking items on the dashboard.

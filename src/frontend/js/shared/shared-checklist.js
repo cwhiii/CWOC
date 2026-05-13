@@ -53,6 +53,20 @@ async function toggleChecklistItem(chitId, itemIndex, newChecked) {
     const chit = await resp.json();
     if (!Array.isArray(chit.checklist) || !chit.checklist[itemIndex]) return;
     chit.checklist[itemIndex].checked = newChecked;
+
+    // Auto-complete: if enabled, evaluate checklist and update status
+    // Note: server-side also checks prerequisites, so the PUT will enforce the correct status
+    if (chit.auto_complete_checklist) {
+      var nonBlank = chit.checklist.filter(function(item) { return item.text && item.text.trim() !== ''; });
+      if (nonBlank.length > 0) {
+        var allChecked = nonBlank.every(function(item) { return item.checked; });
+        if (!allChecked && chit.status === 'Complete') {
+          chit.status = 'ToDo';
+        }
+        // Don't set to Complete here — server will handle prereq check
+      }
+    }
+
     await fetch(`/api/chits/${chitId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -197,6 +211,7 @@ function renderInlineChecklist(container, chit, onUpdate) {
     cb.checked = false; // Only unchecked items are rendered
     cb.style.cursor = 'pointer';
     cb.addEventListener('change', async () => {
+      var oldStatus = chit.status;
       await toggleChecklistItem(chit.id, idx, cb.checked);
       item.checked = cb.checked;
       // Hide the item when checked off (it's now in the "completed" count)
@@ -211,6 +226,14 @@ function renderInlineChecklist(container, chit, onUpdate) {
       var card = container.closest('.chit-card') || container;
       if (allDone) { card.classList.add('checklist-all-done'); }
       else { card.classList.remove('checklist-all-done'); }
+      // If auto-complete is enabled, refresh the dashboard to reflect server-side status changes
+      if (chit.auto_complete_checklist) {
+        // Small delay to let the PUT complete before refreshing
+        setTimeout(function() {
+          if (typeof fetchChits === 'function') fetchChits();
+          else if (typeof displayChits === 'function') displayChits();
+        }, 300);
+      }
     });
 
     const textSpan = document.createElement('span');

@@ -941,6 +941,16 @@
         padding: 6px 8px !important;
     }
 
+    /* ── Indicators Log Mode: stack date above summary on mobile ──────────── */
+    .ind-log-entry {
+        flex-direction: column;
+        gap: 2px;
+        padding: 6px 10px;
+    }
+    .ind-log-summary {
+        white-space: normal;
+    }
+
     /* ── Global Search: compact on mobile ─────────────────────────────────── */
     .global-search-bar {
         padding: 8px 4px;

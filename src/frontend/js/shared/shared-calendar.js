@@ -127,18 +127,29 @@ function calendarEventTitle(chit, isDueOnly, info, settings, context) {
 
   // Birthday/anniversary entries: render as a person chip with thumbnail
   if (chit._isBirthday) {
-    // Format: [img] Name 🎂 Label (age)
+    // Format: [img] Name [emoji] Label (age)
     var displayName = (chit.people && chit.people[0]) ? chit.people[0] : '';
     var labelPart = chit._date_label || '';
     var ageMatch = (chit.title || '').match(/\((\d+ yrs)\)/);
     if (ageMatch) labelPart += ' (' + ageMatch[1] + ')';
+
+    // Choose emoji based on date label
+    var dateLabel = (chit._date_label || '').toLowerCase();
+    var chipEmoji = '';
+    if (dateLabel.indexOf('birthday') !== -1 || dateLabel.indexOf('birth') !== -1) {
+      chipEmoji = ' 🎂 ';
+    } else if (dateLabel.indexOf('anniversary') !== -1) {
+      chipEmoji = ' 💍 ';
+    } else if (labelPart) {
+      chipEmoji = ': ';
+    }
 
     var chipBg = chit.color || '#f5e6d3';
     var chipHtml = '<span class="birthday-chip" style="background-color:' + chipBg + ';">';
     if (chit._contact_image_url) {
       chipHtml += '<img src="' + chit._contact_image_url + '" class="birthday-chip-img">';
     }
-    chipHtml += displayName + ' 🎂 ' + labelPart + '</span>';
+    chipHtml += displayName + chipEmoji + labelPart + '</span>';
     return chipHtml;
   }
 

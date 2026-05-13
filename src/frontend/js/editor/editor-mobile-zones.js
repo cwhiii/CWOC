@@ -733,7 +733,22 @@ function _openMobileActionsSidebar() {
   // Section 2: Snooze in its own section
   if (snoozeBtn) list.appendChild(_makeSidebarBtn(snoozeBtn));
 
-  // Spacer between snooze and archive/delete
+  // Spacer before calculator
+  var spacerCalc = document.createElement('div');
+  spacerCalc.className = 'mobile-actions-sidebar-spacer';
+  list.appendChild(spacerCalc);
+
+  // Section 3: Calculator quick-access
+  var calcItem = document.createElement('button');
+  calcItem.className = 'mobile-actions-sidebar-btn';
+  calcItem.innerHTML = '🧮 Calculator';
+  calcItem.addEventListener('click', function() {
+    _closeMobileActionsSidebar();
+    if (typeof cwocToggleCalculator === 'function') cwocToggleCalculator();
+  });
+  list.appendChild(calcItem);
+
+  // Spacer between calculator and archive/delete
   if (bottomBtns.length > 0) {
     var spacer2 = document.createElement('div');
     spacer2.className = 'mobile-actions-sidebar-spacer';
