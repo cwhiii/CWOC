@@ -51,7 +51,7 @@
     font-family: 'Lora', Georgia, serif;
     opacity: 0.8;
     transition: opacity 0.15s;
-    margin-left: 4px;
+    margin-left: auto;
 }
 .cwoc-calc-titlebar .cwoc-calc-close:hover {
     opacity: 1;
