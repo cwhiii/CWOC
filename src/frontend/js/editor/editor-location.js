@@ -15,10 +15,32 @@ async function _getCoordinates(address) {
   return _geocodeAddress(address);
 }
 
-async function _getWeather(lat, lon) {
-  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max&timezone=auto&forecast_days=1`;
+async function _getWeather(lat, lon, targetDate) {
+  var dateParam = '';
+  var baseUrl = 'https://api.open-meteo.com/v1/forecast';
+
+  if (targetDate) {
+    // If target date is more than 5 days in the past, use the historical archive API
+    var today = new Date();
+    var target = new Date(targetDate + 'T12:00:00');
+    var diffDays = Math.floor((today - target) / (1000 * 60 * 60 * 24));
+    if (diffDays > 5) {
+      baseUrl = 'https://archive-api.open-meteo.com/v1/archive';
+    }
+    dateParam = `&start_date=${targetDate}&end_date=${targetDate}`;
+  } else {
+    dateParam = '&forecast_days=1';
+  }
+
+  const url = `${baseUrl}?latitude=${lat}&longitude=${lon}&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max,wind_gusts_10m_max&timezone=auto${dateParam}`;
   const response = await fetch(url);
   const data = await response.json();
+
+  // Normalize: archive API uses 'weather_code', forecast uses 'weathercode'
+  if (data && data.daily && data.daily.weather_code && !data.daily.weathercode) {
+    data.daily.weathercode = data.daily.weather_code;
+  }
+
   return data;
 }
 
@@ -47,7 +69,23 @@ async function _fetchWeatherData(address) {
 
   try {
     const coords = await _getCoordinates(address);
-    const weather = await _getWeather(coords.lat, coords.lon);
+
+    // Determine the chit's target date from date fields
+    let targetDate = '';
+    const startVal = document.getElementById('start_datetime')?.value;
+    const dueVal = document.getElementById('due_datetime')?.value;
+    const pitVal = document.getElementById('point_in_time_date')?.value;
+    if (startVal) {
+      try { targetDate = new Date(convertMonthFormat(startVal) + 'T12:00:00').toISOString().split('T')[0]; } catch (e) { /* skip */ }
+    }
+    if (!targetDate && dueVal) {
+      try { targetDate = new Date(convertMonthFormat(dueVal) + 'T12:00:00').toISOString().split('T')[0]; } catch (e) { /* skip */ }
+    }
+    if (!targetDate && pitVal) {
+      try { targetDate = new Date(convertMonthFormat(pitVal) + 'T12:00:00').toISOString().split('T')[0]; } catch (e) { /* skip */ }
+    }
+
+    const weather = await _getWeather(coords.lat, coords.lon, targetDate);
 
     currentWeatherLat = coords.lat;
     currentWeatherLon = coords.lon;
@@ -58,23 +96,15 @@ async function _fetchWeatherData(address) {
     // Update weather_data in memory for save payload (6.2)
     if (weather && weather.daily) {
       const today = weather.daily;
-      // Derive focus_date from the chit's earliest date field
-      let focusDate = '';
-      const startVal = document.getElementById('start_datetime')?.value;
-      const dueVal = document.getElementById('due_datetime')?.value;
-      if (startVal) {
-        try { focusDate = new Date(convertMonthFormat(startVal) + 'T12:00:00').toISOString().split('T')[0]; } catch (e) { /* skip */ }
-      }
-      if (!focusDate && dueVal) {
-        try { focusDate = new Date(convertMonthFormat(dueVal) + 'T12:00:00').toISOString().split('T')[0]; } catch (e) { /* skip */ }
-      }
       window._currentChitWeatherData = {
-        focus_date: focusDate || new Date().toISOString().split('T')[0],
+        focus_date: targetDate || new Date().toISOString().split('T')[0],
         updated_time: new Date().toISOString(),
         high: today.temperature_2m_max[0],
         low: today.temperature_2m_min[0],
         precipitation: today.precipitation_sum[0],
-        weather_code: today.weathercode[0]
+        weather_code: today.weathercode[0],
+        wind_gusts: today.wind_gusts_10m_max ? today.wind_gusts_10m_max[0] : null,
+        wind_speed: today.wind_speed_10m_max ? today.wind_speed_10m_max[0] : null
       };
     }
 
@@ -128,6 +158,14 @@ function _editorFormatPrecip(precipMm, weatherCode) {
   return cm + 'cm ' + pType;
 }
 
+/** Format precipitation amount only (no type word) for merged display. */
+function _editorFormatPrecipAmount(precipMm) {
+  if (!precipMm || precipMm <= 0) return '';
+  var cm = Math.round(precipMm / 10);
+  if (cm < 1) return '<1cm';
+  return cm + 'cm';
+}
+
 function _displayWeatherInCompactSection(weatherData, address) {
   const compactWeatherSection = document.getElementById(
     "compactWeatherSection",
@@ -137,6 +175,8 @@ function _displayWeatherInCompactSection(weatherData, address) {
     return;
   }
   compactWeatherSection.classList.remove('weather-placeholder');
+  // Force visibility for mobile zone mode
+  compactWeatherSection.style.setProperty('display', 'flex', 'important');
 
   if (weatherData && weatherData.daily) {
     const today = weatherData.daily;
@@ -144,15 +184,16 @@ function _displayWeatherInCompactSection(weatherData, address) {
     const minC = today.temperature_2m_min[0];
     const maxC = today.temperature_2m_max[0];
     const precipMm = today.precipitation_sum[0];
+    const windGustsKmh = today.wind_gusts_10m_max ? today.wind_gusts_10m_max[0] : null;
 
     const min = _convertTemp(minC);
     const max = _convertTemp(maxC);
 
     const icon = weatherIcons[weatherCode] || "❓";
-    const precip = _editorFormatPrecip(precipMm, weatherCode);
-
-    const d = new Date();
-    const formattedDate = `${d.toLocaleDateString("en-US", { weekday: "short" })} ${d.getFullYear()}-${d.toLocaleDateString("en-US", { month: "short" })}-${String(d.getDate()).padStart(2, "0")}`;
+    const fullDescription = _getWeatherDescription(weatherCode, minC, maxC, windGustsKmh);
+    // Merge precip amount into description line (no separate badge)
+    const precipAmt = _editorFormatPrecipAmount(precipMm);
+    const descWithPrecip = precipAmt ? fullDescription + ', ' + precipAmt : fullDescription;
 
     const barRange = _tempBarRange();
     const barMin = barRange.barMin;
@@ -161,19 +202,23 @@ function _displayWeatherInCompactSection(weatherData, address) {
     const startPct = ((min - barMin) / range) * 100;
     const endPct = ((max - barMin) / range) * 100;
 
+    // Use the shared temperature gradient
+    const gradientStyle = _buildTempGradient();
+
+    const lowAlt = _tempAltUnit(minC);
+    const highAlt = _tempAltUnit(maxC);
+    const precipAlt = precipMm > 0 ? _precipAlt(precipMm) : '';
+
     compactWeatherSection.innerHTML = `
     <div class="compact-day-header">
     <span class="compact-icon">${icon}</span>
-    <span class="compact-date">${formattedDate}</span>
-    <div class="compact-temperatures">
-    <div class="compact-high">${max}º</div>
-    <div class="compact-low">${min}º</div>
-    </div>
-    <div class="compact-precip">${precip}</div>
-    <div class="compact-temperature-track">
+    <span class="compact-description"${precipAlt ? ` title="${precipAlt}"` : ''}>${descWithPrecip}</span>
+    <div class="compact-temperature-track" style="background:${gradientStyle};">
     <div class="compact-temperature-mask" style="left:0%; width:${startPct}%;"></div>
     <div class="compact-temperature-fill" style="left:${startPct}%; width:${endPct - startPct}%;"></div>
     <div class="compact-temperature-mask" style="right:0%; width:${100 - endPct}%;"></div>
+    <div class="compact-temp-callout compact-low" style="left:${startPct}%;" title="${lowAlt}">${min}º</div>
+    <div class="compact-temp-callout compact-high" style="left:${endPct}%;" title="${highAlt}">${max}º</div>
     ${[...Array(Math.floor((barMax - barMin) / 10) + 1)]
       .map((_, index) => {
         const temp = barMin + index * 10;
@@ -339,7 +384,12 @@ function onClearLocation(event) {
   var compactWeather = document.getElementById('compactWeatherSection');
   if (compactWeather) {
     compactWeather.classList.add('weather-placeholder');
-    compactWeather.innerHTML = '📍 Date & location needed for weather';
+    var hasDate = !!(document.getElementById("start_datetime")?.value || document.getElementById("due_datetime")?.value || document.getElementById("point_in_time_date")?.value);
+    if (hasDate) {
+      compactWeather.innerHTML = '<div style="padding:8px;font-family:Lora, Georgia, serif;color:#8b5a2b;font-size:0.85em;opacity:0.7;">📍 Add a location for weather</div>';
+    } else {
+      compactWeather.innerHTML = '<div style="padding:8px;font-family:Lora, Georgia, serif;color:#8b5a2b;font-size:0.85em;opacity:0.7;">🗓️ Date &amp; location needed for weather 📍</div>';
+    }
   }
 
   var dropdown = document.getElementById('saved-locations-dropdown');
@@ -424,6 +474,25 @@ function onCompactLocationSelect() {
   dropdown.selectedIndex = 0;
 }
 
+/**
+ * Re-fetch weather when a date field changes (if location is set).
+ * Called from Flatpickr onChange handlers.
+ */
+function _refreshWeatherOnDateChange() {
+  const locationInput = document.getElementById("location");
+  if (!locationInput || !locationInput.value.trim()) return;
+  const hasDate = !!(document.getElementById("start_datetime")?.value || document.getElementById("due_datetime")?.value || document.getElementById("point_in_time_date")?.value);
+  if (!hasDate) {
+    const cws = document.getElementById("compactWeatherSection");
+    if (cws) {
+      cws.classList.add('weather-placeholder');
+      cws.innerHTML = '<div style="padding:8px;font-family:Lora, Georgia, serif;color:#8b5a2b;font-size:0.85em;opacity:0.7;">🗓️ Add a date for weather</div>';
+    }
+    return;
+  }
+  _fetchWeatherData(locationInput.value.trim()).catch(() => {});
+}
+
 function searchLocationMap(event) {
   const locationInput = document.getElementById("location");
   if (!locationInput || !locationInput.value.trim()) {
@@ -432,13 +501,13 @@ function searchLocationMap(event) {
   }
 
   const address = locationInput.value.trim();
-  const hasDate = !!(document.getElementById("start_datetime")?.value || document.getElementById("due_datetime")?.value);
+  const hasDate = !!(document.getElementById("start_datetime")?.value || document.getElementById("due_datetime")?.value || document.getElementById("point_in_time_date")?.value);
 
   if (!hasDate) {
     const cws = document.getElementById("compactWeatherSection");
     if (cws) {
       cws.classList.add('weather-placeholder');
-      cws.innerHTML = `<div style="padding:8px;font-family:Lora, Georgia, serif;color:#8b5a2b;font-size:0.85em;opacity:0.7;">📅 Add a date for weather</div>`;
+      cws.innerHTML = `<div style="padding:8px;font-family:Lora, Georgia, serif;color:#8b5a2b;font-size:0.85em;opacity:0.7;">🗓️ Add a date for weather</div>`;
     }
     // Still show the map
     _getCoordinates(address).then((coords) => {

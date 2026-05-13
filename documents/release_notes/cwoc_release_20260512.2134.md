@@ -1,0 +1,1 @@
+Added zone preview panel to the Custom Objects Editor — clicking "Preview" in the zone editor modal renders a live preview showing the zone as it appears in the chit editor, with collapsible panel, 3-column field grid, appropriate input types, range highlighting, and unit labels.

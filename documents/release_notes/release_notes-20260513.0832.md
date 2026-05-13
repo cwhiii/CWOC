@@ -1,0 +1,1 @@
+Fixed weather page gradient borders not showing: removed border-radius (conflicts with border-image), increased border to 3px for visibility, changed today highlight to use box-shadow instead of border-color override.

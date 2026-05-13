@@ -1,0 +1,1 @@
+Editor weather bar: fixed 10-degree tick marks being hidden behind the mask (z-index fix), removed the date display, and replaced the simple blue-to-red gradient with a sharper one that goes hard blue below 0°C and hard red above 30°C.

@@ -109,7 +109,7 @@ async function fetchAndCacheWeather(address) {
     var url = 'https://api.open-meteo.com/v1/forecast'
       + '?latitude=' + geo.lat
       + '&longitude=' + geo.lon
-      + '&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_sum'
+      + '&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_gusts_10m_max,wind_speed_10m_max'
       + '&timezone=auto&forecast_days=16';
     var resp = await fetch(url);
     if (!resp.ok) return null;

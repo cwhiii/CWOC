@@ -343,6 +343,139 @@ function _tempBarRange() {
   return { barMin: -14, barMax: 104 };
 }
 
+// WMO weather code descriptions — shared across editor and dashboard
+var _weatherDescriptions = {
+  0: "Clear", 1: "Partly cloudy", 2: "Partly cloudy", 3: "Overcast",
+  45: "Fog", 48: "Rime",
+  51: "Drizzle", 53: "Drizzle", 55: "Drizzle",
+  56: "Drizzle", 57: "Drizzle",
+  61: "Rain", 63: "Rain", 65: "Rain",
+  66: "Rain", 67: "Rain",
+  71: "Snow", 73: "Snow", 75: "Snow",
+  77: "Snow", 85: "Snow", 86: "Snow",
+  80: "Rain", 81: "Rain", 82: "Rain",
+  95: "Thunderstorm", 96: "Thunderstorm + hail", 99: "Thunderstorm + hail"
+};
+
+/** Get a temperature feeling word based on the most extreme temp (in Celsius). */
+function _getTempFeeling(minC, maxC) {
+  var extremeC = Math.abs(maxC) >= Math.abs(minC) ? maxC : minC;
+  if (extremeC <= -5) return "frigid";
+  if (extremeC <= 0) return "freezing";
+  if (extremeC <= 8) return "cold";
+  if (extremeC <= 14) return "cool";
+  if (extremeC <= 20) return "mild";
+  if (extremeC <= 25) return "warm";
+  if (extremeC <= 30) return "hot";
+  return "scorching";
+}
+
+/** Get full weather description with temperature feeling.
+ *  windGustsKmh is optional — if provided and snow codes are active with gusts >= 56 km/h, returns "Blizzard".
+ */
+function _getWeatherDescription(weatherCode, minC, maxC, windGustsKmh) {
+  var desc = _weatherDescriptions[weatherCode] || "Unknown conditions";
+  // NWS blizzard: snow + wind gusts >= 35 mph (56 km/h)
+  if (windGustsKmh && windGustsKmh >= 56 && [71, 73, 75, 77, 85, 86].includes(weatherCode)) {
+    desc = "Blizzard";
+  }
+  var feeling = _getTempFeeling(minC, maxC);
+  return desc + ' & ' + feeling;
+}
+
+/** Get the gradient color for a given temperature (Celsius). */
+function _getTempColor(tempC) {
+  // Canonical gradient stops: -10=#001040, 0=#2166ac, 15=#e0ddd4, 22=#f0c830, 30=#d73027, 40=#3a0000
+  var stops = _cwocTempGradientStops;
+  if (tempC <= stops[0].t) return 'rgb(' + stops[0].r + ',' + stops[0].g + ',' + stops[0].b + ')';
+  if (tempC >= stops[stops.length - 1].t) return 'rgb(' + stops[stops.length - 1].r + ',' + stops[stops.length - 1].g + ',' + stops[stops.length - 1].b + ')';
+  for (var i = 0; i < stops.length - 1; i++) {
+    if (tempC >= stops[i].t && tempC <= stops[i + 1].t) {
+      var pct = (tempC - stops[i].t) / (stops[i + 1].t - stops[i].t);
+      var r = Math.round(stops[i].r + pct * (stops[i + 1].r - stops[i].r));
+      var g = Math.round(stops[i].g + pct * (stops[i + 1].g - stops[i].g));
+      var b = Math.round(stops[i].b + pct * (stops[i + 1].b - stops[i].b));
+      return 'rgb(' + r + ',' + g + ',' + b + ')';
+    }
+  }
+  return '#3a2a1a';
+}
+
+// Canonical temperature gradient stops — single source of truth
+var _cwocTempGradientStops = [
+  { t: -10, r: 0, g: 16, b: 64, hex: '#001040' },
+  { t: 0, r: 33, g: 102, b: 172, hex: '#2166ac' },
+  { t: 15, r: 224, g: 221, b: 212, hex: '#e0ddd4' },
+  { t: 22, r: 240, g: 200, b: 48, hex: '#f0c830' },
+  { t: 30, r: 215, g: 48, b: 39, hex: '#d73027' },
+  { t: 40, r: 58, g: 0, b: 0, hex: '#3a0000' }
+];
+
+/** Build the CSS linear-gradient string for the temperature bar. */
+function _buildTempGradient() {
+  var barR = _tempBarRange();
+  var barMin = barR.barMin, barMax = barR.barMax, range = barMax - barMin;
+  var parts = [];
+  for (var i = 0; i < _cwocTempGradientStops.length; i++) {
+    var stop = _cwocTempGradientStops[i];
+    // Convert Celsius stop to position on the bar (accounting for imperial range)
+    var tempInDisplayUnits = _isMetricUnits() ? stop.t : Math.round(stop.t * 9 / 5 + 32);
+    var pct = ((tempInDisplayUnits - barMin) / range) * 100;
+    pct = Math.max(0, Math.min(100, pct));
+    parts.push(stop.hex + ' ' + pct.toFixed(1) + '%');
+  }
+  return 'linear-gradient(to right, ' + parts.join(', ') + ')';
+}
+
+/** Get border color for a temperature — same as gradient color. */
+function _getTempBorderColor(tempC) {
+  return _getTempColor(tempC);
+}
+
+/** Convert a temperature to the OPPOSITE unit system for tooltip display. */
+function _tempAltUnit(tempC) {
+  if (_isMetricUnits()) {
+    // Currently showing metric — tooltip shows imperial
+    return Math.round(tempC * 9 / 5 + 32) + '°F';
+  } else {
+    // Currently showing imperial — tooltip shows metric (convert from F to C)
+    return Math.round((tempC - 32) * 5 / 9) + '°C';
+  }
+}
+
+/** Convert a temperature (already in display units) to the opposite for tooltip. */
+function _tempDisplayAlt(displayTemp) {
+  if (_isMetricUnits()) {
+    // Display is °C, show °F
+    return Math.round(displayTemp * 9 / 5 + 32) + '°F';
+  } else {
+    // Display is °F, show °C
+    return Math.round((displayTemp - 32) * 5 / 9) + '°C';
+  }
+}
+
+/** Convert wind speed to the opposite unit for tooltip. Input is in display units. */
+function _windDisplayAlt(displayValue) {
+  if (_isMetricUnits()) {
+    // Display is km/h, show mph
+    return Math.round(displayValue * 0.621371) + ' mph';
+  } else {
+    // Display is mph, show km/h
+    return Math.round(displayValue / 0.621371) + ' km/h';
+  }
+}
+
+/** Convert precipitation to the opposite unit for tooltip. Input is mm. */
+function _precipAlt(precipMm) {
+  if (_isMetricUnits()) {
+    // Display is metric (cm), show inches
+    return (precipMm / 25.4).toFixed(1) + ' in';
+  } else {
+    // Display is imperial (in), show cm
+    return (precipMm / 10).toFixed(1) + ' cm';
+  }
+}
+
 function generateUniqueId() {
   return Date.now().toString(36) + Math.random().toString(36).substr(2);
 }
@@ -829,6 +962,35 @@ async function cwocChitPickerModal(options) {
     return escaped.replace(new RegExp('(' + safeTerm + ')', 'gi'), '<mark>$1</mark>');
   }
 
+  function _findMatchedField(chit, term) {
+    // Returns {field, snippet} for the first non-title field that matches
+    var fields = [
+      { name: 'note', val: chit.note },
+      { name: 'checklist', val: Array.isArray(chit.checklist) ? chit.checklist.map(function(i) { return i.text || ''; }).join(' | ') : '' },
+      { name: 'people', val: Array.isArray(chit.people) ? chit.people.join(', ') : '' },
+      { name: 'location', val: chit.location },
+      { name: 'priority', val: chit.priority },
+      { name: 'severity', val: chit.severity },
+      { name: 'status', val: chit.status },
+      { name: 'tags', val: Array.isArray(chit.tags) ? chit.tags.filter(function(t) { return !t.startsWith('CWOC_System/'); }).join(', ') : '' }
+    ];
+    for (var i = 0; i < fields.length; i++) {
+      var f = fields[i];
+      if (!f.val) continue;
+      var idx = f.val.toLowerCase().indexOf(term);
+      if (idx !== -1) {
+        var start = Math.max(0, idx - 10);
+        var end = Math.min(f.val.length, idx + 40);
+        var snippet = '';
+        if (start > 0) snippet += '\u2026';
+        snippet += f.val.substring(start, end);
+        if (end < f.val.length) snippet += '\u2026';
+        return { field: f.name, snippet: snippet };
+      }
+    }
+    return null;
+  }
+
   function _renderList(chitsToRender) {
     var searchTerm = (searchInput.value || '').toLowerCase().trim();
     var highlightTerm = searchTerm.startsWith('#') ? '' : searchTerm;
@@ -890,6 +1052,21 @@ async function cwocChitPickerModal(options) {
         }).join('');
         titleCell.appendChild(tagsSpan);
       }
+
+      // Show which field matched (with snippet) when match isn't in title
+      if (searchTerm && !searchTerm.startsWith('#')) {
+        var titleLower = (chit.title || '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').toLowerCase();
+        if (!titleLower.includes(searchTerm)) {
+          var matchInfo = _findMatchedField(chit, searchTerm);
+          if (matchInfo) {
+            var matchSpan = document.createElement('div');
+            matchSpan.style.cssText = 'font-size:0.78em;color:#6b4e31;margin-top:2px;opacity:0.85;';
+            matchSpan.innerHTML = '<b>' + matchInfo.field + ':</b> ' + _highlightText(matchInfo.snippet, searchTerm);
+            titleCell.appendChild(matchSpan);
+          }
+        }
+      }
+
       row.appendChild(titleCell);
 
       // Due date cell

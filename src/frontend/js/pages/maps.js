@@ -46,7 +46,8 @@ var _mapsStatusColors = {
   'ToDo':        '#2196F3',
   'In Progress': '#FF9800',
   'Blocked':     '#F44336',
-  'Complete':    '#4CAF50'
+  'Complete':    '#4CAF50',
+  'Rejected':    '#9E9E9E'
 };
 var _mapsNoStatusColor = '#9E9E9E';
 
@@ -2182,7 +2183,7 @@ function _buildPopupContent(chit) {
   }
   // Status icon (only if chit has a real status)
   if (chit.status && chit.status !== 'No Status') {
-    var statusIcons = { 'ToDo': '📋', 'In Progress': '🔄', 'Blocked': '🚫', 'Complete': '✅' };
+    var statusIcons = { 'ToDo': '📋', 'In Progress': '🔄', 'Blocked': '🚫', 'Complete': '✅', 'Rejected': '❌' };
     var statusIcon = statusIcons[chit.status] || '📋';
     icons.push('<span title="' + _mapsEsc(chit.status) + '" style="cursor:pointer;">' + statusIcon + '</span>');
   }

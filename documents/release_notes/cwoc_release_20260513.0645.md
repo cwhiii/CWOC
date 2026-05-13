@@ -1,0 +1,1 @@
+Editor title zone rearranged: title input now on top row with pinned icon to its left, "Title" label removed, accessories (owner chip, email button, recurrence icon, nest label) moved to a second row below. Owner chip now shows "Owner: [name]" tooltip on hover.

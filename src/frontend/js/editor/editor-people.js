@@ -912,6 +912,79 @@ function _removePeopleChip(index) {
   setSaveButtonUnsaved();
 }
 
+// ── People Chip Context Menu (shift-click / right-click) ─────────────────────
+
+/**
+ * Show a context menu for a people chip with Remove and View Contact options.
+ * Follows the same visual pattern as _showChitContextMenu in shared.js.
+ */
+function _showPeopleChipContextMenu(e, chipData, chipIdx) {
+  // Remove any existing context menu
+  document.querySelectorAll('.cwoc-people-ctx-overlay').forEach(function(el) { el.remove(); });
+
+  var overlay = document.createElement('div');
+  overlay.className = 'cwoc-people-ctx-overlay';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:9999;';
+
+  var menu = document.createElement('div');
+  menu.style.cssText = 'position:fixed;background:url("/static/parchment.jpg") center/cover;background-color:#fffaf0;border:2px solid #6b4e31;border-radius:8px;padding:8px 0;min-width:180px;max-width:220px;box-shadow:0 8px 24px rgba(0,0,0,0.3);font-family:Lora,Georgia,serif;';
+
+  // Position near the click, clamped to viewport
+  var menuX = Math.min(e.clientX, window.innerWidth - 240);
+  var menuY = Math.min(e.clientY, window.innerHeight - 120);
+  menu.style.left = menuX + 'px';
+  menu.style.top = menuY + 'px';
+
+  function _close() {
+    overlay.remove();
+    document.removeEventListener('keydown', _escHandler, true);
+  }
+
+  function _escHandler(ev) {
+    if (ev.key === 'Escape') {
+      ev.stopImmediatePropagation();
+      ev.preventDefault();
+      _close();
+    }
+  }
+  document.addEventListener('keydown', _escHandler, true);
+
+  overlay.addEventListener('click', function (ev) {
+    ev.stopPropagation();
+    _close();
+  });
+
+  function _menuItem(icon, label, onClick) {
+    var item = document.createElement('div');
+    item.style.cssText = 'padding:8px 14px;cursor:pointer;display:flex;align-items:center;gap:8px;font-size:0.95em;color:#1a1208;';
+    item.innerHTML = '<span style="width:18px;text-align:center;">' + icon + '</span> ' + label;
+    item.addEventListener('mouseenter', function() { this.style.background = '#f0e6d0'; });
+    item.addEventListener('mouseleave', function() { this.style.background = ''; });
+    item.addEventListener('click', function(ev) {
+      ev.stopPropagation();
+      _close();
+      onClick();
+    });
+    menu.appendChild(item);
+  }
+
+  // View Contact (only if the chip has an ID)
+  if (chipData.id) {
+    _menuItem('<i class="fas fa-address-book" style="color:#6b4e31;"></i>', 'View Contact', function() {
+      window.open('/frontend/html/contact-editor.html?id=' + encodeURIComponent(chipData.id), '_blank');
+    });
+  }
+
+  // Remove
+  _menuItem('<i class="fas fa-times" style="color:#a01c1c;"></i>', 'Remove', function() {
+    _removePeopleChip(chipIdx);
+  });
+
+  menu.addEventListener('click', function(ev) { ev.stopPropagation(); });
+  overlay.appendChild(menu);
+  document.body.appendChild(overlay);
+}
+
 function _renderPeopleChips() {
   var container = document.getElementById('peopleChips');
   if (!container) return;
@@ -943,12 +1016,27 @@ function _renderPeopleChips() {
 
     // Double-click opens contact editor
     if (data.id) {
-      chip.title = 'Double-click to edit contact';
+      chip.title = 'Double-click to edit · Shift+click or right-click for menu';
       chip.addEventListener('dblclick', function (e) {
         e.stopPropagation();
         window.open('/frontend/html/contact-editor.html?id=' + encodeURIComponent(data.id), '_blank');
       });
     }
+
+    // Shift-click or right-click context menu
+    (function(chipEl, chipData, chipIdx) {
+      chipEl.addEventListener('contextmenu', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        _showPeopleChipContextMenu(e, chipData, chipIdx);
+      });
+      chipEl.addEventListener('click', function (e) {
+        if (e.shiftKey) {
+          e.stopPropagation();
+          _showPeopleChipContextMenu(e, chipData, chipIdx);
+        }
+      });
+    })(chip, data, idx);
 
     var removeX = document.createElement('span');
     removeX.className = 'chip-remove';

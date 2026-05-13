@@ -213,6 +213,29 @@ function _getWeatherIcon(code) {
   return _weatherIcons[code] || '❓';
 }
 
+/** Build the temperature bar gradient style matching the editor's gradient. */
+function _buildTempBarGradient() {
+  return _buildTempGradient();
+}
+
+/** Build the full temperature bar HTML with masks, callouts, and tick marks. */
+function _buildTempBarHTML(lowPct, highPct, minT, maxT, tUnit) {
+  var barR = _tempBarRange();
+  var barMin = barR.barMin, barMax = barR.barMax, range = barMax - barMin;
+  var gradient = _buildTempBarGradient();
+  var ticks = '';
+  for (var t = barMin; t <= barMax; t += 10) {
+    var pos = ((t - barMin) / range) * 100;
+    ticks += '<div class="temp-bar-tick" style="left:' + pos + '%;"></div><div class="temp-bar-tick-label" style="left:' + pos + '%;">' + t + 'º</div>';
+  }
+  return '<div class="weather-modal-temp-bar" style="background:' + gradient + ';">' +
+    '<div class="temp-bar-mask" style="left:0%;width:' + lowPct + '%;"></div>' +
+    '<div class="temp-bar-mask" style="right:0%;width:' + (100 - highPct) + '%;"></div>' +
+    '<div class="temp-bar-marker marker-low" style="left:' + lowPct + '%;">' + minT + 'º</div>' +
+    '<div class="temp-bar-marker marker-high" style="left:' + highPct + '%;">' + maxT + 'º</div>' +
+    ticks +
+    '</div>';
+}
 function _escHtml(str) {
   if (!str) return '';
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -510,12 +533,17 @@ async function _fetchWeatherForModal(address, label) {
     var highPct = Math.max(0, Math.min(100, ((maxT - barMin) / barRange) * 100));
 
     if (bodyEl) {
+      var fullDesc = _getWeatherDescription(weatherCode, minC, maxC, windKmh);
+      var lowAltM = _tempAltUnit(minC);
+      var highAltM = _tempAltUnit(maxC);
+      var precipAltM = precipMm > 0 ? _precipAlt(precipMm) : '';
+      var windAltM = wind.value > 0 ? _windDisplayAlt(wind.value) : '';
       var weatherHtml =
-        '<div class="weather-modal-icon">' + icon + '</div>' +
-        '<div class="weather-modal-temps"><span class="temp-high">' + maxT + tUnit + '</span> / <span class="temp-low">' + minT + tUnit + '</span></div>' +
-        (precipText ? '<div class="weather-modal-precip">' + precipText + '</div>' : '') +
-        (windText ? '<div class="weather-modal-precip" style="margin-top:2px;">' + windText + '</div>' : '') +
-        '<div class="weather-modal-temp-bar"><div class="temp-bar-marker" style="left:' + lowPct + '%" title="Low ' + minT + tUnit + '"></div><div class="temp-bar-marker" style="left:' + highPct + '%" title="High ' + maxT + tUnit + '"></div></div>';
+        '<div class="weather-modal-icon">' + icon + ' <span class="weather-modal-desc">' + fullDesc + '</span></div>' +
+        '<div class="weather-modal-temps" title="' + lowAltM + ' – ' + highAltM + '"><span class="temp-low">' + minT + tUnit + '</span> – <span class="temp-high">' + maxT + tUnit + '</span></div>' +
+        (precipText ? '<div class="weather-modal-precip"' + (precipAltM ? ' title="' + precipAltM + '"' : '') + '>' + precipText + '</div>' : '') +
+        (windText ? '<div class="weather-modal-precip" style="margin-top:2px;"' + (windAltM ? ' title="' + windAltM + '"' : '') + '>' + windText + '</div>' : '') +
+        _buildTempBarHTML(lowPct, highPct, minT, maxT, tUnit);
       bodyEl.innerHTML = weatherHtml;
       // Cache the result
       try { localStorage.setItem(cacheKey, JSON.stringify({ html: weatherHtml, ts: Date.now() })); } catch (e) { /* ignore */ }
@@ -558,7 +586,7 @@ async function _fetchWeatherForCache(address, cacheKey) {
     var barMin = barR.barMin, barMax = barR.barMax, barRange = barMax - barMin;
     var lowPct = Math.max(0, Math.min(100, ((minT - barMin) / barRange) * 100));
     var highPct = Math.max(0, Math.min(100, ((maxT - barMin) / barRange) * 100));
-    var html = '<div class="weather-modal-icon">' + icon + '</div><div class="weather-modal-temps"><span class="temp-high">' + maxT + tUnit + '</span> / <span class="temp-low">' + minT + tUnit + '</span></div>' + (precipText ? '<div class="weather-modal-precip">' + precipText + '</div>' : '') + '<div class="weather-modal-temp-bar"><div class="temp-bar-marker" style="left:' + lowPct + '%" title="Low ' + minT + tUnit + '"></div><div class="temp-bar-marker" style="left:' + highPct + '%" title="High ' + maxT + tUnit + '"></div></div>';
+    var html = '<div class="weather-modal-icon">' + icon + '</div><div class="weather-modal-temps"><span class="temp-high">' + maxT + tUnit + '</span> / <span class="temp-low">' + minT + tUnit + '</span></div>' + (precipText ? '<div class="weather-modal-precip">' + precipText + '</div>' : '') + _buildTempBarHTML(lowPct, highPct, minT, maxT, tUnit);
     try { localStorage.setItem(cacheKey, JSON.stringify({ html: html, ts: Date.now() })); } catch (e) { /* ignore */ }
   } catch (e) { /* background fetch — silently fail */ }
 }

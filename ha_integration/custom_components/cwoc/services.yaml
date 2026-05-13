@@ -4,8 +4,8 @@ create_chit:
   fields:
     title:
       name: Title
-      description: The title of the new chit
-      required: true
+      description: The title of the new chit (optional)
+      required: false
       example: "Buy groceries"
       selector:
         text:

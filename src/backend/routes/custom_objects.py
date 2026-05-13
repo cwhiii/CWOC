@@ -15,6 +15,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 
 from src.backend.db import DB_PATH
 from src.backend.models import (
+    BulkReorderRequest,
     CustomObjectCreate,
     CustomObjectUpdate,
     ZoneAssignmentCreate,
@@ -658,6 +659,55 @@ async def delete_zone_assignment(request: Request, id: str, zone_id: str):
         raise
     except Exception as e:
         logger.error(f"Error deleting zone assignment: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+    finally:
+        if conn:
+            conn.close()
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PUT /api/custom-objects/zone/{zone_id}/reorder — Bulk reorder assignments
+# ═══════════════════════════════════════════════════════════════════════════
+
+@router.put("/api/custom-objects/zone/{zone_id}/reorder")
+async def bulk_reorder_zone_assignments(
+    request: Request, zone_id: str, body: BulkReorderRequest
+):
+    """Bulk update sort_order for zone assignments.
+
+    Accepts an ordered list of custom_object_ids and assigns sequential
+    sort_order values (1, 2, 3, ...). IDs without an existing zone_assignment
+    for this zone are skipped without error.
+    """
+    conn = None
+    try:
+        owner_id = request.state.user_id
+
+        if not body.object_ids:
+            raise HTTPException(status_code=400, detail="object_ids list is required")
+
+        conn = sqlite3.connect(DB_PATH)
+        conn.execute("PRAGMA busy_timeout=5000")
+        cursor = conn.cursor()
+
+        updated = 0
+        for idx, obj_id in enumerate(body.object_ids, start=1):
+            cursor.execute(
+                """UPDATE zone_assignments SET sort_order = ?
+                   WHERE custom_object_id = ? AND zone_id = ? AND owner_id = ?""",
+                (idx, obj_id, zone_id, owner_id)
+            )
+            if cursor.rowcount > 0:
+                updated += 1
+
+        conn.commit()
+
+        return {"detail": "Reorder complete", "updated": updated}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error reordering zone assignments for '{zone_id}': {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
     finally:
         if conn:

@@ -44,14 +44,19 @@
     background: transparent;
     border: none;
     color: var(--parchment-light, #f5f0e1);
-    font-size: 18px;
+    font-size: 22px;
     cursor: pointer;
-    padding: 0 4px;
+    padding: 4px 8px;
     line-height: 1;
     font-family: 'Lora', Georgia, serif;
     opacity: 0.8;
     transition: opacity 0.15s;
     margin-left: auto;
+    min-width: 36px;
+    min-height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 .cwoc-calc-titlebar .cwoc-calc-close:hover {
     opacity: 1;

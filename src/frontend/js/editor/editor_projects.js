@@ -94,9 +94,10 @@ function renderChildChitsByStatus() {
   projectContainer.className = "project-container";
 
   const statuses = ["ToDo", "In Progress", "Blocked", "Complete"];
-  const statusMapLower = { "todo": "ToDo", "in progress": "In Progress", "blocked": "Blocked", "complete": "Complete" };
+  const statusMapLower = { "todo": "ToDo", "in progress": "In Progress", "blocked": "Blocked", "complete": "Complete", "rejected": "Rejected" };
   const grouped = {};
   statuses.forEach((status) => (grouped[status] = []));
+  grouped["Rejected"] = [];
   Object.values(projectState.childChits).forEach((chit) => {
     var status = chit.status || "ToDo";
     var normalized = statusMapLower[status.toLowerCase()] || "ToDo";
@@ -109,6 +110,7 @@ function renderChildChitsByStatus() {
     section.dataset.status = status;
 
     var count = grouped[status].length;
+    var rejectedCount = (status === "Complete") ? grouped["Rejected"].length : 0;
 
     // Collapsible header
     const header = document.createElement("div");
@@ -122,7 +124,7 @@ function renderChildChitsByStatus() {
 
     var countSpan = document.createElement("span");
     countSpan.style.cssText = "font-size:0.8em;opacity:0.6;font-weight:normal;";
-    countSpan.textContent = "(" + count + ")";
+    countSpan.textContent = "(" + count + (rejectedCount > 0 ? " + " + rejectedCount + " rejected" : "") + ")";
     header.appendChild(countSpan);
 
     var spacer = document.createElement("span");
@@ -140,8 +142,8 @@ function renderChildChitsByStatus() {
     const list = document.createElement("div");
     list.className = "project-chit-list";
 
-    // Collapse "Complete" by default if it has items, expand others
-    var isCollapsed = (status === "Complete" && count > 0);
+    // Collapse "Complete" by default if it has items (includes rejected sub-section)
+    var isCollapsed = (status === "Complete" && (count > 0 || rejectedCount > 0));
     if (isCollapsed) {
       list.style.display = "none";
       toggleIcon.textContent = "▶";
@@ -216,7 +218,7 @@ function renderChildChitsByStatus() {
       if (!chitId || !projectState.childChits[chitId]) return;
 
       var currentStatus = (projectState.childChits[chitId].status || "ToDo");
-      var normalizedCurrent = ({"todo":"ToDo","in progress":"In Progress","blocked":"Blocked","complete":"Complete"})[currentStatus.toLowerCase()] || "ToDo";
+      var normalizedCurrent = ({"todo":"ToDo","in progress":"In Progress","blocked":"Blocked","complete":"Complete","rejected":"Rejected"})[currentStatus.toLowerCase()] || "ToDo";
 
       // If dropping in a different status section, change status
       if (normalizedCurrent !== status) {
@@ -262,6 +264,68 @@ function renderChildChitsByStatus() {
       const chitCard = createChildChitCard(chit);
       list.appendChild(chitCard);
     });
+
+    // If this is the Complete section, append Rejected sub-section below
+    if (status === "Complete") {
+      var rejDivider = document.createElement("div");
+      rejDivider.style.cssText = "display:flex;align-items:center;gap:0.5em;cursor:pointer;user-select:none;padding:6px 0 2px;margin-top:0.5em;border-top:1px dashed #c4a882;";
+      var rejTitle = document.createElement("span");
+      rejTitle.style.cssText = "font-size:0.85em;font-weight:bold;color:#9E9E9E;";
+      rejTitle.textContent = "Rejected";
+      rejDivider.appendChild(rejTitle);
+      var rejCount = document.createElement("span");
+      rejCount.style.cssText = "font-size:0.75em;opacity:0.6;";
+      rejCount.textContent = "(" + grouped["Rejected"].length + ")";
+      rejDivider.appendChild(rejCount);
+      var rejSpacer = document.createElement("span");
+      rejSpacer.style.cssText = "flex:1;";
+      rejDivider.appendChild(rejSpacer);
+      var rejToggle = document.createElement("span");
+      rejToggle.style.cssText = "font-size:0.6em;color:#9E9E9E;";
+      rejToggle.textContent = grouped["Rejected"].length > 0 ? "▶" : "▼";
+      rejDivider.appendChild(rejToggle);
+      list.appendChild(rejDivider);
+
+      var rejList = document.createElement("div");
+      rejList.className = "project-chit-list";
+      rejList.dataset.status = "Rejected";
+      // Collapsed by default if it has items, expanded (empty drop zone) if no items
+      rejList.style.display = grouped["Rejected"].length > 0 ? "none" : "";
+      rejList.style.minHeight = "24px";
+      grouped["Rejected"].forEach((chit) => {
+        const chitCard = createChildChitCard(chit);
+        rejList.appendChild(chitCard);
+      });
+      rejDivider.addEventListener("click", function() {
+        var hidden = rejList.style.display === "none";
+        rejList.style.display = hidden ? "" : "none";
+        rejToggle.textContent = hidden ? "▼" : "▶";
+      });
+      // Drag-drop into Rejected sub-section
+      rejList.addEventListener("dragover", function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        rejList.style.outline = "2px dashed #9E9E9E";
+      });
+      rejList.addEventListener("dragleave", function(e) {
+        if (!rejList.contains(e.relatedTarget)) {
+          rejList.style.outline = "";
+        }
+      });
+      rejList.addEventListener("drop", function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        rejList.style.outline = "";
+        var chitId = e.dataTransfer.getData("text/plain");
+        if (!chitId || !projectState.childChits[chitId]) return;
+        var currentStatus = (projectState.childChits[chitId].status || "ToDo");
+        var normalizedCurrent = ({"todo":"ToDo","in progress":"In Progress","blocked":"Blocked","complete":"Complete","rejected":"Rejected"})[currentStatus.toLowerCase()] || "ToDo";
+        if (normalizedCurrent !== "Rejected") {
+          updateChitStatus(chitId, "Rejected");
+        }
+      });
+      list.appendChild(rejList);
+    }
 
     section.appendChild(list);
     projectContainer.appendChild(section);
@@ -373,7 +437,7 @@ function renderChildChitsByStatus() {
           if (!chitId || !projectState.childChits[chitId]) return;
 
           var currentStatus = (projectState.childChits[chitId].status || "ToDo");
-          var statusMapLower = {"todo":"ToDo","in progress":"In Progress","blocked":"Blocked","complete":"Complete"};
+          var statusMapLower = {"todo":"ToDo","in progress":"In Progress","blocked":"Blocked","complete":"Complete","rejected":"Rejected"};
           var normalizedCurrent = statusMapLower[currentStatus.toLowerCase()] || "ToDo";
 
           // Different section: change status
@@ -482,7 +546,7 @@ function createChildChitCard(chit) {
   // Status dropdown (fixed width for consistency)
   const statusSelect = document.createElement("select");
   statusSelect.className = "status-dropdown project-dropdown-fixed";
-  ["ToDo", "In Progress", "Blocked", "Complete"].forEach((status) => {
+  ["ToDo", "In Progress", "Blocked", "Complete", "Rejected"].forEach((status) => {
     const option = document.createElement("option");
     option.value = status;
     option.textContent = status;
@@ -874,6 +938,34 @@ async function openAddChitModal() {
       return escaped.replace(new RegExp('(' + safeTerm + ')', 'gi'), '<mark>$1</mark>');
     }
 
+    function _findMatchedField(chit, term) {
+      var fields = [
+        { name: 'note', val: chit.note },
+        { name: 'checklist', val: Array.isArray(chit.checklist) ? chit.checklist.map(function(i) { return i.text || ''; }).join(' | ') : '' },
+        { name: 'people', val: Array.isArray(chit.people) ? chit.people.join(', ') : '' },
+        { name: 'location', val: chit.location },
+        { name: 'priority', val: chit.priority },
+        { name: 'severity', val: chit.severity },
+        { name: 'status', val: chit.status },
+        { name: 'tags', val: Array.isArray(chit.tags) ? chit.tags.filter(function(t) { return !t.startsWith('CWOC_System/'); }).join(', ') : '' }
+      ];
+      for (var i = 0; i < fields.length; i++) {
+        var f = fields[i];
+        if (!f.val) continue;
+        var idx = f.val.toLowerCase().indexOf(term);
+        if (idx !== -1) {
+          var start = Math.max(0, idx - 10);
+          var end = Math.min(f.val.length, idx + 40);
+          var snippet = '';
+          if (start > 0) snippet += '\u2026';
+          snippet += f.val.substring(start, end);
+          if (end < f.val.length) snippet += '\u2026';
+          return { field: f.name, snippet: snippet };
+        }
+      }
+      return null;
+    }
+
     function renderChits(chitsToRender) {
       var searchTerm = (document.getElementById("chitSearchNew")?.value || "").toLowerCase().trim();
       var highlightTerm = searchTerm.startsWith('#') ? '' : searchTerm; // Don't highlight in title for tag-only searches
@@ -929,6 +1021,21 @@ async function openAddChitModal() {
           }).join('');
           titleCell.appendChild(tagsSpan);
         }
+
+        // Show which field matched when match isn't in title
+        if (searchTerm && !searchTerm.startsWith('#')) {
+          var titleLower = (chit.title || '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').toLowerCase();
+          if (!titleLower.includes(searchTerm)) {
+            var matchInfo = _findMatchedField(chit, searchTerm);
+            if (matchInfo) {
+              var matchSpan = document.createElement('div');
+              matchSpan.style.cssText = 'font-size:0.78em;color:#6b4e31;margin-top:2px;opacity:0.85;';
+              matchSpan.innerHTML = '<b>' + matchInfo.field + ':</b> ' + _highlightText(matchInfo.snippet, searchTerm);
+              titleCell.appendChild(matchSpan);
+            }
+          }
+        }
+
         row.appendChild(titleCell);
 
         // Due date cell
@@ -1073,7 +1180,7 @@ function addChildChit(chit) {
 
   // Normalize status to match expected values (case-insensitive)
   var normalizedStatus = chit.status || "ToDo";
-  var statusMap = { "todo": "ToDo", "in progress": "In Progress", "blocked": "Blocked", "complete": "Complete" };
+  var statusMap = { "todo": "ToDo", "in progress": "In Progress", "blocked": "Blocked", "complete": "Complete", "rejected": "Rejected" };
   var lower = normalizedStatus.toLowerCase();
   if (statusMap[lower]) normalizedStatus = statusMap[lower];
 

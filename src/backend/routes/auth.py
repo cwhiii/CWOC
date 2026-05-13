@@ -18,7 +18,7 @@ from fastapi.responses import JSONResponse
 
 from src.backend.auth_utils import hash_password, verify_password
 from src.backend.db import DB_PATH, USER_IMAGES_DIR
-from src.backend.models import LoginRequest, PasswordChange, ProfileUpdate
+from src.backend.models import LoginRequest, PasswordChange, ProfileUpdate, PrivatePgpKeyRequest
 
 
 logger = logging.getLogger(__name__)
@@ -244,6 +244,7 @@ def _user_profile_dict(row, is_self=None):
         "has_signal": bool(_get("has_signal")),
         "signal_username": _get("signal_username"),
         "pgp_key": _get("pgp_key"),
+        "has_private_pgp_key": bool(_get("private_pgp_key_encrypted")),
         "color": _get("color"),
         "tags": deserialize_json_field(_get("tags")),
     }
@@ -435,6 +436,109 @@ def change_password(body: PasswordChange, request: Request):
         raise
     except Exception as e:
         logger.error(f"Password change error: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+    finally:
+        if conn:
+            conn.close()
+
+
+# ── POST /api/auth/private-pgp-key — Retrieve private PGP key (password required) ──
+
+@auth_router.post("/private-pgp-key")
+def get_private_pgp_key(body: PrivatePgpKeyRequest, request: Request):
+    """Retrieve the user's private PGP key after password verification.
+
+    Requires ``password`` field. Returns the decrypted private key only
+    if the password matches.
+    """
+    user_id = getattr(request.state, "user_id", None)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        row = conn.execute(
+            "SELECT password_hash, private_pgp_key_encrypted FROM users WHERE id = ?",
+            (user_id,),
+        ).fetchone()
+
+        if row is None:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        if not verify_password(body.password, row["password_hash"]):
+            raise HTTPException(status_code=403, detail="Incorrect password")
+
+        encrypted_key = row["private_pgp_key_encrypted"]
+        if not encrypted_key:
+            return {"private_pgp_key": None}
+
+        # Decrypt the stored key
+        from src.backend.routes.email import _decrypt_password
+        try:
+            decrypted = _decrypt_password(encrypted_key)
+        except Exception as e:
+            logger.error(f"Failed to decrypt private PGP key: {e}")
+            raise HTTPException(status_code=500, detail="Failed to decrypt key")
+
+        return {"private_pgp_key": decrypted}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Get private PGP key error: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+    finally:
+        if conn:
+            conn.close()
+
+
+# ── PUT /api/auth/private-pgp-key — Save private PGP key (password required) ──
+
+@auth_router.put("/private-pgp-key")
+def save_private_pgp_key(body: PrivatePgpKeyRequest, request: Request):
+    """Save or update the user's private PGP key after password verification.
+
+    Requires ``password`` and optionally ``private_pgp_key`` fields.
+    The key is encrypted at rest using Fernet. Send ``private_pgp_key: null``
+    or empty string to remove the stored key.
+    """
+    user_id = getattr(request.state, "user_id", None)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        row = conn.execute(
+            "SELECT password_hash FROM users WHERE id = ?",
+            (user_id,),
+        ).fetchone()
+
+        if row is None:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        if not verify_password(body.password, row["password_hash"]):
+            raise HTTPException(status_code=403, detail="Incorrect password")
+
+        # Encrypt and store (or clear if empty/null)
+        encrypted_value = None
+        if body.private_pgp_key and body.private_pgp_key.strip():
+            from src.backend.routes.email import _encrypt_password
+            encrypted_value = _encrypt_password(body.private_pgp_key.strip())
+
+        conn.execute(
+            "UPDATE users SET private_pgp_key_encrypted = ?, modified_datetime = ? WHERE id = ?",
+            (encrypted_value, _utcnow_iso(), user_id),
+        )
+        conn.commit()
+
+        return {"message": "Private PGP key saved" if encrypted_value else "Private PGP key removed"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Save private PGP key error: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
     finally:
         if conn:

@@ -93,6 +93,10 @@ function onSortSelectChange() {
   _updateSortUI();
   displayChits();
   if (typeof _updateClearAllButton === 'function') _updateClearAllButton();
+  // Persist sort preference for this tab
+  if (typeof saveSortPreference === 'function') {
+    saveSortPreference(currentTab, currentSortField || '', currentSortDir);
+  }
 }
 
 function toggleSortDir() {
@@ -100,6 +104,10 @@ function toggleSortDir() {
   _updateSortUI();
   displayChits();
   if (typeof _updateClearAllButton === 'function') _updateClearAllButton();
+  // Persist sort preference for this tab
+  if (typeof saveSortPreference === 'function') {
+    saveSortPreference(currentTab, currentSortField || '', currentSortDir);
+  }
 }
 
 function _updateSortUI() {
@@ -203,6 +211,10 @@ function _clearAllFilters() {
   var sortSel = document.getElementById('sort-select'); if (sortSel) sortSel.value = '';
   _updateSortUI();
   onFilterChange();
+  // Persist cleared sort preference for this tab
+  if (typeof saveSortPreference === 'function') {
+    saveSortPreference(currentTab, '', 'asc');
+  }
 }
 
 /** Reset search to the default filter for the current tab */
@@ -320,6 +332,10 @@ function _pickSort(field) {
   _updateSortUI();
   displayChits();
   _exitHotkeyMode();
+  // Persist sort preference for this tab
+  if (typeof saveSortPreference === 'function') {
+    saveSortPreference(currentTab, currentSortField || '', currentSortDir);
+  }
 }
 
 /* ── CwocSidebarFilter class ─────────────────────────────────────────────── */

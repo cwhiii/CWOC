@@ -193,23 +193,68 @@
     color: #6b4e31;
 }
 
+.weather-modal-desc {
+    font-size: 0.75em;
+    font-style: italic;
+    color: #3a2a1a;
+}
+
 .weather-modal-temp-bar {
     width: 100%;
     max-width: 260px;
-    height: 10px;
-    border-radius: 5px;
-    background: linear-gradient(to right, #4682b4, #b22222);
+    height: 16px;
+    border-radius: 4px;
+    border: 1px solid #6b4e31;
     position: relative;
-    opacity: 0.7;
+    margin-top: 22px;
+    margin-bottom: 22px;
+}
+
+.weather-modal-temp-bar .temp-bar-mask {
+    position: absolute;
+    top: 0;
+    height: 100%;
+    background-color: var(--parchment-dark, #fff8dc);
+    z-index: 2;
 }
 
 .weather-modal-temp-bar .temp-bar-marker {
     position: absolute;
-    top: -3px;
-    width: 4px;
-    height: 16px;
-    background: #4a2c2a;
-    border-radius: 2px;
+    top: -20px;
+    transform: translateX(-50%);
+    font-size: 0.95em;
+    font-weight: bold;
+    font-family: 'Lora', Georgia, serif;
+    z-index: 5;
+    white-space: nowrap;
+}
+
+.weather-modal-temp-bar .temp-bar-marker.marker-low {
+    color: #4682b4;
+}
+
+.weather-modal-temp-bar .temp-bar-marker.marker-high {
+    color: #b22222;
+}
+
+.weather-modal-temp-bar .temp-bar-tick {
+    position: absolute;
+    width: 1px;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.4);
+    z-index: 4;
+    transform: translateX(-50%);
+}
+
+.weather-modal-temp-bar .temp-bar-tick-label {
+    position: absolute;
+    bottom: -18px;
+    transform: translateX(-50%);
+    text-align: center;
+    font-size: 0.8em;
+    color: #3a2a1a;
+    z-index: 4;
+    white-space: nowrap;
 }
 
 .weather-modal-close {

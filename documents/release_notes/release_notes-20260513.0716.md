@@ -1,0 +1,1 @@
+Weather temperature bar mask now uses the compactWeatherSection background color (var(--parchment-dark)) instead of a hardcoded dark brown, so the non-forecast portions blend seamlessly with the section background.

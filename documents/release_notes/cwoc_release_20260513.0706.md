@@ -1,0 +1,1 @@
+Weather notifications: progressive disclosure (condition dropdown appears first, threshold/mode only after selecting a type). Renamed "wind gusts over" to "wind over" — now checks the higher of sustained wind and gusts. Added wind_speed_10m_max to all weather fetches and storage.

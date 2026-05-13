@@ -908,7 +908,7 @@ function _buildItineraryEvent(chit, _viSettings, opts) {
   if (isTask) {
     var statusSelect = document.createElement("select");
     statusSelect.style.cssText = "font-size:0.8em;padding:2px 4px;border:1px solid #c4a97d;border-radius:3px;background:#fffaf0;color:#4a2c2a;margin-right:8px;flex-shrink:0;width:90px;";
-    var statuses = ['ToDo', 'In Progress', 'Blocked', 'Complete'];
+    var statuses = ['ToDo', 'In Progress', 'Blocked', 'Complete', 'Rejected'];
     statuses.forEach(function(s) {
       var opt = document.createElement("option");
       opt.value = s;
@@ -1008,7 +1008,7 @@ function displayItineraryView(chitsToDisplay) {
   // ── Process habits from the global chits array (pre-expansion, original data) ──
   var _originalChits = (typeof chits !== 'undefined') ? chits : chitsToDisplay;
   var habitChits = _originalChits.filter(function(c) {
-    return c.habit === true && c.status !== 'Complete';
+    return c.habit === true && c.status !== 'Complete' && c.status !== 'Rejected';
   });
   var settings = window._cwocSettings || {};
   var windowDays = settings.habits_success_window || '30';

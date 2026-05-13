@@ -1,0 +1,1 @@
+Fixed notification UX: new notifications now start with only the direction dropdown ("— Choose —" placeholder). Fields (value, unit, target, weather controls) only appear after the user picks a direction. Added Options menu to title bar containing Hide in Calendar, Nest into Thread, and Audit Log.

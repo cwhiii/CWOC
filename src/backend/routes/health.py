@@ -281,6 +281,11 @@ async def editor(id: str = None):
         return FileResponse("/app/src/frontend/html/editor.html")
     return FileResponse("/app/src/frontend/html/editor.html")
 
+# Attachments gallery page
+@router.get("/attachments")
+async def attachments_page():
+    return FileResponse("/app/src/frontend/html/attachments.html")
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Kiosk

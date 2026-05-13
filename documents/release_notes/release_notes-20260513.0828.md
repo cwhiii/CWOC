@@ -1,0 +1,1 @@
+Hover tooltips now show the opposite unit system on all temperature, wind, and precipitation values (editor, quick weather modal, weather page). Weather page borders now use a saturated color palette (_getTempBorderColor) so cold days show blue, warm days gold/orange, hot days red — distinct from the light parchment background.

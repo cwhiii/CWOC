@@ -256,6 +256,7 @@ function _cwocInjectSidebar() {
   html += '        <label><input type="checkbox" value="In Progress" data-filter="status" /> In Progress</label>';
   html += '        <label><input type="checkbox" value="Blocked" data-filter="status" /> Blocked</label>';
   html += '        <label><input type="checkbox" value="Complete" data-filter="status" /> Complete</label>';
+  html += '        <label><input type="checkbox" value="Rejected" data-filter="status" /> Rejected</label>';
   html += '      </div>';
   html += '      <button class="filter-clear-btn" onclick="clearFilterGroup(\'status-multi\')">Clear</button>';
   html += '    </div>';
@@ -375,11 +376,16 @@ function _cwocInjectSidebar() {
   html += '  </div>';
   html += '</div>';
 
-  /* Trash */
+  /* Trash & Custom Objects */
   html += '<div class="sidebar-section" id="section-notif-inbox">';
-  html += '  <button class="action-button" id="sidebar-trash-btn" title="View deleted chits">';
-  html += '    🗑️ Trash';
-  html += '  </button>';
+  html += '  <div style="display:flex;gap:6px;">';
+  html += '    <button class="action-button sidebar-compact-btn" id="sidebar-trash-btn" title="View deleted chits">';
+  html += '      🗑️ Trash';
+  html += '    </button>';
+  html += '    <button class="action-button sidebar-compact-btn" id="sidebar-custom-objects-btn" title="Custom Objects">';
+  html += '      🧩 Custom Objects';
+  html += '    </button>';
+  html += '  </div>';
   html += '</div>';
 
   html += '</div>'; /* /sidebar-scroll */
@@ -558,6 +564,10 @@ function _cwocInitSidebar(context) {
   /* Trash */
   var trashBtn = document.getElementById('sidebar-trash-btn');
   if (trashBtn) trashBtn.onclick = function() { window.location.href = '/frontend/html/trash.html'; };
+
+  /* Custom Objects */
+  var coBtn = document.getElementById('sidebar-custom-objects-btn');
+  if (coBtn) coBtn.onclick = function() { window.location.href = '/frontend/html/custom-objects-editor.html'; };
 
   /* Filters toggle is now handled by inline onclick on the label */
 
@@ -939,7 +949,13 @@ async function _fetchNotifications() {
 
       // Browser system notification
       if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-        try { new Notification('CWOC', { body: msg, icon: '/static/cwoc-icon-192.png' }); } catch (e) { /* ignore */ }
+        try {
+          var _sysNotif = new Notification('CWOC', { body: msg, icon: '/static/cwoc-icon-192.png' });
+          _sysNotif.onclick = function() {
+            window.focus();
+            if (n.chit_id) window.location.href = '/frontend/html/editor.html?id=' + encodeURIComponent(n.chit_id);
+          };
+        } catch (e) { /* ignore */ }
       }
     });
 

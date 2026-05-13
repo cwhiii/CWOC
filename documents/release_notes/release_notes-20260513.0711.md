@@ -1,0 +1,1 @@
+Improved weather placeholder messages in the editor: "needs date" now uses 🗓️ icon, and "needs both" shows "🗓️ Date & location needed for weather 📍". Also fixed onClearLocation to show the specific "Add a location for weather" message when a date exists instead of the generic both-needed message.

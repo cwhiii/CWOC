@@ -1,0 +1,1 @@
+Custom Objects editor: removed Quick Log button. Fixed page icon. Metric units now primary, imperial labeled. Range fields renamed to "Ideal Range Min/Max". Removed category field — consolidated to type + sub_type. Fixed editor-health.js syntax error. Indicators zone grouped by sub_type in 3-column grid.

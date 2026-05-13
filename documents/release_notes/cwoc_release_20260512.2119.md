@@ -1,0 +1,1 @@
+Added weather-based notification option to the Alerts zone. Chits with a location can now trigger notifications based on forecast conditions: temperature thresholds (high/low above/below), precipitation type (rain, snow, hail), or wind gusts exceeding a speed. Backend weather fetch now includes wind gust data.

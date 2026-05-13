@@ -140,6 +140,7 @@
         _initColorPicker();
         _initImageUpload();
         _initSignalToggle();
+        _initPgpValidation();
         _initDisplayNameUpdater();
         _initPillToggle('vault-pill', 'vault-toggle');
 
@@ -455,15 +456,344 @@
     function _initSignalToggle() {
         var cb = document.getElementById('hasSignal');
         if (cb.checked) document.getElementById('signalUsername').style.display = '';
+        // Update message button when username changes
+        var input = document.getElementById('signalUsername');
+        if (input) {
+            input.addEventListener('input', _updateSignalMessageBtn);
+            input.addEventListener('change', _updateSignalMessageBtn);
+        }
+        _updateSignalMessageBtn();
     }
 
     window.onSignalToggle = function () {
         var cb = document.getElementById('hasSignal');
         var input = document.getElementById('signalUsername');
+        var msgBtn = document.getElementById('signalMessageBtn');
         input.style.display = cb.checked ? '' : 'none';
-        if (!cb.checked) input.value = '';
+        if (!cb.checked) {
+            input.value = '';
+            if (msgBtn) msgBtn.style.display = 'none';
+        } else {
+            _updateSignalMessageBtn();
+        }
         if (_saveSystem) _saveSystem.markUnsaved();
     };
+
+    /** Show/hide the Signal message button based on whether there's a username/phone */
+    function _updateSignalMessageBtn() {
+        var msgBtn = document.getElementById('signalMessageBtn');
+        if (!msgBtn) return;
+        var cb = document.getElementById('hasSignal');
+        var input = document.getElementById('signalUsername');
+        var hasValue = cb && cb.checked && input && input.value.trim();
+        msgBtn.style.display = hasValue ? '' : 'none';
+    }
+
+    /** Open Signal to message this contact */
+    window.openSignalMessage = function () {
+        var input = document.getElementById('signalUsername');
+        if (!input) return;
+        var val = input.value.trim();
+        if (!val) return;
+
+        var url;
+        // If it looks like a phone number (starts with + or is all digits/dashes/spaces)
+        if (/^\+?[\d\s\-().]+$/.test(val)) {
+            // Normalize to digits only with leading +
+            var phone = val.replace(/[\s\-().]/g, '');
+            if (!phone.startsWith('+')) phone = '+' + phone;
+            url = 'https://signal.me/#p/' + phone;
+        } else {
+            // Treat as a Signal username
+            var username = val.startsWith('@') ? val.slice(1) : val;
+            url = 'https://signal.me/#u/' + username;
+        }
+        window.open(url, '_blank', 'noopener');
+    };
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // ── PGP Key Validation ──────────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════════════════
+
+    window.validatePgpKey = async function () {
+        var textarea = document.getElementById('pgpKey');
+        var resultEl = document.getElementById('pgpValidationResult');
+        if (!textarea || !resultEl) return;
+
+        var keyText = textarea.value.trim();
+        if (!keyText) {
+            resultEl.textContent = '⚠️ No key to validate.';
+            resultEl.style.color = '#b8860b';
+            return;
+        }
+
+        // Check that openpgp is loaded
+        if (typeof openpgp === 'undefined') {
+            resultEl.textContent = '❌ PGP library not loaded.';
+            resultEl.style.color = '#b22222';
+            return;
+        }
+
+        resultEl.textContent = '⏳ Checking...';
+        resultEl.style.color = '#5a4a3a';
+
+        try {
+            var key = await openpgp.readKey({ armoredKey: keyText });
+            // Extract useful info from the key
+            var userIds = key.getUserIDs();
+            var created = key.getCreationTime();
+            var algo = key.getAlgorithmInfo();
+            var fingerprint = key.getFingerprint().toUpperCase();
+            var fpShort = fingerprint.slice(-16).replace(/(.{4})/g, '$1 ').trim();
+
+            var info = '✅ Valid';
+            if (userIds && userIds.length > 0) {
+                info += ' — ' + userIds[0];
+            }
+            if (algo && algo.bits) {
+                info += ' (' + algo.algorithm.toUpperCase() + ' ' + algo.bits + '-bit)';
+            } else if (algo && algo.curve) {
+                info += ' (' + algo.algorithm.toUpperCase() + ' ' + algo.curve + ')';
+            }
+            resultEl.textContent = info;
+            resultEl.title = 'Fingerprint: ' + fpShort + '\nCreated: ' + (created ? created.toISOString().split('T')[0] : 'unknown');
+            resultEl.style.color = '#1b5e20';
+        } catch (e) {
+            resultEl.textContent = '❌ Invalid key: ' + e.message;
+            resultEl.title = '';
+            resultEl.style.color = '#b22222';
+        }
+    };
+
+    // Auto-validate when PGP key field loses focus (if it has content)
+    function _initPgpValidation() {
+        var textarea = document.getElementById('pgpKey');
+        if (!textarea) return;
+        textarea.addEventListener('blur', function() {
+            if (textarea.value.trim()) {
+                window.validatePgpKey();
+            } else {
+                var resultEl = document.getElementById('pgpValidationResult');
+                if (resultEl) { resultEl.textContent = ''; resultEl.title = ''; }
+            }
+        });
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // ── Private PGP Key (profile mode only) ─────────────────────────────
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /** Cached password for the current unlock session (cleared on lock) */
+    var _privatePgpPassword = null;
+
+    /**
+     * Show the private PGP key section (only in own profile mode).
+     */
+    function _initPrivatePgpSection() {
+        var section = document.getElementById('privatePgpSection');
+        if (!section) return;
+        // Only show for own profile (not contacts, not other users)
+        if (_isProfileMode && !_viewingOtherUser) {
+            section.style.display = '';
+        } else {
+            section.style.display = 'none';
+        }
+    }
+
+    /**
+     * Prompt for password and unlock the private PGP key field.
+     */
+    window.unlockPrivatePgpKey = async function () {
+        // Use a custom modal to ask for password
+        var password = await _promptPassword('Enter your password to access your private PGP key:');
+        if (!password) return;
+
+        var msgEl = document.getElementById('privatePgpStatus');
+        if (msgEl) { msgEl.textContent = 'Verifying...'; }
+
+        try {
+            var resp = await fetch('/api/auth/private-pgp-key', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password: password })
+            });
+
+            if (resp.status === 403) {
+                if (msgEl) { msgEl.textContent = '❌ Incorrect password.'; msgEl.style.color = '#b22222'; }
+                setTimeout(function() {
+                    if (msgEl) { msgEl.textContent = 'Enter your password to view or edit your private key.'; msgEl.style.color = ''; }
+                }, 3000);
+                return;
+            }
+
+            if (!resp.ok) {
+                var err = await resp.json().catch(function() { return {}; });
+                if (msgEl) { msgEl.textContent = '❌ ' + (err.detail || 'Error'); msgEl.style.color = '#b22222'; }
+                return;
+            }
+
+            var data = await resp.json();
+            _privatePgpPassword = password;
+
+            // Show the unlocked section
+            var locked = document.getElementById('privatePgpLocked');
+            var unlocked = document.getElementById('privatePgpUnlocked');
+            var textarea = document.getElementById('privatePgpKey');
+            if (locked) locked.style.display = 'none';
+            if (unlocked) unlocked.style.display = '';
+            if (textarea) textarea.value = data.private_pgp_key || '';
+
+        } catch (e) {
+            console.error('[PrivatePGP] Unlock error:', e);
+            if (msgEl) { msgEl.textContent = '❌ Network error.'; msgEl.style.color = '#b22222'; }
+        }
+    };
+
+    /**
+     * Lock the private PGP key field (hide it again).
+     */
+    window.lockPrivatePgpKey = function () {
+        _privatePgpPassword = null;
+        var locked = document.getElementById('privatePgpLocked');
+        var unlocked = document.getElementById('privatePgpUnlocked');
+        var textarea = document.getElementById('privatePgpKey');
+        var msgEl = document.getElementById('privatePgpStatus');
+        if (locked) locked.style.display = '';
+        if (unlocked) unlocked.style.display = 'none';
+        if (textarea) textarea.value = '';
+        if (msgEl) { msgEl.textContent = 'Enter your password to view or edit your private key.'; msgEl.style.color = ''; }
+    };
+
+    /**
+     * Save the private PGP key via the password-protected endpoint.
+     */
+    window.savePrivatePgpKey = async function () {
+        var textarea = document.getElementById('privatePgpKey');
+        var msgEl = document.getElementById('privatePgpMessage');
+        if (!textarea) return;
+
+        var keyValue = textarea.value.trim();
+        if (!keyValue) {
+            if (msgEl) { msgEl.textContent = '⚠️ No key to save.'; msgEl.style.color = '#b8860b'; }
+            return;
+        }
+
+        if (!_privatePgpPassword) {
+            if (msgEl) { msgEl.textContent = '❌ Session expired. Lock and unlock again.'; msgEl.style.color = '#b22222'; }
+            return;
+        }
+
+        try {
+            var resp = await fetch('/api/auth/private-pgp-key', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password: _privatePgpPassword, private_pgp_key: keyValue })
+            });
+
+            if (resp.status === 403) {
+                if (msgEl) { msgEl.textContent = '❌ Password expired. Lock and unlock again.'; msgEl.style.color = '#b22222'; }
+                _privatePgpPassword = null;
+                return;
+            }
+
+            if (!resp.ok) {
+                var err = await resp.json().catch(function() { return {}; });
+                if (msgEl) { msgEl.textContent = '❌ ' + (err.detail || 'Save failed'); msgEl.style.color = '#b22222'; }
+                return;
+            }
+
+            if (msgEl) { msgEl.textContent = '✅ Private key saved.'; msgEl.style.color = '#1b5e20'; }
+            setTimeout(function() { if (msgEl) msgEl.textContent = ''; }, 3000);
+        } catch (e) {
+            console.error('[PrivatePGP] Save error:', e);
+            if (msgEl) { msgEl.textContent = '❌ Network error.'; msgEl.style.color = '#b22222'; }
+        }
+    };
+
+    /**
+     * Remove the private PGP key (save null).
+     */
+    window.removePrivatePgpKey = async function () {
+        var confirmed = (typeof cwocConfirm === 'function')
+            ? await cwocConfirm('Remove your private PGP key? This cannot be undone.')
+            : confirm('Remove your private PGP key?');
+        if (!confirmed) return;
+
+        if (!_privatePgpPassword) {
+            var msgEl = document.getElementById('privatePgpMessage');
+            if (msgEl) { msgEl.textContent = '❌ Session expired. Lock and unlock again.'; msgEl.style.color = '#b22222'; }
+            return;
+        }
+
+        try {
+            var resp = await fetch('/api/auth/private-pgp-key', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password: _privatePgpPassword, private_pgp_key: '' })
+            });
+
+            if (!resp.ok) {
+                var err = await resp.json().catch(function() { return {}; });
+                var msgEl = document.getElementById('privatePgpMessage');
+                if (msgEl) { msgEl.textContent = '❌ ' + (err.detail || 'Remove failed'); msgEl.style.color = '#b22222'; }
+                return;
+            }
+
+            // Clear and lock
+            var textarea = document.getElementById('privatePgpKey');
+            if (textarea) textarea.value = '';
+            window.lockPrivatePgpKey();
+            if (typeof cwocToast === 'function') cwocToast('Private PGP key removed.', 'success');
+        } catch (e) {
+            console.error('[PrivatePGP] Remove error:', e);
+        }
+    };
+
+    /**
+     * Show a password prompt modal (parchment-themed, not browser prompt).
+     * @param {string} message — the prompt message
+     * @returns {Promise<string|null>} — the entered password, or null if cancelled
+     */
+    function _promptPassword(message) {
+        return new Promise(function(resolve) {
+            // Create modal overlay
+            var overlay = document.createElement('div');
+            overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;';
+
+            var modal = document.createElement('div');
+            modal.style.cssText = 'background:#fffaf0;border:2px solid #6b4e31;border-radius:8px;padding:24px;max-width:360px;width:90%;font-family:Lora,Georgia,serif;box-shadow:0 8px 32px rgba(0,0,0,0.3);';
+
+            modal.innerHTML =
+                '<p style="margin:0 0 12px;color:#1a1208;font-size:0.95em;">' + message + '</p>' +
+                '<input type="password" id="_pgpPasswordInput" placeholder="Password" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid #8b5a2b;border-radius:4px;font-size:1em;font-family:Lora,Georgia,serif;" />' +
+                '<div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end;">' +
+                    '<button type="button" id="_pgpPwCancel" style="padding:6px 14px;border:1px solid #8b5a2b;border-radius:4px;background:#f5e6cc;color:#4a2c2a;cursor:pointer;font-family:Lora,Georgia,serif;">Cancel</button>' +
+                    '<button type="button" id="_pgpPwConfirm" style="padding:6px 14px;border:1px solid #1b5e20;border-radius:4px;background:#2e7d32;color:#fff;cursor:pointer;font-family:Lora,Georgia,serif;">Unlock</button>' +
+                '</div>';
+
+            overlay.appendChild(modal);
+            document.body.appendChild(overlay);
+
+            var input = document.getElementById('_pgpPasswordInput');
+            var cancelBtn = document.getElementById('_pgpPwCancel');
+            var confirmBtn = document.getElementById('_pgpPwConfirm');
+
+            function cleanup(result) {
+                overlay.remove();
+                resolve(result);
+            }
+
+            cancelBtn.onclick = function() { cleanup(null); };
+            confirmBtn.onclick = function() { cleanup(input.value); };
+            overlay.addEventListener('click', function(e) { if (e.target === overlay) cleanup(null); });
+            input.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') { e.preventDefault(); cleanup(input.value); }
+                if (e.key === 'Escape') { e.preventDefault(); cleanup(null); }
+            });
+
+            setTimeout(function() { input.focus(); }, 50);
+        });
+    }
 
     // ═══════════════════════════════════════════════════════════════════════
     // ── Color Picker ────────────────────────────────────────────────────
@@ -928,7 +1258,12 @@
             document.getElementById('signalUsername').style.display = '';
         }
         document.getElementById('signalUsername').value = contact.signal_username || '';
+        _updateSignalMessageBtn();
         document.getElementById('pgpKey').value = contact.pgp_key || '';
+        // Auto-validate PGP key if present
+        if (contact.pgp_key) {
+            setTimeout(function() { window.validatePgpKey(); }, 200);
+        }
 
         // Color
         if (contact.color) _selectColor(contact.color);
@@ -1337,6 +1672,15 @@
         if (header) header.textContent = user.display_name || user.username || 'Profile';
 
         _updateDisplayNameHeader();
+
+        // Initialize private PGP key section (profile mode only)
+        _initPrivatePgpSection();
+
+        // Update private PGP status indicator
+        var privatePgpStatus = document.getElementById('privatePgpStatus');
+        if (privatePgpStatus && user.has_private_pgp_key) {
+            privatePgpStatus.textContent = '🔑 Private key stored. Enter password to view or edit.';
+        }
     }
 
     /**

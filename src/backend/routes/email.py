@@ -890,37 +890,45 @@ def _build_rfc2822_message(chit: dict, account: dict) -> email.message.EmailMess
     body = chit.get("email_body_text", "")
     signature = account.get("signature", "")
 
-    # Build plain text version (with signature if not already present)
-    plain_body = body
-    if signature and "\n--\n" not in body:
-        plain_body = body + "\n\n--\n" + signature
-    msg.set_content(plain_body)
+    # Detect PGP-encrypted body — send as plain text only (no HTML conversion)
+    is_pgp_encrypted = body.strip().startswith("-----BEGIN PGP MESSAGE-----")
 
-    # Build HTML version — convert markdown body + signature to HTML
-    try:
-        # Split body from any existing signature separator
-        if "\n--\n" in plain_body:
-            body_parts = plain_body.split("\n--\n", 1)
-            body_text = body_parts[0]
-            sig_text = body_parts[1] if len(body_parts) > 1 else ""
-        else:
-            body_text = plain_body
-            sig_text = ""
+    if is_pgp_encrypted:
+        # PGP-encrypted messages are sent as plain text only.
+        # No signature appended (it would be outside the encrypted envelope).
+        msg.set_content(body)
+    else:
+        # Build plain text version (with signature if not already present)
+        plain_body = body
+        if signature and "\n--\n" not in body:
+            plain_body = body + "\n\n--\n" + signature
+        msg.set_content(plain_body)
 
-        html_body_content = _markdown_to_html(body_text) if body_text.strip() else ""
-        html_sig = ""
-        if sig_text.strip():
-            html_sig = "<br><br>--<br>" + _markdown_to_html(sig_text)
+        # Build HTML version — convert markdown body + signature to HTML
+        try:
+            # Split body from any existing signature separator
+            if "\n--\n" in plain_body:
+                body_parts = plain_body.split("\n--\n", 1)
+                body_text = body_parts[0]
+                sig_text = body_parts[1] if len(body_parts) > 1 else ""
+            else:
+                body_text = plain_body
+                sig_text = ""
 
-        html_full = (
-            '<div style="font-family:sans-serif;font-size:14px;line-height:1.5;">'
-            + html_body_content
-            + html_sig
-            + '</div>'
-        )
-        msg.add_alternative(html_full, subtype='html')
-    except Exception as e:
-        logger.warning("Failed to add HTML alternative: %s", e)
+            html_body_content = _markdown_to_html(body_text) if body_text.strip() else ""
+            html_sig = ""
+            if sig_text.strip():
+                html_sig = "<br><br>--<br>" + _markdown_to_html(sig_text)
+
+            html_full = (
+                '<div style="font-family:sans-serif;font-size:14px;line-height:1.5;">'
+                + html_body_content
+                + html_sig
+                + '</div>'
+            )
+            msg.add_alternative(html_full, subtype='html')
+        except Exception as e:
+            logger.warning("Failed to add HTML alternative: %s", e)
 
     return msg
 
@@ -1633,7 +1641,7 @@ def email_sync(request: Request):
                     ntfy_body = "\n".join(body_lines)
                 else:
                     ntfy_body = "You have new mail in CWOC."
-                click_url = f"{base}/frontend/html/index.html"
+                click_url = f"{base}/frontend/html/index.html?tab=Email"
                 icon_url = f"{base}/static/cwoc-icon-192.png"
                 send_ntfy_notification(
                     user_id=user_id,

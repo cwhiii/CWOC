@@ -24,6 +24,34 @@ function _highlightMultiTerms(text, terms) {
   return cwocHighlightTerms(text, terms);
 }
 
+/**
+ * Extract a snippet around the first match term found in the text.
+ * Shows ~50 chars total centered on the match.
+ */
+function _getSearchSnippet(text, terms) {
+  if (!text || !terms || terms.length === 0) {
+    return text.length > 50 ? text.substring(0, 50) + '\u2026' : text;
+  }
+  var lower = text.toLowerCase();
+  var firstIdx = -1;
+  for (var i = 0; i < terms.length; i++) {
+    var idx = lower.indexOf(terms[i].toLowerCase());
+    if (idx !== -1 && (firstIdx === -1 || idx < firstIdx)) {
+      firstIdx = idx;
+    }
+  }
+  if (firstIdx === -1) {
+    return text.length > 50 ? text.substring(0, 50) + '\u2026' : text;
+  }
+  var start = Math.max(0, firstIdx - 15);
+  var end = Math.min(text.length, firstIdx + 35);
+  var snippet = '';
+  if (start > 0) snippet += '\u2026';
+  snippet += text.substring(start, end);
+  if (end < text.length) snippet += '\u2026';
+  return snippet;
+}
+
 // ── Search View ──────────────────────────────────────────────────────────────
 
 async function displaySearchView() {
@@ -51,6 +79,124 @@ async function displaySearchView() {
   searchBar.appendChild(input);
   searchBar.appendChild(goBtn);
   chitList.appendChild(searchBar);
+
+  // Email filter toggle (3-value pill: No Email | All | Only Emails)
+  var emailFilterRow = document.createElement('div');
+  emailFilterRow.className = 'global-search-email-filter';
+  emailFilterRow.innerHTML = '<label>Emails:</label>' +
+    '<div class="cwoc-2val-toggle cwoc-3val-toggle" id="search-email-pill">' +
+      '<input type="hidden" id="search-email-toggle" value="no_email" />' +
+      '<span data-val="no_email" class="active">Exclude</span>' +
+      '<span data-val="all">All</span>' +
+      '<span data-val="only_email">Only</span>' +
+    '</div>';
+  chitList.appendChild(emailFilterRow);
+
+  // Wire email pill toggle
+  var emailPill = emailFilterRow.querySelector('#search-email-pill');
+  emailPill.addEventListener('click', function(e) {
+    var span = e.target.closest('span[data-val]');
+    if (!span) return;
+    var hidden = document.getElementById('search-email-toggle');
+    hidden.value = span.dataset.val;
+    emailPill.querySelectorAll('span[data-val]').forEach(function(s) {
+      s.classList.toggle('active', s.dataset.val === span.dataset.val);
+    });
+    // Re-render results with new filter
+    if (_globalSearchResults.length > 0) {
+      _renderSearchResults(resultsContainer, _viSettings);
+    }
+  });
+
+  // ── Dropdown Filters Row ───────────────────────────────────────────────────
+  var filtersRow = document.createElement('div');
+  filtersRow.className = 'global-search-filters-row';
+
+  // Status dropdown
+  var statusSelect = document.createElement('select');
+  statusSelect.id = 'search-filter-status';
+  statusSelect.innerHTML = '<option value="">Status: Any</option>' +
+    '<option value="ToDo">ToDo</option>' +
+    '<option value="In Progress">In Progress</option>' +
+    '<option value="Blocked">Blocked</option>' +
+    '<option value="Complete">Complete</option>';
+  statusSelect.addEventListener('change', function() {
+    if (_globalSearchResults.length > 0) _renderSearchResults(resultsContainer, _viSettings);
+  });
+  filtersRow.appendChild(statusSelect);
+
+  // Priority dropdown
+  var prioritySelect = document.createElement('select');
+  prioritySelect.id = 'search-filter-priority';
+  prioritySelect.innerHTML = '<option value="">Priority: Any</option>' +
+    '<option value="Critical">Critical</option>' +
+    '<option value="High">High</option>' +
+    '<option value="Medium">Medium</option>' +
+    '<option value="Low">Low</option>';
+  prioritySelect.addEventListener('change', function() {
+    if (_globalSearchResults.length > 0) _renderSearchResults(resultsContainer, _viSettings);
+  });
+  filtersRow.appendChild(prioritySelect);
+
+  // Tag filter button + dropdown
+  var tagFilterWrap = document.createElement('div');
+  tagFilterWrap.className = 'search-tag-filter-wrap';
+
+  var tagBtn = document.createElement('button');
+  tagBtn.className = 'action-button search-tag-filter-btn';
+  tagBtn.id = 'search-tag-filter-btn';
+  tagBtn.innerHTML = '<i class="fas fa-tag"></i> Tags';
+  tagFilterWrap.appendChild(tagBtn);
+
+  var tagDropdown = document.createElement('div');
+  tagDropdown.className = 'search-tag-filter-dropdown';
+  tagDropdown.id = 'search-tag-filter-dropdown';
+  tagDropdown.style.display = 'none';
+  tagFilterWrap.appendChild(tagDropdown);
+
+  filtersRow.appendChild(tagFilterWrap);
+  chitList.appendChild(filtersRow);
+
+  // Tag filter state
+  var _searchFilterTags = [];
+
+  // Wire tag filter button
+  tagBtn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    var isOpen = tagDropdown.style.display !== 'none';
+    if (isOpen) {
+      tagDropdown.style.display = 'none';
+    } else {
+      tagDropdown.style.display = 'block';
+      buildTagPicker(tagDropdown, _searchFilterTags, {
+        compact: true,
+        onChange: function(tags) {
+          _searchFilterTags = tags;
+          _updateTagBtnLabel();
+          if (_globalSearchResults.length > 0) _renderSearchResults(resultsContainer, _viSettings);
+        }
+      });
+    }
+  });
+
+  // Close tag dropdown on outside click
+  document.addEventListener('click', function _closeTagDrop(e) {
+    if (!tagFilterWrap.contains(e.target)) {
+      tagDropdown.style.display = 'none';
+    }
+  });
+
+  function _updateTagBtnLabel() {
+    if (_searchFilterTags.length > 0) {
+      tagBtn.innerHTML = '<i class="fas fa-tag"></i> Tags (' + _searchFilterTags.length + ')';
+    } else {
+      tagBtn.innerHTML = '<i class="fas fa-tag"></i> Tags';
+    }
+  }
+
+  // Store tag filter reference on the container for _renderSearchResults to access
+  chitList._searchFilterTags = _searchFilterTags;
+  chitList._getSearchFilterTags = function() { return _searchFilterTags; };
 
   // Search tips hint
   var hintDiv = document.createElement('div');
@@ -118,25 +264,48 @@ function _renderSearchResults(container, viSettings) {
   var resultChits = _globalSearchResults.map(function(r) {
     var c = r.chit;
     c._matchedFields = r.matched_fields || [];
+    c._titleMatch = r.title_match || false;
     return c;
   });
   resultChits = _applyMultiSelectFilters(resultChits);
   resultChits = _applyArchiveFilter(resultChits);
 
-  // Apply show-email filter to search results
-  var _showEmailRecvCb = document.getElementById('show-email-received');
-  var _showEmailSentCb = document.getElementById('show-email-sent');
-  var showRecv = _showEmailRecvCb ? _showEmailRecvCb.checked : false;
-  var showSent = _showEmailSentCb ? _showEmailSentCb.checked : false;
-  if (!showRecv || !showSent) {
+  // Apply email filter from search toggle (No Email / All / Only Emails)
+  var emailToggle = document.getElementById('search-email-toggle');
+  var emailMode = emailToggle ? emailToggle.value : 'no_email';
+  if (emailMode !== 'all') {
     resultChits = resultChits.filter(function(c) {
-      if (!(c.email_message_id || c.email_status)) return true;
-      var folder = c.email_folder || '';
-      var isSent = (folder === 'sent' || c.email_status === 'sent' || c.email_status === 'draft');
-      var isReceived = !isSent;
-      if (!showRecv && isReceived) return false;
-      if (!showSent && isSent) return false;
+      var isEmail = !!(c.email_message_id || c.email_status);
+      if (emailMode === 'no_email') return !isEmail;
+      if (emailMode === 'only_email') return isEmail;
       return true;
+    });
+  }
+
+  // Apply status dropdown filter
+  var statusFilter = document.getElementById('search-filter-status');
+  var statusVal = statusFilter ? statusFilter.value : '';
+  if (statusVal) {
+    resultChits = resultChits.filter(function(c) { return c.status === statusVal; });
+  }
+
+  // Apply priority dropdown filter
+  var priorityFilter = document.getElementById('search-filter-priority');
+  var priorityVal = priorityFilter ? priorityFilter.value : '';
+  if (priorityVal) {
+    resultChits = resultChits.filter(function(c) { return c.priority === priorityVal; });
+  }
+
+  // Apply tag picker filter
+  var chitList = document.getElementById('chit-list');
+  var filterTags = (chitList && chitList._getSearchFilterTags) ? chitList._getSearchFilterTags() : [];
+  if (filterTags.length > 0) {
+    resultChits = resultChits.filter(function(c) {
+      var chitTags = c.tags || [];
+      if (!Array.isArray(chitTags)) return false;
+      return filterTags.every(function(ft) {
+        return typeof matchesTagFilter === 'function' ? matchesTagFilter(chitTags, ft) : chitTags.indexOf(ft) !== -1;
+      });
     });
   }
 
@@ -160,6 +329,13 @@ function _renderSearchResults(container, viSettings) {
     return;
   }
 
+  // Sort: title matches first, then non-title matches
+  resultChits.sort(function(a, b) {
+    var aTitle = a._titleMatch ? 0 : 1;
+    var bTitle = b._titleMatch ? 0 : 1;
+    return aTitle - bTitle;
+  });
+
   // Extract highlight terms once for all cards
   var highlightTerms = _extractHighlightTerms(q);
 
@@ -175,13 +351,14 @@ function _renderSearchResults(container, viSettings) {
     var titleHtml = _highlightMultiTerms(chit.title || '(Untitled)', highlightTerms);
     card.appendChild(_buildChitHeader(chit, titleHtml, viSettings));
 
-    // Matched fields with highlighted excerpts
+    // Show snippets for ALL matched fields
     var matchedFields = chit._matchedFields || [];
     if (matchedFields.length > 0) {
       var fieldsDiv = document.createElement('div');
       fieldsDiv.className = 'global-search-matched-fields';
 
       matchedFields.forEach(function(fieldName) {
+        if (fieldName === 'full_text') return;
         var value = _getChitFieldValue(chit, fieldName);
         if (!value) return;
 
@@ -192,13 +369,15 @@ function _renderSearchResults(container, viSettings) {
         fieldRow.appendChild(label);
 
         var excerpt = document.createElement('span');
-        var displayVal = value.length > 200 ? value.substring(0, 200) + '\u2026' : value;
+        var displayVal = _getSearchSnippet(value, highlightTerms);
         excerpt.innerHTML = _highlightMultiTerms(displayVal, highlightTerms);
         fieldRow.appendChild(excerpt);
 
         fieldsDiv.appendChild(fieldRow);
       });
-      card.appendChild(fieldsDiv);
+      if (fieldsDiv.children.length > 0) {
+        card.appendChild(fieldsDiv);
+      }
     }
 
     // Click handler: navigate to editor

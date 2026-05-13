@@ -1,0 +1,1 @@
+Added weather-based notification option: chits with a location can now trigger notifications when the forecast high or low exceeds a user-defined threshold (above/below). Available via the new "Weather" button in the Alerts zone header.

@@ -251,9 +251,11 @@ function _applySort(chitList) {
   }
   if (currentSortField === 'upcoming') {
     return [...chitList].sort((a, b) => {
-      // Completed always at bottom
-      if (a.status === 'Complete' && b.status !== 'Complete') return 1;
-      if (b.status === 'Complete' && a.status !== 'Complete') return -1;
+      // Completed/Rejected always at bottom
+      var aTerminal = (a.status === 'Complete' || a.status === 'Rejected');
+      var bTerminal = (b.status === 'Complete' || b.status === 'Rejected');
+      if (aTerminal && !bTerminal) return 1;
+      if (bTerminal && !aTerminal) return -1;
       const aDate = a.due_datetime ? new Date(a.due_datetime).getTime() : (a.start_datetime ? new Date(a.start_datetime).getTime() : Infinity);
       const bDate = b.due_datetime ? new Date(b.due_datetime).getTime() : (b.start_datetime ? new Date(b.start_datetime).getTime() : Infinity);
       return aDate - bDate;
@@ -281,7 +283,7 @@ function _applySort(chitList) {
       valA = a.created_datetime ? new Date(a.created_datetime).getTime() : nullLast;
       valB = b.created_datetime ? new Date(b.created_datetime).getTime() : nullLast;
     } else if (currentSortField === 'status') {
-      const order = { 'ToDo': 1, 'In Progress': 2, 'Blocked': 3, 'Complete': 4 };
+      const order = { 'ToDo': 1, 'In Progress': 2, 'Blocked': 3, 'Complete': 4, 'Rejected': 5 };
       valA = order[a.status] || 99;
       valB = order[b.status] || 99;
     }
@@ -376,6 +378,17 @@ function _restoreUIState() {
     if (sortSel && currentSortField) sortSel.value = currentSortField;
     _updateSortUI();
 
+    // If no sort field was restored from session state, try backend preference
+    if (!currentSortField && typeof getSortPreference === 'function') {
+      var pref = getSortPreference(currentTab);
+      if (pref && pref.field) {
+        currentSortField = pref.field;
+        currentSortDir = pref.dir || 'asc';
+        if (sortSel) sortSel.value = currentSortField;
+        _updateSortUI();
+      }
+    }
+
     // If we have full state from editor return, also restore filters/search/toggles
     if (state) {
       // Restore search
@@ -446,7 +459,7 @@ function _restoreUIState() {
     if (yearWeekContainer) yearWeekContainer.style.display = (currentTab === 'Calendar') ? '' : 'none';
     if (orderSection) orderSection.style.display = (currentTab === 'Calendar' || currentTab === 'Indicators' || currentTab === 'Email') ? 'none' : '';
     const kanbanSectionRestore = document.getElementById('section-kanban');
-    if (kanbanSectionRestore) kanbanSectionRestore.style.display = (currentTab === 'Projects') ? '' : 'none';
+    if (kanbanSectionRestore) kanbanSectionRestore.style.display = 'none';
     const calOptsRestore2 = document.getElementById('section-cal-options');
     if (calOptsRestore2) calOptsRestore2.style.display = (currentTab === 'Calendar' && currentView === 'Month') ? '' : 'none';
     const indSectionRestore = document.getElementById('section-indicators');
@@ -624,7 +637,7 @@ function displayChits() {
   if (hidePastDue) {
     const now = new Date();
     filteredChits = filteredChits.filter(c => {
-      if (!c.due_datetime || c.status === 'Complete') return true;
+      if (!c.due_datetime || c.status === 'Complete' || c.status === 'Rejected') return true;
       return new Date(c.due_datetime) >= now;
     });
   }
@@ -632,7 +645,7 @@ function displayChits() {
   // Apply hide-complete filter
   const hideComplete = document.getElementById('hide-complete')?.checked ?? false;
   if (hideComplete) {
-    filteredChits = filteredChits.filter(c => c.status !== 'Complete');
+    filteredChits = filteredChits.filter(c => c.status !== 'Complete' && c.status !== 'Rejected');
   }
 
   // Apply hide-declined filter
@@ -873,7 +886,7 @@ function _applyChitDisplayOptions() {
       if (!chit) return;
 
       const dueTime = chit.due_datetime ? new Date(chit.due_datetime) : null;
-      const isOverdue = highlightOverdue && dueTime && dueTime < now && chit.status !== 'Complete';
+      const isOverdue = highlightOverdue && dueTime && dueTime < now && chit.status !== 'Complete' && chit.status !== 'Rejected';
       const isBlocked = highlightBlocked && chit.status === 'Blocked';
 
       if (isOverdue && isBlocked) {
@@ -945,7 +958,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const yearWeekContainer = document.getElementById('year-week-container');
   if (yearWeekContainer) yearWeekContainer.style.display = (currentTab === 'Calendar') ? '' : 'none';
   const kanbanSection = document.getElementById('section-kanban');
-  if (kanbanSection) kanbanSection.style.display = (currentTab === 'Projects') ? '' : 'none';
+  if (kanbanSection) kanbanSection.style.display = 'none';
   const calOptsRestore = document.getElementById('section-cal-options');
   if (calOptsRestore) calOptsRestore.style.display = (currentTab === 'Calendar' && currentView === 'Month') ? '' : 'none';
   // Initialize the month mode pill toggle
@@ -1356,6 +1369,10 @@ document.addEventListener("DOMContentLoaded", function () {
         _updateSortUI();
         displayChits();
         _exitHotkeyMode();
+        // Persist cleared sort preference for this tab
+        if (typeof saveSortPreference === 'function') {
+          saveSortPreference(currentTab, '', 'asc');
+        }
         return;
       }
       if (document.getElementById('reference-overlay')?.classList.contains('active')) {

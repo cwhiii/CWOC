@@ -1,0 +1,1 @@
+Added "Options" dropdown menu to the editor title bar. Contains: Hide in Calendar toggle, Nest into Thread, and Audit Log. Removed the standalone Log button from the header and the Nest button from the title label — both now live in the Options menu for a cleaner title bar.

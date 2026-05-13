@@ -1,0 +1,1 @@
+Custom Objects & Indicators overhaul: CO editor groups by Type → Sub-Type with alphabetical sorting. Chit editor indicators zone groups by sub_type. Add Custom Object picker shows both levels (collapsed by default, expands on search), search matches name/type/sub_type. Button renamed from "Add Indicator" to "+ Custom Object". Fixed syntax errors.

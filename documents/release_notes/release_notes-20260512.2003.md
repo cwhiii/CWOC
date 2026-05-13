@@ -1,0 +1,1 @@
+Custom Objects picker is now multi-select with checkboxes and an "Add Selected (N)" button. Search renamed to "Search custom objects" and matches on name, type, and sub_type. Types expanded by default, sub-types collapsed. Button renamed to "+ Custom Object". CO editor groups by Type → Sub-Type with alphabetical sorting at all levels.

@@ -1,0 +1,1 @@
+Added drag-to-reorder for the Indicators Zone section in the Custom Objects Editor, allowing users to reorder health indicator objects via desktop drag or mobile touch-hold with persistence via the bulk reorder API.

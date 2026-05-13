@@ -1,0 +1,1 @@
+Fixed title vertical centering — moved accessories (owner chip, recurrence icon, nest label) inline with the title row instead of a separate row below, eliminating the extra height that was pushing the title off-center.

@@ -1,0 +1,1 @@
+Dashboard quick-weather modal now uses the same temperature bar as the editor: matching gradient (dark blue → blue → neutral → yellow → red → dark red), mask overlays for non-forecast range, floating low/high callouts, tick marks every 10°, and 1px border.

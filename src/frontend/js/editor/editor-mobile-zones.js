@@ -202,6 +202,14 @@ function _isZoneEmpty(zoneInfo) {
     return !habitCb || !habitCb.checked;
   }
 
+  // Custom zones: check if any indicator fields exist
+  if (id.indexOf('customZone_') === 0) {
+    var czSection = document.getElementById(id);
+    if (!czSection) return true;
+    var fields = czSection.querySelectorAll('.indicator-field');
+    return fields.length === 0;
+  }
+
   return false;
 }
 
@@ -299,6 +307,15 @@ function _mobileShowZone(idx) {
       titleContainer.classList.add('mobile-zone-active');
       // Inject header controls into title zone if not already there
       _injectTitleZoneControls(titleContainer);
+      // Ensure weather section visibility matches its state
+      var cws = document.getElementById('compactWeatherSection');
+      if (cws) {
+        if (cws.classList.contains('weather-placeholder')) {
+          cws.style.setProperty('display', 'none', 'important');
+        } else {
+          cws.style.setProperty('display', 'flex', 'important');
+        }
+      }
     }
     // Hide both columns
     var colOne = grid.querySelector('.column-one');
@@ -321,11 +338,20 @@ function _mobileShowZone(idx) {
 
       // Make sure the parent column is visible, hide the other
       var parentCol = section.closest('.column-one, .column-two');
-      if (parentCol) parentCol.style.display = 'block';
-      var colOne = grid.querySelector('.column-one');
-      var colTwo = grid.querySelector('.column-two');
-      if (parentCol === colOne && colTwo) colTwo.style.display = 'none';
-      if (parentCol === colTwo && colOne) colOne.style.display = 'none';
+      if (parentCol) {
+        parentCol.style.display = 'block';
+        var colOne = grid.querySelector('.column-one');
+        var colTwo = grid.querySelector('.column-two');
+        if (parentCol === colOne && colTwo) colTwo.style.display = 'none';
+        if (parentCol === colTwo && colOne) colOne.style.display = 'none';
+      } else {
+        // Custom zone panels are direct children of .main-zones-grid (no column wrapper)
+        // Hide both columns so only the custom zone panel is visible
+        var colOne = grid.querySelector('.column-one');
+        var colTwo = grid.querySelector('.column-two');
+        if (colOne) colOne.style.display = 'none';
+        if (colTwo) colTwo.style.display = 'none';
+      }
     }
     if (content) {
       content.style.display = '';

@@ -811,3 +811,148 @@ async def cancel_running_timer_beacon(request: Request):
         logger.info(f"Timer cancelled (beacon): {key}")
         return {"status": "cancelled"}
     return {"status": "not_found"}
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Sort Orders (per-view manual chit ordering, persisted across devices)
+# ═══════════════════════════════════════════════════════════════════════════
+
+@router.get("/api/sort-orders")
+def get_sort_orders(request: Request):
+    """Get all manual sort orders for the authenticated user."""
+    conn = None
+    try:
+        user_id = request.state.user_id
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT view_tab, order_data, modified_datetime FROM sort_orders WHERE owner_id = ?",
+            (user_id,)
+        )
+        rows = cursor.fetchall()
+        result = {}
+        for row in rows:
+            result[row["view_tab"]] = deserialize_json_field(row["order_data"])
+        return result
+    except Exception as e:
+        logger.error(f"Error fetching sort orders: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
+
+
+@router.put("/api/sort-orders/{view_tab}")
+def save_sort_order(view_tab: str, body: dict, request: Request):
+    """Save the manual sort order for a specific view tab."""
+    conn = None
+    try:
+        user_id = request.state.user_id
+        ids = body.get("ids", [])
+        now = datetime.utcnow().isoformat() + "Z"
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute(
+            """INSERT INTO sort_orders (owner_id, view_tab, order_data, modified_datetime)
+               VALUES (?, ?, ?, ?)
+               ON CONFLICT(owner_id, view_tab) DO UPDATE SET
+                 order_data = excluded.order_data,
+                 modified_datetime = excluded.modified_datetime""",
+            (user_id, view_tab, serialize_json_field(ids), now)
+        )
+        conn.commit()
+        return {"status": "ok", "view_tab": view_tab, "count": len(ids)}
+    except Exception as e:
+        logger.error(f"Error saving sort order: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
+
+
+@router.delete("/api/sort-orders")
+def delete_all_sort_orders(request: Request):
+    """Delete all manual sort orders and sort preferences for the authenticated user."""
+    conn = None
+    try:
+        user_id = request.state.user_id
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM sort_orders WHERE owner_id = ?", (user_id,))
+        cursor.execute("DELETE FROM sort_preferences WHERE owner_id = ?", (user_id,))
+        conn.commit()
+        return {"status": "ok", "message": "All sort orders and preferences reset"}
+    except Exception as e:
+        logger.error(f"Error deleting sort orders: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Sort Preferences (per-view sort field + direction, persisted across devices)
+# ═══════════════════════════════════════════════════════════════════════════
+
+@router.get("/api/sort-preferences")
+def get_sort_preferences(request: Request):
+    """Get all sort preferences (field + direction) for the authenticated user."""
+    conn = None
+    try:
+        user_id = request.state.user_id
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT view_tab, sort_field, sort_dir FROM sort_preferences WHERE owner_id = ?",
+            (user_id,)
+        )
+        rows = cursor.fetchall()
+        result = {}
+        for row in rows:
+            result[row["view_tab"]] = {"field": row["sort_field"], "dir": row["sort_dir"]}
+        return result
+    except Exception as e:
+        logger.error(f"Error fetching sort preferences: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
+
+
+@router.put("/api/sort-preferences/{view_tab}")
+def save_sort_preference(view_tab: str, body: dict, request: Request):
+    """Save the sort preference (field + direction) for a specific view tab."""
+    conn = None
+    try:
+        user_id = request.state.user_id
+        sort_field = body.get("field", "")
+        sort_dir = body.get("dir", "asc")
+        now = datetime.utcnow().isoformat() + "Z"
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        if not sort_field:
+            # Empty field means "no sort" — delete the preference
+            cursor.execute(
+                "DELETE FROM sort_preferences WHERE owner_id = ? AND view_tab = ?",
+                (user_id, view_tab)
+            )
+        else:
+            cursor.execute(
+                """INSERT INTO sort_preferences (owner_id, view_tab, sort_field, sort_dir, modified_datetime)
+                   VALUES (?, ?, ?, ?, ?)
+                   ON CONFLICT(owner_id, view_tab) DO UPDATE SET
+                     sort_field = excluded.sort_field,
+                     sort_dir = excluded.sort_dir,
+                     modified_datetime = excluded.modified_datetime""",
+                (user_id, view_tab, sort_field, sort_dir, now)
+            )
+        conn.commit()
+        return {"status": "ok", "view_tab": view_tab, "field": sort_field, "dir": sort_dir}
+    except Exception as e:
+        logger.error(f"Error saving sort preference: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()

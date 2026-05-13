@@ -370,15 +370,19 @@ function _sendBrowserNotification(title, body, chitId, playSound) {
   if ('vibrate' in navigator) {
     opts.vibrate = [200, 100, 200, 100, 300];
   }
+  var targetUrl = chitId
+    ? '/frontend/html/editor.html?id=' + chitId
+    : '/?tab=Alarms&view=independent';
   try {
     var n = new Notification(title, opts);
     n.onclick = function() {
       window.focus();
-      if (chitId) window.location.href = '/editor?id=' + chitId;
+      window.location.href = targetUrl;
     };
   } catch (e) {
     // Fallback for environments where Notification constructor fails (some Android browsers)
     if ('serviceWorker' in navigator && navigator.serviceWorker.ready) {
+      opts.data = { url: targetUrl };
       navigator.serviceWorker.ready.then(function(reg) {
         reg.showNotification(title, opts).catch(function() {});
       });
@@ -554,7 +558,15 @@ function _globalCheckNotifications() {
   chits.forEach((chit) => {
     if (!Array.isArray(chit.alerts)) return;
     chit.alerts.forEach((alert, alertIdx) => {
-      if (alert._type !== "notification" || !alert.value || !alert.unit) return;
+      if (alert._type !== "notification") return;
+
+      // ── Weather notifications — check forecast against threshold ──
+      if (alert.unit === "weather") {
+        _globalCheckWeatherNotification(chit, alert, alertIdx);
+        return;
+      }
+
+      if (!alert.value || !alert.unit) return;
 
       // "Only if undone" — for habits, skip if goal met; for normal chits, skip if complete
       const onlyIfUndone = alert.only_if_undone !== false; // default true
@@ -608,6 +620,127 @@ function _globalCheckNotifications() {
       }
     });
   });
+}
+
+/**
+ * Check a weather-based notification on the dashboard.
+ * Fires once per chit per day if the forecast condition is met.
+ */
+function _globalCheckWeatherNotification(chit, alert, alertIdx) {
+  var condition = alert.weather_condition;
+  if (!condition) return;
+
+  // Get weather data from the chit
+  var wd = chit.weather_data;
+  if (typeof wd === 'string') { try { wd = JSON.parse(wd); } catch (e) { return; } }
+  if (!wd) return;
+
+  var threshold = alert.weather_threshold;
+  var precipMode = alert.weather_precip_mode || 'any';
+  var conditionMet = false;
+  var condLabel = '';
+  var unitLabel = (typeof _tempUnit === 'function') ? _tempUnit() : '°F';
+  var windUnit = (typeof _isMetricUnits === 'function' && _isMetricUnits()) ? 'km/h' : 'mph';
+  var precipUnit = (typeof _isMetricUnits === 'function' && _isMetricUnits()) ? 'mm' : 'in';
+  var isMetric = (typeof _isMetricUnits === 'function' && _isMetricUnits());
+
+  switch (condition) {
+    case 'high_above':
+    case 'high_below':
+    case 'low_above':
+    case 'low_below': {
+      if (wd.high == null || wd.low == null || threshold == null) return;
+      var high = (typeof _convertTemp === 'function') ? _convertTemp(wd.high) : wd.high;
+      var low = (typeof _convertTemp === 'function') ? _convertTemp(wd.low) : wd.low;
+      if (condition === 'high_above') { conditionMet = high > threshold; condLabel = 'high (' + high + unitLabel + ') above ' + threshold + unitLabel; }
+      else if (condition === 'high_below') { conditionMet = high < threshold; condLabel = 'high (' + high + unitLabel + ') below ' + threshold + unitLabel; }
+      else if (condition === 'low_above') { conditionMet = low > threshold; condLabel = 'low (' + low + unitLabel + ') above ' + threshold + unitLabel; }
+      else if (condition === 'low_below') { conditionMet = low < threshold; condLabel = 'low (' + low + unitLabel + ') below ' + threshold + unitLabel; }
+      break;
+    }
+    case 'precipitation': {
+      if (precipMode === 'more_than') {
+        if (wd.precipitation == null || threshold == null) return;
+        var pDisp = isMetric ? wd.precipitation : wd.precipitation / 25.4;
+        conditionMet = pDisp > threshold;
+        condLabel = 'precipitation (' + pDisp.toFixed(1) + ' ' + precipUnit + ') over ' + threshold + ' ' + precipUnit;
+      } else {
+        if (wd.weather_code == null) return;
+        conditionMet = [51,53,55,56,57,61,63,65,66,67,71,73,75,77,80,81,82,85,86,95,96,99].includes(wd.weather_code);
+        condLabel = 'precipitation in forecast';
+      }
+      break;
+    }
+    case 'rain': {
+      if (precipMode === 'more_than') {
+        if (wd.precipitation == null || threshold == null) return;
+        var rCodes = [61,63,65,66,67,80,81,82,51,53,55,56,57];
+        var isRain = wd.weather_code != null && rCodes.includes(wd.weather_code);
+        var rDisp = isMetric ? wd.precipitation : wd.precipitation / 25.4;
+        conditionMet = isRain && rDisp > threshold;
+        condLabel = 'rain (' + rDisp.toFixed(1) + ' ' + precipUnit + ') over ' + threshold + ' ' + precipUnit;
+      } else {
+        if (wd.weather_code == null) return;
+        conditionMet = [61,63,65,66,67,80,81,82,51,53,55,56,57].includes(wd.weather_code);
+        condLabel = 'rain in forecast';
+      }
+      break;
+    }
+    case 'snow': {
+      if (precipMode === 'more_than') {
+        if (wd.precipitation == null || threshold == null) return;
+        var sCodes = [71,73,75,77,85,86];
+        var isSnow = wd.weather_code != null && sCodes.includes(wd.weather_code);
+        var sDisp = isMetric ? wd.precipitation : wd.precipitation / 25.4;
+        conditionMet = isSnow && sDisp > threshold;
+        condLabel = 'snow (' + sDisp.toFixed(1) + ' ' + precipUnit + ') over ' + threshold + ' ' + precipUnit;
+      } else {
+        if (wd.weather_code == null) return;
+        conditionMet = [71,73,75,77,85,86].includes(wd.weather_code);
+        condLabel = 'snow in forecast';
+      }
+      break;
+    }
+    case 'hail': {
+      if (precipMode === 'more_than') {
+        if (wd.precipitation == null || threshold == null) return;
+        var hCodes = [96,99];
+        var isHail = wd.weather_code != null && hCodes.includes(wd.weather_code);
+        var hDisp = isMetric ? wd.precipitation : wd.precipitation / 25.4;
+        conditionMet = isHail && hDisp > threshold;
+        condLabel = 'hail (' + hDisp.toFixed(1) + ' ' + precipUnit + ') over ' + threshold + ' ' + precipUnit;
+      } else {
+        if (wd.weather_code == null) return;
+        conditionMet = [96,99].includes(wd.weather_code);
+        condLabel = 'hail in forecast';
+      }
+      break;
+    }
+    case 'wind_above': {
+      // Check higher of sustained wind and gusts
+      var wGusts = wd.wind_gusts != null ? wd.wind_gusts : null;
+      var wSpeed = wd.wind_speed != null ? wd.wind_speed : null;
+      var wMax = null;
+      if (wGusts != null && wSpeed != null) wMax = Math.max(wGusts, wSpeed);
+      else if (wGusts != null) wMax = wGusts;
+      else if (wSpeed != null) wMax = wSpeed;
+      if (wMax == null || threshold == null) return;
+      var windVal = isMetric ? Math.round(wMax) : Math.round(wMax * 0.621371);
+      conditionMet = windVal > threshold;
+      condLabel = 'wind (' + windVal + ' ' + windUnit + ') over ' + threshold + ' ' + windUnit;
+      break;
+    }
+  }
+  if (!conditionMet) return;
+
+  var today = new Date().toDateString();
+  var key = chit.id + '-weather-' + alertIdx + '-' + today;
+  if (_globalFiredNotifications.has(key)) return;
+  _globalFiredNotifications.add(key);
+
+  var label = '🌡️ ' + condLabel;
+  _showGlobalToast('🌡️', label, chit.title, chit.id, null);
+  _sendBrowserNotification('🌡️ Weather: ' + chit.title, label, chit.id);
 }
 
 /**

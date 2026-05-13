@@ -8,7 +8,8 @@
  * Depends on: shared.js (generateUniqueId, setSaveButtonUnsaved, setSaveButtonSaved,
  *             showQRModal, syncSend, cwocConfirm, _showDeleteUndoToast),
  *             editor-dates.js (_buildRecurrenceRule, convertMonthFormat, createISODateTimeString),
- *             editor-alerts.js (_alertsToArray, _gatherHealthData)
+ *             editor-alerts.js (_alertsToArray, _gatherHealthData),
+ *             editor-custom-zones.js (_gatherCustomZoneData)
  * Loaded before: editor-init.js, editor.js
  */
 
@@ -409,14 +410,7 @@ async function buildChitObject() {
     }
   }
 
-  // Validate: title is required
-  if (!chit.title) {
-    cwocToast("Title is required.", "error");
-    // Focus the title field if possible
-    var _titleEl = document.getElementById('title');
-    if (_titleEl) _titleEl.focus();
-    return null;
-  }
+  // Title is optional — chits can be saved without one
 
   // Validate minimum required fields
   if (
@@ -439,8 +433,11 @@ async function buildChitObject() {
     : null;
 
   // Include health_data in save payload (JSON string like weather_data)
-  const healthObj = _gatherHealthData();
-  chit.health_data = healthObj ? JSON.stringify(healthObj) : null;
+  // Merge indicators zone data with custom zone data into a single UUID-keyed object
+  var healthObj = _gatherHealthData() || {};
+  var customZoneObj = (typeof _gatherCustomZoneData === 'function') ? _gatherCustomZoneData() : {};
+  var mergedHealth = Object.assign({}, healthObj, customZoneObj);
+  chit.health_data = Object.keys(mergedHealth).length > 0 ? JSON.stringify(mergedHealth) : null;
 
   // Include sharing data (shares, stealth, assigned_to)
   if (typeof getSharingData === 'function') {
@@ -482,7 +479,7 @@ async function buildChitObject() {
 
   // Auto-complete checklist flag
   if (typeof _autoCompleteChecklistEnabled !== 'undefined') {
-    chit.auto_complete_checklist = _autoCompleteChecklistEnabled || null;
+    chit.auto_complete_checklist = _autoCompleteChecklistEnabled ? true : false;
   }
 
   // Include snoozed_until (preserved from loaded chit, or set via snooze modal)
@@ -1053,6 +1050,119 @@ function togglePinned() {
     btn.title = isNowPinned ? "Pinned (click to unpin)" : "Not pinned (click to pin)";
   }
   setSaveButtonUnsaved();
+}
+
+function toggleHideInCalendar() {
+  var cb = document.getElementById("showOnCalendar");
+  if (!cb) return;
+  var isNowHidden = cb.checked; // currently shown → hide it
+  cb.checked = !isNowHidden;
+  _updateHideCalendarButton(!isNowHidden);
+  setSaveButtonUnsaved();
+}
+
+function _updateHideCalendarButton(isHidden) {
+  // Update the options menu label
+  var label = document.getElementById("optMenuHideCalLabel");
+  if (label) label.textContent = isHidden ? "Show in Calendar" : "Hide in Calendar";
+  var menuItem = document.getElementById("optMenuHideCalendar");
+  if (menuItem) {
+    menuItem.classList.toggle("active-option", isHidden);
+  }
+}
+
+// ── Options quick menu ───────────────────────────────────────────────────────
+
+function _toggleOptionsMenu(event) {
+  if (event) event.stopPropagation();
+  var menu = document.getElementById("editorOptionsMenu");
+  if (!menu) return;
+  if (menu.style.display !== "none") {
+    _closeOptionsMenu();
+    return;
+  }
+  // Position near the Options button — left-aligned dropdown
+  var btn = document.getElementById("editorMoreBtn");
+  if (btn) {
+    var rect = btn.getBoundingClientRect();
+    menu.style.top = (rect.bottom + 4) + "px";
+    menu.style.left = rect.left + "px";
+    menu.style.right = "auto";
+  }
+  // Update archive label
+  var archiveLabel = document.getElementById("optMenuArchiveLabel");
+  var archivedVal = document.getElementById("archived");
+  if (archiveLabel && archivedVal) {
+    archiveLabel.textContent = archivedVal.value === "true" ? "Unarchive" : "Archive";
+  }
+  // Hide email option if already an email chit
+  var emailOpt = document.getElementById("optMenuEmail");
+  if (emailOpt) {
+    var emailSection = document.getElementById("emailSection");
+    var isEmail = emailSection && emailSection.classList.contains('email-active');
+    emailOpt.style.display = isEmail ? 'none' : '';
+  }
+  menu.style.display = "block";
+  // Close on outside click
+  setTimeout(function() {
+    document.addEventListener("click", _closeOptionsMenuOnOutside, true);
+  }, 0);
+}
+
+function _closeOptionsMenu() {
+  var menu = document.getElementById("editorOptionsMenu");
+  if (menu) menu.style.display = "none";
+  document.removeEventListener("click", _closeOptionsMenuOnOutside, true);
+}
+
+function _closeOptionsMenuOnOutside(e) {
+  var menu = document.getElementById("editorOptionsMenu");
+  if (menu && !menu.contains(e.target) && e.target.id !== "editorMoreBtn" && !e.target.closest('#editorMoreBtn')) {
+    _closeOptionsMenu();
+  }
+}
+
+function _optToggleHideCalendar() {
+  toggleHideInCalendar();
+  _closeOptionsMenu();
+}
+
+function _optNestClick() {
+  _closeOptionsMenu();
+  if (typeof _nestButtonClick === 'function') _nestButtonClick();
+}
+
+function _optAuditLog() {
+  _closeOptionsMenu();
+  var chitId = new URLSearchParams(window.location.search).get('id') || '';
+  if (chitId) {
+    _navigateWithSaveCheck('/frontend/html/audit-log.html?entity_type=chit&entity_id=' + encodeURIComponent(chitId));
+  }
+}
+
+function _optQR() {
+  _closeOptionsMenu();
+  if (typeof _showQRCode === 'function') _showQRCode();
+}
+
+function _optEmail() {
+  _closeOptionsMenu();
+  if (typeof _activateEmailZone === 'function') _activateEmailZone();
+}
+
+function _optArchive() {
+  _closeOptionsMenu();
+  if (typeof toggleArchived === 'function') toggleArchived();
+}
+
+function _optSnooze() {
+  _closeOptionsMenu();
+  if (typeof _openSnoozeModal === 'function') _openSnoozeModal();
+}
+
+function _optDelete() {
+  _closeOptionsMenu();
+  if (typeof deleteChit === 'function') deleteChit();
 }
 
 function toggleArchived() {

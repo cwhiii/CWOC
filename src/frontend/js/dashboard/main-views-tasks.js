@@ -31,7 +31,7 @@ function displayTasksView(chitsToDisplay) {
 
   // Default sort: by status (ToDo → In Progress → Blocked → Complete at bottom)
   if (!currentSortField) {
-    const statusOrder = { 'ToDo': 1, 'In Progress': 2, 'Blocked': 3, '': 4, 'Complete': 5 };
+    const statusOrder = { 'ToDo': 1, 'In Progress': 2, 'Blocked': 3, '': 4, 'Complete': 5, 'Rejected': 6 };
     taskChits.sort((a, b) => (statusOrder[a.status] || 4) - (statusOrder[b.status] || 4));
   }
 
@@ -50,7 +50,7 @@ function displayTasksView(chitsToDisplay) {
     chitElement.dataset.chitId = chit.id;
     if (chit.archived) chitElement.classList.add("archived-chit");
     applyChitColors(chitElement, typeof chitColor === 'function' ? chitColor(chit) : '#fdf6e3');
-    if (chit.status === "Complete") chitElement.classList.add("completed-task");
+    if (chit.status === "Complete" || chit.status === "Rejected") chitElement.classList.add("completed-task");
     if (_isDeclinedByCurrentUser(chit)) chitElement.classList.add("declined-chit");
 
     chitElement.appendChild(_buildChitHeader(chit, `<a href="/editor?id=${chit.id}">${chit.title || '(Untitled)'}</a>`, _viSettings, { hideStatus: true, skipMapIcon: true }));
@@ -74,7 +74,7 @@ function displayTasksView(chitsToDisplay) {
 
     const statusDropdown = document.createElement("select");
     statusDropdown.style.cssText = "font-family:inherit;font-size:inherit;";
-    ["ToDo", "In Progress", "Blocked", "Complete"].forEach((status) => {
+    ["ToDo", "In Progress", "Blocked", "Complete", "Rejected"].forEach((status) => {
       const option = document.createElement("option");
       option.value = status;
       option.textContent = status;
@@ -96,6 +96,12 @@ function displayTasksView(chitsToDisplay) {
       } else if (val === 'Complete') {
         statusDropdown.style.backgroundColor = '';
         statusDropdown.style.color = '';
+        statusDropdown.style.border = '';
+        statusDropdown.style.fontWeight = '';
+        statusDropdown.style.opacity = '0.6';
+      } else if (val === 'Rejected') {
+        statusDropdown.style.backgroundColor = '';
+        statusDropdown.style.color = '#9E9E9E';
         statusDropdown.style.border = '';
         statusDropdown.style.fontWeight = '';
         statusDropdown.style.opacity = '0.6';
@@ -207,7 +213,7 @@ function displayAssignedToMeView(chitsToDisplay) {
 
   // Default sort: by status (ToDo → In Progress → Blocked → Complete at bottom)
   if (!currentSortField) {
-    var statusOrder = { 'ToDo': 1, 'In Progress': 2, 'Blocked': 3, '': 4, 'Complete': 5 };
+    var statusOrder = { 'ToDo': 1, 'In Progress': 2, 'Blocked': 3, '': 4, 'Complete': 5, 'Rejected': 6 };
     assignedChits.sort(function(a, b) {
       return (statusOrder[a.status] || 4) - (statusOrder[b.status] || 4);
     });
@@ -228,7 +234,7 @@ function displayAssignedToMeView(chitsToDisplay) {
     chitElement.dataset.chitId = chit.id;
     if (chit.archived) chitElement.classList.add('archived-chit');
     applyChitColors(chitElement, typeof chitColor === 'function' ? chitColor(chit) : '#fdf6e3');
-    if (chit.status === 'Complete') chitElement.classList.add('completed-task');
+    if (chit.status === 'Complete' || chit.status === 'Rejected') chitElement.classList.add('completed-task');
     if (_isDeclinedByCurrentUser(chit)) chitElement.classList.add('declined-chit');
 
     chitElement.appendChild(_buildChitHeader(chit, '<a href="/editor?id=' + chit.id + '">' + (chit.title || '(Untitled)') + '</a>', _viSettings, { hideStatus: true, skipMapIcon: true }));
@@ -251,7 +257,7 @@ function displayAssignedToMeView(chitsToDisplay) {
 
     var statusDropdown = document.createElement('select');
     statusDropdown.style.cssText = 'font-family:inherit;font-size:inherit;';
-    ['ToDo', 'In Progress', 'Blocked', 'Complete'].forEach(function(status) {
+    ['ToDo', 'In Progress', 'Blocked', 'Complete', 'Rejected'].forEach(function(status) {
       var option = document.createElement('option');
       option.value = status;
       option.textContent = status;

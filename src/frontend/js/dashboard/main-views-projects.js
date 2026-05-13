@@ -13,7 +13,8 @@
  */
 
 // ── Projects View Mode (List vs Kanban) ──────────────────────────────────────
-let _projectsViewMode = localStorage.getItem('cwoc_projectsViewMode') || 'kanban'; // 'list' | 'kanban'
+// Kanban is now the only mode — list view is permanently hidden but code preserved.
+let _projectsViewMode = 'kanban';
 
 
 function _setProjectsMode(mode) {
@@ -777,6 +778,7 @@ function displayProjectsView(chitsToDisplay) {
     var sel = document.getElementById('sort-select');
     if (sel) sel.value = 'manual';
     _updateSortUI();
+    if (typeof saveSortPreference === 'function') saveSortPreference('Projects', 'manual', 'asc');
 
     // Preserve scroll position across the full re-render
     var scrollEl = document.querySelector('.projects-view');
@@ -848,6 +850,7 @@ function displayProjectsView(chitsToDisplay) {
           var sel = document.getElementById('sort-select');
           if (sel) sel.value = 'manual';
           _updateSortUI();
+          if (typeof saveSortPreference === 'function') saveSortPreference('Projects', 'manual', 'asc');
           _listHeaderDraggedBox = null;
 
           // Preserve scroll position across the full re-render
@@ -1159,7 +1162,8 @@ function _renderKanbanBoard(chitList, projects, chitMap, _viSettings) {
     // Group children by status
     const grouped = {};
     statuses.forEach(s => { grouped[s] = []; });
-    const _statusMapLower = { "todo": "ToDo", "in progress": "In Progress", "blocked": "Blocked", "complete": "Complete" };
+    grouped["Rejected"] = [];
+    const _statusMapLower = { "todo": "ToDo", "in progress": "In Progress", "blocked": "Blocked", "complete": "Complete", "rejected": "Rejected" };
     childIds.forEach(cid => {
       const child = chitMap[cid];
       if (!child || child.deleted) return;
@@ -1192,7 +1196,7 @@ function _renderKanbanBoard(chitList, projects, chitMap, _viSettings) {
         const childBg = chitColor(child);
         const childFont = contrastColorForBg(childBg);
         card.style.cssText = `padding:0.5em 0.6em;font-size:1em;background:${childBg};color:${childFont};cursor:grab;margin-bottom:0.3em;border-width:1px;line-height:1.4;`;
-        if (child.status === "Complete") card.classList.add("completed-task");
+        if (child.status === "Complete" || child.status === "Rejected") card.classList.add("completed-task");
         if (_isDeclinedByCurrentUser(child)) {
           console.warn('[Kanban] declined-chit applied to:', child.title, '| owner_id:', child.owner_id, '| shares:', JSON.stringify(child.shares));
           card.classList.add("declined-chit");
@@ -1205,7 +1209,7 @@ function _renderKanbanBoard(chitList, projects, chitMap, _viSettings) {
         var _kanbanChildTitle = child.title || "(Untitled)";
         if (child._hasIncompletePrereqs) _kanbanChildTitle = '⛓️ ' + _kanbanChildTitle;
         titleTextSpan.textContent = _kanbanChildTitle;
-        if (child.status === "Complete") titleTextSpan.style.textDecoration = "line-through";
+        if (child.status === "Complete" || child.status === "Rejected") titleTextSpan.style.textDecoration = "line-through";
         titleEl.appendChild(titleTextSpan);
         // Checklist progress count on child chits
         if (Array.isArray(child.checklist) && child.checklist.length > 0) {
@@ -1294,17 +1298,17 @@ function _renderKanbanBoard(chitList, projects, chitMap, _viSettings) {
             li.dataset.chitId = gc.id;
             li.dataset.parentChitId = child.id;
             li.style.cssText = `padding:2px 4px;margin:1px 0;border-radius:3px;cursor:grab;background:rgba(255,255,255,0.4);border:1px solid rgba(139,90,43,0.1);display:flex;align-items:center;gap:4px;`;
-            if (gc.status === "Complete") li.style.opacity = "0.5";
+            if (gc.status === "Complete" || gc.status === "Rejected") li.style.opacity = "0.5";
 
             const bullet = document.createElement("span");
             bullet.style.cssText = "opacity:0.4;font-size:0.8em;flex-shrink:0;";
-            bullet.textContent = gc.status === "Complete" ? "✓" : "▸";
+            bullet.textContent = (gc.status === "Complete" || gc.status === "Rejected") ? "✓" : "▸";
             li.appendChild(bullet);
 
             const gcTitle = document.createElement("span");
             gcTitle.style.flex = "1";
             gcTitle.textContent = gc.title || "(Untitled)";
-            if (gc.status === "Complete") gcTitle.style.textDecoration = "line-through";
+            if (gc.status === "Complete" || gc.status === "Rejected") gcTitle.style.textDecoration = "line-through";
             li.appendChild(gcTitle);
 
             // Checklist progress count on grandchild chits
@@ -1325,7 +1329,7 @@ function _renderKanbanBoard(chitList, projects, chitMap, _viSettings) {
               e.dataTransfer.effectAllowed = "move";
               li.classList.add('cwoc-dragging');
             });
-            li.addEventListener("dragend", () => { li.classList.remove('cwoc-dragging'); if (gc.status === "Complete") li.style.opacity = "0.5"; if (typeof _markDragJustEnded === 'function') _markDragJustEnded(); });
+            li.addEventListener("dragend", () => { li.classList.remove('cwoc-dragging'); if (gc.status === "Complete" || gc.status === "Rejected") li.style.opacity = "0.5"; if (typeof _markDragJustEnded === 'function') _markDragJustEnded(); });
 
             li.addEventListener("dblclick", e => {
               e.stopPropagation();
@@ -1582,6 +1586,84 @@ function _renderKanbanBoard(chitList, projects, chitMap, _viSettings) {
 
         col.appendChild(card);
       });
+
+      // If this is the Complete column, append Rejected items below with a sub-header
+      if (status === "Complete" && grouped["Rejected"].length > 0) {
+        var _rejDivider = document.createElement("div");
+        _rejDivider.style.cssText = "display:flex;align-items:center;gap:0.4em;cursor:pointer;user-select:none;padding:6px 0 3px;margin-top:0.5em;border-top:1px dashed rgba(139,90,43,0.3);";
+        var _rejLabel = document.createElement("span");
+        _rejLabel.style.cssText = "font-size:0.8em;font-weight:bold;color:#9E9E9E;";
+        _rejLabel.textContent = "Rejected (" + grouped["Rejected"].length + ")";
+        _rejDivider.appendChild(_rejLabel);
+        var _rejToggle = document.createElement("span");
+        _rejToggle.style.cssText = "font-size:0.6em;color:#9E9E9E;";
+        _rejToggle.textContent = "▶";
+        _rejDivider.appendChild(_rejToggle);
+        col.appendChild(_rejDivider);
+
+        var _rejContainer = document.createElement("div");
+        _rejContainer.style.display = "none"; // collapsed by default
+        _rejContainer.dataset.status = "Rejected";
+        _rejContainer.dataset.projectId = project.id;
+        grouped["Rejected"].forEach(function(child) {
+          var card = document.createElement("div");
+          card.className = "chit-card completed-task";
+          card.draggable = true;
+          card.dataset.chitId = child.id;
+          card.dataset.projectId = project.id;
+          var childBg = chitColor(child);
+          var childFont = contrastColorForBg(childBg);
+          card.style.cssText = "padding:0.5em 0.6em;font-size:1em;background:" + childBg + ";color:" + childFont + ";cursor:grab;margin-bottom:0.3em;border-width:1px;line-height:1.4;";
+          var titleEl = document.createElement("div");
+          titleEl.style.cssText = "font-weight:bold;text-decoration:line-through;";
+          titleEl.textContent = child.title || "(Untitled)";
+          card.appendChild(titleEl);
+          card.addEventListener("dblclick", function() {
+            storePreviousState();
+            window.location.href = '/editor?id=' + child.id;
+          });
+          card.addEventListener("dragstart", function(e) {
+            e.stopPropagation();
+            e.dataTransfer.setData("application/x-kanban-card", JSON.stringify({ chitId: child.id, projectId: project.id, fromStatus: "Rejected" }));
+            e.dataTransfer.effectAllowed = "move";
+            card.classList.add('cwoc-dragging');
+          });
+          card.addEventListener("dragend", function() { card.classList.remove('cwoc-dragging'); if (typeof _markDragJustEnded === 'function') _markDragJustEnded(); });
+          _rejContainer.appendChild(card);
+        });
+        _rejDivider.addEventListener("click", function() {
+          var hidden = _rejContainer.style.display === "none";
+          _rejContainer.style.display = hidden ? "" : "none";
+          _rejToggle.textContent = hidden ? "▼" : "▶";
+        });
+        // Drag-drop into Rejected sub-section
+        _rejContainer.addEventListener("dragover", function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          _rejContainer.style.outline = "2px dashed #9E9E9E";
+        });
+        _rejContainer.addEventListener("dragleave", function(e) {
+          if (!_rejContainer.contains(e.relatedTarget)) _rejContainer.style.outline = "";
+        });
+        _rejContainer.addEventListener("drop", async function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          _rejContainer.style.outline = "";
+          var cardData = e.dataTransfer.getData("application/x-kanban-card");
+          if (!cardData) return;
+          try {
+            var data = JSON.parse(cardData);
+            if (data.fromStatus === "Rejected") return;
+            var resp = await fetch('/api/chit/' + data.chitId);
+            if (!resp.ok) return;
+            var fullChit = await resp.json();
+            fullChit.status = "Rejected";
+            await fetch('/api/chits/' + data.chitId, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(fullChit) });
+            _kanbanFetchAndPreserveScroll();
+          } catch (err) { console.error("Kanban rejected drop error:", err); }
+        });
+        col.appendChild(_rejContainer);
+      }
 
       // ── Within-column reorder: placeholder that shifts cards out of the way ──
       var _colPlaceholder = null;
@@ -1879,6 +1961,7 @@ function _renderKanbanBoard(chitList, projects, chitMap, _viSettings) {
     const sel = document.getElementById('sort-select');
     if (sel) sel.value = 'manual';
     _updateSortUI();
+    if (typeof saveSortPreference === 'function') saveSortPreference('Projects', 'manual', 'asc');
 
     // Preserve scroll position across the full re-render
     var scrollEl = document.querySelector('.projects-view');
@@ -1952,6 +2035,7 @@ function _renderKanbanBoard(chitList, projects, chitMap, _viSettings) {
           var sel = document.getElementById('sort-select');
           if (sel) sel.value = 'manual';
           _updateSortUI();
+          if (typeof saveSortPreference === 'function') saveSortPreference('Projects', 'manual', 'asc');
           _kanbanHeaderDraggedBox = null;
 
           // Preserve scroll position across the full re-render

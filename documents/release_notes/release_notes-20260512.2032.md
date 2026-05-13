@@ -1,0 +1,1 @@
+Added PGP key validation in the contact editor. A "Validate Key" button appears below the PGP textarea in the Security zone. Clicking it (or blurring the field) parses the key with OpenPGP.js and shows the result: user ID, algorithm, bit strength, and fingerprint on success, or an error message if the key is invalid. Auto-validates on contact load when a key is present.

@@ -761,14 +761,14 @@ function _openBundleModal(editBundle) {
                     // Bundle has a rule — open the rule editor for that rule
                     ruleEditorUrl = '/frontend/html/rule-editor.html'
                         + '?id=' + encodeURIComponent(ruleIds[0])
-                        + '&return=' + encodeURIComponent('/frontend/html/index.html#Email');
+                        + '&return=' + encodeURIComponent('/frontend/html/index.html?tab=Email');
                 } else {
                     // Bundle has no rule — open rule editor in create mode
                     ruleEditorUrl = '/frontend/html/rule-editor.html'
                         + '?new=1'
                         + '&trigger=email_received'
                         + '&bundle_id=' + encodeURIComponent(bundleId)
-                        + '&return=' + encodeURIComponent('/frontend/html/index.html#Email');
+                        + '&return=' + encodeURIComponent('/frontend/html/index.html?tab=Email');
                 }
                 window.location.href = ruleEditorUrl;
             });
@@ -956,7 +956,7 @@ function _bundleModalCreate(name, description, color) {
             + '?new=1'
             + '&trigger=email_received'
             + '&bundle_id=' + encodeURIComponent(bundleId)
-            + '&return=' + encodeURIComponent('/frontend/html/index.html#Email');
+            + '&return=' + encodeURIComponent('/frontend/html/index.html?tab=Email');
         window.location.href = ruleEditorUrl;
     })
     .catch(function(err) {

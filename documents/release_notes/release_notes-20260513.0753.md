@@ -1,0 +1,1 @@
+Weather bar and text made larger (bar 12→16px, icon 1.5→1.8em, description 0.9→1em, callouts 0.85→0.95em). Description now includes temperature feeling based on average temp (e.g. "Overcast & scorching", "Clear sky & cool").

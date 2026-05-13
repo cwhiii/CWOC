@@ -1,0 +1,1 @@
+Custom Objects & Indicators overhaul: removed category field (consolidated to type + sub_type), removed Quick Log, fixed page icon, metric units primary, range fields labeled "Ideal", Add Indicator picker now has a search box with live filtering, indicators zone uses 3-column grid grouped by sub_type.

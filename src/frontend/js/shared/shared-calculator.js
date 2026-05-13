@@ -645,6 +645,8 @@ function _calcInitDrag(titleBar) {
   titleBar.addEventListener('mousedown', function (e) {
     // Only respond to primary button
     if (e.button !== 0) return;
+    // Don't start drag if clicking the close button
+    if (e.target.closest('.cwoc-calc-close')) return;
     e.preventDefault();
     _calcDragStart(e.clientX, e.clientY);
   });
@@ -664,6 +666,8 @@ function _calcInitDrag(titleBar) {
 
   titleBar.addEventListener('touchstart', function (e) {
     if (e.touches.length !== 1) return;
+    // Don't start drag if touching the close button
+    if (e.target.closest('.cwoc-calc-close')) return;
     e.preventDefault();
     var touch = e.touches[0];
     _calcDragStart(touch.clientX, touch.clientY);
@@ -907,21 +911,26 @@ function _calcIsEditorPage() {
 }
 
 /**
- * Insert the current calculator result into the captured source field.
+ * Insert the current calculator result into the last focused text/number field.
  *
- * Writes the result into the source field's `.value` (for input/textarea)
- * or `.textContent` (for contenteditable elements), then dispatches an
- * `input` event so CWOC's dirty-tracking detects the change.
+ * Inserts the result at the cursor position within the field (does NOT replace
+ * the entire value). If no selection range is available, appends to the end.
+ *
+ * Uses _calcSourceField (captured when calculator opened) as a fallback, but
+ * also checks for the most recently focused input/textarea on the page via
+ * a tracked reference.
  *
  * Does nothing if:
- *   - No source field was captured
+ *   - No source field is available
  *   - Not on the editor page
  *   - Source field is no longer in the DOM
  */
 function _calcInsertResult() {
-  if (!_calcSourceField) return;
+  // Determine which field to insert into — prefer the tracked last-focused field
+  var target = _calcLastFocusedField || _calcSourceField;
+  if (!target) return;
   if (!_calcIsEditorPage()) return;
-  if (!document.body.contains(_calcSourceField)) return;
+  if (!document.body.contains(target)) return;
 
   // ── Determine the current result to insert ─────────────────────────────
   var resultToInsert = _calcResult;
@@ -929,30 +938,75 @@ function _calcInsertResult() {
   // If the display is showing a live-evaluated result, use that instead
   if (_calcPopoverEl) {
     var resultEl = _calcPopoverEl.querySelector('.cwoc-calc-result');
-    if (resultEl && resultEl.textContent) {
+    if (resultEl && resultEl.textContent && resultEl.textContent !== 'Error') {
       resultToInsert = resultEl.textContent;
     }
   }
 
-  // ── Write the result into the source field ─────────────────────────────
-  var tag = _calcSourceField.tagName ? _calcSourceField.tagName.toLowerCase() : '';
+  if (!resultToInsert || resultToInsert === '0' || resultToInsert === 'Error') return;
+
+  // ── Insert at cursor position ──────────────────────────────────────────
+  var tag = target.tagName ? target.tagName.toLowerCase() : '';
   if (tag === 'input' || tag === 'textarea') {
-    _calcSourceField.value = resultToInsert;
-  } else if (_calcSourceField.isContentEditable) {
-    _calcSourceField.textContent = resultToInsert;
-  } else {
-    // Fallback: try value first, then textContent
-    if ('value' in _calcSourceField) {
-      _calcSourceField.value = resultToInsert;
+    var start = target.selectionStart;
+    var end = target.selectionEnd;
+    if (start == null || end == null) {
+      // No selection info — append to end
+      target.value = target.value + resultToInsert;
     } else {
-      _calcSourceField.textContent = resultToInsert;
+      var before = target.value.substring(0, start);
+      var after = target.value.substring(end);
+      target.value = before + resultToInsert + after;
+      // Move cursor to end of inserted text
+      var newPos = start + resultToInsert.length;
+      target.setSelectionRange(newPos, newPos);
     }
+  } else if (target.isContentEditable) {
+    // For contenteditable, insert at current selection or append
+    var sel = window.getSelection();
+    if (sel && sel.rangeCount > 0 && target.contains(sel.anchorNode)) {
+      var range = sel.getRangeAt(0);
+      range.deleteContents();
+      range.insertNode(document.createTextNode(resultToInsert));
+      range.collapse(false);
+    } else {
+      target.textContent += resultToInsert;
+    }
+  } else if ('value' in target) {
+    target.value = target.value + resultToInsert;
   }
 
   // ── Fire input event so dirty-tracking detects the change ──────────────
   var inputEvent = new Event('input', { bubbles: true });
-  _calcSourceField.dispatchEvent(inputEvent);
+  target.dispatchEvent(inputEvent);
 }
+
+// ── Track Last Focused Field ─────────────────────────────────────────────────
+
+/** Reference to the last focused input/textarea/contenteditable before calculator interaction */
+var _calcLastFocusedField = null;
+
+/**
+ * Track focus events on text inputs so the Insert button knows where to put the value.
+ * This runs on focusin so it captures the field even if the calculator is already open.
+ */
+(function() {
+  document.addEventListener('focusin', function(e) {
+    var el = e.target;
+    if (!el) return;
+    // Don't track focus within the calculator itself
+    if (_calcPopoverEl && _calcPopoverEl.contains(el)) return;
+    var tag = el.tagName ? el.tagName.toLowerCase() : '';
+    if (tag === 'input' || tag === 'textarea' || el.isContentEditable) {
+      // Only track text-like inputs
+      if (tag === 'input') {
+        var type = (el.type || '').toLowerCase();
+        if (type && type !== 'text' && type !== 'number' && type !== 'search' && type !== 'url' && type !== 'tel' && type !== 'email') return;
+      }
+      _calcLastFocusedField = el;
+    }
+  });
+})();
 
 
 // ── Global Hotkey Registration ───────────────────────────────────────────────

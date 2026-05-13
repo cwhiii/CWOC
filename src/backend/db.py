@@ -100,7 +100,7 @@ def compute_system_tags(chit) -> List[str]:
         system_tags.append("CWOC_System/Alarms")
     if "Project" in (chit.tags or []):
         system_tags.append("CWOC_System/Projects")
-    if chit.status in ["ToDo", "In Progress", "Blocked", "Complete"]:
+    if chit.status in ["ToDo", "In Progress", "Blocked", "Complete", "Rejected"]:
         system_tags.append("CWOC_System/Tasks")
     if not (chit.due_datetime or chit.start_datetime or chit.end_datetime or getattr(chit, 'point_in_time', None)):
         system_tags.append("CWOC_System/Notes")

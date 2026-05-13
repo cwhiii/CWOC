@@ -1,0 +1,1 @@
+Fixed broken weather bar layout: track now forces full-width row in flex container, temperature labels properly centered with translateX(-50%), tick marks no longer overlap, and masks cover the border properly.

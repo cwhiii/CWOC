@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <link rel="icon" type="image/x-icon" href="/static/cwod_logo-favicon.png" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Attachments — C.W.'s Omni Chits</title>
+    <!-- PWA -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#8b5a2b" />
+    <link rel="apple-touch-icon" href="/static/cwoc-icon-192.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <link rel="stylesheet" href="/frontend/css/shared/shared-page.css" />
+    <link rel="stylesheet" href="/frontend/css/shared/shared-calculator.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" />
+    <style>
+        /* ══ ATTACHMENTS PAGE STYLES ══ */
+
+        /* ── Toolbar ─────────────────────────────────────────────────── */
+        .attachments-toolbar {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+        .attachments-count {
+            font-size: 0.9em;
+            color: #5a4a3a;
+        }
+        .attachments-toolbar .bulk-actions {
+            display: flex;
+            gap: 8px;
+            margin-left: auto;
+        }
+        .selected-count {
+            font-size: 0.85em;
+            color: #5a4a3a;
+            font-weight: 600;
+        }
+
+        /* ── Filter/Sort Bar ─────────────────────────────────────────── */
+        .att-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+            padding: 10px 12px;
+            background: rgba(139, 90, 43, 0.04);
+            border: 1px solid rgba(139, 90, 43, 0.12);
+            border-radius: 6px;
+        }
+        .att-controls label {
+            font-size: 0.82em;
+            color: #5a4a3a;
+            font-weight: 600;
+            margin-right: 2px;
+        }
+        .att-controls select {
+            font-size: 0.85em;
+            padding: 4px 8px;
+            border-radius: 4px;
+        }
+        .att-controls .att-search {
+            flex: 1;
+            min-width: 140px;
+            max-width: 240px;
+            padding: 5px 8px;
+            font-size: 0.85em;
+            border: 1px solid #8b5a2b;
+            border-radius: 4px;
+            background: #f5e6cc;
+            font-family: 'Lora', Georgia, serif;
+            color: #1a1208;
+        }
+
+        /* ── Grid Layout ─────────────────────────────────────────────── */
+        .attachments-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+            gap: 16px;
+        }
+
+        /* ── Grid Card ───────────────────────────────────────────────── */
+        .att-card {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 12px 10px 10px;
+            border: 2px solid transparent;
+            border-radius: 8px;
+            background: rgba(253, 246, 227, 0.6);
+            cursor: pointer;
+            transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+            position: relative;
+            user-select: none;
+        }
+        .att-card:hover {
+            background: rgba(139, 90, 43, 0.06);
+            border-color: rgba(139, 90, 43, 0.2);
+        }
+        .att-card.selected {
+            border-color: #008080;
+            background: rgba(0, 128, 128, 0.08);
+            box-shadow: 0 0 0 2px rgba(0, 128, 128, 0.2);
+        }
+
+        /* ── Thumbnail / Icon ────────────────────────────────────────── */
+        .att-thumb {
+            width: 100px;
+            height: 100px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 6px;
+            overflow: hidden;
+            margin-bottom: 8px;
+            background: rgba(139, 90, 43, 0.04);
+            border: 1px solid rgba(139, 90, 43, 0.12);
+        }
+        .att-thumb img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .att-thumb .att-icon {
+            font-size: 2.5em;
+        }
+
+        /* ── File Name ───────────────────────────────────────────────── */
+        .att-filename {
+            font-size: 0.82em;
+            font-weight: 600;
+            color: #3a2a1a;
+            text-align: center;
+            max-width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            margin-bottom: 2px;
+        }
+
+        /* ── File Size ───────────────────────────────────────────────── */
+        .att-size {
+            font-size: 0.72em;
+            color: #8b7355;
+            margin-bottom: 4px;
+        }
+
+        /* ── Chit Name ───────────────────────────────────────────────── */
+        .att-chit {
+            font-size: 0.75em;
+            color: #6b5a4a;
+            text-align: center;
+            max-width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .att-chit a {
+            color: #6b5a4a;
+            text-decoration: none;
+        }
+        .att-chit a:hover {
+            text-decoration: underline;
+            color: #008080;
+        }
+
+        /* ── Selection Checkbox ──────────────────────────────────────── */
+        .att-check {
+            position: absolute;
+            top: 6px;
+            left: 6px;
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+            opacity: 0;
+            transition: opacity 0.15s;
+        }
+        .att-card:hover .att-check,
+        .att-card.selected .att-check {
+            opacity: 1;
+        }
+
+        /* ── Empty State ─────────────────────────────────────────────── */
+        .att-empty {
+            text-align: center;
+            padding: 40px 20px;
+            font-style: italic;
+            color: #8b7355;
+            font-size: 1.1em;
+        }
+
+        /* ── Preview Modal ───────────────────────────────────────────── */
+        .att-modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.6);
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .att-modal {
+            background: #fffaf0;
+            border: 2px solid #6b4e31;
+            border-radius: 10px;
+            max-width: 700px;
+            width: 100%;
+            max-height: 85vh;
+            overflow-y: auto;
+            padding: 24px;
+            position: relative;
+            font-family: 'Lora', Georgia, serif;
+        }
+        .att-modal-close {
+            position: absolute;
+            top: 10px;
+            right: 14px;
+            font-size: 1.4em;
+            cursor: pointer;
+            color: #6b4e31;
+            background: none;
+            border: none;
+            font-family: inherit;
+        }
+        .att-modal-close:hover { color: #a0522d; }
+        .att-modal-preview {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 16px;
+            min-height: 120px;
+            background: rgba(139, 90, 43, 0.03);
+            border: 1px solid rgba(139, 90, 43, 0.1);
+            border-radius: 6px;
+            overflow: hidden;
+        }
+        .att-modal-preview img {
+            max-width: 100%;
+            max-height: 50vh;
+            object-fit: contain;
+        }
+        .att-modal-preview .att-modal-icon {
+            font-size: 5em;
+            padding: 30px;
+        }
+        .att-modal-details {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 6px 14px;
+            font-size: 0.9em;
+        }
+        .att-modal-details dt {
+            font-weight: 600;
+            color: #5a4a3a;
+        }
+        .att-modal-details dd {
+            margin: 0;
+            color: #1a1208;
+            word-break: break-all;
+        }
+        .att-modal-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 16px;
+            justify-content: flex-end;
+        }
+
+        /* ── Responsive ──────────────────────────────────────────────── */
+        @media (max-width: 600px) {
+            .attachments-grid {
+                grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+                gap: 10px;
+            }
+            .att-thumb {
+                width: 70px;
+                height: 70px;
+            }
+            .att-card {
+                padding: 8px 6px 8px;
+            }
+            .attachments-toolbar {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            .attachments-toolbar .bulk-actions {
+                margin-left: 0;
+            }
+            .att-controls {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 8px;
+            }
+            .att-controls select,
+            .att-controls .att-search {
+                width: 100%;
+                max-width: none;
+            }
+            .att-modal {
+                padding: 16px;
+                max-width: 95vw;
+            }
+        }
+    </style>
+</head>
+<body data-page-title="All Attachments" data-page-icon="📎">
+
+    <div class="settings-panel">
+        <!-- Toolbar: count + selection + bulk actions -->
+        <div class="attachments-toolbar">
+            <div class="attachments-count" id="att-count"></div>
+            <span class="selected-count" id="selected-count"></span>
+            <div class="bulk-actions" id="bulk-actions" style="display:none;">
+                <button class="cwoc-btn danger" id="bulk-delete-btn">
+                    <i class="fas fa-trash-alt"></i> Delete Selected
+                </button>
+            </div>
+        </div>
+
+        <!-- Filter/Sort Controls -->
+        <div class="att-controls">
+            <label for="att-filter-type">Type:</label>
+            <select id="att-filter-type">
+                <option value="all">All</option>
+                <option value="image">Images</option>
+                <option value="document">Documents</option>
+                <option value="audio">Audio</option>
+                <option value="video">Video</option>
+                <option value="archive">Archives</option>
+                <option value="other">Other</option>
+            </select>
+
+            <label for="att-filter-size-min">Size:</label>
+            <input type="number" id="att-filter-size-min" class="att-search" placeholder="Min" min="0" step="0.1" style="width:70px;min-width:70px;max-width:70px;" />
+            <span style="font-size:0.82em;color:#5a4a3a;">–</span>
+            <input type="number" id="att-filter-size-max" class="att-search" placeholder="Max" min="0" step="0.1" style="width:70px;min-width:70px;max-width:70px;" />
+            <span style="font-size:0.75em;color:#8b7355;">MB</span>
+
+            <label for="att-sort">Sort:</label>
+            <select id="att-sort">
+                <option value="uploaded_desc">Newest First</option>
+                <option value="uploaded_asc">Oldest First</option>
+                <option value="name_asc">Name A–Z</option>
+                <option value="name_desc">Name Z–A</option>
+                <option value="size_desc">Largest First</option>
+                <option value="size_asc">Smallest First</option>
+            </select>
+
+            <input type="text" class="att-search" id="att-search" placeholder="Search filename…" />
+        </div>
+
+        <div id="att-grid-wrap"></div>
+    </div>
+
+    <!-- ── Shared scripts ────────────────────────────────────────────────── -->
+    <script src="/frontend/js/shared/shared-auth.js"></script>
+    <script src="/frontend/js/shared/shared-utils.js"></script>
+    <script src="/frontend/js/shared/shared-touch.js"></script>
+    <script src="/frontend/js/shared/shared-checklist.js"></script>
+    <script src="/frontend/js/shared/shared-sort.js"></script>
+    <script src="/frontend/js/shared/shared-indicators.js"></script>
+    <script src="/frontend/js/shared/shared-calendar.js"></script>
+    <script src="/frontend/js/shared/shared-tags.js"></script>
+    <script src="/frontend/js/shared/shared-recurrence.js"></script>
+    <script src="/frontend/js/shared/shared-geocoding.js"></script>
+    <script src="/frontend/js/shared/shared-qr.js"></script>
+    <script src="/frontend/js/shared/shared-hotkeys.js"></script>
+    <script src="/frontend/js/shared/shared-mobile.js"></script>
+    <script src="/frontend/js/shared/shared-weather.js"></script>
+    <script src="/frontend/js/shared/shared-alarms.js"></script>
+    <script src="/frontend/js/shared/shared-habits.js"></script>
+    <script src="/frontend/js/shared/shared.js"></script>
+    <script src="/frontend/js/shared/shared-calculator.js"></script>
+    <script src="/frontend/js/pages/shared-page.js"></script>
+
+    <!-- ── Page-specific script ──────────────────────────────────────────── -->
+    <script src="/frontend/js/pages/attachments.js"></script>
+
+    <!-- ── PWA ───────────────────────────────────────────────────────────── -->
+    <script src="/pwa/pwa-register.js"></script>
+</body>
+</html>

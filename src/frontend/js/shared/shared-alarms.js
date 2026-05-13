@@ -268,7 +268,7 @@ function _sharedBrowserNotif(title, body, chitId) {
   if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
   try {
     var n = new Notification(title, { body: body, icon: '/static/cwod_logo-favicon.png', tag: 'cwoc-' + (chitId || 'alert'), renotify: true, requireInteraction: true, silent: true });
-    n.onclick = function() { window.focus(); if (chitId) window.location.href = '/editor?id=' + chitId; };
+    n.onclick = function() { window.focus(); if (chitId) window.location.href = '/frontend/html/editor.html?id=' + chitId; };
   } catch (e) {}
 }
 

@@ -1,0 +1,1 @@
+Sort order (field + direction) is now saved per view tab in the backend, so it persists across devices and page reloads. Switching tabs restores the last-used sort for that view. A "Reset All Sort Orders" button was added under Display Options in Settings to clear all saved sort preferences and manual item ordering.

@@ -243,7 +243,7 @@ function _showAddIndicatorPicker() {
     _renderAddIndicatorModal(modal, available, close);
   }).catch(function(err) {
     console.error('[editor-health] Failed to fetch objects for picker:', err);
-    modal.innerHTML = '<h3 style="margin:0 0 12px 0;color:#4a2c2a;font-size:1.1em;">Add Indicator</h3>' +
+    modal.innerHTML = '<h3 style="margin:0 0 12px 0;color:#4a2c2a;font-size:1.1em;">Add Custom Object</h3>' +
       '<p style="color:#b22222;">Failed to load objects.</p>' +
       '<div style="display:flex;justify-content:flex-end;margin-top:16px;"><button onclick="this.closest(\'.indicator-picker-overlay\').remove()" style="padding:6px 14px;font-family:Lora,Georgia,serif;font-size:0.9em;background:#e8dcc8;color:#4a2c2a;border:1px solid #a0522d;border-radius:4px;cursor:pointer;">Close</button></div>';
   });
@@ -254,81 +254,176 @@ function _showAddIndicatorPicker() {
  */
 function _renderAddIndicatorModal(modal, available, closeFn) {
   modal.innerHTML = '';
+  var selected = {}; // id → obj
 
   // Title
   var titleEl = document.createElement('h3');
   titleEl.style.cssText = 'margin:0 0 12px 0;color:#4a2c2a;font-size:1.1em;';
-  titleEl.textContent = 'Add Indicator';
+  titleEl.textContent = 'Add Custom Object';
   modal.appendChild(titleEl);
 
-  // List of available indicators grouped by category
   if (available.length === 0) {
     var emptyMsg = document.createElement('p');
     emptyMsg.style.cssText = 'color:#6b4e31;font-size:0.95em;margin:8px 0;';
-    emptyMsg.textContent = 'No additional indicators available.';
+    emptyMsg.textContent = 'No additional custom objects available.';
     modal.appendChild(emptyMsg);
   } else {
-    // Group by category
-    var groups = {};
-    var groupOrder = [];
-    for (var i = 0; i < available.length; i++) {
-      var catKey = available[i].sub_type || available[i].type || 'Other';
-      if (!groups[catKey]) { groups[catKey] = []; groupOrder.push(catKey); }
-      groups[catKey].push(available[i]);
-    }
+    // Search input
+    var searchInput = document.createElement('input');
+    searchInput.type = 'text';
+    searchInput.placeholder = 'Search custom objects...';
+    searchInput.style.cssText = 'width:100%;padding:8px 10px;border:1px solid #8b5a2b;border-radius:5px;font-family:Lora,Georgia,serif;font-size:0.9em;background:#f5e6cc;color:#2b1e0f;box-sizing:border-box;margin-bottom:10px;';
+    modal.appendChild(searchInput);
 
     var list = document.createElement('div');
     list.style.cssText = 'overflow-y:auto;flex:1;';
 
-    for (var g = 0; g < groupOrder.length; g++) {
-      var catName = groupOrder[g];
-      var catItems = groups[catName];
+    function renderList(filter) {
+      list.innerHTML = '';
+      var lowerFilter = (filter || '').toLowerCase();
+      var isSearching = lowerFilter.length > 0;
 
-      // Category header
-      var catHeader = document.createElement('div');
-      catHeader.style.cssText = 'padding:8px 12px 4px;font-size:0.8em;font-weight:bold;color:#4a2c2a;background:#f0e6d3;border-bottom:1px solid #e8dcc8;cursor:pointer;user-select:none;';
-      catHeader.innerHTML = '<span style="font-size:0.9em;">▼</span> ' + catName + ' <span style="opacity:0.5;font-weight:normal;">(' + catItems.length + ')</span>';
-      list.appendChild(catHeader);
+      var typeGroups = {};
+      var typeOrder = [];
+      for (var i = 0; i < available.length; i++) {
+        var obj = available[i];
+        if (lowerFilter) {
+          var nameMatch = obj.name.toLowerCase().indexOf(lowerFilter) !== -1;
+          var typeMatch = (obj.type || '').toLowerCase().indexOf(lowerFilter) !== -1;
+          var subTypeMatch = (obj.sub_type || '').toLowerCase().indexOf(lowerFilter) !== -1;
+          if (!nameMatch && !typeMatch && !subTypeMatch) continue;
+        }
+        var type = obj.type || 'Other';
+        var subType = obj.sub_type || '';
+        if (!typeGroups[type]) { typeGroups[type] = {}; typeOrder.push(type); }
+        if (!typeGroups[type][subType]) typeGroups[type][subType] = [];
+        typeGroups[type][subType].push(obj);
+      }
 
-      var catBody = document.createElement('div');
-      list.appendChild(catBody);
+      if (typeOrder.length === 0) {
+        list.innerHTML = '<div style="text-align:center;padding:12px;color:#6b4e31;font-size:0.85em;opacity:0.7;">No matches.</div>';
+        return;
+      }
 
-      // Wire collapse
-      (function(header, body) {
-        header.addEventListener('click', function() {
-          var arrow = header.querySelector('span');
-          if (body.style.display === 'none') {
-            body.style.display = '';
-            arrow.textContent = '▼';
-          } else {
-            body.style.display = 'none';
-            arrow.textContent = '▶';
-          }
-        });
-      })(catHeader, catBody);
+      typeOrder.sort(function(a, b) { return a.localeCompare(b); });
 
-      for (var j = 0; j < catItems.length; j++) {
-        (function(obj) {
-          var item = document.createElement('div');
-          item.className = 'indicator-picker-item';
-          item.style.cssText = 'padding:8px 12px 8px 20px;cursor:pointer;border-bottom:1px solid #e8dcc8;color:#1a1208;font-size:0.9em;';
-          item.textContent = obj.name;
-          item.addEventListener('mouseenter', function() { item.style.background = '#f0e6d3'; });
-          item.addEventListener('mouseleave', function() { item.style.background = 'transparent'; });
-          item.addEventListener('click', function() {
-            _addPerChitIndicator(obj);
-            closeFn();
+      for (var t = 0; t < typeOrder.length; t++) {
+        var typeName = typeOrder[t];
+        var subTypes = typeGroups[typeName];
+        var typeCount = 0;
+        Object.keys(subTypes).forEach(function(st) { typeCount += subTypes[st].length; });
+
+        var typeHeader = document.createElement('div');
+        typeHeader.style.cssText = 'padding:8px 12px 4px;font-size:0.8em;font-weight:bold;color:#4a2c2a;background:#f0e6d3;border-bottom:1px solid #e8dcc8;cursor:pointer;user-select:none;';
+        typeHeader.innerHTML = '<span style="font-size:0.9em;">▼</span> ' + typeName + ' <span style="opacity:0.5;font-weight:normal;">(' + typeCount + ')</span>';
+        list.appendChild(typeHeader);
+
+        var typeBody = document.createElement('div');
+        list.appendChild(typeBody);
+
+        (function(header, body) {
+          header.addEventListener('click', function() {
+            var arrow = header.querySelector('span');
+            if (body.style.display === 'none') { body.style.display = ''; arrow.textContent = '▼'; }
+            else { body.style.display = 'none'; arrow.textContent = '▶'; }
           });
-          catBody.appendChild(item);
-        })(catItems[j]);
+        })(typeHeader, typeBody);
+
+        var sortedSubTypes = Object.keys(subTypes).sort(function(a, b) {
+          if (a === '') return -1; if (b === '') return 1; return a.localeCompare(b);
+        });
+
+        for (var s = 0; s < sortedSubTypes.length; s++) {
+          var stName = sortedSubTypes[s];
+          var stItems = subTypes[stName];
+          var targetContainer = typeBody;
+
+          if (stName) {
+            var stHeader = document.createElement('div');
+            stHeader.style.cssText = 'padding:5px 12px 3px 20px;font-size:0.75em;font-weight:600;color:#6b4e31;border-bottom:1px solid #f0e6d3;cursor:pointer;user-select:none;';
+            stHeader.innerHTML = '<span style="font-size:0.9em;">' + (isSearching ? '▼' : '▶') + '</span> ' + stName + ' <span style="opacity:0.5;font-weight:normal;">(' + stItems.length + ')</span>';
+            typeBody.appendChild(stHeader);
+
+            var stBody = document.createElement('div');
+            if (!isSearching) stBody.style.display = 'none';
+            typeBody.appendChild(stBody);
+
+            (function(header, body) {
+              header.addEventListener('click', function() {
+                var arrow = header.querySelector('span');
+                if (body.style.display === 'none') { body.style.display = ''; arrow.textContent = '▼'; }
+                else { body.style.display = 'none'; arrow.textContent = '▶'; }
+              });
+            })(stHeader, stBody);
+            targetContainer = stBody;
+          }
+
+          stItems.sort(function(a, b) { return a.name.localeCompare(b.name); });
+
+          for (var j = 0; j < stItems.length; j++) {
+            (function(obj) {
+              var item = document.createElement('label');
+              item.style.cssText = 'display:flex;align-items:center;gap:8px;padding:7px 12px 7px ' + (stName ? '36px' : '20px') + ';cursor:pointer;border-bottom:1px solid #e8dcc8;color:#1a1208;font-size:0.9em;';
+              var cb = document.createElement('input');
+              cb.type = 'checkbox';
+              cb.checked = !!selected[obj.id];
+              cb.style.cssText = 'width:16px;height:16px;accent-color:#8b5a2b;cursor:pointer;flex-shrink:0;';
+              cb.addEventListener('change', function() {
+                if (cb.checked) { selected[obj.id] = obj; } else { delete selected[obj.id]; }
+                updateAddBtn();
+              });
+              item.appendChild(cb);
+              var nameSpan = document.createElement('span');
+              nameSpan.textContent = obj.name;
+              item.appendChild(nameSpan);
+              item.addEventListener('mouseenter', function() { item.style.background = '#f0e6d3'; });
+              item.addEventListener('mouseleave', function() { item.style.background = 'transparent'; });
+              targetContainer.appendChild(item);
+            })(stItems[j]);
+          }
+        }
       }
     }
+
+    renderList('');
+
+    searchInput.addEventListener('input', function() {
+      renderList(searchInput.value);
+    });
+
     modal.appendChild(list);
+    setTimeout(function() { searchInput.focus(); }, 50);
   }
 
-  // Cancel button
+  // Button row: Add Selected + Cancel
   var btnRow = document.createElement('div');
-  btnRow.style.cssText = 'display:flex;justify-content:flex-end;margin-top:16px;';
+  btnRow.style.cssText = 'display:flex;justify-content:flex-end;gap:10px;margin-top:16px;';
+
+  var addBtn = document.createElement('button');
+  addBtn.textContent = 'Add Selected';
+  addBtn.style.cssText = 'padding:6px 14px;font-family:Lora,Georgia,serif;font-size:0.9em;background:linear-gradient(to bottom,#d4a373,#c8965a);color:#2b1e0f;border:1px solid #8b5a2b;border-radius:4px;cursor:pointer;opacity:0.5;pointer-events:none;';
+  addBtn.addEventListener('click', function() {
+    var ids = Object.keys(selected);
+    for (var k = 0; k < ids.length; k++) {
+      _addPerChitIndicator(selected[ids[k]]);
+    }
+    closeFn();
+  });
+  btnRow.appendChild(addBtn);
+
+  function updateAddBtn() {
+    var count = Object.keys(selected).length;
+    if (count > 0) {
+      addBtn.style.opacity = '1';
+      addBtn.style.pointerEvents = '';
+      addBtn.textContent = 'Add Selected (' + count + ')';
+    } else {
+      addBtn.style.opacity = '0.5';
+      addBtn.style.pointerEvents = 'none';
+      addBtn.textContent = 'Add Selected';
+    }
+  }
+
   var cancelBtn = document.createElement('button');
   cancelBtn.textContent = 'Cancel';
   cancelBtn.style.cssText = 'padding:6px 14px;font-family:Lora,Georgia,serif;font-size:0.9em;background:#e8dcc8;color:#4a2c2a;border:1px solid #a0522d;border-radius:4px;cursor:pointer;';
@@ -337,7 +432,6 @@ function _renderAddIndicatorModal(modal, available, closeFn) {
   cancelBtn.addEventListener('click', function() { closeFn(); });
   btnRow.appendChild(cancelBtn);
   modal.appendChild(btnRow);
-}
 }
 
 /**
@@ -555,6 +649,9 @@ async function _loadHealthData(chit) {
     groups[groupKey].push(obj);
   }
 
+  // Sort groups alphabetically
+  groupOrder.sort(function(a, b) { return a.localeCompare(b); });
+
   // Render each group as a collapsible section
   for (var g = 0; g < groupOrder.length; g++) {
     var groupName = groupOrder[g];
@@ -627,6 +724,9 @@ async function _loadHealthData(chit) {
       pcGroups[pcGroupKey].push(pcObj);
     }
 
+    // Sort per-chit groups alphabetically
+    pcGroupOrder.sort(function(a, b) { return a.localeCompare(b); });
+
     for (var pg = 0; pg < pcGroupOrder.length; pg++) {
       var pcGroupName = pcGroupOrder[pg];
       var pcGroupItems = pcGroups[pcGroupName];
@@ -675,7 +775,7 @@ async function _loadHealthData(chit) {
   // ── "+ Add Indicator" button ─────────────────────────────────────────────────
   var addBtn = document.createElement('button');
   addBtn.className = 'zone-button indicator-add-btn';
-  addBtn.textContent = '+ Add Indicator';
+  addBtn.textContent = '+ Custom Object';
   addBtn.style.cssText = 'margin-top:10px;align-self:flex-start;';
   addBtn.addEventListener('click', function() {
     _showAddIndicatorPicker();

@@ -61,6 +61,31 @@ const weatherIcons = {
   99: "⛈️",
 };
 
+// WMO weather code descriptions
+const weatherDescriptions = {
+  0: "Clear sky",
+  1: "Mainly clear",
+  2: "Partly cloudy",
+  3: "Overcast",
+  45: "Foggy",
+  48: "Depositing rime fog",
+  51: "Light drizzle",
+  53: "Moderate drizzle",
+  55: "Dense drizzle",
+  61: "Slight rain",
+  63: "Moderate rain",
+  65: "Heavy rain",
+  71: "Slight snow",
+  73: "Moderate snow",
+  75: "Heavy snow",
+  80: "Slight rain showers",
+  81: "Moderate rain showers",
+  82: "Violent rain showers",
+  95: "Thunderstorm",
+  96: "Thunderstorm with slight hail",
+  99: "Thunderstorm with heavy hail",
+};
+
 // Default color palette — references shared _cwocDefaultColors from shared-utils.js
 // Adds "Transparent" as the first option (editor-specific, not in shared palette)
 const defaultColors = [
@@ -224,10 +249,12 @@ function _initAutoCompleteChecklist(chit) {
   if (!btn) return;
 
   // Determine if enabled from chit data
-  if (chit && (chit.auto_complete_checklist === true || chit.auto_complete_checklist === 'true' || chit.auto_complete_checklist === '1' || chit.auto_complete_checklist === 1)) {
-    _autoCompleteChecklistEnabled = true;
-  } else {
+  // Default to true when in a project (null/undefined means not explicitly set)
+  if (chit && (chit.auto_complete_checklist === false || chit.auto_complete_checklist === 'false' || chit.auto_complete_checklist === '0' || chit.auto_complete_checklist === 0)) {
     _autoCompleteChecklistEnabled = false;
+  } else {
+    // Default to true (covers: true, null, undefined — i.e. new chits in a project)
+    _autoCompleteChecklistEnabled = true;
   }
 
   _updateAutoCompleteBtn();

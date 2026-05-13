@@ -233,6 +233,8 @@ def _extract_weather_for_date(forecast_daily, focus_date):
         "low": forecast_daily.get("temperature_2m_min", [])[idx] if idx < len(forecast_daily.get("temperature_2m_min", [])) else None,
         "precipitation": forecast_daily.get("precipitation_sum", [])[idx] if idx < len(forecast_daily.get("precipitation_sum", [])) else None,
         "weather_code": forecast_daily.get("weathercode", [])[idx] if idx < len(forecast_daily.get("weathercode", [])) else None,
+        "wind_gusts": forecast_daily.get("wind_gusts_10m_max", [])[idx] if idx < len(forecast_daily.get("wind_gusts_10m_max", [])) else None,
+        "wind_speed": forecast_daily.get("wind_speed_10m_max", [])[idx] if idx < len(forecast_daily.get("wind_speed_10m_max", [])) else None,
     }
 
 
@@ -251,7 +253,7 @@ async def _fetch_weather_for_location(lat, lon, days=16):
     url = (
         f"https://api.open-meteo.com/v1/forecast"
         f"?latitude={lat}&longitude={lon}"
-        f"&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_sum"
+        f"&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_gusts_10m_max,wind_speed_10m_max"
         f"&timezone=auto&forecast_days={days}"
     )
     loop = asyncio.get_event_loop()
@@ -552,6 +554,9 @@ async def _alert_push_loop():
     # Dedup set: tracks fired alert keys for the current day
     _fired_keys = set()
     _fired_date = ""
+    # Weather notification value tracking: only re-notify if value shifts by 5+
+    # Key: "weather-{chit_id}-{idx}", Value: last notified display value (int)
+    _weather_last_notified = {}
 
     while True:
         try:
@@ -694,6 +699,235 @@ async def _alert_push_loop():
                     elif alert_type == "notification":
                         value = alert.get("value")
                         unit = alert.get("unit")
+
+                        # ── Weather notifications — check forecast against threshold ──
+                        if unit == "weather":
+                            weather_condition = alert.get("weather_condition")
+                            weather_threshold = alert.get("weather_threshold")
+                            if not weather_condition:
+                                continue
+                            key = f"weather-notif-{chit_id}-{idx}-{today_str}"
+                            if key in _fired_keys:
+                                continue
+                            # Need weather_data for this chit — re-query it
+                            try:
+                                wconn = sqlite3.connect(DB_PATH)
+                                wcur = wconn.cursor()
+                                wcur.execute("SELECT weather_data FROM chits WHERE id = ?", (chit_id,))
+                                wrow = wcur.fetchone()
+                                wconn.close()
+                                if not wrow or not wrow[0]:
+                                    continue
+                                wd = json.loads(wrow[0]) if isinstance(wrow[0], str) else wrow[0]
+                            except Exception:
+                                continue
+                            if not wd:
+                                continue
+
+                            # Determine user's unit system
+                            try:
+                                uconn = sqlite3.connect(DB_PATH)
+                                ucur = uconn.cursor()
+                                ucur.execute("SELECT unit_system FROM settings WHERE user_id = ?", (owner_id,))
+                                urow = ucur.fetchone()
+                                uconn.close()
+                                user_metric = (urow[0] == "metric") if urow and urow[0] else False
+                            except Exception:
+                                user_metric = False
+
+                            condition_met = False
+                            body = ""
+
+                            if weather_condition in ("high_above", "high_below", "low_above", "low_below"):
+                                if wd.get("high") is None or wd.get("low") is None or weather_threshold is None:
+                                    continue
+                                high_c = wd["high"]
+                                low_c = wd["low"]
+                                if user_metric:
+                                    high_display = round(high_c)
+                                    low_display = round(low_c)
+                                else:
+                                    high_display = round(high_c * 9 / 5 + 32)
+                                    low_display = round(low_c * 9 / 5 + 32)
+                                unit_label = "°C" if user_metric else "°F"
+                                if weather_condition == "high_above" and high_display > weather_threshold:
+                                    condition_met = True
+                                    body = f"high ({high_display}{unit_label}) above {weather_threshold}{unit_label}"
+                                elif weather_condition == "high_below" and high_display < weather_threshold:
+                                    condition_met = True
+                                    body = f"high ({high_display}{unit_label}) below {weather_threshold}{unit_label}"
+                                elif weather_condition == "low_above" and low_display > weather_threshold:
+                                    condition_met = True
+                                    body = f"low ({low_display}{unit_label}) above {weather_threshold}{unit_label}"
+                                elif weather_condition == "low_below" and low_display < weather_threshold:
+                                    condition_met = True
+                                    body = f"low ({low_display}{unit_label}) below {weather_threshold}{unit_label}"
+
+                            elif weather_condition == "rain":
+                                wcode = wd.get("weather_code")
+                                precip_mode = alert.get("weather_precip_mode", "any")
+                                if precip_mode == "more_than":
+                                    precip_mm = wd.get("precipitation")
+                                    if precip_mm is None or weather_threshold is None:
+                                        continue
+                                    rain_codes = (61, 63, 65, 66, 67, 80, 81, 82, 51, 53, 55, 56, 57)
+                                    is_rain = wcode is not None and wcode in rain_codes
+                                    if user_metric:
+                                        precip_display = round(precip_mm, 1)
+                                        p_unit = "mm"
+                                    else:
+                                        precip_display = round(precip_mm / 25.4, 1)
+                                        p_unit = "in"
+                                    if is_rain and precip_display > weather_threshold:
+                                        condition_met = True
+                                        body = f"rain ({precip_display} {p_unit}) over {weather_threshold} {p_unit}"
+                                else:
+                                    if wcode is None:
+                                        continue
+                                    if wcode in (61, 63, 65, 66, 67, 80, 81, 82, 51, 53, 55, 56, 57):
+                                        condition_met = True
+                                        body = "rain in forecast"
+
+                            elif weather_condition == "snow":
+                                wcode = wd.get("weather_code")
+                                precip_mode = alert.get("weather_precip_mode", "any")
+                                if precip_mode == "more_than":
+                                    precip_mm = wd.get("precipitation")
+                                    if precip_mm is None or weather_threshold is None:
+                                        continue
+                                    snow_codes = (71, 73, 75, 77, 85, 86)
+                                    is_snow = wcode is not None and wcode in snow_codes
+                                    if user_metric:
+                                        precip_display = round(precip_mm, 1)
+                                        p_unit = "mm"
+                                    else:
+                                        precip_display = round(precip_mm / 25.4, 1)
+                                        p_unit = "in"
+                                    if is_snow and precip_display > weather_threshold:
+                                        condition_met = True
+                                        body = f"snow ({precip_display} {p_unit}) over {weather_threshold} {p_unit}"
+                                else:
+                                    if wcode is None:
+                                        continue
+                                    if wcode in (71, 73, 75, 77, 85, 86):
+                                        condition_met = True
+                                        body = "snow in forecast"
+
+                            elif weather_condition == "hail":
+                                wcode = wd.get("weather_code")
+                                precip_mode = alert.get("weather_precip_mode", "any")
+                                if precip_mode == "more_than":
+                                    precip_mm = wd.get("precipitation")
+                                    if precip_mm is None or weather_threshold is None:
+                                        continue
+                                    hail_codes = (96, 99)
+                                    is_hail = wcode is not None and wcode in hail_codes
+                                    if user_metric:
+                                        precip_display = round(precip_mm, 1)
+                                        p_unit = "mm"
+                                    else:
+                                        precip_display = round(precip_mm / 25.4, 1)
+                                        p_unit = "in"
+                                    if is_hail and precip_display > weather_threshold:
+                                        condition_met = True
+                                        body = f"hail ({precip_display} {p_unit}) over {weather_threshold} {p_unit}"
+                                else:
+                                    if wcode is None:
+                                        continue
+                                    if wcode in (96, 99):
+                                        condition_met = True
+                                        body = "hail in forecast"
+
+                            elif weather_condition == "precipitation":
+                                wcode = wd.get("weather_code")
+                                precip_mode = alert.get("weather_precip_mode", "any")
+                                if precip_mode == "more_than":
+                                    precip_mm = wd.get("precipitation")
+                                    if precip_mm is None or weather_threshold is None:
+                                        continue
+                                    if user_metric:
+                                        precip_display = round(precip_mm, 1)
+                                        p_unit = "mm"
+                                    else:
+                                        precip_display = round(precip_mm / 25.4, 1)
+                                        p_unit = "in"
+                                    if precip_display > weather_threshold:
+                                        condition_met = True
+                                        body = f"precipitation ({precip_display} {p_unit}) over {weather_threshold} {p_unit}"
+                                else:
+                                    if wcode is None:
+                                        continue
+                                    all_precip_codes = (51,53,55,56,57,61,63,65,66,67,71,73,75,77,80,81,82,85,86,95,96,99)
+                                    if wcode in all_precip_codes:
+                                        condition_met = True
+                                        body = "precipitation in forecast"
+
+                            elif weather_condition == "wind_above":
+                                wind_gusts = wd.get("wind_gusts")
+                                wind_speed = wd.get("wind_speed")
+                                # Use the higher of sustained wind and gusts
+                                wind_max = None
+                                if wind_gusts is not None and wind_speed is not None:
+                                    wind_max = max(wind_gusts, wind_speed)
+                                elif wind_gusts is not None:
+                                    wind_max = wind_gusts
+                                elif wind_speed is not None:
+                                    wind_max = wind_speed
+                                if wind_max is None or weather_threshold is None:
+                                    continue
+                                if user_metric:
+                                    wind_display = round(wind_max)
+                                    wind_unit = "km/h"
+                                else:
+                                    wind_display = round(wind_max * 0.621371)
+                                    wind_unit = "mph"
+                                if wind_display > weather_threshold:
+                                    condition_met = True
+                                    body = f"wind ({wind_display} {wind_unit}) over {weather_threshold} {wind_unit}"
+
+                            if not condition_met:
+                                continue
+
+                            # ── 5-unit shift threshold for numeric conditions ──
+                            # For temp/wind/precip-more-than: only re-notify if value shifted by 5+ from last notification
+                            weather_track_key = f"weather-{chit_id}-{idx}"
+                            precip_mode_check = alert.get("weather_precip_mode", "any")
+                            if weather_condition in ("high_above", "high_below", "low_above", "low_below", "wind_above"):
+                                # Determine the current relevant value
+                                if weather_condition.startswith("high"):
+                                    current_val = high_display
+                                elif weather_condition.startswith("low"):
+                                    current_val = low_display
+                                else:
+                                    current_val = wind_display
+                                # Check if we've notified before and if shift is < 5
+                                if weather_track_key in _weather_last_notified:
+                                    last_val = _weather_last_notified[weather_track_key]
+                                    if abs(current_val - last_val) < 5:
+                                        _fired_keys.add(key)
+                                        continue
+                                _weather_last_notified[weather_track_key] = current_val
+                            elif weather_condition in ("precipitation", "rain", "snow", "hail") and precip_mode_check == "more_than":
+                                # For precip "more than" mode, use 5-unit shift on the precip value
+                                if weather_track_key in _weather_last_notified:
+                                    last_val = _weather_last_notified[weather_track_key]
+                                    if abs(precip_display - last_val) < 5:
+                                        _fired_keys.add(key)
+                                        continue
+                                _weather_last_notified[weather_track_key] = precip_display
+                            else:
+                                # Rain/snow/hail/precip "any" mode: just use daily dedup
+                                pass
+
+                            _fired_keys.add(key)
+                            _send_chit_push(owner_id, chit_id, chit_title, "Weather Alert:", body)
+                            try:
+                                _send_chit_ntfy(owner_id, chit_id, chit_title, "Weather Alert:", body)
+                            except Exception as e:
+                                logger.warning(f"Ntfy failed for weather notif {chit_id}[{idx}]: {e}")
+                            sent_count += 1
+                            continue
+
                         if not value or not unit:
                             continue
 

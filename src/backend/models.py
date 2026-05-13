@@ -242,6 +242,10 @@ class PasswordChange(BaseModel):
     current_password: str
     new_password: str
 
+class PrivatePgpKeyRequest(BaseModel):
+    password: str
+    private_pgp_key: Optional[str] = None
+
 
 # ── ICS Import Models ────────────────────────────────────────────────────
 
@@ -339,6 +343,17 @@ class BundleRuleAssociate(BaseModel):
 
 
 # ── Custom Objects Models ────────────────────────────────────────────────
+
+class CustomZoneCreate(BaseModel):
+    name: str
+
+class CustomZoneUpdate(BaseModel):
+    name: Optional[str] = None
+    sort_order: Optional[int] = None
+
+class BulkReorderRequest(BaseModel):
+    object_ids: List[str]
+
 
 class CustomObjectCreate(BaseModel):
     type: str

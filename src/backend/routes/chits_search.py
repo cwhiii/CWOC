@@ -87,6 +87,15 @@ def _search_filter_chits(chits_list, query_str):
             elif q_str[i:i+2] == '||':
                 tokens.append(('OP', '||'))
                 i += 2
+            elif q_str[i] in '&|':
+                # Lone & or | (not && or ||) — treat as literal text
+                j = i + 1
+                while j < len(q_str) and q_str[j] not in ' \t()!#':
+                    if q_str[j:j+2] in ('&&', '||'):
+                        break
+                    j += 1
+                tokens.append(('TEXT', q_str[i:j]))
+                i = j
             elif q_str[i] == '!' and i + 1 < len(q_str) and q_str[i+1] in '#(':
                 tokens.append(('OP', '!'))
                 i += 1
@@ -406,6 +415,15 @@ def search_chits(request: Request, q: Optional[str] = Query(None)):
             elif q_str[i:i+2] == '||':
                 tokens.append(('OP', '||'))
                 i += 2
+            elif q_str[i] in '&|':
+                # Lone & or | (not && or ||) — treat as literal text
+                j = i + 1
+                while j < len(q_str) and q_str[j] not in ' \t()!#':
+                    if q_str[j:j+2] in ('&&', '||'):
+                        break
+                    j += 1
+                tokens.append(('TEXT', q_str[i:j]))
+                i = j
             elif q_str[i] == '!' and i + 1 < len(q_str) and q_str[i+1] in '#(':
                 # NOT operator before a tag or group
                 tokens.append(('OP', '!'))
@@ -882,6 +900,20 @@ def search_chits(request: Request, q: Optional[str] = Query(None)):
             if matched_fields and chit["id"] not in seen_ids:
                 seen_ids.add(chit["id"])
                 results.append({"chit": chit, "matched_fields": matched_fields})
+
+        # Sort results: title matches first, then others
+        def _sort_key(result):
+            mf = result.get("matched_fields", [])
+            # Title match = highest priority (sort value 0)
+            if "title" in mf:
+                return 0
+            return 1
+
+        results.sort(key=_sort_key)
+
+        # Add title_match flag for frontend display logic
+        for r in results:
+            r["title_match"] = "title" in r.get("matched_fields", [])
 
         # Enrich with assigned_to_display_name
         _enrich_assigned_to_display_names(cursor, [r["chit"] for r in results])

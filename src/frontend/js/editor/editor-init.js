@@ -163,6 +163,7 @@ function resetEditorForNewChit() {
   if (habitGoalEl) habitGoalEl.value = 1;
   var showOnCalCb = document.getElementById('showOnCalendar');
   if (showOnCalCb) showOnCalCb.checked = true;
+  if (typeof _updateHideCalendarButton === 'function') _updateHideCalendarButton(false);
   // Reset habit reset period
   var resetValEl = document.getElementById('habitResetValue');
   if (resetValEl) resetValEl.value = 1;
@@ -183,7 +184,7 @@ function resetEditorForNewChit() {
 
   // Show weather placeholder for new chits
   const cws = document.getElementById("compactWeatherSection");
-  if (cws) { cws.classList.add('weather-placeholder'); cws.innerHTML = `<div style="padding:8px;font-family:Lora, Georgia, serif;color:#8b5a2b;font-size:0.85em;opacity:0.7;">📍 Date &amp; location needed for weather</div>`; }
+  if (cws) { cws.classList.add('weather-placeholder'); cws.innerHTML = '<div style="padding:8px;font-family:Lora, Georgia, serif;color:#8b5a2b;font-size:0.85em;opacity:0.7;">🗓️ Date &amp; location needed for weather 📍</div>'; }
 
   // Load saved locations for the dropdown (but do NOT auto-populate)
   loadSavedLocations();
@@ -318,14 +319,17 @@ function _renderOwnerChip(chit) {
   if (!container) return;
   container.innerHTML = '';
 
+  // Don't show owner chip if the owner is the current user
+  var currentUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+  if (currentUser && chit.owner_id && currentUser.user_id === chit.owner_id) {
+    return;
+  }
+
   var displayName = chit.owner_display_name || '(Unknown)';
   var profileImageUrl = null;
 
   // Try to resolve the owner's profile image
-  var currentUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
-  if (currentUser && chit.owner_id && currentUser.user_id === chit.owner_id) {
-    profileImageUrl = currentUser.profile_image_url || null;
-  } else if (typeof _allUsersCache !== 'undefined' && Array.isArray(_allUsersCache)) {
+  if (typeof _allUsersCache !== 'undefined' && Array.isArray(_allUsersCache)) {
     var ownerUser = _allUsersCache.find(function (u) {
       return (u.id || u.user_id) === chit.owner_id;
     });
@@ -338,18 +342,13 @@ function _renderOwnerChip(chit) {
 }
 
 /**
- * Render the owner chip for a new chit — shows the current user's own chip.
+ * Render the owner chip for a new chit — don't show since new chits are always owned by self.
  */
 function _renderOwnerChipForCurrentUser() {
   var container = document.getElementById('cwoc-owner-chip-container');
   if (!container) return;
   container.innerHTML = '';
-
-  var currentUser = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
-  var displayName = (currentUser && currentUser.display_name) ? currentUser.display_name : '(Unknown)';
-  var profileImageUrl = (currentUser && currentUser.profile_image_url) ? currentUser.profile_image_url : null;
-
-  container.appendChild(_buildOwnerChipElement(displayName, profileImageUrl));
+  // Owner is self — don't show the chip
 }
 
 /**
@@ -362,6 +361,7 @@ function _renderOwnerChipForCurrentUser() {
 function _buildOwnerChipElement(displayName, profileImageUrl) {
   var chip = document.createElement('span');
   chip.className = 'people-chip cwoc-owner-chip';
+  chip.title = 'Owner: ' + displayName;
 
   var thumbEl = document.createElement('span');
   thumbEl.className = 'chip-thumb';
@@ -457,6 +457,10 @@ async function loadChitData(chitId) {
     var showOnCalCb = document.getElementById('showOnCalendar');
     if (showOnCalCb) {
       showOnCalCb.checked = chit.show_on_calendar !== false;
+    }
+    // Update the title bar hide-in-calendar button state
+    if (typeof _updateHideCalendarButton === 'function') {
+      _updateHideCalendarButton(chit.show_on_calendar === false || chit.show_on_calendar === 0);
     }
 
     // Load habit reset period — format "N:UNIT" (e.g., "3:DAILY")
@@ -676,6 +680,7 @@ async function loadChitData(chitId) {
 
     _alertsFromChit(chit);
     _loadHealthData(chit);
+    _loadCustomZones(chit);
 
     const locationInput = document.getElementById("location");
     if (locationInput) {
@@ -745,18 +750,18 @@ async function loadChitData(chitId) {
     }
 
     // Fetch weather for the chit's location
-    const hasDate = !!(chit.start_datetime || chit.due_datetime);
+    const hasDate = !!(chit.start_datetime || chit.due_datetime || chit.point_in_time);
     const compactWeatherSection = document.getElementById("compactWeatherSection");
     if (chit.location && hasDate) {
       _fetchWeatherData(chit.location).catch(() => {});
     } else if (compactWeatherSection) {
       compactWeatherSection.classList.add('weather-placeholder');
       if (chit.location && !hasDate) {
-        compactWeatherSection.innerHTML = `<div style="padding:8px;font-family:Lora, Georgia, serif;color:#8b5a2b;font-size:0.85em;opacity:0.7;">📅 Add a date for weather</div>`;
+        compactWeatherSection.innerHTML = `<div style="padding:8px;font-family:Lora, Georgia, serif;color:#8b5a2b;font-size:0.85em;opacity:0.7;">🗓️ Add a date for weather</div>`;
       } else if (!chit.location && hasDate) {
         compactWeatherSection.innerHTML = `<div style="padding:8px;font-family:Lora, Georgia, serif;color:#8b5a2b;font-size:0.85em;opacity:0.7;">📍 Add a location for weather</div>`;
       } else {
-        compactWeatherSection.innerHTML = `<div style="padding:8px;font-family:Lora, Georgia, serif;color:#8b5a2b;font-size:0.85em;opacity:0.7;">📍 Date &amp; location needed for weather</div>`;
+        compactWeatherSection.innerHTML = `<div style="padding:8px;font-family:Lora, Georgia, serif;color:#8b5a2b;font-size:0.85em;opacity:0.7;">🗓️ Date &amp; location needed for weather 📍</div>`;
       }
     }
 
@@ -1239,10 +1244,10 @@ document.addEventListener("DOMContentLoaded", function () {
   loadSavedLocationsDropdown();
   loadCompactLocationDropdown();
 
-  initializeFlatpickr("#start_datetime", { dateFormat: "Y-M-d", disableMobile: true, onChange: function() { _updateRecurrenceLabels(); } });
+  initializeFlatpickr("#start_datetime", { dateFormat: "Y-M-d", disableMobile: true, onChange: function() { _updateRecurrenceLabels(); _refreshWeatherOnDateChange(); } });
   initializeFlatpickr("#end_datetime", { dateFormat: "Y-M-d", disableMobile: true });
-  initializeFlatpickr("#due_datetime", { dateFormat: "Y-M-d", disableMobile: true, onChange: function() { _updateRecurrenceLabels(); } });
-  initializeFlatpickr("#point_in_time_date", { dateFormat: "Y-M-d", disableMobile: true });
+  initializeFlatpickr("#due_datetime", { dateFormat: "Y-M-d", disableMobile: true, onChange: function() { _updateRecurrenceLabels(); _refreshWeatherOnDateChange(); } });
+  initializeFlatpickr("#point_in_time_date", { dateFormat: "Y-M-d", disableMobile: true, onChange: function() { _refreshWeatherOnDateChange(); } });
   initializeFlatpickr("#recurrenceUntil", { dateFormat: "Y-M-d", disableMobile: true });
 
   // Time buttons — define .value property so save/load code works unchanged.
@@ -1518,6 +1523,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
   // Initialize health data for new chits (dynamically renders indicator fields)
   _loadHealthData({});
+  if (!chitId || window.isNewChit) {
+    _loadCustomZones({});
+  }
 
   setSaveButtonSaved();
 

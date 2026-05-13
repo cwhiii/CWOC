@@ -1,0 +1,1 @@
+Hide weather forecast placeholder on mobile in the chit editor — when date or location is missing, the compact weather section is now completely hidden instead of showing the "needed" message, keeping the mobile layout clean.

@@ -859,10 +859,14 @@ def _send_rule_notification(owner_id: str, chit_id: str, chit_title: str, messag
     # Ntfy
     try:
         from src.backend.routes.ntfy import send_ntfy_notification
+        from src.backend.schedulers import _get_server_base_url
+        base = _get_server_base_url()
+        ntfy_click = f"{base}/frontend/html/editor.html?id={chit_id}" if chit_id else None
         send_ntfy_notification(
             user_id=owner_id,
             title="CWOC Rule",
             body=message,
+            click_url=ntfy_click,
             tags="robot_face",
             priority=3,
         )

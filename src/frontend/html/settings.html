@@ -1070,6 +1070,10 @@
                         <label class="setting-subheader">View Order</label>
                         <button type="button" class="standard-button" style="width:100%;" onclick="_openArrangeViewsModal()">📋 Arrange Views</button>
                         <p class="setting-hint">Drag to reorder the tab bar on the dashboard.</p>
+
+                        <label class="setting-subheader">Sort Order</label>
+                        <button type="button" class="standard-button" style="width:100%;" onclick="_resetSortOrders()">🔄 Reset All Sort Orders</button>
+                        <p class="setting-hint">Clears saved sort preferences and manual item ordering for all views.</p>
                     </div>
                     <div class="setting-group">
                         <h3>🔁 Habits</h3>
@@ -1258,6 +1262,7 @@
 
                         <label class="setting-subheader">📎 Attachments</label>
                         <p class="setting-hint">Attachment limits are configured in Administration → Data Management.</p>
+                        <button class="standard-button" onclick="window.location.href='/attachments'" style="margin-top:6px;">📎 View All Attachments</button>
 
                     </div>
                 </div>
@@ -1337,8 +1342,10 @@
                             <label class="setting-subheader" style="margin-top:14px;">📋 Audit Log</label>
                             <button onclick="window.location.href='/frontend/html/audit-log.html'" class="standard-button" style="width:100%;margin-bottom:8px;">📋 Audit Log →</button>
 
-                            <label class="setting-subheader">🗑️ Trash</label>
-                            <button onclick="window.location.href='/frontend/html/trash.html'" class="standard-button" style="width:100%;margin-bottom:8px;">View Deleted Chits →</button>
+                            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+                                <button onclick="window.location.href='/frontend/html/trash.html'" class="standard-button" style="flex:1;">🗑️ Trash →</button>
+                                <button onclick="window.location.href='/frontend/html/custom-objects-editor.html'" class="standard-button" style="flex:1;">🧩 Custom Objects →</button>
+                            </div>
 
                             <label class="setting-subheader">📜 Audit Log Limits</label>
                             <label><input type="checkbox" id="audit-prune-enabled" checked onchange="toggleAuditPruneInputs(); setSaveButtonUnsaved();" /> Enable Pruning</label>

@@ -187,10 +187,10 @@ async def _resolve_chit_id(
 async def async_handle_create_chit(hass: HomeAssistant, call: ServiceCall) -> ServiceResponse:
     """Handle the create_chit service call."""
     title = call.data.get("title")
-    if not title:
-        raise HomeAssistantError("Title is required for create_chit")
 
-    payload: dict = {"title": title}
+    payload: dict = {}
+    if title:
+        payload["title"] = title
 
     if note := call.data.get("note"):
         payload["note"] = note

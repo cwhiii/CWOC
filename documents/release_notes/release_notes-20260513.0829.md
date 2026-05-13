@@ -1,0 +1,1 @@
+Quick weather modal description text made smaller (0.85→0.75em). Weather page day blocks now have gradient borders: high temp color on top, low temp color on bottom, gradient on the sides (using border-image).

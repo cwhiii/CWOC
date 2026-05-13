@@ -1,0 +1,1 @@
+Weather notifications: added "any precipitation" condition, and changed rain/snow/hail from binary to having "any" vs "more than X" modes. Users can now set a precipitation threshold (mm or inches) to only notify when accumulation exceeds a specific amount. The 5-unit shift threshold also applies to precipitation "more than" mode.

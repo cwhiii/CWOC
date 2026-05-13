@@ -1,0 +1,1 @@
+Calculator fixes: close button moved to right corner of title bar with larger tap target, fixed drag handler eating close button clicks/taps, and Insert button now inserts at cursor position in the last-focused text field instead of replacing the entire value.

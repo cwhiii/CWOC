@@ -1,0 +1,1 @@
+Fixed custom zones rendering twice on desktop. The init code was calling _loadCustomZones({}) unconditionally, then loadChitData() called it again for existing chits — both async calls raced and both rendered panels. Now _loadCustomZones is only called at init for new chits; existing chits get it from loadChitData only.

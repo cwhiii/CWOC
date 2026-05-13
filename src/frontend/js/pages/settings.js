@@ -1584,6 +1584,39 @@ function monitorChanges() {
   });
 }
 
+// ── Reset Sort Orders ────────────────────────────────────────────────────────
+
+async function _resetSortOrders() {
+  var confirmed = await cwocConfirm('This will clear all saved sort preferences and manual item ordering for every view. Are you sure?', {
+    title: 'Reset All Sort Orders',
+    confirmLabel: 'Reset',
+    danger: true
+  });
+  if (!confirmed) return;
+
+  if (typeof resetAllSortOrders === 'function') {
+    resetAllSortOrders().then(function() {
+      cwocToast('All sort orders reset');
+    }).catch(function(err) {
+      console.error('[Settings] Failed to reset sort orders:', err);
+      cwocToast('Failed to reset sort orders', 'error');
+    });
+  } else {
+    // Fallback: call the API directly
+    fetch('/api/sort-orders', { method: 'DELETE', credentials: 'same-origin' })
+      .then(function(res) {
+        if (res.ok) {
+          localStorage.removeItem('cwoc_manual_order');
+          localStorage.removeItem('cwoc_sort_preferences');
+          cwocToast('All sort orders reset');
+        } else {
+          cwocToast('Failed to reset sort orders', 'error');
+        }
+      })
+      .catch(function() { cwocToast('Failed to reset sort orders', 'error'); });
+  }
+}
+
 // ── DOMContentLoaded Init ────────────────────────────────────────────────────
 
 document.addEventListener("DOMContentLoaded", () => {

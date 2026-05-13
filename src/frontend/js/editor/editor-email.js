@@ -838,7 +838,7 @@ function _updateEmailButtons(status) {
     if (sendBtn) sendBtn.style.display = 'none';
     if (discardBtn) discardBtn.style.display = 'none';
     if (replyBtn) replyBtn.style.display = 'none';
-    if (forwardBtn) forwardBtn.style.display = 'none';
+    if (forwardBtn) forwardBtn.style.display = '';
     if (expandBtn) expandBtn.style.display = '';
   } else {
     if (sendBtn) sendBtn.style.display = 'none';
@@ -1027,6 +1027,12 @@ async function _emailSaveAndSendArchive() {
   }
 
   try {
+    // PGP encryption step — encrypt body before save if enabled
+    if (typeof _pgpPreSendEncrypt === 'function') {
+      var pgpOk = await _pgpPreSendEncrypt();
+      if (!pgpOk) return;
+    }
+
     // Save the chit first
     if (typeof saveChitAndStay === 'function') {
       cwocToast('Saving before send...', 'info');
@@ -1130,6 +1136,19 @@ function initEmailZone(chit) {
     _setupHtmlEmailView(chit.email_body_html, bodyEl);
   }
 
+  // PGP indicator: show a banner if the body is PGP-encrypted
+  var bodyText = chit.email_body_text || '';
+  if (bodyText.trim().startsWith('-----BEGIN PGP MESSAGE-----')) {
+    var pgpBanner = document.createElement('div');
+    pgpBanner.className = 'email-pgp-banner';
+    pgpBanner.innerHTML = '<i class="fas fa-lock"></i> This message was sent with PGP encryption.';
+    var emailContent = document.getElementById('emailContent');
+    if (emailContent && bodyEl) {
+      var bodyField = bodyEl.closest('.email-field');
+      if (bodyField) bodyField.insertBefore(pgpBanner, bodyField.firstChild);
+    }
+  }
+
   var status = chit.email_status || '';
   var isEmailChit = !!(chit.email_message_id || status);
 
@@ -1193,6 +1212,10 @@ function initEmailZone(chit) {
     _wireEmailAutocomplete('emailTo', 'emailToDropdown');
     _wireEmailAutocomplete('emailCc', 'emailCcDropdown');
     _wireEmailAutocomplete('emailBcc', 'emailBccDropdown');
+    // Initialize PGP availability check after contacts are loaded
+    if (typeof _pgpInitForDraft === 'function' && status === 'draft') {
+      _pgpInitForDraft();
+    }
   });
 
   // Show Cc/Bcc rows if they have data, hide the toggle buttons accordingly
@@ -1498,6 +1521,12 @@ async function _emailSend() {
   }
 
   try {
+    // PGP encryption step — encrypt body before save if enabled
+    if (typeof _pgpPreSendEncrypt === 'function') {
+      var pgpOk = await _pgpPreSendEncrypt();
+      if (!pgpOk) return; // Encryption failed or was cancelled
+    }
+
     // Save the chit first so the backend has the latest body/recipients
     if (typeof saveChitAndStay === 'function') {
       cwocToast('Saving before send...', 'info');
@@ -1531,7 +1560,7 @@ function _emailUndoSendCountdown(chitId, archiveOriginal) {
   localStorage.setItem('cwoc_email_pending_send', JSON.stringify(pendingSend));
 
   // Navigate to the email view
-  window.location.href = '/frontend/html/index.html#Email';
+  window.location.href = '/frontend/html/index.html?tab=Email';
 }
 
 /**
@@ -1658,6 +1687,7 @@ function _openEmailExpandModal() {
       '<button type="button" class="zone-button" onclick="event.stopPropagation(); _emailDownloadRaw()"><i class="fas fa-download"></i> Raw</button>';
   } else if (status === 'sent') {
     actionBtns =
+      '<button type="button" class="zone-button" onclick="event.stopPropagation(); _closeEmailExpandModal(true); _emailForward()"><i class="fas fa-share"></i> Forward</button>' +
       '<button type="button" class="zone-button" onclick="event.stopPropagation(); _emailDownloadRaw()"><i class="fas fa-download"></i> Raw</button>';
   }
 

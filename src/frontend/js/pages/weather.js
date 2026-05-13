@@ -710,16 +710,24 @@ function _wxRenderTable(container, locations, results, weekStartDay, chitsByLocD
       var wsAttr = weekStartIndices[dd] ? ' data-wx-week-start="1"' : '';
       var locAddr = _wxEsc(loc.address || loc.label || '');
 
+      var lowAlt = _tempAltUnit(daily.temperature_2m_min[dd]);
+      var highAlt = _tempAltUnit(daily.temperature_2m_max[dd]);
+      var precipAlt = precip > 0 ? _precipAlt(precip) : '';
+
+      var highColor = _getTempBorderColor(daily.temperature_2m_max[dd]);
+      var lowColor = _getTempBorderColor(daily.temperature_2m_min[dd]);
+      var borderStyle = 'cursor:pointer;border-image:linear-gradient(to top,' + lowColor + ',' + highColor + ') 1';
+
       rowsHtml += '<div class="' + blockClasses + '"' + wsAttr +
         ' data-wx-date="' + daily.time[dd] + '"' +
         ' data-wx-loc="' + locAddr + '"' +
-        ' style="cursor:pointer">' +
+        ' style="' + borderStyle + '">' +
         '<span class="wx-icon">' + icon + '</span>' +
-        '<span class="wx-temps">' +
-          '<span class="wx-high">' + highF + '°</span> ' +
-          '<span class="wx-low">' + lowF + '°</span>' +
+        '<span class="wx-temps" title="' + lowAlt + ' – ' + highAlt + '">' +
+          '<span class="wx-low">' + lowF + '°</span> – ' +
+          '<span class="wx-high">' + highF + '°</span>' +
         '</span>' +
-        '<span class="wx-precip">' + precipStr + '</span>' +
+        '<span class="wx-precip"' + (precipAlt ? ' title="' + precipAlt + '"' : '') + '>' + precipStr + '</span>' +
       '</div>';
     }
 
@@ -1247,18 +1255,25 @@ async function _wxAddCityRows(container, allChits, savedLocations, forecastDates
 
       // Tooltip: chit titles that triggered this day
       var tooltip = chitTitles.join('&#10;');
+      var lowAltCity = _tempAltUnit(forecast.temperature_2m_min[fIdx]);
+      var highAltCity = _tempAltUnit(forecast.temperature_2m_max[fIdx]);
+      var precipAltCity = precip > 0 ? _precipAlt(precip) : '';
+
+      var highColorCity = _getTempBorderColor(forecast.temperature_2m_max[fIdx]);
+      var lowColorCity = _getTempBorderColor(forecast.temperature_2m_min[fIdx]);
+      var borderStyleCity = 'cursor:pointer;border-image:linear-gradient(to top,' + lowColorCity + ',' + highColorCity + ') 1';
 
       rowHtml += '<div class="' + blockClasses + '"' + wsAttr +
         ' data-wx-date="' + dateStr + '"' +
         ' data-wx-loc="' + _wxEsc(cityName) + '"' +
         ' title="' + tooltip + '"' +
-        ' style="cursor:pointer">' +
+        ' style="' + borderStyleCity + '">' +
         '<span class="wx-icon" title="' + tooltip + '">' + icon + '</span>' +
-        '<span class="wx-temps" title="' + tooltip + '">' +
-          '<span class="wx-high">' + highF + '°</span> ' +
-          '<span class="wx-low">' + lowF + '°</span>' +
+        '<span class="wx-temps" title="' + lowAltCity + ' – ' + highAltCity + '">' +
+          '<span class="wx-low">' + lowF + '°</span> – ' +
+          '<span class="wx-high">' + highF + '°</span>' +
         '</span>' +
-        '<span class="wx-precip" title="' + tooltip + '">' + precipStr + '</span>' +
+        '<span class="wx-precip"' + (precipAltCity ? ' title="' + precipAltCity + '"' : ' title="' + tooltip + '"') + '>' + precipStr + '</span>' +
       '</div>';
     }
 

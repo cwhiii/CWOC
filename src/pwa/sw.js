@@ -12,7 +12,7 @@
  *   Everything else  → network fetch (no cache)
  */
 
-const CACHE_NAME = 'cwoc-shell-v2';
+const CACHE_NAME = 'cwoc-shell-v3';
 
 const APP_SHELL_URLS = [
     // ── HTML pages ──

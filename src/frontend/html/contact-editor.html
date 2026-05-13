@@ -17,6 +17,7 @@
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" />
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" />
         <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+        <script src="https://unpkg.com/openpgp@5.11.2/dist/openpgp.min.js"></script>
         <style>
             /* ══ Contact Editor Page-Specific Styles ══ */
 
@@ -496,10 +497,35 @@
                                     <span class="slider round"></span>
                                 </label>
                                 <input type="text" id="signalUsername" placeholder="Signal username or phone" style="display:none;flex:1;margin-left:8px;" />
+                                <button type="button" id="signalMessageBtn" class="zone-button" onclick="openSignalMessage()" title="Open Signal to message this person" style="display:none;margin-left:6px;white-space:nowrap;">
+                                    <i class="fas fa-comment-dots"></i> Signal
+                                </button>
                             </div>
                             <div class="field full-width">
                                 <label for="pgpKey">PGP Public Key</label>
                                 <textarea id="pgpKey" placeholder="Paste PGP public key here..."></textarea>
+                                <div id="pgpValidationRow" style="display:flex;align-items:center;gap:8px;margin-top:6px;">
+                                    <button type="button" id="pgpValidateBtn" class="add-entry-btn" onclick="validatePgpKey()" style="margin:0;font-size:0.8em;padding:4px 10px;"><i class="fas fa-check-circle"></i> Validate Key</button>
+                                    <span id="pgpValidationResult" style="font-size:0.85em;font-weight:600;"></span>
+                                </div>
+                            </div>
+                            <!-- Private PGP Key (profile mode only — hidden for contacts and other users) -->
+                            <div id="privatePgpSection" class="field full-width" style="display:none;">
+                                <label>🔐 Private PGP Key</label>
+                                <div id="privatePgpLocked" style="display:flex;align-items:center;gap:8px;padding:10px;background:rgba(139,90,43,0.08);border:1px dashed var(--aged-brown-medium);border-radius:4px;">
+                                    <i class="fas fa-key" style="color:var(--aged-brown-medium);"></i>
+                                    <span style="flex:1;font-size:0.9em;color:#1a1208;" id="privatePgpStatus">Enter your password to view or edit your private key.</span>
+                                    <button type="button" class="add-entry-btn" onclick="unlockPrivatePgpKey()" style="margin:0;font-size:0.8em;padding:4px 10px;"><i class="fas fa-unlock"></i> Unlock</button>
+                                </div>
+                                <div id="privatePgpUnlocked" style="display:none;">
+                                    <textarea id="privatePgpKey" placeholder="Paste your PGP private key here..." style="min-height:100px;resize:vertical;font-family:monospace;font-size:0.8em;margin-top:6px;"></textarea>
+                                    <div style="display:flex;align-items:center;gap:8px;margin-top:6px;">
+                                        <button type="button" class="add-entry-btn" onclick="savePrivatePgpKey()" style="margin:0;font-size:0.8em;padding:4px 10px;background:#2e7d32;"><i class="fas fa-save"></i> Save Private Key</button>
+                                        <button type="button" class="add-entry-btn" onclick="lockPrivatePgpKey()" style="margin:0;font-size:0.8em;padding:4px 10px;"><i class="fas fa-lock"></i> Lock</button>
+                                        <button type="button" class="add-entry-btn" onclick="removePrivatePgpKey()" style="margin:0;font-size:0.8em;padding:4px 10px;background:#b22222;"><i class="fas fa-trash"></i> Remove</button>
+                                        <span id="privatePgpMessage" style="font-size:0.85em;font-weight:600;"></span>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>

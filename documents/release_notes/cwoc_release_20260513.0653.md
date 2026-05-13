@@ -1,0 +1,1 @@
+Editor title zone cleanup: email button moved to Options menu, owner chip hidden when chit is owned by self, title input styled as a plain header when not focused (transparent background/border, shows input styling only on hover/focus).

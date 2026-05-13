@@ -121,7 +121,7 @@ var NO_VALUE_OPERATORS = ['is_empty', 'is_not_empty'];
 var CHIT_ACTION_TYPES = [
     { value: 'add_tag', label: 'Add Tag', params: [{ key: 'tag', label: 'Tag', type: 'tag' }] },
     { value: 'remove_tag', label: 'Remove Tag', params: [{ key: 'tag', label: 'Tag', type: 'tag' }] },
-    { value: 'set_status', label: 'Set Status', params: [{ key: 'status', label: 'Status', type: 'select', options: ['ToDo', 'In Progress', 'Blocked', 'Complete'] }] },
+    { value: 'set_status', label: 'Set Status', params: [{ key: 'status', label: 'Status', type: 'select', options: ['ToDo', 'In Progress', 'Blocked', 'Complete', 'Rejected'] }] },
     { value: 'set_priority', label: 'Set Priority', params: [{ key: 'priority', label: 'Priority', type: 'select', options: ['Low', 'Medium', 'High', 'Critical'] }] },
     { value: 'set_severity', label: 'Set Severity', params: [{ key: 'severity', label: 'Severity', type: 'select', options: ['Low', 'Medium', 'High', 'Critical'] }] },
     { value: 'set_color', label: 'Set Color', params: [{ key: 'color', label: 'Color', type: 'color' }] },

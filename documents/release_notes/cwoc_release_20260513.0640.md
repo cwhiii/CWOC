@@ -1,0 +1,1 @@
+Editor title row restructured: title input moved above save/exit buttons into the header, "Title" label removed, pinned icon placed to the left of the input, and hover tooltip added to the owner username chip.

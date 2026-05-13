@@ -99,6 +99,7 @@ def get_stats(request: Request):
         in_progress_count = 0
         blocked_count = 0
         complete_count = 0
+        rejected_count = 0
         overdue_count = 0
         inbox_count = 0
         tag_counts: dict = {}
@@ -116,10 +117,12 @@ def get_stats(request: Request):
                 blocked_count += 1
             elif status == "Complete":
                 complete_count += 1
+            elif status == "Rejected":
+                rejected_count += 1
 
             # Overdue: non-complete with past due_datetime
             due_dt = row["due_datetime"]
-            if due_dt and status != "Complete":
+            if due_dt and status != "Complete" and status != "Rejected":
                 try:
                     due_parsed = datetime.fromisoformat(due_dt.replace("Z", ""))
                     if due_parsed < now:
@@ -152,6 +155,7 @@ def get_stats(request: Request):
             "in_progress_count": in_progress_count,
             "blocked_count": blocked_count,
             "complete_count": complete_count,
+            "rejected_count": rejected_count,
             "overdue_count": overdue_count,
             "inbox_count": inbox_count,
             "tag_counts": tag_counts,

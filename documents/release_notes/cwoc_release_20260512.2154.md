@@ -1,0 +1,1 @@
+Added "Hide in Calendar" toggle button to the chit editor title bar (calendar-xmark icon next to the pin button). Click to hide/show the chit in calendar views. Uses the existing show_on_calendar field — no backend changes needed.

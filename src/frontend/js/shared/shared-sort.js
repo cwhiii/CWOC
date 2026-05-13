@@ -1,7 +1,8 @@
 /**
  * shared-sort.js — Manual sort order persistence and drag-to-reorder.
  *
- * Provides per-view manual ordering of chit cards, persisted in localStorage.
+ * Provides per-view manual ordering of chit cards, persisted to both
+ * localStorage (for instant UI) and the backend API (for cross-device sync).
  * Supports both mouse drag and touch drag for reordering.
  *
  * Depends on: shared-touch.js (for enableTouchDrag)
@@ -41,9 +42,121 @@ document.addEventListener('dblclick', function (e) {
   }
 }, true);
 
-// ── Manual Sort Order (per-view, persisted in localStorage) ──────────────────
+// ── Manual Sort Order (per-view, persisted in localStorage + backend) ────────
 
 const MANUAL_ORDER_KEY = 'cwoc_manual_order';
+const SORT_PREFS_KEY = 'cwoc_sort_preferences';
+
+/**
+ * Load sort preferences (field + direction per tab) from the backend API.
+ * Called once at page init. Backend is the source of truth.
+ */
+function _loadSortPreferencesFromServer() {
+  fetch('/api/sort-preferences', { credentials: 'same-origin' })
+    .then(function (res) {
+      if (!res.ok) return;
+      return res.json();
+    })
+    .then(function (prefs) {
+      if (!prefs || typeof prefs !== 'object') return;
+      localStorage.setItem(SORT_PREFS_KEY, JSON.stringify(prefs));
+    })
+    .catch(function (err) {
+      console.error('[SortPrefs] Failed to load from server:', err);
+    });
+}
+
+// Load sort preferences from server on page init
+_loadSortPreferencesFromServer();
+
+/**
+ * Get the saved sort preference for a specific view tab.
+ * @param {string} tab - e.g. 'Tasks', 'Notes', 'Checklists'
+ * @returns {{field: string, dir: string}|null}
+ */
+function getSortPreference(tab) {
+  try {
+    var prefs = JSON.parse(localStorage.getItem(SORT_PREFS_KEY) || '{}');
+    return prefs[tab] || null;
+  } catch (e) { return null; }
+}
+
+/**
+ * Save the sort preference for a specific view tab.
+ * Writes to both localStorage (immediate) and backend API (cross-device).
+ * @param {string} tab
+ * @param {string} field - Sort field (e.g. 'title', 'due', 'manual', '' for none)
+ * @param {string} dir - Sort direction ('asc' or 'desc')
+ */
+function saveSortPreference(tab, field, dir) {
+  // Save to localStorage immediately
+  try {
+    var prefs = JSON.parse(localStorage.getItem(SORT_PREFS_KEY) || '{}');
+    if (field) {
+      prefs[tab] = { field: field, dir: dir || 'asc' };
+    } else {
+      delete prefs[tab];
+    }
+    localStorage.setItem(SORT_PREFS_KEY, JSON.stringify(prefs));
+  } catch (e) { console.error('[SortPrefs] Failed to save to localStorage:', e); }
+
+  // Persist to backend
+  fetch('/api/sort-preferences/' + encodeURIComponent(tab), {
+    method: 'PUT',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ field: field || '', dir: dir || 'asc' })
+  }).catch(function (err) {
+    console.error('[SortPrefs] Failed to save to server:', err);
+  });
+}
+
+/**
+ * Reset all sort orders and preferences (both local and server).
+ * @returns {Promise}
+ */
+function resetAllSortOrders() {
+  localStorage.removeItem(MANUAL_ORDER_KEY);
+  localStorage.removeItem(SORT_PREFS_KEY);
+  return fetch('/api/sort-orders', {
+    method: 'DELETE',
+    credentials: 'same-origin'
+  }).then(function (res) {
+    if (!res.ok) throw new Error('Failed to reset sort orders');
+    return res.json();
+  });
+}
+
+/**
+ * Load sort orders from the backend API and merge into localStorage.
+ * Called once at page init to ensure cross-device consistency.
+ * Backend is the source of truth — overwrites localStorage on load.
+ */
+function _loadSortOrdersFromServer() {
+  fetch('/api/sort-orders', { credentials: 'same-origin' })
+    .then(function (res) {
+      if (!res.ok) return;
+      return res.json();
+    })
+    .then(function (serverOrders) {
+      if (!serverOrders || typeof serverOrders !== 'object') return;
+      // Merge server orders into localStorage (server wins)
+      try {
+        var local = JSON.parse(localStorage.getItem(MANUAL_ORDER_KEY) || '{}');
+        var merged = Object.assign({}, local, serverOrders);
+        localStorage.setItem(MANUAL_ORDER_KEY, JSON.stringify(merged));
+      } catch (e) {
+        // If localStorage is corrupt, just overwrite with server data
+        localStorage.setItem(MANUAL_ORDER_KEY, JSON.stringify(serverOrders));
+      }
+    })
+    .catch(function (err) {
+      console.error('[SortOrder] Failed to load from server:', err);
+    });
+}
+
+// Load sort orders from server on page init
+_loadSortOrdersFromServer();
 
 /**
  * Get the manual sort order for a specific view tab.
@@ -63,15 +176,27 @@ function getManualOrder(tab) {
 
 /**
  * Save the manual sort order for a specific view tab.
+ * Writes to both localStorage (immediate) and backend API (cross-device).
  * @param {string} tab
  * @param {string[]} ids - Array of chit IDs in desired order
  */
 function saveManualOrder(tab, ids) {
+  // Save to localStorage immediately for instant UI response
   try {
     const all = JSON.parse(localStorage.getItem(MANUAL_ORDER_KEY) || '{}');
     all[tab] = ids;
     localStorage.setItem(MANUAL_ORDER_KEY, JSON.stringify(all));
-  } catch (e) { console.error('Failed to save manual order:', e); }
+  } catch (e) { console.error('Failed to save manual order to localStorage:', e); }
+
+  // Persist to backend for cross-device sync
+  fetch('/api/sort-orders/' + encodeURIComponent(tab), {
+    method: 'PUT',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids: ids })
+  }).catch(function (err) {
+    console.error('[SortOrder] Failed to save to server:', err);
+  });
 }
 
 /**
@@ -188,6 +313,7 @@ function enableDragToReorder(container, tab, onReorder, longPressMap) {
     const sel = document.getElementById('sort-select');
     if (sel) sel.value = 'manual';
     _updateSortUI();
+    if (typeof saveSortPreference === 'function') saveSortPreference(tab, 'manual', 'asc');
     if (onReorder) onReorder();
   });
 
@@ -317,6 +443,7 @@ function enableDragToReorder(container, tab, onReorder, longPressMap) {
         var sel = document.getElementById('sort-select');
         if (sel) sel.value = 'manual';
         _updateSortUI();
+        if (typeof saveSortPreference === 'function') saveSortPreference(tab, 'manual', 'asc');
         _touchDragState = null;
         if (onReorder) onReorder();
       },

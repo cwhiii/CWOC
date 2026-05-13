@@ -1,0 +1,1 @@
+Added All Attachments page (`/attachments`) — a visual grid showing every attachment across all chits with thumbnails, clickable filenames (download) and chit names (open editor). Supports multi-select via click, Shift+click for range, and Ctrl/Cmd+click to toggle individual items, with a bulk delete action when 1+ items are selected.

@@ -106,7 +106,8 @@ function _checkAlarms() {
 
     // Request browser notification
     if (Notification.permission === "granted") {
-      new Notification(`🔔 Alarm: ${alarm.name || "Alarm"}`, { body: `Time: ${_fmtAlarmTime(alarm.time)}` });
+      var _alarmNotif = new Notification(`🔔 Alarm: ${alarm.name || "Alarm"}`, { body: `Time: ${_fmtAlarmTime(alarm.time)}` });
+      _alarmNotif.onclick = function() { window.focus(); };
     }
   });
 
@@ -177,6 +178,12 @@ function _checkNotificationAlerts() {
   const isHabit = habitCb && habitCb.checked;
 
   window._alertsData.notifications.forEach((n, idx) => {
+    // ── Weather notifications — check against stored forecast data ──
+    if (n.unit === "weather") {
+      _checkWeatherNotification(n, idx, title);
+      return;
+    }
+
     if (!n.value || !n.unit) return;
 
     // Skip habit notifications if goal already met and only_if_undone is set
@@ -244,6 +251,118 @@ function _checkNotificationAlerts() {
 }
 
 /**
+ * Check a weather-based notification against the current chit's weather data.
+ * Fires once per page load if the condition is met.
+ */
+function _checkWeatherNotification(n, idx, title) {
+  var wd = window._currentChitWeatherData;
+  if (!wd) return;
+
+  var condition = n.weather_condition;
+  var threshold = n.weather_threshold;
+  if (!condition) return;
+
+  var conditionMet = false;
+  var condLabel = '';
+  var unitLabel = (typeof _tempUnit === 'function') ? _tempUnit() : '°';
+  var windUnit = _isMetricUnits() ? 'km/h' : 'mph';
+  var precipUnit = _isMetricUnits() ? 'mm' : 'in';
+  var precipMode = n.weather_precip_mode || 'any';
+
+  switch (condition) {
+    case 'high_above':
+    case 'high_below':
+    case 'low_above':
+    case 'low_below': {
+      if (wd.high == null || wd.low == null || threshold == null) return;
+      var high = (typeof _convertTemp === 'function') ? _convertTemp(wd.high) : wd.high;
+      var low = (typeof _convertTemp === 'function') ? _convertTemp(wd.low) : wd.low;
+      if (condition === 'high_above') { conditionMet = high > threshold; condLabel = 'high (' + high + unitLabel + ') above ' + threshold + unitLabel; }
+      else if (condition === 'high_below') { conditionMet = high < threshold; condLabel = 'high (' + high + unitLabel + ') below ' + threshold + unitLabel; }
+      else if (condition === 'low_above') { conditionMet = low > threshold; condLabel = 'low (' + low + unitLabel + ') above ' + threshold + unitLabel; }
+      else if (condition === 'low_below') { conditionMet = low < threshold; condLabel = 'low (' + low + unitLabel + ') below ' + threshold + unitLabel; }
+      break;
+    }
+    case 'precipitation': {
+      // Any type of precipitation
+      if (precipMode === 'more_than') {
+        if (wd.precipitation == null || threshold == null) return;
+        var pDisplay = _isMetricUnits() ? wd.precipitation : wd.precipitation / 25.4;
+        conditionMet = pDisplay > threshold;
+        condLabel = 'precipitation (' + pDisplay.toFixed(1) + ' ' + precipUnit + ') over ' + threshold + ' ' + precipUnit;
+      } else {
+        if (wd.weather_code == null) return;
+        conditionMet = [51,53,55,56,57,61,63,65,66,67,71,73,75,77,80,81,82,85,86,95,96,99].includes(wd.weather_code);
+        condLabel = 'precipitation in forecast';
+      }
+      break;
+    }
+    case 'rain': {
+      if (precipMode === 'more_than') {
+        if (wd.precipitation == null || threshold == null) return;
+        var rCodes = [61,63,65,66,67,80,81,82,51,53,55,56,57];
+        var isRain = wd.weather_code != null && rCodes.includes(wd.weather_code);
+        var rDisplay = _isMetricUnits() ? wd.precipitation : wd.precipitation / 25.4;
+        conditionMet = isRain && rDisplay > threshold;
+        condLabel = 'rain (' + rDisplay.toFixed(1) + ' ' + precipUnit + ') over ' + threshold + ' ' + precipUnit;
+      } else {
+        if (wd.weather_code == null) return;
+        conditionMet = [61,63,65,66,67,80,81,82,51,53,55,56,57].includes(wd.weather_code);
+        condLabel = 'rain in forecast';
+      }
+      break;
+    }
+    case 'snow': {
+      if (precipMode === 'more_than') {
+        if (wd.precipitation == null || threshold == null) return;
+        var sCodes = [71,73,75,77,85,86];
+        var isSnow = wd.weather_code != null && sCodes.includes(wd.weather_code);
+        var sDisplay = _isMetricUnits() ? wd.precipitation : wd.precipitation / 25.4;
+        conditionMet = isSnow && sDisplay > threshold;
+        condLabel = 'snow (' + sDisplay.toFixed(1) + ' ' + precipUnit + ') over ' + threshold + ' ' + precipUnit;
+      } else {
+        if (wd.weather_code == null) return;
+        conditionMet = [71,73,75,77,85,86].includes(wd.weather_code);
+        condLabel = 'snow in forecast';
+      }
+      break;
+    }
+    case 'hail': {
+      if (precipMode === 'more_than') {
+        if (wd.precipitation == null || threshold == null) return;
+        var hCodes = [96,99];
+        var isHail = wd.weather_code != null && hCodes.includes(wd.weather_code);
+        var hDisplay = _isMetricUnits() ? wd.precipitation : wd.precipitation / 25.4;
+        conditionMet = isHail && hDisplay > threshold;
+        condLabel = 'hail (' + hDisplay.toFixed(1) + ' ' + precipUnit + ') over ' + threshold + ' ' + precipUnit;
+      } else {
+        if (wd.weather_code == null) return;
+        conditionMet = [96,99].includes(wd.weather_code);
+        condLabel = 'hail in forecast';
+      }
+      break;
+    }
+    case 'wind_above': {
+      var wMax = (typeof _getWindMax === 'function') ? _getWindMax(wd) : wd.wind_gusts;
+      if (wMax == null || threshold == null) return;
+      var windVal = _isMetricUnits() ? Math.round(wMax) : Math.round(wMax * 0.621371);
+      conditionMet = windVal > threshold;
+      condLabel = 'wind (' + windVal + ' ' + windUnit + ') over ' + threshold + ' ' + windUnit;
+      break;
+    }
+  }
+
+  if (!conditionMet) return;
+
+  var key = 'weather-notif-' + idx + '-' + (wd.focus_date || 'today');
+  if (_firedNotifications.has(key)) return;
+  _firedNotifications.add(key);
+
+  var msg = 'Weather alert for "' + title + '": ' + condLabel;
+  _fireNotificationAlert(msg, n, idx);
+}
+
+/**
  * Calculate the end-of-cycle datetime for the current habit period.
  * Returns a Date representing midnight at the end of the current cycle.
  */
@@ -296,7 +415,8 @@ function _notifTimingLabel(n) {
 
 function _fireNotificationAlert(msg, notif, notifIdx) {
   if (Notification.permission === "granted") {
-    new Notification("📢 Reminder", { body: msg });
+    var _reminderNotif = new Notification("📢 Reminder", { body: msg });
+    _reminderNotif.onclick = function() { window.focus(); };
   }
   // Always show inline toast as well
   const toast = document.createElement("div");
@@ -327,11 +447,15 @@ function _alertsFromChit(chit) {
 }
 
 function _alertsToArray() {
+  // Filter out unset (incomplete) notifications — they haven't been configured yet
+  var validNotifs = window._alertsData.notifications.filter(function(n) {
+    return !n._direction || n._direction !== "unset";
+  });
   return [
     ...window._alertsData.alarms,
     ...window._alertsData.timers,
     ...window._alertsData.stopwatches,
-    ...window._alertsData.notifications,
+    ...validNotifs,
   ];
 }
 
@@ -598,7 +722,9 @@ function renderNotificationsContainer() {
     const row = document.createElement("div");
     row.style.cssText = "display:flex;align-items:center;gap:0.4em;padding:4px 0;border-bottom:1px solid #e0d4b5;flex-wrap:wrap;";
 
+    const isWeatherMode = (n.unit === "weather");
     const isDesktopMode = (n.unit === "on_desktop");
+    const isUnset = (n._direction === "unset");
     const isTriggered = isDesktopMode && n.triggered;
 
     // If triggered, cross out the whole row
@@ -613,21 +739,28 @@ function renderNotificationsContainer() {
     if (isTriggered) dirSel.disabled = true;
 
     // Determine current direction
-    let curDir = "before";
-    if (isDesktopMode) curDir = "desktop";
+    let curDir = "unset";
+    if (isUnset) curDir = "unset";
+    else if (isWeatherMode) curDir = "weather";
+    else if (isDesktopMode) curDir = "desktop";
     else if (n.atTarget) curDir = "at";
     else if (n.afterTarget) curDir = "after";
+    else if (n.unit && n.unit !== "on_desktop" && n.unit !== "weather") curDir = "before";
 
-    // Build direction options — depends on date mode and habit state
+    // Build direction options — depends on date mode, habit state
     const dateMode = document.querySelector('input[name="dateMode"]:checked')?.value || 'none';
     const hasTimeMode = (dateMode !== 'none' && dateMode !== 'perpetual');
+    const hasWeatherData = !!(window._currentChitWeatherData || (document.getElementById('location') && document.getElementById('location').value && hasTimeMode));
 
     let dirOptions;
     if (!hasTimeMode && !isHabit) {
-      // No date mode — only desktop allowed
-      dirOptions = [{ value: "desktop", label: "Next Time on Desktop" }];
-      // Force to desktop if currently set to a time-based direction
-      if (curDir !== "desktop") {
+      // No date mode — desktop only (+ weather if location has weather)
+      dirOptions = [
+        { value: "desktop", label: "Next Time on Desktop" }
+      ];
+      if (hasWeatherData) dirOptions.push({ value: "weather", label: "Weather" });
+      // Force to desktop or weather if currently set to a time-based direction (but not if unset)
+      if (curDir !== "desktop" && curDir !== "weather" && curDir !== "unset") {
         curDir = "desktop";
         window._alertsData.notifications[idx].unit = "on_desktop";
         window._alertsData.notifications[idx].delivery_target = "desktop";
@@ -636,7 +769,11 @@ function renderNotificationsContainer() {
         window._alertsData.notifications[idx].afterTarget = false;
       }
     } else if (isHabit) {
-      dirOptions = [{ value: "before", label: "Before" }, { value: "desktop", label: "Next Time on Desktop" }];
+      dirOptions = [
+        { value: "before",  label: "Before" },
+        { value: "desktop", label: "Next Time on Desktop" }
+      ];
+      if (hasWeatherData) dirOptions.push({ value: "weather", label: "Weather" });
     } else {
       dirOptions = [
         { value: "at",      label: "At" },
@@ -644,6 +781,12 @@ function renderNotificationsContainer() {
         { value: "after",   label: "After" },
         { value: "desktop", label: "Next Time on Desktop" }
       ];
+      if (hasWeatherData) dirOptions.push({ value: "weather", label: "Weather" });
+    }
+
+    // Add placeholder if unset
+    if (curDir === "unset") {
+      dirOptions.unshift({ value: "unset", label: "— Choose —" });
     }
 
     dirOptions.forEach((d) => {
@@ -655,26 +798,42 @@ function renderNotificationsContainer() {
 
     dirSel.addEventListener("change", () => {
       const dir = dirSel.value;
-      if (dir === "desktop") {
+      if (dir === "unset") return; // ignore placeholder re-selection
+      // Clear the unset marker
+      delete window._alertsData.notifications[idx]._direction;
+      if (dir === "weather") {
+        window._alertsData.notifications[idx].unit = "weather";
+        window._alertsData.notifications[idx].value = 0;
+        window._alertsData.notifications[idx].atTarget = false;
+        window._alertsData.notifications[idx].afterTarget = false;
+        delete window._alertsData.notifications[idx].delivery_target;
+        delete window._alertsData.notifications[idx].triggered;
+        // Don't set weather_condition yet — let user pick from the type dropdown
+      } else if (dir === "desktop") {
         window._alertsData.notifications[idx].unit = "on_desktop";
         window._alertsData.notifications[idx].delivery_target = "desktop";
         window._alertsData.notifications[idx].value = 0;
         window._alertsData.notifications[idx].atTarget = false;
         window._alertsData.notifications[idx].afterTarget = false;
+        delete window._alertsData.notifications[idx].weather_condition;
+        delete window._alertsData.notifications[idx].weather_threshold;
       } else {
-        // Restore from desktop mode if needed
-        if (window._alertsData.notifications[idx].unit === "on_desktop") {
+        // at, before, or after — don't pre-fill values, let user set them
+        window._alertsData.notifications[idx].unit = window._alertsData.notifications[idx].unit || "minutes";
+        if (window._alertsData.notifications[idx].unit === "on_desktop" || window._alertsData.notifications[idx].unit === "weather") {
           window._alertsData.notifications[idx].unit = "minutes";
-          delete window._alertsData.notifications[idx].delivery_target;
-          delete window._alertsData.notifications[idx].triggered;
         }
+        delete window._alertsData.notifications[idx].delivery_target;
+        delete window._alertsData.notifications[idx].triggered;
+        delete window._alertsData.notifications[idx].weather_condition;
+        delete window._alertsData.notifications[idx].weather_threshold;
+        delete window._alertsData.notifications[idx].weather_precip_mode;
         window._alertsData.notifications[idx].atTarget = (dir === "at");
         window._alertsData.notifications[idx].afterTarget = (dir === "after");
         if (dir === "at") {
           window._alertsData.notifications[idx].value = 0;
-        } else if (!window._alertsData.notifications[idx].value) {
-          window._alertsData.notifications[idx].value = 15;
         }
+        // Don't set default target yet — let user pick
       }
       setSaveButtonUnsaved();
       renderNotificationsContainer();
@@ -682,10 +841,15 @@ function renderNotificationsContainer() {
 
     // ── Value input (number) ────────────────────────────────────────────
     const valInput = document.createElement("input");
-    valInput.type = "number"; valInput.min = "1"; valInput.value = n.value || 15;
+    valInput.type = "number"; valInput.min = "1"; valInput.value = n.value || '';
+    valInput.placeholder = "#";
     valInput.style.cssText = "width:55px;font-size:0.9em;padding:2px 4px;";
     if (isTriggered) valInput.disabled = true;
-    valInput.addEventListener("change", () => { window._alertsData.notifications[idx].value = parseInt(valInput.value) || 1; setSaveButtonUnsaved(); });
+    valInput.addEventListener("change", () => {
+      window._alertsData.notifications[idx].value = parseInt(valInput.value) || 0;
+      setSaveButtonUnsaved();
+      renderNotificationsContainer();
+    });
 
     // ── Unit dropdown ───────────────────────────────────────────────────
     const unitSel = document.createElement("select");
@@ -702,48 +866,50 @@ function renderNotificationsContainer() {
       setSaveButtonUnsaved();
     });
 
-    // ── Target dropdown (start/end/due/point) ───────────────────────────
-    const targetSel = document.createElement("select");
-    targetSel.style.cssText = "font-size:0.85em;padding:2px 4px;";
+    // ── Target element (dropdown if multiple options, plain text if single) ──
+    const dateMode2 = document.querySelector('input[name="dateMode"]:checked')?.value || 'none';
+    let targetOptions = [];
+    let targetEl = null; // will be a <select> or <span>
 
-    if (isHabit && !isDesktopMode) {
-      // Habit mode: only "end of [cycle]"
+    if (isHabit && !isDesktopMode && !isWeatherMode && !isUnset) {
       const cycleLabel = _habitPeriodLabel();
-      const opt = document.createElement("option");
-      opt.value = "cycle"; opt.textContent = "end of " + cycleLabel;
-      opt.selected = true;
-      targetSel.appendChild(opt);
-      targetSel.addEventListener("change", () => {
-        window._alertsData.notifications[idx].targetType = "cycle";
-        setSaveButtonUnsaved();
-      });
-    } else if (!isDesktopMode) {
-      // Normal mode: target options depend on active date mode
-      const dateMode = document.querySelector('input[name="dateMode"]:checked')?.value || 'none';
-      const targetOptions = [];
-
-      if (dateMode === 'startend') {
-        targetOptions.push({ value: "start", label: "start" });
-        targetOptions.push({ value: "end",   label: "end" });
-      } else if (dateMode === 'due') {
-        targetOptions.push({ value: "due", label: "due" });
-      } else if (dateMode === 'pointintime') {
-        targetOptions.push({ value: "point", label: "point" });
+      targetEl = document.createElement("span");
+      targetEl.style.cssText = "font-size:0.9em;font-style:italic;opacity:0.8;";
+      targetEl.textContent = "end of " + cycleLabel;
+      if (!n.targetType) window._alertsData.notifications[idx].targetType = "cycle";
+    } else if (!isDesktopMode && !isWeatherMode && !isUnset) {
+      if (dateMode2 === 'startend') {
+        targetOptions = [{ value: "start", label: "start" }, { value: "end", label: "end" }];
+      } else if (dateMode2 === 'due') {
+        targetOptions = [{ value: "due", label: "due" }];
+      } else if (dateMode2 === 'pointintime') {
+        targetOptions = [{ value: "point", label: "point" }];
       } else {
-        targetOptions.push({ value: "start", label: "start" });
+        targetOptions = [{ value: "start", label: "start" }];
       }
 
-      const curTarget = n.targetType || _defaultTargetForMode(dateMode);
-      targetOptions.forEach((t) => {
-        const opt = document.createElement("option");
-        opt.value = t.value; opt.textContent = t.label;
-        if (t.value === curTarget) opt.selected = true;
-        targetSel.appendChild(opt);
-      });
-      targetSel.addEventListener("change", () => {
-        window._alertsData.notifications[idx].targetType = targetSel.value;
-        setSaveButtonUnsaved();
-      });
+      if (targetOptions.length === 1) {
+        // Single option — show as plain text label
+        targetEl = document.createElement("span");
+        targetEl.style.cssText = "font-size:0.9em;font-style:italic;opacity:0.8;";
+        targetEl.textContent = targetOptions[0].label;
+        if (!n.targetType) window._alertsData.notifications[idx].targetType = targetOptions[0].value;
+      } else {
+        // Multiple options — show as dropdown
+        targetEl = document.createElement("select");
+        targetEl.style.cssText = "font-size:0.85em;padding:2px 4px;";
+        const curTarget = n.targetType || _defaultTargetForMode(dateMode2);
+        targetOptions.forEach((t) => {
+          const opt = document.createElement("option");
+          opt.value = t.value; opt.textContent = t.label;
+          if (t.value === curTarget) opt.selected = true;
+          targetEl.appendChild(opt);
+        });
+        targetEl.addEventListener("change", () => {
+          window._alertsData.notifications[idx].targetType = targetEl.value;
+          setSaveButtonUnsaved();
+        });
+      }
     }
 
     // ── Delete button ───────────────────────────────────────────────────
@@ -755,32 +921,49 @@ function renderNotificationsContainer() {
     delBtn.onclick = () => deleteNotificationItem(idx);
 
     // ── Assemble row based on direction ─────────────────────────────────
-    // Order: "Notify [15] [minutes] [before] [start]" or "Notify [at] [start]" or "Notify [Next Time on Desktop]"
+    // Natural English order: "Notify [value] [unit] [direction] [target]"
     row.appendChild(document.createTextNode("Notify "));
 
-    if (!isDesktopMode && !n.atTarget) {
-      // "before" or "after" — show value, unit, direction, target
-      row.appendChild(valInput);
-      row.appendChild(unitSel);
+    if (isUnset) {
+      // Unset — only the direction dropdown, highlighted
+      dirSel.style.cssText += "border:2px solid #d4af37;background:#fff8e1;";
       row.appendChild(dirSel);
-      row.appendChild(targetSel);
+    } else if (isWeatherMode) {
+      // Weather mode: "Notify [Weather ▾] [type controls...]"
+      row.appendChild(dirSel);
+      _appendWeatherControls(row, n, idx);
+    } else if (!isDesktopMode && !n.atTarget) {
+      // "before" or "after": "Notify [value] [unit] [direction] [target]"
+      if (!n.value) {
+        // No value yet — show highlighted empty input, then direction + target
+        valInput.style.cssText += "border:2px solid #d4af37;background:#fff8e1;";
+        row.appendChild(valInput);
+        row.appendChild(dirSel);
+        if (targetEl) row.appendChild(targetEl);
+      } else {
+        // Value set — show full: "12 minutes before start"
+        row.appendChild(valInput);
+        if (n.value) row.appendChild(unitSel);
+        row.appendChild(dirSel);
+        if (targetEl) row.appendChild(targetEl);
+      }
     } else if (!isDesktopMode && n.atTarget) {
-      // "at" — show direction, target
+      // "at": "Notify at [target]"
       row.appendChild(dirSel);
-      row.appendChild(targetSel);
+      if (targetEl) row.appendChild(targetEl);
     } else {
-      // desktop — just the direction dropdown + hint if no time mode
+      // desktop
       row.appendChild(dirSel);
       if (!hasTimeMode && !isHabit) {
         var hint = document.createElement("span");
         hint.style.cssText = "font-size:0.8em;opacity:0.65;font-style:italic;";
-        hint.textContent = "(add a time for additional notification options)";
+        hint.textContent = "(add a time for more options)";
         row.appendChild(hint);
       }
     }
 
     // Habit mode: "Disable if complete for [period]" checkbox
-    if (isHabit && !isDesktopMode) {
+    if (isHabit && !isDesktopMode && !isWeatherMode && !isUnset) {
       const disableLbl = document.createElement("label");
       disableLbl.style.cssText = "display:flex;align-items:center;gap:3px;font-size:0.8em;cursor:pointer;white-space:nowrap;";
       disableLbl.title = "Skip this notification if the habit goal is already met for the current " + _habitPeriodLabel();
@@ -799,6 +982,190 @@ function renderNotificationsContainer() {
     row.appendChild(delBtn);
     c.appendChild(row);
   });
+}
+
+/**
+ * Append weather condition controls (condition dropdown + threshold) to a notification row.
+ * Called inline from renderNotificationsContainer when direction is "weather".
+ */
+function _appendWeatherControls(row, n, idx) {
+  var unitLabel = (typeof _tempUnit === 'function') ? _tempUnit() : '°F';
+  var windUnit = _isMetricUnits() ? 'km/h' : 'mph';
+  var precipUnit = _isMetricUnits() ? 'mm' : 'in';
+  var hasCondition = !!n.weather_condition;
+
+  // ── Condition dropdown (always shown) ──
+  var condSel = document.createElement("select");
+  condSel.style.cssText = "font-size:0.9em;padding:2px 4px;";
+  var conditions = [
+    { value: "high_above", label: "high above" },
+    { value: "high_below", label: "high below" },
+    { value: "low_above",  label: "low above" },
+    { value: "low_below",  label: "low below" },
+    { value: "precipitation", label: "any precipitation" },
+    { value: "rain",       label: "rain" },
+    { value: "snow",       label: "snow" },
+    { value: "hail",       label: "hail" },
+    { value: "wind_above", label: "wind over" }
+  ];
+  // Add placeholder if no condition chosen yet
+  if (!hasCondition) {
+    conditions.unshift({ value: "", label: "— Type —" });
+    condSel.style.cssText += "border:2px solid #d4af37;background:#fff8e1;";
+  }
+  conditions.forEach(function(c) {
+    var opt = document.createElement("option");
+    opt.value = c.value; opt.textContent = c.label;
+    if (n.weather_condition === c.value) opt.selected = true;
+    if (!hasCondition && c.value === "") opt.selected = true;
+    condSel.appendChild(opt);
+  });
+  condSel.addEventListener("change", function() {
+    if (!condSel.value) return;
+    window._alertsData.notifications[idx].weather_condition = condSel.value;
+    // Set sensible defaults
+    if (['high_above','high_below','low_above','low_below'].includes(condSel.value)) {
+      if (!window._alertsData.notifications[idx].weather_threshold) {
+        window._alertsData.notifications[idx].weather_threshold = _isMetricUnits() ? 32 : 90;
+      }
+    } else if (condSel.value === 'wind_above') {
+      if (!window._alertsData.notifications[idx].weather_threshold) {
+        window._alertsData.notifications[idx].weather_threshold = _isMetricUnits() ? 50 : 30;
+      }
+    } else if (['precipitation','rain','snow','hail'].includes(condSel.value)) {
+      if (!window._alertsData.notifications[idx].weather_precip_mode) {
+        window._alertsData.notifications[idx].weather_precip_mode = "any";
+      }
+    }
+    setSaveButtonUnsaved();
+    renderNotificationsContainer();
+  });
+  row.appendChild(condSel);
+
+  // ── Stop here if no condition chosen yet (progressive disclosure) ──
+  if (!hasCondition) return;
+
+  // ── Precipitation conditions: "any" vs "more than X" toggle ──
+  var isPrecipCondition = ['precipitation','rain','snow','hail'].includes(n.weather_condition);
+  if (isPrecipCondition) {
+    var precipMode = n.weather_precip_mode || "any";
+    var modeSel = document.createElement("select");
+    modeSel.style.cssText = "font-size:0.9em;padding:2px 4px;";
+    [{ value: "any", label: "any amount" }, { value: "more_than", label: "more than" }].forEach(function(m) {
+      var opt = document.createElement("option");
+      opt.value = m.value; opt.textContent = m.label;
+      if (precipMode === m.value) opt.selected = true;
+      modeSel.appendChild(opt);
+    });
+    modeSel.addEventListener("change", function() {
+      window._alertsData.notifications[idx].weather_precip_mode = modeSel.value;
+      if (modeSel.value === "more_than" && !window._alertsData.notifications[idx].weather_threshold) {
+        window._alertsData.notifications[idx].weather_threshold = _isMetricUnits() ? 5 : 0.2;
+      }
+      setSaveButtonUnsaved();
+      renderNotificationsContainer();
+    });
+    row.appendChild(modeSel);
+
+    // Show threshold input only if "more than" mode
+    if (precipMode === "more_than") {
+      var precipInput = document.createElement("input");
+      precipInput.type = "number";
+      precipInput.step = _isMetricUnits() ? "1" : "0.1";
+      precipInput.min = "0";
+      precipInput.value = n.weather_threshold != null ? n.weather_threshold : (_isMetricUnits() ? 5 : 0.2);
+      precipInput.style.cssText = "width:60px;font-size:0.9em;padding:2px 4px;";
+      precipInput.addEventListener("change", function() {
+        window._alertsData.notifications[idx].weather_threshold = parseFloat(precipInput.value) || 0;
+        setSaveButtonUnsaved();
+      });
+      row.appendChild(precipInput);
+      var pUnitSpan = document.createElement("span");
+      pUnitSpan.style.cssText = "font-size:0.9em;";
+      pUnitSpan.textContent = precipUnit;
+      row.appendChild(pUnitSpan);
+    }
+  }
+
+  // ── Threshold input (temp and wind conditions) ──
+  var needsThreshold = ['high_above','high_below','low_above','low_below','wind_above'].includes(n.weather_condition);
+  if (needsThreshold) {
+    var threshInput = document.createElement("input");
+    threshInput.type = "number";
+    var defaultThresh = (n.weather_condition === 'wind_above')
+      ? (_isMetricUnits() ? 50 : 30)
+      : (_isMetricUnits() ? 32 : 90);
+    threshInput.value = n.weather_threshold != null ? n.weather_threshold : defaultThresh;
+    threshInput.style.cssText = "width:60px;font-size:0.9em;padding:2px 4px;";
+    threshInput.addEventListener("change", function() {
+      window._alertsData.notifications[idx].weather_threshold = parseInt(threshInput.value) || 0;
+      setSaveButtonUnsaved();
+    });
+    row.appendChild(threshInput);
+
+    var threshUnit = (n.weather_condition === 'wind_above') ? windUnit : unitLabel;
+    var unitSpan = document.createElement("span");
+    unitSpan.style.cssText = "font-size:0.9em;";
+    unitSpan.textContent = threshUnit;
+    row.appendChild(unitSpan);
+  }
+
+  // ── Current forecast hint ──
+  if (window._currentChitWeatherData) {
+    var wd = window._currentChitWeatherData;
+    var hintText = '';
+    if (['high_above','high_below','low_above','low_below'].includes(n.weather_condition)) {
+      var high = (typeof _convertTemp === 'function') ? _convertTemp(wd.high) : wd.high;
+      var low = (typeof _convertTemp === 'function') ? _convertTemp(wd.low) : wd.low;
+      if (high != null && low != null) hintText = "(forecast: " + low + "–" + high + unitLabel + ")";
+    } else if (n.weather_condition === 'wind_above') {
+      var wMax = _getWindMax(wd);
+      if (wMax != null) {
+        var windVal = _isMetricUnits() ? Math.round(wMax) : Math.round(wMax * 0.621371);
+        hintText = "(forecast wind: " + windVal + " " + windUnit + ")";
+      }
+    } else if (['precipitation','rain','snow','hail'].includes(n.weather_condition)) {
+      var parts = [];
+      if (wd.weather_code != null) {
+        var precipType = _weatherCodeToPrecipType(wd.weather_code);
+        if (precipType) parts.push(precipType);
+      }
+      if (wd.precipitation != null) {
+        var pVal = _isMetricUnits() ? Math.round(wd.precipitation) + 'mm' : (wd.precipitation / 25.4).toFixed(1) + 'in';
+        parts.push(pVal);
+      }
+      hintText = parts.length ? "(forecast: " + parts.join(", ") + ")" : "(forecast: clear)";
+    }
+    if (hintText) {
+      var hint = document.createElement("span");
+      hint.style.cssText = "font-size:0.75em;opacity:0.6;font-style:italic;margin-left:4px;";
+      hint.textContent = hintText;
+      row.appendChild(hint);
+    }
+  }
+}
+
+/** Get the higher of wind_gusts and wind_speed from weather data (km/h). */
+function _getWindMax(wd) {
+  var gusts = wd.wind_gusts != null ? wd.wind_gusts : null;
+  var speed = wd.wind_speed != null ? wd.wind_speed : null;
+  if (gusts == null && speed == null) return null;
+  if (gusts == null) return speed;
+  if (speed == null) return gusts;
+  return Math.max(gusts, speed);
+}
+
+/**
+ * Map a WMO weather code to a precipitation type string.
+ * Returns "rain", "snow", "hail", "drizzle", "thunder", or "" for clear/cloudy.
+ */
+function _weatherCodeToPrecipType(code) {
+  if ([61, 63, 65, 66, 67, 80, 81, 82].includes(code)) return "rain";
+  if ([71, 73, 75, 77, 85, 86].includes(code)) return "snow";
+  if ([96, 99].includes(code)) return "hail";
+  if ([51, 53, 55, 56, 57].includes(code)) return "drizzle";
+  if ([95].includes(code)) return "thunder";
+  return "";
 }
 
 /**
@@ -1399,18 +1766,8 @@ function deleteTimerItem(idx) {
 
 function openNotificationModal(event) {
   if (event) event.stopPropagation();
-  // Check if a time-based date mode is active
-  const dateMode = document.querySelector('input[name="dateMode"]:checked')?.value || 'none';
-  const hasTimeMode = (dateMode !== 'none' && dateMode !== 'perpetual');
-
-  if (hasTimeMode) {
-    // Default to "before" with the appropriate target
-    const target = _defaultTargetForMode(dateMode);
-    window._alertsData.notifications.push({ _type: "notification", value: 15, unit: "minutes", afterTarget: false, atTarget: false, targetType: target });
-  } else {
-    // No date mode — only desktop notifications allowed
-    window._alertsData.notifications.push({ _type: "notification", value: 0, unit: "on_desktop", delivery_target: "desktop", afterTarget: false, atTarget: false });
-  }
+  // Add a new notification with no direction chosen yet — just the dropdown
+  window._alertsData.notifications.push({ _type: "notification", _direction: "unset" });
   renderNotificationsContainer();
   setSaveButtonUnsaved();
 }

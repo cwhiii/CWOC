@@ -2,6 +2,52 @@
    Base editor styles (header-row, zones, fields, buttons, toggle switch)
    are provided by shared-editor.css which is loaded first. */
 
+/* ── Editor Title Row (pin icon + input + accessories) ─────────────────── */
+.editor-title-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+}
+
+.editor-title-row #title {
+    flex: 1;
+    min-width: 0;
+    font-size: 1.3em;
+    font-weight: 700;
+    font-family: 'Lora', Georgia, serif;
+    color: var(--aged-brown-dark, #1a1208);
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    padding: 4px 8px;
+    transition: border-color 0.2s, background-color 0.2s, box-shadow 0.2s;
+}
+
+.editor-title-row #title:hover {
+    border-color: var(--aged-brown-light, #c9b896);
+}
+
+.editor-title-row #title:focus {
+    background-color: var(--input-bg, #fffdf7);
+    border-color: var(--accent-teal, teal);
+    box-shadow: 0 0 0 2px rgba(0, 128, 128, 0.25);
+    outline: none;
+}
+
+.editor-title-row .status-icon-button {
+    flex-shrink: 0;
+}
+
+.editor-title-accessories {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-left: auto;
+    flex-shrink: 0;
+}
+
 .editor.archived {
     opacity: 0.6;
 }
@@ -250,6 +296,8 @@
     min-height: 100px;
     height: 145px;
     overflow-y: hidden;
+    overflow-wrap: break-word;
+    word-break: break-word;
     transition:
         height 0.3s ease-in-out,
         overflow-y 0.3s ease-in-out;
@@ -264,6 +312,8 @@
     height: 70vh;
     width: 90vw;
     overflow-y: hidden;
+    overflow-wrap: break-word;
+    word-break: break-word;
     transition:
         height 0.3s ease-in-out,
         overflow-y 0.3s ease-in-out;
@@ -272,6 +322,13 @@
     border-radius: 3px;
     background-color: var(--input-bg);
     color: var(--text-color);
+}
+
+/* ── Rendered markdown output (notes preview) ─────────────────────────────── */
+.markdown-output {
+    overflow-wrap: break-word;
+    word-break: break-word;
+    max-width: 100%;
 }
 
 .location-input-wrapper {
@@ -819,7 +876,7 @@ input.error {
     gap: 20px;
     width: 98.5%;
     margin-bottom: 15px;
-    align-items: flex-end;
+    align-items: center !important;
     border: 1px solid var(--border-color);
     border-radius: 4px;
     background-color: var(--zone-header-bg);
@@ -833,6 +890,7 @@ input.error {
 
 #titleWeatherContainer #titleField {
     flex: 2;
+    align-self: center;
 }
 
 .chit-uuid-display {
@@ -849,7 +907,7 @@ input.error {
 #compactWeatherSection {
     flex: 1;
     background-color: var(--parchment-dark) !important;
-    padding: 8px 12px;
+    padding: 8px 1em;
     border-radius: 4px;
     text-align: center;
     color: var(--aged-brown-dark);
@@ -1370,7 +1428,48 @@ mark {
     color: #a01c1c;
 }
 
+/* ── Options quick menu ─────────────────────────────────────────────────── */
+.editor-opt-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 8px 16px;
+    background: none;
+    border: none;
+    font-family: Lora, Georgia, serif;
+    font-size: 0.9em;
+    color: #3a2a14;
+    cursor: pointer;
+    text-align: left;
+    justify-content: flex-start;
+    white-space: nowrap;
+}
+.editor-opt-menu-item:hover {
+    background: rgba(139, 90, 43, 0.1);
+}
+.editor-opt-menu-item.active-option {
+    color: #b44;
+    font-weight: bold;
+}
+.editor-opt-menu-item.editor-opt-delete {
+    color: #fff;
+    background: #c0392b;
+    border-radius: 4px;
+    margin: 4px 8px;
+    width: calc(100% - 16px);
+    justify-content: center;
+    font-weight: bold;
+    padding: 8px 12px;
+}
+.editor-opt-menu-item.editor-opt-delete:hover {
+    background: #a93226;
+}
+
 /* .main-zones-grid base styles are in shared-editor.css */
+
+/* Custom zone panels are placed inside .column-one / .column-two by JS,
+   so they flow naturally with the other zones. No special grid rules needed. */
 
 .grid-span-2 {
     grid-column: span 2;
@@ -1984,10 +2083,17 @@ mark {
     justify-content: flex-start;
     flex-wrap: wrap;
     padding: 4px 0;
+    width: 100%;
 }
 
 .compact-icon {
-    font-size: 1.5em;
+    font-size: 1.8em;
+}
+
+.compact-description {
+    font-size: 1em;
+    font-style: italic;
+    color: #3a2a1a;
 }
 
 .compact-date {
@@ -2039,18 +2145,20 @@ mark {
 .compact-temperature-track {
     position: relative;
     width: 100%;
-    height: 8px;
+    flex-basis: 100%;
+    height: 16px;
     background: linear-gradient(to right, #4682b4, #b22222);
     border-radius: 4px;
-    margin-top: 4px;
-    margin-bottom: 10px;
+    border: 1px solid #6b4e31;
+    margin-top: 22px;
+    margin-bottom: 22px;
 }
 
 .compact-temperature-mask {
     position: absolute;
     top: 0;
     height: 100%;
-    background-color: #5c4033;
+    background-color: var(--parchment-dark);
     z-index: 2;
 }
 
@@ -2066,15 +2174,39 @@ mark {
     position: absolute;
     width: 1px;
     height: 100%;
-    background-color: black;
+    background-color: rgba(0, 0, 0, 0.4);
+    z-index: 4;
+    transform: translateX(-50%);
 }
 
 .compact-temperature-label {
     position: absolute;
     bottom: -18px;
+    transform: translateX(-50%);
     text-align: center;
     font-size: 0.8em;
-    color: black;
+    color: #3a2a1a;
+    z-index: 4;
+    white-space: nowrap;
+}
+
+.compact-temp-callout {
+    position: absolute;
+    top: -20px;
+    transform: translateX(-50%);
+    font-size: 0.95em;
+    font-weight: bold;
+    font-family: 'Lora', Georgia, serif;
+    z-index: 5;
+    white-space: nowrap;
+}
+
+.compact-temp-callout.compact-low {
+    color: #4682b4;
+}
+
+.compact-temp-callout.compact-high {
+    color: #b22222;
 }
 
 @media (max-width: 480px) {
@@ -3111,6 +3243,10 @@ button.archive-btn.archived-active {
 
 /* ── Tablet Breakpoint (≤768px) — Editor-specific ──────────────────────── */
 @media (max-width: 768px) {
+    .cwoc-profile-img {
+        width: 43px;
+        height: 43px;
+    }
     #titleWeatherContainer {
         flex-direction: column;
         width: 100%;
@@ -3126,6 +3262,9 @@ button.archive-btn.archived-active {
         width: 100%;
         flex: unset;
         box-sizing: border-box;
+    }
+    #compactWeatherSection.weather-placeholder {
+        display: none;
     }
     .grid-span-2 {
         grid-column: span 1;
@@ -3184,10 +3323,7 @@ button.archive-btn.archived-active {
         min-height: 0;
     }
     #compactWeatherSection.weather-placeholder {
-        max-height: none;
-        overflow: visible;
-        padding: 4px 8px;
-        font-size: 0.85em;
+        display: none;
     }
     .compact-location-dropdown {
         align-self: flex-start;
@@ -3536,7 +3672,7 @@ input.location {
 .cwoc-profile-menu { position: relative; display: inline-flex; align-items: center; }
 .cwoc-profile-btn { background: transparent; border: 2px solid rgba(139,90,43,0.4); border-radius: 50%; padding: 2px; cursor: pointer; transition: border-color 0.2s, box-shadow 0.2s; line-height: 0; display: flex; align-items: center; justify-content: center; }
 .cwoc-profile-btn:hover { border-color: #8b5a2b; box-shadow: 0 0 0 2px rgba(139,90,43,0.2); }
-.cwoc-profile-img { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; }
+.cwoc-profile-img { width: 72px; height: 72px; border-radius: 50%; object-fit: cover; }
 .cwoc-profile-dropdown { position: absolute; top: 100%; right: 0; margin-top: 6px; min-width: 180px; background: #fff8e1; border: 2px solid #8b5a2b; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.25); z-index: 2000; padding: 0; font-family: 'Lora', Georgia, serif; overflow: hidden; }
 .cwoc-profile-dropdown-header { padding: 10px 14px; font-weight: 600; font-size: 0.95em; color: #1a1208; border-bottom: 1px solid rgba(139,90,43,0.2); background: rgba(139,90,43,0.06); }
 .cwoc-profile-dropdown-item { padding: 10px 14px; cursor: pointer; font-size: 0.95em; color: #1a1208; transition: background 0.15s; }
@@ -4940,6 +5076,16 @@ input.location {
 #emailSection > .zone-header .zone-actions {
     flex: 1;
     margin-left: 1em;
+    pointer-events: none;
+}
+#notesSection > .zone-header .zone-actions.notes-zone-actions > *,
+#checklistSection > .zone-header .zone-actions > *,
+#peopleSection > .zone-header .zone-actions > *,
+#tagsSection > .zone-header .zone-actions > *,
+#datesSection > .zone-header .zone-actions > *,
+#taskSection > .zone-header .zone-actions > *,
+#emailSection > .zone-header .zone-actions > * {
+    pointer-events: auto;
 }
 #notesSection > .zone-header .zone-toggle-icon,
 #checklistSection > .zone-header .zone-toggle-icon,
@@ -5838,7 +5984,39 @@ input.location {
     }
 
     body.mobile-zone-mode #titleWeatherContainer.mobile-zone-active #compactWeatherSection {
-        display: none;
+        display: flex !important;
+        flex-direction: column;
+        align-items: stretch;
+        width: 100%;
+        min-width: 0;
+        margin-top: 8px;
+        order: 2;
+        box-sizing: border-box;
+    }
+    body.mobile-zone-mode #titleWeatherContainer.mobile-zone-active #compactWeatherSection .compact-day-header {
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: center;
+        width: 100%;
+        gap: 6px;
+    }
+    body.mobile-zone-mode #titleWeatherContainer.mobile-zone-active #compactWeatherSection .compact-description {
+        white-space: normal;
+        word-break: normal;
+    }
+    body.mobile-zone-mode #titleWeatherContainer.mobile-zone-active #compactWeatherSection .compact-temperature-track {
+        width: 100%;
+        min-height: 16px;
+        height: 16px;
+    }
+    body.mobile-zone-mode #titleWeatherContainer.mobile-zone-active #compactWeatherSection.weather-placeholder {
+        display: none !important;
+    }
+    body.mobile-zone-mode #titleWeatherContainer.mobile-zone-active #titleField {
+        order: 1;
+    }
+    body.mobile-zone-mode #titleWeatherContainer.mobile-zone-active .mobile-title-zone-controls {
+        order: 3;
     }
 
     /* Hide email quick-activate button in title zone on mobile */

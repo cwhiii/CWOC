@@ -13,7 +13,7 @@ import sqlite3
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException, Request, UploadFile, File
+from fastapi import APIRouter, Body, HTTPException, Request, UploadFile, File
 from fastapi.responses import FileResponse
 
 from src.backend.db import DB_PATH, deserialize_json_field, serialize_json_field
@@ -284,6 +284,118 @@ def delete_attachment(chit_id: str, attachment_id: str, request: Request):
     except Exception as e:
         logger.error("Attachment delete error: %s", e)
         raise HTTPException(status_code=500, detail=f"Delete failed: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
+# ───────────────────────────────────────────────────────────────────────────
+# GET /api/attachments — List ALL attachments across all chits
+# ───────────────────────────────────────────────────────────────────────────
+
+@attachments_router.get("/api/attachments")
+def list_all_attachments(request: Request):
+    """Return a flat list of all attachments across all non-deleted chits.
+
+    Each entry includes the attachment metadata plus chit_id and chit_title
+    so the UI can link back to the parent chit.
+    """
+    user_id = request.state.user_id
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        cursor.execute(
+            "SELECT id, title, attachments FROM chits "
+            "WHERE owner_id = ? AND deleted = 0 AND attachments IS NOT NULL AND attachments != ''",
+            (user_id,),
+        )
+
+        results = []
+        for row in cursor.fetchall():
+            atts = deserialize_json_field(row["attachments"])
+            if not isinstance(atts, list):
+                continue
+            for att in atts:
+                if not isinstance(att, dict):
+                    continue
+                results.append({
+                    "id": att.get("id"),
+                    "filename": att.get("filename"),
+                    "size": att.get("size", 0),
+                    "mime_type": att.get("mime_type", "application/octet-stream"),
+                    "uploaded_at": att.get("uploaded_at"),
+                    "chit_id": row["id"],
+                    "chit_title": row["title"] or "(Untitled)",
+                })
+
+        return results
+
+    except Exception as e:
+        logger.error("Error listing all attachments: %s", e)
+        raise HTTPException(status_code=500, detail=f"Failed to list attachments: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
+# ───────────────────────────────────────────────────────────────────────────
+# DELETE /api/attachments/bulk — Bulk delete multiple attachments
+# ───────────────────────────────────────────────────────────────────────────
+
+@attachments_router.delete("/api/attachments/bulk")
+def bulk_delete_attachments(request: Request, items: list = Body(...)):
+    """Bulk delete attachments. Expects a JSON array of {chit_id, attachment_id} objects."""
+    user_id = request.state.user_id
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        deleted_count = 0
+        for item in items:
+            chit_id = item.get("chit_id")
+            attachment_id = item.get("attachment_id")
+            if not chit_id or not attachment_id:
+                continue
+
+            # Verify ownership
+            cursor.execute("SELECT owner_id FROM chits WHERE id = ?", (chit_id,))
+            row = cursor.fetchone()
+            if not row or row[0] != user_id:
+                continue
+
+            attachments = _load_attachments(cursor, chit_id)
+            entry = None
+            new_attachments = []
+            for a in attachments:
+                if a.get("id") == attachment_id:
+                    entry = a
+                else:
+                    new_attachments.append(a)
+
+            if not entry:
+                continue
+
+            # Delete file from disk
+            attachments_dir = _get_attachments_dir()
+            stored_name = f"{attachment_id}_{entry['filename']}"
+            file_path = os.path.join(attachments_dir, chit_id, stored_name)
+            if os.path.exists(file_path):
+                os.remove(file_path)
+
+            # Update chit's attachments JSON
+            _save_attachments(cursor, chit_id, new_attachments)
+            deleted_count += 1
+
+        conn.commit()
+        return {"deleted": deleted_count}
+
+    except Exception as e:
+        logger.error("Bulk attachment delete error: %s", e)
+        raise HTTPException(status_code=500, detail=f"Bulk delete failed: {str(e)}")
     finally:
         if conn:
             conn.close()

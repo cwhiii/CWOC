@@ -962,6 +962,24 @@
     .global-search-results {
         padding: 0 4px;
     }
+    .global-search-filters-row {
+        padding: 0 4px 6px;
+        gap: 4px;
+    }
+    .global-search-filters-row select {
+        font-size: 0.8em;
+        padding: 4px 6px;
+    }
+    .global-search-email-filter {
+        padding: 2px 4px 6px;
+        font-size: 0.82em;
+    }
+    .search-tag-filter-dropdown {
+        min-width: 260px;
+        max-width: 90vw;
+        left: auto;
+        right: 0;
+    }
 
     /* ═══════════════════════════════════════════════════════════════════════
        TIGHTER MOBILE: Calendar, Checklists, Projects

@@ -271,7 +271,7 @@ function showQuickEditModal(chit, onRefresh) {
 
   if (chit.priority) addDropdown('🔺', 'Priority', 'priority', chit.priority, ['', 'High', 'Medium', 'Low'], (v) => { pendingChanges.priority = v || null; });
   if (chit.severity) addDropdown('⚠️', 'Severity', 'severity', chit.severity, ['', 'Critical', 'Major', 'Normal', 'Minor'], (v) => { pendingChanges.severity = v || null; });
-  if (chit.status) addDropdown('📋', 'Status', 'status', chit.status, ['', 'ToDo', 'In Progress', 'Blocked', 'Complete'], (v) => { pendingChanges.status = v || null; });
+  if (chit.status) addDropdown('📋', 'Status', 'status', chit.status, ['', 'ToDo', 'In Progress', 'Blocked', 'Complete', 'Rejected'], (v) => { pendingChanges.status = v || null; });
 
   if (hasTaskFields) {
     const saveRow = document.createElement('div');
@@ -1769,6 +1769,7 @@ function _onNotesDragEnd(e) {
     const sel = document.getElementById('sort-select');
     if (sel) sel.value = 'manual';
     if (typeof _updateSortUI === 'function') _updateSortUI();
+    if (typeof saveSortPreference === 'function') saveSortPreference(s.tab, 'manual', 'asc');
   }
 
   _notesDragState = null;
@@ -2249,7 +2250,7 @@ async function fetchAndCacheWeather(address) {
     var url = 'https://api.open-meteo.com/v1/forecast'
       + '?latitude=' + geo.lat
       + '&longitude=' + geo.lon
-      + '&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_sum'
+      + '&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_gusts_10m_max,wind_speed_10m_max'
       + '&timezone=auto&forecast_days=16';
     var resp = await fetch(url);
     if (!resp.ok) return null;
@@ -3728,7 +3729,7 @@ function _sharedBrowserNotif(title, body, chitId) {
   if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
   try {
     var n = new Notification(title, { body: body, icon: '/static/cwod_logo-favicon.png', tag: 'cwoc-' + (chitId || 'alert'), renotify: true, requireInteraction: true, silent: true });
-    n.onclick = function() { window.focus(); if (chitId) window.location.href = '/editor?id=' + chitId; };
+    n.onclick = function() { window.focus(); if (chitId) window.location.href = '/frontend/html/editor.html?id=' + chitId; };
   } catch (e) {}
 }
 

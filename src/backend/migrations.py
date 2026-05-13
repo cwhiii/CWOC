@@ -2835,3 +2835,110 @@ def migrate_health_data_to_uuids(owner_id):
 def _looks_like_uuid(s):
     """Quick check if a string looks like a UUID (contains dashes and is ~36 chars)."""
     return isinstance(s, str) and len(s) == 36 and s.count('-') == 4
+
+
+# ── Sort Orders: per-user, per-view manual sort order persistence ────────
+
+def migrate_create_sort_orders_table():
+    """Create sort_orders table for persisting manual chit ordering across devices."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS sort_orders (
+                owner_id TEXT NOT NULL,
+                view_tab TEXT NOT NULL,
+                order_data TEXT NOT NULL,
+                modified_datetime TEXT NOT NULL,
+                PRIMARY KEY (owner_id, view_tab)
+            )
+        """)
+        conn.commit()
+        logger.info("sort_orders table ready")
+    except Exception as e:
+        logger.error(f"Error creating sort_orders table: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+
+def migrate_create_sort_preferences_table():
+    """Create sort_preferences table for persisting sort field/direction per view tab."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS sort_preferences (
+                owner_id TEXT NOT NULL,
+                view_tab TEXT NOT NULL,
+                sort_field TEXT NOT NULL,
+                sort_dir TEXT NOT NULL DEFAULT 'asc',
+                modified_datetime TEXT NOT NULL,
+                PRIMARY KEY (owner_id, view_tab)
+            )
+        """)
+        conn.commit()
+        logger.info("sort_preferences table ready")
+    except Exception as e:
+        logger.error(f"Error creating sort_preferences table: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+def migrate_add_private_pgp_key():
+    """Add private_pgp_key_encrypted column to users table.
+
+    Stores the user's PGP private key encrypted at rest using Fernet.
+    Never returned in normal profile responses — requires password
+    verification via a dedicated endpoint.
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cols = [row[1] for row in cursor.execute("PRAGMA table_info(users)").fetchall()]
+        if "private_pgp_key_encrypted" not in cols:
+            cursor.execute("ALTER TABLE users ADD COLUMN private_pgp_key_encrypted TEXT")
+            logger.info("Added private_pgp_key_encrypted column to users table")
+        conn.commit()
+    except Exception as e:
+        logger.error(f"Error in migrate_add_private_pgp_key: {str(e)}")
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+
+def migrate_create_custom_zones_table():
+    """Create custom_zones table for user-defined zone metadata.
+
+    Stores zone name, zone_id (slugified identifier), sort_order, and owner.
+    Fully idempotent — uses CREATE TABLE IF NOT EXISTS.
+    """
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS custom_zones (
+                id TEXT PRIMARY KEY,
+                zone_id TEXT NOT NULL,
+                name TEXT NOT NULL,
+                sort_order INTEGER DEFAULT 0,
+                owner_id TEXT NOT NULL,
+                created_datetime TEXT NOT NULL,
+                UNIQUE (zone_id, owner_id)
+            )
+        """)
+
+        conn.commit()
+        logger.info("custom_zones table ready")
+    except Exception as e:
+        logger.error(f"Error creating custom_zones table: {str(e)}")
+        raise
+    finally:
+        if conn:
+            conn.close()

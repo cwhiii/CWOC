@@ -1,0 +1,1 @@
+Fixed notification layout: direction dropdown now always appears first in the row so users can switch modes on any notification (not just the first). Weather is now a standard direction option (At, Before, After, Next Time on Desktop, Weather) — no separate button. Hint text updated when no time/location is set.

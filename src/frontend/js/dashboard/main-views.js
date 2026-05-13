@@ -304,7 +304,7 @@ function _buildChitHeader(chit, titleHtml, settings, opts) {
   // Due date — colored + bold if overdue, using configurable color with contrast background
   if (chit.due_datetime) {
     const dueDate = new Date(chit.due_datetime);
-    const isOverdue = dueDate < new Date() && chit.status !== 'Complete';
+    const isOverdue = dueDate < new Date() && chit.status !== 'Complete' && chit.status !== 'Rejected';
     const s = document.createElement('span');
     if (isOverdue) {
       // Format as YYYY-MMM-DD for past-due items
@@ -718,6 +718,21 @@ function filterChits(tab) {
 
   currentTab = tab;
 
+  // Restore saved sort preference for this tab
+  if (typeof getSortPreference === 'function') {
+    var pref = getSortPreference(tab);
+    if (pref && pref.field) {
+      currentSortField = pref.field;
+      currentSortDir = pref.dir || 'asc';
+    } else {
+      currentSortField = null;
+      currentSortDir = 'asc';
+    }
+    var sortSel = document.getElementById('sort-select');
+    if (sortSel) sortSel.value = currentSortField || '';
+    _updateSortUI();
+  }
+
   // Update mobile Views button to show current tab name
   if (typeof _updateMobileViewsLabel === 'function') _updateMobileViewsLabel();
 
@@ -742,11 +757,9 @@ function filterChits(tab) {
     orderSection.style.display = (tab === 'Calendar' || tab === 'Indicators' || tab === 'Email') ? 'none' : '';
   }
 
-  // Show/hide Kanban toggle for Projects tab
-  const kanbanSection = document.getElementById('section-kanban');
-  if (kanbanSection) {
-    kanbanSection.style.display = (tab === 'Projects') ? '' : 'none';
-  }
+  // Show/hide Kanban toggle for Projects tab (permanently hidden — Kanban is the only mode)
+  // const kanbanSection = document.getElementById('section-kanban');
+  // if (kanbanSection) { kanbanSection.style.display = (tab === 'Projects') ? '' : 'none'; }
 
   // Show/hide Calendar Options (compress/scroll) for Calendar + Month
   const calOptsSection = document.getElementById('section-cal-options');

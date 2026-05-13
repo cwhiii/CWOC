@@ -38,7 +38,7 @@ Package marker. No public exports.
 | `serve_icon_192()` | `GET /static/cwoc-icon-192.png` — Serve 192×192 PWA icon from `src/pwa/` |
 | `serve_icon_512()` | `GET /static/cwoc-icon-512.png` — Serve 512×512 PWA icon from `src/pwa/` |
 
-Registers all route modules (including `auth_router`, `users_router`, `sharing_router`, `notifications_router`, `network_access_router`, `push_router`, `ntfy_router`, `email_router`, `attachments_router`, `rules_router`, `bundles_router`, `custom_objects_router`, and `ha_router`), runs all migrations (including `migrate_add_multi_user()`, `migrate_add_sharing()`, `migrate_add_kiosk_users()`, `migrate_add_network_access()`, `migrate_add_notifications()`, `migrate_habits_overhaul()`, `migrate_habits_phase2()`, `migrate_add_push_subscriptions()`, `migrate_add_vapid_keys()`, `migrate_add_map_settings()`, `migrate_add_contact_dates()`, `migrate_add_email_fields()`, `migrate_add_attachments()`, `migrate_add_email_body_html()`, `migrate_add_fts5()`, `migrate_add_contact_vault()`, `migrate_create_rules_tables()`, `migrate_create_ha_config()`, `migrate_create_bundles_tables()`, `migrate_add_nest_thread_id()`, and `migrate_create_custom_objects_tables()`) and `init_db()` at import time, mounts `StaticFiles` for frontend, static, data, and PWA directories.
+Registers all route modules (including `auth_router`, `users_router`, `sharing_router`, `notifications_router`, `network_access_router`, `push_router`, `ntfy_router`, `email_router`, `attachments_router`, `rules_router`, `bundles_router`, `custom_objects_router`, `custom_zones_router`, and `ha_router`), runs all migrations (including `migrate_add_multi_user()`, `migrate_add_sharing()`, `migrate_add_kiosk_users()`, `migrate_add_network_access()`, `migrate_add_notifications()`, `migrate_habits_overhaul()`, `migrate_habits_phase2()`, `migrate_add_push_subscriptions()`, `migrate_add_vapid_keys()`, `migrate_add_map_settings()`, `migrate_add_contact_dates()`, `migrate_add_email_fields()`, `migrate_add_attachments()`, `migrate_add_email_body_html()`, `migrate_add_fts5()`, `migrate_add_contact_vault()`, `migrate_create_rules_tables()`, `migrate_create_ha_config()`, `migrate_create_bundles_tables()`, `migrate_add_nest_thread_id()`, `migrate_create_custom_objects_tables()`, and `migrate_create_custom_zones_table()`) and `init_db()` at import time, mounts `StaticFiles` for frontend, static, data, and PWA directories.
 
 ### 1.3 `src/backend/models.py` — Pydantic Models
 
@@ -71,6 +71,9 @@ Registers all route modules (including `auth_router`, `users_router`, `sharing_r
 | `CustomObjectUpdate` | Update custom object request — all Optional: `name`, `sub_type`, `category`, `units`, `metric_units`, `range_min`, `range_max`, `active` (bool), `sort_order` (int), `conditional_display` (Dict[str, Any]) |
 | `ZoneAssignmentCreate` | Create zone assignment request — `zone_id` (str), `config` (Optional[Dict[str, Any]]), `sort_order` (Optional[int], default 0) |
 | `ZoneAssignmentUpdate` | Update zone assignment request — `config` (Optional[Dict[str, Any]]), `sort_order` (Optional[int]) |
+| `CustomZoneCreate` | Create custom zone request — `name` (str) |
+| `CustomZoneUpdate` | Update custom zone request — `name` (Optional[str]), `sort_order` (Optional[int]) |
+| `BulkReorderRequest` | Bulk reorder zone assignments request — `object_ids` (List[str]) — ordered list of custom object IDs |
 
 ### 1.4 `src/backend/db.py` — Database Helpers & Shared State
 
@@ -150,6 +153,9 @@ All migrations run at startup. Each checks if the column/table already exists be
 | `migrate_fix_double_encoded_attachments()` | Fix attachments fields that were double-encoded by serialize_json_field — detects and unwraps double-encoded JSON strings. Fully idempotent |
 | `migrate_create_custom_objects_tables()` | Create `custom_objects` table (id, type, sub_type, category, name, value_type, units, metric_units, range_min, range_max, active, deleted, sort_order, is_standard, conditional_display, owner_id, created_datetime, modified_datetime) and `zone_assignments` table (id, custom_object_id, zone_id, config, sort_order, owner_id) with UNIQUE constraints. Fully idempotent |
 | `seed_custom_objects(owner_id)` | Seed the standard library of Custom Objects for a user if none exist yet. Seeds Illnesses (10), Injuries (10), Allergies (10), Vitals (6), Body (3), Activity (2) — all with `is_standard=1`. Does NOT create zone assignments |
+| `migrate_create_custom_zones_table()` | Create `custom_zones` table (id TEXT PK, zone_id TEXT, name TEXT, sort_order INTEGER DEFAULT 0, owner_id TEXT, created_datetime TEXT) with UNIQUE constraint on (zone_id, owner_id). Fully idempotent |
+| `migrate_create_sort_orders_table()` | Create `sort_orders` table (owner_id, view_tab, order_data, modified_datetime) with composite PRIMARY KEY (owner_id, view_tab) for persisting manual chit ordering across devices |
+| `migrate_create_sort_preferences_table()` | Create `sort_preferences` table (owner_id, view_tab, sort_field, sort_dir, modified_datetime) with composite PRIMARY KEY (owner_id, view_tab) for persisting sort field/direction per view tab |
 
 ### 1.6 `src/backend/serializers.py` — vCard & CSV
 
@@ -482,6 +488,11 @@ Settings endpoints use `request.state.user_id` from `AuthMiddleware` to scope da
 | `GET /api/alert-state` | `get_alert_states()` | Get all non-expired alert states |
 | `POST /api/alert-state` | `set_alert_state(body)` | Set dismiss/snooze state for an alert |
 | `DELETE /api/alert-state/cleanup` | `cleanup_alert_states()` | Remove expired snooze/dismiss states |
+| `GET /api/sort-orders` | `get_sort_orders()` | Get all manual sort orders for the authenticated user |
+| `PUT /api/sort-orders/{view_tab}` | `save_sort_order(view_tab, body)` | Save manual sort order for a specific view tab |
+| `DELETE /api/sort-orders` | `delete_all_sort_orders()` | Delete all manual sort orders and sort preferences for the authenticated user |
+| `GET /api/sort-preferences` | `get_sort_preferences()` | Get all sort preferences (field + direction) for the authenticated user |
+| `PUT /api/sort-preferences/{view_tab}` | `save_sort_preference(view_tab, body)` | Save sort preference (field + direction) for a specific view tab |
 
 ### 1.22 `src/backend/routes/contacts.py` — Contacts
 
@@ -554,6 +565,7 @@ Contact endpoints are scoped by `owner_id`. Users can access their own contacts 
 | `GET /profile` | `profile_page()` | Redirect to `contact-editor.html?mode=profile` |
 | `GET /user-admin` | `user_admin_page()` | Serve `user-admin.html` |
 | `GET /editor` | `editor(id)` | Serve `editor.html` (accepts `?id=` param) |
+| `GET /attachments` | `attachments_page()` | Serve `attachments.html` (all attachments grid) |
 | `GET /api/geocode` | `geocode_proxy(q)` | Geocoding proxy to OpenStreetMap Nominatim |
 | `POST /api/sync/send` | `sync_send_message(body)` | Post a sync message |
 | `GET /api/sync/poll` | `sync_poll(after)` | Poll for sync messages after a given ID |
@@ -593,6 +605,8 @@ Provides login, logout, session management, profile updates, password changes, a
 | `GET /api/auth/user-profile/{user_id}` | `get_user_profile(target_user_id, request)` | Return any active user's public profile (display_name, username, email, profile_image_url, created_datetime, is_self flag). Any authenticated user can view |
 | `PUT /api/auth/profile` | `update_profile(body, request)` | Update display_name and/or email for authenticated user |
 | `PUT /api/auth/password` | `change_password(body, request)` | Require current_password verification, hash new_password, update user. Returns 403 if current password is wrong |
+| `POST /api/auth/private-pgp-key` | `get_private_pgp_key(body, request)` | Retrieve user's private PGP key after password verification. Returns decrypted key or null. 403 if password wrong |
+| `PUT /api/auth/private-pgp-key` | `save_private_pgp_key(body, request)` | Save/update user's private PGP key after password verification. Key encrypted at rest via Fernet. Send empty to remove |
 | `POST /api/auth/switch` | `switch_user(body, request)` | Validate target user credentials, invalidate current session, create new session for target user |
 | `GET /api/auth/switchable-users` | `list_switchable_users(request)` | Return minimal list of active users (id, username, display_name, profile_image_url, color) for sharing and people filters |
 
@@ -877,6 +891,8 @@ Provides upload, download, and delete endpoints for chit file attachments. Files
 |----------|-------------|
 | `_get_attachments_dir()` | Return the appropriate attachments directory for the current environment |
 | `_get_max_size_bytes(cursor, user_id)` | Load the max attachment size from settings (default 10 MB) |
+| `_get_max_storage_bytes(cursor, user_id)` | Load the max total attachment storage per user from settings (default 500 MB, 0 = unlimited) |
+| `_get_user_total_attachment_size(cursor, user_id)` | Calculate the total attachment storage used by a user across all their chits |
 | `_load_attachments(cursor, chit_id)` | Load the attachments JSON array from a chit |
 | `_save_attachments(cursor, chit_id, attachments)` | Save the attachments JSON array back to the chit |
 
@@ -885,6 +901,8 @@ Provides upload, download, and delete endpoints for chit file attachments. Files
 | `POST /api/chits/{chit_id}/attachments` | `upload_attachment(chit_id, request, file)` | Upload a file attachment; validates size limit; stores file on disk and updates chit metadata |
 | `GET /api/chits/{chit_id}/attachments/{attachment_id}` | `download_attachment(chit_id, attachment_id, request)` | Download an attachment file by its ID |
 | `DELETE /api/chits/{chit_id}/attachments/{attachment_id}` | `delete_attachment(chit_id, attachment_id, request)` | Delete an attachment file and remove it from the chit's metadata |
+| `GET /api/attachments` | `list_all_attachments(request)` | List all attachments across all non-deleted chits for the current user; returns flat array with chit_id and chit_title |
+| `DELETE /api/attachments/bulk` | `bulk_delete_attachments(request, items)` | Bulk delete multiple attachments; expects JSON array of `{chit_id, attachment_id}` objects |
 
 ### 1.37 `src/backend/rules_engine.py` — Rules Engine: Condition Tree Evaluator, Action Executor & Trigger Dispatcher
 
@@ -1180,6 +1198,7 @@ Provides CRUD endpoints for managing Custom Objects in the generic registry, inc
 | `POST /api/custom-objects/{id}/assign` | `create_zone_assignment(request, id, assignment)` | Create a zone assignment. Returns 409 if already assigned |
 | `PUT /api/custom-objects/{id}/assign/{zone_id}` | `update_zone_assignment(request, id, zone_id, updates)` | Update zone assignment config and/or sort_order |
 | `DELETE /api/custom-objects/{id}/assign/{zone_id}` | `delete_zone_assignment(request, id, zone_id)` | Remove a zone assignment |
+| `PUT /api/custom-objects/zone/{zone_id}/reorder` | `bulk_reorder_zone_assignments(request, zone_id, body)` | Bulk update sort_order for zone assignments. Accepts `{"object_ids": [...]}`, updates sort_order sequentially (1, 2, 3, ...). Skips missing assignments without error |
 
 **Internal helpers:**
 
@@ -1188,6 +1207,23 @@ Provides CRUD endpoints for managing Custom Objects in the generic registry, inc
 | `_row_to_dict(row, cursor)` | Convert a sqlite3 Row to a plain dict using cursor.description |
 | `_format_object(obj)` | Format a custom_objects row dict for API response — converts integer flags to booleans, parses conditional_display JSON |
 | `_get_zone_assignments(conn, custom_object_id, owner_id)` | Fetch zone assignments for a custom object, parsing config JSON |
+
+### 1.48 `src/backend/routes/custom_zones.py` — Custom Zones CRUD
+
+Provides CRUD endpoints for managing Custom Zones — user-defined named collections of Custom Objects that render as collapsible zones in the chit editor. All endpoints scoped by `owner_id` from authenticated user.
+
+| Route | Handler | Description |
+|-------|---------|-------------|
+| `GET /api/custom-zones` | `list_custom_zones(request)` | List all custom zones for the user, ordered by sort_order. Includes object_count via COUNT on zone_assignments |
+| `POST /api/custom-zones` | `create_custom_zone(request, zone)` | Create a new zone (accepts name, generates zone_id via slugification). Validates non-empty name, checks uniqueness (409 on duplicate) |
+| `PUT /api/custom-zones/{zone_id}` | `update_custom_zone(request, zone_id, updates)` | Update name and/or sort_order. Zone_id does NOT change on rename |
+| `DELETE /api/custom-zones/{zone_id}` | `delete_custom_zone(request, zone_id)` | Delete zone record AND cascade delete all zone_assignments for that zone. Health_data on chits is preserved |
+
+**Internal helpers:**
+
+| Function | Description |
+|----------|-------------|
+| `_slugify_zone_name(name)` | Generate zone_id from name: lowercase, replace non-alphanumeric with `_`, collapse consecutive, strip leading/trailing, prefix `cz_` |
 
 ---
 
@@ -1277,8 +1313,14 @@ Manual sort order persistence, drag-to-reorder for chit cards, edge-scroll durin
 | `_markDragJustEnded()` | Set `window._dragJustEnded` flag to suppress spurious click/dblclick events after a drag operation; auto-clears after the browser's post-drag click fires |
 | *(capture listeners)* | Document-level capture-phase click/dblclick listeners that swallow events on draggable elements while `_dragJustEnded` is true |
 | `MANUAL_ORDER_KEY` | LocalStorage key for persisted manual sort orders |
+| `SORT_PREFS_KEY` | LocalStorage key for persisted sort preferences (field + direction per tab) |
+| `_loadSortPreferencesFromServer()` | Load sort preferences from backend API into localStorage on page init (server is source of truth) |
+| `_loadSortOrdersFromServer()` | Load sort orders from backend API into localStorage on page init (server is source of truth) |
+| `getSortPreference(tab)` | Get the saved sort preference (field + direction) for a view tab |
+| `saveSortPreference(tab, field, dir)` | Save the sort preference for a view tab to localStorage and backend API |
+| `resetAllSortOrders()` | Reset all sort orders and preferences (both local and server); returns a Promise |
 | `getManualOrder(tab)` | Get the saved manual sort order (array of chit IDs) for a view tab |
-| `saveManualOrder(tab, ids)` | Save the manual sort order for a view tab to localStorage |
+| `saveManualOrder(tab, ids)` | Save the manual sort order for a view tab to localStorage and backend API |
 | `applyManualOrder(tab, chitList)` | Sort a chit list according to the saved manual order; new chits go last |
 | `enableDragToReorder(container, tab, onReorder, longPressMap)` | Enable mouse and touch drag-to-reorder on chit cards; optional longPressMap (chitId → callback) enables unified drag + long-press via enableTouchGesture |
 
@@ -1842,7 +1884,8 @@ Depends on: `shared-sidebar.js` (`_cwocInitSidebar`, `toggleSidebar`, `restoreSi
 | `_showTimerDoneModal(timerName, onDismiss)` | Show a "Time's up!" alert modal for a completed timer |
 | `_sendBrowserNotification(title, body, chitId, playSound)` | Send a browser notification with vibration and click-to-open |
 | `_globalCheckAlarms()` | Check all chit-based and independent alarms against the current time |
-| `_globalCheckNotifications()` | Check all chit notification alerts against their fire times; supports habit cycle-end targeting and only_if_undone suppression for habits |
+| `_globalCheckNotifications()` | Check all chit notification alerts against their fire times; supports habit cycle-end targeting, only_if_undone suppression, and weather-based notifications |
+| `_globalCheckWeatherNotification(chit, alert, alertIdx)` | Check a weather notification against the chit's weather_data; fires once per day if forecast condition is met |
 | `_globalGetHabitCycleEnd(chit)` | Calculate the end-of-cycle datetime for a habit chit using its recurrence_rule.freq |
 | `_getSnoozeMs()` | Get the snooze duration in milliseconds from settings |
 | `_startGlobalAlertSystem()` | Initialize the global alert system — permissions, intervals, sync listeners |
@@ -1851,8 +1894,9 @@ Depends on: `shared-sidebar.js` (`_cwocInitSidebar`, `toggleSidebar`, `restoreSi
 
 | Function | Description |
 |----------|-------------|
-| `displaySearchView()` | Render the global search view with search bar and results container |
-| `_renderSearchResults(container, viSettings)` | Render search result cards with sidebar filters applied |
+| `displaySearchView()` | Render the global search view with search bar, email toggle, dropdown filters (status, priority, tag picker), and results container |
+| `_renderSearchResults(container, viSettings)` | Render search result cards — title matches first, snippets for non-title matches, applies email/status/priority/tag filters |
+| `_getSearchSnippet(text, terms)` | Extract a contextual snippet (~160 chars) around the first matching term in text |
 | `_getChitFieldValue(chit, fieldName)` | Extract a displayable string value for a chit field by name |
 | `_saveSearch()` | Save the current sidebar search text to localStorage |
 | `_loadSavedSearch(text)` | Load a saved search into the sidebar search input and trigger search |
@@ -2159,6 +2203,7 @@ People zone: contacts, system users, sharing controls. Loads all contacts and sy
 | `_toggleAllPeopleGroups(event, expand)` | Expand or collapse all letter groups in the people tree (includes both contact and system user letters) |
 | `_addPeopleChip(data)` | Add a person chip (deduped by name), re-render chips and tree |
 | `_removePeopleChip(index)` | Remove a person chip by index, re-render chips and tree |
+| `_showPeopleChipContextMenu(e, chipData, chipIdx)` | Show a context menu (shift-click/right-click) on a people chip with View Contact and Remove options |
 | `_renderPeopleChips()` | Render the active people chips (contacts) and shared users (with user-circle icons, pill toggles, RSVP status badges, and accept/decline controls for the current user) in the right column |
 | `_syncPeopleHiddenField()` | Sync the hidden `#people` input with current chip names (comma-separated) |
 | `_updateActivePeopleCount()` | Update the active people count badge (includes both `_peopleChipData.length` and `_currentShares.length`) |
@@ -2336,6 +2381,9 @@ Alerts zone: alarms, timers, stopwatches, notifications.
 | `renderTimersContainer()` | Render the timers list with input/countdown modes, start/pause, and reset controls |
 | `deleteTimerItem(idx)` | Delete a timer by index, stop its interval, and rebuild runtime map |
 | `openNotificationModal(event)` | Add a new notification inline with 15-minute default |
+| `_appendWeatherControls(row, n, idx)` | Append weather condition controls (condition dropdown, threshold, forecast hint) to a notification row |
+| `_weatherCodeToPrecipType(code)` | Map a WMO weather code to a precipitation type string (rain/snow/hail/drizzle/thunder) |
+| `_checkWeatherNotification(n, idx, title)` | Check a weather notification against stored forecast data; fires once per page load if condition is met |
 | `addNotification()` | Save notification data from the modal |
 | `deleteNotificationItem(idx)` | Delete a notification by index and re-render |
 | `closeNotificationModal(save)` | Close the notification modal |
@@ -2375,6 +2423,21 @@ Health indicators zone (data-driven): dynamically renders health indicator input
 | `_identifyPerChitIndicators(healthData, defaultObjects, allObjects)` | Identify per-chit indicator UUIDs from health_data not in the default set |
 | `_loadHealthData(chit)` | Orchestrate: parse health_data, fetch objects, evaluate conditional display, render default + per-chit fields, add "Add Indicator" button |
 | `_gatherHealthData()` | Collect all non-null health data values into a UUID-keyed object for saving (or null if empty) |
+
+#### editor-custom-zones.js
+
+Dynamic custom zone rendering in the chit editor. On chit load, discovers user's custom zones via GET /api/custom-zones, fetches assigned objects for each zone, evaluates conditional_display rules, and renders collapsible Zone_Panels in the .main-zones-grid. Reuses pure functions from editor-health.js. Loaded after editor-health.js, before editor-save.js.
+
+| Symbol | Description |
+|--------|-------------|
+| `window._customZoneData` | Global object holding current custom zone field values (UUID-keyed) |
+| `window._customZonePanels` | Array tracking rendered zone panel element IDs |
+| `_fetchCustomZones()` | Fetch all custom zones for the current user from GET /api/custom-zones |
+| `_fetchZoneObjects(zoneId)` | Fetch objects assigned to a specific zone from GET /api/custom-objects/zone/{zone_id} |
+| `_renderCustomZonePanel(zone, objects, settings, healthData)` | Render a collapsible Zone_Panel for a custom zone with 3-column field grid |
+| `_renderCustomZoneField(obj, value, unitSystem)` | Render a single custom zone field (numeric, checkbox, or text based on value_type) with range highlighting and unit labels |
+| `_loadCustomZones(chit)` | Entry point called during editor init — orchestrates zone discovery, object fetching, conditional display evaluation, and panel rendering |
+| `_gatherCustomZoneData()` | Collect UUID-keyed values from all custom zone fields for the save flow |
 
 #### editor-email.js
 
@@ -2427,6 +2490,23 @@ Email zone: populate, collect, reply, forward, send. Handles the Email zone in t
 | `_emailSearchContacts(query)` | Search cached contacts by query string, return top 5 matches (favorites first) |
 | `_wireEmailAutocomplete(inputId, dropdownId)` | Wire up autocomplete on an email input field |
 | `_toggleEmailCcBcc(field)` | Toggle Cc or Bcc field visibility in the email zone |
+
+#### editor-email-pgp.js
+
+PGP encryption for outgoing emails. Provides client-side PGP encryption using OpenPGP.js. When a recipient has a PGP public key stored in their contact record, the user can toggle PGP encryption on. The message body is encrypted in the browser before being sent. Depends on: `openpgp.min.js` (CDN), `editor-email.js` (`_emailContactsCache`, `_emailGetFieldValue`, `_emailCurrentChit`), `shared-utils.js` (`cwocToast`).
+
+| Symbol | Description |
+|--------|-------------|
+| `_pgpEnabled` | Module-level state — whether PGP encryption is currently enabled for this draft |
+| `_pgpRecipientKeys` | Map of recipient email → PGP public key text |
+| `_emailTogglePgp()` | Toggle PGP encryption on/off; validates all recipients have keys before enabling |
+| `_updatePgpButtonState()` | Update the PGP button visual state (active green lock / inactive open lock) |
+| `_pgpCheckAvailability()` | Check if PGP is available for current recipients; shows/hides PGP button accordingly |
+| `_pgpEncryptBody(plaintext)` | Encrypt message body with recipients' PGP public keys; returns ASCII-armored ciphertext |
+| `_pgpPreSendEncrypt()` | Pre-send hook — encrypts body if PGP enabled; returns true on success, false on failure |
+| `_pgpExtractEmails(fieldValue)` | Extract plain email addresses from "Name <email>" formatted string |
+| `_pgpFindKeyForEmail(emailAddr)` | Look up a PGP public key for an email address from the contacts cache |
+| `_pgpInitForDraft()` | Initialize PGP UI hooks — wire recipient change detection via MutationObserver |
 
 #### editor-attachments.js
 
@@ -2858,6 +2938,7 @@ Settings page logic: tags, colors, clocks, locations, indicators, import/export,
 | `_setupArrangeViewsTouch(grid)` | Set up touch-based drag support for mobile devices |
 | `_getViewItemAtPoint(grid, x, y, exclude)` | Find the view-tab-item element at a given point (excluding the dragged item) |
 | `_collectViewOrder()` | Collect the current view order for saving; returns null if matches default |
+| `_resetSortOrders()` | Reset all sort orders and preferences via confirmation modal; calls DELETE /api/sort-orders and clears localStorage |
 
 #### people.js
 
@@ -2907,8 +2988,10 @@ Contact editor page: 3-column zone layout, image upload, multi-value fields, col
 | `triggerImageUpload()` | Global — trigger the hidden file input for image upload |
 | `viewContactImage()` | Global — open the full-size image modal |
 | `removeContactImage()` | Global — clear the pending image and mark for removal on save |
-| `_initSignalToggle()` | Initialize Signal username field visibility based on checkbox state |
-| `onSignalToggle()` | Global — toggle Signal username input visibility on checkbox change |
+| `_initSignalToggle()` | Initialize Signal username field visibility and message button listeners |
+| `onSignalToggle()` | Global — toggle Signal username input and message button visibility on checkbox change |
+| `_updateSignalMessageBtn()` | Show/hide the Signal message button based on whether a username/phone is entered |
+| `openSignalMessage()` | Global — open Signal deep link to message the contact (phone or username) |
 | `_initColorPicker()` | Build color swatches and wire hex input for contact color selection |
 | `_selectColor(hex, fromInput)` | Select a color: update preview, hex input, editor background tint, and swatch highlight |
 | `onDropdownCustomChange(selectId, customInputId)` | Global — handle prefix/suffix dropdown change; show/hide custom input |
@@ -2990,6 +3073,24 @@ Weather page: 16-day forecasts for all saved locations rendered as a scrollable 
 | `_wxBuildCityGroups(chits, savedLocations, forecastDates)` | Build city groups from chits at non-saved locations with date→title mapping |
 | `_wxAddCityRows(container, allChits, savedLocations, forecastDates, weekStartDay)` | Add city-based weather rows for chits at non-saved locations; fetch weather per city |
 
+#### attachments.js
+
+All Attachments grid page: displays every attachment across all chits in a visual grid with multi-select (click, Shift+click range, Ctrl/Cmd+click toggle) and bulk delete.
+
+| Symbol | Description |
+|--------|-------------|
+| `_allAttachments` | Module-level state — flat array of all attachment objects with chit_id and chit_title |
+| `_selectedSet` | Module-level state — Set of selected indices |
+| `_lastClickedIndex` | Module-level state — last clicked index for Shift+click range selection |
+| `init()` | Wire bulk delete button and load attachments |
+| `loadAttachments()` | Fetch all attachments via `GET /api/attachments` and render the grid |
+| `renderGrid(wrap)` | Build the attachment card grid with thumbnails, filenames, chit links, and selection checkboxes |
+| `handleSelect(idx, e)` | Handle card selection: single click, Shift+click range, Ctrl/Cmd+click toggle |
+| `syncSelectionDOM()` | Sync selected class and checkbox state across all cards |
+| `updateSelectionUI()` | Show/hide bulk actions bar and update selected count |
+| `bulkDelete()` | Confirm and execute bulk delete via `DELETE /api/attachments/bulk` |
+| `getFileIcon(mimeType)` | Return emoji icon for a MIME type |
+
 #### profile.js — REMOVED (merged into contact-editor.js)
 
 Profile functionality is now part of `contact-editor.js`. When `?mode=profile` is in the URL, the contact editor switches to profile mode with these additional functions:
@@ -3002,6 +3103,10 @@ Profile functionality is now part of `contact-editor.js`. When `?mode=profile` i
 | `_saveProfile()` | Save profile data via `PUT /api/auth/profile` |
 | `_applyReadOnlyMode(displayName)` | Disable all inputs, hide save/password, show read-only banner for viewing other users |
 | `changeProfilePassword()` | Change password via `PUT /api/auth/password` with validation |
+| `unlockPrivatePgpKey()` | Prompt for password, fetch private PGP key via POST /api/auth/private-pgp-key, show unlocked textarea |
+| `lockPrivatePgpKey()` | Hide private PGP key textarea, clear cached password |
+| `savePrivatePgpKey()` | Save private PGP key via PUT /api/auth/private-pgp-key (requires cached password) |
+| `removePrivatePgpKey()` | Confirm and remove private PGP key (saves empty value) |
 
 #### user-admin.js
 
@@ -3216,6 +3321,64 @@ Custom Objects Editor page: browse, create, edit, toggle, soft-delete, restore, 
 | `_coRefreshAfterZoneChange(objectId)` | Refresh data and re-render zone modal after any zone change |
 | `_coHandleEsc(e)` | ESC key handler — closes modals from innermost to outermost |
 | `_coEscape(str)` | HTML-escape a string for safe insertion |
+| `_coFetchIndicators()` | Fetch objects assigned to indicators_zone and render the listing |
+| `_coRenderIndicatorsList()` | Render indicators zone objects with drag handles, sorted by sort_order |
+| `_coInitIndicatorDragReorder()` | Initialize drag-to-reorder for indicator rows (HTML5 + touch) |
+| `_coIndicatorOnDragStart(e)` | HTML5 dragstart handler for indicator rows |
+| `_coIndicatorOnDragOver(e)` | HTML5 dragover handler — shows drop position indicator |
+| `_coIndicatorOnDragEnd()` | HTML5 dragend handler — cleans up drag state |
+| `_coIndicatorOnDrop(e)` | HTML5 drop handler — calculates new order and persists |
+| `_coIndicatorOnTouchStart(row, data)` | Touch drag start — creates placeholder, floats row |
+| `_coIndicatorOnTouchMove(row, data)` | Touch drag move — repositions row and placeholder |
+| `_coIndicatorOnTouchEnd(row, data)` | Touch drag end — restores row, reads new order, persists |
+| `_coIndicatorPersistOrder(orderedObjectIds)` | Persist indicator order via PUT `/api/custom-objects/zone/indicators_zone/reorder` |
+| `_coToggleZonePreview()` | Toggle the zone preview panel visibility — renders or hides the preview |
+| `_coRenderZonePreview()` | Render the zone preview panel using collapsible Zone_Panel layout with 3-column field grid |
+| `_coPreviewRenderField(obj, unitSystem)` | Render a single preview field with appropriate input type, range highlighting, and unit label |
+| `_coPreviewEvaluateConditionalDisplay(rule, settings)` | Evaluate conditional_display rule against user settings (pure function) |
+| `_coPreviewGetUnitLabel(obj, unitSystem)` | Get unit label based on user's unit system (pure function) |
+| `_coPreviewGetRangeHighlightClass(value, rangeMin, rangeMax)` | Determine CSS class for range highlighting (pure function) |
+| `_coAllZones` | Array — full list of custom zones from API |
+| `_coZoneEditorZone` | Object or null — zone currently being edited in zone editor modal |
+| `_coZoneEditorObjects` | Array — objects assigned to the zone being edited |
+| `_coFetchZones()` | Fetch all custom zones from GET /api/custom-zones and render the listing |
+| `_coRenderZonesList()` | Render the custom zones listing with name, object count, edit/delete buttons |
+| `_coInitZoneDragReorder()` | Initialize drag-to-reorder for zone rows (HTML5 + touch) |
+| `_coZoneOnDragStart(e)` | HTML5 dragstart handler for zone rows |
+| `_coZoneOnDragOver(e)` | HTML5 dragover handler — shows drop position indicator |
+| `_coZoneOnDragEnd()` | HTML5 dragend handler — cleans up drag state |
+| `_coZoneOnDrop(e)` | HTML5 drop handler — calculates new order and persists |
+| `_coZoneOnTouchStart(row, data)` | Touch drag start — creates placeholder, floats row |
+| `_coZoneOnTouchMove(row, data)` | Touch drag move — repositions row and placeholder |
+| `_coZoneOnTouchEnd(row, data)` | Touch drag end — restores row, reads new order, persists |
+| `_coZonePersistOrder(orderedZoneIds)` | Persist zone order via PUT /api/custom-zones/{zone_id} with new sort_order values |
+| `_coDeleteZone(zone)` | Delete a zone with confirmation via DELETE /api/custom-zones/{zone_id} |
+| `_coInitCreateZoneModal()` | Wire up create zone modal cancel/submit buttons |
+| `_coOpenCreateZoneModal()` | Open the create zone modal |
+| `_coCloseCreateZoneModal()` | Close the create zone modal |
+| `_coSubmitCreateZone()` | Submit zone creation via POST /api/custom-zones, then open zone editor |
+| `_coInitZoneEditorModal()` | Initialize zone editor modal controls (close, name blur, add button) |
+| `_coOpenZoneEditor(zone)` | Open the zone editor modal for a zone — fetches objects, renders list |
+| `_coCloseZoneEditor()` | Close the zone editor modal and refresh zones list |
+| `_coZoneEditorSaveName()` | Save zone name change via PUT /api/custom-zones/{zone_id} |
+| `_coZoneEditorFetchObjects()` | Fetch objects assigned to the zone being edited |
+| `_coZoneEditorRenderObjects()` | Render assigned objects in zone editor, grouped by sub_type, sorted by sort_order |
+| `_coZoneEditorRemoveObject(obj)` | Remove object from zone via DELETE /api/custom-objects/{id}/assign/{zone_id} |
+| `_coInitZoneEditorDragReorder()` | Initialize drag-to-reorder for zone editor cards (HTML5 + touch) |
+| `_coZoneEditorOnDragStart(e)` | HTML5 dragstart for zone editor cards |
+| `_coZoneEditorOnDragOver(e)` | HTML5 dragover for zone editor cards |
+| `_coZoneEditorOnDragEnd()` | HTML5 dragend for zone editor cards |
+| `_coZoneEditorOnDrop(e)` | HTML5 drop for zone editor cards |
+| `_coZoneEditorOnTouchStart(card, data)` | Touch drag start for zone editor cards |
+| `_coZoneEditorOnTouchMove(card, data)` | Touch drag move for zone editor cards |
+| `_coZoneEditorOnTouchEnd(card, data)` | Touch drag end for zone editor cards |
+| `_coZoneEditorPersistOrder()` | Persist zone editor card order via PUT /api/custom-objects/zone/{zone_id}/reorder |
+| `_coToggleZonePreview()` | Toggle the zone preview panel visibility — renders or hides the preview |
+| `_coRenderZonePreview()` | Render the zone preview panel using collapsible Zone_Panel layout with 3-column field grid |
+| `_coPreviewRenderField(obj, unitSystem)` | Render a single preview field with appropriate input type, range highlighting, and unit label |
+| `_coPreviewEvaluateConditionalDisplay(rule, settings)` | Evaluate conditional_display rule against user settings (pure function) |
+| `_coPreviewGetUnitLabel(obj, unitSystem)` | Get unit label based on user's unit system (pure function) |
+| `_coPreviewGetRangeHighlightClass(value, rangeMin, rangeMax)` | Determine CSS class for range highlighting (pure function) |
 
 
 ## 3. Frontend CSS
@@ -3773,7 +3936,9 @@ All HTML pages include the following PWA `<head>` tags: `<link rel="manifest" hr
 <script src="/frontend/js/editor/editor-alerts.js"></script>
 <script src="/frontend/js/editor/editor-color.js"></script>
 <script src="/frontend/js/editor/editor-health.js"></script>
+<script src="/frontend/js/editor/editor-custom-zones.js"></script>
 <script src="/frontend/js/editor/editor-email.js"></script>
+<script src="/frontend/js/editor/editor-email-pgp.js"></script>
 <script src="/frontend/js/editor/editor-attachments.js"></script>
 <script src="/frontend/js/editor/editor-nest.js"></script>
 <script src="/frontend/js/editor/editor-snooze.js"></script>
@@ -3926,7 +4091,11 @@ src/backend/routes/attachments.py
 
 src/backend/routes/custom_objects.py
   ├── src.backend.db           (DB_PATH)
-  └── src.backend.models       (CustomObjectCreate, CustomObjectUpdate, ZoneAssignmentCreate, ZoneAssignmentUpdate)
+  └── src.backend.models       (CustomObjectCreate, CustomObjectUpdate, ZoneAssignmentCreate, ZoneAssignmentUpdate, BulkReorderRequest)
+
+src/backend/routes/custom_zones.py
+  ├── src.backend.db           (DB_PATH)
+  └── src.backend.models       (CustomZoneCreate, CustomZoneUpdate)
 
 src/backend/rules_engine.py
   ├── src.backend.db           (DB_PATH, serialize_json_field, deserialize_json_field, compute_system_tags)
@@ -4065,7 +4234,9 @@ shared-auth.js            ← MUST load first (getCurrentUser, isAdmin, waitForA
                     editor-alerts.js      (alerts zone)
                     editor-color.js       (color zone)
                     editor-health.js      (health indicators zone)
+                    editor-custom-zones.js (custom zones — depends on editor-health.js; provides _loadCustomZones, _gatherCustomZoneData)
                     editor-email.js       (email zone — depends on shared-utils, shared-editor, editor-save; includes thread view and HTML rendering)
+                    editor-email-pgp.js   (PGP encryption — depends on openpgp.min.js CDN, editor-email.js; provides _pgpPreSendEncrypt, _pgpInitForDraft)
                     editor-attachments.js (attachments zone — depends on shared-utils, editor-save)
                     editor-nest.js        (nest button + thread picker — depends on shared-utils, editor-save)
                     editor-snooze.js      (snooze modal + state — depends on shared.js; provides _initSnooze, _currentSnoozedUntil for editor-save)

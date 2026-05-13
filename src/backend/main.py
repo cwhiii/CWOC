@@ -22,6 +22,7 @@
 #   src/backend/routes/ntfy.py — Ntfy push notification sender & endpoints
 #   src/backend/routes/bundles.py — Email bundle CRUD & rule associations
 #   src/backend/routes/custom_objects.py — Custom Objects registry CRUD & zone assignments
+#   src/backend/routes/custom_zones.py — Custom Zones CRUD (user-defined zone collections)
 #   src/backend/middleware.py   — Auth middleware (session validation)
 #
 # PWA files served directly from src/pwa/:
@@ -186,6 +187,10 @@ from src.backend.migrations import (
     seed_custom_objects,
     migrate_indicators_zone_init,
     migrate_health_data_to_uuids,
+    migrate_create_sort_orders_table,
+    migrate_create_sort_preferences_table,
+    migrate_add_private_pgp_key,
+    migrate_create_custom_zones_table,
 )
 
 # Initialize database and run all migrations (same order as before)
@@ -258,6 +263,10 @@ migrate_add_autosave_settings()
 migrate_add_auto_complete_checklist()
 migrate_create_custom_objects_tables()
 migrate_custom_objects_remove_category()
+migrate_create_sort_orders_table()
+migrate_create_sort_preferences_table()
+migrate_add_private_pgp_key()
+migrate_create_custom_zones_table()
 seed_version_info()
 
 # Seed standard custom objects for all active users (if not already seeded)
@@ -326,6 +335,7 @@ from src.backend.routes.ha import ha_router
 from src.backend.routes.admin import admin_router
 from src.backend.routes.bundles import bundles_router
 from src.backend.routes.custom_objects import router as custom_objects_router
+from src.backend.routes.custom_zones import router as custom_zones_router
 
 app.include_router(auth_router)
 app.include_router(users_router)
@@ -350,6 +360,7 @@ app.include_router(ha_router)
 app.include_router(admin_router)
 app.include_router(bundles_router)
 app.include_router(custom_objects_router)
+app.include_router(custom_zones_router)
 
 # ── Bundle reclassification is triggered by rule changes, not on startup ──
 # Triggers: rule update (PUT), rule association (POST), bundle delete (DELETE)

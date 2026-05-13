@@ -1,0 +1,1 @@
+Fixed custom zones appearing at the bottom of the page on mobile instead of being integrated into the mobile zone sidebar. Custom zones now register with the mobile navigation system — they appear in the zone list, are hidden/shown correctly when switching zones, and are reachable via swipe navigation like all other zones.

@@ -1,0 +1,1 @@
+Consolidated temperature gradient into a single source of truth: _cwocTempGradientStops array and _buildTempGradient() function in shared-utils.js. All three places (editor bar, quick weather bar, weather page borders) now use the same gradient definition. Removed the separate _getTempBorderColor — borders now use the same colors as the bar fill.

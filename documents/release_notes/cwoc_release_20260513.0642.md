@@ -1,0 +1,1 @@
+Fixed custom zones being pushed below both columns on desktop. They were appended directly to the grid as extra grid items. Now they're placed inside column-one and column-two alternating, so they flow naturally with the other zones.
